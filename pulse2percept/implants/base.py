@@ -8,9 +8,11 @@ from scipy.interpolate import RegularGridInterpolator
 from .electrodes import Electrode, DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
-from ..stimuli import Stimulus, ImageStimulus, StimulusEncoder, VideoStimulus
+from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
+                       StimulusEncoder, VideoStimulus)
 from ..stimuli.base import _describe_unit
-from ..units import DimensionMismatchError, as_value, uA, um
+from ..stimuli.pulse_trains import _as_threshold_amp
+from ..units import DimensionMismatchError, as_value, uA, um, xTh
 from ..utils import PrettyPrint
 
 
@@ -94,8 +96,8 @@ class ProsthesisSystem(PrettyPrint):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode',
-                 'preprocess', '_encoder', '_raster', '_max_current')
+    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess',
+                 '_encoder', '_raster', '_max_current', '_thresholds')
 
     #: The physical quantity this system delivers, mirroring
     #: :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`. An electrical
@@ -135,6 +137,8 @@ class ProsthesisSystem(PrettyPrint):
             params['raster'] = self.raster
         if self.max_current is not None:
             params['max_current'] = self.max_current
+        if self.thresholds:
+            params['thresholds'] = self.thresholds
         return params
 
     @property
@@ -199,6 +203,118 @@ class ProsthesisSystem(PrettyPrint):
             raise ValueError("'max_current' must be positive.")
         self._max_current = max_current
 
+    @property
+    def thresholds(self):
+        """Perceptual threshold current (uA) for each electrode
+
+        Calibration of the electrode/subject interface, relating stimulation
+        expressed in :py:data:`~pulse2percept.units.xTh` to the current that
+        realizes it. Assign one current for the whole array, a dict for
+        per-electrode values (a partial dict leaves the rest uncalibrated), or
+        None to clear.
+
+        Changing thresholds recalibrates any
+        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` already assigned
+        to :py:attr:`stim`: ``xTh`` trains keep their multiple of threshold,
+        current-valued trains keep their current. Sampled stimuli are
+        unchanged.
+
+        .. versionadded:: 0.10.0
+
+        Examples
+        --------
+        >>> from pulse2percept.implants import ArgusII
+        >>> from pulse2percept.stimuli import BiphasicPulseTrain
+        >>> from pulse2percept.units import uA, xTh
+        >>> implant = ArgusII()
+        >>> implant.stim = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
+        ...                 'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
+        >>> implant.thresholds = {'A1': 80 * uA, 'A2': 120 * uA}
+        >>> float(abs(implant.stim['A1']).max())
+        160.0
+        >>> float(abs(implant.stim['A2']).max())
+        240.0
+
+        """
+        return dict(getattr(self, '_thresholds', None) or {})
+
+    @thresholds.setter
+    def thresholds(self, thresholds):
+        """Threshold setter (called upon ``self.thresholds = ...``)"""
+        previous = getattr(self, '_thresholds', {})
+        self._thresholds = self._normalize_thresholds(thresholds)
+        try:
+            self._recalibrate_stim()
+        except Exception:
+            # Thresholds and stimulus move together or not at all:
+            self._thresholds = previous
+            raise
+
+    def _normalize_thresholds(self, thresholds):
+        """Return thresholds as a mapping of electrode names to uA."""
+        if thresholds is None:
+            return {}
+        if not isinstance(thresholds, dict):
+            threshold = _as_threshold_amp(thresholds, 'thresholds')
+            return {name: threshold for name in self.electrode_names}
+        normalized = {}
+        for name, threshold in thresholds.items():
+            if name not in self.electrodes:
+                raise ValueError(f'Electrode "{name}" not found in implant.')
+            threshold = _as_threshold_amp(threshold, f'thresholds[{name!r}]')
+            # Omitting an electrode already means "uncalibrated", so None is
+            # not stored as a second way of saying it:
+            if threshold is not None:
+                normalized[name] = threshold
+        return normalized
+
+    def _recalibrate_stim(self):
+        """Recalibrate the stored stimulus for the thresholds now in force"""
+        stim = getattr(self, '_stim', None)
+        if stim is None:
+            return
+        calibrated = self._calibrated(stim)
+        if calibrated is stim:
+            return
+        # Checked before it is stored, so a rejected stimulus is not the one
+        # left behind:
+        self.check_stim(calibrated)
+        self._stim = calibrated
+
+    def _calibrated(self, stim):
+        """Apply implant thresholds to retained BiphasicPulseTrain sources.
+
+        Returns ``stim`` unchanged if no source needs recalibration.
+        """
+        thresholds = getattr(self, '_thresholds', None) or {}
+        sources = stim._structured_sources()
+        if sources is None:
+            return stim
+        rebuilt, changed = {}, False
+        for name, source in sources:
+            train = (source._with_threshold(thresholds.get(name))
+                     if type(source) is BiphasicPulseTrain else source)
+            changed = changed or train is not source
+            rebuilt[name] = train
+        if not changed:
+            return stim
+        # Give a threshold-specific error for mixed xTh/uA sources.
+        units = {train.unit for train in rebuilt.values()}
+        if len(units) > 1:
+            missing = sorted(name for name, train in rebuilt.items()
+                             if train.unit == xTh)
+            raise DimensionMismatchError(
+                f"Calibrating only some electrodes would leave "
+                f"{', '.join(missing)} measured in threshold multiples and "
+                f"the rest in uA. Give every driven electrode a threshold, or "
+                f"none of them.")
+        if len(sources) == 1 and sources[0][1] is stim:
+            # The stimulus *is* the pulse train, and must stay that kind of
+            # object rather than become a collection of one:
+            return rebuilt[sources[0][0]]
+        return Stimulus(rebuilt,
+                        metadata=deepcopy(stim.metadata.get('user')))
+
     def _require_deliverable_stim(self, stim):
         """Refuse a stimulus this system cannot physically deliver
 
@@ -214,6 +330,10 @@ class ProsthesisSystem(PrettyPrint):
         turns an image into current is exactly as valid as encoding it first.
         """
         if stim.unit.dimension == self.stimulus_unit.dimension:
+            return
+        # Threshold-relative pulse trains may be assigned before
+        # calibration.
+        if stim.unit.dimension == xTh.dimension:
             return
         raise DimensionMismatchError(
             f"{type(self).__name__} delivers "
@@ -233,13 +353,20 @@ class ProsthesisSystem(PrettyPrint):
         itself: ``check_stim`` is public, and is called directly by tests and
         by subclasses on stimuli that never went through the setter.
         """
-        if stim.unit.dimension != uA.dimension:
+        if stim.unit.dimension == uA.dimension:
+            return
+        if stim.unit.dimension == xTh.dimension:
             raise DimensionMismatchError(
                 f"Safety check '{check}' needs an electrical stimulus to "
-                f"check, and this one is measured in "
-                f"{_describe_unit(stim.unit)}. Encode it into current first "
-                f"(see pulse2percept.stimuli.StimulusEncoder), or give the "
-                f"implant a 'preprocess' function that does.")
+                f"check, and this one is a multiple of threshold. Set "
+                f"'thresholds' on the implant, or 'threshold_amp' on the "
+                f"pulse train, so that it names a current.")
+        raise DimensionMismatchError(
+            f"Safety check '{check}' needs an electrical stimulus to "
+            f"check, and this one is measured in "
+            f"{_describe_unit(stim.unit)}. Encode it into current first "
+            f"(see pulse2percept.stimuli.StimulusEncoder), or give the "
+            f"implant a 'preprocess' function that does.")
 
     @classmethod
     def _require_charge_balanced(cls, stim):
@@ -574,11 +701,13 @@ class ProsthesisSystem(PrettyPrint):
                    if not e.activated and name in stim.electrodes]
             if off:
                 stim = stim._without_electrodes(off)
+            # Calibrate a copy; do not mutate the caller's stimulus.
+            stim = self._calibrated(deepcopy(stim))
             # Perform safety checks, etc. These are all questions about what
-            # gets delivered, so they are asked of the pulse train:
+            # gets delivered, so they are asked of the calibrated pulse train:
             self.check_stim(stim)
             # Store stimulus:
-            self._stim = deepcopy(stim)
+            self._stim = stim
 
     @property
     def eye(self):

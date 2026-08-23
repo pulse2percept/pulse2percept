@@ -8,7 +8,7 @@ from . import AxonMapSpatial, Model
 from ..implants import ProsthesisSystem, ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
-from ..units import as_value, um
+from ..units import as_value, um, xTh
 from ..utils import FreezeError, rename_parameter
 from ..utils.base import has_own_attr
 from .base import NotBuiltError, BaseModel, _require_stim_dimension
@@ -17,10 +17,8 @@ from ._granley2021 import fast_biphasic_axon_map
 # Safety limit for locating delayed temporal peaks.
 _PEAK_SEARCH_DOUBLINGS = 4
 
-# `find_threshold` bisects on a scaled copy of the stimulus *data*. This model
-# reads amplitude off the pulse train instead, where it means a multiple of
-# threshold rather than a current, so scaling the data leaves the prediction
-# untouched and the search cannot converge:
+# `find_threshold` bisects on a scaled copy of the stimulus *data*, which this
+# model does not read, so the search cannot converge:
 _FIND_THRESHOLD_MSG = (
     "{cls} does not support find_threshold. It takes amplitude as a multiple "
     "of threshold and reads it from the pulse train the stimulus is made of, "
@@ -208,13 +206,22 @@ class DefaultStreakModel(BaseModel):
         return np.maximum(F_streak, min_f_streak)
 
 
-def _pulse_train_params(stim):
-    """``(electrode, freq, amp, phase_dur, stim_dur)`` per driven electrode
+#: What to do about a pulse whose amplitude is a current of unknown
+#: threshold. Formatted with the failing electrode.
+_NO_THRESHOLD_MSG = (
+    "This model takes amplitude as a multiple of perceptual threshold, and "
+    "electrode {electrode} is driven at {amp:.1f} uA with no threshold to "
+    "measure that against. Either give `amp` in threshold units (e.g. "
+    "`2 * xTh`), pass `threshold_amp` to the BiphasicPulseTrain, or set "
+    "`implant.thresholds`."
+)
 
-    Read off the pulse trains the stimulus is made of rather than off a copy
-    of their numbers in its metadata: a stimulus whose samples were rewritten
-    has no train behind it any more, and this is what tells the two apart. No
-    waveform is generated to answer the question.
+
+def _pulse_train_params(stim):
+    """Return Granley pulse parameters for each driven electrode.
+
+    Parameters are read from retained ``BiphasicPulseTrain`` sources without
+    rendering the waveform. Amplitude is returned in multiples of threshold.
 
     Electrodes driven at zero amplitude are left out, so an empty list means
     the percept is zero.
@@ -225,6 +232,9 @@ def _pulse_train_params(stim):
         If any electrode is driven by something other than a
         :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` with
         ``delay_dur=0``.
+    ValueError
+        If a driven electrode's amplitude is a current whose threshold is
+        unknown.
     """
     sources = stim._structured_sources()
     if sources is None:
@@ -246,7 +256,10 @@ def _pulse_train_params(stim):
                             f"no delay dur (Failing electrode: {electrode})")
         if source.amp == 0:
             continue
-        params.append((electrode, source.freq, source.amp,
+        if source.amp_factor is None:
+            raise ValueError(_NO_THRESHOLD_MSG.format(electrode=electrode,
+                                                      amp=source.amp))
+        params.append((electrode, source.freq, source.amp_factor,
                        source.phase_dur, source.stim_dur))
     return params
 
@@ -385,6 +398,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         n_jobs : int, optional
             Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
     """
+    extra_stimulus_units = (xTh,)
 
     def __init__(self, **params):
         super(BiphasicAxonMapSpatial, self).__init__(**params)
@@ -696,8 +710,17 @@ class BiphasicAxonMapModel(Model):
 
     .. important::
 
-        Stimuli should pass amplitude as a factor of threshold, NOT as raw
-        amplitude in microamps.
+        This model works in multiples of perceptual threshold, so give
+        amplitude in :py:data:`~pulse2percept.units.xTh` (``2 * xTh``), or
+        calibrate the electrode with ``threshold_amp`` or
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` and
+        give it in microamps.
+
+        Threshold is the 50%-detection current for a train at the same
+        frequency and 0.45 ms phase duration [Granley2021]_. If frequency
+        changes, the threshold may change too. The model applies the
+        phase-duration correction itself; do not pre-correct the supplied
+        threshold.
 
         This model reads amplitude, frequency and pulse duration off the
         :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
@@ -840,8 +863,13 @@ class BiphasicAxonMapModel(Model):
 
         .. important::
 
-            Stimuli should pass amplitude as a factor of threshold,
-            NOT as raw amplitude in microamps.
+            This model works in multiples of perceptual threshold, so give
+            amplitude in :py:data:`~pulse2percept.units.xTh` (``2 * xTh``),
+            or calibrate the electrode with ``threshold_amp`` or
+            :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`
+            and give it in microamps. See
+            :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` for what
+            counts as threshold here.
 
             The model reads the intended amplitude, frequency and pulse
             duration off the

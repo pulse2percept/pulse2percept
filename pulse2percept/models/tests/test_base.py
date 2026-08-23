@@ -1355,7 +1355,7 @@ def test_model_requires_a_current_stimulus():
     for model in (spatial, composite):
         with pytest.raises(DimensionMismatchError) as excinfo:
             model.predict_percept(implant)
-        npt.assert_equal('AmplitudeEncoder' in str(excinfo.value), True)
+        npt.assert_equal('electric current' in str(excinfo.value), True)
         npt.assert_equal('dimensionless' in str(excinfo.value), True)
     with pytest.raises(DimensionMismatchError):
         temporal.predict_percept(implant.stim)

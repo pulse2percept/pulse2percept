@@ -37,8 +37,13 @@ current           ``A``, ``mA``, ``uA``, ``nA``
 voltage           ``V``, ``mV``, ``uV``
 charge            ``C``, ``mC``, ``uC``, ``nC``
 visual angle      ``dva``
+threshold ratio   ``xTh``
 dimensionless     ``dimensionless``
 ================  ==========================
+
+``xTh`` ("times threshold") has its own dimension rather than being a
+dimensionless alias, because turning ``2 * xTh`` into a current takes a
+calibration (see :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`).
 
 .. autosummary::
     :toctree: _api
@@ -60,7 +65,9 @@ from .base import (Dimension, Unit, Quantity, DimensionMismatchError, as_value,
                    # charge
                    C, mC, uC, nC,
                    # visual angle
-                   dva)
+                   dva,
+                   # threshold ratio
+                   xTh)
 
 __all__ = [
     'as_value',
@@ -76,4 +83,5 @@ __all__ = [
     'V', 'mV', 'uV',
     'C', 'mC', 'uC', 'nC',
     'dva',
+    'xTh',
 ]

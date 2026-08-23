@@ -244,14 +244,13 @@ def _require_stim_dimension(model, stim):
     """
     if not isinstance(stim, Stimulus):
         return
-    if stim.unit.dimension == model.stimulus_unit.dimension:
+    accepted = (model.stimulus_unit,) + tuple(model.extra_stimulus_units)
+    if stim.unit.dimension in {unit.dimension for unit in accepted}:
         return
+    expected = ' or '.join(_describe_unit(unit) for unit in accepted)
     raise DimensionMismatchError(
-        f"{type(model).__name__} reads its stimulus as "
-        f"{_describe_unit(model.stimulus_unit)}, and this one is measured in "
-        f"{_describe_unit(stim.unit)}. Encode it with "
-        f"pulse2percept.stimuli.AmplitudeEncoder or FrequencyEncoder, which "
-        f"is what says how much current a gray level stands for.")
+        f"{type(model).__name__} expects {expected}, got "
+        f"{_describe_unit(stim.unit)}.")
 
 
 def _spatial_input(implant):
@@ -388,6 +387,8 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     #: The unit stimulus values are expressed in
     stimulus_unit = uA
+    #: Additional stimulus units accepted by this model
+    extra_stimulus_units = ()
     #: The unit spatial coordinates are expressed in
     space_unit = um
     #: The unit time is expressed in
@@ -1575,6 +1576,15 @@ class Model(PrettyPrint):
         if self.has_time:
             return self.temporal.stimulus_unit
         return BaseModel.stimulus_unit
+
+    @property
+    def extra_stimulus_units(self):
+        """Additional stimulus units accepted by the active component"""
+        if self.has_space:
+            return self.spatial.extra_stimulus_units
+        if self.has_time:
+            return self.temporal.extra_stimulus_units
+        return BaseModel.extra_stimulus_units
 
     @property
     def space_unit(self):

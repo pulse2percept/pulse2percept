@@ -7,78 +7,57 @@ import math
 from copy import deepcopy
 import numpy as np
 
-# Primitive dimensions. This is deliberately *not* the seven-dimensional SI
-# system: p2p only ever needs these five, and every other dimension we care
-# about is derived from them (frequency = time^-1, charge = current * time,
-# current density = current / length^2).
+# Primitive dimensions used by p2p. Derived dimensions such as frequency,
+# charge, and current density are formed from these.
 #
-# ``visual_angle`` is a p2p-specific primitive dimension, not an ordinary
-# physical angle: converting degrees of visual angle to retinal or cortical
-# distance is a coordinate transformation owned by a visual field map, not a
-# unit conversion.
-BASE_DIMENSIONS = ('time', 'length', 'current', 'voltage', 'visual_angle')
+# ``visual_angle`` is kept separate from physical angle because converting
+# visual angle to retinal or cortical distance requires a visual field map.
+#
+# ``threshold_ratio`` represents amplitudes relative to perceptual threshold
+# (e.g. ``2 * xTh``). The threshold itself is a current and may vary across
+# electrodes and subjects, so converting a threshold ratio to current requires
+# calibration rather than a fixed unit conversion.
+BASE_DIMENSIONS = ('time', 'length', 'current', 'voltage', 'visual_angle',
+                   'threshold_ratio')
 
-# How the primitive dimensions are spelled in error messages:
+# Human-readable names used in error messages:
 _BASE_LABELS = {
     'time': 'time',
     'length': 'length',
     'current': 'electric current',
     'voltage': 'voltage',
     'visual_angle': 'visual angle',
+    'threshold_ratio': 'threshold ratio',
 }
 
-# Names for the handful of derived dimensions that have one. A dimension earns
-# an entry here when p2p actually talks about it -- these names are what error
-# messages say, and "expected charge density, got time * electric current /
-# length^2" is the difference between a diagnostic and a puzzle. Power and
-# energy are deliberately absent: the algebra derives them from voltage and
-# current already, but no p2p API takes them yet.
+# Human-readable names used in error messages:
 _DERIVED_LABELS = {
-    (0, 0, 0, 0, 0): 'dimensionless',
-    (-1, 0, 0, 0, 0): 'frequency',
-    (1, 0, 1, 0, 0): 'charge',
-    (0, -2, 1, 0, 0): 'current density',
-    (1, -2, 1, 0, 0): 'charge density',
+    (0, 0, 0, 0, 0, 0): 'dimensionless',
+    (-1, 0, 0, 0, 0, 0): 'frequency',
+    (1, 0, 1, 0, 0, 0): 'charge',
+    (0, -2, 1, 0, 0, 0): 'current density',
+    (1, -2, 1, 0, 0, 0): 'charge density',
 }
 
 
 def _snap_scale(scale):
-    """Snap a scale factor to an exact power of ten
+    """Snap near-exact decimal scale factors to powers of ten.
 
-    Every unit p2p exposes is a decimal multiple of its base unit, so scale
-    factors and conversion ratios are powers of ten in exact arithmetic. In
-    floating point they are not: ``1e-6 * 1e-3`` is ``1.0000000000000002e-09``,
-    which would leave ``uA * ms`` a hair away from ``nC``. Snapping keeps the
-    *units* canonical, so that unit algebra lands on the predefined units
-    exactly rather than approximately.
-
-    It does not, and cannot, make every conversion exact: ``0.0041 * 1000`` is
-    ``4.1000000000000005`` no matter how exact the 1000 is. Converted
-    magnitudes agree to floating-point precision, which is why
-    :py:meth:`Quantity.__eq__` compares with a tight relative tolerance rather
-    than bit-for-bit.
-
-    The tolerance is deliberately much tighter than the noise this is meant to
-    remove (a few ulps from multiplying units together), so a scale that is
-    merely *near* a power of ten is left alone.
+    Unit algebra can introduce small floating-point errors, e.g.
+    ``1e-6 * 1e-3 != 1e-9`` exactly. Snapping removes that noise so equivalent
+    compound units resolve to the same predefined unit.
     """
     if not math.isfinite(scale) or scale <= 0:
         return scale
     rounded = round(math.log10(scale))
     if abs(rounded) < 300:
-        # Build the float from its decimal literal rather than with ``**``, so
-        # that the result is the correctly rounded power of ten:
         candidate = float(f'1e{rounded:d}')
         if math.isclose(scale, candidate, rel_tol=1e-12, abs_tol=0.0):
             return candidate
     return scale
 
 
-#: Relative tolerance for comparing quantities. Converting a magnitude between
-#: units is a multiplication, and multiplication rounds: ``0.0041 * mA`` and
-#: ``4.1 * uA`` are the same current but not the same float. This is tight
-#: enough that only rounding noise slips through -- values that differ in the
-#: 12th significant digit are different values, not different spellings.
+#: Relative tolerance used when comparing converted quantity magnitudes.
 _EQ_RTOL = 1e-12
 
 
@@ -835,6 +814,7 @@ LENGTH = Dimension(length=1)
 CURRENT = Dimension(current=1)
 VOLTAGE = Dimension(voltage=1)
 VISUAL_ANGLE = Dimension(visual_angle=1)
+THRESHOLD_RATIO = Dimension(threshold_ratio=1)
 FREQUENCY = TIME ** -1
 CHARGE = CURRENT * TIME
 
@@ -896,6 +876,11 @@ nC = Unit(CHARGE, 1e-9, 'nC')
 #: on the retina or cortex requires a visual field map, not a scale factor.
 dva = Unit(VISUAL_ANGLE, 1, 'dva')
 
+#: Multiple of perceptual threshold ("times threshold"). Becomes a current
+#: only once a threshold is known; see
+#: :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`.
+xTh = Unit(THRESHOLD_RATIO, 1, 'xTh')
+
 
 # The canonical spelling of each predefined unit, for `Unit._display_symbol`.
 # Written out here rather than harvested from this module's namespace: should
@@ -911,7 +896,7 @@ _CANONICAL_UNITS = (dimensionless,
                     A, mA, uA, nA,
                     V, mV, uV,
                     C, mC, uC, nC,
-                    dva)
+                    dva, xTh)
 
 for _unit in _CANONICAL_UNITS:
     _key = (_unit.dimension, _unit.scale)

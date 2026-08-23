@@ -216,8 +216,10 @@ built that way exercises a sixtieth of the per-electrode work and barely moves
 when that work regresses. Use the ``array_ptrain`` helper, as above.
 
 **Match the stimulus to the model.** ``BiphasicAxonMapModel`` reads pulse
-parameters off each electrode and rejects an image; a temporal model given a
-single-frame stimulus measures nothing temporal.
+parameters off each electrode and rejects an image, and its amplitude is a
+multiple of threshold (``array_ptrain(..., amp=20 * p2p.units.xTh)``) rather
+than a current; a temporal model given a single-frame stimulus measures
+nothing temporal.
 
 **An image is not a stimulus.** Gray levels are dimensionless, and both
 ``implant.stim`` and ``predict_percept`` refuse them; user code turns an image

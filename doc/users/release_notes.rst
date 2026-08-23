@@ -64,6 +64,15 @@ API changes:
   :py:class:`~pulse2percept.models.FadingTemporal` now ignores anodic current
   rather than treating it as negative brightness, and enforces ``tau >= dt``.
 
+* A bare :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` amplitude now
+  consistently means microamps.
+  :py:class:`~pulse2percept.models.BiphasicAxonMapModel` amplitudes, which used
+  to be read as multiples of threshold, must now say so with the new ``xTh``
+  unit (``2 * xTh``) or supply a threshold via ``threshold_amp`` or
+  :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`. An
+  uncalibrated ``xTh`` train remains in ``xTh`` until a threshold is
+  provided.
+
 * :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` can now be paired
   with a temporal model, in a space-time-separable approximation: Granley
   determines the peak spatial percept, the temporal model supplies a

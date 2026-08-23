@@ -19,7 +19,8 @@ from pulse2percept.models import (AxonMapSpatial, BiphasicAxonMapModel,
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.units import (DimensionMismatchError, Quantity,
-                                 dimensionless, mm, ms, s, uA, um)
+                                 dimensionless, mm, ms, s, uA, um,
+                                 xTh)
 from pulse2percept.utils.base import FreezeError
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -243,7 +244,10 @@ def test_biphasicAxonMapSpatial():
     model.build()
     axon_map = AxonMapSpatial(step=2).build()
     implant = ArgusII()
-    implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
+    # The axon map reads current and this model reads threshold multiples, so
+    # a 1 uA threshold is what makes the two numbers the same one:
+    implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
+                                                      threshold_amp=1 * uA)})
     percept = model.predict_percept(implant)
     percept_axon = axon_map.predict_percept(implant)
     npt.assert_almost_equal(
@@ -259,7 +263,7 @@ def test_biphasicAxonMapSpatial():
     model = BiphasicAxonMapSpatial(step=2)
     model.build()
     implant = ArgusII()
-    implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1, 0.45)})
+    implant.stim = Stimulus({'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45)})
     percept = model.predict_percept(implant)
     npt.assert_equal(percept.time is None, True)
     # If t_percept is specified, only first frame should have data
@@ -274,7 +278,7 @@ def test_biphasicAxonMapSpatial():
                                    step=1, xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     implant = ArgusII()
-    implant.stim = Stimulus({'A4': BiphasicPulseTrain(20, 1, 1)})
+    implant.stim = Stimulus({'A4': BiphasicPulseTrain(20, 1 * xTh, 1)})
     percept = model.predict_percept(implant)
     npt.assert_equal(np.sum(percept.data > 0.0813), 70)
     npt.assert_equal(np.sum(percept.data > 0.1626), 50)
@@ -450,7 +454,7 @@ def test_find_threshold_not_supported(model_cls):
     # rather than fail somewhere deeper with a confusing message.
     model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
-    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 1, 0.45,
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=100)})
     with pytest.raises(NotImplementedError) as excinfo:
         model.find_threshold(implant, 0.5)
@@ -462,28 +466,25 @@ def test_find_threshold_not_supported(model_cls):
 
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
-# Scaling the train itself, and scaling the stimulus the implant made of it -
-# the second is what a user reaches for, and it goes through the per-electrode
-# metadata rather than the train's own:
+# Scaling the train itself, and scaling the stimulus the implant made of it;
+# the second is what a user reaches for:
 @pytest.mark.parametrize('compose', [False, True])
 def test_scaled_pulse_train_changes_percept(model_cls, compose):
-    # This model reads amplitude off the stimulus metadata, so a scaled pulse
-    # train used to deliver twice the current and predict the very same
-    # percept. Scaling now updates the metadata, and has to give what building
-    # the train at that amplitude in the first place gives:
+    # Scaling has to give what building the train at that amplitude in the
+    # first place gives:
     model = model_cls(xrange=(-12, 12), yrange=(-8, 8), step=1,
                       n_ax_segments=30).build()
-    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45,
+    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=100)})
     single = model.predict_percept(implant).data
     if compose:
         implant.stim = implant.stim * 2
     else:
-        implant.stim = {'C5': BiphasicPulseTrain(20, 1, 0.45,
+        implant.stim = {'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                  stim_dur=100) * 2}
     doubled = model.predict_percept(implant).data
     direct = model.predict_percept(ArgusII(
-        stim={'C5': BiphasicPulseTrain(20, 2, 0.45, stim_dur=100)})).data
+        stim={'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)})).data
     npt.assert_equal(np.any(single), True)
     npt.assert_array_almost_equal(doubled, direct)
     npt.assert_equal(np.allclose(doubled, single), False)
@@ -499,7 +500,7 @@ def test_modified_pulse_train_rejected(model_cls, modify):
     # than predict from pulse parameters that no longer describe the stimulus:
     model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
-    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45,
+    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=100)})
     with np.errstate(divide='ignore', invalid='ignore'):
         implant.stim = modify(implant.stim)
@@ -509,13 +510,13 @@ def test_modified_pulse_train_rejected(model_cls, modify):
 
 def test_pulse_train_amp_sign_does_not_change_percept():
     # `BiphasicPulse` takes the magnitude of `amp`, so these two trains have
-    # the very same waveform. The model reads `amp` back from the metadata and
-    # is a function of it rather than of its magnitude, so the metadata has to
-    # store the magnitude - otherwise identical stimuli predict differently:
+    # the very same waveform, and must therefore predict the same percept:
     model = BiphasicAxonMapModel(xrange=(-12, 12), yrange=(-8, 8), step=1,
                                  n_ax_segments=30).build()
-    pos = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)})
-    neg = ArgusII(stim={'C5': BiphasicPulseTrain(20, -1, 0.45, stim_dur=100)})
+    pos = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
+                                                 stim_dur=100)})
+    neg = ArgusII(stim={'C5': BiphasicPulseTrain(20, -1 * xTh, 0.45,
+                                                 stim_dur=100)})
     npt.assert_almost_equal(pos.stim.data, neg.stim.data)
     npt.assert_array_almost_equal(model.predict_percept(pos).data,
                                   model.predict_percept(neg).data)
@@ -528,7 +529,8 @@ def test_BiphasicAxonMapModel_min_current_spread():
     ``BiphasicAxonMapSpatial`` inherits it; this pins that the biphasic
     kernel actually honours it rather than accepting it and ignoring it.
     """
-    stim = {e: BiphasicPulseTrain(20, 30, 0.45) for e in ('A2', 'C5', 'F8')}
+    stim = {e: BiphasicPulseTrain(20, 30 * xTh, 0.45)
+            for e in ('A2', 'C5', 'F8')}
     implant = ArgusII(stim=stim)
     kwargs = {'xrange': (-8, 8), 'yrange': (-8, 8), 'step': 0.5,
               'rho': 200, 'verbose': False}
@@ -562,7 +564,7 @@ def test_BiphasicAxonMapModel_min_current_spread_error_bound(amp):
     """
     min_spread = 1e-8
     freq, pdur = 20, 0.45
-    implant = ArgusII(stim={e: BiphasicPulseTrain(freq, amp, pdur)
+    implant = ArgusII(stim={e: BiphasicPulseTrain(freq, amp * xTh, pdur)
                             for e in ArgusII().electrode_names})
     kwargs = {'xrange': (-14, 14), 'yrange': (-10, 10), 'step': 0.75,
               'rho': 200, 'lam': 800, 'verbose': False}
@@ -591,7 +593,7 @@ def test_BiphasicAxonMapModel_rejects_nonpositive_effects(attr):
     model = BiphasicAxonMapModel(xrange=(-4, 4), yrange=(-4, 4), step=1,
                                  verbose=False).build()
     setattr(model.spatial, attr, lambda freq, amp, pdur: np.zeros_like(amp))
-    implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 30, 0.45)})
+    implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 30 * xTh, 0.45)})
     with pytest.raises(ValueError, match=attr):
         model.predict_percept(implant)
 
@@ -620,7 +622,7 @@ def test_BiphasicAxonMapModel_rejects_nonfinite_effects(attr, bad):
     setattr(model.spatial, attr,
             lambda freq, amp, pdur: np.full_like(np.asarray(amp, dtype=float),
                                                  bad))
-    implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 30, 0.45)})
+    implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 30 * xTh, 0.45)})
     with pytest.raises(ValueError, match=attr):
         model.predict_percept(implant)
 
@@ -649,7 +651,8 @@ def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
                                                                 dtype=float)))
     biphasic.build()
     got = biphasic.predict_percept(ArgusII(
-        stim={e: BiphasicPulseTrain(20, 30, 0.45) for e in electrodes})).data
+        stim={e: BiphasicPulseTrain(20, 30 * xTh, 0.45)
+              for e in electrodes})).data
 
     plain = AxonMapModel(**kwargs).build()
     stim = np.zeros(60)
@@ -663,7 +666,7 @@ def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
 
 def test_BiphasicAxonMap_t_percept_units():
     """This model overrides `predict_percept`, so it normalizes for itself"""
-    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 1, 0.45,
+    implant = ArgusII(stim={'A1': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=100)})
     for model in (BiphasicAxonMapSpatial(step=2).build(),
                   BiphasicAxonMapModel(step=2).build()):
@@ -699,7 +702,10 @@ def test_BiphasicAxonMap_dimension_before_waveform():
                   BiphasicAxonMapModel(step=2).build()):
         with pytest.raises(DimensionMismatchError) as excinfo:
             model.predict_percept(implant)
-        npt.assert_equal('AmplitudeEncoder' in str(excinfo.value), True)
+        # Both dimensions this model reads are named, not just the one:
+        for accepted in ('electric current', 'threshold ratio'):
+            npt.assert_equal(accepted in str(excinfo.value), True)
+        npt.assert_equal('dimensionless' in str(excinfo.value), True)
     # A current-valued stimulus of the wrong waveform still gets the
     # model-specific message:
     with pytest.raises(TypeError) as excinfo:
@@ -720,8 +726,8 @@ def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
                           lam=400, n_axons=250, n_ax_segments=200,
                           ignore_pickle=True, **params).build()
 
-    implant = ArgusII(stim={'C4': BiphasicPulseTrain(20, 20, 0.45),
-                            'C8': BiphasicPulseTrain(20, 20, 0.45)})
+    implant = ArgusII(stim={'C4': BiphasicPulseTrain(20, 20 * xTh, 0.45),
+                            'C8': BiphasicPulseTrain(20, 20 * xTh, 0.45)})
     plain = make(meridian_blend=0)
     unblended = plain.predict_percept(implant).data
 
@@ -762,10 +768,12 @@ def _no_pulse_train_rendering():
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 @pytest.mark.parametrize('build_stim', [
-    lambda: BiphasicPulseTrain(20, 1, 0.45, stim_dur=100, electrode='C5'),
-    lambda: {'C5': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100),
-             'A2': BiphasicPulseTrain(30, 2, 0.45, stim_dur=100)},
-    lambda: Stimulus({'C5': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)}) * 2,
+    lambda: BiphasicPulseTrain(20, 1 * xTh, 0.45, stim_dur=100,
+                               electrode='C5'),
+    lambda: {'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45, stim_dur=100),
+             'A2': BiphasicPulseTrain(30, 2 * xTh, 0.45, stim_dur=100)},
+    lambda: Stimulus({'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
+                                               stim_dur=100)}) * 2,
 ])
 def test_BiphasicAxonMap_predicts_without_a_waveform(model_cls, build_stim):
     # This model is a function of frequency, amplitude and phase duration, and
@@ -782,12 +790,10 @@ def test_BiphasicAxonMap_predicts_without_a_waveform(model_cls, build_stim):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_ignores_user_metadata(model_cls):
-    # The model is a function of the trains the stimulus is made of, and of
-    # nothing the user filed alongside them -- even metadata that happens to
-    # name pulse parameters:
+    # Metadata that happens to name pulse parameters is still just metadata:
     model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
-    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1, 0.45,
+    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=100)})
     expected = model.predict_percept(implant).data
     implant.stim.metadata['user'] = {'amp': 999, 'freq': 1}
@@ -800,10 +806,11 @@ def test_BiphasicAxonMap_ignores_user_metadata(model_cls):
     lambda: {'C5': MonophasicPulse(-1, 0.45, stim_dur=100)},
     lambda: {'C5': AsymmetricBiphasicPulseTrain(20, 1, 2, 0.45, 0.9,
                                                 stim_dur=100)},
-    lambda: {'C5': BiphasicPulseTrain(20, 1, 0.45, delay_dur=1,
+    lambda: {'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45, delay_dur=1,
                                       stim_dur=100)},
-    lambda: (BiphasicPulseTrain(20, 1, 0.45, stim_dur=100, electrode='C5')
-             .append(BiphasicPulseTrain(50, 1, 0.45, stim_dur=100,
+    lambda: (BiphasicPulseTrain(20, 1 * xTh, 0.45, stim_dur=100,
+                                electrode='C5')
+             .append(BiphasicPulseTrain(50, 1 * xTh, 0.45, stim_dur=100,
                                         electrode='C5'))),
     lambda: {'C5': Stimulus([[0, 1, 1, 0]], time=[0, 1, 99, 100])},
 ])
@@ -826,20 +833,20 @@ def test_BiphasicAxonMap_zero_amplitude_is_inactive(model_cls):
     # than an error -- and is read off `amp`, not off the waveform:
     model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
-    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 0, 0.45,
+    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 0 * xTh, 0.45,
                                                      stim_dur=100),
-                            'A2': BiphasicPulseTrain(20, 0, 0.45,
+                            'A2': BiphasicPulseTrain(20, 0 * xTh, 0.45,
                                                      stim_dur=100)})
     with _no_pulse_train_rendering():
         percept = model.predict_percept(implant)
     npt.assert_almost_equal(percept.data, 0)
     # One driven electrode among zeros still predicts from that one alone:
-    implant.stim = {'C5': BiphasicPulseTrain(20, 0, 0.45, stim_dur=100),
-                    'A2': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)}
+    implant.stim = {'C5': BiphasicPulseTrain(20, 0 * xTh, 0.45, stim_dur=100),
+                    'A2': BiphasicPulseTrain(20, 1 * xTh, 0.45, stim_dur=100)}
     with _no_pulse_train_rendering():
         mixed = model.predict_percept(implant).data
     only = model.predict_percept(ArgusII(
-        stim={'A2': BiphasicPulseTrain(20, 1, 0.45, stim_dur=100)})).data
+        stim={'A2': BiphasicPulseTrain(20, 1 * xTh, 0.45, stim_dur=100)})).data
     npt.assert_array_almost_equal(mixed, only)
 
 
@@ -881,7 +888,7 @@ def _composite(temporal):
 
 
 def _composite_implant(stim_dur=_STIM_DUR):
-    return ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+    return ArgusII(stim={'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                   stim_dur=stim_dur)})
 
 
@@ -1001,11 +1008,11 @@ def test_BiphasicAxonMapSpatial_composite_ignores_inactive_stim_dur():
     # A train at zero amplitude is inactive everywhere, so it must not stretch
     # the envelope the active one rides on either:
     composite, _ = _composite(FadingTemporal())
-    short = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+    short = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                    stim_dur=100)})
-    padded = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+    padded = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                     stim_dur=100),
-                           'A2': BiphasicPulseTrain(20, 0, 0.45,
+                           'A2': BiphasicPulseTrain(20, 0 * xTh, 0.45,
                                                     stim_dur=1000)})
     t_percept = [40, 80, 100]
     npt.assert_array_almost_equal(
@@ -1019,9 +1026,9 @@ def test_BiphasicAxonMapSpatial_composite_rejects_unequal_stim_dur(
     # One separable envelope cannot have one electrode's contribution stop at
     # 100 ms and another's at 1000 ms:
     composite, _ = _composite(temporal_cls())
-    implant = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1, 0.45,
+    implant = ArgusII(stim={'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=100),
-                            'A2': BiphasicPulseTrain(20, 1, 0.45,
+                            'A2': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=1000)})
     with pytest.raises(NotImplementedError):
         composite.predict_percept(implant)
@@ -1047,3 +1054,75 @@ def test_BiphasicAxonMapSpatial_composite_rejects_an_unlocatable_peak():
     composite, _ = _composite(Horsager2009Temporal(tau3=300))
     with pytest.raises(ValueError):
         composite.predict_percept(_composite_implant())
+
+
+def _threshold_model():
+    return BiphasicAxonMapModel(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                                n_ax_segments=30).build()
+
+
+def _percept_at(model, train, thresholds=None):
+    implant = ArgusII(stim={'A2': train})
+    if thresholds is not None:
+        implant.thresholds = thresholds
+    return model.predict_percept(implant).data
+
+
+def test_BiphasicAxonMap_reads_threshold_multiples_not_current():
+    model = _threshold_model()
+    # Uncalibrated 2xTh and 160 uA on an 80 uA electrode are the same
+    # stimulation to this model, though only the second is a current:
+    relative = _percept_at(model, BiphasicPulseTrain(20, 2 * xTh, 0.45,
+                                                     stim_dur=100))
+    npt.assert_equal(np.any(relative), True)
+    calibrated = _percept_at(model, BiphasicPulseTrain(20, 2 * xTh, 0.45,
+                                                       stim_dur=100),
+                             thresholds=80 * uA)
+    npt.assert_array_equal(calibrated, relative)
+    as_current = _percept_at(model, BiphasicPulseTrain(20, 160 * uA, 0.45,
+                                                       stim_dur=100),
+                             thresholds=80 * uA)
+    npt.assert_array_equal(as_current, relative)
+    on_the_train = _percept_at(model,
+                               BiphasicPulseTrain(20, 160 * uA, 0.45,
+                                                  stim_dur=100,
+                                                  threshold_amp=80 * uA))
+    npt.assert_array_equal(on_the_train, relative)
+
+
+def test_BiphasicAxonMap_same_current_differs_by_threshold():
+    model = _threshold_model()
+    train = BiphasicPulseTrain(20, 160 * uA, 0.45, stim_dur=100)
+    npt.assert_equal(np.allclose(_percept_at(model, train, thresholds=80 * uA),
+                                 _percept_at(model, train,
+                                             thresholds=40 * uA)),
+                     False)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_BiphasicAxonMap_uncalibrated_current_raises(model_cls):
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 160 * uA, 0.45,
+                                                     stim_dur=100)})
+    with pytest.raises(ValueError) as err:
+        model.predict_percept(implant)
+    for remedy in ('2 * xTh', 'threshold_amp', 'implant.thresholds'):
+        npt.assert_equal(remedy in str(err.value), True)
+    # Any one of the three fixes it:
+    implant.thresholds = 80 * uA
+    npt.assert_equal(np.any(model.predict_percept(implant).data), True)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_BiphasicAxonMap_zero_current_needs_no_threshold(model_cls):
+    # Zero-current electrodes need no threshold.
+    model = model_cls(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                      n_ax_segments=30).build()
+    implant = ArgusII(stim={'A2': BiphasicPulseTrain(20, 0 * uA, 0.45,
+                                                     stim_dur=100)})
+    with _no_pulse_train_rendering():
+        percept = model.predict_percept(implant)
+    npt.assert_almost_equal(percept.data, 0)

@@ -35,7 +35,7 @@ from typing import Callable
 import pulse2percept as p2p
 
 
-def array_ptrain(implant_cls):
+def array_ptrain(implant_cls, amp=20):
     """A ``BiphasicPulseTrain`` on *every* electrode of ``implant_cls``.
 
     Handing a bare ``BiphasicPulseTrain`` to an implant assigns it to a single
@@ -49,10 +49,14 @@ def array_ptrain(implant_cls):
     ``stimulus`` benchmark carries about 2 ms of implant construction on top of
     the 15 ms of building the pulse trains. That is small, and the alternative
     -- hard-coding the electrode names -- would duplicate the implant.
+
+    ``amp`` defaults to microamps, which is what the current-based models
+    below read. Granley reads multiples of threshold instead, so its scenario
+    passes ``20 * xTh``; the workload is the same either way.
     """
     names = implant_cls().electrode_names
     return p2p.stimuli.Stimulus(
-        {e: p2p.stimuli.BiphasicPulseTrain(20, 20, 0.45, stim_dur=200)
+        {e: p2p.stimuli.BiphasicPulseTrain(20, amp, 0.45, stim_dur=200)
          for e in names})
 
 
@@ -170,10 +174,12 @@ SCENARIOS = [
     ),
     # Granley 2021. Its stimulus is a pulse train rather than an image because
     # the model reads amplitude, frequency and pulse duration off each
-    # electrode's BiphasicPulseTrain and rejects anything else.
+    # electrode's BiphasicPulseTrain and rejects anything else. Its amplitude
+    # is a multiple of threshold, unlike every other scenario here.
     Scenario(
         id='argus2_biphasic_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
+        stimulus=lambda: array_ptrain(p2p.implants.ArgusII,
+                                      amp=20 * p2p.units.xTh),
         implant=lambda stim: p2p.implants.ArgusII(stim=stim),
         model=lambda **kwargs: p2p.models.BiphasicAxonMapModel(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
