@@ -11,7 +11,7 @@ Highlights:
 
 * New :py:class:`~pulse2percept.stimuli.StimulusEncoder` classes translate
   images and videos into electrical stimulation using amplitude or frequency
-  modulation (see :ref:`Stimulus Encoders <topics-encoders>`. 
+  modulation (see :ref:`Stimulus Encoders <topics-encoders>`).
   New :py:class:`~pulse2percept.implants.Raster` classes describe how
   stimulators multiplex electrodes that cannot be driven simultaneously
   (see :ref:`Raster Strategies <topics-rasters>`).

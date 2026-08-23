@@ -63,27 +63,12 @@ def _fps(metadata):
 
 
 class _EncodedStimulus(Stimulus):
-    """A resolved encoder schedule, before it is a waveform
-
-    What :py:meth:`StimulusEncoder._assemble` produces once it has settled
-    *when* every electrode pulses and *how hard*: the pulse template, the
-    onsets of every distinct schedule, which frame each onset belongs to, and
-    the global time axis they all live on. Turning that into an
-    ``n_electrodes x n_time`` matrix is the expensive half, and the only half
-    that waits.
-
-    Deliberately not a scheduler abstraction. The schedule is resolved once,
-    eagerly, by the encoder -- including every validation and warning -- and
-    this class only carries the result of that work to whoever asks for the
-    samples.
-    """
-    #: Described by its schedule rather than by its samples. A frame-varying
-    #: amplitude and a raster realization are not something an operation on
-    #: the waveform could keep true, so one hands back a plain stimulus.
+    """A resolved encoder schedule, expanded into a waveform on demand"""
+    #: whether the stimulus is described by its schedule rather than by its
+    #: samples
     _is_parametric = True
 
-    #: What the encoder asked the device for is not what the device delivers,
-    #: and this class is the one that knows both (see `_spatial_view`):
+    #: whether the stimulus has a special spatial view
     _has_spatial_view = True
 
     __slots__ = ('_amp', '_ticks', '_sched', '_onsets', '_frames',
@@ -93,8 +78,6 @@ class _EncodedStimulus(Stimulus):
     def __init__(self, electrodes, amp, ticks, sched, onsets, frames,
                  pulse_ticks, pulse_vals, total, firing, frame_time,
                  frame_dur, cycle):
-        # `dtype=a.dtype` throughout: these are the scheduler's own numbers,
-        # and converting any of them would change the waveform below.
         self._amp = self._own(amp, amp.dtype)
         self._ticks = self._own(ticks, ticks.dtype)
         self._sched = self._own(sched, sched.dtype)
@@ -103,10 +86,7 @@ class _EncodedStimulus(Stimulus):
         self._pulse_ticks = self._own(pulse_ticks, pulse_ticks.dtype)
         self._pulse_vals = self._own(pulse_vals, pulse_vals.dtype)
         self._total = float(total)
-        # Which electrode-frames were asked for a pulse rate at all. Kept as a
-        # mask rather than the frequencies themselves: what survives into the
-        # spatial view is on/off, and a rate is a fact about time that a
-        # reader with no clock cannot express anyway.
+        # Which electrode-frames were asked for a pulse rate at all:
         self._firing = self._own(firing, bool)
         self._frame_time = self._own(frame_time, frame_time.dtype)
         self._frame_dur = float(frame_dur)
@@ -114,108 +94,53 @@ class _EncodedStimulus(Stimulus):
         # expanding a waveform for:
         self._time = None
         self._defer(electrodes)
-        # The frame clock, which is what decides when a percept is worth
-        # reporting (see `pulse2percept.models.base._frame_clock`), and the
-        # raster sweep the schedule was actually realized on. Derived from the
-        # frozen state above, which stays the authority:
         self.metadata['encoder'] = {'frame_time': self._frame_time,
                                     'frame_dur': self._frame_dur,
                                     'cycle': cycle}
 
     def _spatial_view(self):
-        """What the encoder asked each electrode for, frame by frame
-
-        One column per frame of the source and one row per electrode, holding
-        the current that electrode is modulated to over that frame. It is what
-        the encoder *asks the device for*, before the device's own timing --
-        the pulse shape, the pulse clock, the raster -- settles when any of it
-        is actually delivered.
-
-        An electrode whose train never fires delivers no current at all, so a
-        zero frequency reads as zero amplitude here however high an amplitude
-        it was handed. Past that, rate does not survive into this
-        representation: what a rate means is a fact about time, and a reader
-        with no clock of its own has no way to express it. So frequency
-        modulation collapses to on/off here, which is the least misleading
-        thing it can do.
-        """
+        """One column per frame of the source and one row per electrode"""
         data = np.where(self._firing, self._amp, np.float32(0)).astype(
             np.float32)
-        # A source with a single frame has no time axis of its own, and gets
-        # none here either: what it asks for is one steady thing, and saying so
-        # is what lets a spatial model report a single picture rather than a
-        # sequence of one. Flattened, because that is how `Stimulus` is told
-        # a stimulus has no time component -- an (n, 1) container with
-        # `time=None` is given a time axis of [0] instead.
+        # A source with a single frame has no time axis of its own
         if self._frame_time.size > 1:
             stim = Stimulus(data, electrodes=self.electrodes,
                             time=self._frame_time)
         else:
             stim = Stimulus(data.ravel(), electrodes=self.electrodes)
-        # The frame clock and nothing else: there is no schedule here to
-        # record, which is the whole point of this representation.
         stim.metadata['encoder'] = {'frame_time': self._frame_time,
                                     'frame_dur': self._frame_dur}
         return stim
 
     def _rebuilt(self, electrodes, amp, sched, firing):
-        """This schedule, driving different electrodes or amplitudes
-
-        The one place the electrode-indexed halves of the schedule are
-        replaced. Everything about *when* a pulse happens is untouched, and
-        the per-schedule arrays are shared: an entry no row refers to any more
-        is simply one `_render` skips.
-        """
+        """This schedule, driving different electrodes or amplitudes"""
         rebuilt = _EncodedStimulus(
             electrodes, amp, self._ticks, sched, self._onsets, self._frames,
             self._pulse_ticks, self._pulse_vals, self._total, firing,
             self._frame_time, self._frame_dur,
             self.metadata['encoder']['cycle'])
-        # What the user put in the metadata is theirs; the encoder keys are
-        # rebuilt from the frozen state by the constructor:
         rebuilt.metadata['user'] = deepcopy(self.metadata.get('user'))
         return rebuilt
 
     def _scaled(self, factor):
-        """This schedule, delivering amplitudes scaled by ``factor``
-
-        Scaling changes what each electrode delivers, not when: the onsets,
-        the raster, the frame clock, the pulse shape and which electrodes fire
-        at all are still the ones this schedule resolved. So both descriptions
-        of it -- the waveform and the modulation behind it -- scale together.
-        """
+        """This schedule, delivering amplitudes scaled by ``factor``"""
         return self._rebuilt(self.electrodes, self._amp * factor, self._sched,
                              self._firing)
 
     def _without_electrodes(self, electrodes):
-        """This schedule, no longer driving ``electrodes``
-
-        Only the electrode-indexed arrays are filtered. The schedules
-        themselves are left as they are, including any that no electrode
-        refers to any more -- `_render` skips those, and compacting them would
-        buy nothing but tidiness.
-        """
+        """This schedule, no longer driving ``electrodes``"""
         keep = self._keep_mask(electrodes)
         return self._rebuilt(self.electrodes[keep], self._amp[keep],
                              self._sched[keep], self._firing[keep])
 
     @property
     def duration(self):
-        """Duration of the stimulus (ms)
-
-        Settled by the source the schedule was built from, so this does not
-        generate a waveform to find out.
-        """
+        """Duration of the stimulus (ms)"""
         return self._total
 
     @property
     def time(self):
-        """Time points of the stimulus (ms)
-
-        The schedule already says where every pulse edge falls, so asking for
-        the axis does not expand it into a waveform. Cached, so that the axis
-        a caller sees before the samples exist is the one it sees after.
-        """
+        """Time points of the stimulus (ms)"""
         if self._time is None:
             time = self._ticks * DT
             time[-1] = self._total
@@ -223,11 +148,7 @@ class _EncodedStimulus(Stimulus):
         return self._time
 
     def _render(self):
-        """Expand the schedule into the pulse trains it describes
-
-        One unit-amplitude waveform per distinct schedule, scaled by the
-        amplitude of whichever frame each pulse belongs to.
-        """
+        """Expand the schedule into the pulse trains it describes"""
         data = np.zeros((len(self.electrodes), self._ticks.size),
                         dtype=np.float32)
         for s, (onset, frame) in enumerate(zip(self._onsets, self._frames)):
@@ -246,11 +167,7 @@ class _EncodedStimulus(Stimulus):
                 'time': self.time}
 
     def _pprint_params(self):
-        """Return a dict of class attributes to pretty-print
-
-        The schedule rather than the waveform it describes, so that printing
-        one does not generate it.
-        """
+        """Return a dict of class attributes to pretty-print"""
         return {'electrodes': self.electrodes,
                 'n_frames': self._amp.shape[1],
                 'n_time': self._ticks.size,

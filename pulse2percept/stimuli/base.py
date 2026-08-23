@@ -141,8 +141,9 @@ class Stimulus(PrettyPrint):
     A stimulus can be created from a variety of source types (e.g., scalars,
     lists, NumPy arrays, and dictionaries).
 
-    Pulse parameters (``data``, ``time``, ``electrodes``) are read-only.
-    Arbitrary stimuli are kept as sampled waveforms only.
+    The stimulus arrays (``data``, ``time``, ``electrodes``) and the pulse
+    parameters of a stimulus that has any are read-only. Arbitrary stimuli are
+    kept as sampled waveforms only.
 
     .. seealso ::
 
@@ -151,7 +152,8 @@ class Stimulus(PrettyPrint):
     .. versionadded:: 0.6
 
     .. versionchanged:: 0.10.0
-        Pulse parameters are read-only, and waveform are generated lazily.
+        Stimulus arrays and pulse parameters are read-only, and waveforms
+        are generated lazily.
 
     Parameters
     ----------
@@ -294,6 +296,11 @@ class Stimulus(PrettyPrint):
         if not isinstance(electrodes, ElectrodeNames):
             electrodes = np.array([electrodes]).ravel()
         # `data=None` is what says the waveform has not been generated yet
+        self.__stim = {'data': None, 'time': None,
+                       'electrodes': self._own_names(electrodes)}
+
+    def _forget_waveform(self, electrodes):
+        """Drop a cached waveform the components no longer describe"""
         self.__stim = {'data': None, 'time': None,
                        'electrodes': self._own_names(electrodes)}
 
@@ -753,9 +760,6 @@ class Stimulus(PrettyPrint):
                        f"to shift the other stimulus in time by at least "
                        f"{DT:.1e} ms.")
             raise ValueError(err_str)
-        if self._is_parametric or other._is_parametric:
-            return _SequenceStimulus(_sequence_parts(self) +
-                                     _sequence_parts(other))
         return self._append_waveform(other)
 
     def _end_column(self):
@@ -844,7 +848,7 @@ class Stimulus(PrettyPrint):
 
     def _drop_components(self, keep_el):
         """Forget whole entries of an unmerged collection"""
-        if self._components is None or _has_waveform(self):
+        if self._components is None:
             return False
         kept, start = [], 0
         for component in self._components:
@@ -855,8 +859,7 @@ class Stimulus(PrettyPrint):
             elif rows.any():
                 return False
         self._components = kept
-        self.__stim = {**self.__stim,
-                       'electrodes': self._own_names(self.electrodes[keep_el])}
+        self._forget_waveform(self.electrodes[keep_el])
         return True
 
     def _structured_sources(self):
@@ -1204,12 +1207,13 @@ class Stimulus(PrettyPrint):
 
     def _scale_components(self, factor):
         """An unmerged collection scales its entries instead"""
-        if self._components is None or _has_waveform(self):
+        if self._components is None:
             return None
         if not all(isinstance(src, Stimulus) for src, _ in self._components):
             return None
         stim = self._shallow_copy()
         stim._components = [(src * factor, n) for src, n in self._components]
+        stim._forget_waveform(self.electrodes)
         stim._rescale_metadata(factor)
         return stim
 
@@ -1543,65 +1547,3 @@ class Stimulus(PrettyPrint):
 def _has_time_axis(stim):
     """Whether a stimulus has a time component, without sampling it"""
     return _component_shape(stim)[2]
-
-
-def _sequence_parts(stim):
-    """The parts a stimulus contributes to a sequence, already flattened"""
-    if isinstance(stim, _SequenceStimulus):
-        return list(stim.parts)
-    return [_snapshot(stim)]
-
-
-class _SequenceStimulus(Stimulus):
-    """Two or more stimuli delivered one after another
-
-    What :py:meth:`Stimulus.append` returns when either side is described by
-    something other than its samples. The parts are kept as they are, so a
-    20 Hz train followed by a 50 Hz train goes on being two trains; only the
-    concatenation waits for :py:meth:`_render`.
-
-    Private on purpose.
-    """
-    #: Described by its parts rather than by its samples:
-    _is_parametric = True
-
-    __slots__ = ('_parts',)
-
-    def __init__(self, parts):
-        self._parts = tuple(parts)
-        first = self._parts[0]
-        self._defer(first.electrodes, unit=first.unit,
-                    time_unit=first.time_unit)
-        self.metadata = deepcopy(first.metadata)
-        first._rescale_result(self, None)
-
-    @property
-    def parts(self):
-        """The stimuli this one delivers, in order"""
-        return self._parts
-
-    @property
-    def duration(self):
-        """Duration of the stimulus (ms)"""
-        return self.time[-1]
-
-    def _end_column(self):
-        # Concatenation leaves the last part's last column where it was:
-        return self._parts[-1].data[:, -1]
-
-    def _render(self):
-        """Lay the parts end to end, on the terms `append` always used"""
-        stim = Stimulus(self._parts[0])
-        for part in self._parts[1:]:
-            stim = stim._append_waveform(part)
-        return {'data': stim.data, 'electrodes': self.electrodes,
-                'time': stim.time}
-
-    def _scaled(self, factor):
-        """Scaling a sequence scales each of its parts"""
-        return _SequenceStimulus([part * factor for part in self._parts])
-
-    def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print"""
-        return {'parts': [type(p).__name__ for p in self._parts],
-                'electrodes': self.electrodes, 'metadata': self.metadata}

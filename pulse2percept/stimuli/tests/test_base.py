@@ -1780,9 +1780,9 @@ def _lazy(stim):
     return stim._Stimulus__stim['data'] is None
 
 
-# The collections Phase 5 has to keep unmerged, each as (name, source). The
-# expensive one is the last: differing frequencies means every entry lands on
-# its own time axis, and merging them interpolates all of them onto the union.
+# Collections that stay unmerged, each as (name, source). The expensive one
+# is the last: differing frequencies means every entry lands on its own time
+# axis, and merging them interpolates all of them onto the union.
 COLLECTIONS = [
     ('same protocol', lambda: {'A1': CountingLazy(4, ['A1']),
                                'B2': CountingLazy(4, ['B2'])}),
@@ -1840,8 +1840,8 @@ def test_Stimulus_collection_matches_the_eager_merge(name, build,
 @pytest.mark.parametrize('freqs', [(20, 20), (20, 23), (20, 23, 41)])
 def test_Stimulus_pulse_train_collection_merges_as_it_always_did(freqs,
                                                                  monkeypatch):
-    # The case Phase 5 exists for: differing frequencies put every train on a
-    # time axis of its own, so the merge is the expensive part.
+    # Differing frequencies put every train on a time axis of its own, so
+    # the merge is the expensive part.
     def build():
         return {f'E{i}': BiphasicPulseTrain(f, 10 + i, 0.45, stim_dur=200)
                 for i, f in enumerate(freqs)}
@@ -1982,24 +1982,40 @@ def test_Stimulus_rewriting_a_waveform_forgets_the_components():
     npt.assert_equal(stim.data.shape, (2, 4))
     # Rendering is the one install that keeps them -- it built that waveform:
     npt.assert_equal(stim._components is None, False)
-    for rewrite in (lambda s: s + 5, lambda s: s * 2, lambda s: s >> 1,
-                    lambda s: -s):
+    for rewrite in (lambda s: s + 5, lambda s: s >> 1):
         npt.assert_equal(rewrite(stim)._components, None)
     compressed = stim._shallow_copy()
     compressed.compress()
     npt.assert_equal(compressed._components, None)
-    # Removing an electrode from a collection that has already been rendered
-    # goes through the waveform, so it drops them too:
-    removed = stim._shallow_copy()
-    removed.remove('A1')
-    npt.assert_equal(removed._components, None)
+
+
+@pytest.mark.parametrize('operate', [
+    lambda s: s * 2, lambda s: -s, lambda s: s._without_electrodes('A1')])
+def test_Stimulus_collection_exact_operations_ignore_a_cached_waveform(
+        operate):
+    # Reading `.data` caches a waveform, it does not rewrite one, so the
+    # components stay canonical and an exact operation still works on them.
+    # Whether anybody looked first must not change the outcome.
+    def build():
+        return Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
+                         'B2': BiphasicPulseTrain(23, 20, 0.45,
+                                                  stim_dur=100)})
+    fresh, cached = build(), build()
+    cached.data  # inspect the waveform, and nothing more
+    a, b = operate(fresh), operate(cached)
+
+    def described(stim):
+        return [(name, type(src), src.freq, src.amp)
+                for name, src in stim._structured_sources()]
+    npt.assert_equal(described(a), described(b))
+    npt.assert_array_equal(a.electrodes, b.electrodes)
+    npt.assert_allclose(a.data, b.data, rtol=1e-6, atol=1e-6)
 
 
 @pytest.mark.parametrize('factor', [2, 0.5, -1, 0])
 def test_Stimulus_collection_scaling_stays_deferred(factor):
-    # The Phase 6 target case: scaling a collection of pulse trains scales the
-    # trains, and the expensive part -- merging their time axes -- still has
-    # not happened.
+    # Scaling a collection of pulse trains scales the trains, and the
+    # expensive part -- merging their time axes -- still has not happened.
     def build():
         return {'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
                 'B2': BiphasicPulseTrain(23, 20, 0.45, stim_dur=100)}

@@ -214,15 +214,16 @@ class PulseTrain(Stimulus):
     @property
     def pulse(self):
         """The single pulse this train repeats"""
-        return self._pulse
+        return deepcopy(self._pulse)
+
+    def __deepcopy__(self, memo):
+        train = super().__deepcopy__(memo)
+        train._pulse = deepcopy(self._pulse, memo)
+        return train
 
     @property
     def n_pulses(self):
-        """Number of pulses delivered
-
-        Resolved at construction: ``n_pulses=None`` means as many whole
-        pulses as fit into ``stim_dur``.
-        """
+        """Number of pulses delivered"""
         return self._n_pulses
 
     @property
@@ -234,6 +235,11 @@ class PulseTrain(Stimulus):
     def pulse_type(self):
         """Name of the class the repeated pulse came from"""
         return self._pulse.__class__.__name__
+
+    @property
+    def duration(self):
+        """Stimulus duration (ms)"""
+        return self._stim_dur
 
     def _render(self):
         """Tile the pulse into the train the parameters above describe"""
@@ -268,25 +274,15 @@ class PulseTrain(Stimulus):
         return {'data': data, 'electrodes': self.electrodes, 'time': time}
 
     def _scaled(self, factor):
-        """This train, tiling a pulse whose amplitudes were scaled
-
-        Tiling copies the pulse without doing arithmetic on it, so scaling
-        every sample of the train is the same thing as scaling the pulse it
-        repeats -- and the train's own parameters (frequency, pulse count,
-        window) are untouched by either.
-        """
-        return PulseTrain(self.freq, self.pulse * factor,
+        """This train, tiling a pulse whose amplitudes were scaled"""
+        return PulseTrain(self.freq, self._pulse * factor,
                           n_pulses=self._n_pulses_asked,
                           stim_dur=self.stim_dur,
                           electrode=self.electrodes,
                           metadata=deepcopy(self.metadata.get('user')))
 
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print
-
-        The parameters that define the train rather than the waveform they
-        describe, so that printing one does not generate it.
-        """
+        """Return a dict of class arguments to pretty-print"""
         return {'freq': self.freq, 'pulse_type': self.pulse_type,
                 'n_pulses': self.n_pulses, 'stim_dur': self.stim_dur,
                 'electrodes': self.electrodes, 'metadata': self.metadata}
@@ -401,29 +397,34 @@ class BiphasicPulseTrain(Stimulus):
         return self._train.stim_dur
 
     @property
+    def duration(self):
+        """Stimulus duration (ms)"""
+        return self._train.stim_dur
+
+    @property
     def amp(self):
         """Magnitude (uA) of both phases of each pulse"""
-        return self._train.pulse.amp
+        return self._train._pulse.amp
 
     @property
     def phase_dur(self):
         """Duration (ms) of the cathodic/anodic phase"""
-        return self._train.pulse.phase_dur
+        return self._train._pulse.phase_dur
 
     @property
     def interphase_dur(self):
         """Duration (ms) of the gap between the two phases"""
-        return self._train.pulse.interphase_dur
+        return self._train._pulse.interphase_dur
 
     @property
     def delay_dur(self):
         """Delay (ms) before the first phase of each pulse"""
-        return self._train.pulse.delay_dur
+        return self._train._pulse.delay_dur
 
     @property
     def cathodic_first(self):
         """Whether the cathodic phase is delivered first"""
-        return self._train.pulse.cathodic_first
+        return self._train._pulse.cathodic_first
 
     def _render(self):
         """The tiled train the parameters above describe"""
@@ -431,13 +432,7 @@ class BiphasicPulseTrain(Stimulus):
                 'time': self._train.time}
 
     def _scaled(self, factor):
-        """This train with every amplitude multiplied by ``factor``
-
-        Built from the parameters rather than from the samples: ``amp`` is
-        canonical state now, so twice this train is the train at twice its
-        amplitude -- not the float32 waveform cache doubled and its rounding
-        promoted to truth. The two agree to within a float32 ulp.
-        """
+        """This train with every amplitude multiplied by ``factor``"""
         return BiphasicPulseTrain(
             self.freq, self.amp * abs(factor), self.phase_dur,
             interphase_dur=self.interphase_dur, delay_dur=self.delay_dur,
@@ -455,29 +450,15 @@ class BiphasicPulseTrain(Stimulus):
 
     @classmethod
     def _rescale_params(cls, metadata, factor):
-        """Keep the compatibility copy of the pulse parameters in step
-
-        Scaling is the one operation that leaves a biphasic pulse train a
-        biphasic pulse train, so it scales ``amp`` (a negative factor only
-        swaps the two phases, which does not change the magnitude). Anything
-        else leaves something no single amplitude and frequency describe, so
-        the parameters are dropped and a reader rejects the stimulus rather
-        than predicting from numbers that no longer fit it. What the user put
-        in ``metadata`` is theirs, and survives either way.
-        """
+        """Return a scaled copy of the meta parameters"""
         if 'amp' not in metadata:
-            # Parameters an earlier operation has already dropped
             return metadata
         if factor is None:
             return {'user': metadata.get('user')}
         return dict(metadata, amp=abs(metadata['amp'] * factor))
 
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print
-
-        The parameters that define the train rather than the waveform they
-        describe, so that printing one does not generate it.
-        """
+        """Return a dict of class arguments to pretty-print"""
         return {'freq': self.freq, 'amp': self.amp,
                 'phase_dur': self.phase_dur,
                 'interphase_dur': self.interphase_dur,
@@ -579,39 +560,44 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         return self._train.stim_dur
 
     @property
+    def duration(self):
+        """Stimulus duration (ms)"""
+        return self._train.stim_dur
+
+    @property
     def amp1(self):
         """Magnitude (uA) of the first phase of each pulse"""
-        return self._train.pulse.amp1
+        return self._train._pulse.amp1
 
     @property
     def amp2(self):
         """Magnitude (uA) of the second phase of each pulse"""
-        return self._train.pulse.amp2
+        return self._train._pulse.amp2
 
     @property
     def phase_dur1(self):
         """Duration (ms) of the first pulse phase"""
-        return self._train.pulse.phase_dur1
+        return self._train._pulse.phase_dur1
 
     @property
     def phase_dur2(self):
         """Duration (ms) of the second pulse phase"""
-        return self._train.pulse.phase_dur2
+        return self._train._pulse.phase_dur2
 
     @property
     def interphase_dur(self):
         """Duration (ms) of the gap between the two phases"""
-        return self._train.pulse.interphase_dur
+        return self._train._pulse.interphase_dur
 
     @property
     def delay_dur(self):
         """Delay (ms) before the first phase of each pulse"""
-        return self._train.pulse.delay_dur
+        return self._train._pulse.delay_dur
 
     @property
     def cathodic_first(self):
         """Whether the cathodic phase is delivered first"""
-        return self._train.pulse.cathodic_first
+        return self._train._pulse.cathodic_first
 
     def _render(self):
         """The tiled train the parameters above describe"""
@@ -619,10 +605,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
                 'time': self._train.time}
 
     def _scaled(self, factor):
-        """This train with both phase magnitudes multiplied by ``factor``
-
-        See :py:meth:`BiphasicPulseTrain._scaled`.
-        """
+        """This train with both phase magnitudes multiplied by ``factor``"""
         return AsymmetricBiphasicPulseTrain(
             self.freq, self.amp1 * abs(factor), self.amp2 * abs(factor),
             self.phase_dur1, self.phase_dur2,
@@ -635,11 +618,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
             metadata=deepcopy(self.metadata.get('user')))
 
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print
-
-        The parameters that define the train rather than the waveform they
-        describe, so that printing one does not generate it.
-        """
+        """Return a dict of class arguments to pretty-print"""
         return {'freq': self.freq, 'amp1': self.amp1, 'amp2': self.amp2,
                 'phase_dur1': self.phase_dur1,
                 'phase_dur2': self.phase_dur2,
@@ -761,6 +740,11 @@ class BiphasicTripletTrain(Stimulus):
         return self._train.stim_dur
 
     @property
+    def duration(self):
+        """Stimulus duration (ms)"""
+        return self._train.stim_dur
+
+    @property
     def amp(self):
         """Magnitude (uA) of both phases of each pulse"""
         return self._pulse.amp
@@ -796,11 +780,7 @@ class BiphasicTripletTrain(Stimulus):
                 'time': self._train.time}
 
     def _scaled(self, factor):
-        """This train with every phase magnitude multiplied by ``factor``
-
-        See :py:meth:`BiphasicPulseTrain._scaled`. The triplet structure --
-        three pulses per window, ``interpulse_dur`` apart -- is untouched.
-        """
+        """This train with every phase magnitude multiplied by ``factor``"""
         return BiphasicTripletTrain(
             self.freq, self.amp * abs(factor), self.phase_dur,
             interphase_dur=self.interphase_dur,
@@ -813,11 +793,7 @@ class BiphasicTripletTrain(Stimulus):
             metadata=deepcopy(self.metadata.get('user')))
 
     def _pprint_params(self):
-        """Return a dict of class arguments to pretty-print
-
-        The parameters that define the train rather than the waveform they
-        describe, so that printing one does not generate it.
-        """
+        """Return a dict of class arguments to pretty-print"""
         return {'freq': self.freq, 'amp': self.amp,
                 'phase_dur': self.phase_dur,
                 'interphase_dur': self.interphase_dur,

@@ -1,4 +1,5 @@
 import warnings
+from copy import deepcopy
 
 import numpy as np
 import pytest
@@ -444,9 +445,7 @@ def test_Stimulus_rescale_metadata_leaves_the_source_alone():
     # A composed stimulus files the very dict its source carries, not a copy
     # of it, so `composed.metadata[...]['metadata'] is pt.metadata`. Rescaling
     # the composition must still not reach back into the pulse train the
-    # caller is holding. What keeps it out is the deep copy `_shallow_copy`
-    # takes before `_rescale_metadata` rewrites anything; drop that and an
-    # operator corrupts an object it was never handed:
+    # caller is holding.
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     composed = Stimulus({'A1': pt})
     scaled = composed * 2
@@ -468,12 +467,10 @@ def test_Stimulus_rescale_metadata_leaves_the_source_alone():
 
 @pytest.mark.parametrize('factor', [2, -2, None])
 def test_BiphasicPulseTrain_metadata_rescale_params_does_not_mutate(factor):
-    # `_rescale_params` is documented to return the rewritten metadata and
-    # never to modify the dict it was given. Today every caller hands it a
-    # dict that `_shallow_copy` already deep-copied, so breaking this would
-    # not corrupt anything - which is exactly why it needs its own test. A
-    # subclass author writing the next `_rescale_params` reads the contract,
-    # not the call sites:
+    # `_rescale_params` returns the rewritten metadata and never modifies
+    # the dict it was given. No caller depends on that today -- every one of
+    # them hands it a dict `_shallow_copy` already deep-copied -- so only the
+    # contract holds a subclass author to it:
     meta = {'freq': 20, 'amp': 10, 'phase_dur': 0.45, 'delay_dur': 0,
             'user': None}
     before = dict(meta)
@@ -517,12 +514,10 @@ def test_Stimulus_rescale_metadata_mixed_sources():
     {'type': BiphasicPulseTrain},                        # no metadata recorded
     'not-an-entry-at-all'])
 def test_Stimulus_rescale_metadata_tolerates_odd_entries(entry):
-    # p2p writes these entries itself, so none of this arises in practice.
-    # But `_rescale_metadata` walks whatever is in the dict and calls a hook
-    # off the type it finds recorded there, so an entry it cannot recognize
-    # has to come through unchanged rather than be assumed to implement the
-    # hook - a user who has hand-edited `metadata` gets their entry back, not
-    # an AttributeError from inside an arithmetic operator:
+    # `_rescale_metadata` calls a hook off the type it finds recorded in the
+    # entry, so an entry it cannot recognize has to come through unchanged: a
+    # user who hand-edited `metadata` gets their entry back, not an
+    # AttributeError from inside an arithmetic operator.
     stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)})
     stim.metadata['electrodes']['A1'] = entry
     for modified in (stim * 2, stim * -2, stim + 5, stim.append(stim >> 1)):
@@ -744,6 +739,11 @@ def test_pulse_train_parameters_are_canonical(cls, build, params):
     train = build()
     for name, expected in params.items():
         npt.assert_equal(getattr(train, name), expected)
+    # `duration` is one of them: `stim_dur` already says where the train ends,
+    # so asking must not tile 600 pulses to find out.
+    npt.assert_almost_equal(train.duration, params['stim_dur'])
+    npt.assert_equal(_rendered(train), False)
+    npt.assert_almost_equal(train.time[-1], train.duration, decimal=3)
 
 
 @pytest.mark.parametrize('cls, build, params', TRAINS)
@@ -785,12 +785,28 @@ def test_PulseTrain_snapshots_its_pulse():
     npt.assert_equal(train.pulse_type, 'BiphasicPulse')
 
 
+def test_PulseTrain_pulse_is_not_a_way_into_the_train():
+    # `remove` and `compress` rewrite a stimulus in place, so handing out the
+    # retained pulse itself would let a caller rewrite what the train renders
+    # from -- and leave it driving electrodes its own name list does not
+    # mention. A plain Stimulus is the pulse that has those methods.
+    pulse = Stimulus([[0, -50, 50, 0]], electrodes=['A1'],
+                     time=[0, 0.1, 0.2, 0.3])
+    train = PulseTrain(20, pulse, stim_dur=100)
+    train.pulse.remove('all')
+    npt.assert_equal(len(train.pulse.electrodes), 1)
+    npt.assert_equal(train.data.shape[0], 1)
+    # A copy renders from a pulse of its own, too:
+    copied = deepcopy(train)
+    copied._pulse.compress()
+    npt.assert_equal(train._pulse.is_compressed, False)
+
+
 @pytest.mark.parametrize('factor', [2, 0.5, -1, -2, 1, 0, 1e-3])
 def test_BiphasicPulseTrain_scaling_rebuilds_its_model_metadata(factor):
     # Scaling every amplitude by a finite factor is exactly what a different
-    # `amp` does, so the result is built from the parameters rather than
-    # degraded to a waveform. `amp` is canonical state now, so twice this
-    # train is the train at twice its amplitude:
+    # `amp` does, so twice this train is the train at twice its amplitude,
+    # built from the parameters rather than degraded to a waveform.
     pt = BiphasicPulseTrain(20, 10, 0.45, interphase_dur=0.2, delay_dur=1,
                             stim_dur=100, metadata='userdata')
     routes = [pt * factor, factor * pt]
@@ -904,58 +920,21 @@ def test_train_scaling_survives_a_partial_last_window():
     npt.assert_equal((asked * 2).n_pulses, 2)
 
 
-def test_append_keeps_two_distinct_protocols():
-    # The case the sequence exists for: a 20 Hz train followed by a 50 Hz one
-    # is two protocols, and neither frequency describes the whole thing.
+def test_append_gives_a_plain_waveform():
+    # No single frequency describes a 20 Hz train followed by a 50 Hz one, so
+    # the result stops claiming to be a train at all.
     pt20 = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100, metadata='mine')
     pt50 = BiphasicPulseTrain(50, 20, 0.45, stim_dur=100)
-    seq = pt20.append(pt50)
-    npt.assert_equal([p.freq for p in seq.parts], [20, 50])
-    npt.assert_equal([p.amp for p in seq.parts], [10, 20])
-    npt.assert_equal([type(p) for p in seq.parts],
-                     [BiphasicPulseTrain, BiphasicPulseTrain])
-    # No single `freq` is claimed, and the parameters a model reads are gone
-    # rather than stale -- what the user put in metadata is still theirs:
-    npt.assert_equal(hasattr(seq, 'freq'), False)
-    npt.assert_equal(seq.metadata, {'user': 'mine'})
-    # Appending again extends the sequence rather than nesting one in another:
-    npt.assert_equal(len(seq.append(pt20).parts), 3)
-    npt.assert_equal([p.freq for p in seq.append(pt20).parts], [20, 50, 20])
-
-
-def test_append_renders_what_the_waveform_append_did():
-    pt20 = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
-    pt50 = BiphasicPulseTrain(50, 20, 0.45, stim_dur=100)
+    out = pt20.append(pt50)
+    npt.assert_equal(type(out), Stimulus)
+    npt.assert_equal(hasattr(out, 'freq'), False)
+    # ...and it is the concatenation the waveforms alone would have produced:
     plain20 = Stimulus(pt20.data, electrodes=pt20.electrodes, time=pt20.time)
     plain50 = Stimulus(pt50.data, electrodes=pt50.electrodes, time=pt50.time)
     expected = plain20.append(plain50)
-    seq = pt20.append(pt50)
-    npt.assert_array_equal(seq.data, expected.data)
-    npt.assert_array_equal(seq.time, expected.time)
-    npt.assert_almost_equal(seq.duration, 200)
-
-
-def test_append_scaling_scales_every_part():
-    pt20 = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
-    pt50 = BiphasicPulseTrain(50, 20, 0.45, stim_dur=100)
-    seq = pt20.append(pt50)
-    scaled = seq * 2
-    npt.assert_equal(type(scaled), type(seq))
-    npt.assert_equal([p.amp for p in scaled.parts], [20, 40])
-    npt.assert_allclose(scaled.data, 2 * seq.data, rtol=1e-6, atol=1e-6)
-    npt.assert_equal([p.amp for p in seq.parts], [10, 20])
-
-
-@pytest.mark.parametrize('modify', [lambda s: s + 5, lambda s: s >> 5,
-                                    lambda s: s.pad(s.duration + 10)])
-def test_append_inexact_operations_degrade(modify):
-    # A DC offset or a shift in time is not something the parts describe, so
-    # the sequence gives way to a plain waveform:
-    seq = (BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
-           .append(BiphasicPulseTrain(50, 20, 0.45, stim_dur=100)))
-    out = modify(seq)
-    npt.assert_equal(type(out), Stimulus)
-    npt.assert_equal(out._is_parametric, False)
+    npt.assert_array_equal(out.data, expected.data)
+    npt.assert_array_equal(out.time, expected.time)
+    npt.assert_almost_equal(out.duration, 200)
 
 
 def test_append_still_rejects_what_it_always_did():

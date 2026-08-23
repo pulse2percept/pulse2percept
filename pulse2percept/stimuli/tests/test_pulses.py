@@ -545,23 +545,19 @@ def test_pulse_scaling_stays_a_pulse(cls, build, params, factor):
 
 
 @pytest.mark.parametrize('cls, build, params', PULSES)
-def test_pulse_append_keeps_both_pulses(cls, build, params):
-    # A pulse laid after another is two pulses, so the result keeps both
-    # rather than becoming an anonymous waveform -- but it is no longer one
-    # pulse, and does not answer as one.
+def test_pulse_append_gives_a_plain_waveform(cls, build, params):
+    # Two pulses laid end to end are not one pulse, so the result stops
+    # answering as one rather than reporting parameters that describe half
+    # of it.
     pulse = build()
-    seq = pulse.append(pulse >> DT)
-    npt.assert_equal(type(seq).__name__, '_SequenceStimulus')
-    npt.assert_equal(len(seq.parts), 2)
-    npt.assert_equal(type(seq.parts[0]), cls)
+    out = pulse.append(pulse >> DT)
+    npt.assert_equal(type(out), Stimulus)
     for name in params:
-        npt.assert_equal(hasattr(seq, name), False)
-        npt.assert_almost_equal(getattr(seq.parts[0], name), params[name])
-    npt.assert_almost_equal(seq.duration, 2 * pulse.duration + DT)
-    # ...and it is the same waveform the plain concatenation produced:
+        npt.assert_equal(hasattr(out, name), False)
+    npt.assert_almost_equal(out.duration, 2 * pulse.duration + DT)
     plain = Stimulus(pulse.data, electrodes=pulse.electrodes, time=pulse.time)
-    npt.assert_array_equal(seq.data, plain.append(pulse >> DT).data)
-    npt.assert_array_equal(seq.time, plain.append(pulse >> DT).time)
+    npt.assert_array_equal(out.data, plain.append(pulse >> DT).data)
+    npt.assert_array_equal(out.time, plain.append(pulse >> DT).time)
 
 
 @pytest.mark.parametrize('cls, build, params', PULSES)
