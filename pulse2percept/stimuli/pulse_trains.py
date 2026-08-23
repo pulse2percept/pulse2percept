@@ -19,15 +19,15 @@ from ..utils.constants import DT, MS_PER_S
 _XTH_REFERENCE_AMP = 100.0
 
 
-def _as_threshold_amp(threshold_amp):
+def _as_threshold_amp(threshold_amp, name='threshold_amp'):
     """Normalize a threshold to a plain, strictly positive value in uA"""
-    threshold_amp = as_value(threshold_amp, uA, 'threshold_amp')
+    threshold_amp = as_value(threshold_amp, uA, name)
     if threshold_amp is None:
         return None
     threshold_amp = float(threshold_amp)
     if not np.isfinite(threshold_amp) or threshold_amp <= 0:
-        raise ValueError(f"'threshold_amp' must be a positive, finite "
-                         f"current, not {threshold_amp}.")
+        raise ValueError(f"'{name}' must be a positive, finite current, not "
+                         f"{threshold_amp}.")
     return threshold_amp
 
 

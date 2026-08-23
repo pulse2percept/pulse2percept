@@ -8,10 +8,22 @@ from scipy.interpolate import RegularGridInterpolator
 from .electrodes import Electrode, DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
-from ..stimuli import Stimulus, ImageStimulus, StimulusEncoder, VideoStimulus
+from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
+                       StimulusEncoder, VideoStimulus)
 from ..stimuli.base import _describe_unit
-from ..units import DimensionMismatchError, as_value, uA, um
+from ..stimuli.pulse_trains import _as_threshold_amp
+from ..units import DimensionMismatchError, as_value, uA, um, xTh
 from ..utils import PrettyPrint
+
+
+def _recalibrated(source, threshold):
+    """A pulse train rebuilt for ``threshold``, or ``source`` if unaffected"""
+    if threshold is None or type(source) is not BiphasicPulseTrain:
+        return source
+    if source.threshold_amp == threshold:
+        return source
+    amp = source.amp_factor * xTh if source._amp_relative else source.amp
+    return source._rebuilt(amp, threshold)
 
 
 class ProsthesisSystem(PrettyPrint):
@@ -94,8 +106,9 @@ class ProsthesisSystem(PrettyPrint):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode',
-                 'preprocess', '_encoder', '_raster', '_max_current')
+    __slots__ = ('_earray', '_stim', '_stim_source', '_eye', 'safe_mode',
+                 'preprocess', '_encoder', '_raster', '_max_current',
+                 '_thresholds')
 
     #: The physical quantity this system delivers, mirroring
     #: :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`. An electrical
@@ -135,6 +148,8 @@ class ProsthesisSystem(PrettyPrint):
             params['raster'] = self.raster
         if self.max_current is not None:
             params['max_current'] = self.max_current
+        if self.thresholds:
+            params['thresholds'] = self.thresholds
         return params
 
     @property
@@ -198,6 +213,93 @@ class ProsthesisSystem(PrettyPrint):
         if max_current is not None and max_current <= 0:
             raise ValueError("'max_current' must be positive.")
         self._max_current = max_current
+
+    @property
+    def thresholds(self):
+        """Perceptual threshold current (uA) for each electrode
+
+        Thresholds relate stimulation expressed in
+        :py:data:`~pulse2percept.units.xTh` to physical current. Assign a single
+        current to all electrodes, a dict for per-electrode values, or ``None`` to
+        clear the calibration.
+
+        Changing thresholds recalibrates any structured
+        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` already assigned to
+        :py:attr:`stim`. Threshold-relative trains preserve their ``xTh`` value;
+        current-valued trains preserve their current. Sampled stimuli are
+        unchanged.
+
+        .. versionadded:: 0.10.0
+
+        Examples
+        --------
+        >>> from pulse2percept.implants import ArgusII
+        >>> from pulse2percept.stimuli import BiphasicPulseTrain
+        >>> from pulse2percept.units import uA, xTh
+        >>> implant = ArgusII()
+        >>> implant.stim = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
+        ...                 'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
+        >>> implant.thresholds = {'A1': 80 * uA, 'A2': 120 * uA}
+        >>> [src.amp for _, src in implant.stim._structured_sources()]
+        [160.0, 240.0]
+
+        """
+        return dict(getattr(self, '_thresholds', None) or {})
+
+    @thresholds.setter
+    def thresholds(self, thresholds):
+        """Set perceptual threshold currents."""
+        previous = getattr(self, '_thresholds', {})
+        self._thresholds = self._normalize_thresholds(thresholds)
+        try:
+            self._recalibrate_stim()
+        except Exception:
+            self._thresholds = previous
+            raise
+
+    def _normalize_thresholds(self, thresholds):
+        """Return thresholds as a mapping of electrode names to uA."""
+        if thresholds is None:
+            return {}
+        if not isinstance(thresholds, dict):
+            threshold = _as_threshold_amp(thresholds, 'thresholds')
+            return {name: threshold for name in self.electrode_names}
+        normalized = {}
+        for name, threshold in thresholds.items():
+            if name not in self.electrodes:
+                raise ValueError(f'Electrode "{name}" not found in implant.')
+            normalized[name] = _as_threshold_amp(
+                threshold, f'thresholds[{name!r}]')
+        return normalized
+
+    def _recalibrate_stim(self):
+        """Rebuild the stored structured stimulus using current thresholds."""
+        source = getattr(self, '_stim_source', None)
+        if source is None:
+            return
+        stim = self._calibrated(source)
+        self.check_stim(stim)
+        self._stim = stim
+
+    def _calibrated(self, stim):
+        """Return ``stim`` with electrode thresholds applied where possible."""
+        thresholds = getattr(self, '_thresholds', None)
+        if not thresholds:
+            return stim
+        sources = stim._structured_sources()
+        if sources is None:
+            return stim
+        rebuilt, changed = {}, False
+        for name, source in sources:
+            train = _recalibrated(source, thresholds.get(name))
+            changed = changed or train is not source
+            rebuilt[name] = train
+        if not changed:
+            return stim
+        if len(sources) == 1 and sources[0][1] is stim:
+            return rebuilt[sources[0][0]]
+        return Stimulus(rebuilt,
+                        metadata=deepcopy(stim.metadata.get('user')))
 
     def _require_deliverable_stim(self, stim):
         """Refuse a stimulus this system cannot physically deliver
@@ -513,11 +615,11 @@ class ProsthesisSystem(PrettyPrint):
         """Stimulus setter (called upon ``self.stim = data``)"""
         # if stim is empty or None
         if data is None:
-            self._stim = None
+            self._stim = self._stim_source = None
         elif isinstance(data, (list, tuple, dict)) and not data:
-            self._stim = None
+            self._stim = self._stim_source = None
         elif isinstance(data, np.ndarray) and data.size == 0:
-            self._stim = None
+            self._stim = self._stim_source = None
         else:
             # Preprocess can be a function (callable) or True/False:
             if callable(self.preprocess):
@@ -574,11 +676,18 @@ class ProsthesisSystem(PrettyPrint):
                    if not e.activated and name in stim.electrodes]
             if off:
                 stim = stim._without_electrodes(off)
+            # The stimulus as it was asked for, kept alongside the calibrated
+            # one: `thresholds` can change later, and recalibrating has to
+            # start from what the user specified rather than from the currents
+            # the previous calibration worked out (see `_calibrated`).
+            source = deepcopy(stim)
+            stim = self._calibrated(source)
             # Perform safety checks, etc. These are all questions about what
-            # gets delivered, so they are asked of the pulse train:
+            # gets delivered, so they are asked of the calibrated pulse train:
             self.check_stim(stim)
             # Store stimulus:
-            self._stim = deepcopy(stim)
+            self._stim_source = source
+            self._stim = stim
 
     @property
     def eye(self):
