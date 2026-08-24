@@ -1,5 +1,5 @@
 from libc.math cimport(pow as c_pow, exp as c_exp, fabs as c_abs,
-                       sqrt as c_sqrt)
+                       sqrt as c_sqrt, log1p as c_log1p, expm1 as c_expm1)
 from cython.parallel import prange
 from cython.parallel cimport threadid
 from pulse2percept.utils._fpmode cimport c_denormals_off, c_fpmode_restore
@@ -24,6 +24,54 @@ cdef uint32 REDUCE_LAST = 0
 cdef uint32 REDUCE_PEAK = 1
 
 
+cdef index_t _build_runs(const float32[::1] t_stim,
+                         const uint32[::1] idx_t_percept,
+                         float32 dt,
+                         index_t n_sim,
+                         index_t n_stim,
+                         index_t n_percept,
+                         int32[::1] run_frame,
+                         int32[::1] run_len,
+                         int32[::1] run_out) noexcept nogil:
+    """Group simulation steps into constant-frame runs.
+
+    A run ends when the stimulus frame changes or a percept is due. Within a
+    run, the drive is constant and can be advanced in closed form. ``run_out``
+    is the percept column to write at the end of the run, or -1.
+
+    Stimulus frames are advanced with ``while`` because multiple frame changes
+    may occur within one simulation step.
+
+    Returns the number of runs written.
+    """
+    cdef:
+        index_t idx_sim, idx_stim = 0, idx_frame = 0
+        index_t n_runs = 0, length = 0, prev_frame = -1
+        float32 t_sim
+
+    for idx_sim in range(n_sim):
+        t_sim = idx_sim * dt
+        while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
+            idx_stim = idx_stim + 1
+        if length > 0 and idx_stim != prev_frame:
+            run_frame[n_runs] = <int32>prev_frame
+            run_len[n_runs] = <int32>length
+            run_out[n_runs] = -1
+            n_runs = n_runs + 1
+            length = 0
+        prev_frame = idx_stim
+        length = length + 1
+        if (idx_frame < n_percept and
+                idx_sim == <index_t>idx_t_percept[idx_frame]):
+            run_frame[n_runs] = <int32>idx_stim
+            run_len[n_runs] = <int32>length
+            run_out[n_runs] = <int32>idx_frame
+            n_runs = n_runs + 1
+            length = 0
+            idx_frame = idx_frame + 1
+    return n_runs
+
+
 @cdivision(True)
 cpdef fading_fast(const float32[:, ::1] stim,
                   const float32[::1] t_stim,
@@ -35,12 +83,21 @@ cpdef fading_fast(const float32[:, ::1] stim,
                   uint32 reduce=REDUCE_LAST):
     """Cython implementation of the generic fading model
 
-    The leaky integrator has to be stepped in order, so the loop over time is
-    serial. But, each spatial location integrates independently of every
-    other. Time is therefore the *outer* loop and space the inner one, which
-    leaves the inner loop free of any carried dependency and lets it
-    vectorize. Threads take a block of locations each and run the whole time
-    loop over it, so the parallel region is still entered only once.
+    The model applies the discrete recurrence
+
+    ``b <- b + (dt / tau) * (drive - b)``.
+
+    Consecutive simulation steps with the same drive are grouped into runs.
+    Writing ``q = 1 - dt/tau``, a run of ``n`` steps composes to
+
+    ``b_n = b_0 * q**n + drive * (1 - q**n)``.
+
+    This is the closed form of the discrete recurrence, not of the
+    continuous-time ODE. Stimulus-frame selection therefore follows the same
+    simulation-step timing as before.
+
+    Because brightness is monotonic under constant drive, the peak within a
+    run is at one of its endpoints.
 
     Parameters
     ----------
@@ -69,8 +126,9 @@ cpdef fading_fast(const float32[:, ::1] stim,
         to end on samples a signal whose energy lives in sub-millisecond
         transients, and the sampling phase then walks through the pulse cycle:
         neighbouring frames come out orders of magnitude apart for no reason a
-        viewer would recognize. The peak is tracked across every ``dt`` step,
-        so it costs one compare per step and is exact at any output rate.
+        viewer would recognize. Within a constant-drive run brightness is
+        monotonic, so checking the run endpoints gives the exact interval
+        peak without evaluating every simulation step.
 
     Returns
     -------
@@ -79,13 +137,22 @@ cpdef fading_fast(const float32[:, ::1] stim,
 
     """
     cdef:
-        float32 t_sim, amp, drive, bright, peak, dt_tau
+        float32 t_sim, amp, drive, bright, peak, dt_tau, q, p
         float32[:, ::1] percept
-        float32[:, ::1] stim_t
+        # `const`: the caller's stimulus can be read-only, and the transpose
+        # below is a no-op for a single location, so this is not always a copy
+        const float32[:, ::1] stim_t
         float32[:, ::1] scratch
         float32[:, ::1] running
-        index_t idx_space, idx_sim, idx_stim, idx_frame, idx_block
+        float32[::1] run_q
+        float32[::1] run_p
+        int32[::1] run_frame
+        int32[::1] run_len
+        int32[::1] run_out
+        index_t idx_space, idx_sim, idx_stim, idx_frame, idx_block, idx_run
         index_t n_space, n_stim, n_percept, n_sim, n_blocks, lo, hi, tid
+        index_t n_runs, max_runs
+        double log_q, n_log_q
         unsigned long long fpmode
 
     n_percept = len(idx_t_percept)  # Py overhead
@@ -96,16 +163,9 @@ cpdef fading_fast(const float32[:, ::1] stim,
         n_threads = 1
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
-    # The integrator below steps by `dt * (drive - bright) / tau`, and `dt/tau`
-    # is the same number on every step at every location. Written that way it
-    # is still a division per step, because reassociating it is not a
-    # transformation a C compiler may make on its own: the two forms round
-    # differently, and neither `/fp:fast` nor `-ffast-math` is on. Dividing
-    # once here takes ~14 cycles of latency off the dependency chain that the
-    # loop cannot start the next step without:
+    # Match the float32 step used by the original recurrence.
     dt_tau = dt / tau
-    # One simulation step reads the same stimulus frame for every location, so
-    # transpose once and that read becomes a contiguous run:
+    # Make spatial reads contiguous within each run.
     stim_t = np.ascontiguousarray(np.asarray(stim).T)  # Py overhead
     n_blocks = (n_space + BLOCK - 1) // BLOCK
     # Running brightness, one row per thread. Rows are BLOCK floats apart, so
@@ -115,6 +175,26 @@ cpdef fading_fast(const float32[:, ::1] stim,
     # Allocated even when it is not used, so that the loop below can be written
     # once:
     running = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
+
+    # Runs end at frame changes or output points:
+    max_runs = n_stim + n_percept + 1
+    if max_runs > n_sim:
+        max_runs = n_sim
+    run_frame = np.empty(max_runs, dtype=np.int32)  # Py overhead
+    run_len = np.empty(max_runs, dtype=np.int32)  # Py overhead
+    run_out = np.empty(max_runs, dtype=np.int32)  # Py overhead
+    run_q = np.empty(max_runs, dtype=np.float32)  # Py overhead
+    run_p = np.empty(max_runs, dtype=np.float32)  # Py overhead
+
+    log_q = c_log1p(-<double>dt_tau)
+    with nogil:
+        n_runs = _build_runs(t_stim, idx_t_percept, dt, n_sim, n_stim,
+                             n_percept, run_frame, run_len, run_out)
+        # Precompute run coefficients shared by all spatial locations:
+        for idx_run in range(n_runs):
+            n_log_q = run_len[idx_run] * log_q
+            run_q[idx_run] = <float32>c_exp(n_log_q)
+            run_p[idx_run] = <float32>(-c_expm1(n_log_q))
 
     for idx_block in prange(n_blocks, schedule='static', nogil=True,
                             num_threads=n_threads):
@@ -131,28 +211,10 @@ cpdef fading_fast(const float32[:, ::1] stim,
         for idx_space in range(hi - lo):
             scratch[tid, idx_space] = <float32>0.0
             running[tid, idx_space] = <float32>0.0
-        idx_stim = 0
-        idx_frame = 0
-        for idx_sim in range(n_sim):
-            t_sim = idx_sim * dt
-            # Since the stimulus is compressed ('sparse'), we need to access
-            # the right frame. Each frame is associated with a time, `t_stim`.
-            # We use that frame until `t_sim` advances past it. In other words,
-            # we use the `idx_stim`-th frame for all times
-            # t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1]. Which frame
-            # that is does not depend on the location, so it is settled here
-            # rather than inside the loop below.
-            #
-            # `while`, not `if`: more than one stimulus frame can fall inside a
-            # single simulation step, and skipping only one of them leaves the
-            # integrator reading a frame that is already in the past. Encoded
-            # pulses make that the normal case rather than a corner case --
-            # their edges sit on the DT=1e-3 ms grid while `dt` defaults to
-            # 5e-3 ms, so a pulse edge and the sample after it routinely share
-            # a step. Advancing one frame per step would let a blip that has
-            # already ended drive brightness at a later instant:
-            while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
-                idx_stim = idx_stim + 1
+        for idx_run in range(n_runs):
+            idx_stim = run_frame[idx_run]
+            q = run_q[idx_run]
+            p = run_p[idx_run]
             for idx_space in range(hi - lo):
                 amp = stim_t[idx_stim, lo + idx_space]
                 bright = scratch[tid, idx_space]
@@ -162,20 +224,19 @@ cpdef fading_fast(const float32[:, ::1] stim,
                 drive = -amp
                 if drive < 0.0:
                     drive = 0.0
-                bright = bright + dt_tau * (drive - bright)
-                # Brightness is bounded in [0, \inf[
-                if bright < 0.0:
-                    bright = 0.0
+                # Compose the constant-drive run:
+                bright = bright * q + drive * p
                 scratch[tid, idx_space] = bright
-                # One compare per step, and it keeps the peak exact however
-                # coarse the output rate is:
+                # Brightness is monotonic within a run, so its endpoint is
+                # sufficient for peak tracking:
                 if bright > running[tid, idx_space]:
                     running[tid, idx_space] = bright
-            if idx_sim == idx_t_percept[idx_frame]:
+            idx_frame = run_out[idx_run]
+            if idx_frame >= 0:
                 # `idx_t_percept` stores the time points at which we need to
-                # output a percept. We compare `idx_sim` to `idx_t_percept`
-                # rather than `t_sim` to `t_percept` because there is no good
-                # (fast) way to compare two floating point numbers:
+                # output a percept. The pre-pass ended a run on each of them,
+                # so reaching one is a property of the run rather than a
+                # comparison to make here:
                 for idx_space in range(hi - lo):
                     if reduce == REDUCE_PEAK:
                         bright = running[tid, idx_space]
@@ -188,7 +249,6 @@ cpdef fading_fast(const float32[:, ::1] stim,
                     # value carried across the boundary is a floor on what the
                     # next interval reaches:
                     running[tid, idx_space] = scratch[tid, idx_space]
-                idx_frame = idx_frame + 1
         # Hand the thread back in the floating-point mode it arrived in:
         c_fpmode_restore(fpmode)
 
@@ -207,13 +267,27 @@ cpdef alpha_fast(const float32[:, ::1] stim,
     """Cython implementation of the generic alpha model
 
     Two leaky integrators in series, both with time constant ``tau`` and unit
-    DC gain, driven by the cathodic half of the stimulus. The cascade's
-    impulse response is ``t / tau**2 * exp(-t / tau)``, which starts at zero,
-    peaks at ``t = tau`` and decays afterwards.
+    DC gain, driven by the cathodic half of the stimulus.
 
-    Loop structure, sparse stimulus advancement, blocking, denormal handling
-    and interval peak tracking all work exactly as in ``fading_fast``; see
-    there. The only difference is that each location carries two states.
+    For a constant drive ``d``, write ``a = dt/tau`` and ``q = 1 - a``. After
+    ``n`` discrete steps from states ``x0`` and ``y0``:
+
+        x_n = d + q**n * (x0 - d)
+        y_n = d + q**n * (y0 - d) + n * a * q**(n - 1) * (x0 - d)
+
+    The second-stage response can peak inside a run. Its successive difference is
+
+        y[k+1] - y[k] = a * (x[k] - y[k])
+
+    with
+
+        x[k] - y[k]
+            = q**(k - 1) * (q * (x0 - y0) - k * a * (x0 - d)).
+
+    The term in parentheses is linear in ``k``, so the response has at most one
+    interior maximum. The kernel therefore evaluates the run endpoints and the
+    samples around that turning point instead of stepping through the whole run.
+
 
     Parameters
     ----------
@@ -245,14 +319,30 @@ cpdef alpha_fast(const float32[:, ::1] stim,
 
     """
     cdef:
-        float32 t_sim, amp, drive, stage1, stage1_old, bright, dt_tau
+        float32 amp, drive, x0, y0, xn, yn, u0, kstar, cand, dt_tau, q
+        float32 qn, pn, cn, rn
+        double d_qn, d_pn, d_cn
         float32[:, ::1] percept
-        float32[:, ::1] stim_t
+        # `const`: the caller's response can be read-only, and the transpose
+        # below is a no-op for a single location, so this is not always a copy
+        const float32[:, ::1] stim_t
         float32[:, ::1] first
         float32[:, ::1] second
         float32[:, ::1] running
-        index_t idx_space, idx_sim, idx_stim, idx_frame, idx_block
+        float32[::1] run_q
+        float32[::1] run_p
+        float32[::1] run_c
+        float32[::1] run_r
+        float32[::1] pow_q
+        float32[::1] pow_c
+        float32[::1] pow_r
+        int32[::1] run_frame
+        int32[::1] run_len
+        int32[::1] run_out
+        index_t idx_space, idx_frame, idx_block, idx_run, idx_stim
         index_t n_space, n_stim, n_percept, n_sim, n_blocks, lo, hi, tid
+        index_t n_runs, max_runs, max_len, n_run, k, kk, j
+        double log_q, n_log_q
         unsigned long long fpmode
 
     n_percept = len(idx_t_percept)  # Py overhead
@@ -264,6 +354,7 @@ cpdef alpha_fast(const float32[:, ::1] stim,
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
     dt_tau = dt / tau
+    q = <float32>1.0 - dt_tau
     stim_t = np.ascontiguousarray(np.asarray(stim).T)  # Py overhead
     n_blocks = (n_space + BLOCK - 1) // BLOCK
     # One row per thread for each of the two stages and for the running peak,
@@ -271,6 +362,70 @@ cpdef alpha_fast(const float32[:, ::1] stim,
     first = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
     second = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
     running = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
+
+    max_runs = n_stim + n_percept + 1
+    if max_runs > n_sim:
+        max_runs = n_sim
+    run_frame = np.empty(max_runs, dtype=np.int32)  # Py overhead
+    run_len = np.empty(max_runs, dtype=np.int32)  # Py overhead
+    run_out = np.empty(max_runs, dtype=np.int32)  # Py overhead
+    run_q = np.empty(max_runs, dtype=np.float32)  # Py overhead
+    run_p = np.empty(max_runs, dtype=np.float32)  # Py overhead
+    run_c = np.empty(max_runs, dtype=np.float32)  # Py overhead
+    run_r = np.empty(max_runs, dtype=np.float32)  # Py overhead
+
+    # Use nonnegative weights on y0, x0, and drive. This avoids cancellation
+    # between O(a) terms when the response first rises.
+    log_q = c_log1p(-<double>dt_tau)
+    with nogil:
+        n_runs = _build_runs(t_stim, idx_t_percept, dt, n_sim, n_stim,
+                             n_percept, run_frame, run_len, run_out)
+        max_len = 1
+        for idx_run in range(n_runs):
+            n_run = run_len[idx_run]
+            if n_run > max_len:
+                max_len = n_run
+            if n_run == 1:
+                # Preserve the exact one-step recurrence: stage two sees x0,
+                # so the drive coefficient is exactly zero
+                run_q[idx_run] = q
+                run_p[idx_run] = dt_tau
+                run_c[idx_run] = dt_tau
+                run_r[idx_run] = <float32>0.0
+            else:
+                n_log_q = n_run * log_q
+                d_qn = c_exp(n_log_q)
+                d_pn = -c_expm1(n_log_q)
+                d_cn = n_run * <double>dt_tau * c_exp((n_run - 1) * log_q)
+                run_q[idx_run] = <float32>d_qn
+                run_p[idx_run] = <float32>d_pn
+                run_c[idx_run] = <float32>d_cn
+                # Form the small residual in double to avoid cancellation:
+                run_r[idx_run] = <float32>(d_pn - d_cn)
+
+    # Coefficients used to evaluate candidates around the turning point
+    if reduce == REDUCE_PEAK:
+        pow_q = np.empty(max_len + 1, dtype=np.float32)  # Py overhead
+        pow_c = np.empty(max_len + 1, dtype=np.float32)  # Py overhead
+        pow_r = np.empty(max_len + 1, dtype=np.float32)  # Py overhead
+        with nogil:
+            pow_q[0] = <float32>1.0
+            pow_c[0] = <float32>0.0
+            pow_r[0] = <float32>0.0
+            pow_q[1] = q
+            pow_c[1] = dt_tau
+            pow_r[1] = <float32>0.0
+            for k in range(2, max_len + 1):
+                d_qn = c_exp(k * log_q)
+                d_pn = -c_expm1(k * log_q)
+                d_cn = k * <double>dt_tau * c_exp((k - 1) * log_q)
+                pow_q[k] = <float32>d_qn
+                pow_c[k] = <float32>d_cn
+                pow_r[k] = <float32>(d_pn - d_cn)
+    else:
+        pow_q = np.empty(1, dtype=np.float32)  # Py overhead
+        pow_c = np.empty(1, dtype=np.float32)  # Py overhead
+        pow_r = np.empty(1, dtype=np.float32)  # Py overhead
 
     for idx_block in prange(n_blocks, schedule='static', nogil=True,
                             num_threads=n_threads):
@@ -284,47 +439,67 @@ cpdef alpha_fast(const float32[:, ::1] stim,
             first[tid, idx_space] = <float32>0.0
             second[tid, idx_space] = <float32>0.0
             running[tid, idx_space] = <float32>0.0
-        idx_stim = 0
-        idx_frame = 0
-        for idx_sim in range(n_sim):
-            t_sim = idx_sim * dt
-            while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
-                idx_stim = idx_stim + 1
+        for idx_run in range(n_runs):
+            idx_stim = run_frame[idx_run]
+            n_run = run_len[idx_run]
+            qn = run_q[idx_run]
+            pn = run_p[idx_run]
+            cn = run_c[idx_run]
+            rn = run_r[idx_run]
             for idx_space in range(hi - lo):
                 amp = stim_t[idx_stim, lo + idx_space]
-                stage1 = first[tid, idx_space]
-                bright = second[tid, idx_space]
+                x0 = first[tid, idx_space]
+                y0 = second[tid, idx_space]
                 # Half-wave rectify: only cathodic (negative) current drives
                 # the cascade.
                 drive = -amp
                 if drive < 0.0:
                     drive = 0.0
-                # The second stage reads the first stage as it was at the
-                # start of the step. Feeding it the already-updated value
-                # would let a drive reach the output within a single step and
-                # remove the rise delay the cascade exists for:
-                stage1_old = stage1
-                stage1 = stage1 + dt_tau * (drive - stage1)
-                bright = bright + dt_tau * (stage1_old - bright)
-                # Brightness is bounded in [0, \inf[
-                if bright < 0.0:
-                    bright = 0.0
-                first[tid, idx_space] = stage1
-                second[tid, idx_space] = bright
-                if bright > running[tid, idx_space]:
-                    running[tid, idx_space] = bright
-            if idx_sim == idx_t_percept[idx_frame]:
+                # An interior maximum is possible only when stage one starts
+                # above the drive:
+                u0 = x0 - drive
+                xn = x0 * qn + drive * pn
+                yn = y0 * qn + x0 * cn + drive * rn
+                # # Guard against negative roundoff:
+                if yn < 0.0:
+                    yn = 0.0
+                first[tid, idx_space] = xn
+                second[tid, idx_space] = yn
+                if reduce == REDUCE_PEAK:
+                    # Check the first and last samples of the run:
+                    cand = y0 + dt_tau * (x0 - y0)
+                    if cand > running[tid, idx_space]:
+                        running[tid, idx_space] = cand
+                    if yn > running[tid, idx_space]:
+                        running[tid, idx_space] = yn
+                    # If an interior maximum exists, check the discrete samples
+                    # around its turning point:
+                    if u0 > 0.0 and n_run > 2:
+                        kstar = q * (x0 - y0) / (dt_tau * u0)
+                        if kstar >= 1.0:
+                            kk = <index_t>kstar + 1
+                            for j in range(3):
+                                k = kk - 1 + j
+                                if k < 1:
+                                    k = 1
+                                if k > n_run:
+                                    k = n_run
+                                cand = (y0 * pow_q[k] + x0 * pow_c[k] +
+                                        drive * pow_r[k])
+                                if cand > running[tid, idx_space]:
+                                    running[tid, idx_space] = cand
+            idx_frame = run_out[idx_run]
+            if idx_frame >= 0:
                 for idx_space in range(hi - lo):
                     if reduce == REDUCE_PEAK:
-                        bright = running[tid, idx_space]
+                        yn = running[tid, idx_space]
                     else:
-                        bright = second[tid, idx_space]
-                    if c_abs(bright) >= thresh_percept:
-                        percept[lo + idx_space, idx_frame] = bright
+                        yn = second[tid, idx_space]
+                    if c_abs(yn) >= thresh_percept:
+                        percept[lo + idx_space, idx_frame] = yn
                     # Brightness is continuous, so the value carried across
                     # the boundary is a floor on the next interval's peak:
                     running[tid, idx_space] = second[tid, idx_space]
-                idx_frame = idx_frame + 1
         c_fpmode_restore(fpmode)
 
     return np.asarray(percept)  # Py overhead

@@ -17,6 +17,7 @@ from pulse2percept.stimuli import Stimulus
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.models.beyeler2019 import _AXON_CACHE_VERSION
+from pulse2percept.models._beyeler2019 import fast_axon_map
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -791,6 +792,44 @@ def test_predict_percept_all_zero_stim(ModelClass):
     model = ModelClass(step=1, xrange=(-10, 10), yrange=(-8, 8)).build()
     percept = model.predict_percept(ArgusII(stim=np.zeros(60)))
     npt.assert_equal(np.all(percept.data == 0), True)
+
+
+def test_fast_axon_map_cutoff_band_boundaries():
+    """An electrode exactly on either edge of the cutoff still contributes.
+
+    ``fast_axon_map`` binary-searches the x band ``[ax_x - r, ax_x + r]`` and
+    walks it until x leaves, so both ends are places an off-by-one can hide.
+    ``cutoff_r2`` is an exact float32 square here, so that what is being
+    pinned is the band's boundary rather than the rounding of its ``sqrt``.
+    """
+    rho = np.float32(200.0)
+    cutoff_r2 = np.float32(360000.0)  # r = 600 um, exactly
+    # One pixel whose axon is a single segment at the origin, sensitivity 1:
+    segments = np.array([[0.0, 0.0, 1.0]], dtype=np.float32)
+    start = np.array([0], dtype=np.uint32)
+    end = np.array([1], dtype=np.uint32)
+
+    def bright(x_el):
+        x_el = np.ascontiguousarray(x_el, dtype=np.float32)
+        stim = np.full((len(x_el), 1), -1.0, dtype=np.float32)
+        return fast_axon_map(stim, x_el, np.zeros_like(x_el), segments,
+                             start, end, rho, np.float32(0.0), cutoff_r2,
+                             1).ravel()[0]
+
+    for x in (-600.0, 600.0):
+        npt.assert_array_less(0.0, abs(bright([x])))
+    for x in (-600.5, 600.5):
+        npt.assert_equal(bright([x]), 0.0)
+
+    # ... and the walk in between drops exactly the electrodes outside it:
+    x_el = np.array([-900., -600.5, -600., -300., 0., 300., 600., 600.5,
+                     900.], dtype=np.float32)
+    # Summed in increasing x, which is the order the kernel visits them in:
+    want = np.float32(0.0)
+    two_rho2 = 2.0 * rho * rho
+    for x in x_el[np.abs(x_el) <= 600.0]:
+        want = np.float32(want - np.float32(np.exp(-x * x / two_rho2)))
+    npt.assert_allclose(bright(x_el), want, rtol=1e-6)
 
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))

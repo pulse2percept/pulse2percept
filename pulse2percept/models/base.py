@@ -346,8 +346,13 @@ def _blend_meridian(resp, grid, meridian, width):
                                 mode='nearest')
     weight = np.exp(-dist ** 2 / (2.0 * width ** 2))[..., np.newaxis]
     weight = weight.astype(work.dtype, copy=False)
-    blended = weight * blurred + (1 - weight) * work
-    return blended.reshape(resp.shape).astype(resp.dtype, copy=False)
+    # `work + weight * (blurred - work)`, accumulated into the buffer
+    # `gaussian_filter1d` already returned. Written as one expression it costs
+    # three more arrays the size of the whole response:
+    np.subtract(blurred, work, out=blurred)
+    np.multiply(blurred, weight, out=blurred)
+    np.add(blurred, work, out=blurred)
+    return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
 class NotBuiltError(ValueError, AttributeError):
