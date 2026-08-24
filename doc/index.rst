@@ -1,12 +1,13 @@
 .. _topics-index:
 
 .. toctree::
-   :caption: First steps
+   :caption: Getting started
    :hidden:
    :maxdepth: 1
 
    Overview <self>
    install
+   getting_started
    examples/index
 
 .. toctree::

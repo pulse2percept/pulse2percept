@@ -6,136 +6,74 @@ Physical Units
 
 .. versionadded:: 0.10.0
 
-Many numbers in pulse2percept stand for physical quantities: a current, a
-duration, a distance on the retina, or a position in the visual field. The
-:py:mod:`~pulse2percept.units` module lets you say which, so that the library
-can make sure you meant it:
+Many pulse2percept parameters represent physical quantities. The
+:py:mod:`~pulse2percept.units` module adds dimensional checking and automatic
+conversion while keeping bare numbers fully supported.
 
 .. code-block:: python
 
     from pulse2percept.stimuli import BiphasicPulse
     from pulse2percept.units import mA, us
 
-    pulse = BiphasicPulse(50, 0.45)             # microamps and milliseconds
-    pulse = BiphasicPulse(0.05 * mA, 450 * us)  # exactly the same pulse
+    BiphasicPulse(50, 0.45)
+    BiphasicPulse(0.05 * mA, 450 * us)  # equivalent
 
-Both lines mean the same thing and produce the same numbers. **Units are
-optional.** Bare numbers remain valid and are interpreted in the documented
-canonical unit. Supplying units adds dimensional checking and automatic
-conversion.
+Bare numbers use the canonical unit documented by the API.
 
-.. code-block:: python
+Canonical units
+---------------
 
-    # To import a few units:
-    from pulse2percept.units import ms, uA
-    pulse = BiphasicPulse(50 * uA, 0.45 * ms)
+.. list-table::
+   :header-rows: 1
 
-    # To import many units:
-    import pulse2percept.units as u
-    pulse = BiphasicPulse(50 * u.uA, 0.45 * u.ms)
+   * - Quantity
+     - Bare number means
+   * - stimulus current
+     - microamps (uA)
+   * - stimulus and percept time
+     - milliseconds (ms)
+   * - electrode and tissue geometry
+     - microns (um)
+   * - visual-field coordinates
+     - degrees of visual angle (dva)
+   * - frequency
+     - hertz (Hz)
+   * - image and video intensity
+     - dimensionless
+   * - implant rotation
+     - degrees
 
-pulse2percept does not check magnitudes (e.g., ``450 * ms`` where you meant
-``450 * us``), but it will alert you when you passed the wrong units:
+Objects that use a different unit, such as a Percept with its own time base,
+record that unit explicitly.
 
-.. doctest::
-    :options: +IGNORE_EXCEPTION_DETAIL
+Quantities and conversion
+-------------------------
 
-    >>> from pulse2percept.stimuli import BiphasicPulse
-    >>> from pulse2percept.units import ms, uA
-    >>> BiphasicPulse(0.45 * ms, 50 * uA)  # arguments swapped
-    Traceback (most recent call last):
-      ...
-    DimensionMismatchError: Parameter 'amp' expects electric current (uA), got time (ms).
-
-What bare numbers mean
-----------------------
-
-Each domain has one canonical unit. A bare number is read as being in it, and
-a unitful value is converted into it:
-
-=============================  =====================================
-Quantity                       A bare number means
-=============================  =====================================
-stimulus current               microamps (µA) [#f1]_
-stimulus and percept time      milliseconds (ms) [#f1]_
-electrode and tissue geometry  microns (µm) [#f1]_
-visual field coordinates       degrees of visual angle (dva)
-frequency                      hertz (Hz)
-image and video intensity      dimensionless
-rotation of an implant         plain degrees [#f2]_
-=============================  =====================================
-
-.. [#f1] Unless the object says otherwise. A
-   :py:class:`~pulse2percept.percepts.Percept` records its own
-   :py:attr:`~pulse2percept.percepts.Percept.time_unit`, and a model declares
-   the unit its kernels count in; see `For model authors`_.
-
-.. [#f2] ``rot`` is the angle an array is rotated by in its own plane. It is
-   not a visual angle, so ``dva`` is refused there.
-
-Working with quantities
------------------------
-
-Multiply a number by a unit to get a
+Multiply a number or array by a unit to create a
 :py:class:`~pulse2percept.units.Quantity`:
 
 .. doctest::
 
-    >>> from pulse2percept.units import uA, mA
+    >>> from pulse2percept.units import mA, uA
     >>> q = 500 * uA
-    >>> q
-    500 uA
     >>> q.to(mA)
     0.5 mA
     >>> q.to_value(mA)
     0.5
 
-:py:meth:`~pulse2percept.units.Quantity.to` gives you another quantity;
-:py:meth:`~pulse2percept.units.Quantity.to_value` gives you a plain number and
-is the explicit way to remove a unit. Nothing removes one implicitly.
+``to`` returns another Quantity; ``to_value`` returns a plain number or array.
+Compatible quantities can be added, multiplied, divided, and raised to powers.
 
-Lists and arrays work too, and quantities do arithmetic:
+Dimensional boundaries
+----------------------
 
-.. doctest::
+Units prevent physically different quantities from being confused. For
+example, retinal distance is not visual angle, and image intensity is not
+current.
 
-    >>> from pulse2percept.units import mA, ms, nC, s, uA
-    >>> amps = [10, 20, 50] * uA
-    >>> amps.to_value(mA)
-    array([0.01, 0.02, 0.05])
-    >>> 20 * ms + 0.03 * s
-    50.0 ms
-    >>> (3 * uA * (2 * ms)).to(nC)
-    6 nC
-
-Units compose, so a quantity the vocabulary does not name directly can still
-be built out of the ones it does:
-
-.. doctest::
-
-    >>> from pulse2percept.units import uA, mm
-    >>> 675 * uA / mm ** 2
-    675 uA/mm^2
-
-Boundaries you cannot cross
----------------------------
-
-Dimensions are checked, so a quantity of the wrong kind is refused rather than
-reinterpreted:
-
-.. doctest::
-
-    >>> from pulse2percept.implants import DiskElectrode
-    >>> from pulse2percept.units import dva
-    >>> DiskElectrode(2 * dva, 0, 0, 100)  # doctest: +IGNORE_EXCEPTION_DETAIL
-    Traceback (most recent call last):
-      ...
-    DimensionMismatchError: Parameter 'x' expects length (um), got visual angle (dva).
-
-**Visual angle is not a length.** ``dva`` has its own dimension. There is no
-factor that turns degrees of visual angle into microns of tissue, because the
-relationship is (usually) not a constant: it depends on where in the visual
-field you are, and on which retinotopic map you believe in. That is what a
-:py:class:`~pulse2percept.topography.VisualFieldMap` is for:
+``dva`` therefore does not convert directly to ``um``. Use a
+:py:class:`~pulse2percept.topography.VisualFieldMap` when mapping between
+visual-field and tissue coordinates:
 
 .. code-block:: python
 
@@ -144,180 +82,66 @@ field you are, and on which retinotopic map you believe in. That is what a
 
     x_um, y_um = Watson2014Map().dva_to_ret(2 * dva, 3 * dva)
 
-**Gray levels are not small currents.** An image or a video is dimensionless,
-and a model that stimulates tissue will refuse one. A
-:py:class:`~pulse2percept.stimuli.StimulusEncoder` is what says how much
-current a gray level stands for, and an implant that has one encodes on
-assignment:
+Likewise, :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+:py:class:`~pulse2percept.stimuli.VideoStimulus` are dimensionless. A
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` defines how their gray
+levels become electrical stimulation.
+
+Threshold-relative amplitude
+----------------------------
+
+``xTh`` means a multiple of perceptual threshold, not a current. This matters
+for :py:class:`~pulse2percept.models.BiphasicAxonMapModel`, whose amplitude
+terms are defined relative to threshold.
 
 .. code-block:: python
 
-    from pulse2percept.stimuli import AmplitudeEncoder, ImageStimulus
-    from pulse2percept.implants import ArgusII
-    from pulse2percept.models import ScoreboardModel
-
-    img = ImageStimulus('path-to-image.png')
-
-    implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 50)))
-    implant.stim = img            # encoded here, and now measured in uA
-
-    model = ScoreboardModel().build()
-    percept = model.predict_percept(implant)
-
-Assigning the image to an implant *without* an encoder raises, rather than
-reading its gray levels as microamps. There is no default answer to *how much*
-current a gray level stands for, and choosing one is what an encoder is for.
-
-**Threshold multiples are not currents.** ``xTh`` ("times threshold") has its
-own dimension too. How much current ``2 * xTh`` represents depends on the
-reference threshold, which varies by electrode and by subject. A
-:py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` gets that threshold from
-its ``threshold_amp`` or from
-:py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`, and until it
-has one it stays measured in ``xTh``:
-
-.. code-block:: python
-
-    from pulse2percept.implants import ArgusII
     from pulse2percept.stimuli import BiphasicPulseTrain
     from pulse2percept.units import uA, xTh
 
-    implant = ArgusII()
+    train = BiphasicPulseTrain(20, 2 * xTh, 0.45)
+
     implant.thresholds = {'A4': 80 * uA}
-    implant.stim = {'A4': BiphasicPulseTrain(20, 2 * xTh, 0.45)}  # 160 uA
+    implant.stim = {'A4': train}  # calibrated to 160 uA
 
-Until a threshold is supplied, the train remains in ``xTh``. Electrical
-safety checks and current-based models require calibration to ``uA``.
+Without a threshold, the train remains in ``xTh``. Current-based safety checks
+and models require calibration to a physical current.
 
-Shorthands that are not conversions
------------------------------------
+Documented shorthands
+---------------------
 
-A few arguments accept a quantity of a dimension they do not store, because
-there is exactly one thing it can mean there. These are shorthands resolved at
-the boundary, not conversions: what is stored afterwards is the ordinary
-number it always was.
+A few APIs accept another dimension when there is one unambiguous physical
+interpretation. In particular:
 
-**A retinal extent, for a visual field range.** A spatial model simulates a
-patch of the visual field, sampled uniformly in dva. On a retinal model you
-may name that patch by the piece of retina it lands on, and the model's own
-:py:class:`~pulse2percept.topography.VisualFieldMap` resolves it:
+* retinal-model ``xrange`` and ``yrange`` may be specified as retinal lengths;
+  the model's visual-field map converts the endpoints to visual angle;
+* frame-rate arguments such as ``fps`` accept frequency quantities such as
+  ``30 * Hz``.
 
-.. doctest::
+These are API-level interpretations, not general unit conversions.
 
-    >>> from pulse2percept.models import ScoreboardModel
-    >>> from pulse2percept.topography import Curcio1990Map
-    >>> from pulse2percept.units import mm
-    >>> model = ScoreboardModel(xrange=(-2.8 * mm, 2.8 * mm),
-    ...                         vfmap=Curcio1990Map())
-    >>> model.xrange  # 280 um to the degree
-    (-10.0, 10.0)
+Inspecting units
+----------------
 
-Each range is converted along its corresponding retinal meridian: ``xrange``
-through ``ret_to_dva(x, 0)`` and ``yrange`` through ``ret_to_dva(0, y)``. The
-resulting grid is still rectangular and uniformly sampled in dva, exactly as
-if you had typed those degrees yourself. Under a nonlinear map such as
-:py:class:`~pulse2percept.topography.Watson2014Map` it is therefore not the
-image of a retinal rectangle: naming retinal lengths says how far to simulate,
-it does not make the grid uniform in retinal space.
-
-For the same reason ``step`` has no such spelling -- a grid spaced evenly on
-the retina is a different grid, not a different spelling of this one -- and
-neither has a cortical model, where a length is not shorthand for anything.
-The range is resolved once, when it is assigned, so a map installed afterwards
-does not reinterpret it.
-
-**A frequency, for a frame rate.** ``fps`` counts frames per second, so it
-takes hertz as readily as a bare number: ``percept.play(fps=30)``,
-``percept.play(fps=30 * Hz)`` and ``percept.play(fps=0.03 * kHz)`` are the same
-call, and ``percept.play(fps=30 * ms)`` raises.
-
-Asking what an object's numbers mean
-------------------------------------
-
-Objects store plain numbers, and separately record what those numbers are.
-Reading them back in another unit never changes what is stored:
+Objects expose the units of their stored numbers and methods for reading them
+in another compatible unit:
 
 .. code-block:: python
 
-    stim.unit                            # uA
-    stim.values(mA)                      # the data, in milliamps
-    stim.time_unit                       # ms
-    stim.time_quantity                   # the time axis, with its unit
+    stim.unit
+    stim.values(mA)
+    stim.time_unit
+    stim.time_quantity
 
-    implant.earray.coordinates()         # (n, 3) array of microns
-    implant.earray.coordinates(mm)       # the same array, in millimeters
+    implant.earray.coordinates()
+    implant.earray.coordinates(mm)
 
-    percept.time_unit                    # the model's own time unit
-    percept.times(s)                     # the time axis, in seconds
+    percept.time_unit
+    percept.times(s)
 
-Model parameters answer the same question through
-:py:meth:`~pulse2percept.utils.Parametrized.get_param_units`:
+Model parameter units are available through
+:py:meth:`~pulse2percept.utils.Parametrized.get_param_units`.
 
-.. doctest::
-
-    >>> from pulse2percept.models import ScoreboardModel
-    >>> ScoreboardModel().get_param_units()['rho']
-    um
-
-.. _units-for-model-authors:
-
-For model authors
------------------
-
-A model declares the units its numerical implementation works in:
-
-.. code-block:: python
-
-    from pulse2percept.models import SpatialModel
-    from pulse2percept.units import ms, uA, um
-
-    class MyModel(SpatialModel):
-        stimulus_unit = uA
-        space_unit = um
-        time_unit = ms
-
-These are not decoration, but required to make sure physical units stay out
-of the computationally heavy code sections (e.g., Cython/Torch kernel).
-Each model has private methods to convert from physical units to the raw
-numbers a kernel expects:
-
-.. code-block:: python
-
-    def _predict_spatial(self, earray, stim):
-        x, y, z = self._electrode_coords(earray, stim)  # in space_unit
-        amp = self._stim_values(stim)                   # in stimulus_unit
-        t = self._stim_times(stim)                      # in time_unit
-        return my_kernel(amp, x, y, z, t)               # plain float arrays
-
-If your model has parameters of its own, declare them in
-``get_param_units()`` and they will be normalized on assignment, whether
-they arrive through the constructor, ``build()``, or a plain attribute set.
-
-The rule for everything else: **convert at the Python boundary and keep
-numerical kernels unitless.** By the time an array reaches Cython, NumPy or
-Torch it is ordinary contiguous numeric data, exactly as it always has been.
-
-Deliberately not supported
---------------------------
-
-.. important::
-
-    This is a small, fixed unit system, not a general one. It does not have:
-
-    *  a unit registry or user-defined units — the vocabulary is the handful
-       of units that appear in pulse2percept's own APIs, plus whatever you
-       build out of them with ``*``, ``/`` and ``**``;
-    *  string parsing — ``"5 mA"`` is a string, ``5 * mA`` is a quantity;
-    *  automatic propagation through NumPy — a
-       :py:class:`~pulse2percept.units.Quantity` is not an ``ndarray`` and
-       does not survive ``np.mean`` or ``np.concatenate``;
-    *  conversion between visual angle and length — that is a visual field
-       map, not a unit;
-    *  quantities inside Cython or Torch kernels;
-    *  any requirement that you use units at all.
-
-.. seealso::
-
-    *  :py:mod:`pulse2percept.units` for the full API
-    *  :ref:`Electrical Stimuli <topics-stimuli>`
-    *  :ref:`Computational Models <topics-models>`
+The unit system is intentionally small. It has no unit registry, string
+parsing, or automatic NumPy propagation, and physical units do not enter
+Cython or Torch kernels.

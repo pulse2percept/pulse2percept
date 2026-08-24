@@ -1,54 +1,36 @@
 .. _topics-stimuli:
 
-==================
-Electrical Stimuli
-==================
+=======
+Stimuli
+=======
 
-A :py:class:`~pulse2percept.stimuli.Stimulus` describes what is delivered to
-one or more electrodes. For electrical stimulation, its rows are electrodes,
-its columns are points in time, and its values are current amplitudes:
+A :py:class:`~pulse2percept.stimuli.Stimulus` is labeled two-dimensional data:
+rows are electrodes and columns are points in time. Electrical stimuli contain
+current amplitudes; images and videos contain dimensionless visual intensity.
 
-::
+Electrical waveforms
+--------------------
 
-    electrical Stimulus -> implant -> model -> Percept
-
-Most users do not need to build this array by hand. pulse2percept provides
-pulse and pulse-train classes for common stimulation waveforms, and
-:ref:`stimulus encoders <topics-encoders>` for turning images and videos into
-multi-electrode stimulation.
-
-The usual workflow
-------------------
-
-A :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` is a good place to
-start:
+For most electrical stimulation, start with a
+:py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`:
 
 .. code-block:: python
 
     import pulse2percept as p2p
-    from pulse2percept.units import Hz, ms, uA
-
-    implant = p2p.implants.ArgusII()
 
     pulse_train = p2p.stimuli.BiphasicPulseTrain(
-        freq=20 * Hz,
-        amp=50 * uA,
-        phase_dur=0.45 * ms,
-        stim_dur=500 * ms,
+        freq=20,
+        amp=50,
+        phase_dur=0.45,
+        stim_dur=500,
     )
 
-    implant.stim = {'A5': pulse_train}
+    implant = p2p.implants.ArgusII(stim={'A5': pulse_train})
 
-    model = p2p.models.AxonMapModel().build()
-    percept = model.predict_percept(implant)
-
-The dictionary key identifies the electrode. Electrodes not listed receive no
+The dictionary key selects the electrode; unlisted electrodes receive no
 stimulation.
 
-Pulses and pulse trains
------------------------
-
-pulse2percept provides a small set of common electrical waveforms:
+Common waveform classes include:
 
 .. list-table::
    :header-rows: 1
@@ -56,357 +38,104 @@ pulse2percept provides a small set of common electrical waveforms:
    * - Stimulus
      - Description
    * - :py:class:`~pulse2percept.stimuli.BiphasicPulse`
-     - One symmetric, charge-balanced biphasic pulse.
+     - One symmetric biphasic pulse
    * - :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
-     - Repeated symmetric biphasic pulses. The usual starting point.
+     - Repeated biphasic pulses
    * - :py:class:`~pulse2percept.stimuli.MonophasicPulse`
-     - One cathodic or anodic phase; generally not charge-balanced.
+     - One cathodic or anodic phase
    * - :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulse`
-     - A biphasic pulse whose two phases may differ in amplitude or duration.
+     - Unequal biphasic phases
    * - :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`
-     - A train of asymmetric biphasic pulses.
+     - Repeated asymmetric pulses
    * - :py:class:`~pulse2percept.stimuli.BiphasicTripletTrain`
-     - Repeated triplets of biphasic pulses.
+     - Repeated biphasic triplets
    * - :py:class:`~pulse2percept.stimuli.PulseTrain`
-     - Repeat an arbitrary single-pulse Stimulus.
+     - Repeats an arbitrary pulse
 
-For example, a single cathodic-first biphasic pulse is:
-
-.. code-block:: python
-
-    pulse = p2p.stimuli.BiphasicPulse(
-        amp=50 * uA,
-        phase_dur=0.45 * ms,
-        interphase_dur=0.1 * ms,
-    )
-
-The amplitude specifies the magnitude; ``cathodic_first=True`` by default
-determines the sign of the first phase.
-
-A generic :py:class:`~pulse2percept.stimuli.PulseTrain` can repeat any
-single-pulse stimulus:
-
-.. code-block:: python
-
-    train = p2p.stimuli.PulseTrain(
-        freq=20 * Hz,
-        pulse=pulse,
-        stim_dur=500 * ms,
-    )
-
-Only whole pulses are delivered. If the final pulse would extend beyond
-``stim_dur``, it is omitted rather than cut in half.
-
-Stimulating multiple electrodes
--------------------------------
-
-The easiest way to specify different stimulation on different electrodes is a
-dictionary:
-
-.. code-block:: python
-
-    implant.stim = {
-        'A5': p2p.stimuli.BiphasicPulseTrain(
-            20 * Hz, 50 * uA, 0.45 * ms, stim_dur=500 * ms
-        ),
-        'B5': p2p.stimuli.BiphasicPulseTrain(
-            20 * Hz, 25 * uA, 0.45 * ms, stim_dur=500 * ms
-        ),
-    }
-
-pulse2percept combines the individual waveforms into one
-:py:class:`~pulse2percept.stimuli.Stimulus`, merging their time axes as
-needed.
-
-You can also construct a Stimulus directly from scalar values, arrays, lists,
-or dictionaries:
-
-.. code-block:: python
-
-    static = p2p.stimuli.Stimulus({
-        'A1': 10 * uA,
-        'A2': 20 * uA,
-        'A3': 30 * uA,
-    })
-
-A one-dimensional sequence means one value per electrode and has no time
-component. A two-dimensional array has shape ``(n_electrodes, n_times)``.
+Pulse trains deliver only complete pulses. A pulse that would extend beyond
+``stim_dur`` is omitted rather than truncated.
 
 The Stimulus container
 ----------------------
 
-Every Stimulus exposes the same basic pieces:
+Every Stimulus exposes:
 
-``stim.data``
-    A 2D NumPy array with shape ``(n_electrodes, n_times)``.
+``data``
+    A NumPy array with shape ``(n_electrodes, n_times)``.
 
-``stim.electrodes``
-    The electrode names corresponding to the rows.
+``electrodes``
+    The labels corresponding to the rows.
 
-``stim.time``
-    The time axis, or ``None`` for a stimulus without a time component.
+``time``
+    The time axis, or ``None`` for a timeless stimulus.
 
-Stimuli can also be indexed by electrode name and time:
+A Stimulus can be built from arrays, scalars, lists, dictionaries, or other
+Stimulus objects:
 
 .. code-block:: python
 
-    stim = implant.stim
+    stim = p2p.stimuli.Stimulus({'A1': 10, 'A2': 20, 'A3': 30})
 
-    stim['A5']
-    stim['A5', 10 * ms]
+Stimulus indexing uses electrode labels and physical time:
 
-The second index is a **time**, not a column number. If that exact time is not
-stored, pulse2percept interpolates the waveform there. Use ``stim.data`` when
-you want ordinary NumPy indexing by row and column.
+.. code-block:: python
 
-The time axis does not need to be uniformly sampled. Pulse classes store the
-important transition points rather than a dense sample at every simulation
-step, which keeps long pulse trains compact.
+    stim['A1']
+    stim['A1', 10]
 
-Read-only, and sampled when asked
----------------------------------
+The second index is a time, not a column number. If the exact time is not
+stored, pulse2percept interpolates the waveform there. Use ``stim.data`` for
+ordinary NumPy indexing.
+
+Structured and read-only stimuli
+--------------------------------
 
 .. versionchanged:: 0.10.0
 
-A Stimulus owns its scientific state. Its ``data``, ``time`` and
-``electrodes`` arrays are read-only, so a stimulus you hand to an implant or a
-model is the one you get back.
-
-For an arbitrary stimulus, that sampled waveform *is* the stimulus. Pulses,
-pulse trains and encoded images and videos are different: they retain the
-parameters or the schedule that define them, and only generate their waveform
-when samples are asked for.
+Stimulus state is read-only. Pulse classes retain their defining parameters and
+generate waveform samples only when needed:
 
 .. code-block:: python
 
-    pt = p2p.stimuli.BiphasicPulseTrain(20 * Hz, 50 * uA, 0.45 * ms)
+    pt = p2p.stimuli.BiphasicPulseTrain(20, 50, 0.45)
 
-    pt.freq, pt.amp, pt.phase_dur   # free -- the parameters are the stimulus
-    pt.data                         # generates the waveform, then caches it
+    pt.freq, pt.amp, pt.phase_dur
+    pt.data  # generate and cache the waveform
 
-So pulse parameters are first-class and read-only, and reading them never
-costs a waveform. ``stim.data`` remains the public sampled waveform, and
-reading it may be what generates it.
+Operations preserve the structured form when that remains truthful. For
+example, ``pt * 2`` is still a pulse train, while ``pt + 5`` becomes a plain
+Stimulus because a DC offset is no longer a pulse train.
 
-Most operations return a **new** stimulus rather than modifying one. Where
-the result is still describable in the same terms, it keeps that form:
-
-.. code-block:: python
-
-    pt * 2          # still a BiphasicPulseTrain, at twice the amplitude
-    pt + 5          # a plain Stimulus: a DC offset is not a pulse train
-
-An operation that cannot be represented truthfully -- a DC offset, a shift in
-time, appending a second train -- falls back to an ordinary waveform-backed
-Stimulus rather than reporting parameters that no longer describe it.
-
+Most operations return a new object. The older
 :py:meth:`~pulse2percept.stimuli.Stimulus.compress` and
-:py:meth:`~pulse2percept.stimuli.Stimulus.remove` are the exceptions. Both
-predate this and still replace the stimulus' own state in place.
+:py:meth:`~pulse2percept.stimuli.Stimulus.remove` methods still modify the
+Stimulus in place.
 
-Looking at a stimulus
----------------------
-
-:py:meth:`~pulse2percept.stimuli.Stimulus.plot` draws either an overview of
-the whole stimulus or the waveforms of the electrodes you name:
-
-.. code-block:: python
-
-    stim.plot()                          # compact overview
-    stim.plot(time=(0, 50 * ms))         # the same overview, zoomed in time
-    stim.plot(electrodes=['A5', 'B5'])   # inspect individual waveforms
-
-The overview is an electrode-by-time heatmap: one row per electrode, color for
-current, zero in the middle of a diverging colormap so that cathodic and
-anodic phases are told apart. An encoded Argus II stimulus drives 60
-electrodes, and 60 stacked waveforms show nothing useful; the heatmap shows
-which electrodes fire, how strongly, and in what order. Because it plots
-against the real time axis rather than against column number, the
-sub-millisecond phases of a pulse stay sub-millisecond next to the long gaps
-between pulses.
-
-Naming electrodes means "show me these signals in detail", so it draws
-waveforms instead, one subplot per electrode. So does a single-electrode
-stimulus such as a pulse or a pulse train.
-
-Pass ``kind='traces'`` or ``kind='heatmap'`` to overrule that choice.
-
-Images and videos are different
--------------------------------
+Images and videos
+-----------------
 
 :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-:py:class:`~pulse2percept.stimuli.VideoStimulus` are also Stimulus objects, but
-their values are **dimensionless gray levels, not electrical current**.
+:py:class:`~pulse2percept.stimuli.VideoStimulus` are visual sources, not
+currents. Their values are dimensionless gray levels. A
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` defines how those gray
+levels become electrical stimulation; see :ref:`topics-encoders`.
 
-For example:
+Plotting and time operations
+----------------------------
 
-.. code-block:: python
-
-    source = p2p.stimuli.BostonTrain()
-
-That object is a visual source. It should be passed through an
-:py:class:`~pulse2percept.stimuli.StimulusEncoder` before it is used as electrical
-stimulation:
-
-.. code-block:: python
-
-    implant.encoder = p2p.stimuli.AmplitudeEncoder(
-        amp_range=(0, 50 * uA),
-        freq=20 * Hz,
-    )
-
-    implant.stim = source
-
-This distinction matters. A gray level of 0.5 is not 0.5 uA; the encoder is
-what defines how image intensity maps onto stimulation. See
-:ref:`topics-encoders` for the full workflow.
-
-Physical units
---------------
-
-Electrical stimulus amplitudes are stored in microamps and time in
-milliseconds. Pulse-train frequency is measured in hertz. You can use those
-canonical units directly or pass compatible quantities:
+:py:meth:`~pulse2percept.stimuli.Stimulus.plot` shows a heatmap for
+multi-electrode stimuli and waveform traces for a single or explicitly selected
+electrode:
 
 .. code-block:: python
 
-    from pulse2percept.units import mA, us
+    stim.plot()
+    stim.plot(electrodes=['A1', 'A2'])
 
-    pulse = p2p.stimuli.BiphasicPulse(
-        amp=0.05 * mA,
-        phase_dur=450 * us,
-    )
+:py:meth:`~pulse2percept.stimuli.Stimulus.shift` moves a stimulus in time, and
+:py:meth:`~pulse2percept.stimuli.Stimulus.pad` adds zero-valued endpoints to a
+requested end time. ``stim >> dt`` and ``stim << dt`` are shorthand for
+positive and negative shifts.
 
-This is equivalent to ``50 * uA`` and ``0.45 * ms``. Bare numbers continue to
-mean the documented canonical units. See :ref:`topics-units` for the full
-convention.
-
-Charge balance and safety
--------------------------
-
-For implanted stimulation, charge balance matters. Symmetric
-:py:class:`~pulse2percept.stimuli.BiphasicPulse` and
-:py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects are
-charge-balanced by construction.
-
-The :py:class:`~pulse2percept.stimuli.Stimulus` API also exposes charge-balance
-information for arbitrary waveforms, and implants can apply additional safety
-checks when ``safe_mode=True``. These checks are useful guardrails, but they
-are not a substitute for the safety limits of a particular experimental or
-clinical device.
-
-You can change the coordinates of an existing
-:py:class:`~pulse2percept.stimuli.Stimulus` object, but retain all its data,
-by wrapping it in a second Stimulus object:
-
-.. ipython:: python
-
-    import numpy as np
-    from pulse2percept.stimuli import Stimulus
-
-    # Say you have a Stimulus object with unlabeled axes:
-    stim = Stimulus(np.ones((2, 5)))
-    stim
-
-    # You can create a new object from it with named electrodes:
-    Stimulus(stim, electrodes=['A1', 'F10'])
-
-    # Same goes for time points:
-    Stimulus(stim, time=[0, 0.1, 0.2, 0.3, 0.4])
-
-Shifting and padding a stimulus
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-:py:meth:`~pulse2percept.stimuli.Stimulus.shift` moves a stimulus along the
-time axis, and :py:meth:`~pulse2percept.stimuli.Stimulus.pad` adds
-zero-valued endpoints at ``t=0`` and ``t=duration`` as needed.
-Note that ``pad`` takes the time the padded stimulus should *end* at, not an
-amount of time to add:
-
-.. ipython:: python
-
-    from pulse2percept.stimuli import BiphasicPulse
-
-    # A pulse that starts 3 ms in, ending at 10 ms:
-    stim = BiphasicPulse(-20, 1).shift(3).pad(10)
-    stim.time
-
-    stim.data
-
-Because a stimulus is interpolated between its time points, an endpoint can
-only be added next to a data point that is already zero (as it is for all
-built-in pulses and pulse trains); otherwise ``pad`` raises a ``ValueError``
-rather than adding a ramp.
-
-Shifts may be negative, which moves the stimulus into the past
-(``stim.shift(-3)``).
-``stim >> dt`` and ``stim << dt`` are supported shorthand for
-``stim.shift(dt)`` and ``stim.shift(-dt)``.
-
-Compressing a stimulus
-^^^^^^^^^^^^^^^^^^^^^^
-
-The :py:meth:`~pulse2percept.stimuli.Stimulus.compress` method automatically
-compresses the data in two ways:
-
-* Removes electrodes with all-zero activation.
-* Retains only the time points at which the stimulus changes.
-
-For example, only the signal edges of a pulse train are saved.
-That is, rather than saving the current amplitude at every 0.1ms time step,
-only the non-redundant values are retained.
-This drastically reduces the memory footprint of the stimulus.
-You can convince yourself of that by inspecting the size of a Stimulus object
-before and after compression:
-
-.. ipython:: python
-
-    # An uncompressed stimulus:
-    stim = Stimulus([[0, 0, 0, 1, 2, 0, 0, 0]], time=[0, 1, 2, 3, 4, 5, 6, 7])
-    stim
-
-    # Now compress the data:
-    stim.compress()
-
-    # Notice how the time axis have changed:
-    stim
-
-Accessing stimulus metadata
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Stimuli can store additional relevant information in the ``metadata``
-dictionary. What the user passes is stored in ``metadata["user"]``; each source
-of a multi-source stimulus keeps its own:
-
-.. ipython:: python
-
-    from pulse2percept.stimuli import BiphasicPulseTrain
-
-    # Accessing metadata
-    stim = Stimulus([[0, 1, 2, 3]], metadata='user_metadata')
-    stim.metadata
-
-    # Sources carry their own metadata
-    stim = BiphasicPulseTrain(1,1,1, metadata='user_metadata')
-    stim.metadata
-
-    # A collection keeps the metadata the whole stimulus was given
-    stim = Stimulus({'A1' : BiphasicPulseTrain(1,1,1, metadata='A1 metadata'),
-                     'B2' : BiphasicPulseTrain(1,1,1, metadata='B2 metadata')},
-                    metadata='stimulus metadata')
-    stim.metadata
-    
-.. seealso::
-
-    * :py:class:`pulse2percept.stimuli.Stimulus`
-    * :py:class:`pulse2percept.stimuli.BiphasicPulse`
-    * :py:class:`pulse2percept.stimuli.BiphasicPulseTrain`
-    * :ref:`Stimulus Encoders <topics-encoders>`
-    * :ref:`Visual Prostheses <topics-implants>`
-    * :ref:`Raster Strategies <topics-rasters>`
-    * :ref:`Physical Units <topics-units>`
-    * :ref:`Computational Models <topics-models>`
-
-.. .. minigallery:: pulse2percept.stimuli.Stimulus
-..     :add-heading: Examples using ``Stimulus``
-..     :heading-level: -
+Electrical amplitudes, time, and frequency use the unit conventions described
+in :ref:`topics-units`.
