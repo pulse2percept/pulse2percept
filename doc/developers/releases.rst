@@ -48,7 +48,9 @@ Update ``stable`` to point at the same commit:
 
 .. code-block:: bash
 
-    git push origin vX.Y.Z:stable --force
+    git checkout stable
+    git reset --hard vX.Y.Z
+    git push origin stable --force
 
 After this step,
 
