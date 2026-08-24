@@ -1,8 +1,11 @@
 .. _getting-started:
 
 ===============
-Getting started
+Getting Started
 ===============
+
+Hello world
+-----------
 
 A pulse2percept simulation usually has three parts:
 
@@ -36,7 +39,7 @@ what is delivered, and the model predicts the resulting response.
 Physical quantities can be written explicitly with :mod:pulse2percept.units; 
 bare numbers are also accepted in the documented canonical units.
 
-Images and videos
+Images and Videos
 -----------------
 
 Images and videos must first be translated into electrical stimulation. The

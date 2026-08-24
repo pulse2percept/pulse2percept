@@ -46,7 +46,7 @@ Available models
    * - [Granley2021]_
      - :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
      - spatiotemporal
-   * - [Grinten2023]_
+   * - [vanderGrinten2023]_
      - :py:class:`~pulse2percept.models.cortex.DynaphosModel`
      - spatiotemporal
 

@@ -4,84 +4,124 @@
 Preparing a New Release
 =======================
 
-Before the Release
-------------------
+A release is prepared on a short-lived release branch, merged into ``master``,
+tagged, and then mirrored to ``stable``. The tag is the canonical release
+commit; wheels and the source distribution must be built from that commit.
 
-*  Make a new PR to ``master`` with up-to-date Release Notes
-   "doc/users/release_notes.rst". You might have to go through all the past PRs
-   to make sure all work is adequately represented.
+Prepare the release
+-------------------
 
-*  Make sure the version number is set correctly in "pulse2percept/pyproject.toml".
-   In specific, the ``version`` variable should not contain a ``.dev0`` substring.
+Create a release branch from an up-to-date ``master``:
 
-Uploading the Release to PyPI
------------------------------
+.. code-block:: bash
 
-pulse2percept wheels are built using GitHub Actions ``wheels.yml``.
+    git checkout master
+    git pull
+    git checkout -b release-X.Y
 
-.. important::
+On the release branch:
 
-    Before uploading the wheels to PyPI, make sure they work! You don't have to
-    try all the wheels, but common problems are with Cython (and OpenMP) on
-    Windows vs Unix.
-    You can install a wheel via ``pip install <name>.wheel``
+* Update ``doc/users/release_notes.rst``.
+* Set the final version in ``pyproject.toml`` (for example, ``0.10.0`` rather
+  than ``0.10.0.dev0``).
+* Run the test suite and build the documentation.
 
-The following recipe will upload the files to TestPyPI:
+Open a PR from the release branch into ``master`` and merge it once CI passes.
 
-.. code-block:: python
+Tag the release
+---------------
 
-    cd pulse2percept
+Update your local ``master`` and tag the merged release commit:
 
-    # Clear out your 'dist' folder.
-    rm -rf dist
-    # Make a source distribution
-    python setup.py sdist
+.. code-block:: bash
 
-    # Go and download your wheel files from wherever you put them. e.g. your CI
-    # provider can be configured to store them for you. Put them all into the
-    # 'dist' folder.
-    wget ...
+    git checkout master
+    git pull
+    git tag -a vX.Y.Z -m "pulse2percept X.Y.Z"
+    git push origin vX.Y.Z
 
-    # Or for TestPyPI:
-    twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+The ``v*`` tag triggers the GitHub Actions wheel build. These tag-built wheels,
+rather than wheels from an earlier PR or ``master`` build, are the release
+artifacts.
 
-Install the package from TestPyPI and make sure it works.
-If everything looks good, upload the wheels to the real PyPI:
+Update ``stable`` to point at the same commit:
 
-.. code-block:: python
+.. code-block:: bash
 
-    # Upload using 'twine' (you may need to 'pip install twine')
-    twine upload dist/*
+    git push origin vX.Y.Z:stable --force
 
-Make sure the ``pip install`` command works e.g. on Google Colab.
-If not, you will need to fix the wheels and upload them under a new 
-patch number (e.g., v0.9.1 instead of v0.9.0).
+After this step,
 
-.. _cibuildwheel: https://github.com/joerick/cibuildwheel
-.. _PR194: https://github.com/joerick/cibuildwheel/pull/194
+.. code-block:: text
 
-Releasing the code on GitHub
+    stable == vX.Y.Z == release commit
+
+This keeps the ReadTheDocs ``stable`` branch tied to a released version even if
+new commits are merged into ``master`` immediately afterward.
+
+Build and test the artifacts
 ----------------------------
 
-*  Make ``stable`` identical to ``master`` with a reset + force push:
+While GitHub Actions builds the wheels, create the source distribution from the
+tagged commit:
 
-   .. code-block:: bash
+.. code-block:: bash
 
-       git checkout stable
-       git reset --hard master
-       git push origin stable --force
+    git checkout vX.Y.Z
+    rm -rf dist
+    python -m build --sdist
 
-   This is cleaner than squash and merge. Either way, it's important
-   for ReadTheDocs that every single commit on the ``stable`` branch 
-   matches a release.
+Download the wheels produced by the tag-triggered ``Wheels`` workflow and place
+them alongside the source distribution in ``dist/``:
 
-*  Draft a new release on PR and tag it with "vX.Y".
-   Upload all the wheels you downloaded as artifacts from GitHub Actions
-   above.
+.. code-block:: text
+
+    dist/
+    ├── pulse2percept-X.Y.Z.tar.gz
+    ├── pulse2percept-X.Y.Z-cp311-...whl
+    ├── pulse2percept-X.Y.Z-cp312-...whl
+    └── ...
+
+Check the artifacts before uploading them:
+
+.. code-block:: bash
+
+    twine check dist/*
+
+It is strongly recommended to upload to TestPyPI first:
+
+.. code-block:: bash
+
+    twine upload --repository testpypi dist/*
+
+Install the package from TestPyPI and smoke-test it on at least one common
+platform. Pay particular attention to Cython/OpenMP behavior on Windows,
+Linux, and macOS.
+
+If the artifacts are good, upload the same files to PyPI:
+
+.. code-block:: bash
+
+    twine upload dist/*
+
+Once a version has been uploaded to PyPI, its files cannot be replaced. If a
+release artifact is broken, fix the problem and publish a new patch release.
+
+Publish the GitHub release
+--------------------------
+
+Create a GitHub Release for ``vX.Y.Z`` using the release notes. Attach the same
+source distribution and wheels if desired.
 
 After the release
 -----------------
 
-*  Bump the version number in "pulse2percept/pyproject.toml", add back the ".0dev"
-   appendix, and add an entry for the next release in 
-   "doc/users/release_notes.rst". Then commit to ``master``.
+Return to ``master`` and prepare the next development version:
+
+* Set the version in ``pyproject.toml`` to the next ``.dev0`` version.
+* Add an empty section for the next release to
+  ``doc/users/release_notes.rst``.
+* Commit these changes to ``master``.
+
+For example, after releasing ``0.10.0``, development continues as
+``0.11.0.dev0``.

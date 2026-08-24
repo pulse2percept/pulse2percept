@@ -4,7 +4,7 @@
 Release Notes
 =============
 
-v0.10.0 Encoders (unreleased)
+v0.10.0 Encoders (2026-08-23)
 -----------------------------
 
 Highlights:
@@ -29,9 +29,9 @@ Highlights:
   and percept playback now supports irregular time axes (:pull:`809`,
   :pull:`834`)
 
-* New :py:class:`~pulse2percept.models.AlphaTemporal` and
-  :py:class:`~pulse2percept.models.TorchFadingTemporal` temporal models
-  (:pull:`849`, :pull:`626`)
+* New :py:class:`~pulse2percept.models.AlphaTemporal` and much faster
+  :py:class:`~pulse2percept.models.FadingTemporal` temporal models
+  (:pull:`849`)
 
 * New :py:meth:`~pulse2percept.percepts.Percept.load` reads percepts from image
   and video files (:pull:`835`)

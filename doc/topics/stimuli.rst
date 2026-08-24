@@ -1,8 +1,8 @@
 .. _topics-stimuli:
 
-=======
-Stimuli
-=======
+==================
+Electrical Stimuli
+==================
 
 A :py:class:`~pulse2percept.stimuli.Stimulus` is labeled two-dimensional data:
 rows are electrodes and columns are points in time. Electrical stimuli contain

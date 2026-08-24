@@ -1,8 +1,8 @@
 .. _dev-benchmarks:
 
-========================
-pulse2percept benchmarks
-========================
+======================
+Performance Benchmarks
+======================
 
 A small suite that measures the library's main job: predicting a percept from a
 stimulus, an implant and a phosphene model. It tracks **execution time** and
