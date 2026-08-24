@@ -124,9 +124,12 @@ class FadingTemporal(TemporalModel):
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct multiples "
                              f"of `dt`={self.dt:.2e}")
-        # Cython returns a 2D (space x time) NumPy array:
-        return fading_fast(stim_data.astype(np.float32),
-                           time.astype(np.float32),
+        # Cython returns a 2D (space x time) NumPy array. `copy=False`: a
+        # spatial stage upstream already hands this over as float32, and the
+        # array is the whole space x time response, so copying it to the dtype
+        # it is already in is the largest allocation in the call:
+        return fading_fast(stim_data.astype(np.float32, copy=False),
+                           time.astype(np.float32, copy=False),
                            idx_percept, self.dt, self.tau, self.thresh_percept,
                            self.n_threads, 1 if reduce == 'peak' else 0)
 

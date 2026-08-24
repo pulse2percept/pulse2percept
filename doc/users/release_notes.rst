@@ -94,6 +94,11 @@ API changes:
   including multi-electrode stimulus heatmaps and ``vmin``/``vmax`` controls
   for percept playback and saving.
 
+* :py:class:`~pulse2percept.models.FadingTemporal` and
+  :py:class:`~pulse2percept.models.AxonMapSpatial` are substantially faster
+  and agree with their previous output to within float32 rounding rather than
+  bit for bit.
+
 Bug fixes:
 
 * Stimulus timing, metadata propagation, and pulse-train handling are more

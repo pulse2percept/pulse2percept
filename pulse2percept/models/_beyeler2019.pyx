@@ -1,6 +1,6 @@
 from libc.math cimport(powf as c_pow, expf as c_exp, tanhf as c_tanh,
                        sinf as c_sin, cosf as c_cos, fabsf as c_abs,
-                       isnan as c_isnan)
+                       isnan as c_isnan, sqrtf as c_sqrt)
 from cython.parallel import prange
 from cython.parallel cimport threadid
 from cython import cdivision  # for modulo operator
@@ -14,6 +14,19 @@ ctypedef cnp.int32_t int32
 ctypedef Py_ssize_t index_t
 
 cdef float32 deg2rad = <float32>(3.14159265358979323846 / 180.0)
+
+
+cdef inline index_t _lower_bound(const float32[::1] xs, index_t n,
+                                 float32 value) noexcept nogil:
+    """Index of the first entry of sorted ``xs[:n]`` at or above ``value``."""
+    cdef index_t lo = 0, hi = n, mid
+    while lo < hi:
+        mid = lo + ((hi - lo) >> 1)
+        if xs[mid] < value:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
 
 
 cdef cnp.uint8_t[::1] _active_electrodes(const float32[:, ::1] stim):
@@ -306,12 +319,28 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
     once per (segment, electrode) pair and reused across every time point.
     A time-innermost ordering would evaluate it ``n_time`` times over.
 
+    Only electrodes within ``cutoff_r2`` of a segment can contribute to it,
+    and for an array of any size that is a small fraction of them. Rather
+    than test every electrode and reject nearly all of them, the electrodes
+    are sorted by x once per call and each segment binary-searches the band
+    ``[ax_x - r, ax_x + r]``, leaving the loop over electrodes proportional
+    to the width of that band instead of to the size of the array. Sorting
+    also lets the inactive electrodes be dropped outright rather than
+    branched past. The band is one-dimensional, so it still admits electrodes
+    that are far away in y; those are rejected by the ``r2`` test as before.
+
     The innermost loop over time accumulates into independent slots of a
     scratch buffer, so it vectorizes without relaxed floating-point
     semantics. Nothing of size ``n_segments x n_electrodes`` or
     ``n_segments x n_time`` is ever materialized: each thread holds two
     buffers of ``n_time`` floats, and ``stim`` is small enough to stay in
     cache while every pixel streams past it.
+
+    .. note::
+
+        Electrodes are summed in order of increasing x rather than in the
+        order they were passed, so results can differ in the last bits from
+        a version that summed them in array order.
 
     Parameters
     ----------
@@ -348,14 +377,15 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
 
     """
     cdef:
-        index_t idx_el, idx_time, idx_space, idx_ax, tid, row
+        index_t idx_el, idx_time, idx_space, idx_ax, tid, row, lo_el
         index_t n_el, n_time, n_space, stride
         float32[:, ::1] bright
         float32[:, ::1] scratch
-        float32 xdiff, ydiff, r2, gauss, sens, ax_x, ax_y, sgm
-        cnp.uint8_t[::1] active
+        const float32[:, ::1] stim_s
+        const float32[::1] xs
+        const float32[::1] ys
+        float32 xdiff, ydiff, r2, gauss, sens, ax_x, ax_y, sgm, cutoff_r, x_hi
 
-    n_el = stim.shape[0]
     n_time = stim.shape[1]
     n_space = len(idx_start)
     # `num_threads(0)` is not conforming OpenMP, and the scratch buffer below
@@ -365,7 +395,19 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
 
     # A flattened array containing n_space x n_time entries:
     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
-    active = _active_electrodes(stim)  # Py overhead
+
+    # Keep the electrodes that carry current at some point, in order of
+    # increasing x. `stim` is permuted alongside so that the band the loop
+    # below walks is contiguous in all three arrays.  # Py overhead follows
+    keep = np.asarray(_active_electrodes(stim)).view(np.bool_).nonzero()[0]
+    keep = keep[np.argsort(np.asarray(xel)[keep], kind='stable')]
+    xs = np.ascontiguousarray(np.asarray(xel)[keep])
+    ys = np.ascontiguousarray(np.asarray(yel)[keep])
+    stim_s = np.ascontiguousarray(np.asarray(stim)[keep])
+    n_el = len(keep)
+    # Half-width of the x band to search. `inf` (no cutoff) carries through:
+    # every electrode then sorts into the band and none is ever rejected.
+    cutoff_r = c_sqrt(cutoff_r2)
 
     # Per-thread scratch: row `tid` holds this thread's running per-time-point
     # segment brightness (first `n_time` entries) and pixel brightness (next
@@ -409,18 +451,22 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
             # contribution of each electrode:
             for idx_time in range(n_time):
                 scratch[tid, idx_time] = <float32>0.0
-            for idx_el in range(n_el):
-                # An electrode that is zero for the whole stimulus
-                # contributes nothing at any time point:
-                if active[idx_el] == 0:
-                    continue
+            # Only the electrodes whose x lies within `cutoff_r` of this
+            # segment can clear the cutoff, and `xs` is sorted, so they are
+            # one contiguous run. Seek its start, then walk until x leaves the
+            # band -- no electrode outside it is ever looked at:
+            lo_el = _lower_bound(xs, n_el, ax_x - cutoff_r)
+            x_hi = ax_x + cutoff_r
+            for idx_el in range(lo_el, n_el):
+                if xs[idx_el] > x_hi:
+                    break
                 # Calculate the distance between this axon segment and the
                 # center of the stimulating electrode:
-                xdiff = ax_x - xel[idx_el]
-                ydiff = ax_y - yel[idx_el]
+                xdiff = ax_x - xs[idx_el]
+                ydiff = ax_y - ys[idx_el]
                 r2 = xdiff * xdiff + ydiff * ydiff
-                # Past the cutoff radius. Note this drops `gauss * stim`, not
-                # just `gauss`:
+                # In the band on x, but still too far in y. Note this drops
+                # `gauss * stim`, not just `gauss`:
                 if r2 > cutoff_r2:
                     continue
                 # Activation as a function of distance to the stimulating
@@ -429,7 +475,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                 gauss = sens * c_exp(-r2 / (<float32>2.0 * rho * rho))
                 for idx_time in range(n_time):
                     scratch[tid, idx_time] = (scratch[tid, idx_time] +
-                                              gauss * stim[idx_el, idx_time])
+                                              gauss * stim_s[idx_el, idx_time])
             # After summing up the currents from all the electrodes, we
             # compare the brightness of the segment to the previously
             # brightest segment. The brightest segment overall determines the

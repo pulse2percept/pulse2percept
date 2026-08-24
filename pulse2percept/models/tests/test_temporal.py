@@ -237,9 +237,16 @@ def test_FadingTemporal_peak_is_exact():
     """The in-kernel peak must equal a dense scan of the same interval.
 
     Sampling an interval a fixed number of times cannot summarize a transient
-    shorter than its own step, which is why the peak is tracked across every
-    `dt` step instead. That makes it exact however coarse the output rate is,
-    and this pins it against brightness computed at every single step.
+    shorter than its own step, which is why the peak is tracked across the
+    whole interval instead. That makes it exact however coarse the output rate
+    is, and this pins it against brightness computed at every single step.
+
+    Close, not equal: `fading_fast` composes the runs of simulation steps that
+    share a stimulus frame into one affine map, so asking for every step and
+    asking for five points do not put the same number of roundings between two
+    output times. Both stay within a few ulps of the recurrence they compose
+    -- the composed form is in fact the closer of the two -- but neither is
+    obliged to reproduce the other bit for bit.
     """
     rng = np.random.default_rng(3)
     data = (rng.random((5, 12)) - 0.5).astype(np.float32) * 40
@@ -258,9 +265,11 @@ def test_FadingTemporal_peak_is_exact():
     lo = np.r_[0, out[:-1]]
     brute = np.stack([dense[:, a:b + 1].max(axis=1)
                       for a, b in zip(lo, out)], axis=1)
-    npt.assert_array_equal(peak, brute)
+    npt.assert_allclose(peak, brute, rtol=1e-5)
     # Reducing to the closing instant is what the model always did:
-    npt.assert_array_equal(last, dense[:, out])
+    npt.assert_allclose(last, dense[:, out], rtol=1e-5)
+    # Exactly, not approximately: the interval contains the instant it ends
+    # on, so the peak is a max taken over a set including `last` itself:
     npt.assert_equal(np.all(peak >= last), True)
     npt.assert_equal(np.any(peak > last), True)
     # Threads take a block of locations each; the peak must not depend on how
