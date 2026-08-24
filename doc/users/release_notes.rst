@@ -14,6 +14,11 @@ New features:
   of visual angle, and expose ``pixel_to_dva``/``dva_to_pixel`` to convert
   between pixels and visual-field coordinates.
 
+* :py:class:`~pulse2percept.percepts.Percept` supports RGB percepts of shape
+  ``(Y, X, 3, T)`` alongside the ``(Y, X, T)`` brightness percepts models
+  produce; :py:meth:`~pulse2percept.percepts.Percept.load` reads one with
+  ``as_gray=False``.
+
 v0.10.0 Encoders (2026-08-23)
 -----------------------------
 

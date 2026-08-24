@@ -78,6 +78,33 @@ an implant containing a stimulus.
 of ``predict_percept`` is a
 :py:class:`~pulse2percept.percepts.Percept`.
 
+Percept data layouts
+--------------------
+
+A :py:class:`~pulse2percept.percepts.Percept` holds one of two layouts, with
+time as the last axis in both::
+
+    (Y, X, T)     perceived brightness in arbitrary units
+    (Y, X, 3, T)  RGB intensities in [0, 1]
+
+Models always produce the brightness form. The RGB form exists to display a
+scene alongside a modeled percept:
+
+.. code-block:: python
+
+    import numpy as np
+    from pulse2percept.percepts import Percept
+
+    rgb = Percept(np.zeros((60, 80, 3, 1)))
+    rgb.is_rgb                  # True
+    rgb[..., 0].shape           # (60, 80, 3): one frame, still in color
+    rgb.plot()                  # drawn as RGB, without a colormap
+
+The RGB axis is not a spatial dimension: ``space`` still describes ``(Y, X)``.
+Operations defined on perceived brightness -- ``n_gray``, ``noise``, and the
+``vmin``/``vmax`` display range -- raise a ``ValueError`` for an RGB percept
+rather than inventing a conversion from color to brightness.
+
 Spatial and temporal components
 -------------------------------
 

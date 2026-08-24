@@ -951,3 +951,184 @@ def test_Percept_load_half_a_range_raises(tmp_path):
         warnings.simplefilter('error')
         npt.assert_allclose(Percept.load(fname, vmin=0, vmax=20).data,
                             percept.data, atol=20 / 255)
+
+
+def rgb_percept(n_frames=3, shape=(4, 6), **kwargs):
+    """An RGB percept whose every value is distinct, on a known dva grid"""
+    n_rows, n_cols = shape
+    data = np.linspace(0, 1, n_rows * n_cols * 3 * n_frames, dtype=float)
+    grid = Grid2D((-2, 2), (-1, 1),
+                  step=[4 / (n_cols - 1), 2 / (n_rows - 1)])
+    return Percept(data.reshape((n_rows, n_cols, 3, n_frames)), space=grid,
+                   **kwargs)
+
+
+@pytest.mark.parametrize('shape', [(4, 6), (4, 6, 4, 2), (4, 6, 3, 2, 2),
+                                   (4, 6, 3, 3, 3)])
+def test_Percept_rejects_shapes_that_are_neither_gray_nor_rgb(shape):
+    with pytest.raises(ValueError):
+        Percept(np.zeros(shape))
+
+
+def test_Percept_rgb_shape_contract():
+    gray = Percept(np.zeros((4, 6, 2)))
+    npt.assert_equal(gray.is_rgb, False)
+    npt.assert_equal(gray.shape, (4, 6, 2))
+    rgb = Percept(np.zeros((4, 6, 3, 2)))
+    npt.assert_equal(rgb.is_rgb, True)
+    npt.assert_equal(rgb.shape, (4, 6, 3, 2))
+    # A 3-D array stays grayscale even when its last axis happens to be 3:
+    npt.assert_equal(Percept(np.zeros((4, 6, 3))).is_rgb, False)
+    # The RGB axis is a channel index, not a spatial coordinate: `space` still
+    # describes (Y, X) only.
+    grid = Grid2D((-2, 2), (-1, 1))
+    npt.assert_equal(Percept(np.zeros((*grid.x.shape, 3, 2)),
+                             space=grid).xdva.size, grid.x.shape[1])
+
+
+def test_Percept_rgb_still_and_multiframe():
+    still = Percept(np.zeros((4, 6, 3, 1)))
+    npt.assert_equal(still.shape, (4, 6, 3, 1))
+    npt.assert_equal(still.time, None)
+    movie = rgb_percept(n_frames=3, time=[0, 10, 20])
+    npt.assert_equal(movie.shape, (4, 6, 3, 3))
+    npt.assert_almost_equal(movie.time, [0, 10, 20])
+
+
+def test_Percept_rgb_indexing_and_frames():
+    percept = rgb_percept(n_frames=3, time=[0, 10, 20])
+    # A frame keeps its color channels; time stays the last axis:
+    npt.assert_equal(percept[..., 0].shape, (4, 6, 3))
+    npt.assert_almost_equal(percept[..., 0], percept.data[..., 0])
+    # A time between two frames is interpolated, not indexed:
+    npt.assert_almost_equal(percept[..., 5.0],
+                            0.5 * (percept.data[..., 0] +
+                                   percept.data[..., 1]))
+    # One pixel's color over time:
+    npt.assert_equal(percept[0, 1].shape, (3, 3))
+    for i, frame in enumerate(percept):
+        npt.assert_equal(frame.shape, (4, 6, 3))
+        npt.assert_almost_equal(frame, percept.data[..., i])
+    # The brightest frame is the one holding the brightest value, whichever
+    # channel it is in:
+    npt.assert_equal(percept.argmax(axis='frames'), 2)
+    npt.assert_almost_equal(percept.max(axis='frames'), percept.data[..., 2])
+
+
+def test_Percept_rgb_plot():
+    percept = rgb_percept(n_frames=2, time=[0, 10])
+    ax = percept.plot()
+    npt.assert_equal(isinstance(ax, Subplot), True)
+    npt.assert_almost_equal(ax.axis(), [-2, 2, -1, 1])
+    # Drawn as an image with its own colors, not through a colormap:
+    npt.assert_equal(len(ax.images), 1)
+    npt.assert_equal(len(ax.collections), 0)
+    drawn = ax.images[0].get_array()
+    npt.assert_equal(drawn.shape, (4, 6, 3))
+    npt.assert_almost_equal(drawn, np.clip(percept.data[..., 1], 0, 1))
+    # Row 0 sits at the top, the same way `pcolor` puts it there for grayscale:
+    left, right, bottom, top = ax.images[0].get_extent()
+    npt.assert_equal(top > bottom, True)
+    npt.assert_equal(right > left, True)
+    # A brightness scale and a colormap have nothing to say about RGB:
+    for kwargs in ({'vmin': 0}, {'vmax': 1}, {'cmap': 'viridis'}):
+        with pytest.raises(ValueError):
+            percept.plot(**kwargs)
+    # A hexbin needs one number per pixel:
+    with pytest.raises(ValueError):
+        percept.plot(kind='hex')
+
+
+def test_Percept_rgb_play():
+    percept = rgb_percept(n_frames=3, time=[0, 10, 20])
+    ani = percept.play()
+    npt.assert_equal(isinstance(ani, FuncAnimation), True)
+    # RGB frames reach the player as RGB, and it never gets a colorbar:
+    npt.assert_equal(ani._frame_data.shape, (4, 6, 3, 3))
+    npt.assert_equal(len(ani._fig.axes), 1)
+    npt.assert_equal(player(ani)['n'], 3)
+    with pytest.raises(ValueError):
+        percept.play(vmin=0)
+
+
+def test_Percept_rgb_play_clips_out_of_range_values():
+    """Matplotlib only accepts RGB in [0, 1], so `play` clips before drawing"""
+    data = np.full((4, 6, 3, 2), 2.0)
+    data[..., 0] = -1.0
+    ani = Percept(data, time=[0, 10]).play()
+    npt.assert_equal(ani._frame_data.min() >= 0, True)
+    npt.assert_equal(ani._frame_data.max() <= 1, True)
+
+
+def test_Percept_rgb_save_still_roundtrip(tmp_path):
+    fname = str(tmp_path / 'still.png')
+    percept = Percept(np.linspace(0, 1, 16 * 16 * 3).reshape((16, 16, 3, 1)))
+    # No brightness scale to choose, so no warning about picking one:
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        out = percept.save(fname, shape=(16, 16))
+    npt.assert_equal(out, fname)
+    loaded = Percept.load(out, as_gray=False)
+    npt.assert_equal(loaded.is_rgb, True)
+    npt.assert_equal(loaded.shape, (16, 16, 3, 1))
+    # Only 8-bit quantization stands between the two:
+    npt.assert_allclose(loaded.data, percept.data, atol=1 / 255)
+    # The same file still loads as brightness by default:
+    npt.assert_equal(Percept.load(out).shape, (16, 16, 1))
+
+
+def test_Percept_rgb_save_movie_roundtrip(tmp_path):
+    fname = str(tmp_path / 'movie.gif')
+    data = np.linspace(0, 1, 16 * 16 * 3 * 4).reshape((16, 16, 3, 4))
+    percept = Percept(data, time=np.arange(4) * 100.0)
+    out = percept.save(fname, shape=(16, 16))
+    loaded = Percept.load(out, as_gray=False)
+    npt.assert_equal(loaded.shape, (16, 16, 3, 4))
+    npt.assert_almost_equal(loaded.time, [0, 100, 200, 300])
+    npt.assert_allclose(loaded.data, percept.data, atol=1 / 255)
+    with pytest.raises(ValueError):
+        percept.save(str(tmp_path / 'x.gif'), vmin=0, vmax=1)
+
+
+def test_Percept_rgb_rejects_brightness_operations():
+    data = np.random.rand(4, 6, 3, 2)
+    for kwargs in ({'n_gray': 4}, {'noise': 0.5}):
+        with pytest.raises(ValueError):
+            Percept(data, **kwargs)
+    # Both remain available for a brightness percept:
+    npt.assert_equal(len(np.unique(Percept(np.random.rand(4, 6, 2),
+                                           n_gray=4).data)), 4)
+
+
+def test_Percept_load_rgb_rejects_a_brightness_range(tmp_path):
+    fname = str(tmp_path / 'rgb.png')
+    imageio.imwrite(fname, np.zeros((8, 8, 3), dtype=np.uint8))
+    with pytest.raises(ValueError):
+        Percept.load(fname, as_gray=False, vmin=0, vmax=20)
+    # ... and needs no range of its own, so it loads without a warning:
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        npt.assert_equal(Percept.load(fname, as_gray=False).shape,
+                         (8, 8, 3, 1))
+
+
+def test_Percept_rgb_temporal_plot():
+    """A percept with no spatial extent plots one line per channel"""
+    percept = Percept(np.random.rand(1, 1, 3, 5), time=np.arange(5) * 10.0)
+    ax = percept.plot()
+    npt.assert_equal(len(ax.lines), 3)
+    npt.assert_almost_equal(ax.lines[0].get_ydata(), percept.data[0, 0, 0])
+
+
+def test_model_prediction_stays_grayscale():
+    """Adding RGB must not change what a model returns"""
+    from pulse2percept.implants import ArgusII
+    from pulse2percept.models import ScoreboardModel
+    model = ScoreboardModel(rho=200, xrange=(-4, 4), yrange=(-4, 4),
+                            xystep=1).build()
+    percept = model.predict_percept(ArgusII(stim={'A8': 30}))
+    npt.assert_equal(percept.is_rgb, False)
+    npt.assert_equal(percept.data.ndim, 3)
+    npt.assert_equal(percept.shape, (9, 9, 1))
+    # A phosphene is there to see, so the shape above is not trivially right:
+    npt.assert_equal(percept.data.max() > 0, True)
