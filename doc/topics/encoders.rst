@@ -81,6 +81,56 @@ whether encoding happened explicitly or during assignment to the implant.
 Waveform samples are generated lazily, so encoding a large image or video does
 not allocate the full electrical waveform until something needs it.
 
+Where the electrodes look
+-------------------------
+
+By default an image is *device-relative*: it is stretched across the implant's
+electrodes, and the picture means nothing beyond "this is what the device was
+shown". An image that states a ``fov`` (see :ref:`topics-stimuli`) is instead a
+scene in the visual field, and registering it needs two more things: the
+retinotopy that says where each electrode looks, and where the eye is pointing.
+
+.. code-block:: python
+
+    from pulse2percept.units import dva
+
+    scene = p2p.stimuli.ImageStimulus('scene.png', fov=30 * dva)
+    model = p2p.models.ScoreboardModel(rho=200).build()
+
+    implant.stim = implant.encoder.encode(
+        scene, implant=implant, vfmap=model.vfmap, gaze=(0, 0) * dva,
+    )
+
+Each electrode is followed out along this chain::
+
+    retinal coordinate (um)
+      -> vfmap.ret_to_dva -> eye-centered visual field (dva)
+      -> + gaze            -> scene coordinate (dva)
+      -> sample the image
+
+``gaze`` is the scene location that currently falls on the fovea, so
+``scene = visual field + gaze``. The implant does not move when gaze does, and
+neither does an eye-centered :py:class:`~pulse2percept.vision.Scotoma`: the two
+hold their positions relative to each other while the scene moves past them.
+Pass one ``(x, y)`` to fixate, or one per video frame to move the eye between
+frames.
+
+The pieces each state one fact, and nothing states it twice: the image owns its
+field of view, the implant owns its electrode locations, the model owns its
+``vfmap``, and gaze is passed in at the moment of sampling rather than stored
+anywhere.
+
+A scene is never silently stretched. Encoding an image that states a ``fov``
+without a ``vfmap`` raises, rather than producing a spatially wrong stimulus,
+and passing a ``vfmap`` for an image that has no ``fov`` raises for the same
+reason.
+
+Sampling keeps whatever color channels the source had; today's encoders are
+luminance encoders and reduce them with
+:py:func:`~pulse2percept.stimuli.encoders.as_luminance` at their own boundary.
+That leaves the seam a future color encoder would read from, without any of
+them having to be written now.
+
 Device constraints
 ------------------
 

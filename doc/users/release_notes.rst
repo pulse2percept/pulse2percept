@@ -19,6 +19,17 @@ New features:
   produce; :py:meth:`~pulse2percept.percepts.Percept.load` reads one with
   ``as_gray=False``.
 
+* An image or video that states a ``fov`` is now registered against the visual
+  field rather than stretched across the implant:
+  :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode` and
+  :py:meth:`~pulse2percept.implants.ProsthesisSystem.reshape_stim` take a
+  ``vfmap`` and a ``gaze``, and spatial sampling keeps the source's color
+  channels until the encoder reduces them.
+
+* New :py:mod:`pulse2percept.vision` with
+  :py:class:`~pulse2percept.vision.Scotoma`, an eye-centered map of lost
+  vision in degrees of visual angle.
+
 v0.10.0 Encoders (2026-08-23)
 -----------------------------
 
