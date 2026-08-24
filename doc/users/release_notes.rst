@@ -33,7 +33,8 @@ Highlights:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are much faster and
   produce smaller notebooks and documentation pages.
 
-* :py:class:`~pulse2percept.models.FadingTemporal` and
+* :py:class:`~pulse2percept.models.FadingTemporal`,
+  :py:class:`~pulse2percept.models.AlphaTemporal` and
   :py:class:`~pulse2percept.models.AxonMapSpatial` are substantially faster for
   long stimuli and large electrode arrays. Results may differ from previous
   versions by floating-point roundoff.

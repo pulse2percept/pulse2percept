@@ -205,7 +205,7 @@ class AlphaTemporal(TemporalModel):
 
     """
 
-    #: The peak is tracked across every `dt` step inside `alpha_fast`, so
+    #: The peak is tracked over whole intervals inside `alpha_fast`, so
     #: `predict_percept` does not have to subsample the interval itself.
     _reduces_intervals = True
 
@@ -248,8 +248,9 @@ class AlphaTemporal(TemporalModel):
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct "
                              f"multiples of `dt`={self.dt:.2e}")
-        # Cython returns a 2D (space x time) NumPy array:
-        return alpha_fast(stim_data.astype(np.float32),
-                          time.astype(np.float32),
+        # Cython returns a 2D (space x time) NumPy array. `copy=False`:
+        # avoid copying an already-float32 spatial response.
+        return alpha_fast(stim_data.astype(np.float32, copy=False),
+                          time.astype(np.float32, copy=False),
                           idx_percept, self.dt, self.tau, self.thresh_percept,
                           self.n_threads, 1 if reduce == 'peak' else 0)

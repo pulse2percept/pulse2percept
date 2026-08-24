@@ -594,29 +594,38 @@ def test_AlphaTemporal_rectifies_the_drive():
     npt.assert_equal(cathodic.data.max() > 0, True)
 
 
-def _alpha_reference(data, t_stim, idx_percept, dt, tau):
-    """Two-state explicit Euler, one location at a time, in float32.
+def _alpha_reference(data, t_stim, idx_percept, dt, tau, reduce_peak=False):
+    """Two-state explicit Euler, one location at a time, in float64.
 
     Stage 2 reads stage 1 as it was at the *start* of the step, which is what
     gives the cascade its rise delay.
+
+    float64 on purpose. `alpha_fast` composes the steps of a constant-drive
+    run into one update rather than taking them one at a time, so it cannot
+    reproduce a float32 replay of those steps bit for bit -- and should not be
+    asked to, since the replay is the less accurate of the two. What both are
+    implementations *of* is this recurrence, so this is what they are pinned
+    against.
     """
-    dt, tau = np.float32(dt), np.float32(tau)
-    dt_tau = np.float32(dt / tau)
+    a = float(np.float32(np.float32(dt) / np.float32(tau)))
     n_stim = len(t_stim)
-    out = np.zeros((data.shape[0], len(idx_percept)), dtype=np.float32)
+    out = np.zeros((data.shape[0], len(idx_percept)))
     for s in range(data.shape[0]):
-        x = y = np.float32(0.0)
+        x = y = 0.0
+        running = 0.0
         idx_stim, frame = 0, 0
         for i in range(int(idx_percept[-1]) + 1):
             while (idx_stim + 1 < n_stim and
-                   np.float32(i) * dt >= t_stim[idx_stim + 1]):
+                   np.float32(i) * np.float32(dt) >= t_stim[idx_stim + 1]):
                 idx_stim += 1
-            drive = np.float32(max(-data[s, idx_stim], 0.0))
+            drive = max(-float(data[s, idx_stim]), 0.0)
             x_old = x
-            x = np.float32(x + dt_tau * (drive - x))
-            y = np.float32(y + dt_tau * (x_old - y))
-            if i == idx_percept[frame]:
-                out[s, frame] = y
+            x = x + a * (drive - x)
+            y = y + a * (x_old - y)
+            running = max(running, y)
+            if frame < len(idx_percept) and i == idx_percept[frame]:
+                out[s, frame] = running if reduce_peak else y
+                running = y
                 frame += 1
     return out
 
@@ -641,10 +650,10 @@ def test_AlphaTemporal_matches_reference_recurrence():
 
     idx_p = np.uint32(np.round(t_percept / model.dt))
     want = _alpha_reference(data, t_stim, idx_p, model.dt, model.tau)
-    # Close, not equal: `x + dt_tau * d` may be contracted into one fused
-    # multiply-add by the C compiler but never is by NumPy here. See
-    # `test_FadingTemporal_matches_reference_integrator`.
-    npt.assert_allclose(got, want, rtol=1e-6)
+    # Close, not equal: the kernel composes each constant-drive run into one
+    # update and works in float32, so it lands within a few parts in 1e6 of
+    # the float64 recurrence rather than on it.
+    npt.assert_allclose(got, want, rtol=1e-5)
 
     # Stage 2 must use the previous stage-1 value:
     dt, tau = 0.01, 50.0
@@ -705,8 +714,59 @@ def test_AlphaTemporal_dc_gain_is_unity():
             rtol=5e-3)
 
 
+#: Constant-drive runs that stress each shape the composed update has to
+#: reproduce, as (data, t_stim, tau, t_percept). ``dt`` is 0.05 throughout.
+_ALPHA_RUNS = {
+    'rising': ([[-40.0, -40.0]], [0.0, 1e6], 20.0, [1.0, 10.0, 40.0]),
+    'falling': ([[-40.0, 0.0]], [0.0, 3.0], 20.0, [3.0, 20.0, 60.0]),
+    # Drive gone at 2 ms but stage 1 still above stage 2, so brightness keeps
+    # climbing for several tau afterwards and peaks mid-interval:
+    'interior_peak': ([[-60.0, 0.0]], [0.0, 2.0], 8.0, [2.0, 20.0, 60.0]),
+    # An output point one step either side of where the drive changes:
+    'peak_at_transition': ([[-50.0, -1.0, 0.0]], [0.0, 4.9, 5.0], 6.0,
+                           [4.85, 4.9, 4.95, 5.0, 5.05, 30.0]),
+    'tau_eq_dt': ([[-30.0, 0.0, -10.0]], [0.0, 1.0, 2.0], 0.05,
+                  [1.0, 2.0, 3.0]),
+    # Frame times 50x closer together than one simulation step:
+    'frames_inside_one_dt': ([[0.0, -90.0, 0.0, -20.0, 0.0]],
+                             [0.0, 0.001, 0.002, 0.02, 9.0], 15.0,
+                             [0.05, 1.0, 9.0]),
+}
+
+
+@pytest.mark.parametrize('case', sorted(_ALPHA_RUNS))
+def test_AlphaTemporal_run_composition_matches_recurrence(case):
+    """Composing a run must land where stepping it would.
+
+    `alpha_fast` advances both stages across a whole constant-drive run at
+    once. What that has to agree with is the recurrence, so the reference is
+    that recurrence in float64 rather than a float32 replay of it.
+    """
+    data, t_stim, tau, t_percept = _ALPHA_RUNS[case]
+    dt = 0.05
+    data = np.array(data, dtype=np.float32)
+    t_stim = np.array(t_stim, dtype=np.float32)
+    idx = np.uint32(np.round(np.array(t_percept) / dt))
+    got = {}
+    for reduce_peak in (0, 1):
+        got[reduce_peak] = np.asarray(
+            alpha_fast(data, t_stim, idx, dt, tau, 0.0, 1, reduce_peak))
+        npt.assert_allclose(
+            got[reduce_peak],
+            _alpha_reference(data, t_stim, idx, dt, tau, bool(reduce_peak)),
+            rtol=1e-5, atol=1e-6)
+    # Exactly, not approximately: the peak is a max over a set of candidates
+    # that always includes the instant the interval ends on.
+    npt.assert_equal(np.all(got[1] >= got[0]), True)
+
+
 def test_AlphaTemporal_peak_is_exact():
-    """The in-kernel peak must equal a dense scan of the same interval."""
+    """The in-kernel peak must equal a dense scan of the same interval.
+
+    Close, not equal: `alpha_fast` composes the steps between two output
+    points into one update, so asking for every step and asking for five
+    points do not put the same number of roundings between two output times.
+    """
     rng = np.random.default_rng(3)
     data = (rng.random((5, 12)) - 0.5).astype(np.float32) * 40
     t_stim = (np.arange(12) * 4.0).astype(np.float32)
@@ -723,9 +783,25 @@ def test_AlphaTemporal_peak_is_exact():
     lo = np.r_[0, out[:-1]]
     brute = np.stack([dense[:, a:b + 1].max(axis=1)
                       for a, b in zip(lo, out)], axis=1)
-    npt.assert_array_equal(peak, brute)
-    npt.assert_array_equal(last, dense[:, out])
+    npt.assert_allclose(peak, brute, rtol=1e-5)
+    npt.assert_allclose(last, dense[:, out], rtol=1e-5)
+    npt.assert_equal(np.all(peak >= last), True)
     npt.assert_equal(np.any(peak > last), True)
+
+    # The case the O(1) search exists for: an interval whose largest value is
+    # at neither of its ends, so nothing but the turning point will do.
+    single = np.array([[-60.0, 0.0]], dtype=np.float32)
+    edges = np.array([0.0, 2.0], dtype=np.float32)
+    fine = np.asarray(alpha_fast(single, edges,
+                                 np.arange(1201, dtype=np.uint32), dt, 8.0,
+                                 0.0, 1, 0)).ravel()
+    npt.assert_equal(0 < int(fine.argmax()) < 1200, True)
+    span = np.array([40, 400, 1200], dtype=np.uint32)
+    got = np.asarray(alpha_fast(single, edges, span, dt, 8.0, 0.0, 1,
+                                1)).ravel()
+    lo = np.r_[0, span[:-1]]
+    npt.assert_allclose(
+        got, [fine[a:b + 1].max() for a, b in zip(lo, span)], rtol=1e-5)
 
 
 def test_AlphaTemporal_reduce():
