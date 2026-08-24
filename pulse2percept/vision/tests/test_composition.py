@@ -12,7 +12,7 @@ import pytest
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import ImageStimulus, VideoStimulus
 from pulse2percept.topography import Grid2D
-from pulse2percept.units import dva, ms
+from pulse2percept.units import dva, ms, s
 from pulse2percept.vision import Scotoma, compose_amd
 
 SCENE_PX = 21
@@ -35,7 +35,8 @@ def pixel_of(x_dva, y_dva=0.0):
     return int(round(HALF - y_dva)), int(round(x_dva + HALF))
 
 
-def percept_on(values, x_range=(-4, 4), y_range=(-4, 4), step=2, time=None):
+def percept_on(values, x_range=(-4, 4), y_range=(-4, 4), step=2, time=None,
+               time_unit=ms):
     """A brightness percept on a known dva grid
 
     ``values`` is indexed the way percept data is: row 0 is the largest y.
@@ -45,7 +46,7 @@ def percept_on(values, x_range=(-4, 4), y_range=(-4, 4), step=2, time=None):
     if values.ndim == 2:
         values = values[..., np.newaxis]
     npt.assert_equal(values.shape[:2], grid.shape)
-    return Percept(values, space=grid, time=time)
+    return Percept(values, space=grid, time=time, time_unit=time_unit)
 
 
 def uniform_percept(brightness, **kwargs):
@@ -280,12 +281,10 @@ def test_compose_amd_rejects_inputs_it_cannot_place():
     with pytest.raises(ValueError):
         compose_amd(ImageStimulus(np.zeros((5, 5, 3))), percept, scotoma,
                     vmax=20)
-    # A percept with nowhere to be. `Percept` fills an omitted axis with
-    # pixel indices, so this is the shape where the omission still shows:
-    nowhere = Percept(np.zeros((1, 1, 3)), time=[0, 10, 20])
-    npt.assert_equal(nowhere.xdva, None)
+    # A percept with nowhere to be:
     with pytest.raises(ValueError):
-        compose_amd(scene, nowhere, scotoma, vmax=20)
+        compose_amd(scene, Percept(np.zeros((1, 1, 3)), time=[0, 10, 20]),
+                    scotoma, vmax=20)
     # An RGB percept, which no model produces yet:
     with pytest.raises(ValueError):
         compose_amd(scene, Percept(np.zeros((5, 5, 3, 1)),
@@ -352,3 +351,37 @@ def test_output_percept_plays_and_plots():
     npt.assert_equal(combined[..., 5 * ms].shape, (SCENE_PX, SCENE_PX, 3))
     ani = combined.play()
     npt.assert_equal(ani._frame_data.shape, (SCENE_PX, SCENE_PX, 3, 3))
+
+
+def test_a_percept_without_a_space_is_not_a_place():
+    """Pixel indices are not degrees, however much they look like them
+
+    `Percept` fills an omitted spatial axis with 0, 1, 2, ...; composing those
+    as visual-field coordinates puts the percept somewhere plausible-looking
+    and wrong, which is the one failure that would not announce itself.
+    """
+    nowhere = Percept(np.zeros((5, 5, 1)))
+    npt.assert_array_equal(nowhere.xdva, [0, 1, 2, 3, 4])
+    npt.assert_equal(nowhere._has_space, False)
+    with pytest.raises(ValueError):
+        compose_amd(scene_rgb(), nowhere, Scotoma.circle(3), vmax=20)
+    # The same data, told where it is, composes fine:
+    somewhere = Percept(np.zeros((5, 5, 1)),
+                        space=Grid2D((-4, 4), (-4, 4), step=2))
+    npt.assert_equal(somewhere._has_space, True)
+    compose_amd(scene_rgb(), somewhere, Scotoma.circle(3), vmax=20)
+
+
+def test_the_output_keeps_the_clock_it_was_given():
+    """A percept counted in seconds does not come back in milliseconds"""
+    values = np.stack([np.full((5, 5), b) for b in (0.0, 20.0)], axis=-1)
+    percept = percept_on(values, time=[0, 0.05], time_unit=s)
+    combined = compose_amd(scene_rgb(), percept, Scotoma.circle(10), vmax=20)
+    npt.assert_equal(combined.time_unit, s)
+    npt.assert_almost_equal(combined.time, [0, 0.05])
+    npt.assert_almost_equal(combined.times(ms), [0, 50])
+    # A video owns the clock instead, and its unit comes along the same way:
+    video = scene_rgb(n_frames=3)
+    combined = compose_amd(video, percept, Scotoma.circle(10), vmax=20)
+    npt.assert_equal(combined.time_unit, video.time_unit)
+    npt.assert_almost_equal(combined.time, video.time)

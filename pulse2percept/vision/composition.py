@@ -65,21 +65,23 @@ def _prosthetic_frames(scene, prosthetic):
 
     An image scene has no clock of its own, so a temporal percept sets the
     output timing. A video does have one, and keeps it: the percept is read at
-    the video's frame times instead. Neither input can arrive with frames but
-    no clock -- ``Percept`` and ``VideoStimulus`` both number their frames when
-    nothing better is given.
+    the video's frame times instead. Whichever clock wins brings its own unit
+    along, so a percept counted in seconds does not come back in milliseconds.
+    Neither input can arrive with frames but no clock -- ``Percept`` and
+    ``VideoStimulus`` both number their frames when nothing better is given.
     """
     if isinstance(scene, ImageStimulus):
-        return prosthetic.data, prosthetic.time
+        return prosthetic.data, prosthetic.time, prosthetic.time_unit
     n_out = scene.vid_shape[-1]
     if prosthetic.data.shape[-1] == 1:
         # A still percept stands behind every frame of the video:
-        return np.repeat(prosthetic.data, n_out, axis=-1), scene.time
+        return (np.repeat(prosthetic.data, n_out, axis=-1), scene.time,
+                scene.time_unit)
     # `Percept.__getitem__` owns time interpolation; the quantity is what
     # carries the video's clock across to the percept's own time unit:
     frames = prosthetic[..., Quantity(np.asarray(scene.time),
                                       scene.time_unit)]
-    return frames, scene.time
+    return frames, scene.time, scene.time_unit
 
 
 def _scene_grid(scene):
@@ -165,8 +167,8 @@ def compose_amd(scene, prosthetic, scotoma, vmax, vmin=0, gaze=None,
         RGB and an alpha channel is blended against black.
     prosthetic : :py:class:`~pulse2percept.percepts.Percept`
         The modeled percept, in arbitrary brightness units. Must be grayscale
-        and must carry the ``space`` it was predicted on, which is what says
-        where in the visual field it belongs.
+        and must have been given the ``space`` it was predicted on, which is
+        what says where in the visual field it belongs.
     scotoma : :py:class:`~pulse2percept.vision.Scotoma`
         Where native vision is lost, and how much of it.
     vmax : float
@@ -205,8 +207,8 @@ def compose_amd(scene, prosthetic, scotoma, vmax, vmin=0, gaze=None,
     replace it with.
 
     Timing follows whichever input has a clock. An image scene takes the
-    percept's time axis; a video keeps its own and reads the percept at its
-    frame times.
+    percept's time axis and time unit; a video keeps its own and reads the
+    percept at its frame times.
 
     """
     if not isinstance(scene, (ImageStimulus, VideoStimulus)):
@@ -222,7 +224,10 @@ def compose_amd(scene, prosthetic, scotoma, vmax, vmin=0, gaze=None,
         raise ValueError("'prosthetic' must be a brightness percept: models "
                          "produce brightness in arbitrary units, and this "
                          "function is what turns it into display intensity.")
-    if prosthetic.xdva is None or prosthetic.ydva is None:
+    if not prosthetic._has_space:
+        # Without a `space`, `xdva`/`ydva` are the pixel indices `Data` fills
+        # an omitted axis with. Reading those as degrees would place the
+        # percept somewhere plausible-looking and wrong:
         raise ValueError("'prosthetic' has no visual-field coordinates, so "
                          "there is nowhere in the scene to put it. Predict it "
                          "on a model grid, or pass 'space' when building it.")
@@ -231,7 +236,7 @@ def compose_amd(scene, prosthetic, scotoma, vmax, vmin=0, gaze=None,
     vmin, vmax, fill = _check_range(vmin, vmax, scotoma_fill)
 
     scene_rgb = _scene_rgb(scene)
-    pframes, out_time = _prosthetic_frames(scene, prosthetic)
+    pframes, out_time, out_time_unit = _prosthetic_frames(scene, prosthetic)
     n_out = pframes.shape[-1]
     gaze = _gaze_frames(gaze, n_out)
     n_rows, n_cols = _frame_shape(scene)
@@ -267,4 +272,5 @@ def compose_amd(scene, prosthetic, scotoma, vmax, vmin=0, gaze=None,
         lost = np.maximum(fill, phosphene)[..., np.newaxis]
         native = scene_rgb[..., 0 if scene_rgb.shape[-1] == 1 else f]
         out[..., f] = (1 - loss) * native + loss * lost
-    return Percept(out, space=_scene_grid(scene), time=out_time)
+    return Percept(out, space=_scene_grid(scene), time=out_time,
+                   time_unit=out_time_unit)

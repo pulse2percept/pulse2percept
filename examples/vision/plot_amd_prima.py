@@ -94,10 +94,15 @@ plt.title('Prosthetic percept alone')
 #
 # ``vmax`` is the one thing that cannot be guessed: a percept is in arbitrary
 # brightness units, so you have to say which brightness counts as white.
+# pulse2percept does not infer that transfer function; taking the peak of this
+# percept is simply the normalization *this example* chooses, and it is held
+# fixed below so that a change of gaze does not silently rescale the display.
 # ``scotoma_fill`` is what the lost region looks like where the implant does
 # not reach -- black here.
 
-combined = compose_amd(scene, prosthetic, scotoma, vmax=prosthetic.data.max(),
+display_vmax = prosthetic.data.max()
+
+combined = compose_amd(scene, prosthetic, scotoma, vmax=display_vmax,
                        gaze=gaze, scotoma_fill=0)
 
 combined.plot()
@@ -120,7 +125,7 @@ gaze = (8, -4) * dva
 implant.stim = implant.encoder.encode(scene, implant=implant,
                                       vfmap=model.vfmap, gaze=gaze)
 shifted = compose_amd(scene, model.predict_percept(implant), scotoma,
-                      vmax=prosthetic.data.max(), gaze=gaze)
+                      vmax=display_vmax, gaze=gaze)
 
 shifted.plot()
 plt.title('Looking 8 degrees right and 4 degrees down')

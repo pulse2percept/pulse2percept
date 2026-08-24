@@ -229,7 +229,9 @@ class Percept(Data):
         Percept data in (Y, X, T) or (Y, X, 3, T) dimensions. RGB data must be
         finite and lie in [0, 1].
     space : :py:class:`~pulse2percept.topography.Grid2D`, optional
-        Spatial coordinates of the percept.
+        Spatial coordinates of the percept. Without one, ``xdva`` and ``ydva``
+        are filled in with pixel indices, which are not degrees of visual
+        angle; see Notes.
     time : 1D array_like, optional
         Time points corresponding to the frames. Bare values are expressed in
         ``time_unit``; unitful values are converted to it.
@@ -263,6 +265,12 @@ class Percept(Data):
     models never produced is a decision for the caller, not for this class.
     ``percept.data`` is always there for the plain numerical answer.
 
+    A percept built without a ``space`` still reports ``xdva`` and ``ydva``:
+    they are the pixel indices ``Data`` fills an omitted axis with, and they
+    are indistinguishable from coordinates once stored. Code that needs real
+    visual-field positions -- placing a percept in a scene, say -- must ask
+    whether one was given rather than trust the numbers.
+
     Examples
     --------
     A one-frame RGB percept, and the frame it displays:
@@ -291,6 +299,9 @@ class Percept(Data):
         self._time_unit = time_unit
         data = deepcopy(data)
         is_rgb = _is_rgb(data)
+        # An omitted spatial axis is filled in with pixel indices, which read
+        # exactly like coordinates; this is what tells the two apart:
+        self._has_space = space is not None
         xdva = None
         ydva = None
         if space is not None:
