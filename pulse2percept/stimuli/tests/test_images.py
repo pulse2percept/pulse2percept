@@ -677,3 +677,27 @@ def test_ImageStimulus_apply_drops_fov_on_reshape():
 def test_ImageStimulus_fov_of_builtin_images():
     npt.assert_almost_equal(LogoUCSB(resize=(8, 16), fov=32).fov, (32, 16))
     npt.assert_equal(LogoUCSB(resize=(8, 16)).fov, None)
+
+
+def test_ImageStimulus_copy_renames_a_changed_pixel_grid():
+    stim = ImageStimulus(np.random.rand(4, 8, 3), fov=(16, 8))
+    # Copied verbatim, a pixel is still the same pixel and keeps its name:
+    same = ImageStimulus(stim)
+    npt.assert_equal(same.img_shape, (4, 8, 3))
+    npt.assert_array_equal(same.electrodes, stim.electrodes)
+    npt.assert_almost_equal(same.fov, (16, 8))
+    # A resize builds a different grid, so the names are generated afresh
+    # rather than inherited from a grid that no longer exists:
+    smaller = ImageStimulus(stim, resize=(2, 4))
+    npt.assert_equal(smaller.img_shape, (2, 4, 3))
+    npt.assert_equal(len(smaller.electrodes), 24)
+    npt.assert_almost_equal(smaller.fov, (16, 8))
+    # Same for dropping the color channels:
+    gray = ImageStimulus(stim, as_gray=True)
+    npt.assert_equal(gray.img_shape, (4, 8))
+    npt.assert_equal(len(gray.electrodes), 32)
+    npt.assert_almost_equal(gray.fov, (16, 8))
+    # An explicit name list still wins:
+    named = ImageStimulus(stim, resize=(1, 2), as_gray=True,
+                          electrodes=['a', 'b'])
+    npt.assert_array_equal(named.electrodes, ['a', 'b'])

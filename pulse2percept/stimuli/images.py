@@ -99,6 +99,10 @@ class ImageStimulus(HasFieldOfView, Stimulus):
             metadata = {'user': metadata}
         # The buffer the caller still holds, if any:
         borrowed = None
+        # The image whose pixel names this one may inherit; decided once the
+        # final shape is known, because `as_gray` and `resize` build a
+        # different grid:
+        parent = None
         if isinstance(source, str):
             # Filename provided:
             img = imread(source)
@@ -108,8 +112,7 @@ class ImageStimulus(HasFieldOfView, Stimulus):
             img = source.data.reshape(source.img_shape)
             borrowed = source.data
             metadata.update(source.metadata)
-            if electrodes is None:
-                electrodes = source.electrodes
+            parent = source
             if fov is None:
                 # A resize keeps the angular extent of the image, so the FOV
                 # survives every way of building one image from another:
@@ -144,11 +147,16 @@ class ImageStimulus(HasFieldOfView, Stimulus):
         self.img_shape = img.shape
         self._fov = resolve_fov(fov, img.shape[0], img.shape[1])
         if electrodes is None:
-            # Name every pixel after its place in the image: 'A1' is the
-            # top-left pixel, 'C12' sits in the third row and twelfth column,
-            # and a color image suffixes the channel ('A1_R'). The names are
-            # generated on demand rather than stored:
-            electrodes = ElectrodeNames(self.img_shape)
+            if parent is not None and parent.img_shape == self.img_shape:
+                # A pixel keeps its name only for as long as it is the same
+                # pixel:
+                electrodes = parent.electrodes
+            else:
+                # Name every pixel after its place in the image: 'A1' is the
+                # top-left pixel, 'C12' sits in the third row and twelfth
+                # column, and a color image suffixes the channel ('A1_R'). The
+                # names are generated on demand rather than stored:
+                electrodes = ElectrodeNames(self.img_shape)
         data = img_as_float32(img)
         if borrowed is not None and np.may_share_memory(data, borrowed):
             data = data.copy()
@@ -212,8 +220,8 @@ class ImageStimulus(HasFieldOfView, Stimulus):
         -----
         *  ``func`` can reshape the image in any way it likes, so a result
            whose pixel grid differs from the original is given no field of
-           view rather than an unverifiable one. Set ``fov`` on the result if
-           you know it.
+           view rather than an unverifiable one. If you know it, pass the
+           result to ``ImageStimulus(..., fov=...)``.
         """
         # `func` gets a frame of its own: several of the scikit-image
         # transforms this exists to reach cannot take a read-only one.

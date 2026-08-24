@@ -141,7 +141,8 @@ at positive ``y``.
 A :py:meth:`~pulse2percept.stimuli.ImageStimulus.resize` keeps the field of
 view and resamples the pixels, while a
 :py:meth:`~pulse2percept.stimuli.ImageStimulus.crop` keeps the angular pixel
-size and shrinks the field of view.
+size and shrinks the field of view. A cropped stimulus is centered on its new
+frame; it does not retain an offset relative to the original image.
 
 Plotting and time operations
 ----------------------------

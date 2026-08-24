@@ -178,6 +178,10 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             metadata = {'user': metadata}
         # The buffer the caller still holds, if any (see below):
         borrowed = None
+        # The video whose pixel names this one may inherit; decided once the
+        # final frame shape is known, because `as_gray` and `resize` build a
+        # different grid:
+        parent = None
         if isinstance(source, str):
             vid, meta = _read_video(source, format, start_time, stop_time)
             # Move frame index to the last dimension:
@@ -196,8 +200,7 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             vid = source.data.reshape(source.vid_shape)
             borrowed = source.data
             metadata.update(source.metadata)
-            if electrodes is None:
-                electrodes = source.electrodes
+            parent = source
             if time is None:
                 time = source.time
             if fov is None:
@@ -241,10 +244,16 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         self.vid_shape = vid.shape
         self._fov = resolve_fov(fov, vid.shape[0], vid.shape[1])
         if electrodes is None:
-            # One electrode per pixel, named after its place in the frame
-            # ('A1', 'C12', 'A1_R' for a color video). The last axis holds the
-            # frames, which are the time component and not electrodes:
-            electrodes = ElectrodeNames(self.vid_shape[:-1])
+            grid = self.vid_shape[:-1]
+            if parent is not None and parent.vid_shape[:-1] == grid:
+                # A pixel keeps its name only for as long as it is the same
+                # pixel:
+                electrodes = parent.electrodes
+            else:
+                # One electrode per pixel, named after its place in the frame
+                # ('A1', 'C12', 'A1_R' for a color video). The last axis holds
+                # the frames, which are the time component and not electrodes:
+                electrodes = ElectrodeNames(grid)
         if borrowed is not None and np.may_share_memory(vid, borrowed):
             vid = vid.copy()
         super().__init__(_adoptable(vid.reshape((-1, vid.shape[-1]))),
@@ -355,8 +364,8 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         -----
         *  ``func`` can reshape a frame in any way it likes, so a result
            whose pixel grid differs from the original is given no field of
-           view rather than an unverifiable one. Set ``fov`` on the result if
-           you know it.
+           view rather than an unverifiable one. If you know it, pass the
+           result to ``VideoStimulus(..., fov=...)``.
         """
         # `func` gets a frame of its own: several of the scikit-image
         # transforms this exists to reach cannot take a read-only one.
