@@ -1,4 +1,4 @@
-""":py:func:`~pulse2percept.vision.compose_amd`"""
+""":py:func:`~pulse2percept.vision.compose_hybrid_vision`"""
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
@@ -65,10 +65,13 @@ def _prosthetic_frames(scene, prosthetic):
 
     An image scene has no clock of its own, so a temporal percept sets the
     output timing. A video does have one, and keeps it: the percept is read at
-    the video's frame times instead. Whichever clock wins brings its own unit
-    along, so a percept counted in seconds does not come back in milliseconds.
-    Neither input can arrive with frames but no clock -- ``Percept`` and
-    ``VideoStimulus`` both number their frames when nothing better is given.
+    the video's frame times instead, and a temporal percept has to cover the
+    whole of it. A one-frame percept stands behind every frame on purpose,
+    which is a different thing from running off the end of a modeled one.
+    Whichever clock wins brings its own unit along, so a percept counted in
+    seconds does not come back in milliseconds. Neither input can arrive with
+    frames but no clock -- ``Percept`` and ``VideoStimulus`` both number their
+    frames when nothing better is given.
     """
     if isinstance(scene, ImageStimulus):
         return prosthetic.data, prosthetic.time, prosthetic.time_unit
@@ -77,6 +80,21 @@ def _prosthetic_frames(scene, prosthetic):
         # A still percept stands behind every frame of the video:
         return (np.repeat(prosthetic.data, n_out, axis=-1), scene.time,
                 scene.time_unit)
+    # Percept interpolation holds the nearest endpoint outside the modeled
+    # interval, so a video that runs past it would be shown a phosphene that
+    # was never predicted:
+    unit = prosthetic.time_unit
+    asked = np.asarray(scene.times(unit), dtype=float)
+    lo, hi = float(prosthetic.time[0]), float(prosthetic.time[-1])
+    slack = 1e-9 * max(abs(lo), abs(hi), 1.0)
+    if asked.min() < lo - slack or asked.max() > hi + slack:
+        raise ValueError(
+            f"The percept covers {lo:g}-{hi:g} {unit}, but the video runs "
+            f"{asked.min():g}-{asked.max():g} {unit}. Nothing was modeled "
+            f"outside that interval, and holding the nearest predicted frame "
+            f"there would show a phosphene that was never simulated. Predict "
+            f"the percept over the whole video, or trim the video to the "
+            f"percept.")
     # `Percept.__getitem__` owns time interpolation; the quantity is what
     # carries the video's clock across to the percept's own time unit:
     frames = prosthetic[..., Quantity(np.asarray(scene.time),
@@ -137,8 +155,8 @@ def _check_range(vmin, vmax, scotoma_fill):
     return vmin, vmax, fill
 
 
-def compose_amd(scene, prosthetic, scotoma, vmax, vmin=0, gaze=None,
-                scotoma_fill=0):
+def compose_hybrid_vision(scene, prosthetic, scotoma, vmax, vmin=0, gaze=None,
+                          scotoma_fill=0):
     """Compose native and prosthetic vision into one RGB percept
 
     What someone with an eye-centered scotoma and a retinal implant sees:
@@ -208,7 +226,8 @@ def compose_amd(scene, prosthetic, scotoma, vmax, vmin=0, gaze=None,
 
     Timing follows whichever input has a clock. An image scene takes the
     percept's time axis and time unit; a video keeps its own and reads the
-    percept at its frame times.
+    percept at its frame times, which requires a temporal percept to cover the
+    video's whole duration. A single-frame percept stands behind every frame.
 
     """
     if not isinstance(scene, (ImageStimulus, VideoStimulus)):

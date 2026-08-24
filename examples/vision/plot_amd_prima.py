@@ -32,7 +32,7 @@ from pulse2percept.implants import PRIMA
 from pulse2percept.models import ScoreboardModel
 from pulse2percept.stimuli import AmplitudeEncoder, LogoBVL
 from pulse2percept.units import dva
-from pulse2percept.vision import Scotoma, compose_amd
+from pulse2percept.vision import Scotoma, compose_hybrid_vision
 
 ###############################################################################
 # The scene
@@ -102,8 +102,9 @@ plt.title('Prosthetic percept alone')
 
 display_vmax = prosthetic.data.max()
 
-combined = compose_amd(scene, prosthetic, scotoma, vmax=display_vmax,
-                       gaze=gaze, scotoma_fill=0)
+combined = compose_hybrid_vision(scene, prosthetic, scotoma,
+                                 vmax=display_vmax, gaze=gaze,
+                                 scotoma_fill=0)
 
 combined.plot()
 plt.title('Native vision with a PRIMA percept in the scotoma')
@@ -124,8 +125,8 @@ gaze = (8, -4) * dva
 
 implant.stim = implant.encoder.encode(scene, implant=implant,
                                       vfmap=model.vfmap, gaze=gaze)
-shifted = compose_amd(scene, model.predict_percept(implant), scotoma,
-                      vmax=display_vmax, gaze=gaze)
+shifted = compose_hybrid_vision(scene, model.predict_percept(implant),
+                                scotoma, vmax=display_vmax, gaze=gaze)
 
 shifted.plot()
 plt.title('Looking 8 degrees right and 4 degrees down')

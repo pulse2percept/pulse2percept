@@ -365,6 +365,18 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
                              "electrodes land in a scene, so they need an "
                              "'implant' to place.")
         else:
+            if getattr(stim, 'fov', None) is not None:
+                # One pixel per electrode is a device-relative reading of the
+                # source, which throws the stated geometry away silently:
+                raise ValueError(
+                    f"This {type(stim).__name__} states a field of view "
+                    f"({stim.fov[0]:g} x {stim.fov[1]:g} dva), so it is a "
+                    f"scene in visual-field coordinates rather than a grid of "
+                    f"pixels to encode one per electrode. Pass the 'implant' "
+                    f"it is being encoded for, along with the 'vfmap' that "
+                    f"says where in that scene each of its electrodes looks. "
+                    f"Build it without 'fov' for the device-relative "
+                    f"behavior.")
             # `values` rather than `data`, to say out loud that these are the
             # dimensionless numbers the modulation below is a function of:
             values = stim.values(dimensionless)
@@ -836,7 +848,8 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` decides
             which electrodes may pulse when. If None, every pixel of the source
             is treated as its own electrode and every electrode fires on the
-            same schedule.
+            same schedule. Required when ``source`` states a ``fov``: a scene
+            has to be sampled somewhere, and the implant is what says where.
 
             .. versionchanged:: 0.10.0
                 The implant is named here rather than owned by the encoder, so

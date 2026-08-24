@@ -1,8 +1,8 @@
 """Registering a scene against an implant through a retinal map
 
-Phase 3 of #668: an image that states a ``fov`` is a picture *of* somewhere in
-the visual field, so its pixels reach the electrodes that actually see them
-rather than being stretched across the implant's bounding box.
+An image that states a ``fov`` is a picture *of* somewhere in the visual
+field, so its pixels reach the electrodes that actually see them rather than
+being stretched across the implant's bounding box (#668).
 """
 import numpy as np
 import numpy.testing as npt
@@ -40,7 +40,7 @@ def one_electrode_at(x_um, y_um):
 #: center pixel sits on the origin: pixel column c is at x = c - HALF dva, and
 #: row r at y = HALF - r. That keeps the expected values below plain
 #: arithmetic, independent of the pixel-center convention `dva_to_pixel`
-#: already owns (and that Phase 1 tests).
+#: already owns.
 SCENE_PX = 41
 HALF = (SCENE_PX - 1) // 2
 
@@ -212,6 +212,54 @@ def test_fov_without_a_map_fails_loudly():
     implant.encoder = AmplitudeEncoder()
     with pytest.raises(ValueError):
         implant.stim = scene
+
+
+def test_a_scene_is_never_encoded_without_an_implant_to_place_it():
+    """A bare encoder is the last path that could still drop the geometry
+
+    With no implant an encoder treats every pixel as its own electrode, which
+    reads a scene as a device-relative image and throws its fov away silently.
+    """
+    with pytest.raises(ValueError) as excinfo:
+        AmplitudeEncoder().encode(ramp_scene())
+    npt.assert_equal('field of view' in str(excinfo.value), True)
+    npt.assert_equal('implant' in str(excinfo.value), True)
+    # A video is the same picture with more frames:
+    with pytest.raises(ValueError):
+        AmplitudeEncoder().encode(VideoStimulus(np.zeros((4, 4, 2)),
+                                                fov=(4, 4)))
+    # A picture that claims no geometry is still encoded pixel by pixel:
+    AmplitudeEncoder().encode(ImageStimulus(np.ones((4, 4))))
+
+
+@pytest.mark.parametrize('as_video', [False, True])
+def test_the_encode_shorthand_takes_the_registration_arguments(as_video):
+    """`scene.encode(implant=, vfmap=, gaze=)` reaches the same sampling
+
+    ``fov`` is an image/video feature, so their own encoding shorthand must
+    not be the one route that cannot register with it.
+    """
+    vfmap = Curcio1990Map()
+    implant = ProsthesisSystem(ElectrodeGrid((3, 3), 300))
+    scene = ramp_scene()
+    if as_video:
+        frames = np.repeat(scene.data.reshape(scene.img_shape)[..., None],
+                           2, axis=-1)
+        # Frames long enough that a 20 Hz train reaches both of them:
+        scene = VideoStimulus(frames, fov=(SCENE_PX, SCENE_PX), time=[0, 100])
+    short = scene.encode(amp_range=(0, 50), implant=implant, vfmap=vfmap,
+                         gaze=(2, -1) * dva)
+    spelled = AmplitudeEncoder(amp_range=(0, 50)).encode(
+        scene, implant=implant, vfmap=vfmap, gaze=(2, -1) * dva)
+    npt.assert_almost_equal(short.data, spelled.data, decimal=5)
+    npt.assert_equal(list(short.electrodes), list(spelled.electrodes))
+    # Registering somewhere else really does read somewhere else:
+    elsewhere = scene.encode(amp_range=(0, 50), implant=implant, vfmap=vfmap,
+                             gaze=(8, 0) * dva)
+    npt.assert_equal(np.allclose(short.data, elsewhere.data), False)
+    # And the shorthand does not route a scene into the pixel-grid path:
+    with pytest.raises(ValueError):
+        scene.encode()
 
 
 def test_a_map_without_a_fov_fails_loudly():

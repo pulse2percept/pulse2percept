@@ -769,7 +769,8 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
 
-    def encode(self, amp_range=(0, 50), freq=20, implant=None, **kwargs):
+    def encode(self, amp_range=(0, 50), freq=20, implant=None, vfmap=None,
+               gaze=None, **kwargs):
         """Encode the video using amplitude modulation
 
         Encodes every frame of the video as a train of biphasic pulses, where
@@ -798,7 +799,24 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             If given, the video is first sampled at the implant's electrode
             locations, so that the pulse trains are built at electrode rather
             than pixel resolution. Strongly recommended: a video has orders of
-            magnitude more pixels than an implant has electrodes.
+            magnitude more pixels than an implant has electrodes. Required if
+            the video states a ``fov``.
+        vfmap : :py:class:`~pulse2percept.topography.RetinalMap`, optional
+            The retinotopy that says where in the visual field each electrode
+            looks, typically a model's ``vfmap``. Required if the video states
+            a ``fov``, and rejected if it does not. See
+            :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode`.
+
+            .. versionadded:: 0.11.0
+
+        gaze : (x, y) or (n_frames, 2), optional
+            The scene location that falls on the fovea, in degrees of visual
+            angle. Defaults to the origin; one pair per frame moves the eye
+            between frames. See
+            :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode`.
+
+            .. versionadded:: 0.11.0
+
         **kwargs :
             Additional arguments passed to
             :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
@@ -811,8 +829,8 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         """
         # Imported here because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
-        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
-                                **kwargs).encode(self, implant=implant)
+        encoder = AmplitudeEncoder(amp_range=amp_range, freq=freq, **kwargs)
+        return encoder.encode(self, implant=implant, vfmap=vfmap, gaze=gaze)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""

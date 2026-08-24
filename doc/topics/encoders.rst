@@ -116,9 +116,12 @@ Pass one ``(x, y)`` to fixate, or one per video frame to move the eye between
 frames.
 
 A scene is never silently stretched. Encoding an image that states a ``fov``
-without a ``vfmap`` raises, rather than producing a spatially wrong stimulus,
-and passing a ``vfmap`` for an image that has no ``fov`` raises for the same
-reason.
+without an ``implant`` and a ``vfmap`` raises, rather than producing a
+spatially wrong stimulus, and passing a ``vfmap`` for an image that has no
+``fov`` raises for the same reason.
+:py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
+:py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` take ``vfmap`` and
+``gaze`` too, so the shorthand registers exactly like the long form.
 
 Spatial sampling preserves the source's color channels; today's encoders are
 luminance encoders and reduce them to one number per electrode before

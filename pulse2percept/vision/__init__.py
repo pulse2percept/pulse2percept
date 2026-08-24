@@ -8,10 +8,10 @@
 
 .. versionadded:: 0.11.0
 """
-from .composition import compose_amd
+from .composition import compose_hybrid_vision
 from .scotoma import Scotoma
 
 __all__ = [
-    'compose_amd',
+    'compose_hybrid_vision',
     'Scotoma'
 ]

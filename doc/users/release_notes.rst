@@ -24,13 +24,16 @@ New features:
   :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode` and
   :py:meth:`~pulse2percept.implants.ProsthesisSystem.reshape_stim` take a
   ``vfmap`` and a ``gaze``, and spatial sampling keeps the source's color
-  channels until the encoder reduces them.
+  channels until the encoder reduces them. The
+  :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` shorthand takes them
+  too, and encoding a scene without an implant to place it now raises.
 
 * New :py:mod:`pulse2percept.vision` with
   :py:class:`~pulse2percept.vision.Scotoma`, an eye-centered map of lost
   vision in degrees of visual angle, and
-  :py:func:`~pulse2percept.vision.compose_amd`, which combines a scene, a
-  scotoma and a prosthetic percept into one RGB percept (:issue:`668`).
+  :py:func:`~pulse2percept.vision.compose_hybrid_vision`, which combines a
+  scene, a scotoma and a prosthetic percept into one RGB percept
+  (:issue:`668`).
 
 v0.10.0 Encoders (2026-08-23)
 -----------------------------

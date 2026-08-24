@@ -653,7 +653,8 @@ class ImageStimulus(HasFieldOfView, Stimulus):
             raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
 
-    def encode(self, amp_range=(0, 50), freq=20, implant=None, **kwargs):
+    def encode(self, amp_range=(0, 50), freq=20, implant=None, vfmap=None,
+               gaze=None, **kwargs):
         """Encode the image using amplitude modulation
 
         Encodes the image as a train of biphasic pulses, where the gray level
@@ -681,7 +682,22 @@ class ImageStimulus(HasFieldOfView, Stimulus):
         implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
             If given, the image is first sampled at the implant's electrode
             locations, so that the pulse trains are built at electrode rather
-            than pixel resolution.
+            than pixel resolution. Required if the image states a ``fov``.
+        vfmap : :py:class:`~pulse2percept.topography.RetinalMap`, optional
+            The retinotopy that says where in the visual field each electrode
+            looks, typically a model's ``vfmap``. Required if the image states
+            a ``fov``, and rejected if it does not. See
+            :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode`.
+
+            .. versionadded:: 0.11.0
+
+        gaze : (x, y), optional
+            The scene location that falls on the fovea, in degrees of visual
+            angle. Defaults to the origin. See
+            :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode`.
+
+            .. versionadded:: 0.11.0
+
         **kwargs :
             Additional arguments passed to
             :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
@@ -694,8 +710,8 @@ class ImageStimulus(HasFieldOfView, Stimulus):
         """
         # Imported here because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
-        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
-                                **kwargs).encode(self, implant=implant)
+        encoder = AmplitudeEncoder(amp_range=amp_range, freq=freq, **kwargs)
+        return encoder.encode(self, implant=implant, vfmap=vfmap, gaze=gaze)
 
     def plot(self, ax=None, **kwargs):
         """Plot the stimulus
