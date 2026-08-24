@@ -7,7 +7,6 @@
    :py:class:`~pulse2percept.utils.gamma`,
    :py:class:`~pulse2percept.utils.unique`"""
 import numpy as np
-import sys
 import abc
 from copy import copy, deepcopy
 from scipy.integrate import trapezoid
@@ -137,11 +136,22 @@ def has_own_attr(obj, name):
     return name in getattr(obj, '__dict__', {}) or hasattr(type(obj), name)
 
 
+#: ``id()`` of every object whose constructor is currently running. Kept
+#: outside the instances themselves: some ``Frozen`` subclasses are slotted,
+#: and a flag living on the object would double as a way to unfreeze it.
+_constructing = set()
+
+
+def _is_constructing(obj):
+    """Whether ``obj``'s constructor is currently running"""
+    return id(obj) in _constructing
+
+
 def freeze_class(set, normalize=None):
     """Freezes a class
-    Raise an error when trying to set an undeclared name, or when calling from
-    a method other than ``Frozen.__init__`` or the ``__init__`` method of a
-    class derived from Frozen
+
+    Raise an error when trying to set an undeclared name from anywhere but
+    the object's own constructor.
 
     Parameters
     ----------
@@ -153,34 +163,26 @@ def freeze_class(set, normalize=None):
         See ``_normalize_param``, which dispatches to the object's own
         ``_normalize_param_value``.
 
-        This is a parameter rather than a wrapper around ``set_attr`` on
-        purpose: both this function and
-        :py:meth:`~pulse2percept.models.BaseModel.is_built` locate their
-        caller by stack depth, and inserting another ``__setattr__`` frame
-        between the caller and this one would move it.
-
     """
 
     def set_attr(self, name, value):
         if normalize is not None and has_units(value):
             # Units are stripped here, at the last moment before storage, so
-            # that every path into a parameter -- constructor, `set_params`,
-            # `build`, a direct assignment, or a composite `Model` forwarding
-            # one to its sub-models -- goes through the same conversion:
+            # that every path into a parameter goes through the same conversion
             value = normalize(self, name, value)
-        # The cheap check comes first so that assigning to an attribute never
-        # *reads* it (see ``has_own_attr``); `hasattr` then covers the names
-        # that only a ``__getattr__`` knows about:
+        if _is_constructing(self):
+            set(self, name, value)
+            return
+        # Deliberately after the construction check: probing a half-built
+        # object can run a forwarding `__getattr__` before the state it
+        # forwards through exists. The cheap check comes first so that
+        # assigning to an attribute never *reads* it (see ``has_own_attr``);
+        # `hasattr` then covers the names that only a ``__getattr__`` knows
+        # about:
         if has_own_attr(self, name) or hasattr(self, name):
             # If attribute already exists, simply set it
             set(self, name, value)
             return
-        elif sys._getframe(1).f_code.co_name == '__init__' or \
-             sys._getframe(2).f_code.co_name == '__init__':
-            # Allow __setattr__ calls in __init__ calls of proper object types
-            if isinstance(sys._getframe(1).f_locals['self'], self.__class__):
-                set(self, name, value)
-                return
         err_str = (f"'{name}' not found. You cannot add attributes "
                    f"to {self.__class__.__name__} outside the constructor.")
         raise FreezeError(err_str)
@@ -194,6 +196,32 @@ class Frozen(object):
     class will raise a FreezeError.
     """
     __slots__ = ()
+
+    def __init_subclass__(cls, **kwargs):
+        """Register the object under construction for the whole constructor
+
+        Wrapping every subclass's own ``__init__`` -- not just the base one --
+        is what keeps a subclass that calls ``super().__init__()`` and then
+        adds an attribute of its own counting as "under construction".
+        """
+        super().__init_subclass__(**kwargs)
+        init = cls.__dict__.get('__init__')
+        if init is None:
+            return
+
+        @wraps(init)
+        def wrapped_init(self, *args, **kwargs):
+            # Nested `super().__init__` calls all see the same id, so only the
+            # outermost one may unregister it:
+            outermost = id(self) not in _constructing
+            _constructing.add(id(self))
+            try:
+                return init(self, *args, **kwargs)
+            finally:
+                if outermost:
+                    _constructing.discard(id(self))
+
+        cls.__init__ = wrapped_init
 
     __setattr__ = freeze_class(object.__setattr__)
 

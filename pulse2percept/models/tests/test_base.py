@@ -868,6 +868,39 @@ def test_Model_set_params():
     npt.assert_equal(hasattr(model.spatial, 'dt'), False)
 
 
+class ValidCompositeModel(Model):
+    """A Model subclass that owns an attribute of its own"""
+
+    def __init__(self, **params):
+        super().__init__(spatial=ValidSpatialModel(), temporal=None, **params)
+        self.n_calls = 0
+
+
+def test_Model_subclass_constructor_owns_its_attributes():
+    model = ValidCompositeModel()
+    npt.assert_equal(model.n_calls, 0)
+    npt.assert_equal('n_calls' in model.__dict__, True)
+    npt.assert_equal(hasattr(model.spatial, 'n_calls'), False)
+    # Nothing new may be added once the constructor is done:
+    with pytest.raises(FreezeError):
+        model.n_misses = 0
+
+
+def test_Model_subclass_params_go_to_the_component_model():
+    # A user parameter belongs to the sub-model, even when it is passed to a
+    # subclass constructor that is free to create attributes of its own:
+    model = ValidCompositeModel(step=2.5)
+    npt.assert_almost_equal(model.spatial.step, 2.5)
+    npt.assert_equal('step' in model.__dict__, False)
+    model.set_params({'step': 0.5})
+    npt.assert_almost_equal(model.spatial.step, 0.5)
+    npt.assert_equal('step' in model.__dict__, False)
+    # A parameter no sub-model knows has nowhere to go, and must not quietly
+    # become an attribute of the composite instead:
+    with pytest.raises(FreezeError):
+        ValidCompositeModel(nonexistent=1)
+
+
 def test_Model_build():
     # A None model:
     model = Model()

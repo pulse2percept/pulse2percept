@@ -50,6 +50,37 @@ def test_Frozen():
         frozen_child.c = 3
 
 
+class FrozenGrandChild(FrozenChild):
+
+    def __init__(self, a, c):
+        super().__init__(a)
+        self.c = c
+
+
+def test_Frozen_derived_constructor():
+    # The whole most-derived constructor counts as construction, not just the
+    # base one it delegates to:
+    grandchild = FrozenGrandChild(1, 2)
+    npt.assert_almost_equal(grandchild.a, 1)
+    npt.assert_almost_equal(grandchild.c, 2)
+    with pytest.raises(FreezeError):
+        grandchild.d = 3
+
+
+class Impostor:
+    """Anything whose constructor touches an already-built Frozen object"""
+
+    def __init__(self, victim):
+        victim.newvar = 0
+
+
+def test_Frozen_other_object_constructor():
+    # Being called from *some* `__init__` is not permission to add an
+    # attribute to a finished object (#801):
+    with pytest.raises(FreezeError):
+        Impostor(FrozenChild(1))
+
+
 class ParametrizedChild(Parametrized):
 
     def get_default_params(self):
