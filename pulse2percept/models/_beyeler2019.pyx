@@ -319,22 +319,20 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
     once per (segment, electrode) pair and reused across every time point.
     A time-innermost ordering would evaluate it ``n_time`` times over.
 
-    Only electrodes within ``cutoff_r2`` of a segment can contribute to it,
-    and for an array of any size that is a small fraction of them. Rather
-    than test every electrode and reject nearly all of them, the electrodes
-    are sorted by x once per call and each segment binary-searches the band
-    ``[ax_x - r, ax_x + r]``, leaving the loop over electrodes proportional
-    to the width of that band instead of to the size of the array. Sorting
-    also lets the inactive electrodes be dropped outright rather than
-    branched past. The band is one-dimensional, so it still admits electrodes
-    that are far away in y; those are rejected by the ``r2`` test as before.
+    Only electrodes within ``cutoff_r2`` of a segment can contribute to it.
+    The active electrodes are sorted by x once per call and each segment
+    binary-searches the band ``[ax_x - r, ax_x + r]``; with a finite cutoff
+    that leaves the electrode loop walking the band rather than the whole
+    array. Sorting also lets the inactive electrodes be dropped outright
+    rather than branched past. The band is one-dimensional, so the exact
+    ``r2 <= cutoff_r2`` test still decides which of its electrodes count; an
+    infinite cutoff puts every electrode in the band and rejects none.
 
     The innermost loop over time accumulates into independent slots of a
     scratch buffer, so it vectorizes without relaxed floating-point
     semantics. Nothing of size ``n_segments x n_electrodes`` or
     ``n_segments x n_time`` is ever materialized: each thread holds two
-    buffers of ``n_time`` floats, and ``stim`` is small enough to stay in
-    cache while every pixel streams past it.
+    buffers of ``n_time`` floats.
 
     .. note::
 

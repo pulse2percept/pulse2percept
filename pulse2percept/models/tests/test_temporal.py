@@ -233,6 +233,44 @@ def test_FadingTemporal_thread_count_invariant():
         npt.assert_array_equal(parallel, serial)
 
 
+def test_FadingTemporal_long_run_matches_closed_form():
+    """A long constant drive lands on the recurrence, not on its drift.
+
+    Stepping a run one `dt` at a time in float32 is what loses accuracy here:
+    each step adds about `dt / tau` of the running value, and approaching the
+    fixed point those additions round away entirely. At the default
+    `dt=0.005`, `tau=100`, a one-second constant drive stepped that way sits
+    ~9000 ulps below the recurrence it is meant to implement. So the
+    reference is that recurrence in float64, not the trajectory the per-step
+    float32 loop used to produce.
+    """
+    dt, tau, amp = 0.005, 100.0, 50.0
+    # One frame outlasting every output point, so the drive never changes and
+    # the only run boundaries are the output points themselves:
+    stim = Stimulus(np.array([[-amp, 0.0]]), time=[0.0, 1e6])
+    t_percept = np.array([200.0, 700.0, 1500.0])
+    got = FadingTemporal(dt=dt, tau=tau, thresh_percept=0,
+                         reduce='last').build().predict_percept(
+        stim, t_percept=t_percept).data.ravel()
+
+    # `q` from the float32 `dt / tau` the kernel divides once and reuses, but
+    # composed in float64. Run `k` covers the steps after the previous output
+    # point up to and including this one:
+    q = 1.0 - float(np.float32(dt / tau))
+    idx = np.round(t_percept / dt).astype(np.int64)
+    want, bright, prev = [], 0.0, -1
+    for i in idx:
+        bright = amp + (bright - amp) * q ** (i - prev)
+        want.append(bright)
+        prev = i
+    npt.assert_allclose(got, want, rtol=1e-6)
+    # Not a vacuous comparison: brightness is still climbing at every one of
+    # these points, so a wrong `q**n` cannot hide behind the fixed point:
+    npt.assert_array_less(want[0], want[1])
+    npt.assert_array_less(want[1], want[2])
+    npt.assert_array_less(want[2], amp)
+
+
 def test_FadingTemporal_peak_is_exact():
     """The in-kernel peak must equal a dense scan of the same interval.
 
@@ -244,8 +282,9 @@ def test_FadingTemporal_peak_is_exact():
     Close, not equal: `fading_fast` composes the runs of simulation steps that
     share a stimulus frame into one affine map, so asking for every step and
     asking for five points do not put the same number of roundings between two
-    output times. Both stay within a few ulps of the recurrence they compose,
-    but neither is obliged to reproduce the other bit for bit.
+    output times, and neither is obliged to reproduce the other bit for bit.
+    See `test_FadingTemporal_long_run_matches_closed_form` for which of the
+    two tracks the recurrence over a long run.
     """
     rng = np.random.default_rng(3)
     data = (rng.random((5, 12)) - 0.5).astype(np.float32) * 40

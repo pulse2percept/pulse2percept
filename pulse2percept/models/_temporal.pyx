@@ -56,8 +56,8 @@ cpdef fading_fast(const float32[:, ::1] stim,
     ``q**n`` and ``1 - q**n`` are both carried because neither alone stays
     accurate: for a short run ``q**n`` is near 1 and ``drive + (b - drive) *
     q**n`` cancels, while for a long one ``1 - q**n`` rounds to 1 and the
-    decaying tail is lost. Weighting the two endpoints instead keeps the
-    error at one rounding of the larger term either way.
+    decaying tail is lost. Weighting the two endpoints avoids both, and
+    ``expm1`` supplies ``1 - q**n`` without cancelling when it is small.
 
     Parameters
     ----------
