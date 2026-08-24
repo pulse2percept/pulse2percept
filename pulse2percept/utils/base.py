@@ -119,26 +119,15 @@ class FreezeError(AttributeError):
 
 
 def has_own_attr(obj, name):
-    """Whether ``obj`` has an attribute ``name``, without running its getter
+    """Return whether ``obj`` owns ``name`` without invoking its getter.
 
-    ``hasattr`` *invokes* a property or other descriptor just to answer the
-    question, which for a :py:class:`~pulse2percept.utils.deprecated_alias`
-    means a spurious deprecation warning every time an attribute is merely
-    probed. Looking the name up on the type instead settles the same question
-    without ever reading the instance's value.
-
-    Note that this does not consult ``__getattr__``, so it answers "does the
-    object own this attribute", not the broader "can this attribute be read".
-
-    .. versionadded:: 0.10.0
-
+    Unlike ``hasattr``, this avoids triggering properties such as
+    deprecated aliases.
     """
     return name in getattr(obj, '__dict__', {}) or hasattr(type(obj), name)
 
 
-#: ``id()`` of every object whose constructor is currently running. Kept
-#: outside the instances themselves: some ``Frozen`` subclasses are slotted,
-#: and a flag living on the object would double as a way to unfreeze it.
+#: ``id()`` values of ``Frozen`` objects currently under construction.
 _constructing = set()
 
 
@@ -167,18 +156,12 @@ def freeze_class(set, normalize=None):
 
     def set_attr(self, name, value):
         if normalize is not None and has_units(value):
-            # Units are stripped here, at the last moment before storage, so
-            # that every path into a parameter goes through the same conversion
+            # Normalize unitful parameters before storage.
             value = normalize(self, name, value)
         if _is_constructing(self):
             set(self, name, value)
             return
-        # Deliberately after the construction check: probing a half-built
-        # object can run a forwarding `__getattr__` before the state it
-        # forwards through exists. The cheap check comes first so that
-        # assigning to an attribute never *reads* it (see ``has_own_attr``);
-        # `hasattr` then covers the names that only a ``__getattr__`` knows
-        # about:
+        # Avoid probing descriptors while the object is only half-built.
         if has_own_attr(self, name) or hasattr(self, name):
             # If attribute already exists, simply set it
             set(self, name, value)
@@ -198,12 +181,7 @@ class Frozen(object):
     __slots__ = ()
 
     def __init_subclass__(cls, **kwargs):
-        """Register the object under construction for the whole constructor
-
-        Wrapping every subclass's own ``__init__`` -- not just the base one --
-        is what keeps a subclass that calls ``super().__init__()`` and then
-        adds an attribute of its own counting as "under construction".
-        """
+        """Track construction across a subclass's complete ``__init__`` call."""
         super().__init_subclass__(**kwargs)
         init = cls.__dict__.get('__init__')
         if init is None:
@@ -211,8 +189,7 @@ class Frozen(object):
 
         @wraps(init)
         def wrapped_init(self, *args, **kwargs):
-            # Nested `super().__init__` calls all see the same id, so only the
-            # outermost one may unregister it:
+            # Only the outermost constructor unregisters the object.
             outermost = id(self) not in _constructing
             _constructing.add(id(self))
             try:
@@ -230,33 +207,18 @@ class Frozen(object):
 
 
 def _normalize_param(obj, name, value):
-    """Hand a unitful value to the object's own normalization hook
-
-    Kept as a module-level function because ``freeze_class`` takes the
-    normalizer as an argument rather than looking it up on the class; see
-    :py:meth:`~pulse2percept.utils.Parametrized._normalize_param_value` for
-    what actually happens to the value, and for how a subclass extends it.
-    """
+    """Dispatch unit normalization to the object's parameter hook."""
     return obj._normalize_param_value(name, value)
 
 
 class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
-    """Abstract base class for objects with user-settable parameters
+    """Base class for objects with user-settable parameters.
 
-    Provides the following functionality:
-
-    *  Pretty-print class attributes (via ``_pprint_params`` and
-       ``PrettyPrint``)
-    *  User-settable parameters must be listed in ``get_default_params``
-    *  New class attributes can only be added in the constructor
-       (enforced via ``Frozen`` and ``FreezeError``)
-    *  Value-based equality and deep copying that understand NumPy arrays
-    *  Parameters can declare the physical unit they are stored in (via
-       ``get_param_units``), so that a unitful value assigned to one is
-       converted before it is stored
+    Parameters are declared by :meth:`get_default_params`; subclasses
+    may declare their storage units with :meth:`get_param_units`.
+    ``Frozen`` prevents adding new attributes after construction.
 
     .. versionadded:: 0.10.0
-
     """
 
     #: Units are stripped on the way in; see ``_normalize_param``.
@@ -306,52 +268,25 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     def _normalize_param_value(self, name, value):
-        """Convert a unitful value into the unit its parameter is stored in
+        """Normalize a unitful parameter value before storing it.
 
-        Called on the way into every attribute assignment whose value carries
-        a physical unit -- from the constructor, ``set_params``, ``build``, a
-        direct assignment, or a composite
-        :py:class:`~pulse2percept.models.Model` forwarding one to its
-        sub-models -- and returns the value to store.
-
-        Model equations operate on ordinary numbers, so a
-        :py:class:`~pulse2percept.units.Quantity` must never survive into a
-        parameter. Which unit a parameter is stored in is declared by
-        ``get_param_units``; a parameter that declares none takes a plain
-        number, and saying so is more useful than storing an object the
-        equations cannot use.
-
-        Attributes that are not user-settable parameters at all are left
-        alone: it is the parameter contract this enforces, not a rule about
-        what a ``Parametrized`` object may hold.
-
-        This is the extension point for a parameter whose unit is not the
-        whole story. ``SpatialModel`` overrides it so that a retinal *length*
-        assigned to ``xrange``/``yrange`` is resolved through the model's
-        visual field map into the degrees of visual angle the parameter is
-        actually stored in -- a conversion that needs the object, not just the
-        unit, and so cannot live in ``get_param_units``. An override handles
-        the names it knows about and defers the rest::
-
-            def _normalize_param_value(self, name, value):
-                if name == 'mine' and ...:
-                    return ...
-                return super()._normalize_param_value(name, value)
+        Parameters declared by :meth:`get_param_units` are converted to
+        their storage unit. Other declared parameters must be dimensionless.
+        Non-parameter attributes are returned unchanged.
 
         .. versionadded:: 0.10.0
 
         Parameters
         ----------
         name : str
-            Name of the attribute being assigned.
-        value : Quantity, Unit, or sequence of them
-            The value being assigned. Only unitful values reach this method.
+            Attribute name.
+        value : Quantity, Unit, or sequence
+            Unitful value being assigned.
 
         Returns
         -------
-        value : float, np.ndarray, or tuple
-            The plain numerical value to store.
-
+        value
+            Plain value to store.
         """
         units = self.get_param_units()
         if name in units:
@@ -361,41 +296,12 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         return value
 
     def get_param_units(self):
-        """Return a dict of the units that parameters are stored in
+        """Return storage units for physical parameters.
 
-        Maps a parameter name to the :py:class:`~pulse2percept.units.Unit`
-        that the implementation assumes it is expressed in. A
-        :py:class:`~pulse2percept.units.Quantity` assigned to such a parameter
-        is checked against that unit and rescaled to it, so that
-
-        .. code-block:: python
-
-            FadingTemporal(tau=100)
-            FadingTemporal(tau=100 * ms)
-            FadingTemporal(tau=0.1 * s)
-
-        all store the same float. Bare numbers keep their documented meaning
-        and are passed through untouched.
-
-        Parameters absent from this dict take plain numbers: they are either
-        dimensionless (``thresh_percept``) or empirical fit parameters whose
-        dimension the implementation does not actually commit to. Declaring a
-        unit is a statement about what the equations assume, so a parameter
-        should only appear here when that is documented or unambiguous.
-
-        This dict is not restricted to the names in ``get_default_params``: it
-        describes every physical attribute this object normalizes. A
-        constructor argument assigned straight to ``self`` --
-        :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel` takes
-        ``rho`` that way -- belongs here too, and is converted like any other.
-
-        Subclasses extend rather than replace it::
-
-            def get_param_units(self):
-                return {**super().get_param_units(), 'dt': ms, 'tau': ms}
+        Subclasses should extend this mapping. Parameters not listed here
+        take plain dimensionless values.
 
         .. versionadded:: 0.10.0
-
         """
         return {}
 

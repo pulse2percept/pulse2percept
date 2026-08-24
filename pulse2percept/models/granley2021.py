@@ -29,21 +29,21 @@ _FIND_THRESHOLD_MSG = (
 class DefaultBrightModel(BaseModel):
     """
     Default model to be used for brightness scaling in BiphasicAxonMapModel
-    Implements Eq 4 from [Granley2021]_ 
+    Implements Eq 4 from [Granley2021]_
     Fit using data from [Nanduri2012]_ and [Weitz2015]_
 
     Parameters:
     ------------
     do_thresholding : bool, optional
-        Set to true to enable probabilistic phosphene appearance at near-threshold 
+        Set to true to enable probabilistic phosphene appearance at near-threshold
         amplitudes
     a0, a1 : float, optional
         Linear regression coefficients (slope and intercept) of pulse_duration
-        vs threshold curve (Eq 3). Amplitude factor will be scaled by 
+        vs threshold curve (Eq 3). Amplitude factor will be scaled by
         a0*pdur + a1.
     a2, a3, a4: float, optional
         Linear regression coefficients for brightness vs amplitude and frequency (Eq 4)
-        F_bright = a2*scaled_amp + a3*freq + a4 
+        F_bright = a2*scaled_amp + a3*freq + a4
     """
 
     def __init__(self, **params):
@@ -61,7 +61,7 @@ class DefaultBrightModel(BaseModel):
         return params
 
     def scale_threshold(self, pdur):
-        """ 
+        """
         Based on eq 3 in paper, this function produces the factor that amplitude
         will be scaled by to produce a_tilde. Computes A_0 * t + A_1 (1/threshold)
         .. note::
@@ -89,7 +89,7 @@ class DefaultBrightModel(BaseModel):
 class DefaultSizeModel(BaseModel):
     """
     Default model to be used for size (rho) scaling in BiphasicAxonMapModel
-    Implements Eq 5 from [Granley2021]_ 
+    Implements Eq 5 from [Granley2021]_
     Fit using data from [Nanduri2012]_ and [Weitz2015]_
 
     Parameters:
@@ -98,7 +98,7 @@ class DefaultSizeModel(BaseModel):
         Rho parameter of BiphasicAxonMapModel (spatial decay rate)
     a0, a1 : float, optional
         Linear regression coefficients (slope and intercept) of pulse_duration
-        vs threshold curve (Eq 3). Amplitude factor will be scaled by 
+        vs threshold curve (Eq 3). Amplitude factor will be scaled by
         a0*pdur + a1.
     a5, a6 : float, optional
         Linear regression coefficients for size vs amplitude (Eq 5)
@@ -130,7 +130,7 @@ class DefaultSizeModel(BaseModel):
         return {**super().get_param_units(), 'rho': um, 'min_rho': um}
 
     def scale_threshold(self, pdur):
-        """ 
+        """
         Based on eq 3 in paper, this function produces the factor that amplitude
         will be scaled by to produce a_tilde. Computes A_0 * t + A_1 (1/threshold)
         .. note::
@@ -153,7 +153,7 @@ class DefaultSizeModel(BaseModel):
 class DefaultStreakModel(BaseModel):
     """
     Default model to be used for streak length (lambda) scaling in BiphasicAxonMapModel
-    Implements Eq 6 from [Granley2021]_ 
+    Implements Eq 6 from [Granley2021]_
     Fit using data from [Weitz2015]_
 
     Parameters:
@@ -219,21 +219,17 @@ _NO_THRESHOLD_MSG = (
 def _pulse_train_params(stim):
     """Return Granley pulse parameters for each driven electrode.
 
-    Parameters are read from retained ``BiphasicPulseTrain`` sources without
-    rendering the waveform. Amplitude is returned in multiples of threshold.
-
-    Electrodes driven at zero amplitude are left out, so an empty list means
-    the percept is zero.
+    Parameters are read from retained ``BiphasicPulseTrain`` objects
+    without rendering their waveforms. Amplitudes are returned in
+    multiples of threshold; zero-amplitude electrodes are omitted.
 
     Raises
     ------
     TypeError
-        If any electrode is driven by something other than a
-        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` with
-        ``delay_dur=0``.
+        If a driven electrode is not a zero-delay
+        :class:`~pulse2percept.stimuli.BiphasicPulseTrain`.
     ValueError
-        If a driven electrode's amplitude is a current whose threshold is
-        unknown.
+        If a current-valued amplitude has no threshold calibration.
     """
     sources = stim._structured_sources()
     if sources is None:
@@ -311,7 +307,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         Model used to modulate percept streak length with amplitude, frequency,
         and pulse duration
     **params: optional
-        Additional params for AxonMapModel. 
+        Additional params for AxonMapModel.
 
         Options:
         --------
@@ -369,8 +365,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             ``n_gray`` bins. If None, no compression is performed.
         noise : float or int, optional
             Adds salt-and-pepper noise to each percept frame. An integer will be
-            interpreted as the number of pixels to subject to noise in each 
-            frame. A float between 0 and 1 will be interpreted as a ratio of 
+            interpreted as the number of pixels to subject to noise in each
+            frame. A float between 0 and 1 will be interpreted as a ratio of
             pixels to subject to noise in each frame.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the
@@ -565,7 +561,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def predict_percept(self, implant, t_percept=None):
         """ Predicts the spatial response
-        Override base predict percept to have desired timesteps and 
+        Override base predict percept to have desired timesteps and
         remove unneccesary computation
 
         Parameters
@@ -701,8 +697,8 @@ class BiphasicAxonMapModel(Model):
     one representative percept from all time steps of the stimulus.
 
     Brightness, size, and streak length scaling are controlled by the
-    parameters bright_model, size_model, and streak model respectively. 
-    By default, these are set to classes that implement Eqs 3-6 from 
+    parameters bright_model, size_model, and streak model respectively.
+    By default, these are set to classes that implement Eqs 3-6 from
     [Granley2021]_. These models can be individually customized by setting
     the bright_model, size_model, or streak_model to any python callable
     with signature ``f(freq, amp, pdur)``.
@@ -807,8 +803,8 @@ class BiphasicAxonMapModel(Model):
             ``n_gray`` bins. If None, no compression is performed.
         noise : float or int, optional
             Adds salt-and-pepper noise to each percept frame. An integer will be
-            interpreted as the number of pixels to subject to noise in each 
-            frame. A float between 0 and 1 will be interpreted as a ratio of 
+            interpreted as the number of pixels to subject to noise in each
+            frame. A float between 0 and 1 will be interpreted as a ratio of
             pixels to subject to noise in each frame.
         loc_od, loc_od: (x,y), optional
             Location of the optic disc in degrees of visual angle. Note that the

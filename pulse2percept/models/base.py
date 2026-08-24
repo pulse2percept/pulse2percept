@@ -1,4 +1,4 @@
-""":py:class:`~pulse2percept.models.BaseModel`, 
+""":py:class:`~pulse2percept.models.BaseModel`,
    :py:class:`~pulse2percept.models.Model`,
    :py:class:`~pulse2percept.models.NotBuiltError`,
    :py:class:`~pulse2percept.models.SpatialModel`,
@@ -25,11 +25,9 @@ from ..utils.constants import ZORDER
 
 
 def _n_jobs_alias():
-    """Build the ``n_jobs`` property, an alias for ``n_threads``
+    """Build ``n_jobs`` as an alias for ``n_threads``.
 
-    Both names refer to the same OpenMP thread count, and both read and write
-    the same storage, so they can never drift apart. ``None`` and ``-1`` mean
-    "use every core", following the scikit-learn convention.
+    ``None`` and ``-1`` select all available CPU cores.
     """
     def getter(self):
         return self.n_threads
@@ -53,53 +51,27 @@ def _n_jobs_alias():
                         "names read and write the same value.")
 
 
-#: How many instants inside each video frame a percept is sampled at before
-#: being reduced to one value for that frame. Electrical stimulation is
-#: pulsatile, so the brightness a frame produces rises and falls within it; a
-#: single instant lands wherever the pulse cycle happens to be and can differ
-#: from its neighbours by two orders of magnitude for no reason a viewer would
-#: recognize. Sampling across the frame and keeping the peak reports what the
-#: frame actually did.
-#:
-#: This is the fallback for models whose kernel cannot track the peak itself
-#: (``_reduces_intervals``), and it is only approximate: dynamics much faster
-#: than ``frame_dur`` divided by this are under-reported, because no finite
-#: sampling can summarize a transient shorter than its own step. A 0.92 ms
-#: pulse against a 33.4 ms frame needs 37 samples to be caught reliably; eight
-#: of them catch it about one frame in seven, which is enough for a model whose
-#: output is already smooth on the millisecond scale and not enough for one
-#: whose output is not.
+#: Samples per video frame used when a temporal kernel cannot reduce an
+#: interval internally. This fallback is approximate for sub-frame transients.
 _FRAME_SUBSAMPLES = 8
 
 
 def _subsample(t_out, dt, n_sub, start=None):
-    """Sample the interval leading up to each output point ``n_sub`` times
+    """Sample each output interval at up to ``n_sub`` points.
 
-    The fallback for a model that cannot summarize an interval inside its own
-    integrator (see ``_FRAME_SUBSAMPLES``): ask it for several instants per
-    interval and keep the largest. Samples are evenly spaced and land exactly
-    on the output point, so the value there is always among them -- the peak of
-    an interval is then never below the instant it ends on, whatever the
-    sampling does.
+    Used by temporal models that cannot reduce an interval internally.
 
     Parameters
     ----------
     start : float, optional
-        Where the interval summarized by the *first* output point begins (ms).
-        A frame clock puts its output points on frame *ends*, so the first one
-        summarizes an interval reaching back to the start of frame 0. If None,
-        the first output point has no interval and stands for its own instant.
+        Start of the first interval (ms).
 
     Returns
     -------
     t : array
-        The instants to evaluate at (ms), strictly increasing.
+        Sample times (ms).
     idx : array
-        Where each output point's samples begin in ``t``, ready to pass
-        straight to ``np.maximum.reduceat``.
-
-    .. versionadded:: 0.10.0
-
+        Start index of each interval in ``t``.
     """
     ticks = np.round(np.asarray(t_out, dtype=np.float64) / dt).astype(np.int64)
     # An interval runs from the previous output point up to and including this
@@ -122,33 +94,21 @@ def _subsample(t_out, dt, n_sub, start=None):
 
 
 def _frame_clock(stim, dt, unit=ms):
-    """When to sample a percept for the video an encoded stimulus came from
+    """Return percept output times for an encoded video stimulus.
 
-    An encoder separates the clock that decides *when the picture changes* from
-    the clock that decides *when the electrodes pulse*, and records the former
-    in the stimulus' metadata. That is the rate at which a percept is worth
-    reporting: one frame in, one frame out. The pulse train's own time points
-    are far finer and carry no extra picture.
-
-    A percept point lands on the end of each frame. Everything is rounded onto
-    the model's ``dt`` grid (a 29.97 fps frame is 33.3667 ms, which is not a
-    multiple of the default dt=0.005 ms). It is the frame *interval* that is
-    rounded rather than each frame time on its own, so that the percept keeps
-    an evenly spaced time axis -- ``play`` and ``save`` infer a frame rate from
-    it and refuse a ragged one.
+    Encoders record source-frame timing in stimulus metadata. Output
+    times are rounded to the model's ``dt`` grid.
 
     Returns
     -------
-    t : (n_frames,) array
-        The time at which each frame ends, expressed in ``unit``.
+    t : array
+        Frame-end times in ``unit``.
     start : float
-        The time (in ``unit``) at which the first frame begins, which is where
-        the interval summarized by ``t[0]`` starts.
+        Start time of the first frame.
 
-    Returns None for anything that did not come out of an encoder.
+    Returns None for stimuli without encoder frame metadata.
 
     .. versionadded:: 0.10.0
-
     """
     meta = getattr(stim, 'metadata', None)
     if not isinstance(meta, dict):
@@ -188,22 +148,7 @@ def _frame_clock(stim, dt, unit=ms):
 
 
 def _vfmap_first(params):
-    """Order parameters so that ``vfmap`` is applied before the others
-
-    A retinal extent assigned to ``xrange``/``yrange`` is resolved through the
-    model's visual field map at assignment time (see
-    :py:meth:`SpatialModel._retinal_range_to_dva`), so which map is installed
-    when that happens decides what the range comes out as. Parameters are
-    otherwise applied in the order they were given, and
-
-    .. code-block:: python
-
-        AxonMapModel(xrange=(-2.8 * mm, 2.8 * mm), vfmap=Curcio1990Map())
-
-    has to use the map the caller asked for rather than whichever one was
-    already there. Only ``vfmap`` is moved; everything else keeps its order,
-    so nothing else becomes order-sensitive.
-    """
+    """Apply ``vfmap`` before parameters whose units depend on that map."""
     if 'vfmap' not in params:
         return params
     return {'vfmap': params['vfmap'],
@@ -211,36 +156,17 @@ def _vfmap_first(params):
 
 
 def _length_valued(value):
-    """Whether a value, or either half of a pair, is a physical length
-
-    What tells a retinal extent apart from a visual one is the *dimension* of
-    what was passed, not the unit: ``mm``, ``um`` and ``m`` are all the same
-    shorthand, and a bare number is no shorthand at all.
-    """
+    """Return whether a value or pair contains a physical length."""
     values = value if isinstance(value, (list, tuple)) else [value]
     return any(isinstance(v, (Quantity, Unit)) and v.dimension == um.dimension
                for v in values)
 
 
 def _require_stim_dimension(model, stim):
-    """Refuse a stimulus that is not the physical quantity a model reads
+    """Require a stimulus with a physical dimension accepted by ``model``.
 
-    Only the *dimension* has to match; a stimulus in a compatible unit is
-    converted rather than refused. In practice there is nothing left for a
-    model to convert, because :py:class:`~pulse2percept.stimuli.Stimulus`
-    canonicalizes to microamps when it is built -- an amplitude given as
-    ``0.05 * mA`` is already 50 by the time any model sees it.
-
-    The dimension is another matter, and is the model's to insist on. Gray
-    levels are not small currents, so a model that multiplied them by a
-    Gaussian current spread and called the result brightness would be doing
-    exactly the silent reinterpretation ``stimulus_unit`` exists to declare
-    away. A picture becomes a stimulus by being encoded (see
-    :py:class:`~pulse2percept.stimuli.StimulusEncoder`), which is where the
-    gray levels are given a current to stand for.
-
-    A :py:class:`~pulse2percept.percepts.Percept` is not checked: it is
-    brightness, the output of a spatial model, and carries no unit.
+    Percepts are not checked because they represent model output rather
+    than electrical stimulation.
     """
     if not isinstance(stim, Stimulus):
         return
@@ -254,30 +180,18 @@ def _require_stim_dimension(model, stim):
 
 
 def _spatial_input(implant):
-    """The stimulus a model with no temporal component reads off an implant
+    """Return the spatial view of an implant stimulus.
 
-    A pulse train says *when* current flows and a raster says which electrodes
-    may flow at once. Both are facts about time that such a model has no
-    machinery to express -- handed the delivered train, it would report an
-    encoded image as a sequence of raster slots. So an encoded stimulus is
-    read for the modulation it realizes instead: one amplitude per electrode
-    per frame of the source. Anything else is its own answer.
+    Encoded stimuli expose frame-level modulation to spatial-only
+    models instead of the time-resolved pulse schedule.
     """
     return implant.stim._spatial_view()
 
 
 def _rescale(stim, scale):
-    """A copy of ``stim`` with every amplitude multiplied by ``scale``
+    """Return a sampled copy of ``stim`` scaled by ``scale``.
 
-    Rebuilt from the data rather than scaled through the operator, because a
-    stimulus with no time component picks one up on the way through: that is
-    what lets a temporal model be handed one at all, and
-    :py:meth:`TemporalModel.find_threshold` has always relied on it.
-
-    The metadata is carried across: it is what tells ``predict_percept`` which
-    video the stimulus was encoded from, and hence when to report a percept.
-    Without it every trial of a ``find_threshold`` search would be evaluated
-    on a different time base than the caller's own ``predict_percept`` uses.
+    Metadata and units are preserved.
     """
     return Stimulus(scale * stim.data, electrodes=stim.electrodes,
                     time=stim.time,
@@ -285,29 +199,14 @@ def _rescale(stim, scale):
 
 
 def _rescaled_implant(implant, amp):
-    """A copy of ``implant`` whose stimulus peaks at ``amp``
-
-    What ``find_threshold`` varies from trial to trial. Scaling the stimulus
-    scales every description of it at once: an encoded one is still the
-    schedule it was, delivering less current, and what a spatial model reads
-    off it moves with what a temporal one does. A search run on only one of
-    them would not be a search for the threshold of what the caller's own
-    ``predict_percept`` reports.
-    """
+    """Return a copy of ``implant`` with its stimulus scaled to peak at ``amp``."""
     trial = deepcopy(implant)
     trial.stim = implant.stim * (amp / implant.stim.data.max())
     return trial
 
 
 def _delivered(implant):
-    """The same implant, made to hand a spatial model the pulse train
-
-    The other side of :py:func:`_spatial_input`: when a temporal stage follows,
-    integrating the pulses is the point, so they are what has to get through.
-    An ordinary :py:class:`~pulse2percept.stimuli.Stimulus` is its own spatial
-    view, so wrapping in one is how the delivered pulses are asked for -- and
-    the wrapper stays unmaterialized until something reads them.
-    """
+    """Return an implant whose spatial input is the delivered pulse train."""
     if implant.stim is None or not implant.stim._has_spatial_view:
         return implant
     stand_in = copy(implant)
@@ -558,7 +457,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     provide an implementation for:
 
     *  ``_predict_spatial``: This method should accept an ElectrodeArray as well
-       as a Stimulus, and compute the brightness at all spatial coordinates of 
+       as a Stimulus, and compute the brightness at all spatial coordinates of
        ``self.grid``, returned as a 2D NumPy array (space x time).
 
        .. note ::
@@ -1100,7 +999,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         ax = self.grid.plot(autoscale=autoscale, ax=ax, style=style, zorder=zorder,
                             figsize=figsize, use_dva=use_dva)
-        
+
         if use_dva:
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')

@@ -11,11 +11,7 @@ import functools
 
 
 def _version_clause(deprecated_version=None, removed_version=None):
-    """Build the " since version X, and will be removed in version Y" clause
-
-    Shared by :py:class:`deprecated` and :py:class:`deprecate_parameter` so
-    that all deprecation messages are worded the same way.
-    """
+    """Build the version clause shared by deprecation warnings."""
     dep_msg = ""
     if deprecated_version is not None:
         dep_msg = f" since version {deprecated_version}"
@@ -36,25 +32,16 @@ def _callable_name(func):
 
 
 def _is_internal_module(name):
-    """Whether a module name belongs to pulse2percept itself
-
-    Test modules are deliberately excluded, so that a warning raised from the
-    test suite is blamed on the test rather than on the machinery underneath
-    it -- which is what lets the tests check where a warning points.
-    """
+    """Return whether a module belongs to pulse2percept, excluding tests."""
     return ((name == 'pulse2percept' or name.startswith('pulse2percept.')) and
             '.tests.' not in name)
 
 
 def _warn_external(message, category=DeprecationWarning):
-    """Warn, blaming the innermost frame outside pulse2percept
+    """Warn from the innermost stack frame outside pulse2percept.
 
-    A deprecation warning is only actionable if it points at the line that
-    used the deprecated name, and no fixed ``stacklevel`` can do that here:
-    the same alias is reached directly (``spatial.axlambda``), through a
-    composite model's ``__getattr__`` or ``__setattr__``, and through a chain
-    of ``super().__init__`` calls whose depth differs per subclass. So walk
-    out of the package instead, and blame the first frame that is not ours.
+    A fixed ``stacklevel`` is insufficient because deprecated aliases
+    can be reached through different model and inheritance paths.
 
     .. seealso::
 
@@ -63,10 +50,9 @@ def _warn_external(message, category=DeprecationWarning):
     Parameters
     ----------
     message : str
-        The warning message.
+        Warning message.
     category : warning class, optional
-        The class of warning to raise.
-
+        Warning category.
     """
     frame = sys._getframe()
     stacklevel = 1
@@ -196,56 +182,24 @@ class deprecated:
         return wrapped
 
 class deprecate_parameter:
-    """Decorator to mark a single function or method parameter as deprecated
+    """Decorator for a deprecated function or method parameter.
 
-    The decorated callable keeps *accepting* the parameter, so that existing
-    code does not break, but the value is ignored. A ``DeprecationWarning`` is
-    raised whenever the parameter is passed explicitly, whether by keyword or
-    by position.
-
-    Use this when a parameter is going away but the callable itself stays. To
-    deprecate an entire function, class, or property, use
-    :py:class:`~pulse2percept.utils.deprecated` instead. To keep a parameter
-    that is merely being *renamed* working under its old name, use
-    :py:class:`~pulse2percept.utils.rename_parameter` instead.
+    The parameter remains accepted but is ignored, and explicit use
+    raises ``DeprecationWarning``. Use :class:`rename_parameter` when
+    the parameter is only being renamed.
 
     .. versionadded:: 0.9.1
-
-    .. note::
-
-        This decorator only produces the *warning*. Document the parameter
-        itself by adding a ``.. deprecated::`` directive to its entry in the
-        docstring's ``Parameters`` section, which is where numpydoc expects it.
-
-    .. seealso::
-
-        Modeled on matplotlib's ``matplotlib._api.delete_parameter``.
 
     Parameters
     ----------
     name : str
-        Name of the deprecated parameter. Must appear in the signature of the
-        decorated callable, otherwise a ``ValueError`` is raised at decoration
-        time (which catches the parameter being renamed or dropped).
+        Deprecated parameter name.
     deprecated_version : float or str
-        The package version in which the parameter was first marked as
-        deprecated.
+        Version in which it was deprecated.
     removed_version : float or str
-        The package version in which the parameter will be removed.
+        Version in which it will be removed.
     addendum : str, optional
-        Text appended to the warning, e.g. to spell out what the parameter
-        used to do or how the behavior differs now that it is ignored.
-
-    Examples
-    --------
-    >>> from pulse2percept.utils import deprecate_parameter
-    >>> @deprecate_parameter('engine', deprecated_version='0.9.1',
-    ...                      removed_version='0.10.0')
-    ... def predict(data, engine=None):
-    ...     return data
-    >>> predict([1, 2])  # no warning
-    [1, 2]
-
+        Additional warning text.
     """
 
     def __init__(self, name, deprecated_version=None, removed_version=None,
@@ -295,52 +249,23 @@ class deprecate_parameter:
 
 
 class rename_parameter:
-    """Decorator to rename a single function or method parameter
+    """Decorator for a renamed function or method parameter.
 
-    Calls that use the old name keep working: the value is forwarded to the
-    new parameter, so the callable behaves exactly as it did before, but a
-    ``DeprecationWarning`` is raised. Use this when a parameter is only being
-    renamed; when its value is no longer read at all, use
-    :py:class:`~pulse2percept.utils.deprecate_parameter` instead.
-
-    Only *keyword* use of the old name is forwarded, which is the only way it
-    can be recognized: a positional argument is bound by position and never
-    mentions either name.
+    Keyword use of the old name is forwarded to the new name and emits
+    ``DeprecationWarning``.
 
     .. versionadded:: 0.10.0
-
-    .. note::
-
-        Models take their parameters as ``**params``, validated against
-        ``get_default_params`` rather than declared in a signature, so this
-        decorator cannot see them. Rename those with a
-        :py:class:`~pulse2percept.utils.deprecated_alias` instead.
 
     Parameters
     ----------
     old_name : str
-        The name being retired. Must *not* appear in the signature of the
-        decorated callable, otherwise a ``ValueError`` is raised at decoration
-        time (which catches the rename never having been made).
+        Deprecated parameter name.
     new_name : str
-        The name that replaces it. Must appear in the signature, otherwise a
-        ``ValueError`` is raised at decoration time.
+        Replacement parameter name.
     deprecated_version : float or str
-        The package version in which the old name was first marked as
-        deprecated.
+        Version in which the old name was deprecated.
     removed_version : float or str
-        The package version in which the old name will stop working.
-
-    Examples
-    --------
-    >>> from pulse2percept.utils import rename_parameter
-    >>> @rename_parameter('axlambda', 'lam', deprecated_version='0.10.0',
-    ...                   removed_version='0.11.0')
-    ... def decay(lam=1):
-    ...     return lam
-    >>> decay(lam=3)  # no warning
-    3
-
+        Version in which the old name will be removed.
     """
 
     def __init__(self, old_name, new_name, deprecated_version=None,
@@ -387,50 +312,13 @@ class rename_parameter:
 
 
 class deprecated_alias:
-    """Class attribute that keeps a renamed parameter usable under its old name
+    """Descriptor that keeps a renamed model parameter usable by its old name.
 
-    Assign one in the class body, under the *old* name, to a
-    :py:class:`~pulse2percept.utils.Parametrized` subclass whose parameters
-    live in ``get_default_params`` rather than in a signature:
-
-    .. code-block:: python
-
-        class MyModel(BaseModel):
-
-            axlambda = deprecated_alias('lam', deprecated_version='0.10.0')
-
-            def get_default_params(self):
-                return {'lam': 500}
-
-    Reading or writing ``model.axlambda`` then reads or writes ``model.lam``
-    and raises a ``DeprecationWarning``. The alias also registers itself in
-    the owner's ``_renamed_params``, which is what lets the constructor,
-    ``set_params`` and ``build`` keep accepting the old name as a keyword
-    argument (see
-    :py:func:`~pulse2percept.utils.rename_deprecated_params`).
-
-    To rename a parameter that *is* declared in a signature, use
-    :py:class:`~pulse2percept.utils.rename_parameter` instead.
+    Use this for parameters stored in ``get_default_params``. For
+    parameters declared in a function signature, use
+    :class:`rename_parameter`.
 
     .. versionadded:: 0.10.0
-
-    .. note::
-
-        Document the rename by adding a ``.. versionchanged::`` directive to
-        the *new* parameter's entry in the docstring's ``Parameters`` section.
-        The old name has no entry of its own, since nothing should be written
-        against it any more.
-
-    Parameters
-    ----------
-    new_name : str
-        Name of the parameter that replaces the alias.
-    deprecated_version : float or str
-        The package version in which the old name was first marked as
-        deprecated.
-    removed_version : float or str
-        The package version in which the old name will stop working.
-
     """
 
     def __init__(self, new_name, deprecated_version=None,
