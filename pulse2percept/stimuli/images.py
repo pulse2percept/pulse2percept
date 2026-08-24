@@ -18,13 +18,14 @@ from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
 from skimage.feature import canny
 
 from .base import Stimulus, _adoptable
+from ._geometry import HasFieldOfView, resolve_fov
 from .names import ElectrodeNames
 from ..units import dimensionless
 from ..utils import center_image, shift_image, scale_image, trim_image
 from ..utils.images import _as_writable
 
 
-class ImageStimulus(Stimulus):
+class ImageStimulus(HasFieldOfView, Stimulus):
     """ImageStimulus
 
     A stimulus made from an image, where each pixel gets assigned to an
@@ -71,14 +72,27 @@ class ImageStimulus(Stimulus):
     compress : bool, optional
         If True, will remove pixels with 0 grayscale value.
 
+    fov : float, (width, height), or None; optional
+        The field of view the image subtends, in degrees of visual angle
+        (e.g., ``30 * dva``). A scalar gives the horizontal FOV, and the
+        vertical one follows from the image's aspect ratio. The FOV is the
+        outer extent of the image, centered on the image; pixel coordinates
+        address pixel centers, half an angular pixel inside that extent, and
+        row 0 lies at positive ``y``. See
+        :py:meth:`~pulse2percept.stimuli.ImageStimulus.pixel_to_dva`.
+
+        Without a FOV, the image's pixels have no visual-field geometry.
+
+        .. versionadded:: 0.11.0
+
     """
-    __slots__ = ('img_shape',)
+    __slots__ = ('img_shape', '_fov')
 
     #: Pixel intensities are gray levels in [0, 1], not currents
     _default_unit = dimensionless
 
     def __init__(self, source, resize=None, as_gray=False,
-                 electrodes=None, metadata=None, compress=False):
+                 electrodes=None, metadata=None, compress=False, fov=None):
         if metadata is None:
             metadata = {}
         elif not isinstance(metadata, dict):
@@ -96,6 +110,10 @@ class ImageStimulus(Stimulus):
             metadata.update(source.metadata)
             if electrodes is None:
                 electrodes = source.electrodes
+            if fov is None:
+                # A resize keeps the angular extent of the image, so the FOV
+                # survives every way of building one image from another:
+                fov = source.fov
         elif isinstance(source, np.ndarray):
             img = source
             borrowed = source
@@ -124,6 +142,7 @@ class ImageStimulus(Stimulus):
             img = img_resize(img, (height, width))
         # Store the original image shape for resizing and color conversion:
         self.img_shape = img.shape
+        self._fov = resolve_fov(fov, img.shape[0], img.shape[1])
         if electrodes is None:
             # Name every pixel after its place in the image: 'A1' is the
             # top-left pixel, 'C12' sits in the third row and twelfth column,
@@ -141,8 +160,12 @@ class ImageStimulus(Stimulus):
 
     def _pprint_params(self):
         params = super()._pprint_params()
-        params.update({'img_shape': self.img_shape})
+        params.update({'img_shape': self.img_shape, 'fov': self.fov})
         return params
+
+    @property
+    def _frame_shape(self):
+        return self.img_shape[:2]
 
     def _names_for(self, img, electrodes):
         """Electrode names for an image derived from this one"""
@@ -184,13 +207,21 @@ class ImageStimulus(Stimulus):
         -------
         stim : `ImageStimulus`
             A copy of the stimulus object with the new image
+
+        Notes
+        -----
+        *  ``func`` can reshape the image in any way it likes, so a result
+           whose pixel grid differs from the original is given no field of
+           view rather than an unverifiable one. Set ``fov`` on the result if
+           you know it.
         """
         # `func` gets a frame of its own: several of the scikit-image
         # transforms this exists to reach cannot take a read-only one.
         img = func(_as_writable(self.data.reshape(self.img_shape)),
                    *args, **kwargs)
+        fov = self.fov if np.shape(img)[:2] == self._frame_shape else None
         return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
-                             metadata=self.metadata)
+                             metadata=self.metadata, fov=fov)
 
     def invert(self):
         """Invert the gray levels of the image
@@ -210,7 +241,7 @@ class ImageStimulus(Stimulus):
         else:
             img = 1.0 - img
         return ImageStimulus(img, electrodes=self.electrodes,
-                             metadata=self.metadata)
+                             metadata=self.metadata, fov=self.fov)
 
     def rgb2gray(self, electrodes=None):
         """Convert the image to grayscale
@@ -246,7 +277,7 @@ class ImageStimulus(Stimulus):
         if img.ndim == 3:
             img = rgb2gray(img)
         return ImageStimulus(img, electrodes=electrodes,
-                             metadata=self.metadata)
+                             metadata=self.metadata, fov=self.fov)
 
     def resize(self, shape, electrodes=None, **kwargs):
         """Resize the image
@@ -292,7 +323,7 @@ class ImageStimulus(Stimulus):
                          **kwargs)
 
         return ImageStimulus(img, electrodes=electrodes,
-                             metadata=self.metadata)
+                             metadata=self.metadata, fov=self.fov)
 
     def crop(self, idx_rect=None, left=0, right=0, top=0, bottom=0,
              electrodes=None):
@@ -374,7 +405,8 @@ class ImageStimulus(Stimulus):
             else:
                 electrodes = electrodes[y0:y1, x0:x1].ravel()
         return ImageStimulus(cropped_img, electrodes=electrodes,
-                             metadata=self.metadata)
+                             metadata=self.metadata,
+                             fov=self._fov_for_shape(cropped_img.shape))
 
     def trim(self, tol=0, electrodes=None):
         """Remove any black border around the image
@@ -401,9 +433,10 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object with trimmed borders.
 
         """
-        img = self.data.reshape(self.img_shape)
-        return ImageStimulus(trim_image(img, tol=tol), electrodes=electrodes,
-                             metadata=self.metadata)
+        img = trim_image(self.data.reshape(self.img_shape), tol=tol)
+        return ImageStimulus(img, electrodes=electrodes,
+                             metadata=self.metadata,
+                             fov=self._fov_for_shape(img.shape))
 
     def threshold(self, thresh, **kwargs):
         """Threshold the image
@@ -460,7 +493,7 @@ class ImageStimulus(Stimulus):
             raise TypeError(f"Threshold type must be str or float, not "
                             f"{type(thresh)}.")
         return ImageStimulus(img, electrodes=self.electrodes,
-                             metadata=self.metadata)
+                             metadata=self.metadata, fov=self.fov)
 
     def rotate(self, angle, mode='constant', electrodes=None, **kwargs):
         """Rotate the image
@@ -501,8 +534,11 @@ class ImageStimulus(Stimulus):
         kwargs.setdefault('resize', False)
         img = img_rotate(_as_writable(self.data.reshape(self.img_shape)),
                          angle, mode=mode, **kwargs)
+        # A rotation resamples the frame but not the angular pixel size, so a
+        # grown canvas (``resize=True``) subtends a correspondingly larger FOV:
         return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
-                             metadata=self.metadata)
+                             metadata=self.metadata,
+                             fov=self._fov_for_shape(img.shape))
 
     def shift(self, shift_cols, shift_rows):
         """Shift the image foreground
@@ -548,7 +584,7 @@ class ImageStimulus(Stimulus):
         img = self.data.reshape(self.img_shape)
         return ImageStimulus(center_image(img, loc=loc),
                              electrodes=self.electrodes,
-                             metadata=self.metadata)
+                             metadata=self.metadata, fov=self.fov)
 
     def scale(self, scaling_factor):
         """Scale the image foreground
@@ -570,7 +606,7 @@ class ImageStimulus(Stimulus):
         img = self.data.reshape(self.img_shape)
         return ImageStimulus(scale_image(img, scaling_factor),
                              electrodes=self.electrodes,
-                             metadata=self.metadata)
+                             metadata=self.metadata, fov=self.fov)
 
     def filter(self, filt, **kwargs):
         """Filter the image
@@ -746,11 +782,17 @@ class SnellenChart(ImageStimulus):
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
 
+    fov : float, (width, height), or None; optional
+        Field of view in degrees of visual angle; see
+        :py:class:`~pulse2percept.stimuli.ImageStimulus`.
+
+        .. versionadded:: 0.11.0
+
     """
     __slots__ = ()
 
     def __init__(self, resize=None, show_annotations=True, row=None,
-                 electrodes=None, metadata=None):
+                 electrodes=None, metadata=None, fov=None):
         # Load image from data dir:
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'snellen.png')
@@ -792,7 +834,8 @@ class SnellenChart(ImageStimulus):
                                            as_gray=True,
                                            electrodes=electrodes,
                                            metadata=metadata,
-                                           compress=False)
+                                           compress=False,
+                                           fov=fov)
 
 
 class LogoBVL(ImageStimulus):
@@ -822,11 +865,17 @@ class LogoBVL(ImageStimulus):
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
 
+    fov : float, (width, height), or None; optional
+        Field of view in degrees of visual angle; see
+        :py:class:`~pulse2percept.stimuli.ImageStimulus`.
+
+        .. versionadded:: 0.11.0
+
     """
     __slots__ = ()
 
     def __init__(self, resize=None, electrodes=None, metadata=None,
-                 as_gray=False):
+                 as_gray=False, fov=None):
         # Load logo from data dir:
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'bionic-vision-lab.png')
@@ -836,7 +885,8 @@ class LogoBVL(ImageStimulus):
                                       as_gray=as_gray,
                                       electrodes=electrodes,
                                       metadata=metadata,
-                                      compress=False)
+                                      compress=False,
+                                      fov=fov)
 
 
 class LogoUCSB(ImageStimulus):
@@ -867,10 +917,17 @@ class LogoUCSB(ImageStimulus):
     metadata : dict, optional
         Additional stimulus metadata can be stored in a dictionary.
 
+    fov : float, (width, height), or None; optional
+        Field of view in degrees of visual angle; see
+        :py:class:`~pulse2percept.stimuli.ImageStimulus`.
+
+        .. versionadded:: 0.11.0
+
     """
     __slots__ = ()
 
-    def __init__(self, resize=None, electrodes=None, metadata=None):
+    def __init__(self, resize=None, electrodes=None, metadata=None,
+                 fov=None):
         # Load logo from data dir:
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'ucsb.png')
@@ -880,4 +937,5 @@ class LogoUCSB(ImageStimulus):
                                        as_gray=True,
                                        electrodes=electrodes,
                                        metadata=metadata,
-                                       compress=False)
+                                       compress=False,
+                                       fov=fov)

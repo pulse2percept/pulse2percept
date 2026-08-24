@@ -7,6 +7,13 @@ Release Notes
 v0.11.0 Residual Vision (unreleased)
 ------------------------------------
 
+New features:
+
+* :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+  :py:class:`~pulse2percept.stimuli.VideoStimulus` accept a ``fov`` in degrees
+  of visual angle, and expose ``pixel_to_dva``/``dva_to_pixel`` to convert
+  between pixels and visual-field coordinates.
+
 v0.10.0 Encoders (2026-08-23)
 -----------------------------
 
