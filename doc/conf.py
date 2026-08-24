@@ -77,6 +77,7 @@ sphinx_gallery_conf = {
         "../examples/implants",
         "../examples/stimuli",
         "../examples/models",
+        "../examples/vision",
         "../examples/datasets",
         "../examples/developers",
     ]),

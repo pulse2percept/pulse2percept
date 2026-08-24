@@ -28,7 +28,9 @@ New features:
 
 * New :py:mod:`pulse2percept.vision` with
   :py:class:`~pulse2percept.vision.Scotoma`, an eye-centered map of lost
-  vision in degrees of visual angle.
+  vision in degrees of visual angle, and
+  :py:func:`~pulse2percept.vision.compose_amd`, which combines a scene, a
+  scotoma and a prosthetic percept into one RGB percept (:issue:`668`).
 
 v0.10.0 Encoders (2026-08-23)
 -----------------------------
