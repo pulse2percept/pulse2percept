@@ -100,10 +100,17 @@ scene alongside a modeled percept:
     rgb[..., 0].shape           # (60, 80, 3): one frame, still in color
     rgb.plot()                  # drawn as RGB, without a colormap
 
-The RGB axis is not a spatial dimension: ``space`` still describes ``(Y, X)``.
-Operations defined on perceived brightness -- ``n_gray``, ``noise``, and the
-``vmin``/``vmax`` display range -- raise a ``ValueError`` for an RGB percept
-rather than inventing a conversion from color to brightness.
+RGB values are display intensities and must be finite and lie in ``[0, 1]``;
+anything else raises at construction rather than saturating quietly later. The
+RGB axis is not a spatial dimension: ``space`` still describes ``(Y, X)``.
+
+Operations defined on perceived brightness -- ``n_gray``, ``noise``,
+``argmax``, ``max``, and the ``vmin``/``vmax`` display range -- raise a
+``ValueError`` for an RGB percept rather than inventing a conversion from
+color to brightness. Ranking three channels by one number would have to pick a
+color metric, which is also why a multi-frame RGB percept has no brightest
+frame to ``plot()``; animate it with ``play()`` instead. ``percept.data`` is
+always available for the plain numerical answer.
 
 Spatial and temporal components
 -------------------------------

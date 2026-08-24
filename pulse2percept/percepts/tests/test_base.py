@@ -1009,14 +1009,19 @@ def test_Percept_rgb_indexing_and_frames():
     for i, frame in enumerate(percept):
         npt.assert_equal(frame.shape, (4, 6, 3))
         npt.assert_almost_equal(frame, percept.data[..., i])
-    # The brightest frame is the one holding the brightest value, whichever
-    # channel it is in:
-    npt.assert_equal(percept.argmax(axis='frames'), 2)
-    npt.assert_almost_equal(percept.max(axis='frames'), percept.data[..., 2])
+    # There is no brightest pixel or frame to point at: ranking colors would
+    # have to call one of them brighter than another.
+    for axis in (None, 'frames'):
+        with pytest.raises(ValueError):
+            percept.argmax(axis=axis)
+        with pytest.raises(ValueError):
+            percept.max(axis=axis)
+    # The plain numerical answer is still one attribute away:
+    npt.assert_almost_equal(percept.data.max(), 1.0)
 
 
 def test_Percept_rgb_plot():
-    percept = rgb_percept(n_frames=2, time=[0, 10])
+    percept = rgb_percept(n_frames=1)
     ax = percept.plot()
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_almost_equal(ax.axis(), [-2, 2, -1, 1])
@@ -1025,7 +1030,7 @@ def test_Percept_rgb_plot():
     npt.assert_equal(len(ax.collections), 0)
     drawn = ax.images[0].get_array()
     npt.assert_equal(drawn.shape, (4, 6, 3))
-    npt.assert_almost_equal(drawn, np.clip(percept.data[..., 1], 0, 1))
+    npt.assert_almost_equal(drawn, percept.data[..., 0])
     # Row 0 sits at the top, the same way `pcolor` puts it there for grayscale:
     left, right, bottom, top = ax.images[0].get_extent()
     npt.assert_equal(top > bottom, True)
@@ -1037,6 +1042,13 @@ def test_Percept_rgb_plot():
     # A hexbin needs one number per pixel:
     with pytest.raises(ValueError):
         percept.plot(kind='hex')
+
+
+def test_Percept_rgb_plot_will_not_pick_a_frame():
+    """Choosing the 'brightest' of several color frames needs a color metric"""
+    percept = rgb_percept(n_frames=2, time=[0, 10])
+    with pytest.raises(ValueError):
+        percept.plot()
 
 
 def test_Percept_rgb_play():
@@ -1051,13 +1063,26 @@ def test_Percept_rgb_play():
         percept.play(vmin=0)
 
 
-def test_Percept_rgb_play_clips_out_of_range_values():
-    """Matplotlib only accepts RGB in [0, 1], so `play` clips before drawing"""
-    data = np.full((4, 6, 3, 2), 2.0)
-    data[..., 0] = -1.0
-    ani = Percept(data, time=[0, 10]).play()
-    npt.assert_equal(ani._frame_data.min() >= 0, True)
-    npt.assert_equal(ani._frame_data.max() <= 1, True)
+@pytest.mark.parametrize('value', [1.8, -0.1, np.nan, np.inf])
+def test_Percept_rgb_rejects_values_outside_the_display_range(value):
+    """An RGB value that is not a color must fail loudly, not saturate quietly
+
+    A compositor that maps arbitrary brightness units onto display intensity
+    can get the scale wrong; a white pixel would look plausible, an error does
+    not.
+    """
+    data = np.full((4, 6, 3, 2), 0.5)
+    data[1, 2, 0, 1] = value
+    with pytest.raises(ValueError):
+        Percept(data)
+
+
+def test_Percept_rgb_accepts_the_ends_of_the_display_range():
+    percept = Percept(np.array([0.0, 1.0] * 12).reshape((4, 2, 3, 1)))
+    npt.assert_equal(percept.is_rgb, True)
+    npt.assert_almost_equal((percept.data.min(), percept.data.max()), (0, 1))
+    # Brightness percepts stay unbounded:
+    npt.assert_almost_equal(Percept(np.full((4, 6, 2), 40.0)).data.max(), 40)
 
 
 def test_Percept_rgb_save_still_roundtrip(tmp_path):
@@ -1125,7 +1150,7 @@ def test_model_prediction_stays_grayscale():
     from pulse2percept.implants import ArgusII
     from pulse2percept.models import ScoreboardModel
     model = ScoreboardModel(rho=200, xrange=(-4, 4), yrange=(-4, 4),
-                            xystep=1).build()
+                            step=1).build()
     percept = model.predict_percept(ArgusII(stim={'A8': 30}))
     npt.assert_equal(percept.is_rgb, False)
     npt.assert_equal(percept.data.ndim, 3)

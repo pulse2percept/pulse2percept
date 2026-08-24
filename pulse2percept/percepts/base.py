@@ -154,18 +154,31 @@ def _resolve_clim(data, vmin, vmax, auto_vmin):
     return vmin, vmax
 
 
-def _is_rgb_shape(shape):
-    """Whether ``shape`` is an RGB percept, having rejected anything else
+def _is_rgb(data):
+    """Whether ``data`` is an RGB percept, having rejected anything else
 
-    A percept is either (Y, X, T) brightness or (Y, X, 3, T) RGB; time is the
-    last axis in both.
+    A percept is either (Y, X, T) brightness in arbitrary units or (Y, X, 3, T)
+    RGB display intensities; time is the last axis in both. Brightness is
+    unbounded, but an RGB value outside [0, 1] is not a color, so it is
+    rejected here rather than clipped later, where it would silently come out
+    as a saturated pixel.
     """
+    shape = np.shape(data)
     if len(shape) == 3:
         return False
-    if len(shape) == 4 and shape[2] == 3:
-        return True
-    raise ValueError(f"Percept data must have shape (Y, X, T) for brightness "
-                     f"or (Y, X, 3, T) for RGB, not {tuple(shape)}.")
+    if not (len(shape) == 4 and shape[2] == 3):
+        raise ValueError(f"Percept data must have shape (Y, X, T) for "
+                         f"brightness or (Y, X, 3, T) for RGB, not "
+                         f"{tuple(shape)}.")
+    values = np.asarray(data)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("RGB percept data must be finite.")
+    if values.min() < 0 or values.max() > 1:
+        raise ValueError(f"RGB percept data are display intensities and must "
+                         f"lie in [0, 1], but this one spans "
+                         f"[{values.min():g}, {values.max():g}]. Scale it "
+                         f"explicitly if it is in some other unit.")
+    return True
 
 
 def _reject_rgb(name, extra=''):
@@ -199,9 +212,10 @@ class Percept(Data):
         (Y, X, 3, T)  RGB intensities in [0, 1]
 
     Models produce brightness percepts. RGB percepts exist to display a scene
-    alongside a modeled percept, and their values are display intensities
-    rather than brightness in arbitrary units, which is why operations defined
-    on brightness reject them (see Notes).
+    alongside a modeled percept. Their values are display intensities rather
+    than brightness in arbitrary units, so they must be finite and lie in
+    [0, 1]; anything else is rejected at construction. That is also why the
+    operations defined on brightness reject them (see Notes).
 
     .. versionadded:: 0.6
 
@@ -212,7 +226,8 @@ class Percept(Data):
     Parameters
     ----------
     data : 3D or 4D array_like
-        Percept data in (Y, X, T) or (Y, X, 3, T) dimensions.
+        Percept data in (Y, X, T) or (Y, X, 3, T) dimensions. RGB data must be
+        finite and lie in [0, 1].
     space : :py:class:`~pulse2percept.topography.Grid2D`, optional
         Spatial coordinates of the percept.
     time : 1D array_like, optional
@@ -240,11 +255,13 @@ class Percept(Data):
     spatial dimension: ``space`` still describes ``(Y, X)``, and a frame comes
     out as ``(Y, X)`` or ``(Y, X, 3)``.
 
-    ``n_gray``, ``noise``, and the ``vmin``/``vmax`` display range are defined
-    on perceived brightness and raise a ``ValueError`` for an RGB percept,
-    which already carries its own display values. Converting color to a
-    brightness the models never produced is a decision for the caller, not for
-    this class.
+    ``n_gray``, ``noise``, ``argmax``, ``max``, and the ``vmin``/``vmax``
+    display range are defined on perceived brightness and raise a
+    ``ValueError`` for an RGB percept, which already carries its own display
+    values. Reducing three channels to one number -- to rank pixels or pick a
+    brightest frame -- would have to choose a color metric, and a metric the
+    models never produced is a decision for the caller, not for this class.
+    ``percept.data`` is always there for the plain numerical answer.
 
     Examples
     --------
@@ -273,7 +290,7 @@ class Percept(Data):
                 f"{time_unit.dimension.name} ({time_unit}).")
         self._time_unit = time_unit
         data = deepcopy(data)
-        is_rgb = _is_rgb_shape(np.shape(data))
+        is_rgb = _is_rgb(data)
         xdva = None
         ydva = None
         if space is not None:
@@ -397,11 +414,6 @@ class Percept(Data):
         return self.data.ndim == 4
 
     @property
-    def _frame_axes(self):
-        """The axes that make up one frame, time excluded"""
-        return tuple(range(self.data.ndim - 1))
-
-    @property
     def time_unit(self):
         """Unit in which ``time`` is stored.
 
@@ -472,13 +484,21 @@ class Percept(Data):
             If `axis` is None, the result is a scalar value.
             If `axis` is 'frames', the result is the time of the brightest
             frame.
+
+        Raises
+        ------
+        ValueError
+            For an RGB percept, which has no brightest pixel or frame.
         """
         if axis is not None and not isinstance(axis, str):
             raise TypeError('"axis" must be a string or None.')
+        if self.is_rgb:
+            raise _reject_rgb('argmax', ' Use percept.data.argmax() for the '
+                                        'largest number it holds.')
         if axis is None:
             return self.data.argmax()
         elif axis.lower() == 'frames':
-            return np.argmax(np.max(self.data, axis=self._frame_axes))
+            return np.argmax(np.max(self.data, axis=(0, 1)))
         raise ValueError(f'Unknown axis value "{axis}". Use "frames" or '
                          f'None.')
 
@@ -498,9 +518,17 @@ class Percept(Data):
             Maximum of ``percept.data``.
             If `axis` is None, the result is a scalar value.
             If `axis` is 'frames', the result is the brightest frame.
+
+        Raises
+        ------
+        ValueError
+            For an RGB percept, which has no brightest pixel or frame.
         """
         if axis is not None and not isinstance(axis, str):
             raise TypeError('"axis" must be a string or None.')
+        if self.is_rgb:
+            raise _reject_rgb('max', ' Use percept.data.max() for the largest '
+                                     'number it holds.')
         if axis is None:
             return self.data.max()
         elif axis.lower() == 'frames':
@@ -534,6 +562,10 @@ class Percept(Data):
         over time.
         For a spatiotemporal percept, will plot the brightest frame.
         Use ``percept.play()`` to animate the percept across time points.
+
+        An RGB percept is drawn as RGB rather than through a colormap. It has
+        no brightest frame to single out, so a multi-frame one raises; use
+        ``play()``.
 
         Parameters
         ----------
@@ -576,10 +608,6 @@ class Percept(Data):
                           else 'Perceived brightness (a.u.)')
             return ax
 
-        # A spatial or spatiotemporal percept: Find the brightest frame
-        idx = np.argmax(np.max(self.data, axis=self._frame_axes))
-        frame = self.data[..., idx]
-
         if self.is_rgb:
             for name in ('vmin', 'vmax', 'cmap'):
                 if name in kwargs:
@@ -590,6 +618,10 @@ class Percept(Data):
                 raise ValueError(f"kind='{kind}' needs one number per pixel "
                                  f"and cannot draw an RGB percept. Use "
                                  f"kind='pcolor'.")
+            if self.data.shape[-1] > 1:
+                raise ValueError("RGB percepts do not define a brightest "
+                                 "frame. Use play() to view a temporal "
+                                 "percept.")
             # `pcolormesh` maps one number per pixel through a colormap, so RGB
             # goes to `imshow` instead, on the footprint `pcolormesh` would
             # have covered. `origin='upper'` puts row 0 at the largest y, which
@@ -597,10 +629,14 @@ class Percept(Data):
             drop = ['figsize', 'shading']
             other_kwargs = {key: kwargs[key]
                             for key in (kwargs.keys() - drop)}
-            ax.imshow(np.clip(frame, 0, 1), origin='upper',
+            ax.imshow(self.data[..., 0], origin='upper',
                       extent=_pixel_extent(self.xdva, self.ydva),
                       **other_kwargs)
             return self._label_axes(ax)
+
+        # A spatial or spatiotemporal percept: Find the brightest frame
+        idx = np.argmax(np.max(self.data, axis=(0, 1)))
+        frame = self.data[..., idx]
 
         vmin = kwargs['vmin'] if 'vmin' in kwargs.keys() else frame.min()
         vmax = kwargs['vmax'] if 'vmax' in kwargs.keys() else frame.max()
@@ -693,15 +729,11 @@ class Percept(Data):
         # Convert percept times to wall-clock milliseconds:
         timeline = _frame_timeline(self.times(ms), fps=fps)
         idx = timeline.indices
-        # Matplotlib wants RGB in [0, 1] and complains about anything else, so
-        # clip once here rather than at every frame:
-        data = np.clip(self.data, 0, 1) if self.is_rgb else self.data
-
         def update(i):
             if annotate_time:
                 t = self.time[idx[i]]
                 mat.axes.set_title(f't = {t:.2f} {self.time_unit}')
-            mat.set_data(data[..., idx[i]])
+            mat.set_data(self.data[..., idx[i]])
             return mat
 
         def data_gen():
@@ -724,10 +756,10 @@ class Percept(Data):
                                                'they are.')
             # No colormap and no brightness colorbar: an RGB frame carries its
             # own colors, and there is no one scale to put next to it.
-            mat = ax.imshow(np.zeros_like(data[..., 0]))
+            mat = ax.imshow(np.zeros_like(self.data[..., 0]))
         else:
-            vmin, vmax = _resolve_clim(data, vmin, vmax, auto_vmin=0)
-            mat = ax.imshow(np.zeros_like(data[..., 0]), cmap='gray',
+            vmin, vmax = _resolve_clim(self.data, vmin, vmax, auto_vmin=0)
+            mat = ax.imshow(np.zeros_like(self.data[..., 0]), cmap='gray',
                             vmin=vmin, vmax=vmax)
             if colorbar:
                 cbar = fig.colorbar(mat)
@@ -742,7 +774,7 @@ class Percept(Data):
         return HTMLAnimation(fig, update, data_gen, repeat=repeat,
                              intervals=timeline.intervals,
                              save_count=idx.size, image=mat,
-                             frame_data=data[..., idx], labels=labels,
+                             frame_data=self.data[..., idx], labels=labels,
                              fmt=fmt)
 
     def save(self, fname, shape=None, fps=None, vmin=None, vmax=None):
@@ -800,7 +832,7 @@ class Percept(Data):
             # is simply the one RGB always has:
             fixed_clim = False
             vmin, vmax = 0.0, 1.0
-            data = np.clip(self.data, 0, 1)
+            data = self.data
         else:
             # Either limit says that the scale matters, which is what allows
             # the file name to be changed below:
