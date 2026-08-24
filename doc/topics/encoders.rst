@@ -115,21 +115,14 @@ hold their positions relative to each other while the scene moves past them.
 Pass one ``(x, y)`` to fixate, or one per video frame to move the eye between
 frames.
 
-The pieces each state one fact, and nothing states it twice: the image owns its
-field of view, the implant owns its electrode locations, the model owns its
-``vfmap``, and gaze is passed in at the moment of sampling rather than stored
-anywhere.
-
 A scene is never silently stretched. Encoding an image that states a ``fov``
 without a ``vfmap`` raises, rather than producing a spatially wrong stimulus,
 and passing a ``vfmap`` for an image that has no ``fov`` raises for the same
 reason.
 
-Sampling keeps whatever color channels the source had; today's encoders are
-luminance encoders and reduce them with
-:py:func:`~pulse2percept.stimuli.encoders.as_luminance` at their own boundary.
-That leaves the seam a future color encoder would read from, without any of
-them having to be written now.
+Spatial sampling preserves the source's color channels; today's encoders are
+luminance encoders and reduce them to one number per electrode before
+modulating.
 
 Device constraints
 ------------------

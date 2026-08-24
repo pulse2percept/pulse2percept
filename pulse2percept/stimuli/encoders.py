@@ -28,14 +28,12 @@ _BIG_TIME = 20000
 _DEFAULT_FRAME_DUR = 500.0
 
 
-def as_luminance(values):
+def _as_luminance(values):
     """Reduce sampled RGB to the one number an encoder modulates
 
-    The boundary between color and stimulation. Spatial sampling keeps whatever
-    channels the source had, so a future color encoder can read them; the
-    encoders that exist today are luminance encoders and call this first.
-
-    .. versionadded:: 0.11.0
+    The boundary between color and stimulation: spatial sampling keeps whatever
+    channels the source had, and the encoders that exist today are luminance
+    encoders, so they call this before modulating.
 
     Parameters
     ----------
@@ -361,7 +359,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             electrodes = implant.electrode_names
             # Sampling keeps whatever channels the source had, and this is
             # where they become the one number an encoder modulates:
-            values = as_luminance(values)
+            values = _as_luminance(values)
         elif vfmap is not None or gaze is not None:
             raise ValueError("'vfmap'/'gaze' say where an implant's "
                              "electrodes land in a scene, so they need an "

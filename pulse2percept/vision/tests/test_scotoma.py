@@ -98,3 +98,28 @@ def test_Scotoma_does_not_move_with_gaze():
     npt.assert_equal(scotoma(0, 0), scotoma(0, 0))
     with pytest.raises(TypeError):
         scotoma(0, 0, gaze=(5, 0))
+
+
+@pytest.mark.parametrize('center', [(np.nan, 0), (0, np.inf), (-np.inf, 2)])
+def test_Scotoma_rejects_a_non_finite_center(center):
+    """A NaN center compares false everywhere, so it would read as intact
+
+    The quietest possible failure: no error, no scotoma, an entirely healthy
+    visual field.
+    """
+    with pytest.raises(ValueError):
+        Scotoma.circle(5, center=center)
+    with pytest.raises(ValueError):
+        Scotoma.ellipse(5, 2, center=center)
+
+
+@pytest.mark.parametrize('coord', [np.nan, np.inf, -np.inf])
+def test_Scotoma_rejects_non_finite_coordinates(coord):
+    """Same trap on the way in: the mask would turn NaN into 0 loss"""
+    scotoma = Scotoma.circle(5)
+    with pytest.raises(ValueError):
+        scotoma(coord, 0)
+    with pytest.raises(ValueError):
+        scotoma(0, coord)
+    with pytest.raises(ValueError):
+        scotoma(np.array([0.0, coord]), 0)

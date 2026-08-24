@@ -12,7 +12,7 @@ from pulse2percept.implants import (ElectrodeGrid, PointSource,
                                     ProsthesisSystem)
 from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus,
                                    VideoStimulus)
-from pulse2percept.stimuli.encoders import as_luminance
+from pulse2percept.stimuli.encoders import _as_luminance
 from pulse2percept.topography import Curcio1990Map, RetinalMap, Watson2014Map
 from pulse2percept.units import dva
 
@@ -146,7 +146,7 @@ def test_rgb_survives_sampling_and_greys_at_the_encoder():
     npt.assert_equal(values.shape, (1, 3, 1))
     npt.assert_almost_equal(values[0, :, 0], [1, 0, 0], decimal=5)
     # ... and the luminance of pure red only at the encoder boundary:
-    npt.assert_almost_equal(as_luminance(values), [[0.2125]], decimal=4)
+    npt.assert_almost_equal(_as_luminance(values), [[0.2125]], decimal=4)
 
 
 @pytest.mark.parametrize('registered', [False, True])
@@ -261,3 +261,94 @@ def test_legacy_stretch_is_untouched():
     npt.assert_almost_equal(out.data.ravel().reshape((5, 5))[0],
                             np.linspace(0, 1, 5), decimal=5)
     npt.assert_equal(out.time, None)
+
+
+#: A 4x4 scene one degree per pixel: columns sit at x = -1.5, -0.5, 0.5, 1.5
+#: and rows at y = 1.5, 0.5, -0.5, -1.5, so the outer extent runs to +/-2.
+EDGE_PX = 4
+EDGE_EXTENT = EDGE_PX / 2
+
+
+def edge_scene(along='x'):
+    """A 4x4 scene whose value reads off the pixel index, 0.25 to 1.0
+
+    Nonzero everywhere, so that a sample falling off the scene (which reads 0)
+    cannot be mistaken for a pixel of the scene.
+    """
+    ramp = np.linspace(0.25, 1.0, EDGE_PX)
+    data = (np.tile(ramp, (EDGE_PX, 1)) if along == 'x'
+            else np.tile(ramp.reshape((-1, 1)), (1, EDGE_PX)))
+    return ImageStimulus(data, fov=(EDGE_PX, EDGE_PX))
+
+
+def seen_at(scene, x_dva, y_dva=0.0):
+    """What a foveal electrode sees when the eye points at a scene location
+
+    Gaze does the moving here, so this reads the scene at (x_dva, y_dva)
+    exactly, through the whole retina -> visual field -> scene chain.
+    """
+    return sampled(one_electrode_at(0, 0), scene, vfmap=Curcio1990Map(),
+                   gaze=(x_dva, y_dva))
+
+
+@pytest.mark.parametrize('sign', [1, -1])
+def test_the_whole_stated_fov_belongs_to_the_scene(sign):
+    """The outer half-pixel border is scene, not background
+
+    A fov is the image's *outer* extent, so it reaches half a pixel past the
+    outermost pixel centers. Interpolation stops at those centers, so without
+    care that border strip comes back black -- a strip of the scene the user
+    said was there.
+    """
+    scene = edge_scene('x')
+    # The value of the edge pixel this side of the scene:
+    edge_value = 1.0 if sign > 0 else 0.25
+    last_center = sign * (EDGE_EXTENT - 0.5)
+    npt.assert_almost_equal(seen_at(scene, last_center), edge_value, decimal=5)
+    # Between the last pixel center and the outer edge: still the scene, and
+    # it takes the value of the pixel it is inside rather than extrapolating:
+    npt.assert_almost_equal(seen_at(scene, sign * (EDGE_EXTENT - 0.25)),
+                            edge_value, decimal=5)
+    # Exactly on the outer edge is the last point that is still the scene:
+    npt.assert_almost_equal(seen_at(scene, sign * EDGE_EXTENT), edge_value,
+                            decimal=5)
+    # Just past it there is no scene left to sample:
+    npt.assert_almost_equal(seen_at(scene, sign * (EDGE_EXTENT + 0.01)), 0.0)
+
+
+@pytest.mark.parametrize('sign', [1, -1])
+def test_the_vertical_fov_reaches_its_edges_too(sign):
+    """Same border rule on y, where row 0 is +y"""
+    scene = edge_scene('y')
+    # Row 0 holds 0.25 and sits at the top, so +y is the small value:
+    edge_value = 0.25 if sign > 0 else 1.0
+    for y in (sign * (EDGE_EXTENT - 0.5), sign * (EDGE_EXTENT - 0.25),
+              sign * EDGE_EXTENT):
+        npt.assert_almost_equal(seen_at(scene, 0.0, y), edge_value, decimal=5)
+    npt.assert_almost_equal(seen_at(scene, 0.0, sign * (EDGE_EXTENT + 0.01)),
+                            0.0)
+
+
+def test_a_corner_outside_the_fov_is_outside_even_on_one_axis():
+    """Inside on x is not inside: a point off the scene in y is off it"""
+    scene = edge_scene('x')
+    npt.assert_almost_equal(seen_at(scene, 0.0, 1.9), 0.625, decimal=5)
+    npt.assert_almost_equal(seen_at(scene, 0.0, 2.1), 0.0)
+    npt.assert_almost_equal(seen_at(scene, 2.1, 1.9), 0.0)
+
+
+def test_interior_sampling_still_interpolates():
+    """Clamping the border must not flatten the inside of the scene"""
+    scene = edge_scene('x')
+    # Halfway between the two middle pixel centers (0.5 and 0.75):
+    npt.assert_almost_equal(seen_at(scene, 0.0), 0.625, decimal=5)
+    # A quarter of the way from the second pixel to the third:
+    npt.assert_almost_equal(seen_at(scene, -0.25), 0.5625, decimal=5)
+
+
+@pytest.mark.parametrize('gaze', [(np.nan, 0), (0, np.inf), (-np.inf, 0)])
+def test_non_finite_gaze_is_refused(gaze):
+    """A blank percept is not the right answer to 'where was the eye?'"""
+    with pytest.raises(ValueError):
+        one_electrode_at(0, 0).reshape_stim(ramp_scene(),
+                                            vfmap=Curcio1990Map(), gaze=gaze)

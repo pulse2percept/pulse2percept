@@ -67,6 +67,11 @@ class Scotoma(PrettyPrint):
         """
         x = np.asarray(as_value(x, dva, 'x'), dtype=float)
         y = np.asarray(as_value(y, dva, 'y'), dtype=float)
+        for name, coord in (('x', x), ('y', y)):
+            # A NaN coordinate compares false against every radius, so an
+            # elliptical mask would report intact vision rather than raise:
+            if not np.all(np.isfinite(coord)):
+                raise ValueError(f"'{name}' must be finite.")
         loss = np.broadcast_to(np.asarray(self.mask(x, y), dtype=float),
                                np.broadcast_shapes(x.shape, y.shape))
         if not np.all(np.isfinite(loss)):
@@ -100,6 +105,10 @@ class Scotoma(PrettyPrint):
                 raise ValueError(f"'{label}' must be a finite positive number "
                                  f"of degrees, not {radius}.")
         cx, cy = np.asarray(as_value(center, dva, 'center'), dtype=float)
+        if not np.isfinite([cx, cy]).all():
+            # Same trap as a NaN coordinate, and quieter: every point would
+            # fall outside, leaving an entirely intact visual field:
+            raise ValueError(f"'center' must be finite, not ({cx}, {cy}).")
 
         def mask(x, y):
             xr, yr = (x - cx) / x_radius, (y - cy) / y_radius

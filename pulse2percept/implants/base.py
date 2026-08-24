@@ -11,7 +11,7 @@ from .rasters import Raster
 from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
                        StimulusEncoder, VideoStimulus)
 from ..stimuli.base import _describe_unit
-from ..stimuli.encoders import as_luminance
+from ..stimuli.encoders import _as_luminance
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, dva, uA, um, xTh
 from ..utils import PrettyPrint
@@ -60,16 +60,39 @@ def _drop_gray_axis(values):
     return values[:, 0] if values.shape[1] == 1 else values
 
 
+def _clip_to_frame(points, shape):
+    """Clip pixel coordinates onto the frame, and say which were on it
+
+    A source's field of view is its *outer* extent, so it reaches half a pixel
+    past the outermost pixel centers (see ``pixel_to_dva``). Interpolation
+    stops at those centers, and the border strip between them and the edge
+    still belongs to the scene: a point there takes the value of the pixel it
+    is inside. Past the outer edge there is no scene to sample, which is what
+    ``inside`` is for -- nothing is extrapolated.
+    """
+    points = np.asarray(points, dtype=float)
+    edges = np.asarray(shape[:2], dtype=float) - 0.5
+    inside = np.all((points >= -0.5) & (points <= edges), axis=1)
+    # A point off the frame is not interpolated at all, so anything goes here
+    # as long as it is on the grid:
+    on_grid = np.where(inside[:, np.newaxis], points, 0.0)
+    return np.clip(on_grid, 0.0, edges - 0.5), inside
+
+
 def _gaze_points(gaze, n_frames):
     """Gaze as one (x, y) in dva, or one per frame"""
     if gaze is None:
         return np.zeros((1, 2))
     gaze = np.atleast_2d(np.asarray(as_value(gaze, dva, 'gaze'), dtype=float))
-    if gaze.shape in {(1, 2), (n_frames, 2)}:
-        return gaze
-    raise ValueError(f"'gaze' must be an (x, y) pair in dva, or one per frame "
-                     f"({n_frames} of them), not an array of shape "
-                     f"{gaze.shape}.")
+    if gaze.shape not in {(1, 2), (n_frames, 2)}:
+        raise ValueError(f"'gaze' must be an (x, y) pair in dva, or one per "
+                         f"frame ({n_frames} of them), not an array of shape "
+                         f"{gaze.shape}.")
+    if not np.all(np.isfinite(gaze)):
+        # Left to reach the interpolator, this would come back as a blank
+        # percept rather than as a question about where the eye was pointing:
+        raise ValueError(f"'gaze' must be finite, not {gaze.tolist()}.")
+    return gaze
 
 
 class ProsthesisSystem(PrettyPrint):
@@ -469,8 +492,7 @@ class ProsthesisSystem(PrettyPrint):
 
         The spatial half of turning a picture into stimulation, and the seam a
         color encoder would need: what an electrode sees is sampled here, and
-        reducing three channels to one number is the caller's business (see
-        :py:func:`~pulse2percept.stimuli.encoders.as_luminance`).
+        reducing three channels to one number is the caller's business.
 
         Where the electrodes land in the source depends on whether the source
         says what it is a picture *of*:
@@ -524,14 +546,19 @@ class ProsthesisSystem(PrettyPrint):
         # the source owns the rest of it (see `dva_to_pixel`):
         grid = (np.arange(frames.shape[0], dtype=float),
                 np.arange(frames.shape[1], dtype=float))
-        points = [np.column_stack(
-            stim.dva_to_pixel(x_vf + gx, y_vf + gy)[::-1]) for gx, gy in gaze]
-        if len(points) == 1:
-            return _drop_gray_axis(_interpolate(grid, frames, points[0]))
-        # A gaze per frame: each frame is sampled where the eye was pointing
-        # when it came up, so no one interpolator covers them all.
-        sampled = [_interpolate(grid, frames[..., f], pts)
-                   for f, pts in enumerate(points)]
+        sampled = []
+        # One gaze samples every frame at once; a gaze per frame samples each
+        # frame where the eye was pointing when it came up.
+        for f, (gx, gy) in enumerate(gaze):
+            col, row = stim.dva_to_pixel(x_vf + gx, y_vf + gy)
+            points, inside = _clip_to_frame(np.column_stack((row, col)),
+                                            frames.shape)
+            values = _interpolate(grid, frames if len(gaze) == 1
+                                  else frames[..., f], points)
+            values[~inside] = 0
+            sampled.append(values)
+        if len(sampled) == 1:
+            return _drop_gray_axis(sampled[0])
         return _drop_gray_axis(np.stack(sampled, axis=-1))
 
     def reshape_stim(self, stim, vfmap=None, gaze=None):
@@ -563,8 +590,8 @@ class ProsthesisSystem(PrettyPrint):
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
             One gray level per electrode per frame.
         """
-        values = as_luminance(self._sample_source(stim, vfmap=vfmap,
-                                                  gaze=gaze))
+        values = _as_luminance(self._sample_source(stim, vfmap=vfmap,
+                                                   gaze=gaze))
         if stim.time is None:
             # Sampling treats a still as a one-frame movie; a `Stimulus` with
             # no time axis wants that frame axis gone, or it reads the frame
