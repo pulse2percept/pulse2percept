@@ -244,9 +244,8 @@ def test_FadingTemporal_peak_is_exact():
     Close, not equal: `fading_fast` composes the runs of simulation steps that
     share a stimulus frame into one affine map, so asking for every step and
     asking for five points do not put the same number of roundings between two
-    output times. Both stay within a few ulps of the recurrence they compose
-    -- the composed form is in fact the closer of the two -- but neither is
-    obliged to reproduce the other bit for bit.
+    output times. Both stay within a few ulps of the recurrence they compose,
+    but neither is obliged to reproduce the other bit for bit.
     """
     rng = np.random.default_rng(3)
     data = (rng.random((5, 12)) - 0.5).astype(np.float32) * 40
@@ -460,6 +459,17 @@ def test_FadingTemporal_tau_limits():
     # rectifier and not a pass-through:
     npt.assert_equal(np.any(np.asarray(stim.data) > 0), True)
     npt.assert_equal(got.max(), 50.0)
+
+    # Asking for the percept less often does not make it a different model.
+    # This is the one `tau` at which the decay per step is total, so the runs
+    # of steps the kernel composes decay by `exp(-inf)` rather than by a
+    # power of something in ]0, 1[ -- and a run of 100 such steps still has to
+    # land exactly on the drive:
+    coarse = np.round(np.arange(0, 4, 0.5), 5)
+    npt.assert_array_equal(
+        FadingTemporal(tau=dt, dt=dt, reduce='last').build().predict_percept(
+            stim, t_percept=coarse).data.ravel(),
+        rectified[np.searchsorted(t, coarse)])
 
     # Slower than that and brightness lags its drive, so the two part company.
     # Lagging cuts both ways: brightness never catches the drive while it is on,

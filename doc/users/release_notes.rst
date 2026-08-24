@@ -33,6 +33,11 @@ Highlights:
   :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are much faster and
   produce smaller notebooks and documentation pages.
 
+* :py:class:`~pulse2percept.models.FadingTemporal` and
+  :py:class:`~pulse2percept.models.AxonMapSpatial` are substantially faster for
+  long stimuli and large electrode arrays. Results may differ from previous
+  versions by floating-point roundoff.
+
 * New :py:meth:`~pulse2percept.percepts.Percept.load` reads percepts back from
   image and video files.
 
@@ -93,11 +98,6 @@ API changes:
 * Stimulus and percept visualization gained several usability improvements,
   including multi-electrode stimulus heatmaps and ``vmin``/``vmax`` controls
   for percept playback and saving.
-
-* :py:class:`~pulse2percept.models.FadingTemporal` and
-  :py:class:`~pulse2percept.models.AxonMapSpatial` are substantially faster
-  and agree with their previous output to within float32 rounding rather than
-  bit for bit.
 
 Bug fixes:
 

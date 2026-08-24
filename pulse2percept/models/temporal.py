@@ -67,7 +67,7 @@ class FadingTemporal(TemporalModel):
 
     """
 
-    #: The peak is tracked across every `dt` step inside `fading_fast`, so
+    #: The peak is tracked over whole intervals inside `fading_fast`, so
     #: `predict_percept` does not have to subsample the interval itself.
     _reduces_intervals = True
 
@@ -124,10 +124,8 @@ class FadingTemporal(TemporalModel):
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct multiples "
                              f"of `dt`={self.dt:.2e}")
-        # Cython returns a 2D (space x time) NumPy array. `copy=False`: a
-        # spatial stage upstream already hands this over as float32, and the
-        # array is the whole space x time response, so copying it to the dtype
-        # it is already in is the largest allocation in the call:
+        # Cython returns a 2D (space x time) NumPy array. `copy=False`:
+        # avoid copying an already-float32 spatial response.
         return fading_fast(stim_data.astype(np.float32, copy=False),
                            time.astype(np.float32, copy=False),
                            idx_percept, self.dt, self.tau, self.thresh_percept,

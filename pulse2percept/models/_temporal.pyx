@@ -86,8 +86,9 @@ cpdef fading_fast(const float32[:, ::1] stim,
         to end on samples a signal whose energy lives in sub-millisecond
         transients, and the sampling phase then walks through the pulse cycle:
         neighbouring frames come out orders of magnitude apart for no reason a
-        viewer would recognize. The peak is tracked across every ``dt`` step,
-        so it costs one compare per step and is exact at any output rate.
+        viewer would recognize. Within a constant-drive run brightness is
+        monotonic, so checking the run endpoints gives the exact interval
+        peak without evaluating every simulation step.
 
     Returns
     -------
@@ -267,9 +268,12 @@ cpdef alpha_fast(const float32[:, ::1] stim,
     impulse response is ``t / tau**2 * exp(-t / tau)``, which starts at zero,
     peaks at ``t = tau`` and decays afterwards.
 
-    Loop structure, sparse stimulus advancement, blocking, denormal handling
-    and interval peak tracking all work exactly as in ``fading_fast``; see
-    there. The only difference is that each location carries two states.
+    Blocking, sparse stimulus advancement, denormal handling and interval
+    peak tracking follow the same principles as ``fading_fast``; see there.
+    Each location carries two states rather than one, and unlike
+    ``fading_fast`` this kernel still advances one simulation step at a time:
+    a two-stage response need not be monotonic within a constant-drive run,
+    so neither its value nor its peak can be read off the endpoints.
 
     Parameters
     ----------
