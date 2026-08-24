@@ -14,27 +14,10 @@ MIN_AMP = 1e-5
 #: transitions.
 DT = 1e-3
 
-#: Milliseconds in a second (1000).
-#:
-#: p2p counts durations in milliseconds and frequencies in hertz, so anything
-#: that turns one into the other needs this factor: a pulse train's window is
-#: ``MS_PER_S / freq`` ms, and a duration in ms is ``dur / MS_PER_S`` seconds.
-#: Derived from the unit system once, at import time, rather than written down
-#: as a bare 1000 at each site -- those are the conversions that go wrong
-#: silently. Numerical code divides by it and stays plain floats; nothing here
-#: puts a :py:class:`~pulse2percept.units.Quantity` inside a loop.
-#:
-#: .. versionadded:: 0.10.0
+#: Milliseconds per second.
 MS_PER_S = Quantity(1, s).to_value(ms)
 
-#: Microns in a millimeter (1000).
-#:
-#: p2p stores tissue coordinates in microns, while published cortical and
-#: retinal fits are written in millimeters and plots are labelled in them.
-#: Same idea as :py:data:`MS_PER_S`: derive the factor from the unit system
-#: once, then do plain arithmetic with it.
-#:
-#: .. versionadded:: 0.10.0
+#: Microns per millimeter.
 UM_PER_MM = Quantity(1, mm).to_value(um)
 
 # Block size for saving videos: width/height must be divisible by 16 for most

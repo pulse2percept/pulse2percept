@@ -12,20 +12,14 @@ from .videos import VideoStimulus
 from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, ms,
                      uA)
 from ..utils import PrettyPrint, frame_interval
-# Every warning below is about the *caller's* choice of source, frequency, or
-# implant, so it has to point at their line rather than at this file:
+# Point encoder warnings at the caller.
 from ..utils.deprecation import _warn_external
 from ..utils.constants import DT, MS_PER_S
 
-# Encoding a source that still has one row per *pixel* rather than one per
-# electrode produces a data container this many elements large before anyone
-# notices. Warn past that, because the fix (pass ``implant``) is a one-liner:
+# Warn when encoding an unsampled pixel grid would create a huge stimulus.
 _BIG_STIM = 5e7
 
-# Every model downstream of the encoder allocates something proportional to the
-# number of time points in the stimulus -- a spatial model, one float per grid
-# point per time point. Warn past this many, because the fixes (``clock``,
-# ``n_levels``) are not obvious:
+# Warn before an encoded stimulus grows to an impractical number of time points.
 _BIG_TIME = 20000
 
 # Duration (ms) of a source that has no time axis of its own, such as an image:
@@ -86,12 +80,11 @@ class _EncodedStimulus(Stimulus):
         self._pulse_ticks = self._own(pulse_ticks, pulse_ticks.dtype)
         self._pulse_vals = self._own(pulse_vals, pulse_vals.dtype)
         self._total = float(total)
-        # Which electrode-frames were asked for a pulse rate at all:
+        # Electrode-frames with a nonzero requested rate:
         self._firing = self._own(firing, bool)
         self._frame_time = self._own(frame_time, frame_time.dtype)
         self._frame_dur = float(frame_dur)
-        # Built on demand by `time`, which is cheap enough to be worth not
-        # expanding a waveform for:
+        # Built lazily without rendering the waveform:
         self._time = None
         self._defer(electrodes)
         self.metadata['encoder'] = {'frame_time': self._frame_time,
@@ -148,7 +141,7 @@ class _EncodedStimulus(Stimulus):
         return self._time
 
     def _render(self):
-        """Expand the schedule into the pulse trains it describes"""
+        """Expand the schedule into pulse trains."""
         data = np.zeros((len(self.electrodes), self._ticks.size),
                         dtype=np.float32)
         for s, (onset, frame) in enumerate(zip(self._onsets, self._frames)):
@@ -161,8 +154,7 @@ class _EncodedStimulus(Stimulus):
             at = np.searchsorted(onset, self._ticks, side='right') - 1
             np.clip(at, 0, onset.size - 1, out=at)
             data[rows] = self._amp[rows][:, frame[at]] * wave
-        # Allocated here for this stimulus and returned straight to it, so
-        # `Stimulus` need not copy it away from anyone:
+        # The newly allocated array can be adopted without another copy:
         return {'data': _adoptable(data), 'electrodes': self.electrodes,
                 'time': self.time}
 
@@ -177,144 +169,41 @@ class _EncodedStimulus(Stimulus):
 
 
 class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
-    """Abstract base class for all stimulus encoders
+    """Abstract base class for stimulus encoders.
 
-    An encoder translates the gray levels of an image or a video into the
-    electrical stimulus that a retinal implant would actually deliver: each
-    electrode emits a train of biphasic pulses, and the gray level of the pixel
-    that the electrode sees determines some property of that train.
+    Encoders map image or video gray levels to electrical pulse trains.
+    If an implant is supplied, the source is sampled at its electrode
+    locations and scheduled using its raster pattern.
 
-    Three clocks are involved, and they are deliberately independent of one
-    another:
-
-    *  The **frame clock** belongs to the video. It says when the modulation
-       parameters update; that is, a new frame is a new gray level, and hence
-       a new amplitude or a new frequency. It is also the rate at which a
-       percept is worth reporting, which is why it is recorded in the encoded
-       stimulus' metadata for 
-       :py:meth:`~pulse2percept.models.Model.predict_percept` to
-       pick up. It takes no part in the timing of the pulses themselves.
-
-    *  The **pulse clock** belongs to ``freq``. It runs continuously for the
-       whole stimulus rather than restarting at every frame, so the frame rate
-       has no say in the rate delivered. A pulse takes the modulation
-       parameters of the frame its *onset* falls into, so it is never cut in
-       half by a frame boundary.
-
-       The rate can still come out below the one requested, but only where the
-       hardware you described cannot express it: ``clock``, and a raster with
-       electrodes on differing rates, both round a pulse period *up*. Neither
-       ever rounds down, so an electrode is never driven faster, and so never
-       given more charge, than was asked for.
-
-    *  The **raster sweep** belongs to the
-       :py:class:`~pulse2percept.implants.Raster`, and says which electrodes
-       may pulse when, so that no two raster groups are ever active at the same
-       instant.
-
-    All encoders share the same two-step structure, and the seam between the
-    steps is where time enters:
-
-    1.  **Modulation.** Reduce the source to one gray level per electrode per
-        frame -- sampled at the electrode locations, if :py:meth:`encode` was
-        given an ``implant`` -- and map those gray levels onto the amplitude
-        and frequency each electrode is to run at (``_modulate``). Nothing
-        here is time-resolved.
-    2.  **Realization.** Turn those parameters into an actual train of pulses
-        (``_assemble``), which is where the pulse shape, the pulse clock and
-        the raster come in.
-
-    :py:meth:`encode` runs both steps and hands back the train. The seam is
-    not only an implementation detail, though: a model with no temporal
-    component has no way to express a pulse train, and reads what came out of
-    the first step instead (see
-    :py:meth:`~pulse2percept.models.SpatialModel.predict_percept`).
-
-    An encoder describes a *modulation scheme*, not a device: it holds no
-    implant of its own, and the implant it encodes for is named at
-    :py:meth:`encode` time (or, more usually, by assigning the encoder to
-    :py:attr:`~pulse2percept.implants.ProsthesisSystem.encoder` and letting the
-    implant do it). Everything about the device -- which electrodes there are,
-    where they sit, and how they take turns -- therefore comes from that one
-    implant, including the :py:class:`~pulse2percept.implants.Raster`.
-
-    Subclasses only implement ``_modulate``; everything else is provided here.
+    Subclasses implement :meth:`_modulate`, which maps gray levels to
+    pulse amplitude and frequency.
 
     .. versionadded:: 0.10.0
 
     Parameters
     ----------
     phase_dur : float, optional
-        Duration (ms) of the cathodic/anodic phase of each pulse.
+        Duration of each pulse phase (ms).
     interphase_dur : float, optional
-        Duration (ms) of the gap between the cathodic and anodic phases.
+        Gap between cathodic and anodic phases (ms).
     cathodic_first : bool, optional
-        If True, the cathodic phase of each pulse is delivered first. Most
-        temporal models in :py:mod:`pulse2percept.models` treat cathodic 
-        current as brightness-increasing, so bright pixels map onto 
-        cathodic-first pulses.
-    pulse : :py:class:`~pulse2percept.stimuli.Stimulus`, optional
-        A single pulse to repeat, in place of the symmetric biphasic pulse
-        built from ``phase_dur``, ``interphase_dur`` and ``cathodic_first``
-        (which are then ignored). Only its *shape* is used: its amplitude is
-        normalized away, since that is what the encoder sets, and its time axis
-        is shifted to start at zero. It must start and end at zero amplitude,
-        since it is tiled into a train.
+        If True, deliver the cathodic phase first.
+    pulse : :class:`~pulse2percept.stimuli.Stimulus`, optional
+        Pulse shape to repeat. Its amplitude is normalized away.
     clock : float, optional
-        Period (ms) of the stimulator's time base. Pulse periods and raster
-        offsets are rounded to a whole number of clock cycles, as they would be
-        on real hardware. If None, they are placed at the full resolution of
-        the simulation (``DT`` = 1e-3 ms).
-
-        .. important::
-
-           Every timing constraint here (the clock, and the raster sweep) may
-           *lower* the rate an electrode ends up on, and none of them may
-           raise it. Rounding a period down would deliver more charge than was
-           asked for, so a time base that cannot represent a rate exactly gives
-           back the nearest slower one it can.
-
-           That makes a coarse clock expensive in frequency: realizable periods
-           are ``clock``, ``2*clock``, ``3*clock``, ... , so with ``clock=1`` 
-           a requested 300 Hz (3.33 ms) is delivered as 250 Hz (4 ms), and with
-           ``clock=3`` as 166.7 Hz.
-           Choose it against the top of your frequency range rather than in the
-           abstract.
+        Stimulator clock period (ms). Pulse periods and raster offsets
+        are rounded to whole clock cycles.
     n_levels : int, optional
-        Number of gray levels the encoder can distinguish, mimicking the
-        resolution of the device's input stage. Gray levels are rounded onto
-        ``n_levels`` values evenly spaced over [0, 1] before being modulated.
-        If None, they are taken at full precision.
+        Number of gray levels used before modulation.
     frame_dur : float, optional
-        Duration (ms) of a single frame. If None, it is inferred from the
-        source's frame rate (or, failing that, from its time axis). A source
-        without a time axis, such as an
-        :py:class:`~pulse2percept.stimuli.ImageStimulus`, is treated as a
-        single frame lasting 500 ms.
+        Frame duration (ms). If None, infer it from the source.
     stretch : bool, optional
-        If True, the gray levels of the source are stretched to fill [0, 1]
-        before they are modulated, so that the darkest pixel maps onto the
-        bottom of the modulation range and the brightest onto the top.
-        If False (the default), gray levels are taken at face value: a gray
-        level of 0.5 always maps onto the middle of the range no matter how
-        bright the rest of the source is.
-
-        .. note::
-
-           Stretching makes the encoding depend on the content of the source.
-           A uniform image has no range to stretch, and encodes to a stimulus
-           of zero amplitude everywhere.
+        If True, stretch source gray levels to [0, 1].
 
     Notes
     -----
-    *  Arguments may be given as plain numbers in the units documented above,
-       or as unitful quantities (e.g. ``0.05 * mA``, ``460 * us``,
-       ``0.02 * kHz``), which are converted to those units. See
-       :py:mod:`pulse2percept.units`.
-    *  ``pulse`` is the exception: only its shape is borrowed and its
-       amplitude is normalized away, so what that amplitude was measured in
-       does not matter. A dimensionless waveform is a perfectly good template.
-
+    Plain numbers use the units documented above; unitful values are
+    converted automatically. See :mod:`pulse2percept.units`.
     """
     __slots__ = ('phase_dur', 'interphase_dur', 'cathodic_first', 'pulse',
                  'clock', 'n_levels', 'frame_dur', 'stretch')
@@ -322,11 +211,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
     def __init__(self, phase_dur=0.46, interphase_dur=0,
                  cathodic_first=True, pulse=None, clock=None, n_levels=None,
                  frame_dur=None, stretch=False):
-        # Strip the units first; every schedule computed below is in plain
-        # milliseconds, as it has always been. `pulse` is deliberately not
-        # checked: only its shape is borrowed, and its amplitude is normalized
-        # away in `_unit_pulse`, so what that amplitude was measured in does
-        # not enter the encoding.
+        # Normalize timing inputs; a custom pulse contributes shape only.
         phase_dur = as_value(phase_dur, ms, 'phase_dur')
         interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
         clock = as_value(clock, ms, 'clock')
@@ -354,9 +239,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
                                  f"time step DT={DT} ms.")
         if n_levels is not None:
             _finite('n_levels', n_levels)
-            # A fractional `n_levels` would quietly become a fractional step
-            # size, and the number of levels you got back would not be the
-            # number you asked for:
+            # ``n_levels`` is a count.
             if int(n_levels) != n_levels:
                 raise ValueError(f"'n_levels' must be a whole number, not "
                                  f"{n_levels}.")
@@ -385,39 +268,36 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
 
     @abstractmethod
     def _modulate(self, gray):
-        """Map gray levels onto pulse train parameters
+        """Map gray levels to pulse amplitude and frequency.
 
         Parameters
         ----------
         gray : (n_electrodes, n_frames) array
-            Gray levels in [0, 1], one per electrode per frame.
+            Gray levels in [0, 1].
 
         Returns
         -------
         amp : array
-            Pulse amplitude (uA), broadcastable to ``gray.shape``. The sign is
-            supplied by ``cathodic_first``, so this should be nonnegative.
+            Nonnegative pulse amplitudes (uA), broadcastable to
+            ``gray.shape``.
         freq : array
-            Pulse train frequency (Hz), broadcastable to ``gray.shape``.
-
+            Pulse frequencies (Hz), broadcastable to ``gray.shape``.
         """
         raise NotImplementedError
 
     def _as_frames(self, source, implant=None):
-        """Reduce the source to one gray level per electrode per frame
+        """Reduce a source to one gray level per electrode per frame.
 
         Returns
         -------
         gray : (n_electrodes, n_frames) array
-            Gray levels in [0, 1]. Values outside that range (an edge filter
-            can produce them) are clipped.
+            Gray levels clipped to [0, 1].
         electrodes : array
-            Electrode names, one per row of ``gray``.
+            Electrode names.
         frame_time : (n_frames,) array
-            The time (ms) at which each frame starts.
+            Frame onset times (ms).
         frame_dur : float
-            The duration (ms) of a single frame.
-
+            Frame duration (ms).
         """
         if not isinstance(source, Stimulus):
             raise TypeError(f"'source' must be a Stimulus object, not "

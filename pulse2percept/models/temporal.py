@@ -7,68 +7,43 @@ from ._temporal import alpha_fast, fading_fast
 
 
 class FadingTemporal(TemporalModel):
-    """A generic temporal model for phosphene fading
+    r"""Generic temporal model for phosphene fading.
 
-    Implements phosphene fading using a leaky integrator driven by the
-    cathodic half of the stimulus:
+    The model is a leaky integrator driven by cathodic current:
 
     .. math::
 
-        \\frac{dB}{dt} = \\frac{\\max(-A, 0) - B}{\\tau}
+        \frac{dB}{dt} = \frac{\max(-A, 0) - B}{\tau}
 
-    where :math:`A` is the stimulus amplitude, :math:`B` is the perceived
-    brightness, and :math:`\\tau` is the exponential decay constant (``tau``).
+    where :math:`A` is stimulus amplitude, :math:`B` is brightness,
+    and :math:`\tau` is the time constant. Anodic current is ignored.
 
-    The model makes the following assumptions:
-
-    *  Cathodic currents (negative amplitudes) increase perceived brightness
-    *  Anodic currents (positive amplitudes) do not, and are ignored
-    *  Brightness is bounded below by zero. What is reported is then
-       thresholded, so an output value is either 0 or at least
-       :math:`\\theta` (``thresh_percept``, a nonnegative scalar)
+    This is a generic response model, not a perceptually validated fit.
 
     .. versionchanged:: 0.10.0
 
-        The drive is now half-wave rectified, driven by the cathodic phase.
-        A stimulus that is purely cathodic is unaffected.
-
-    .. note::
-
-        This is the simplest sensical temporal model, not a perceptually
-        validated model of phosphene fading.
+        The drive is half-wave rectified, so only cathodic current
+        increases brightness.
 
     Parameters
     ----------
     dt : float, optional
-        Sampling time step of the simulation (ms)
+        Simulation time step (ms).
     tau : float, optional
-        Time decay constant for the exponential decay (ms).
-        Larger values lead to slower decay.
-        Brightness should decay to half its peak ("half-life") after
-        :math:`\\ln(2) \\tau` milliseconds.
-
-        It cannot be shorter than ``dt``. The integrator steps explicitly, so
-        a time constant of one step already carries brightness all the way to
-        its drive; anything shorter overshoots and oscillates. ``tau`` also
-        sets the *rise*, not just the decay, so raising it does not make a
-        percept persist -- it makes it dimmer, as :math:`1/\\tau`.
-    thresh_percept: float, optional
-        Below threshold, the percept has brightness zero.
+        Leaky-integrator time constant (ms). Larger values slow both
+        rise and decay; for brief pulses they also reduce peak
+        brightness. Must be at least ``dt``.
+    thresh_percept : float, optional
+        Brightness values below threshold are set to zero.
     reduce : {'peak', 'last'}, optional
-        How a percept time point summarizes the interval since the previous
-        one, when ``predict_percept`` chooses the output times itself; see
-        :py:class:`~pulse2percept.models.TemporalModel`. This model tracks the
-        peak inside the integrator, so it is exact at any output rate.
-    n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. 
-            Defaults to max number of user CPU cores.
+        How each output point summarizes the preceding interval.
+    n_threads : int, optional
+        Number of OpenMP threads.
 
     .. versionadded:: 0.7.1
-
     """
 
-    #: The peak is tracked over whole intervals inside `fading_fast`, so
-    #: `predict_percept` does not have to subsample the interval itself.
+    #: The kernel tracks interval peaks directly.
     _reduces_intervals = True
 
     def get_default_params(self):
@@ -76,15 +51,10 @@ class FadingTemporal(TemporalModel):
         params = {
             # Time constant for the exponential decay:
             'tau': 100,
-            # This model is generic rather than a published fit, so it is free
-            # to report the more useful summary by default. The peak is tracked
-            # inside `fading_fast`, so it costs nothing and is exact:
+            # Report the exact interval peak by default.
             'reduce': 'peak',
         }
-        # This is subtle: Rather than calling `params.update(base_params)`, we
-        # call `base_params.update(params)`. This will overwrite `base_params`
-        # with values from `params`, which allows us to set `thresh_percept`=0
-        # rather than what the BaseModel dictates:
+        # Override base defaults with this model's defaults.
         base_params.update(params)
         return base_params
 
@@ -93,15 +63,10 @@ class FadingTemporal(TemporalModel):
         return {**super().get_param_units(), 'tau': ms}
 
     def _build(self):
-        # Zero is as unusable as a negative value: the integrator divides by
-        # `tau`, so it does not decay infinitely fast, it produces inf/nan.
+        # The integrator divides by ``tau``.
         if self.tau <= 0:
             raise ValueError(f'"tau" must be positive, not {self.tau}.')
-        # The integrator steps explicitly, so `dt / tau` is the fraction of the
-        # remaining gap it closes per step. Above 1 it overshoots and then
-        # oscillates, and the overshoot is `dt / tau` -- at tau=dt/4 brightness
-        # alternates between four times its drive and zero, which is not a
-        # leaky integrator in any useful sense:
+        # Explicit Euler is unstable here when ``tau < dt``.
         if self.tau < self.dt:
             raise ValueError(
                 f'"tau" must be at least dt={self.dt}, not {self.tau}. A time '
@@ -116,10 +81,7 @@ class FadingTemporal(TemporalModel):
         # Pass the stimulus as a 2D NumPy array to the fast Cython function:
         time = self._stim_times(stim)
         stim_data = self._stim_values(stim).reshape((-1, len(time)))
-        # Calculate at which simulation time steps we need to output a percept.
-        # This is basically t_percept/self.dt, but we need to beware of
-        # floating point rounding errors! 29.999 will be rounded down to 29 by
-        # np.uint32, so we need to np.round it first:
+        # Round before casting so floating-point noise cannot shift a sample.
         idx_percept = np.uint32(np.round(t_percept / self.dt))
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct multiples "
@@ -133,80 +95,46 @@ class FadingTemporal(TemporalModel):
 
 
 class AlphaTemporal(TemporalModel):
-    """A generic alpha-shaped temporal model
+    r"""Generic alpha-shaped temporal model.
 
-    Two leaky integrators in series, both with the same time constant
-    :math:`\\tau`, driven by the cathodic half of the stimulus:
-
-    .. math::
-
-        \\tau \\frac{dx}{dt} = \\max(-A, 0) - x
+    Two identical leaky integrators are cascaded:
 
     .. math::
 
-        \\tau \\frac{dy}{dt} = x - y
-
-    where :math:`A` is the stimulus amplitude, :math:`x` is the (hidden) first
-    stage, and :math:`y` is the perceived brightness.
-
-    :py:class:`~pulse2percept.models.FadingTemporal` has an exponentially
-    decaying impulse response. Here, cascading two identical leaky integrators
-    adds a finite rise time: the impulse response starts at zero, peaks, and
-    then decays. Its impulse response is
+        \tau \frac{dx}{dt} = \max(-A, 0) - x
 
     .. math::
 
-        h(t) = \\frac{t}{\\tau^2} e^{-t/\\tau},
+        \tau \frac{dy}{dt} = x - y
 
-    proportional to the standard alpha function, peaking at :math:`t = \\tau`.
+    Their impulse response is proportional to
 
-    The model makes the following assumptions:
+    .. math::
 
-    *  Cathodic currents (negative amplitudes) increase perceived brightness
-    *  Anodic currents (positive amplitudes) do not, and are ignored
-    *  ``tau`` sets the rise and the decay together; there is only the one
-       constant, so a later peak is also a slower decay
-    *  Brightness is bounded below by zero. What is reported is then
-       thresholded, so an output value is either 0 or at least
-       :math:`\\theta` (``thresh_percept``, a nonnegative scalar)
+        h(t) = \frac{t}{\tau^2} e^{-t/\tau},
 
-    .. note::
+    which rises from zero, peaks at :math:`t=\tau`, and then decays.
+    Cathodic current drives the response; anodic current is ignored.
 
-        This is a generic alpha-shaped temporal response, not a perceptually
-        validated model. Use it where a percept should build up over tens of
-        milliseconds rather than appear instantaneously.
+    This is a generic response model, not a perceptually validated fit.
 
     Parameters
     ----------
     dt : float, optional
-        Sampling time step of the simulation (ms)
+        Simulation time step (ms).
     tau : float, optional
-        Time constant of both leaky stages (ms). The impulse response peaks
-        approximately ``tau`` milliseconds after an impulse, and decays with
-        the same constant afterwards.
-
-        It cannot be shorter than ``dt``, for the same reason as in
-        :py:class:`~pulse2percept.models.FadingTemporal`: the stages step
-        explicitly, so a time constant of one step already carries each stage
-        all the way to its input, and anything shorter overshoots and
-        oscillates.
-    thresh_percept: float, optional
-        Below threshold, the percept has brightness zero.
+        Time constant of both stages (ms). Must be at least ``dt``.
+    thresh_percept : float, optional
+        Brightness values below threshold are set to zero.
     reduce : {'peak', 'last'}, optional
-        How a percept time point summarizes the interval since the previous
-        one, when ``predict_percept`` chooses the output times itself; see
-        :py:class:`~pulse2percept.models.TemporalModel`. This model tracks the
-        peak inside the cascade, so it is exact at any output rate.
-    n_threads: int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
+        How each output point summarizes the preceding interval.
+    n_threads : int, optional
+        Number of OpenMP threads.
 
     .. versionadded:: 0.10.0
-
     """
 
-    #: The peak is tracked over whole intervals inside `alpha_fast`, so
-    #: `predict_percept` does not have to subsample the interval itself.
+    #: The kernel tracks interval peaks directly.
     _reduces_intervals = True
 
     def get_default_params(self):
@@ -214,8 +142,7 @@ class AlphaTemporal(TemporalModel):
         params = {
             # Time constant of both stages:
             'tau': 100,
-            # Generic rather than a published fit, so it is free to report the
-            # more useful summary by default; see `FadingTemporal`:
+            # Report the exact interval peak by default.
             'reduce': 'peak',
         }
         base_params.update(params)
@@ -228,9 +155,7 @@ class AlphaTemporal(TemporalModel):
     def _build(self):
         if self.tau <= 0:
             raise ValueError(f'"tau" must be positive, not {self.tau}.')
-        # Both stages step explicitly, so `dt / tau` is the fraction of the
-        # remaining gap each closes per step. Above 1 they overshoot and
-        # oscillate; see `FadingTemporal._build`:
+        # Explicit Euler is unstable here when ``tau < dt``.
         if self.tau < self.dt:
             raise ValueError(
                 f'"tau" must be at least dt={self.dt}, not {self.tau}. A time '

@@ -99,14 +99,7 @@ class ProsthesisSystem(PrettyPrint):
     __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess',
                  '_encoder', '_raster', '_max_current', '_thresholds')
 
-    #: The physical quantity this system delivers, mirroring
-    #: :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`. An electrical
-    #: prosthesis delivers current, so a stimulus that is not a current is not
-    #: a stimulus it can deliver, and is refused when it is assigned rather
-    #: than when a model eventually tries to read it. Only the *dimension* has
-    #: to match: `Stimulus` has already converted an amplitude given as
-    #: ``0.05 * mA`` into 50 uA by the time it gets here. A device that
-    #: delivered something else (light, say) would override this.
+    #: Physical quantity delivered by the implant. Subclasses may override.
     stimulus_unit = uA
 
     def __init__(self, earray, stim=None, eye='RE', preprocess=False,
@@ -118,9 +111,8 @@ class ProsthesisSystem(PrettyPrint):
         self.encoder = encoder
         self.raster = raster
         self.max_current = max_current
-        # Beware of race condition: the stimulus goes last, because assigning
-        # it may have to encode a picture, which needs the encoder, the raster
-        # and the electrode array to be in place already.
+        # Assign stimulus last because encoding depends on the initialized
+        # encoder, raster, and electrode array.
         self.stim = stim
 
     def _pprint_params(self):
@@ -143,13 +135,10 @@ class ProsthesisSystem(PrettyPrint):
 
     @property
     def encoder(self):
-        """Stimulus encoder
+        """Stimulus encoder used for image or video input.
 
-        How this device turns a picture into stimulation. Most implants do not
-        set one in their constructor, so the slot backing it may never have
-        been written to; no encoder means an image or a video assigned to
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim` is refused
-        rather than silently given a modulation scheme nobody chose.
+        If None, dimensionless image/video stimuli are not encoded
+        automatically.
         """
         return getattr(self, '_encoder', None)
 
@@ -163,18 +152,9 @@ class ProsthesisSystem(PrettyPrint):
 
     @property
     def raster(self):
-        """Raster pattern
+        """Raster pattern used to schedule stimulation across electrodes.
 
-        Most implants do not set this in their constructor, so the slot backing
-        it may never have been written to; an unset raster means all electrodes
-        may fire at once.
-
-        Assigning a raster binds it to this implant (see
-        :py:meth:`~pulse2percept.implants.Raster.bind`), which is what lets a
-        geometry-dependent pattern such as
-        :py:class:`~pulse2percept.implants.CheckerboardRaster` work itself out
-        and what lets :py:meth:`~pulse2percept.implants.Raster.plot` be called
-        without an argument.
+        Assigning a raster binds it to this implant.
         """
         return getattr(self, '_raster', None)
 
@@ -205,36 +185,13 @@ class ProsthesisSystem(PrettyPrint):
 
     @property
     def thresholds(self):
-        """Perceptual threshold current (uA) for each electrode
+        """Perceptual threshold current (uA) for each electrode.
 
-        Calibration of the electrode/subject interface, relating stimulation
-        expressed in :py:data:`~pulse2percept.units.xTh` to the current that
-        realizes it. Assign one current for the whole array, a dict for
-        per-electrode values (a partial dict leaves the rest uncalibrated), or
-        None to clear.
-
-        Changing thresholds recalibrates any
-        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` already assigned
-        to :py:attr:`stim`: ``xTh`` trains keep their multiple of threshold,
-        current-valued trains keep their current. Sampled stimuli are
-        unchanged.
+        Assign a single current for the whole array, a per-electrode dict,
+        or None to clear the calibration. Threshold-relative pulse trains
+        are recalibrated when this property changes.
 
         .. versionadded:: 0.10.0
-
-        Examples
-        --------
-        >>> from pulse2percept.implants import ArgusII
-        >>> from pulse2percept.stimuli import BiphasicPulseTrain
-        >>> from pulse2percept.units import uA, xTh
-        >>> implant = ArgusII()
-        >>> implant.stim = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
-        ...                 'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
-        >>> implant.thresholds = {'A1': 80 * uA, 'A2': 120 * uA}
-        >>> float(abs(implant.stim['A1']).max())
-        160.0
-        >>> float(abs(implant.stim['A2']).max())
-        240.0
-
         """
         return dict(getattr(self, '_thresholds', None) or {})
 
@@ -282,9 +239,9 @@ class ProsthesisSystem(PrettyPrint):
         self._stim = calibrated
 
     def _calibrated(self, stim):
-        """Apply implant thresholds to retained BiphasicPulseTrain sources.
+        """Apply implant thresholds to retained ``BiphasicPulseTrain`` sources.
 
-        Returns ``stim`` unchanged if no source needs recalibration.
+        Return ``stim`` unchanged if no source needs recalibration.
         """
         thresholds = getattr(self, '_thresholds', None) or {}
         sources = stim._structured_sources()
@@ -316,19 +273,7 @@ class ProsthesisSystem(PrettyPrint):
                         metadata=deepcopy(stim.metadata.get('user')))
 
     def _require_deliverable_stim(self, stim):
-        """Refuse a stimulus this system cannot physically deliver
-
-        The implant's half of the boundary that
-        :py:func:`~pulse2percept.models.base._require_stim_dimension` guards on
-        the model's side. Both are needed: a model must not read gray levels as
-        microamps whatever produced them, and an implant that accepted a
-        picture would only fail once a model got hold of it, several steps
-        away from the assignment that was actually wrong.
-
-        Checked on the *final* stimulus, after ``preprocess`` and after any
-        reshaping onto the electrode grid, so that a preprocessing step that
-        turns an image into current is exactly as valid as encoding it first.
-        """
+        """Require a stimulus with a physical dimension this implant can deliver."""
         if stim.unit.dimension == self.stimulus_unit.dimension:
             return
         # Threshold-relative pulse trains may be assigned before
@@ -346,13 +291,7 @@ class ProsthesisSystem(PrettyPrint):
 
     @staticmethod
     def _require_current_stim(stim, check):
-        """Refuse to run an electrical safety check on something that isn't
-
-        Called by each check rather than by ``check_stim``, because a safety
-        check is a claim about electricity and each one has to say so for
-        itself: ``check_stim`` is public, and is called directly by tests and
-        by subclasses on stimuli that never went through the setter.
-        """
+        """Require electrical current before applying an electrical safety check."""
         if stim.unit.dimension == uA.dimension:
             return
         if stim.unit.dimension == xTh.dimension:
@@ -508,7 +447,7 @@ class ProsthesisSystem(PrettyPrint):
             return Stimulus(
                 pixel_values, electrodes=self.electrode_names,
                 time=stim.time, metadata=stim.metadata)._inherit_units(stim)
-        
+
         else:
             raise ValueError(
                 f"Number of electrodes in the stimulus ({len(stim.electrodes)}) "
@@ -528,7 +467,7 @@ class ProsthesisSystem(PrettyPrint):
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
         stim_cmap : bool, str, or matplotlib colormap, optional
-            If not false, the fill color of the plotted electrodes will vary based 
+            If not false, the fill color of the plotted electrodes will vary based
             on maximum stimulus amplitude on each electrode. The chosen colormap
             will be used if provided
 
@@ -823,7 +762,7 @@ class RectangleImplant(ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
                                     rot=rot, names=names, etype=DiskElectrode)
         self.stim = stim
-        
+
         # Set left/right eye:
         if not isinstance(eye, str):
             raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")

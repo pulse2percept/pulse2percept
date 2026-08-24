@@ -4,118 +4,94 @@
 Release Notes
 =============
 
-v0.10.0 Encoders (unreleased)
+v0.10.0 Encoders (2026-08-23)
 -----------------------------
 
 Highlights:
 
-* New :py:class:`~pulse2percept.stimuli.StimulusEncoder` classes translate
-  images and videos into electrical stimulation using amplitude or frequency
-  modulation (see :ref:`Stimulus Encoders <topics-encoders>`).
-  New :py:class:`~pulse2percept.implants.Raster` classes describe how
-  stimulators multiplex electrodes that cannot be driven simultaneously
-  (see :ref:`Raster Strategies <topics-rasters>`).
+* New stimulus encoders support amplitude and frequency modulation of images and
+  videos, with implant-specific raster strategies for multiplexed stimulation
+  (:pull:`810`, :pull:`820`, :pull:`833`)
 
-* Stimuli now retain their scientific representation instead of eagerly
-  reducing everything to waveform samples. Pulse parameters and stimulus arrays
-  are read-only; pulses, pulse trains, multi-electrode collections, and encoder
-  output generate and cache their waveform only when needed. This substantially
-  reduces the time and memory required to construct large stimuli.
+* Stimuli now retain structured pulse and encoder representations and generate
+  waveform samples lazily, substantially reducing construction time and memory
+  use (:pull:`842`)
 
-* New :py:mod:`~pulse2percept.units` support adds dimension-checked physical
-  quantities (``50 * uA``, ``450 * us``, ``15 * mm``, ``2 * dva``) throughout
-  the public API. Bare numbers retain their documented meaning.
-  See :ref:`Physical Units <topics-units>`.
+* New :py:mod:`~pulse2percept.units` support for dimension-checked physical
+  quantities throughout the public API (:pull:`828`)
 
-* Temporal modeling and playback have been substantially improved:
-  temporal models can summarize percepts over an interval rather than sampling
-  a single instant, and :py:meth:`~pulse2percept.percepts.Percept.play` and
-  :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are much faster and
-  produce smaller notebooks and documentation pages.
+* Major performance improvements for stimulus handling, spatial models, temporal
+  models, and large-array simulations (:pull:`800`, :pull:`805`, :pull:`808`,
+  :pull:`821`, :pull:`850`)
 
-* :py:class:`~pulse2percept.models.FadingTemporal`,
-  :py:class:`~pulse2percept.models.AlphaTemporal` and
-  :py:class:`~pulse2percept.models.AxonMapSpatial` are substantially faster for
-  long stimuli and large electrode arrays. Results may differ from previous
-  versions by floating-point roundoff.
+* :py:meth:`~pulse2percept.percepts.Percept.play` and
+  :py:meth:`~pulse2percept.stimuli.VideoStimulus.play` are substantially faster,
+  and percept playback now supports irregular time axes (:pull:`809`,
+  :pull:`834`)
 
-* New :py:meth:`~pulse2percept.percepts.Percept.load` reads percepts back from
-  image and video files.
+* New :py:class:`~pulse2percept.models.AlphaTemporal` and much faster
+  :py:class:`~pulse2percept.models.FadingTemporal` temporal models
+  (:pull:`849`)
 
-* Python 3.14 is supported. Python 3.11 and NumPy 2 are now required.
+* New :py:meth:`~pulse2percept.percepts.Percept.load` reads percepts from image
+  and video files (:pull:`835`)
+
+* Python 3.14 is supported. Python 3.11 and NumPy 2 are now required
+  (:pull:`790`)
 
 
 API changes:
 
-* Stimulus handling was overhauled. ``Stimulus.data``, ``time`` and
-  ``electrodes`` are read-only, pulse and pulse-train parameters such as
-  ``amp``, ``freq`` and ``phase_dur`` are first-class attributes, and exact
-  transformations such as scaling preserve structured pulse representations
-  when possible. New :py:meth:`~pulse2percept.stimuli.Stimulus.shift` and
-  :py:meth:`~pulse2percept.stimuli.Stimulus.pad` provide explicit time-axis
-  transformations. ``compress`` and ``remove`` remain in-place operations.
+* ``Stimulus.data``, ``time``, ``electrodes``, and pulse parameters are now
+  read-only. New :py:meth:`~pulse2percept.stimuli.Stimulus.pad` and
+  :py:meth:`~pulse2percept.stimuli.Stimulus.shift` methods provide explicit
+  time-axis transformations (:pull:`837`, :pull:`842`)
 
-* Encoded stimuli now carry both the delivered electrical stimulation and the
-  frame-level modulation it realizes. Purely spatial models read the latter,
-  while temporal models use the delivered pulses. This behavior no longer
-  depends on whether encoding happened explicitly or during assignment to an
-  implant.
+* Image and video stimuli now use grid-style electrode names such as ``'A1'``
+  and ``'C12_G'`` instead of integer pixel indices (:pull:`805`)
 
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` now supports encoders,
-  raster strategies, and maximum-current limits. Raster strategies are attached
-  to the implant and bound to its electrode array.
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` now supports stimulus
+  encoders, raster strategies, and maximum-current limits. Dimensionless
+  image/video stimuli can be encoded automatically when assigned to an implant
+  (:pull:`810`, :pull:`833`)
 
-* Temporal models gained a ``reduce`` parameter for choosing how automatically
-  selected output times summarize the preceding interval. In addition,
-  :py:class:`~pulse2percept.models.FadingTemporal` now ignores anodic current
-  rather than treating it as negative brightness, and enforces ``tau >= dt``.
+* Temporal models gained a ``reduce`` parameter for summarizing automatically
+  selected output intervals. :py:class:`~pulse2percept.models.FadingTemporal`
+  now responds only to cathodic current (:pull:`818`)
 
-* New :py:class:`~pulse2percept.models.AlphaTemporal` provides a one-time-constant
-  alpha-shaped temporal response, whose impulse response rises to a peak at 
-  ``tau`` before decaying.
+* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` now distinguishes
+  physical current from threshold-relative amplitude via the new ``xTh`` unit
+  (:pull:`848`)
 
-* A bare :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` amplitude now
-  consistently means microamps.
-  :py:class:`~pulse2percept.models.BiphasicAxonMapModel` amplitudes, which used
-  to be read as multiples of threshold, must now say so with the new ``xTh``
-  unit (``2 * xTh``) or supply a threshold via ``threshold_amp`` or
-  :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`. An
-  uncalibrated ``xTh`` train remains in ``xTh`` until a threshold is
-  provided.
+* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` can now be composed
+  with temporal models using a space-time-separable approximation (:pull:`847`)
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` can now be paired
-  with a temporal model, in a space-time-separable approximation: Granley
-  determines the peak spatial percept, the temporal model supplies a
-  normalized envelope for it to evolve along (:issue:`565`).
+* Model parameter ``xystep`` was renamed to ``step`` and ``axlambda`` to
+  ``lam``; the old names are deprecated until v0.11 (:pull:`824`, :pull:`830`)
 
-* Spatial-model APIs were cleaned up: ``xystep`` was renamed to ``step`` and
-  ``axlambda`` to ``lam``. Axon-map and cortical scoreboard models also gained
-  configurable smoothing across their relevant visual-field meridians.
+* Axon-map and cortical scoreboard models can smooth predictions across
+  visual-field meridians (:pull:`838`)
 
-* ``predict_percept`` and implant safety checks now enforce physical stimulus
-  dimensions instead of silently interpreting image gray levels as electrical
-  current.
+* Multi-electrode stimuli now plot as electrode-by-time heatmaps by default;
+  percept playback and saving gained ``vmin``/``vmax`` controls
+  (:pull:`835`, :pull:`841`)
 
-* Stimulus and percept visualization gained several usability improvements,
-  including multi-electrode stimulus heatmaps and ``vmin``/``vmax`` controls
-  for percept playback and saving.
 
 Bug fixes:
 
-* Stimulus timing, metadata propagation, and pulse-train handling are more
-  robust. Time axes now use float64 precision, metadata survives model
-  prediction and transformations, and Dynaphos uses the actual frequency and
-  phase duration of the biphasic pulse trains a stimulus is made of.
+* Fixed stimulus timing, metadata propagation, pulse scheduling, and structured
+  stimulus handling across implants and models (:pull:`804`, :pull:`810`,
+  :pull:`818`, :pull:`825`, :pull:`846`)
 
-* Fixed several image/video issues, including accidental input mutation,
-  argument forwarding to scikit-image, image centering, single-frame playback,
-  and handling of nonuniform time axes.
+* Fixed several image and video issues, including argument forwarding,
+  centering, single-frame playback, irregular timing, and efficient partial
+  video loading (:pull:`815`, :pull:`822`, :pull:`834`, :pull:`844`)
 
-* Fixed several visual-field-map issues, including equality and hashing,
-  array-shaped inverse cortical mappings, exact mesh-vertex mappings, and
-  incorrect cortical-coordinate units in the documentation.
+* Fixed several Neuropythy and cortical-map issues involving shapes, NaNs,
+  scalar inputs, mesh vertices, subject IDs, and coordinate units
+  (:pull:`826`, :pull:`836`, :pull:`845`)
 
-* Various smaller correctness, compatibility, and documentation fixes.
+* Various smaller correctness fixes (:pull:`814`)
 
 v0.9.1 (2026-08-06)
 -------------------

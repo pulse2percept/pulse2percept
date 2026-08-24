@@ -30,11 +30,7 @@ def _whole(name, value):
 
 
 def _electrode_array(implant):
-    """The electrode array of a prosthesis system, or the array itself
-
-    Duck-typed rather than imported, since ``implants.base`` imports this
-    module.
-    """
+    """Return the electrode array of an implant, or the array itself."""
     earray = getattr(implant, 'earray', implant)
     if (getattr(earray, 'electrode_names', None) is None or
             getattr(earray, 'coordinates', None) is None):
@@ -44,101 +40,24 @@ def _electrode_array(implant):
 
 
 class Raster(PrettyPrint, metaclass=ABCMeta):
-    """Abstract base class for all raster patterns
+    """Abstract base class for raster patterns.
 
-    A stimulator usually cannot drive every electrode at once, because the
-    total current it can source at any instant is limited. Electrodes are
-    therefore split into *raster groups* that take turns.
+    A raster partitions electrodes into groups that take turns
+    stimulating. Different groups must not be active at the same time.
+    Raster timing is applied by :class:`~pulse2percept.stimuli.StimulusEncoder`.
 
-    A raster is a **scheduling constraint, not a hardware state machine**. What
-    it has to deliver is one property: no two groups are ever active at the same
-    instant, so that the stimulator sources at most one group's worth of current
-    however the video is modulated. It is not a switch that cyclically enables
-    group 0, then group 1, then group 0 again forever, and a group's pulses do
-    not have to land at the same phase of a repeating cycle.
-
-    Taking turns is described by a **raster sweep**: group *g* starts its pulse
-    ``g * group_dur`` after group 0 does, so a sweep spans ``n_groups *
-    group_dur``. Two things then keep groups apart for good (see
-    :py:class:`~pulse2percept.stimuli.StimulusEncoder`):
-
-    1.  A pulse has to be short enough to finish before the next group's turn
-        begins.
-    2.  Electrodes on *different* pulse periods drift relative to one another,
-        and would eventually collide however they started out. Their periods are
-        therefore pinned to whole numbers of the sweep, which fixes their
-        relative phase. Pinning rounds the period *up*, so multiplexing never
-        drives an electrode faster -- and so never delivers more charge -- than
-        asked.
-
-        Electrodes that share one period cannot drift in the first place: their
-        onsets stay ``group_dur`` apart forever, whatever that period is.
-        Nothing is quantized in that case and the requested rate is delivered
-        exactly, even when the period is not a whole number of sweeps. This is
-        the usual case under amplitude modulation, and it is why rastering costs
-        no frequency there.
-
-        So with two groups 1.5 ms apart on a common 10 ms period, group 0 pulses
-        at 0, 10, 20, ... and group 1 at 1.5, 11.5, 21.5, ... -- collision-free,
-        but not a repeating 3 ms schedule, and the 10 ms period is left alone.
-
-    The sweep belongs to the *stimulation* schedule, not to the video: it is
-    tied to the pulse period, not to the frame rate. Two rules settle how long
-    it is and what it costs:
-
-    *  With ``group_dur=None`` the groups divide the *shortest* pulse period
-       between them, so the sweep is exactly that period. Under frequency
-       modulation that means the fastest electrode pulses once per sweep and
-       slower ones every *m*-th sweep.
-    *  With an explicit ``group_dur`` the sweep is ``n_groups * group_dur``
-       whatever rate the electrodes run at -- six groups of 1 ms sweep in 6 ms.
-       It is then generally much shorter than a pulse period, so even the
-       fastest electrode may pulse only every *m*-th sweep.
-
-    Either way, only periods that *differ* from one another are rounded up onto
-    the sweep; a period they all share is delivered exactly, since fixed group
-    offsets cannot drift into one another.
-
-    A raster is *bound* to the implant it schedules. Assigning it to
-    :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` binds it, which
-    is what lets a subclass whose pattern depends on where the electrodes are
-    (:py:class:`~pulse2percept.implants.CheckerboardRaster`) work the geometry
-    out, and what lets :py:meth:`plot` draw the array without being handed it
-    again:
-
-    .. code::
-
-        implant.raster = CheckerboardRaster(5)
-        implant.raster.plot()
-
-    Subclasses only implement ``groups``, and override ``bind`` if their
-    pattern depends on the implant.
+    Assigning a raster to ``implant.raster`` binds it to that implant.
+    Subclasses implement :meth:`groups` and may override :meth:`bind`
+    when the grouping depends on electrode geometry.
 
     .. versionadded:: 0.10.0
 
     Parameters
     ----------
     group_dur : float, optional
-        Duration (ms) of a single group's slot, and hence the spacing between
-        one group's turn and the next. If None, the groups are spread evenly
-        over the pulse period, so that a sweep takes exactly one period to
-        complete -- which is what an encoder wants whenever every electrode
-        pulses at the same rate.
-
-        Setting it explicitly makes the sweep ``n_groups * group_dur``
-        regardless of the pulse period, which is how you buy back frequency
-        resolution under frequency modulation: a shorter slot means a shorter
-        sweep, and the periods that have to be pinned are pinned onto a finer
-        grid. It cannot be shorter than a single pulse.
-
-        An encoder with a ``clock`` rounds the slot onto it and rebuilds the
-        sweep from the result, so every group keeps a turn of the same length.
-
-        May be given as a plain number of milliseconds or as a unitful
-        quantity (e.g. ``1000 * us``); the same goes for the ``period``
-        argument of :py:meth:`slot_dur` and :py:meth:`offsets`. See
-        :py:mod:`pulse2percept.units`.
-
+        Duration of one group's slot (ms). If None, groups divide the
+        shortest pulse period evenly. An explicit value fixes the
+        raster sweep to ``n_groups * group_dur``.
     """
     __slots__ = ('group_dur', '_implant')
 
@@ -170,31 +89,20 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         return getattr(self, '_implant', None)
 
     def bind(self, implant):
-        """Bind the raster to an implant
+        r"""Bind the raster to an implant or electrode array.
 
-        A raster describes how one particular device takes turns between its
-        electrodes, so it is bound to that device rather than handed to every
-        method that needs it. This is called for you when the raster is
-        assigned to
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster`.
-
-        Binding is also where a pattern that depends on the electrode geometry
-        is worked out, so a subclass that has such a pattern overrides this and
-        recomputes. Rebinding therefore always recomputes: the same raster
-        object assigned to a second implant describes *that* implant.
+        Geometry-dependent rasters may override this method to recompute
+        their grouping.
 
         Parameters
         ----------
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            The implant to bind to, or its
-            :py:class:`~pulse2percept.implants.ElectrodeArray`.
+        implant : :class:`~pulse2percept.implants.ProsthesisSystem` or \
+                  :class:`~pulse2percept.implants.ElectrodeArray`
+            Implant or electrode array to bind.
 
         Returns
         -------
-        self : :py:class:`~pulse2percept.implants.Raster`
-            The raster, so that ``CheckerboardRaster(5).bind(implant)`` reads
-            as one expression.
-
+        self : :class:`~pulse2percept.implants.Raster`
         """
         _electrode_array(implant)
         self._implant = implant
@@ -234,32 +142,19 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         raise NotImplementedError
 
     def members(self, electrodes, group):
-        """The electrodes that take their turn together in one group
-
-        The inverse of :py:meth:`groups`, which says what group each electrode
-        is in. This says which electrodes are in a group.
+        """Return the electrodes in one raster group.
 
         Parameters
         ----------
         electrodes : array_like
-            Electrode names, in the order they appear in the stimulus.
+            Electrode names.
         group : int
-            Which group to look up, in ``0..n_groups-1``. Groups take their
-            turns in index order, so group 0 is the one that goes first.
+            Group index in ``0..n_groups-1``.
 
         Returns
         -------
         members : array
-            The entries of ``electrodes`` belonging to ``group``, in the order
-            they were given: names in, names out.
-
-        Examples
-        --------
-        >>> from pulse2percept.implants import ArgusII, SequentialRaster
-        >>> names = ArgusII().electrode_names
-        >>> SequentialRaster(6).members(names, 0)[:4]
-        array(['A1', 'A2', 'A3', 'A4'], dtype='<U3')
-
+            Electrode names belonging to ``group``.
         """
         group = _whole('group', group)
         if group < 0 or group >= self.n_groups:
@@ -269,43 +164,26 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
     def plot(self, implant=None, annotate=None, ax=None, cmap='viridis',
              autoscale=True):
-        """Plot the electrode array, colored by raster group
-
-        What a raster does is spatial, so the quickest way to tell whether it
-        does what was wanted is to look at it. Colors run in the order the
-        groups take their turns, so the picture shows the schedule as well as
-        the pattern: with
-        :py:class:`~pulse2percept.implants.CheckerboardRaster` a group's
-        electrodes should be scattered over the whole array rather than
-        gathered into a line, and neighboring colors should not lie next to
-        one another in a consistent direction.
+        """Plot electrodes colored by raster group.
 
         Parameters
         ----------
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-            The implant to draw, or its
-            :py:class:`~pulse2percept.implants.ElectrodeArray`. Its electrodes
-            are the ones the raster is asked about, so this has to be an
-            implant the raster covers. If None, the implant the raster is
-            bound to is drawn (see :py:meth:`bind`).
+        implant : :class:`~pulse2percept.implants.ProsthesisSystem`, optional
+            Implant to draw. If None, use the bound implant.
         annotate : bool, optional
-            Whether to write the group index into each electrode. If None,
-            they are written whenever there are few enough electrodes
-            (at most 120) for the numbers to be readable.
+            Write group indices on electrodes. If None, annotate arrays
+            with at most 120 electrodes.
         ax : matplotlib.axes.Axes, optional
-            Axes to draw on. If None, uses the current axes.
+            Axes to draw on.
         cmap : str, optional
-            Matplotlib colormap the group colors are taken from, evenly
-            spaced. A sequential map is the useful default, since the order
-            the colors run in is the order the groups fire in.
+            Matplotlib colormap.
         autoscale : bool, optional
-            Whether to fit the x/y limits to the implant.
+            Fit the axes to the implant.
 
         Returns
         -------
         ax : matplotlib.axes.Axes
             The axes drawn on.
-
         """
         earray = self._bound(implant)
         names = list(earray.electrode_names)

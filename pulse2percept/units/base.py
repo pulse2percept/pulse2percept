@@ -7,16 +7,8 @@ import math
 from copy import deepcopy
 import numpy as np
 
-# Primitive dimensions used by p2p. Derived dimensions such as frequency,
-# charge, and current density are formed from these.
-#
-# ``visual_angle`` is kept separate from physical angle because converting
-# visual angle to retinal or cortical distance requires a visual field map.
-#
-# ``threshold_ratio`` represents amplitudes relative to perceptual threshold
-# (e.g. ``2 * xTh``). The threshold itself is a current and may vary across
-# electrodes and subjects, so converting a threshold ratio to current requires
-# calibration rather than a fixed unit conversion.
+# Visual angle and threshold ratio are distinct dimensions because converting
+# either requires model- or subject-specific calibration.
 BASE_DIMENSIONS = ('time', 'length', 'current', 'voltage', 'visual_angle',
                    'threshold_ratio')
 
@@ -30,7 +22,7 @@ _BASE_LABELS = {
     'threshold_ratio': 'threshold ratio',
 }
 
-# Human-readable names used in error messages:
+# Names for common derived dimensions:
 _DERIVED_LABELS = {
     (0, 0, 0, 0, 0, 0): 'dimensionless',
     (-1, 0, 0, 0, 0, 0): 'frequency',
@@ -43,9 +35,7 @@ _DERIVED_LABELS = {
 def _snap_scale(scale):
     """Snap near-exact decimal scale factors to powers of ten.
 
-    Unit algebra can introduce small floating-point errors, e.g.
-    ``1e-6 * 1e-3 != 1e-9`` exactly. Snapping removes that noise so equivalent
-    compound units resolve to the same predefined unit.
+    This removes floating-point noise from equivalent compound units.
     """
     if not math.isfinite(scale) or scale <= 0:
         return scale
@@ -62,11 +52,10 @@ _EQ_RTOL = 1e-12
 
 
 def _isclose(a, b):
-    """Compare magnitudes up to floating-point conversion noise
+    """Compare magnitudes up to floating-point conversion noise.
 
-    Returns ``NotImplemented`` if the two are not comparable as numbers at
-    all, so that ``5 * dimensionless == 'foo'`` answers the question with
-    False rather than raising: equality is asked, not asserted.
+    Return ``NotImplemented`` for values that cannot be compared
+    numerically.
     """
     try:
         result = np.isclose(a, b, rtol=_EQ_RTOL, atol=0.0)
@@ -77,13 +66,9 @@ def _isclose(a, b):
 
 
 class DimensionMismatchError(TypeError):
-    """Raised when quantities of incompatible dimensions are combined
-
-    Subclasses ``TypeError`` because a dimension mismatch is a type error in
-    the physical sense: microamps are simply not a kind of millisecond.
+    """Raised when quantities have incompatible physical dimensions.
 
     .. versionadded:: 0.10.0
-
     """
 
 
@@ -106,28 +91,24 @@ def _mismatch(expected, got, name=None):
 
 
 class Dimension(object):
-    """Physical dimensionality of a unit or quantity
+    """Physical dimensionality of a unit or quantity.
 
-    A dimension is a vector of integer exponents over the primitive dimensions
-    in ``BASE_DIMENSIONS``. Dimensions are immutable, hashable, and support
-    multiplication, division, and integer powers.
+    Dimensions are immutable vectors of integer exponents over
+    ``BASE_DIMENSIONS``.
 
     .. versionadded:: 0.10.0
 
     Parameters
     ----------
     **exponents : int
-        Exponent for each primitive dimension, e.g. ``Dimension(current=1,
-        length=-2)`` for a current density. Omitted dimensions have exponent 0.
+        Exponents of the primitive dimensions. Omitted dimensions have
+        exponent zero.
 
     Examples
     --------
     >>> from pulse2percept.units import Dimension
     >>> Dimension(current=1) * Dimension(time=1)
     Dimension('charge')
-    >>> Dimension(time=-1).name
-    'frequency'
-
     """
     __slots__ = ('_exponents',)
 
@@ -210,19 +191,14 @@ class Dimension(object):
     def __hash__(self):
         return hash(self._exponents)
 
-    # An immutable value object has nothing to copy: sharing one is
-    # indistinguishable from duplicating it, and a stimulus or model that gets
-    # deep-copied on every prediction should not be allocating dimensions
-    # along the way.
+    # Immutable value objects can be shared across copies.
     def __copy__(self):
         return self
 
     def __deepcopy__(self, memodict=None):
         return self
 
-    # `copy` and `pickle` restore an object's state by assigning to it, which
-    # ``__setattr__`` refuses to allow. Go around it the way the object's own
-    # constructor does:
+    # Restore state without going through the immutability guard.
     def __getstate__(self):
         return {'_exponents': self._exponents}
 
@@ -256,63 +232,32 @@ def _symbol_mul(a, b):
 
 
 def _symbol_group(sym):
-    """Parenthesize a compound symbol so it composes unambiguously
-
-    Exponents bind tighter than products and quotients, so ``mm^2`` needs no
-    parentheses; ``uA*ms`` does.
-    """
+    """Parenthesize a compound unit symbol when needed for composition."""
     if any(c in sym for c in '*/'):
         return f'({sym})'
     return sym
 
 
 class Unit(object):
-    """A unit of measurement
+    """A physical unit.
 
-    A unit is a dimension plus a scale factor relative to the base unit of
-    that dimension (seconds, meters, amperes, volts, or degrees of visual
-    angle) plus a symbol used for display.
+    A unit combines a :class:`Dimension`, a scale relative to its base
+    unit, and a display symbol. Multiplying a value by a unit produces a
+    :class:`Quantity`; units may also be multiplied, divided, and raised
+    to integer powers.
 
-    Multiplying a number, list, or NumPy array by a unit produces a
-    :py:class:`~pulse2percept.units.Quantity`. Multiplying, dividing, or
-    exponentiating units produces another unit, so derived units such as
-    ``uA / mm ** 2`` need not be predefined.
-
-    A composed unit that is exactly a predefined one is displayed as that unit,
-    since ``uA * ms`` and ``nC`` are the same unit rather than convertible
-    ones. This is a spelling choice applied at display time; it never rescales
-    a magnitude, so a composed unit that is *not* exactly a predefined one
-    keeps its composed symbol. Use :py:meth:`Quantity.to` to change scale.
-
-    Units are immutable. p2p does not maintain a unit registry, parse unit
-    strings, or generate SI prefixes automatically: the vocabulary exported by
-    :py:mod:`pulse2percept.units` is the whole of it.
+    Units are immutable.
 
     .. versionadded:: 0.10.0
 
     Parameters
     ----------
-    dimension : :py:class:`~pulse2percept.units.Dimension`
-        The dimensionality of the unit.
+    dimension : :class:`~pulse2percept.units.Dimension`
+        Physical dimension.
     scale : float
-        Size of the unit relative to the base unit of its dimension. For
-        example, ``ms`` has ``scale=1e-3`` because the base unit of time is
-        the second.
+        Scale relative to the base unit of that dimension.
     symbol : str
-        Short symbol used when printing quantities, e.g. ``'uA'``.
-
-    Examples
-    --------
-    >>> from pulse2percept.units import uA, mm, ms
-    >>> uA / mm ** 2
-    uA/mm^2
-    >>> 50 * uA
-    50 uA
-    >>> uA * ms
-    nC
-    >>> uA * ms / mm ** 2
-    uA*ms/mm^2
-
+        Display symbol, e.g. ``'uA'``.
     """
     __slots__ = ('_dimension', '_scale', '_symbol')
 
@@ -327,9 +272,7 @@ class Unit(object):
             raise TypeError(f"'dimension' must be a Dimension object, not "
                             f"{type(dimension)}.")
         scale = float(scale)
-        # A unit is how big something is, so its scale is a positive, finite
-        # number. Anything else makes conversion and hashing meaningless, and
-        # is much easier to diagnose here than three operations later:
+        # Unit scales must be positive and finite.
         if not math.isfinite(scale) or scale <= 0:
             raise ValueError(f"'scale' must be a positive, finite number, not "
                              f"{scale}.")
@@ -357,20 +300,7 @@ class Unit(object):
 
     @property
     def _display_symbol(self):
-        """The symbol to print, preferring a predefined unit's spelling
-
-        A composed unit that lands *exactly* on a predefined one is printed as
-        that unit: ``uA * ms`` prints as ``nC`` because the two are the same
-        unit, not merely convertible ones. `_snap_scale` has already made their
-        scales the same float, so this is a dict hit on the pair that
-        :py:meth:`__eq__` and :py:meth:`__hash__` already agree on.
-
-        It is a spelling choice and nothing more. It never touches a magnitude
-        and never picks a different scale, so ``uA * ms / um ** 2`` keeps its
-        composed symbol: no predefined unit is that size, and printing it as
-        ``uC/mm^2`` would mean silently rescaling 0.00225 to 2.25. Choosing a
-        different scale is what :py:meth:`Quantity.to` is for.
-        """
+        """Display symbol, preferring an exactly equivalent predefined unit."""
         return _CANONICAL_SYMBOLS.get((self._dimension, self._scale),
                                       self._symbol)
 

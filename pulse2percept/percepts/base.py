@@ -48,13 +48,7 @@ def _parse_range_tag(text):
 
 
 def _range_tagged_path(fname, vmin, vmax):
-    """``fname`` with the brightness range written into its own name
-
-    The fallback for the containers :py:func:`_metadata_kwargs` cannot record
-    a range in. A name that already carries a tag has it replaced rather than
-    added to, so that no file is left named for a range it was not written
-    with.
-    """
+    """Return ``fname`` with its stored brightness range in the filename."""
     head, tail = os.path.split(os.fspath(fname))
     root, ext = os.path.splitext(tail)
     tag = _range_tag(vmin, vmax)
@@ -63,13 +57,7 @@ def _range_tagged_path(fname, vmin, vmax):
 
 
 def _media_metadata(fname):
-    """Whatever metadata imageio can read off a media file
-
-    Pillow carries the text chunks and comments that
-    :py:meth:`~pulse2percept.percepts.Percept.save` writes, but cannot open a
-    video; FFMPEG can, and reports the frame rate. Whichever opens the file
-    wins, so this yields at most one dictionary per backend that can read it.
-    """
+    """Yield metadata dictionaries from imageio backends that can read ``fname``."""
     for kwargs in ({'plugin': 'pillow'}, {}):
         try:
             yield dict(iio.immeta(fname, **kwargs))
@@ -129,12 +117,7 @@ def _media_fps(fname, n_frames):
 
 
 def _metadata_kwargs(fname, tag):
-    """Writer arguments that record ``tag`` in the file's own metadata
-
-    Only for the containers whose writer already has a comment field to put it
-    in. A percept saved in any other format can still carry its range in the
-    file name, which is the caller's to choose.
-    """
+    """Return writer arguments that store ``tag`` in supported media metadata."""
     ext = os.path.splitext(os.fspath(fname))[1].lower()
     if ext == '.png':
         try:
@@ -163,12 +146,7 @@ def _check_clim(vmin, vmax):
 
 
 def _resolve_clim(data, vmin, vmax, auto_vmin):
-    """Fill omitted display limits in from the whole percept
-
-    Resolving against all of ``data`` rather than against the frames a display
-    or export clock happens to sample is what keeps the brightness scale
-    independent of ``fps``.
-    """
+    """Fill omitted display limits from the full percept."""
     vmin = auto_vmin if vmin is None else vmin
     vmax = np.max(data) if vmax is None else vmax
     vmin, vmax = float(vmin), float(vmax)
@@ -266,17 +244,15 @@ class Percept(Data):
         }
 
     def __getitem__(self, item):
-        """Return percept data, interpolated in time where necessary
+        """Return percept data, interpolating requested time points as needed.
 
-        Space is indexed the NumPy way, but a number that reaches the time
-        axis is a *time* rather than a frame index; see the class docstring
-        for the forms that takes. Returns a NumPy array or a scalar, never a
-        new :py:class:`~pulse2percept.percepts.Percept`.
+        Spatial dimensions use normal NumPy indexing. A numeric index that
+        reaches the final axis is interpreted as time rather than a frame
+        number. Returns an array or scalar, not a new :class:`Percept`.
 
         .. versionadded:: 0.10.0
-
         """
-        # STEP 1: DOES THE INDEX REACH THE TIME AXIS?
+        # Determine whether the index reaches the time axis.
         # ``percept[0, 1]`` asks for the time series of a pixel, so only an
         # index that reaches the last axis can be naming a time point:
         space, time = item, None
@@ -285,7 +261,7 @@ class Percept(Data):
             if (any(idx is Ellipsis for idx in head) or
                     len(head) == self.data.ndim - 1):
                 space, time = head, item[-1]
-        # STEP 2: AVOID CONFUSING TIME POINTS WITH FRAME INDICES
+        # Distinguish time values from ordinary NumPy frame indices.
         scalar_time = mask_time = False
         if isinstance(time, slice):
             sliced = _slice_times(time, self.time, self.time_unit)
@@ -304,7 +280,7 @@ class Percept(Data):
                 # Convert to float so time is not mistaken for a frame index:
                 time = np.float64(time)
                 scalar_time = time.ndim == 0
-        # STEP 3: NUMPY HANDLES MOST INDEXING AND SLICING
+        # Let NumPy handle ordinary indexing first.
         try:
             return self.data[space if time is None else (*space, time)]
         except IndexError:
@@ -314,7 +290,7 @@ class Percept(Data):
             # question instead of raising:
             if time is None or mask_time:
                 raise
-        # STEP 4: INTERPOLATE TIME
+        # Interpolate explicit time values.
         frames = self.data[space]
         times = np.array([time], dtype=np.float64).ravel()
         # ``_interp_rows`` interpolates rows, and a percept's rows are its
@@ -331,24 +307,20 @@ class Percept(Data):
 
     @property
     def time_unit(self):
-        """The unit ``time`` is expressed in
+        """Unit in which ``time`` is stored.
 
-        Milliseconds unless the percept was built with a different
-        ``time_unit``. Read-only: the stored numbers mean what they meant when
-        they were written down. Ask for another unit with
-        :py:meth:`~pulse2percept.percepts.Percept.times`.
+        The property is read-only; use :meth:`times` to request another
+        unit.
 
         .. versionadded:: 0.10.0
-
         """
         return self._time_unit
 
     @property
     def time_quantity(self):
-        """The time axis with its unit attached, or None
+        """Time axis with its unit attached, or None.
 
         .. versionadded:: 0.10.0
-
         """
         if self.time is None:
             return None

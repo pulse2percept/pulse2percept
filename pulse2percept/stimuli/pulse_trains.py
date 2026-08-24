@@ -1,5 +1,5 @@
-""":py:class:`~pulse2percept.stimuli.PulseTrain`, 
-   :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`, 
+""":py:class:`~pulse2percept.stimuli.PulseTrain`,
+   :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`,
    :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`"""
 import numpy as np
 from copy import deepcopy
@@ -31,26 +31,14 @@ def _is_threshold_relative(amp):
 
 
 def _tile_pulse(pulse, shift, n_pulses):
-    """Concatenate ``n_pulses`` copies of ``pulse``, spaced by ``shift`` ms
+    """Tile ``pulse`` ``n_pulses`` times with ``shift`` ms between copies.
 
-    Vectorized equivalent of repeatedly calling
-    ``pt = pt.append(pulse >> shift)``, which copies the ever-growing data
-    container once per pulse (and is therefore quadratic in ``n_pulses``).
-
-    Parameters
-    ----------
-    pulse : :py:class:`~pulse2percept.stimuli.Stimulus`
-        A stimulus containing a single pulse, with a time component.
-    shift : float
-        Time (ms) by which each copy is shifted with respect to the previous
-        one, in addition to the duration of the pulse itself.
-    n_pulses : int
-        Number of copies to concatenate.
+    This is the vectorized equivalent of repeated ``Stimulus.append``.
 
     Returns
     -------
     data, time : np.ndarray
-        The data container and time axis of the concatenated pulse train.
+        Waveform and time axis of the tiled train.
     """
     time, data = pulse.time, pulse.data
     # The time axis of each appended copy, i.e. of ``pulse >> shift``:
@@ -138,8 +126,7 @@ class PulseTrain(Stimulus):
 
     def __init__(self, freq, pulse, n_pulses=None, stim_dur=1000.0,
                  electrode=None, metadata=None):
-        # Strip the units first; everything below is plain numbers in Hz and
-        # ms, exactly as it has always been:
+        # Normalize frequency and duration.
         freq = as_value(freq, Hz, 'freq')
         stim_dur = as_value(stim_dur, ms, 'stim_dur')
         if not isinstance(pulse, Stimulus):
@@ -149,14 +136,10 @@ class PulseTrain(Stimulus):
         if n_rows == 0:
             raise ValueError(f"'pulse' has invalid shape "
                              f"({pulse.shape[0]}, {pulse.shape[1]}).")
-        # Every parameter-backed stimulus in the library is a pulse, and a
-        # pulse always has a time axis. So this only has to ask a raw
-        # stimulus, whose waveform is already there to be asked:
+        # Raw pulses must carry a time axis.
         if not pulse._is_parametric and pulse.time is None:
             raise ValueError("'pulse' does not have a time component.")
-        # `duration` rather than `time[-1]`: a parametric pulse knows how long
-        # it is from its parameters, so none of the arithmetic below has to
-        # generate a waveform to find out.
+        # ``duration`` avoids rendering a parametric pulse.
         pulse_dur = pulse.duration
 
         # How many pulses fit into stim dur. `freq` counts cycles per second
@@ -208,10 +191,7 @@ class PulseTrain(Stimulus):
                                  f"({len(names)}) does not match the number "
                                  f"of electrodes in the pulse ({n_rows}).")
         self._freq = freq
-        # A snapshot, not the caller's object: tiling used to copy the pulse's
-        # values into the train there and then, so a pulse the caller goes on
-        # to replace must not change a train already built from it. Immutable
-        # waveform state makes this share arrays rather than duplicate them.
+        # Snapshot the pulse so later caller changes cannot affect this train.
         self._pulse = deepcopy(pulse)
         self._n_pulses = n_pulses
         self._stim_dur = stim_dur
