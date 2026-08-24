@@ -1,7 +1,6 @@
 """:py:class:`~pulse2percept.models.BiphasicAxonMapModel`,
    :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` [Granley2021]_"""
 import numpy as np
-import sys
 from copy import deepcopy
 
 from . import AxonMapSpatial, Model
@@ -264,6 +263,11 @@ def _pulse_train_params(stim):
     return params
 
 
+#: The three effect models are set up by ``BiphasicAxonMapSpatial.__init__``
+#: and are excluded from its attribute forwarding, in both directions.
+_EFFECT_MODELS = ('bright_model', 'size_model', 'streak_model')
+
+
 class BiphasicAxonMapSpatial(AxonMapSpatial):
     """ BiphasicAxonMapModel of [Granley2021]_ (spatial model)
 
@@ -422,20 +426,16 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             setattr(self, spec.new_name if spec else key, val)
 
     def __getattr__(self, attr):
-        # Called when normal get attribute fails
-        # If we are in the initializer, or if trying to access
-        # an effects model, raise an error which is caught and causes
-        # the parameter to be created.
-        if (sys._getframe(3).f_code.co_name == '__init__' and
-                "pulse2percept/models/base.py" in
-                sys._getframe(3).f_code.co_filename) or \
-                (attr in ['bright_model', 'streak_model', 'size_model']):
-            # We can set new class attributes in the constructor. Reaching this
-            # point means the default attribute access failed - most likely
-            # because we are trying to create a variable. In this case, simply
-            # raise an exception:
-            # Note that this gets called from __init__ of BaseModel, not directly from
-            # BiphasicAxonMap
+        # Called when normal attribute access fails. The effect models
+        # themselves are never forwarded through: asking one of them for
+        # itself would recurse.
+        if attr in _EFFECT_MODELS:
+            raise AttributeError(f"{attr} not found")
+        # `has_own_attr` rather than `getattr`, which would re-enter this
+        # method: until the constructor has set all three, there is nothing to
+        # forward through, and the caller (`Parametrized.__init__` setting a
+        # default, say) wants the AttributeError anyway.
+        if not all(has_own_attr(self, name) for name in _EFFECT_MODELS):
             raise AttributeError(f"{attr} not found")
         # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
@@ -463,8 +463,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             except AttributeError:
                 pass
         # Check whether the attribute is a part of any
-        # bright/size/streak model
-        if name not in ['bright_model', 'size_model', 'streak_model', 'is_built', '_is_built']:
+        # bright/size/streak model. Note that this runs even when the spatial
+        # model already took the assignment above: `rho` and `lam` live in
+        # both places and have to stay in step.
+        if name not in _EFFECT_MODELS + ('is_built', '_is_built'):
             try:
                 for m in [self.bright_model, self.size_model, self.streak_model]:
                     if hasattr(m, name):
@@ -473,18 +475,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             except (AttributeError, FreezeError):
                 pass
         if not found:
-            try:
-                if sys._getframe(2).f_code.co_name == '__init__' or  \
-                        sys._getframe(3).f_code.co_name == '__init__':
-                    super().__setattr__(name, value)
-                    return
-            except FreezeError:
-                pass
-
-        if not found:
-            err_str = (f"'{name}' not found. You cannot add attributes to "
-                       f"{self.__class__.__name__} outside the constructor.")
-            raise FreezeError(err_str)
+            # No legitimate destination, so let `Frozen` decide: a new
+            # attribute is fine during construction and a `FreezeError`
+            # afterwards.
+            super().__setattr__(name, value)
 
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()

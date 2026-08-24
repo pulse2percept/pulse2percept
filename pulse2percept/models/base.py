@@ -3,7 +3,6 @@
    :py:class:`~pulse2percept.models.NotBuiltError`,
    :py:class:`~pulse2percept.models.SpatialModel`,
    :py:class:`~pulse2percept.models.TemporalModel`"""
-import sys
 import warnings
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
@@ -18,9 +17,10 @@ from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D, RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
                      um, uA)
-from ..utils import (PrettyPrint, FreezeError, Parametrized, bisect,
+from ..utils import (PrettyPrint, FreezeError, Frozen, Parametrized, bisect,
                      deprecated_alias, warn_deprecated_params,
                      rename_deprecated_params)
+from ..utils.base import _is_constructing
 from ..utils.constants import ZORDER
 
 
@@ -520,29 +520,13 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         # constructor:
         self.set_params(**build_params)
         self._build()
-        self.is_built = True
+        self._is_built = True
         return self
 
     @property
     def is_built(self):
-        """A flag indicating whether the model has been built"""
+        """A read-only flag indicating whether the model has been built"""
         return self._is_built
-
-    @is_built.setter
-    def is_built(self, val):
-        """This flag can only be set in the constructor or ``build``"""
-        # getframe(0) is '_is_built', getframe(1) is 'set_attr'.
-        # getframe(2) is the one we are looking for, and has to be either the
-        # construct or ``build``:
-        f_caller_2 = sys._getframe(2).f_code.co_name
-        f_caller_3 = sys._getframe(3).f_code.co_name
-        if f_caller_2 in ["__init__", "build"] or \
-           f_caller_3 in ["__init__", "build"]:
-            self._is_built = val
-        else:
-            err_s = (f"The attribute `is_built` can only be set in the "
-                     f"constructor or in ``build``, not in ``{f_caller_2}``.")
-            raise AttributeError(err_s)
 
     def __deepcopy__(self, memodict=None):
         if memodict is None:
@@ -854,7 +838,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                            grid_type=self.grid_type)
         self.grid.build(self.vfmap)
         self._build()
-        self.is_built = True
+        self._is_built = True
         return self
 
     @abstractmethod
@@ -1527,7 +1511,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                       y_tol=bright_tol, max_iter=max_iter)
 
 
-class Model(PrettyPrint):
+class Model(Frozen, PrettyPrint):
     """Computational model
 
     To build your own model, you can mix and match spatial and temporal models
@@ -1700,14 +1684,22 @@ class Model(PrettyPrint):
         and / or ``model.temporal.a``.
 
         """
-        if sys._getframe(1).f_code.co_name == '__init__':
-            # Allow setting new attributes in the constructor:
-            if isinstance(sys._getframe(1).f_locals['self'], self.__class__):
-                super().__setattr__(name, value)
-                return
-        # Outside the constructor, we cannot add new attributes (FreezeError).
-        # But, we have to check whether the attribute is part of the spatial
-        # model, the temporal model, or both:
+        if _is_constructing(self):
+            # `self.spatial = ...`, and whatever attributes a subclass
+            # constructor creates, belong to the composite object. User
+            # parameters do not: `set_params` forwards those explicitly, so
+            # that `rho` passed to the constructor still reaches the
+            # sub-models rather than shadowing them here.
+            super().__setattr__(name, value)
+            return
+        self._set_component_param(name, value)
+
+    def _set_component_param(self, name, value):
+        """Forward an assignment to the spatial and/or temporal model
+
+        Raises a ``FreezeError`` if neither sub-model knows the name; outside
+        the constructor there is nowhere else for it to go.
+        """
         found = False
         try:
             self.spatial.__setattr__(name, value)
@@ -1831,8 +1823,12 @@ class Model(PrettyPrint):
         # Each parameter is forwarded to the sub-models one at a time, so the
         # order they are applied in is decided here rather than by
         # `SpatialModel.set_params`. See `_vfmap_first`:
+        #
+        # Forwarding directly rather than via `setattr`: `set_params` also
+        # runs from inside `__init__`, where an assignment to `self` would
+        # land on the composite object instead of the sub-models.
         for key, val in _vfmap_first(params).items():
-            setattr(self, key, val)
+            self._set_component_param(key, val)
 
     def build(self, **build_params):
         """Build the model

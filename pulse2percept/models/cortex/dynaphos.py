@@ -248,7 +248,7 @@ class DynaphosModel(BaseModel):
                            grid_type=self.grid_type)
         self.grid.build(self.vfmap)
         self._build()
-        self.is_built = True
+        self._is_built = True
         return self
                     
     def _predict_percept(self, earray, stim, t_percept, clocks=None):
