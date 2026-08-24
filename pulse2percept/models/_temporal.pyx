@@ -33,27 +33,14 @@ cdef index_t _build_runs(const float32[::1] t_stim,
                          int32[::1] run_frame,
                          int32[::1] run_len,
                          int32[::1] run_out) noexcept nogil:
-    """Group the simulation clock into runs of steps that share one frame.
+    """Group simulation steps into constant-frame runs.
 
-    Serial and location-independent, so it is walked once per call rather than
-    once per location: O(n_sim) against the O(n_sim x n_space) it saves.
+    A run ends when the stimulus frame changes or a percept is due. Within a
+    run, the drive is constant and can be advanced in closed form. ``run_out``
+    is the percept column to write at the end of the run, or -1.
 
-    A run ends where the frame changes or where a percept is due, so within
-    one run the drive is constant and an integrator can be advanced across it
-    in closed form. ``run_out`` carries the percept column to write at the end
-    of the run, or -1.
-
-    This is the only place the per-step frame rule lives. Each step is asked
-    which frame it reads with the same comparison the per-step loops used to
-    make, so a frame that no step ever lands on is skipped here exactly as it
-    was skipped there.
-
-    ``while``, not ``if``: more than one stimulus frame can fall inside a
-    single simulation step, and skipping only one of them leaves the
-    integrator reading a frame that is already in the past. Encoded pulses
-    make that the normal case rather than a corner case -- their edges sit on
-    the DT=1e-3 ms grid while ``dt`` defaults to 5e-3 ms, so a pulse edge and
-    the sample after it routinely share a step.
+    Stimulus frames are advanced with ``while`` because multiple frame changes
+    may occur within one simulation step.
 
     Returns the number of runs written.
     """
@@ -96,29 +83,21 @@ cpdef fading_fast(const float32[:, ::1] stim,
                   uint32 reduce=REDUCE_LAST):
     """Cython implementation of the generic fading model
 
-    The leaky integrator has to be stepped in order, so the loop over time is
-    serial. But, each spatial location integrates independently of every
-    other. Time is therefore the *outer* loop and space the inner one, which
-    leaves the inner loop free of any carried dependency and lets it
-    vectorize. Threads take a block of locations each and run the whole time
-    loop over it, so the parallel region is still entered only once.
+    The model applies the discrete recurrence
 
-    The outer loop runs over *runs* of simulation steps rather than over the
-    steps themselves. Within a run the stimulus frame does not change, so the
-    drive is constant and the Euler recurrence
-    ``b <- b + (dt / tau) * (drive - b)`` is a fixed affine map; ``n`` of them
-    compose into ``b <- b * q**n + drive * (1 - q**n)``, for
-    ``q = 1 - dt/tau``.
-    That is the closed form of the *discrete* recurrence, not of the ODE it
-    approximates, so a pulse falling entirely between two simulation steps is
-    still missed exactly as before -- which frame each step reads is settled
-    by the same comparison, one step at a time, in the pre-pass below.
+    ``b <- b + (dt / tau) * (drive - b)``.
 
-    ``q**n`` and ``1 - q**n`` are both carried because neither alone stays
-    accurate: for a short run ``q**n`` is near 1 and ``drive + (b - drive) *
-    q**n`` cancels, while for a long one ``1 - q**n`` rounds to 1 and the
-    decaying tail is lost. Weighting the two endpoints avoids both, and
-    ``expm1`` supplies ``1 - q**n`` without cancelling when it is small.
+    Consecutive simulation steps with the same drive are grouped into runs.
+    Writing ``q = 1 - dt/tau``, a run of ``n`` steps composes to
+
+    ``b_n = b_0 * q**n + drive * (1 - q**n)``.
+
+    This is the closed form of the discrete recurrence, not of the
+    continuous-time ODE. Stimulus-frame selection therefore follows the same
+    simulation-step timing as before.
+
+    Because brightness is monotonic under constant drive, the peak within a
+    run is at one of its endpoints.
 
     Parameters
     ----------
@@ -184,13 +163,9 @@ cpdef fading_fast(const float32[:, ::1] stim,
         n_threads = 1
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
-    # `dt / tau` is the step of the recurrence being composed below. Rounding
-    # it to float32 here rather than carrying `dt` and `tau` separately is what
-    # keeps the composed map a power of the step the per-step loop would have
-    # taken:
+    # Match the float32 step used by the original recurrence.
     dt_tau = dt / tau
-    # One run reads the same stimulus frame for every location, so transpose
-    # once and that read becomes a contiguous run:
+    # Make spatial reads contiguous within each run.
     stim_t = np.ascontiguousarray(np.asarray(stim).T)  # Py overhead
     n_blocks = (n_space + BLOCK - 1) // BLOCK
     # Running brightness, one row per thread. Rows are BLOCK floats apart, so
@@ -201,9 +176,7 @@ cpdef fading_fast(const float32[:, ::1] stim,
     # once:
     running = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
 
-    # A run ends when the frame changes or a percept lands on it, so there can
-    # be no more runs than there are frames plus output points -- nor, of
-    # course, than there are simulation steps:
+    # Runs end at frame changes or output points:
     max_runs = n_stim + n_percept + 1
     if max_runs > n_sim:
         max_runs = n_sim
@@ -217,9 +190,7 @@ cpdef fading_fast(const float32[:, ::1] stim,
     with nogil:
         n_runs = _build_runs(t_stim, idx_t_percept, dt, n_sim, n_stim,
                              n_percept, run_frame, run_len, run_out)
-        # `q**n` and `1 - q**n` for each run. Both are the same number at
-        # every location, so they are settled here rather than inside the
-        # parallel loop:
+        # Precompute run coefficients shared by all spatial locations:
         for idx_run in range(n_runs):
             n_log_q = run_len[idx_run] * log_q
             run_q[idx_run] = <float32>c_exp(n_log_q)
@@ -253,16 +224,11 @@ cpdef fading_fast(const float32[:, ::1] stim,
                 drive = -amp
                 if drive < 0.0:
                     drive = 0.0
-                # The whole run in one affine step. Brightness stays in
-                # [0, inf[ without a clamp: `q` and `p` are both in [0, 1]
-                # (`tau >= dt` is enforced), so this is a convex combination
-                # of two nonnegative numbers.
+                # Compose the constant-drive run:
                 bright = bright * q + drive * p
                 scratch[tid, idx_space] = bright
-                # `drive` is constant across the run, so brightness moves
-                # monotonically from one end of it to the other and the peak
-                # over the run is at an endpoint. Comparing here therefore
-                # tracks the same peak the per-step compare did:
+                # Brightness is monotonic within a run, so its endpoint is
+                # sufficient for peak tracking:
                 if bright > running[tid, idx_space]:
                     running[tid, idx_space] = bright
             idx_frame = run_out[idx_run]
@@ -301,36 +267,27 @@ cpdef alpha_fast(const float32[:, ::1] stim,
     """Cython implementation of the generic alpha model
 
     Two leaky integrators in series, both with time constant ``tau`` and unit
-    DC gain, driven by the cathodic half of the stimulus. The cascade's
-    impulse response is ``t / tau**2 * exp(-t / tau)``, which starts at zero,
-    peaks at ``t = tau`` and decays afterwards.
+    DC gain, driven by the cathodic half of the stimulus.
 
-    Blocking, the run schedule, denormal handling and interval peak tracking
-    follow the same principles as ``fading_fast``; see there. Each location
-    carries two states rather than one, and both compose across a run of
-    ``n`` steps at constant drive ``d``. Writing ``a = dt/tau``, ``q = 1 - a``
-    and taking the run's starting states as ``x0``, ``y0``::
+    For a constant drive ``d``, write ``a = dt/tau`` and ``q = 1 - a``. After
+    ``n`` discrete steps from states ``x0`` and ``y0``:
 
         x_n = d + q**n * (x0 - d)
         y_n = d + q**n * (y0 - d) + n * a * q**(n - 1) * (x0 - d)
 
-    the second term on ``y`` being what the first stage feeds in over the run.
+    The second-stage response can peak inside a run. Its successive difference is
 
-    The peak needs more care than it does for one stage, because ``y`` is not
-    monotonic within a run: the cascade is what gives the model a rise time,
-    so brightness can climb after the drive has gone. It is however
-    *unimodal*, which is enough. Since ``y[k+1] - y[k] = a * (x[k] - y[k])``
-    and::
+        y[k+1] - y[k] = a * (x[k] - y[k])
 
-        x[k] - y[k] = q**(k - 1) * (q * (x0 - y0) - k * a * (x0 - d))
+    with
 
-    the bracket is linear in ``k`` and ``q**(k-1)`` is positive, so the
-    difference changes sign at most once across the run. A strictly interior
-    maximum therefore exists only when ``x0 > d`` -- stage one above the
-    drive, brightness still catching up -- and sits at the crossing
-    ``k* = q * (x0 - y0) / (a * (x0 - d))``. Evaluating ``y`` at the two ends
-    and either side of ``k*`` gives the exact interval peak in O(1), so no
-    part of this kernel walks the simulation clock per location.
+        x[k] - y[k]
+            = q**(k - 1) * (q * (x0 - y0) - k * a * (x0 - d)).
+
+    The term in parentheses is linear in ``k``, so the response has at most one
+    interior maximum. The kernel therefore evaluates the run endpoints and the
+    samples around that turning point instead of stepping through the whole run.
+
 
     Parameters
     ----------
@@ -417,14 +374,8 @@ cpdef alpha_fast(const float32[:, ::1] stim,
     run_c = np.empty(max_runs, dtype=np.float32)  # Py overhead
     run_r = np.empty(max_runs, dtype=np.float32)  # Py overhead
 
-    # Both states come out of a run as a weighted average of where the run
-    # started and the drive it ran at, never as a difference of two larger
-    # numbers. That matters most at the onset of a response, where `y` is
-    # orders of magnitude below both `drive` and the terms an algebraically
-    # equal grouping would subtract. The three weights on `y` are
-    # nonnegative and sum to one -- `1 - q**n - n*a*q**(n-1)` is the chance
-    # of at least two successes in `n` Bernoulli(`a`) trials -- so the result
-    # is bracketed by the values going in.
+    # Use nonnegative weights on y0, x0, and drive. This avoids cancellation
+    # between O(a) terms when the response first rises.
     log_q = c_log1p(-<double>dt_tau)
     with nogil:
         n_runs = _build_runs(t_stim, idx_t_percept, dt, n_sim, n_stim,
@@ -435,11 +386,8 @@ cpdef alpha_fast(const float32[:, ::1] stim,
             if n_run > max_len:
                 max_len = n_run
             if n_run == 1:
-                # A single step is the plain recurrence, and its weights are
-                # exact: `1 - q - a` is zero, not the 1-ulp residue `expm1`
-                # would leave. That residue is the whole output of the first
-                # step of a response, which has to be exactly zero -- stage
-                # two reads a stage one that has not moved yet.
+                # Preserve the exact one-step recurrence: stage two sees x0,
+                # so the drive coefficient is exactly zero
                 run_q[idx_run] = q
                 run_p[idx_run] = dt_tau
                 run_c[idx_run] = dt_tau
@@ -452,13 +400,10 @@ cpdef alpha_fast(const float32[:, ::1] stim,
                 run_q[idx_run] = <float32>d_qn
                 run_p[idx_run] = <float32>d_pn
                 run_c[idx_run] = <float32>d_cn
-                # Differenced in double, where the two are still far enough
-                # apart to leave the small result its significant digits:
+                # Form the small residual in double to avoid cancellation:
                 run_r[idx_run] = <float32>(d_pn - d_cn)
 
-    # The same three weights at every k a peak can land on. Only the peak
-    # search indexes these, and only at the steps either side of the turning
-    # point:
+    # Coefficients used to evaluate candidates around the turning point
     if reduce == REDUCE_PEAK:
         pow_q = np.empty(max_len + 1, dtype=np.float32)  # Py overhead
         pow_c = np.empty(max_len + 1, dtype=np.float32)  # Py overhead
@@ -510,38 +455,29 @@ cpdef alpha_fast(const float32[:, ::1] stim,
                 drive = -amp
                 if drive < 0.0:
                     drive = 0.0
-                # How far stage one starts above the drive. This is what the
-                # first stage feeds the second over the run, and its sign is
-                # also what decides whether the run can peak in its interior:
+                # An interior maximum is possible only when stage one starts
+                # above the drive:
                 u0 = x0 - drive
                 xn = x0 * qn + drive * pn
                 yn = y0 * qn + x0 * cn + drive * rn
-                # Brightness is bounded in [0, inf[. Both stages are convex
-                # combinations of nonnegative quantities, so this only ever
-                # catches rounding:
+                # # Guard against negative roundoff:
                 if yn < 0.0:
                     yn = 0.0
                 first[tid, idx_space] = xn
                 second[tid, idx_space] = yn
                 if reduce == REDUCE_PEAK:
-                    # `y` is unimodal across the run, so the ends always have
-                    # to be looked at. The first is one plain step from the
-                    # state the run began in:
+                    # Check the first and last samples of the run:
                     cand = y0 + dt_tau * (x0 - y0)
                     if cand > running[tid, idx_space]:
                         running[tid, idx_space] = cand
                     if yn > running[tid, idx_space]:
                         running[tid, idx_space] = yn
-                    # An interior maximum needs stage one to start above the
-                    # drive; otherwise the interior turning point is a
-                    # minimum and the ends already have it:
+                    # If an interior maximum exists, check the discrete samples
+                    # around its turning point:
                     if u0 > 0.0 and n_run > 2:
                         kstar = q * (x0 - y0) / (dt_tau * u0)
                         if kstar >= 1.0:
                             kk = <index_t>kstar + 1
-                            # Either side of the crossing, since which of the
-                            # two neighbouring steps is higher is decided by
-                            # a rounding of `kstar`:
                             for j in range(3):
                                 k = kk - 1 + j
                                 if k < 1:
