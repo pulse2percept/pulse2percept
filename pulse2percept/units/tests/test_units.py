@@ -507,11 +507,7 @@ def test_units_copy_and_pickle():
 
 
 class StaleDimension(object):
-    """Pickles as a Dimension whose exponent tuple has the wrong length
-
-    That is what a pickle from p2p 0.10 holds: six base dimensions, no
-    ``angle``.
-    """
+    """Pickles as a Dimension whose exponent tuple has the wrong length"""
 
     def __reduce__(self):
         return (copyreg._reconstructor, (Dimension, object, None),
@@ -520,7 +516,7 @@ class StaleDimension(object):
 
 def test_Dimension_rejects_stale_pickle():
     # An exponent tuple written against a different set of base dimensions
-    # would restore into the wrong dimensions, so it fails loudly instead:
+    # would restore into the wrong dimensions:
     with pytest.raises(ValueError):
         pickle.loads(pickle.dumps(StaleDimension()))
 

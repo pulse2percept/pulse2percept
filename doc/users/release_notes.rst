@@ -13,13 +13,11 @@ Highlights:
   :py:class:`~pulse2percept.vision.Scene` and
   :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
   residual vision and retinal prostheses (:pull:`854`).
-* New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
-  wherever p2p already took an angle in degrees.
 
 API changes:
 
-* ``dva`` remains a separate dimension from ``deg``: it measures visual angle,
-  so it is still rejected by angle-valued parameters.
+* New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
+  wherever p2p already took an angle in degrees.
 
 Bug fixes:
 
