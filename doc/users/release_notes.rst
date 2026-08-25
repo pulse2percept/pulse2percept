@@ -7,6 +7,17 @@ Release Notes
 v0.11.0 Residual Vision (unreleased)
 ------------------------------------
 
+Highlights:
+
+* New :py:mod:`pulse2percept.vision` introduces
+  :py:class:`~pulse2percept.vision.Scene` and
+  :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
+  residual vision and retinal prostheses (:pull:`854`).
+
+API changes:
+
+Bug fixes:
+
 v0.10.0 Encoders (2026-08-23)
 -----------------------------
 

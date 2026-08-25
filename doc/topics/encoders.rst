@@ -39,7 +39,9 @@ Encoding can also be explicit:
 
 Passing the implant samples the source at its electrode locations before pulse
 trains are constructed, so the resulting Stimulus has one row per implant
-electrode.
+electrode. That sampling is device-relative: the source is stretched across the
+implant's bounding box. Registering a picture against the visual field instead
+is a model's job, not an encoder's; see :ref:`topics-models-scene`.
 
 Amplitude and frequency encoding
 --------------------------------

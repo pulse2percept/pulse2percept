@@ -120,6 +120,13 @@ currents. Their values are dimensionless gray levels. A
 :py:class:`~pulse2percept.stimuli.StimulusEncoder` defines how those gray
 levels become electrical stimulation; see :ref:`topics-encoders`.
 
+An image is *device-relative*: its pixels are stretched across the implant's
+electrodes, and the picture means nothing beyond "this is what the device was
+shown". To place a picture in the visual field instead -- so that each
+electrode sees the part of it that electrode actually looks at -- wrap it in a
+:py:class:`~pulse2percept.vision.Scene` and give that to a model; see
+:ref:`topics-models-scene`.
+
 Plotting and time operations
 ----------------------------
 

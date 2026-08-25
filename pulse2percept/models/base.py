@@ -11,12 +11,13 @@ import multiprocessing
 from scipy.ndimage import gaussian_filter1d
 
 from ..implants import ProsthesisSystem
-from ..stimuli import Stimulus
+from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D, RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
                      um, uA)
+from ..vision import Scene
 from ..utils import (PrettyPrint, FreezeError, Frozen, Parametrized, bisect,
                      deprecated_alias, warn_deprecated_params,
                      rename_deprecated_params)
@@ -212,6 +213,87 @@ def _delivered(implant):
     stand_in = copy(implant)
     stand_in._stim = Stimulus(implant.stim)
     return stand_in
+
+
+def _device_scene(scene, implant):
+    """The visual scene the implant's own input pipeline sees"""
+    source = implant._preprocess(scene.source)
+    if source is scene.source:
+        return scene
+    if not isinstance(source, (ImageStimulus, VideoStimulus)):
+        raise TypeError(
+            f"This implant's 'preprocess' returned a "
+            f"{type(source).__name__}, which has no pixels to place in the "
+            f"visual field. Preprocessing a scene operates on the picture, so "
+            f"it has to give an ImageStimulus or a VideoStimulus back; "
+            f"turning gray levels into current is the encoder's job.")
+
+    def refuse(what, before, after):
+        raise ValueError(
+            f"This implant's 'preprocess' changed the scene's {what} from "
+            f"{before} to {after}. A scene's 'fov' describes the geometry of "
+            f"the source it was given, so preprocessing may change pixel "
+            f"values and channels, but not spatial shape or timing.")
+
+    if isinstance(source, VideoStimulus) != isinstance(scene.source,
+                                                       VideoStimulus):
+        refuse('kind', type(scene.source).__name__, type(source).__name__)
+    device = Scene(source, fov=scene.fov)
+    if device.shape != scene.shape:
+        refuse('shape', scene.shape, device.shape)
+    if scene.time is not None:
+        # Same instants, told in whichever unit preprocessing handed back:
+        mine = np.asarray(scene.time)
+        theirs = np.asarray(as_value(Quantity(np.asarray(device.time),
+                                              device.time_unit),
+                                     scene.time_unit, 'time'))
+        if mine.size != theirs.size:
+            refuse('frame count', mine.size, theirs.size)
+        if not np.allclose(mine, theirs):
+            refuse('frame times', f'{mine} {scene.time_unit}',
+                   f'{theirs} {scene.time_unit}')
+    return device
+
+
+def _scene_driven_implant(model, implant, gaze):
+    """A stand-in implant carrying what the scene delivers to its electrodes"""
+    scene = model.scene
+    if not model.has_space:
+        raise ValueError("A scene is registered against the retina, which "
+                         "needs a spatial model. This model has only a "
+                         "temporal one.")
+    vfmap = getattr(model.spatial, 'vfmap', None)
+    if not isinstance(vfmap, RetinalMap):
+        raise ValueError(
+            f"A scene reaches the electrodes through the model's 'vfmap', "
+            f"which has to say where on the retina each degree of visual "
+            f"angle lands. This model's is a {type(vfmap).__name__}; "
+            f"registering a scene against a cortical map is not implemented.")
+    if implant.encoder is None:
+        raise ValueError(
+            "A scene is a picture, and there is no principled default for "
+            "turning a gray level into current. Give the implant an "
+            "'encoder' (e.g. an AmplitudeEncoder) to say how.")
+    device_scene = _device_scene(scene, implant)
+    xy = implant.earray.coordinates(vfmap.tissue_unit)[:, :2].T
+    x_vf, y_vf = vfmap.ret_to_dva(*xy)
+    gray = device_scene._device_input(x_vf, y_vf, gaze=gaze)
+    if device_scene.time is None:
+        # A still scene is sampled as a one-frame movie; a `Stimulus` with no
+        # time axis wants that frame axis gone, or it reads the frame as a
+        # time point:
+        gray = gray[:, 0]
+    seen = Stimulus(gray, electrodes=implant.electrode_names,
+                    time=device_scene.time,
+                    metadata=device_scene.source.metadata)
+    trial = copy(implant)
+    # Preprocessing already ran, on the picture rather than on the values it
+    # samples to; everything else the setter does is still wanted:
+    trial.preprocess = False
+    # Through the setter, so the encoder, the safety checks and whatever else
+    # the device does to a stimulus all still happen:
+    trial.stim = seen._inherit_units(device_scene.source)
+    return trial
 
 
 def _blend_meridian(resp, grid, meridian, width):
@@ -821,7 +903,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         """
         if not self.is_built:
-            raise NotBuiltError("Yout must call ``build`` first.")
+            raise NotBuiltError("You must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, "
                             f"not {type(implant)}.")
@@ -1216,7 +1298,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
         """
         if not self.is_built:
-            raise NotBuiltError("Yout must call ``build`` first.")
+            raise NotBuiltError("You must call ``build`` first.")
         if stim is None:
             # Nothing to see here:
             return None
@@ -1316,8 +1398,11 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # by its duty cycle instead:
             resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
             t_percept = t_out
+        # A temporal model rewrites a spatial percept frame by frame; it does
+        # not move it in the visual field, so it hands the grid back on:
         return Percept(resp, space=None, time=t_percept,
-                       time_unit=self.time_unit, metadata={'stim': stim})
+                       time_unit=self.time_unit,
+                       metadata={'stim': stim})._inherit_space(stim)
 
     def _warn_if_blank(self, stim, resp):
         """Point out a percept that came out blank for a polarity reason
@@ -1435,9 +1520,23 @@ class Model(Frozen, PrettyPrint):
     Parameters
     ----------
     spatial: :py:class:`~pulse2percept.models.SpatialModel` or None
-        blah
+        The spatial model, which decides where in the visual field a stimulus
+        is seen. May be given as a class, which is then constructed from
+        ``params``.
     temporal: :py:class:`~pulse2percept.models.TemporalModel` or None
-        blah
+        The temporal model, which decides how the response evolves over time.
+        May be given as a class, which is then constructed from ``params``.
+    scene: :py:class:`~pulse2percept.vision.Scene` or None
+        What the eye is looking at. With a scene,
+        :py:meth:`~pulse2percept.models.Model.predict_percept` registers it
+        against the implant through this model's own ``vfmap`` rather than
+        taking a stimulus from the caller. Belongs to the composite rather
+        than to either component, and is not forwarded to them: it is what
+        connects the retinotopy one of them holds to the implant the other
+        never sees.
+
+        .. versionadded:: 0.11.0
+
     **params:
         Additional keyword arguments(e.g., ``verbose=True``) to be passed to
         either the spatial model, the temporal model, or both.
@@ -1501,7 +1600,7 @@ class Model(Frozen, PrettyPrint):
             return self.spatial.time_unit
         return BaseModel.time_unit
 
-    def __init__(self, spatial=None, temporal=None, **params):
+    def __init__(self, spatial=None, temporal=None, scene=None, **params):
         # A sub-model passed as a *class* is constructed from `params` below,
         # and `set_params` then hands the same dict to the resulting instance.
         # Both paths rewrite renamed parameters, so an old name reaching this
@@ -1530,6 +1629,13 @@ class Model(Frozen, PrettyPrint):
                 raise TypeError(f"'temporal' must be a TemporalModel instance, "
                                 f"not {type(temporal)}.")
         self.temporal = temporal
+        # The scene belongs to the composite, not to either component: it is
+        # what connects the retinotopy one of them holds to the implant the
+        # other never sees. Deliberately not forwarded to `set_params`.
+        if scene is not None and not isinstance(scene, Scene):
+            raise TypeError(f"'scene' must be a Scene object, not "
+                            f"{type(scene)}.")
+        self.scene = scene
         # Use user-specified parameter values instead of defaults:
         self.set_params(params)
 
@@ -1638,7 +1744,12 @@ class Model(Frozen, PrettyPrint):
         # the constructor, so those cannot be passed in as parameters:
         spatial = attributes.pop('spatial', None)
         temporal = attributes.pop('temporal', None)
+        # Same reason: a subclass constructor may splat its keyword arguments
+        # into the sub-models, which do not accept a scene.
+        scene = attributes.pop('scene', None)
         result = self.__class__(**attributes)
+        if scene is not None:
+            object.__setattr__(result, 'scene', scene)
         # Whatever the constructor made, replace it with our copies. Model
         # parameters (e.g. `rho`) are forwarded to the sub-models by
         # `__setattr__`, so they live in `spatial`/`temporal`, not in
@@ -1682,6 +1793,8 @@ class Model(Frozen, PrettyPrint):
     def _pprint_params(self):
         """Return a dictionary of parameters to pretty - print"""
         params = {'spatial': self.spatial, 'temporal': self.temporal}
+        if self.scene is not None:
+            params['scene'] = self.scene
         # Also display the parameters from the spatial/temporal model:
         if self.has_space:
             params.update(self.spatial._pprint_params())
@@ -1755,18 +1868,40 @@ class Model(Frozen, PrettyPrint):
             self.temporal.build()
         return self
 
-    def predict_percept(self, implant, t_percept=None):
+    def predict_percept(self, implant, t_percept=None, gaze=None, vmax=None,
+                        vmin=0):
         """Predict a percept
 
         .. important ::
 
             You must call ``build`` before calling ``predict_percept``.
 
+        Without a :py:class:`~pulse2percept.vision.Scene`, this predicts what
+        ``implant.stim`` produces, as it always has. With one, the model is
+        the glue: it follows each electrode out through its own ``vfmap`` to
+        the place in the scene that electrode sees, hands those values to the
+        implant's ``encoder``, and predicts the percept that results. The
+        caller's ``implant.stim`` is not touched.
+
+        If the scene also has a
+        :py:class:`~pulse2percept.vision.Scotoma`, the result is what the
+        person actually sees: intact native vision outside the lost region,
+        and the prosthetic percept inside it, as one RGB percept on the
+        scene's own pixel grid.
+
+        .. versionchanged:: 0.11.0
+
+            Added ``gaze``, ``vmax`` and ``vmin``, which are what a scene
+            needs and are rejected without one.
+
         Parameters
         ----------
         implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
             A valid prosthesis system. A stimulus can be passed via
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`. With a
+            scene the stimulus comes from the scene instead, and the implant
+            supplies its electrode locations, its ``encoder`` and its device
+            scheduling.
         t_percept: float or list of floats, optional
             The time points at which to output a percept, counted in this
             model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
@@ -1774,15 +1909,70 @@ class Model(Frozen, PrettyPrint):
             If None, ``implant.stim.time`` is used.
             May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
             :py:mod:`pulse2percept.units`.
+        gaze : (x, y) or (n_frames, 2), optional
+            Where the eye is pointing: the scene location that currently falls
+            on the fovea, in degrees of visual angle (e.g. ``(5, 0) * dva``).
+            Defaults to the origin. One pair fixates; one pair per frame moves
+            the eye between the frames of a video scene. The implant does not
+            move when gaze does, and neither does an eye-centered scotoma --
+            the scene moves past them. Requires a scene.
+
+            .. versionadded:: 0.11.0
+
+        vmax : float, optional
+            The perceived brightness that displays as white. Required when the
+            scene has a scotoma, because the result is then a picture rather
+            than model output: a percept is in arbitrary units, so nothing
+            here can guess the transfer function.
+
+            .. versionadded:: 0.11.0
+
+        vmin : float, optional
+            The perceived brightness that displays as black. Brightness maps
+            linearly onto [0, 1] between the two, and is clipped outside them.
+
+            .. versionadded:: 0.11.0
 
         Returns
         -------
         percept: :py:class:`~pulse2percept.models.Percept`
-            A Percept object whose ``data`` container has dimensions Y x X x T.
-            Will return None if ``implant.stim`` is None.
+            Without a scene, or with one that has no scotoma: a brightness
+            percept whose ``data`` has dimensions Y x X x T, and None if
+            ``implant.stim`` is None. With a scene that has a scotoma: an RGB
+            percept of dimensions Y x X x 3 x T on the scene's pixel grid.
+
         """
+        # Before the scene is sampled and a whole stimulus encoded from it:
+        # not being built is the caller's oldest mistake, and it should not be
+        # reported after two newer ones.
         if not self.is_built:
-            raise NotBuiltError("Yout must call ``build`` first.")
+            raise NotBuiltError("You must call ``build`` first.")
+        if self.scene is None:
+            for name, value in (('gaze', gaze), ('vmax', vmax)):
+                if value is not None:
+                    raise ValueError(
+                        f"'{name}' says where an implanted eye is looking in "
+                        f"a scene, and this model has none. Build it with "
+                        f"'scene' to place one.")
+            if vmin != 0:
+                raise ValueError("'vmin' maps a percept onto a display, which "
+                                 "only happens for a scene with a scotoma.")
+            return self._predict_percept(implant, t_percept)
+        if not isinstance(implant, ProsthesisSystem):
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
+        trial = _scene_driven_implant(self, implant, gaze)
+        resp = self._predict_percept(trial, t_percept)
+        if self.scene.scotoma is None or resp is None:
+            # Nothing is lost, so there is nothing to compose the percept
+            # into: what the implant produces is the whole answer.
+            return resp
+        return self.scene._compose(resp, vmax, vmin=vmin, gaze=gaze)
+
+    def _predict_percept(self, implant, t_percept=None):
+        """Predict the percept an implant's own stimulus produces"""
+        if not self.is_built:
+            raise NotBuiltError("You must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
                             f"{type(implant)}.")
@@ -1879,6 +2069,12 @@ class Model(Frozen, PrettyPrint):
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem, not "
                             f"{type(implant)}.")
+        if self.scene is not None:
+            # Thresholding rescales `implant.stim`, and with a scene that
+            raise NotImplementedError(
+                "find_threshold scales an implant's own stimulus, but this "
+                "model builds one from its scene instead. Drop the scene "
+                "(or use a second model without one) to find a threshold.")
         amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
         amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
         t_percept = as_value(t_percept, self.time_unit, 't_percept')

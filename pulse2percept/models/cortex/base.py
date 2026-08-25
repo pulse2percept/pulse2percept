@@ -446,7 +446,10 @@ class ScoreboardModel(Model):
 
     """
 
-    def __init__(self, **params):
+    def __init__(self, scene=None, **params):
+        # `scene` is composite state and this is the one standalone model that
+        # forwards its keyword arguments to the spatial model, which does not
+        # take one. Named here so it goes only to `Model.__init__`.
         super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(**params),
-                                              temporal=None,
+                                              temporal=None, scene=scene,
                                               **params)
