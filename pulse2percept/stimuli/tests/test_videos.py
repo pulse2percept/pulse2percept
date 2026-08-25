@@ -1,7 +1,7 @@
 from pulse2percept.stimuli import (AmplitudeEncoder, VideoStimulus,
                                    BostonTrain, GirlPool)
 from pulse2percept.stimuli.videos import _frame_index
-from pulse2percept.units import (DimensionMismatchError, Hz, kHz, dva, ms, s,
+from pulse2percept.units import (DimensionMismatchError, Hz, kHz, ms, s,
                                  uA)
 from skimage.color import rgb2gray
 from skimage.io import imsave
@@ -732,99 +732,3 @@ def test_VideoStimulus_does_not_alias_another_stimulus():
                           .reshape((4, 5, 3)))
     second = VideoStimulus(first)
     npt.assert_equal(np.shares_memory(first.data, second.data), False)
-
-
-def test_VideoStimulus_fov_none_by_default():
-    stim = VideoStimulus(np.zeros((4, 6, 3)))
-    npt.assert_equal(stim.fov, None)
-    with pytest.raises(ValueError):
-        stim.pixel_to_dva(0, 0)
-
-
-def test_VideoStimulus_fov_scalar_infers_aspect_ratio():
-    # A scalar is the horizontal FOV; the last axis is time, not geometry:
-    npt.assert_almost_equal(VideoStimulus(np.zeros((4, 8, 5)), fov=16).fov,
-                            (16, 8))
-    npt.assert_almost_equal(
-        VideoStimulus(np.zeros((4, 8, 3, 5)), fov=16 * dva).fov, (16, 8))
-
-
-def test_VideoStimulus_fov_tuple_and_errors():
-    npt.assert_almost_equal(
-        VideoStimulus(np.zeros((4, 8, 5)), fov=(20, 5) * dva).fov, (20, 5))
-    with pytest.raises(DimensionMismatchError):
-        VideoStimulus(np.zeros((4, 8, 5)), fov=16 * ms)
-    with pytest.raises(ValueError):
-        VideoStimulus(np.zeros((4, 8, 5)), fov=-1)
-    with pytest.raises(ValueError):
-        VideoStimulus(np.zeros((4, 8, 5)), fov=(1, 2, 3))
-
-
-@pytest.mark.parametrize('shape', [(4, 8), (5, 7)])
-def test_VideoStimulus_pixel_to_dva_centers(shape):
-    n_rows, n_cols = shape
-    stim = VideoStimulus(np.zeros((n_rows, n_cols, 3)), fov=(n_cols, n_rows))
-    x, y = stim.pixel_to_dva([0, n_cols - 1], [0, n_rows - 1])
-    npt.assert_almost_equal(x, [-n_cols / 2 + 0.5, n_cols / 2 - 0.5])
-    # Row 0 is the top of the frame and therefore the largest y:
-    npt.assert_almost_equal(y, [n_rows / 2 - 0.5, -n_rows / 2 + 0.5])
-    col, row = np.meshgrid(np.arange(n_cols), np.arange(n_rows))
-    npt.assert_almost_equal(stim.dva_to_pixel(*stim.pixel_to_dva(col, row)),
-                            (col, row))
-
-
-def test_VideoStimulus_fov_survives_transforms():
-    stim = VideoStimulus(np.random.rand(4, 8, 3, 5), fov=(16, 8))
-    npt.assert_almost_equal(stim.resize((8, 16)).fov, (16, 8))
-    npt.assert_almost_equal(stim.rgb2gray().fov, (16, 8))
-    npt.assert_almost_equal(stim.invert().fov, (16, 8))
-    npt.assert_almost_equal(stim.rgb2gray().rotate(30).fov, (16, 8))
-    npt.assert_almost_equal(VideoStimulus(stim).fov, (16, 8))
-    npt.assert_almost_equal(VideoStimulus(stim, fov=(4, 2)).fov, (4, 2))
-    # Cropping in time leaves the frame geometry alone (the extra row and
-    # column go because `crop` cannot currently keep the last of either):
-    npt.assert_almost_equal(
-        stim.crop(right=1, bottom=1, idx_time=(1, 3)).fov, (14, 6))
-
-
-def test_VideoStimulus_crop_updates_fov():
-    stim = VideoStimulus(np.random.rand(4, 8, 5), fov=(16, 8))
-    # 2 dva per pixel here, and `crop` cannot currently keep the last row or
-    # column of a video, hence the extra right=1/bottom=1:
-    npt.assert_almost_equal(stim.crop(left=2, right=1, bottom=1).fov, (10, 6))
-    npt.assert_almost_equal(stim.crop(top=1, bottom=1, right=1).fov, (14, 4))
-
-
-def test_VideoStimulus_apply_drops_fov_on_reshape():
-    stim = VideoStimulus(np.random.rand(4, 8, 5), fov=(16, 8))
-    npt.assert_almost_equal(stim.apply(lambda x: x * 0.5).fov, (16, 8))
-    npt.assert_equal(stim.apply(lambda x: x[:2, :4]).fov, None)
-
-
-def test_VideoStimulus_fov_of_builtin_videos():
-    npt.assert_almost_equal(BostonTrain(resize=(8, 16), fov=32).fov, (32, 16))
-    npt.assert_equal(BostonTrain(resize=(8, 16)).fov, None)
-
-
-def test_VideoStimulus_copy_renames_a_changed_pixel_grid():
-    stim = VideoStimulus(np.random.rand(4, 8, 3, 5), fov=(16, 8))
-    # Copied verbatim, a pixel is still the same pixel and keeps its name:
-    same = VideoStimulus(stim)
-    npt.assert_equal(same.vid_shape, (4, 8, 3, 5))
-    npt.assert_array_equal(same.electrodes, stim.electrodes)
-    npt.assert_almost_equal(same.fov, (16, 8))
-    # A resize builds a different grid, so the names are generated afresh
-    # rather than inherited from a grid that no longer exists:
-    smaller = VideoStimulus(stim, resize=(2, 4))
-    npt.assert_equal(smaller.vid_shape, (2, 4, 3, 5))
-    npt.assert_equal(len(smaller.electrodes), 24)
-    npt.assert_almost_equal(smaller.fov, (16, 8))
-    # Same for dropping the color channels:
-    gray = VideoStimulus(stim, as_gray=True)
-    npt.assert_equal(gray.vid_shape, (4, 8, 5))
-    npt.assert_equal(len(gray.electrodes), 32)
-    npt.assert_almost_equal(gray.fov, (16, 8))
-    # An explicit name list still wins:
-    named = VideoStimulus(stim, resize=(1, 2), as_gray=True,
-                          electrodes=['a', 'b'])
-    npt.assert_array_equal(named.electrodes, ['a', 'b'])

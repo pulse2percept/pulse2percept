@@ -11,88 +11,9 @@ from .rasters import Raster
 from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
                        StimulusEncoder, VideoStimulus)
 from ..stimuli.base import _describe_unit
-from ..stimuli.encoders import _as_luminance
 from ..stimuli.pulse_trains import _as_threshold_amp
-from ..units import DimensionMismatchError, as_value, dva, uA, um, xTh
+from ..units import DimensionMismatchError, as_value, uA, um, xTh
 from ..utils import PrettyPrint
-
-
-def _source_frames(stim):
-    """An image or video as a dense (rows, cols[, 3], n_frames) array
-
-    One layout for both, so that everything downstream can treat a still as a
-    one-frame movie. An alpha channel is blended against black here, as it is
-    everywhere else in p2p, because nothing further along knows what to do
-    with it.
-    """
-    if isinstance(stim, ImageStimulus):
-        frames = stim.data.reshape(stim.img_shape)[..., np.newaxis]
-    else:
-        frames = stim.data.reshape(stim.vid_shape)
-    if frames.ndim == 3:
-        # Grayscale: give it the channel axis the color path already has
-        frames = frames[:, :, np.newaxis, :]
-    if frames.shape[2] == 4:
-        frames = np.clip(frames[:, :, :3] * frames[:, :, 3:4], 0, 1)
-    return frames
-
-
-def _interpolate(grid, frames, points):
-    """Sample ``frames`` at ``points``, carrying the trailing axes along
-
-    One interpolator covers every channel and every frame: the grid is the
-    leading two axes, and anything past them comes back as trailing axes of
-    the result. Building one per frame instead meant re-deriving the same grid
-    for each of them.
-    """
-    interpolator = RegularGridInterpolator(grid, frames, method='linear',
-                                           bounds_error=False, fill_value=0)
-    return interpolator(points)
-
-
-def _drop_gray_axis(values):
-    """Give back the (n_electrodes, n_frames) a grayscale source samples to
-
-    Sampling runs on one (rows, cols, channels, frames) layout so that color
-    and gray take the same path through the interpolator; a single channel is
-    not a channel once it comes out the other side.
-    """
-    return values[:, 0] if values.shape[1] == 1 else values
-
-
-def _clip_to_frame(points, shape):
-    """Clip pixel coordinates onto the frame, and say which were on it
-
-    A source's field of view is its *outer* extent, so it reaches half a pixel
-    past the outermost pixel centers (see ``pixel_to_dva``). Interpolation
-    stops at those centers, and the border strip between them and the edge
-    still belongs to the scene: a point there takes the value of the pixel it
-    is inside. Past the outer edge there is no scene to sample, which is what
-    ``inside`` is for -- nothing is extrapolated.
-    """
-    points = np.asarray(points, dtype=float)
-    edges = np.asarray(shape[:2], dtype=float) - 0.5
-    inside = np.all((points >= -0.5) & (points <= edges), axis=1)
-    # A point off the frame is not interpolated at all, so anything goes here
-    # as long as it is on the grid:
-    on_grid = np.where(inside[:, np.newaxis], points, 0.0)
-    return np.clip(on_grid, 0.0, edges - 0.5), inside
-
-
-def _gaze_points(gaze, n_frames):
-    """Gaze as one (x, y) in dva, or one per frame"""
-    if gaze is None:
-        return np.zeros((1, 2))
-    gaze = np.atleast_2d(np.asarray(as_value(gaze, dva, 'gaze'), dtype=float))
-    if gaze.shape not in {(1, 2), (n_frames, 2)}:
-        raise ValueError(f"'gaze' must be an (x, y) pair in dva, or one per "
-                         f"frame ({n_frames} of them), not an array of shape "
-                         f"{gaze.shape}.")
-    if not np.all(np.isfinite(gaze)):
-        # Left to reach the interpolator, this would come back as a blank
-        # percept rather than as a question about where the eye was pointing:
-        raise ValueError(f"'gaze' must be finite, not {gaze.tolist()}.")
-    return gaze
 
 
 class ProsthesisSystem(PrettyPrint):
@@ -487,119 +408,51 @@ class ProsthesisSystem(PrettyPrint):
         """
         return stim
 
-    def _sample_source(self, stim, vfmap=None, gaze=None):
-        """One source value per electrode per frame, color channels intact
+    def reshape_stim(self, stim):
+        if isinstance(stim, (ImageStimulus, VideoStimulus)):
+            # Convert to grayscale:
+            img = stim.rgb2gray()
 
-        The spatial half of turning a picture into stimulation, and the seam a
-        color encoder would need: what an electrode sees is sampled here, and
-        reducing three channels to one number is the caller's business.
+            # Extract electrode coordinates, in the same units the image grid
+            # below is laid out in:
+            x, y = self.earray.coordinates(um)[:, :2].T
 
-        Where the electrodes land in the source depends on whether the source
-        says what it is a picture *of*:
+            # Define image coordinate space
+            if isinstance(stim, ImageStimulus):
+                img_h, img_w = img.img_shape
+                data = img.data.reshape(img_h, img_w)  # Ensure 2D format
+            elif isinstance(stim, VideoStimulus):
+                img_h, img_w, n_frames = img.vid_shape
+                data = img.data.reshape(img_h, img_w, n_frames)  # 3D format
 
-        *  Without a ``fov`` it is a device-relative image, stretched across
-           the implant's bounding box. This is what p2p has always done.
-        *  With a ``fov`` it is a scene in visual-field coordinates, and each
-           electrode is followed out through ``vfmap`` to the place in that
-           scene it actually sees.
 
-        Returns
-        -------
-        values : (n_electrodes, n_frames) or (n_electrodes, 3, n_frames) array
-        """
-        if not isinstance(stim, (ImageStimulus, VideoStimulus)):
+            x_min, x_max = np.min(x), np.max(x)
+            y_min, y_max = np.min(y), np.max(y)
+
+            # Create grid along original image axes
+            img_x = np.linspace(x_min, x_max, img_w)
+            img_y = np.linspace(y_min, y_max, img_h)
+
+            # One interpolator covers every frame: the grid is the leading two
+            # axes of `data`, and anything past them -- the frame axis of a
+            # video -- is carried along, so a video comes back as
+            # (n_electrodes, n_frames) from a single call. Building one per
+            # frame instead meant re-deriving the same grid for each of them.
+            interpolator = RegularGridInterpolator(
+                (img_y, img_x), data, method='linear',
+                bounds_error=False, fill_value=0
+            )
+            pixel_values = interpolator(np.vstack((y, x)).T)
+
+            return Stimulus(
+                pixel_values, electrodes=self.electrode_names,
+                time=stim.time, metadata=stim.metadata)._inherit_units(stim)
+
+        else:
             raise ValueError(
-                f"Number of electrodes in the stimulus "
-                f"({len(stim.electrodes)}) does not match the number of "
-                f"electrodes in the implant ({self.n_electrodes}).")
-        frames = _source_frames(stim)
-        # Electrode coordinates, in the units the retinal side of a map speaks:
-        x, y = self.earray.coordinates(um)[:, :2].T
-        if stim.fov is None:
-            if vfmap is not None or gaze is not None:
-                raise ValueError(
-                    f"'vfmap'/'gaze' place a scene in the visual field, "
-                    f"but this {type(stim).__name__} has no field of view to "
-                    f"place and would be stretched across the implant "
-                    f"instead. Build it with 'fov' to say what it is a "
-                    f"picture of.")
-            # Device-relative: the image spans the electrode bounding box.
-            # Row 0 lands at the smallest retinal y, as it always has.
-            n_rows, n_cols = frames.shape[:2]
-            grid = (np.linspace(y.min(), y.max(), n_rows),
-                    np.linspace(x.min(), x.max(), n_cols))
-            return _drop_gray_axis(
-                _interpolate(grid, frames, np.column_stack((y, x))))
-        if vfmap is None:
-            raise ValueError(
-                f"This {type(stim).__name__} states a field of view "
-                f"({stim.fov[0]:g} x {stim.fov[1]:g} dva), so it is a scene "
-                f"in visual-field coordinates rather than a picture to "
-                f"stretch across the implant. Sampling it needs a retinal "
-                f"map: pass 'vfmap' (e.g. the model's) to the encoder. Build "
-                f"the image without 'fov' for the device-relative behavior.")
-        # retina (um) -> eye-centered visual field (dva) -> scene (dva), where
-        # `gaze` is the scene location currently falling on the fovea:
-        x_vf, y_vf = vfmap.ret_to_dva(x, y)
-        gaze = _gaze_points(gaze, frames.shape[-1])
-        # The pixel grid is the one place this needs to know about geometry;
-        # the source owns the rest of it (see `dva_to_pixel`):
-        grid = (np.arange(frames.shape[0], dtype=float),
-                np.arange(frames.shape[1], dtype=float))
-        sampled = []
-        # One gaze samples every frame at once; a gaze per frame samples each
-        # frame where the eye was pointing when it came up.
-        for f, (gx, gy) in enumerate(gaze):
-            col, row = stim.dva_to_pixel(x_vf + gx, y_vf + gy)
-            points, inside = _clip_to_frame(np.column_stack((row, col)),
-                                            frames.shape)
-            values = _interpolate(grid, frames if len(gaze) == 1
-                                  else frames[..., f], points)
-            values[~inside] = 0
-            sampled.append(values)
-        if len(sampled) == 1:
-            return _drop_gray_axis(sampled[0])
-        return _drop_gray_axis(np.stack(sampled, axis=-1))
-
-    def reshape_stim(self, stim, vfmap=None, gaze=None):
-        """Sample an image or video at this implant's electrode locations
-
-        .. versionchanged:: 0.11.0
-
-            Added ``vfmap`` and ``gaze``, which register a source that states a
-            ``fov`` against the visual field instead of stretching it across
-            the implant.
-
-        Parameters
-        ----------
-        stim : ImageStimulus or VideoStimulus
-            The source to sample. See
-            :py:class:`~pulse2percept.stimuli.ImageStimulus`.
-        vfmap : :py:class:`~pulse2percept.topography.RetinalMap`, optional
-            The retinotopy to follow each electrode out into the visual field,
-            typically a model's ``vfmap``. Required for a source that states a
-            ``fov``, and rejected for one that does not.
-        gaze : (x, y) or (n_frames, 2), optional
-            Where the eye is pointing: the scene location that falls on the
-            fovea, in degrees of visual angle. Defaults to the origin. One pair
-            fixates for the whole source; one pair per frame moves the eye
-            between frames.
-
-        Returns
-        -------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            One gray level per electrode per frame.
-        """
-        values = _as_luminance(self._sample_source(stim, vfmap=vfmap,
-                                                   gaze=gaze))
-        if stim.time is None:
-            # Sampling treats a still as a one-frame movie; a `Stimulus` with
-            # no time axis wants that frame axis gone, or it reads the frame
-            # as a time point:
-            values = values[:, 0]
-        return Stimulus(values, electrodes=self.electrode_names,
-                        time=stim.time,
-                        metadata=stim.metadata)._inherit_units(stim)
+                f"Number of electrodes in the stimulus ({len(stim.electrodes)}) "
+                f"does not match the number of electrodes in the implant ({self.n_electrodes})."
+            )
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim_cmap=False):
         """Plot

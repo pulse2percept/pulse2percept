@@ -13,7 +13,8 @@ import pytest
 
 from pulse2percept.implants import (ElectrodeGrid, PointSource,
                                     ProsthesisSystem)
-from pulse2percept.models import Model, ScoreboardModel, ScoreboardSpatial
+from pulse2percept.models import (Model, NotBuiltError, ScoreboardModel,
+                                  ScoreboardSpatial)
 from pulse2percept.models.base import _scene_driven_implant
 from pulse2percept.models.cortex import ScoreboardModel as CortexScoreboard
 from pulse2percept.percepts import Percept
@@ -211,6 +212,17 @@ def test_a_scene_needs_an_encoder_and_a_retina():
     temporal = Model(temporal=Nanduri2012Temporal(), scene=scene).build()
     with pytest.raises(ValueError):
         temporal.predict_percept(implant_at(0, 0))
+
+
+def test_an_unbuilt_model_says_so_before_it_samples_anything():
+    """The oldest mistake is reported first, not after two newer ones"""
+    unbuilt = ScoreboardModel(scene=scene_of(), rho=200, xrange=(-3, 3),
+                              yrange=(-3, 3), step=1)
+    with pytest.raises(NotBuiltError):
+        unbuilt.predict_percept(implant_at(0, 0))
+    # ... including when there is a newer mistake waiting behind it:
+    with pytest.raises(NotBuiltError):
+        unbuilt.predict_percept(implant_at(0, 0, encoder=False))
 
 
 def test_a_scene_must_be_a_scene():

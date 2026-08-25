@@ -9,31 +9,28 @@ v0.11.0 Residual Vision (unreleased)
 
 New features:
 
-* :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-  :py:class:`~pulse2percept.stimuli.VideoStimulus` accept a ``fov`` in degrees
-  of visual angle, and expose ``pixel_to_dva``/``dva_to_pixel`` to convert
-  between pixels and visual-field coordinates.
+* New :py:mod:`pulse2percept.vision`, which describes the visual world an
+  implanted eye is looking at: a :py:class:`~pulse2percept.vision.Scene` says
+  what is present and how much of the visual field it covers, and a
+  :py:class:`~pulse2percept.vision.Scotoma` says where native vision is lost
+  (:issue:`668`).
+
+* :py:class:`~pulse2percept.models.Model` accepts a ``scene``, and
+  :py:meth:`~pulse2percept.models.Model.predict_percept` takes a ``gaze``. The
+  model follows each electrode out through its own ``vfmap`` to the part of
+  the scene it sees, so registering an image against an implant no longer
+  involves any coordinate arithmetic in user code.
+
+* A scene with a scotoma makes
+  :py:meth:`~pulse2percept.models.Model.predict_percept` return what the
+  person actually sees -- intact native vision outside the lost region and the
+  prosthetic percept inside it -- as one RGB percept. ``vmax`` says which
+  model brightness displays as white, and is required rather than inferred.
 
 * :py:class:`~pulse2percept.percepts.Percept` supports RGB percepts of shape
   ``(Y, X, 3, T)`` alongside the ``(Y, X, T)`` brightness percepts models
   produce; :py:meth:`~pulse2percept.percepts.Percept.load` reads one with
   ``as_gray=False``.
-
-* An image or video that states a ``fov`` is now registered against the visual
-  field rather than stretched across the implant:
-  :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode` and
-  :py:meth:`~pulse2percept.implants.ProsthesisSystem.reshape_stim` take a
-  ``vfmap`` and a ``gaze``, and spatial sampling keeps the source's color
-  channels until the encoder reduces them. The
-  :py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` shorthand takes them
-  too, and encoding a scene without an implant to place it now raises.
-
-* New :py:mod:`pulse2percept.vision` with
-  :py:class:`~pulse2percept.vision.Scotoma`, an eye-centered map of lost
-  vision in degrees of visual angle, and
-  :py:func:`~pulse2percept.vision.compose_hybrid_vision`, which combines a
-  scene, a scotoma and a prosthetic percept into one RGB percept
-  (:issue:`668`).
 
 v0.10.0 Encoders (2026-08-23)
 -----------------------------

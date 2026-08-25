@@ -870,7 +870,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         """
         if not self.is_built:
-            raise NotBuiltError("Yout must call ``build`` first.")
+            raise NotBuiltError("You must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, "
                             f"not {type(implant)}.")
@@ -1265,7 +1265,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
         """
         if not self.is_built:
-            raise NotBuiltError("Yout must call ``build`` first.")
+            raise NotBuiltError("You must call ``build`` first.")
         if stim is None:
             # Nothing to see here:
             return None
@@ -1892,6 +1892,11 @@ class Model(Frozen, PrettyPrint):
             percept of dimensions Y x X x 3 x T on the scene's pixel grid.
 
         """
+        # Before the scene is sampled and a whole stimulus encoded from it:
+        # not being built is the caller's oldest mistake, and it should not be
+        # reported after two newer ones.
+        if not self.is_built:
+            raise NotBuiltError("You must call ``build`` first.")
         if self.scene is None:
             for name, value in (('gaze', gaze), ('vmax', vmax)):
                 if value is not None:
@@ -1917,7 +1922,7 @@ class Model(Frozen, PrettyPrint):
     def _predict_percept(self, implant, t_percept=None):
         """Predict the percept an implant's own stimulus produces"""
         if not self.is_built:
-            raise NotBuiltError("Yout must call ``build`` first.")
+            raise NotBuiltError("You must call ``build`` first.")
         if not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
                             f"{type(implant)}.")

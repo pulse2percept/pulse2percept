@@ -39,7 +39,9 @@ Encoding can also be explicit:
 
 Passing the implant samples the source at its electrode locations before pulse
 trains are constructed, so the resulting Stimulus has one row per implant
-electrode.
+electrode. That sampling is device-relative: the source is stretched across the
+implant's bounding box. Registering a picture against the visual field instead
+is a model's job, not an encoder's; see :ref:`topics-models-scene`.
 
 Amplitude and frequency encoding
 --------------------------------
@@ -80,52 +82,6 @@ whether encoding happened explicitly or during assignment to the implant.
 
 Waveform samples are generated lazily, so encoding a large image or video does
 not allocate the full electrical waveform until something needs it.
-
-Where the electrodes look
--------------------------
-
-By default an image is *device-relative*: it is stretched across the implant's
-electrodes, and the picture means nothing beyond "this is what the device was
-shown". An image that states a ``fov`` (see :ref:`topics-stimuli`) is instead a
-scene in the visual field, and registering it needs two more things: the
-retinotopy that says where each electrode looks, and where the eye is pointing.
-
-.. code-block:: python
-
-    from pulse2percept.units import dva
-
-    scene = p2p.stimuli.ImageStimulus('scene.png', fov=30 * dva)
-    model = p2p.models.ScoreboardModel(rho=200).build()
-
-    implant.stim = implant.encoder.encode(
-        scene, implant=implant, vfmap=model.vfmap, gaze=(0, 0) * dva,
-    )
-
-Each electrode is followed out along this chain::
-
-    retinal coordinate (um)
-      -> vfmap.ret_to_dva -> eye-centered visual field (dva)
-      -> + gaze            -> scene coordinate (dva)
-      -> sample the image
-
-``gaze`` is the scene location that currently falls on the fovea, so
-``scene = visual field + gaze``. The implant does not move when gaze does, and
-neither does an eye-centered :py:class:`~pulse2percept.vision.Scotoma`: the two
-hold their positions relative to each other while the scene moves past them.
-Pass one ``(x, y)`` to fixate, or one per video frame to move the eye between
-frames.
-
-A scene is never silently stretched. Encoding an image that states a ``fov``
-without an ``implant`` and a ``vfmap`` raises, rather than producing a
-spatially wrong stimulus, and passing a ``vfmap`` for an image that has no
-``fov`` raises for the same reason.
-:py:meth:`~pulse2percept.stimuli.ImageStimulus.encode` and
-:py:meth:`~pulse2percept.stimuli.VideoStimulus.encode` take ``vfmap`` and
-``gaze`` too, so the shorthand registers exactly like the long form.
-
-Spatial sampling preserves the source's color channels; today's encoders are
-luminance encoders and reduce them to one number per electrode before
-modulating.
 
 Device constraints
 ------------------

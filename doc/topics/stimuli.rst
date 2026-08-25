@@ -120,29 +120,12 @@ currents. Their values are dimensionless gray levels. A
 :py:class:`~pulse2percept.stimuli.StimulusEncoder` defines how those gray
 levels become electrical stimulation; see :ref:`topics-encoders`.
 
-An image or video can also state the field of view it subtends, which places
-its pixels in the visual field rather than merely in a pixel grid:
-
-.. code-block:: python
-
-    from pulse2percept.stimuli import ImageStimulus
-    from pulse2percept.units import dva
-
-    scene = ImageStimulus('scene.png', resize=(200, 400), fov=30 * dva)
-    scene.fov                      # (30.0, 15.0) degrees, width x height
-    scene.pixel_to_dva(0, 0)       # (-14.9625, 7.4625): top-left pixel center
-    scene.dva_to_pixel(0, 0)       # (199.5, 99.5): the center of the image
-
-``fov`` is the *outer* extent of the image, centered on it, and a scalar gives
-the horizontal FOV with square angular pixels. Pixel coordinates address pixel
-centers, so they lie half an angular pixel inside that extent, and row 0 sits
-at positive ``y``.
-
-A :py:meth:`~pulse2percept.stimuli.ImageStimulus.resize` keeps the field of
-view and resamples the pixels, while a
-:py:meth:`~pulse2percept.stimuli.ImageStimulus.crop` keeps the angular pixel
-size and shrinks the field of view. A cropped stimulus is centered on its new
-frame; it does not retain an offset relative to the original image.
+An image is *device-relative*: its pixels are stretched across the implant's
+electrodes, and the picture means nothing beyond "this is what the device was
+shown". To place a picture in the visual field instead -- so that each
+electrode sees the part of it that electrode actually looks at -- wrap it in a
+:py:class:`~pulse2percept.vision.Scene` and give that to a model; see
+:ref:`topics-models-scene`.
 
 Plotting and time operations
 ----------------------------

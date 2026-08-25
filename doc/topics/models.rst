@@ -78,6 +78,92 @@ an implant containing a stimulus.
 of ``predict_percept`` is a
 :py:class:`~pulse2percept.percepts.Percept`.
 
+.. _topics-models-scene:
+
+Simulating a visual scene
+-------------------------
+
+.. versionadded:: 0.11.0
+
+The workflow above starts from a stimulus you built yourself. To start from
+what someone is *looking at* instead, give the model a
+:py:class:`~pulse2percept.vision.Scene`:
+
+.. code-block:: python
+
+    from pulse2percept.units import dva
+
+    scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva)
+
+    implant = p2p.implants.ArgusII()
+    implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
+
+    model = p2p.models.ScoreboardModel(scene=scene, rho=200).build()
+    percept = model.predict_percept(implant, gaze=(0, 0) * dva)
+
+Four objects divide the problem between them:
+
+=========  ==================================================================
+Scene      What is visually present, and where native vision is lost.
+Implant    Device geometry and encoding constraints.
+Model      Knows the retinotopy, and so connects Scene to Implant.
+Percept    What the simulated observer sees.
+=========  ==================================================================
+
+The model is the glue because it is the only object that holds a retinotopy
+*and* is handed an implant. Each electrode is followed out along this chain::
+
+    retinal coordinate (um)
+      -> vfmap.ret_to_dva -> eye-centered visual field (dva)
+      -> + gaze            -> scene coordinate (dva)
+      -> sample the scene
+
+``gaze`` is the scene location that currently falls on the fovea, so
+``scene = visual field + gaze``. The implant does not move when gaze does, and
+neither does an eye-centered
+:py:class:`~pulse2percept.vision.Scotoma`: the scene moves past them. Pass one
+``(x, y)`` to fixate, or one per video frame to move the eye between frames.
+
+The sampled values go to ``implant.encoder``, so the implant still decides how
+a gray level becomes current and which electrodes may pulse when. Prediction
+does not touch ``implant.stim``: it runs against a stand-in copy, so asking
+what someone sees never rewrites their device.
+
+Scene registration is retinal. A model whose ``vfmap`` is a cortical map
+raises rather than pretending cortical registration is solved, and so does an
+implant with no ``encoder``.
+
+Residual vision
+~~~~~~~~~~~~~~~
+
+If the scene also carries a :py:class:`~pulse2percept.vision.Scotoma`, the
+result is what the person actually sees -- intact native vision outside the
+lost region, and the prosthetic percept inside it -- as a single RGB
+:py:class:`~pulse2percept.percepts.Percept` on the scene's own pixel grid:
+
+.. code-block:: python
+
+    scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva,
+                             scotoma=p2p.vision.Scotoma.circle(8 * dva))
+    model = p2p.models.ScoreboardModel(scene=scene, rho=200).build()
+
+    percept = model.predict_percept(implant, gaze=(0, 0) * dva, vmax=50)
+
+``vmax`` is required here and is not inferred: model brightness is in
+arbitrary units, so which brightness counts as white is a claim about the
+display, not about the model. Holding it fixed across calls is what keeps two
+gazes comparable.
+
+The scotoma describes *native* vision only. What the implant is given to
+encode is sampled from the scene itself, inside the lost region as well as
+outside it: a camera does not go blind where its wearer has.
+
+.. note::
+
+    ``find_threshold`` rescales an implant's own stimulus, which a
+    scene-driven model does not take from the caller. It raises rather than
+    silently ignoring the scene.
+
 Percept data layouts
 --------------------
 

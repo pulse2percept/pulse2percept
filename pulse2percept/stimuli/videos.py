@@ -14,7 +14,6 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus, _adoptable
-from ._geometry import HasFieldOfView, resolve_fov
 from ..units import as_value, dimensionless, ms
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
@@ -76,7 +75,7 @@ def _frame_index(t, fps):
     return int(np.ceil(t * fps / MS_PER_S - _FRAME_TOL))
 
 
-class VideoStimulus(HasFieldOfView, Stimulus):
+class VideoStimulus(Stimulus):
     """VideoStimulus
 
     A stimulus made from a movie file, where each pixel gets assigned to an
@@ -149,21 +148,8 @@ class VideoStimulus(HasFieldOfView, Stimulus):
 
         .. versionadded:: 0.10.0
 
-    fov : float, (width, height), or None; optional
-        The field of view each frame subtends, in degrees of visual angle
-        (e.g., ``30 * dva``). A scalar gives the horizontal FOV, and the
-        vertical one follows from the frame's aspect ratio. The FOV is the
-        outer extent of the frame, centered on it; pixel coordinates address
-        pixel centers, half an angular pixel inside that extent, and row 0 lies
-        at positive ``y``. See
-        :py:meth:`~pulse2percept.stimuli.VideoStimulus.pixel_to_dva`.
-
-        Without a FOV, the video's pixels have no visual-field geometry.
-
-        .. versionadded:: 0.11.0
-
     """
-    __slots__ = ('vid_shape', '_next_frame', '_fov')
+    __slots__ = ('vid_shape', '_next_frame')
 
     #: Pixel intensities are gray levels in [0, 1], not currents; see
     #: :py:class:`~pulse2percept.stimuli.ImageStimulus`.
@@ -171,17 +157,13 @@ class VideoStimulus(HasFieldOfView, Stimulus):
 
     def __init__(self, source, format=None, resize=None, as_gray=False,
                  electrodes=None, time=None, metadata=None, compress=False,
-                 start_time=None, stop_time=None, fov=None):
+                 start_time=None, stop_time=None):
         if metadata is None:
             metadata = {}
         elif not isinstance(metadata, dict):
             metadata = {'user': metadata}
         # The buffer the caller still holds, if any (see below):
         borrowed = None
-        # The video whose pixel names this one may inherit; decided once the
-        # final frame shape is known, because `as_gray` and `resize` build a
-        # different grid:
-        parent = None
         if isinstance(source, str):
             vid, meta = _read_video(source, format, start_time, stop_time)
             # Move frame index to the last dimension:
@@ -200,13 +182,10 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             vid = source.data.reshape(source.vid_shape)
             borrowed = source.data
             metadata.update(source.metadata)
-            parent = source
+            if electrodes is None:
+                electrodes = source.electrodes
             if time is None:
                 time = source.time
-            if fov is None:
-                # A resize keeps the angular extent of a frame, so the FOV
-                # survives every way of building one video from another:
-                fov = source.fov
         elif isinstance(source, np.ndarray):
             vid = source
             borrowed = source
@@ -242,18 +221,11 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             vid = vid_resize(vid, (height, width, *vid.shape[2:]))
         # Store the original image shape for resizing and color conversion:
         self.vid_shape = vid.shape
-        self._fov = resolve_fov(fov, vid.shape[0], vid.shape[1])
         if electrodes is None:
-            grid = self.vid_shape[:-1]
-            if parent is not None and parent.vid_shape[:-1] == grid:
-                # A pixel keeps its name only for as long as it is the same
-                # pixel:
-                electrodes = parent.electrodes
-            else:
-                # One electrode per pixel, named after its place in the frame
-                # ('A1', 'C12', 'A1_R' for a color video). The last axis holds
-                # the frames, which are the time component and not electrodes:
-                electrodes = ElectrodeNames(grid)
+            # One electrode per pixel, named after its place in the frame
+            # ('A1', 'C12', 'A1_R' for a color video). The last axis holds the
+            # frames, which are the time component and not electrodes:
+            electrodes = ElectrodeNames(self.vid_shape[:-1])
         if borrowed is not None and np.may_share_memory(vid, borrowed):
             vid = vid.copy()
         super().__init__(_adoptable(vid.reshape((-1, vid.shape[-1]))),
@@ -301,12 +273,8 @@ class VideoStimulus(HasFieldOfView, Stimulus):
 
     def _pprint_params(self):
         params = super()._pprint_params()
-        params.update({'vid_shape': self.vid_shape, 'fov': self.fov})
+        params.update({'vid_shape': self.vid_shape})
         return params
-
-    @property
-    def _frame_shape(self):
-        return self.vid_shape[:2]
 
     def _names_for(self, vid, electrodes):
         """Electrode names for a video derived from this one
@@ -359,13 +327,6 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         -------
         stim : `VideoStimulus`
             A copy of the stimulus object with the new video
-
-        Notes
-        -----
-        *  ``func`` can reshape a frame in any way it likes, so a result
-           whose pixel grid differs from the original is given no field of
-           view rather than an unverifiable one. If you know it, pass the
-           result to ``VideoStimulus(..., fov=...)``.
         """
         # `func` gets a frame of its own: several of the scikit-image
         # transforms this exists to reach cannot take a read-only one.
@@ -375,9 +336,8 @@ class VideoStimulus(HasFieldOfView, Stimulus):
                         for frame in self])
         # Move first axis (frames) to last:
         vid = np.moveaxis(vid, 0, -1)
-        fov = self.fov if np.shape(vid)[:2] == self._frame_shape else None
         return VideoStimulus(vid, electrodes=self._names_for(vid, electrodes),
-                             time=self.time, metadata=self.metadata, fov=fov)
+                             time=self.time, metadata=self.metadata)
 
     def invert(self):
         """Invert the gray levels of the video
@@ -391,7 +351,7 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         """
         return VideoStimulus(1.0 - self.data.reshape(self.vid_shape),
                              electrodes=self.electrodes, time=self.time,
-                             metadata=self.metadata, fov=self.fov)
+                             metadata=self.metadata)
 
     def rgb2gray(self, electrodes=None):
         """Convert the video to grayscale
@@ -419,7 +379,7 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         if len(self.vid_shape) == 4:
             vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
-                             metadata=self.metadata, fov=self.fov)
+                             metadata=self.metadata)
 
     def resize(self, shape, electrodes=None, **kwargs):
         """Resize the video
@@ -466,7 +426,7 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         vid = vid_resize(self.data.reshape(self.vid_shape),
                          (height, width, *self.vid_shape[2:]), **kwargs)
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
-                             metadata=self.metadata, fov=self.fov)
+                             metadata=self.metadata)
 
     def crop(self, idx_space=None, idx_time=None, left=0, right=0, top=0,
              bottom=0, front=0, back=0, electrodes=None):
@@ -570,8 +530,7 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             electrodes = self.electrodes.reshape(self.vid_shape[:-1])
             electrodes = electrodes[y0:y1, x0:x1, ...].ravel()
         return VideoStimulus(cropped_vid, electrodes=electrodes, time=time,
-                             metadata=self.metadata,
-                             fov=self._fov_for_shape(cropped_vid.shape))
+                             metadata=self.metadata)
 
     def trim(self, tol=0, electrodes=None):
         """Remove any black border around the video
@@ -612,8 +571,7 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         row_start, row_end = rows[:, 0].min(), rows[:, 1].max()
         vid = vid[row_start:row_end, col_start:col_end, ...]
         return VideoStimulus(vid, electrodes=electrodes, metadata=self.metadata,
-                             time=self.time,
-                             fov=self._fov_for_shape(vid.shape))
+                             time=self.time)
 
     def rotate(self, angle, mode='constant', electrodes=None, **kwargs):
         """Rotate each frame of the video
@@ -658,12 +616,9 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             # frames standing in for the color channels it expects:
             data = vid_rotate(_as_writable(data), angle, mode=mode,
                               **kwargs)
-            # A rotation resamples a frame but not its angular pixel size, so a
-            # grown canvas (``resize=True``) subtends a larger FOV:
             return VideoStimulus(data,
                                  electrodes=self._names_for(data, electrodes),
-                                 metadata=self.metadata, time=self.time,
-                                 fov=self._fov_for_shape(data.shape))
+                                 metadata=self.metadata, time=self.time)
         # Else need to feed in each frame individually:
         return self.apply(vid_rotate, angle, mode=mode, electrodes=electrodes,
                           **kwargs)
@@ -769,8 +724,7 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             raise ValueError(f"Unknown filter '{filt}'.")
         return self.apply(filt, **kwargs)
 
-    def encode(self, amp_range=(0, 50), freq=20, implant=None, vfmap=None,
-               gaze=None, **kwargs):
+    def encode(self, amp_range=(0, 50), freq=20, implant=None, **kwargs):
         """Encode the video using amplitude modulation
 
         Encodes every frame of the video as a train of biphasic pulses, where
@@ -799,24 +753,7 @@ class VideoStimulus(HasFieldOfView, Stimulus):
             If given, the video is first sampled at the implant's electrode
             locations, so that the pulse trains are built at electrode rather
             than pixel resolution. Strongly recommended: a video has orders of
-            magnitude more pixels than an implant has electrodes. Required if
-            the video states a ``fov``.
-        vfmap : :py:class:`~pulse2percept.topography.RetinalMap`, optional
-            The retinotopy that says where in the visual field each electrode
-            looks, typically a model's ``vfmap``. Required if the video states
-            a ``fov``, and rejected if it does not. See
-            :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode`.
-
-            .. versionadded:: 0.11.0
-
-        gaze : (x, y) or (n_frames, 2), optional
-            The scene location that falls on the fovea, in degrees of visual
-            angle. Defaults to the origin; one pair per frame moves the eye
-            between frames. See
-            :py:meth:`~pulse2percept.stimuli.StimulusEncoder.encode`.
-
-            .. versionadded:: 0.11.0
-
+            magnitude more pixels than an implant has electrodes.
         **kwargs :
             Additional arguments passed to
             :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
@@ -829,8 +766,8 @@ class VideoStimulus(HasFieldOfView, Stimulus):
         """
         # Imported here because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
-        encoder = AmplitudeEncoder(amp_range=amp_range, freq=freq, **kwargs)
-        return encoder.encode(self, implant=implant, vfmap=vfmap, gaze=gaze)
+        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
+                                **kwargs).encode(self, implant=implant)
 
     def __iter__(self):
         """Iterate over all frames in self.data"""
@@ -974,17 +911,11 @@ class BostonTrain(VideoStimulus):
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
 
-    fov : float, (width, height), or None; optional
-        Field of view in degrees of visual angle; see
-        :py:class:`~pulse2percept.stimuli.VideoStimulus`.
-
-        .. versionadded:: 0.11.0
-
     """
     __slots__ = ()
 
     def __init__(self, resize=None, electrodes=None, as_gray=False,
-                 metadata=None, fov=None):
+                 metadata=None):
         # Load logo from data dir:
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'boston-train.mp4')
@@ -994,8 +925,7 @@ class BostonTrain(VideoStimulus):
                                           as_gray=as_gray,
                                           electrodes=electrodes,
                                           metadata=metadata,
-                                          compress=False,
-                                          fov=fov)
+                                          compress=False)
 
 
 class GirlPool(VideoStimulus):
@@ -1031,17 +961,11 @@ class GirlPool(VideoStimulus):
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
 
-    fov : float, (width, height), or None; optional
-        Field of view in degrees of visual angle; see
-        :py:class:`~pulse2percept.stimuli.VideoStimulus`.
-
-        .. versionadded:: 0.11.0
-
     """
     __slots__ = ()
 
     def __init__(self, resize=None, electrodes=None, as_gray=False,
-                 metadata=None, fov=None):
+                 metadata=None):
         # Load logo from data dir:
         module_path = dirname(__file__)
         source = join(module_path, 'data', 'girl-pool.mp4')
@@ -1051,5 +975,4 @@ class GirlPool(VideoStimulus):
                                        as_gray=as_gray,
                                        electrodes=electrodes,
                                        metadata=metadata,
-                                       compress=False,
-                                       fov=fov)
+                                       compress=False)

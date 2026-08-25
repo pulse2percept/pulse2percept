@@ -3,7 +3,8 @@
 Residual vision
 ===============
 
-The :mod:`pulse2percept.vision` module describes what a person still sees:
-where native vision is lost (:py:class:`~pulse2percept.vision.Scotoma`), and
-how what is left of it combines with the percept an implant produces
-(:py:func:`~pulse2percept.vision.compose_hybrid_vision`).
+The :mod:`pulse2percept.vision` module describes the visual world an implanted
+eye is looking at: what is present (:py:class:`~pulse2percept.vision.Scene`)
+and where native vision is lost
+(:py:class:`~pulse2percept.vision.Scotoma`). A model registers a scene against
+an implant and returns what the person sees; see :ref:`topics-models-scene`.

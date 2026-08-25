@@ -5,8 +5,6 @@ from abc import ABCMeta, abstractmethod
 import numpy as np
 from copy import deepcopy
 
-from skimage.color import rgb2gray
-
 from .base import Stimulus, _adoptable
 from .images import ImageStimulus
 from .pulses import BiphasicPulse
@@ -26,34 +24,6 @@ _BIG_TIME = 20000
 
 # Duration (ms) of a source that has no time axis of its own, such as an image:
 _DEFAULT_FRAME_DUR = 500.0
-
-
-def _as_luminance(values):
-    """Reduce sampled RGB to the one number an encoder modulates
-
-    The boundary between color and stimulation: spatial sampling keeps whatever
-    channels the source had, and the encoders that exist today are luminance
-    encoders, so they call this before modulating.
-
-    Parameters
-    ----------
-    values : (n_electrodes, n_frames) or (n_electrodes, 3, n_frames) array
-        What each electrode sees, per frame. Grayscale passes through.
-
-    Returns
-    -------
-    gray : (n_electrodes, n_frames) array
-    """
-    values = np.asarray(values)
-    if values.ndim == 2:
-        return values
-    if values.ndim != 3 or values.shape[1] != 3:
-        raise ValueError(f"Sampled values must be (n_electrodes, n_frames) or "
-                         f"(n_electrodes, 3, n_frames), not an array of shape "
-                         f"{values.shape}.")
-    # `rgb2gray` wants the channels last; the electrodes and the frames are
-    # both just pixels to it:
-    return rgb2gray(values.transpose((0, 2, 1)))
 
 
 def _finite(name, value):
@@ -315,7 +285,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def _as_frames(self, source, implant=None, vfmap=None, gaze=None):
+    def _as_frames(self, source, implant=None):
         """Reduce a source to one gray level per electrode per frame.
 
         Returns
@@ -346,41 +316,19 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         # does not necessarily carry it along.
         fps = _fps(source.metadata)
         stim = source
-        electrodes = stim.electrodes
         if (implant is not None and
                 isinstance(stim, (ImageStimulus, VideoStimulus))):
             # Sample the source at the electrode locations. This is the same
             # step that assigning an image or a video to `implant.stim` would
             # perform, done here so that the pulse trains below are built at
-            # electrode resolution rather than at pixel resolution. Row count
-            # is not a usable test of whether a source is already in electrode
-            # coordinates, so always sample:
-            values = implant._sample_source(stim, vfmap=vfmap, gaze=gaze)
-            electrodes = implant.electrode_names
-            # Sampling keeps whatever channels the source had, and this is
-            # where they become the one number an encoder modulates:
-            values = _as_luminance(values)
-        elif vfmap is not None or gaze is not None:
-            raise ValueError("'vfmap'/'gaze' say where an implant's "
-                             "electrodes land in a scene, so they need an "
-                             "'implant' to place.")
-        else:
-            if getattr(stim, 'fov', None) is not None:
-                # One pixel per electrode is a device-relative reading of the
-                # source, which throws the stated geometry away silently:
-                raise ValueError(
-                    f"This {type(stim).__name__} states a field of view "
-                    f"({stim.fov[0]:g} x {stim.fov[1]:g} dva), so it is a "
-                    f"scene in visual-field coordinates rather than a grid of "
-                    f"pixels to encode one per electrode. Pass the 'implant' "
-                    f"it is being encoded for, along with the 'vfmap' that "
-                    f"says where in that scene each of its electrodes looks. "
-                    f"Build it without 'fov' for the device-relative "
-                    f"behavior.")
-            # `values` rather than `data`, to say out loud that these are the
-            # dimensionless numbers the modulation below is a function of:
-            values = stim.values(dimensionless)
-        gray = np.clip(np.asarray(values, dtype=np.float32), 0, 1)
+            # electrode resolution rather than at pixel resolution. It is also
+            # where RGB becomes gray. Row count is not a usable test of whether
+            # a source is already in electrode coordinates, so always reshape:
+            stim = implant.reshape_stim(stim)
+        # `values` rather than `data`, to say out loud that these are the
+        # dimensionless numbers the modulation below is a function of:
+        gray = np.clip(np.asarray(stim.values(dimensionless),
+                                  dtype=np.float32), 0, 1)
         if stim.time is None:
             # A single frame, which has no duration of its own:
             gray = gray.reshape((-1, 1))
@@ -399,7 +347,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             # let neighboring frames overlap:
             frame_dur = self.frame_dur
             frame_time = np.arange(gray.shape[1], dtype=np.float64) * frame_dur
-        return gray, electrodes, frame_time, frame_dur
+        return gray, stim.electrodes, frame_time, frame_dur
 
     @staticmethod
     def _ticks(t):
@@ -800,7 +748,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             pulse_vals, total, freq > 0, frame_time, frame_dur,
             None if cycle is None else cycle * DT)
 
-    def _modulation(self, source, implant=None, vfmap=None, gaze=None):
+    def _modulation(self, source, implant=None):
         """What the source asks each electrode for, frame by frame
 
         The first half of encoding, and the half with no time resolution in
@@ -814,8 +762,8 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         Returns the arguments :py:meth:`_assemble` takes, in the order it
         takes them.
         """
-        gray, electrodes, frame_time, frame_dur = self._as_frames(
-            source, implant, vfmap=vfmap, gaze=gaze)
+        gray, electrodes, frame_time, frame_dur = self._as_frames(source,
+                                                                  implant)
         if self.stretch:
             gray = gray - gray.min()
             peak = gray.max()
@@ -829,7 +777,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         amp, freq = self._modulate(gray)
         return amp, freq, electrodes, frame_time, frame_dur
 
-    def encode(self, source, implant=None, vfmap=None, gaze=None):
+    def encode(self, source, implant=None):
         """Encode an image or a video as a train of electrical pulses
 
         Parameters
@@ -848,32 +796,12 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` decides
             which electrodes may pulse when. If None, every pixel of the source
             is treated as its own electrode and every electrode fires on the
-            same schedule. Required when ``source`` states a ``fov``: a scene
-            has to be sampled somewhere, and the implant is what says where.
+            same schedule.
 
             .. versionchanged:: 0.10.0
                 The implant is named here rather than owned by the encoder, so
                 that one encoder can be used for several implants and so that
                 the implant is the only place device scheduling is described.
-
-        vfmap : :py:class:`~pulse2percept.topography.RetinalMap`, optional
-            The retinotopy that says where in the visual field each electrode
-            looks, typically a model's ``vfmap``. Required when ``source``
-            states a ``fov``, and rejected when it does not: without a field of
-            view there is no scene to register, and the source is stretched
-            across the implant as before.
-
-            .. versionadded:: 0.11.0
-
-        gaze : (x, y) or (n_frames, 2), optional
-            Where the eye is pointing: the scene location that falls on the
-            fovea, in degrees of visual angle (e.g. ``(5, 0) * dva``).
-            Defaults to the origin. One pair fixates for the whole source; one
-            pair per frame moves the eye between frames. The implant and any
-            eye-centered scotoma do not move when gaze does -- the scene moves
-            past them.
-
-            .. versionadded:: 0.11.0
 
         Returns
         -------
@@ -889,9 +817,8 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
             If ``source`` is not dimensionless.
 
         """
-        return self._assemble(
-            *self._modulation(source, implant, vfmap=vfmap, gaze=gaze),
-            implant=implant)
+        return self._assemble(*self._modulation(source, implant),
+                              implant=implant)
 
 
 class AmplitudeEncoder(StimulusEncoder):
