@@ -198,8 +198,15 @@ class Dimension(object):
         return {'_exponents': self._exponents}
 
     def __setstate__(self, state):
-        for key, value in state.items():
-            object.__setattr__(self, key, value)
+        # An exponent tuple is only meaningful against the `BASE_DIMENSIONS`
+        # it was written with. One from a release with a different set of base
+        # dimensions would unpickle happily and mean something else, so refuse
+        # it rather than restore a quietly wrong dimension:
+        exponents = state['_exponents']
+        if len(exponents) != len(BASE_DIMENSIONS):
+            raise ValueError("Cannot restore Dimension with an incompatible "
+                             "base-dimension layout.")
+        object.__setattr__(self, '_exponents', exponents)
 
     def __str__(self):
         return self.name

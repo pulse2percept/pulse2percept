@@ -1,3 +1,4 @@
+import copyreg
 import pickle
 from copy import copy, deepcopy
 
@@ -503,3 +504,39 @@ def test_units_copy_and_pickle():
     npt.assert_almost_equal((1 * restored).to_value(uA), 1000)
     npt.assert_equal(restored * s, mC)
     npt.assert_equal(restored * ms, uC)
+
+
+class StaleDimension(object):
+    """Pickles as a Dimension whose exponent tuple has the wrong length
+
+    That is what a pickle from p2p 0.10 holds: six base dimensions, no
+    ``angle``.
+    """
+
+    def __reduce__(self):
+        return (copyreg._reconstructor, (Dimension, object, None),
+                {'_exponents': (0, 0, 1, 0, 0, 0)})
+
+
+def test_Dimension_rejects_stale_pickle():
+    # An exponent tuple written against a different set of base dimensions
+    # would restore into the wrong dimensions, so it fails loudly instead:
+    with pytest.raises(ValueError):
+        pickle.loads(pickle.dumps(StaleDimension()))
+
+    # A Unit is protected through the Dimension it carries, and so is a
+    # Quantity through its Unit:
+    class StaleUnit(object):
+        def __reduce__(self):
+            return (copyreg._reconstructor, (Unit, object, None),
+                    {'_dimension': StaleDimension(), '_scale': 1e-6,
+                     '_symbol': 'uA'})
+
+    class StaleQuantity(object):
+        def __reduce__(self):
+            return (copyreg._reconstructor, (Quantity, object, None),
+                    {'_magnitude': 5, '_unit': StaleUnit()})
+
+    for stale in (StaleUnit(), StaleQuantity()):
+        with pytest.raises(ValueError):
+            pickle.loads(pickle.dumps(stale))

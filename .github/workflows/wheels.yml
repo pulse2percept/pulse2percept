@@ -48,8 +48,21 @@ jobs:
           # so a single OMP_PREFIX serves the x86_64 and arm64 builds.
           CIBW_BEFORE_ALL_MACOS: |
             set -eux
-            curl -Ls https://micro.mamba.pm/api/micromamba/osx-arm64/latest \
-              | tar -xvj bin/micromamba
+            # Pinned rather than `latest`: an unpinned URL is how these
+            # builds moved from micromamba 1.x to 2.x without anyone
+            # deciding to. Bump it deliberately.
+            MICROMAMBA_VERSION=2.9.0
+            # Downloaded to a file rather than piped into tar: `set -e`
+            # without `pipefail` takes only tar's exit status, so a failed
+            # or truncated download surfaced as a confusing tar error, or
+            # as no error at all. `--fail` likewise keeps an HTTP error
+            # page from reaching tar as though it were an archive.
+            curl --fail --location --silent --show-error \
+              --retry 5 --retry-all-errors \
+              -o micromamba.tar.bz2 \
+              "https://micro.mamba.pm/api/micromamba/osx-arm64/${MICROMAMBA_VERSION}"
+            tar -xvjf micromamba.tar.bz2 bin/micromamba
+            rm micromamba.tar.bz2
             for arch in osx-arm64 osx-64; do
               ./bin/micromamba create -y -p "/tmp/omp-${arch}" \
                 --platform "${arch}" -c conda-forge llvm-openmp
