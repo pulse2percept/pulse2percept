@@ -382,11 +382,7 @@ class ProsthesisSystem(PrettyPrint):
             self._require_within_current_limit(stim)
 
     def _preprocess(self, stim):
-        """Run ``stim`` through whatever this implant's ``preprocess`` says
-
-        The one place that resolves the three forms ``preprocess`` takes: a
-        callable, True (meaning ``preprocess_stim``), or False.
-        """
+        """Run ``stim`` through whatever this implant's ``preprocess`` says"""
         if callable(self.preprocess):
             return self.preprocess(stim)
         if self.preprocess:

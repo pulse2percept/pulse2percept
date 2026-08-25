@@ -13,11 +13,7 @@ from ..utils import PrettyPrint
 
 
 def _resolve_fov(fov, n_rows, n_cols):
-    """Normalize a user-supplied ``fov`` to ``(width, height)`` in dva
-
-    A scalar is the horizontal FOV; the vertical one follows from the frame's
-    aspect ratio, which is the same as assuming square angular pixels.
-    """
+    """Normalize a user-supplied ``fov`` to ``(width, height)`` in dva"""
     fov = np.asarray(as_value(fov, dva, 'fov'), dtype=float)
     if fov.ndim == 0:
         width = float(fov)
@@ -51,15 +47,7 @@ def _gaze_points(gaze, n_frames):
 
 
 def _clip_to_frame(points, shape):
-    """Clip pixel coordinates onto the frame, and say which were on it
-
-    A scene's field of view is its *outer* extent, so it reaches half a pixel
-    past the outermost pixel centers (see ``pixel_to_dva``). Interpolation
-    stops at those centers, and the border strip between them and the edge
-    still belongs to the scene: a point there takes the value of the pixel it
-    is inside. Past the outer edge there is no scene to sample, which is what
-    ``inside`` is for -- nothing is extrapolated.
-    """
+    """Clip pixel coordinates onto the frame, and say which were on it"""
     points = np.asarray(points, dtype=float)
     edges = np.asarray(shape[:2], dtype=float) - 0.5
     inside = np.all((points >= -0.5) & (points <= edges), axis=1)
@@ -70,33 +58,19 @@ def _clip_to_frame(points, shape):
 
 
 def _interpolate(grid, frames, points):
-    """Sample ``frames`` at ``points``, carrying the trailing axes along
-
-    One interpolator covers every channel and every frame: the grid is the
-    leading two axes, and anything past them comes back as trailing axes of
-    the result.
-    """
+    """Sample ``frames`` at ``points``, carrying the trailing axes along"""
     interpolator = RegularGridInterpolator(grid, frames, method='linear',
                                            bounds_error=False, fill_value=0)
     return interpolator(points)
 
 
 def _drop_gray_axis(values):
-    """Give back the (n_points, n_frames) a grayscale scene samples to
-
-    Sampling runs on one (rows, cols, channels, frames) layout so that color
-    and gray take the same path through the interpolator; a single channel is
-    not a channel once it comes out the other side.
-    """
+    """Give back the (n_points, n_frames) a grayscale scene samples to"""
     return values[:, 0] if values.shape[1] == 1 else values
 
 
 def _percept_sampler(prosthetic, frames):
-    """Read a percept at arbitrary eye-centered ``(y, x)`` coordinates in dva
-
-    Outside the model's own grid there is no percept, and nothing is
-    extrapolated into that space.
-    """
+    """Read a percept at arbitrary eye-centered ``(y, x)`` coordinates in dva"""
     ys = np.asarray(prosthetic.ydva, dtype=float)
     xs = np.asarray(prosthetic.xdva, dtype=float)
     if ys.size < 2 or xs.size < 2:
@@ -316,13 +290,7 @@ class Scene(PrettyPrint):
         return col, row
 
     def _frames(self):
-        """The source as a dense ``(rows, cols, channels, n_frames)`` array
-
-        The one place that knows how an image or a video stores its pixels.
-        Everything downstream treats a still as a one-frame movie, and an
-        alpha channel is blended against black here, as it is everywhere else
-        in p2p, because nothing further along knows what to do with it.
-        """
+        """The source as a dense ``(rows, cols, channels, n_frames)`` array"""
         if self._cached_frames is not None:
             return self._cached_frames
         source = self.source
@@ -352,30 +320,7 @@ class Scene(PrettyPrint):
         return self._frames().shape[-1]
 
     def _sample_at(self, x, y, gaze=None):
-        """What the scene shows at eye-centered visual-field positions
-
-        The spatial half of turning a scene into stimulation, and the seam a
-        color encoder would need: color channels are preserved here, and
-        reducing them to one number is a separate step (see
-        :py:meth:`_device_input`).
-
-        Parameters
-        ----------
-        x, y : array_like
-            Eye-centered visual-field coordinates in dva -- where the viewer
-            is looking *from*, not where the picture is. ``gaze`` is what puts
-            them in the scene: ``scene = visual field + gaze``.
-        gaze : (x, y) or (n_frames, 2), optional
-            Where the eye is pointing. One pair fixates for the whole source;
-            one pair per frame moves the eye between frames.
-
-        Returns
-        -------
-        values : (n_points, n_frames) or (n_points, 3, n_frames) array
-            Zero wherever a position falls outside the scene: there is no
-            picture there, and none is extrapolated.
-
-        """
+        """What the scene shows at eye-centered visual-field positions"""
         frames = self._frames()
         gaze = _gaze_points(gaze, frames.shape[-1])
         x = np.asarray(x, dtype=float).ravel()
@@ -400,15 +345,7 @@ class Scene(PrettyPrint):
         return _drop_gray_axis(np.stack(sampled, axis=-1))
 
     def _device_input(self, x, y, gaze=None):
-        """One number per position per frame, for a device to encode
-
-        The Scene-to-device seam. Today's stimulus encoders are luminance
-        encoders, so this is where color stops.
-
-        Returns
-        -------
-        gray : (n_points, n_frames) array
-        """
+        """One number per position per frame, for a device to encode"""
         values = self._sample_at(x, y, gaze=gaze)
         if values.ndim == 2:
             return values
@@ -417,23 +354,14 @@ class Scene(PrettyPrint):
         return rgb2gray(values.transpose((0, 2, 1)))
 
     def _rgb_frames(self):
-        """The source as ``(rows, cols, 3, n_frames)``, scotoma not applied
-
-        Grayscale is replicated across the three channels. What is *out there*
-        is the same picture whether or not the eye looking at it can see all
-        of it.
-        """
+        """The source as ``(rows, cols, 3, n_frames)``, scotoma not applied"""
         frames = self._frames()
         if frames.shape[2] == 1:
             frames = np.repeat(frames, 3, axis=2)
         return frames
 
     def _loss_at(self, gaze_xy):
-        """How much native vision is lost at each scene pixel, in [0, 1]
-
-        ``gaze_xy`` is where the eye points, which is what carries the
-        eye-centered scotoma onto the scene's own pixel grid.
-        """
+        """How much native vision is lost at each scene pixel, in [0, 1]"""
         n_rows, n_cols = self._frame_shape
         if self.scotoma is None:
             return np.zeros((n_rows, n_cols))
@@ -444,12 +372,7 @@ class Scene(PrettyPrint):
         return self.scotoma(x_scene - gx, y_scene - gy)
 
     def _native_rgb(self, gaze=None):
-        """What is left of native vision, as ``(rows, cols, 3, n_frames)``
-
-        The scene where vision is intact, ``scotoma_fill`` where it is
-        completely lost, and a linear mix of the two where a graded scotoma
-        says vision is partly there.
-        """
+        """What is left of native vision, as ``(rows, cols, 3, n_frames)``"""
         frames = self._rgb_frames()
         if self.scotoma is None:
             return frames
@@ -470,29 +393,7 @@ class Scene(PrettyPrint):
         return self.pixel_to_dva(cols, rows)
 
     def _compose(self, prosthetic, vmax, vmin=0, gaze=None):
-        """Native vision with a prosthetic percept painted into the loss
-
-        Each pixel is composed as::
-
-            lost   = maximum(scotoma_fill, prosthetic_rgb)
-            output = (1 - loss) * scene_rgb + loss * lost
-
-        That ``maximum`` is a **display composition rule**, not a
-        physiological model: it puts a luminous phosphene over whatever the
-        lost view looks like, which is what the intact periphery, a complete
-        scotoma, and a phosphene inside one each need. It is deliberately the
-        simplest rule that gets those three right, and it is expected to be
-        replaced when there is science to replace it with.
-
-        The result lives on the scene's own pixel grid, so intact vision
-        passes through untouched rather than being resampled onto the model's.
-
-        Returns
-        -------
-        percept : :py:class:`~pulse2percept.percepts.Percept`
-            An RGB percept of shape ``(Y, X, 3, T)`` in scene coordinates.
-
-        """
+        """Native vision with a prosthetic percept painted into the loss"""
         if not isinstance(prosthetic, Percept):
             raise TypeError(f"'prosthetic' must be a Percept, not "
                             f"{type(prosthetic)}.")
@@ -551,22 +452,7 @@ class Scene(PrettyPrint):
                        time_unit=out_unit)
 
     def _prosthetic_frames(self, prosthetic):
-        """Line a percept up with the output frames, and say when they happen
-
-        A still scene has no clock of its own, so the percept sets the output
-        timing. Against a video there are three cases, in this order:
-
-        *  A percept with one frame and no time axis happened at no particular
-           time, so it stands behind every frame of the video.
-        *  One percept frame per video frame pair off, and the percept's own
-           timestamps describe them. They need not be the video's: a temporal
-           model summarizes each frame's interval and reports its *end*.
-        *  Anything else is read at the video's frame times, which requires
-           the percept to cover the whole of it -- nothing is extrapolated.
-
-        Whichever clock wins brings its own unit along, so a percept counted
-        in seconds does not come back in milliseconds.
-        """
+        """Line a percept up with the output frames, and say when they happen"""
         if self.time is None:
             return prosthetic.data, prosthetic.time, prosthetic.time_unit
         n_out = self.n_frames
@@ -579,11 +465,6 @@ class Scene(PrettyPrint):
                     self.time_unit)
         if n_pros == n_out:
             # One modeled response per video frame: they are responses *to*
-            # those frames, so they pair off, and the percept's own timestamps
-            # are the ones that describe them. A temporal model reports the
-            # end of each interval it summarized rather than the frame onset
-            # the scene was sampled at, and resampling it onto the onsets
-            # would be asking it for a percept it never claimed.
             return prosthetic.data, prosthetic.time, prosthetic.time_unit
         # Percept interpolation holds the nearest endpoint outside the modeled
         # interval, so a video that runs past it would be shown a phosphene
@@ -607,12 +488,7 @@ class Scene(PrettyPrint):
         return frames, self.time, self.time_unit
 
     def _grid(self):
-        """A Grid2D on the scene's pixel centers, in scene coordinates
-
-        Gaze moves where the eye-centered scotoma and percept land on the
-        scene; it does not move the scene, so this is the one coordinate
-        system a composed result is reported in.
-        """
+        """A Grid2D on the scene's pixel centers, in scene coordinates"""
         n_rows, n_cols = self._frame_shape
         x_left, y_top = self.pixel_to_dva(0, 0)
         x_right, y_bottom = self.pixel_to_dva(n_cols - 1, n_rows - 1)
@@ -622,11 +498,7 @@ class Scene(PrettyPrint):
                       (float(y_bottom), float(y_top)), step=step)
 
     def _native_percept(self, gaze=None):
-        """Residual native vision as an ordinary RGB percept
-
-        Which is what makes drawing and animating a scene the same problem as
-        drawing and animating anything else p2p produces.
-        """
+        """Residual native vision as an ordinary RGB percept"""
         return Percept(self._native_rgb(gaze=gaze), space=self._grid(),
                        time=self.time, time_unit=self.time_unit)
 

@@ -155,14 +155,7 @@ def _resolve_clim(data, vmin, vmax, auto_vmin):
 
 
 def _is_rgb(data):
-    """Whether ``data`` is an RGB percept, having rejected anything else
-
-    A percept is either (Y, X, T) brightness in arbitrary units or (Y, X, 3, T)
-    RGB display intensities; time is the last axis in both. Brightness is
-    unbounded, but an RGB value outside [0, 1] is not a color, so it is
-    rejected here rather than clipped later, where it would silently come out
-    as a saturated pixel.
-    """
+    """Whether ``data`` is an RGB percept, having rejected anything else"""
     shape = np.shape(data)
     if len(shape) == 3:
         return False
@@ -188,12 +181,7 @@ def _reject_rgb(name, extra=''):
 
 
 def _pixel_extent(xdva, ydva):
-    """Outer edges of a pixel grid whose centers sit at ``xdva``/``ydva``
-
-    ``imshow`` takes the edges, where ``pcolormesh(shading='nearest')`` takes
-    the centers, so this is what keeps an RGB percept on the same footprint as
-    a brightness one.
-    """
+    """Outer edges of a pixel grid whose centers sit at ``xdva``/``ydva``"""
     def edges(centers):
         centers = np.asarray(centers, dtype=float)
         # A single row or column has no spacing to halve:
@@ -425,13 +413,7 @@ class Percept(Data):
         return self.data.ndim == 4
 
     def _inherit_space(self, other):
-        """Take the visual-field coordinates of the percept this came from
-
-        A stage that rewrites a percept frame by frame -- a temporal model
-        reading a spatial one -- does not move it in the visual field. Without
-        this the grid is lost and ``xdva``/``ydva`` silently become pixel
-        indices, which read exactly like coordinates.
-        """
+        """Take the visual-field coordinates of the percept this came from"""
         if not getattr(other, '_has_space', False):
             return self
         coords = {name: getattr(other, name) for name in ('ydva', 'xdva')}
@@ -659,9 +641,6 @@ class Percept(Data):
                                  "frame. Use play() to view a temporal "
                                  "percept.")
             # `pcolormesh` maps one number per pixel through a colormap, so RGB
-            # goes to `imshow` instead, on the footprint `pcolormesh` would
-            # have covered. `origin='upper'` puts row 0 at the largest y, which
-            # is where the `np.flipud` below puts it too:
             drop = ['figsize', 'shading']
             other_kwargs = {key: kwargs[key]
                             for key in (kwargs.keys() - drop)}

@@ -101,13 +101,7 @@ def test_row_zero_is_the_top_of_the_visual_field():
 
 
 def test_sampling_depends_only_on_where_you_look():
-    """Scene sampling is a pure function of the eye-centered position
-
-    Whatever retinal map produced a visual-field coordinate, and whatever
-    mixture of eye position and gaze got the viewer there, the same point of
-    the scene comes back. That is what lets a nonlinear retinotopy register
-    correctly without the scene knowing anything about it.
-    """
+    """Scene sampling is a pure function of the eye-centered position"""
     scene = ramp_scene()
     for x_vf, gaze_x in [(4.0, 0.0), (0.0, 4.0), (10.0, -6.0), (-3.0, 7.0)]:
         npt.assert_almost_equal(
@@ -143,13 +137,7 @@ def edge_scene(along='x'):
 
 @pytest.mark.parametrize('sign', [1, -1])
 def test_the_whole_stated_fov_belongs_to_the_scene(sign):
-    """The outer half-pixel border is scene, not background
-
-    A fov is the picture's *outer* extent, so it reaches half a pixel past the
-    outermost pixel centers. Interpolation stops at those centers, so without
-    care that border strip comes back black -- a strip of the scene the user
-    said was there.
-    """
+    """The outer half-pixel border is scene, not background"""
     scene = edge_scene('x')
     edge_value = 1.0 if sign > 0 else 0.25
     last_center = sign * (EDGE_EXTENT - 0.5)
@@ -209,11 +197,7 @@ def test_color_survives_sampling_and_greys_only_at_the_device():
 
 
 def test_sampling_rgb_then_greying_matches_greying_first():
-    """Moving rgb2gray after interpolation must not move the numbers
-
-    Both steps are linear, so they commute; this is what says the seam is a
-    refactor and not a change of result.
-    """
+    """Moving rgb2gray after interpolation must not move the numbers"""
     rng = np.random.default_rng(0)
     rgb = ImageStimulus(rng.random((17, 23, 3)))
     x = np.linspace(-10, 10, 7)
@@ -344,13 +328,7 @@ def test_the_scotoma_is_eye_centered_so_gaze_moves_the_scene_past_it():
 
 
 def test_scotoma_does_not_change_what_the_device_sees():
-    """A camera does not go blind where its wearer has
-
-    The scotoma is native vision's business. Masking the source before it
-    reaches the implant would look entirely plausible and simulate the wrong
-    thing: the phosphenes would carry no information exactly where the
-    prosthesis is the only thing left to carry any.
-    """
+    """A camera does not go blind where its wearer has"""
     x = np.array([-15.0, -8.0, -2.0, 0.0, 3.0, 9.0, 18.0])
     y = np.array([0.0, 6.0, -4.0, 0.0, 2.0, -9.0, 5.0])
     plain = ramp_scene()

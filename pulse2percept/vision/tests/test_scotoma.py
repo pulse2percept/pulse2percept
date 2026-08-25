@@ -88,12 +88,7 @@ def test_Scotoma_is_unit_aware():
 
 
 def test_Scotoma_does_not_move_with_gaze():
-    """A scotoma is eye-centered: it is asked about the visual field only
-
-    Nothing in its API takes a gaze or a scene coordinate, which is what keeps
-    it fixed relative to the fovea (and therefore to the implant) while the
-    scene moves past both.
-    """
+    """A scotoma is eye-centered: it is asked about the visual field only"""
     scotoma = Scotoma.circle(5)
     npt.assert_equal(scotoma(0, 0), scotoma(0, 0))
     with pytest.raises(TypeError):
@@ -102,11 +97,7 @@ def test_Scotoma_does_not_move_with_gaze():
 
 @pytest.mark.parametrize('center', [(np.nan, 0), (0, np.inf), (-np.inf, 2)])
 def test_Scotoma_rejects_a_non_finite_center(center):
-    """A NaN center compares false everywhere, so it would read as intact
-
-    The quietest possible failure: no error, no scotoma, an entirely healthy
-    visual field.
-    """
+    """A NaN center compares false everywhere, so it would read as intact"""
     with pytest.raises(ValueError):
         Scotoma.circle(5, center=center)
     with pytest.raises(ValueError):

@@ -216,11 +216,7 @@ def _delivered(implant):
 
 
 def _device_scene(scene, implant):
-    """The visual scene the implant's own input pipeline sees
-
-    Preprocessing applies to the prosthetic branch only and runs before
-    electrode sampling, at the scene source's own resolution.
-    """
+    """The visual scene the implant's own input pipeline sees"""
     source = implant._preprocess(scene.source)
     if source is scene.source:
         return scene
@@ -260,18 +256,7 @@ def _device_scene(scene, implant):
 
 
 def _scene_driven_implant(model, implant, gaze):
-    """A stand-in implant carrying what the scene delivers to its electrodes
-
-    The whole registration chain, in the one place that knows all of it:
-    retinal coordinates in the map's own tissue unit, out through
-    ``vfmap.ret_to_dva`` into the eye-centered visual field, and from there
-    into the scene at this gaze. The model is the only object that holds a
-    retinotopy *and* is handed an implant, which is why this is its job and
-    not the scene's or the encoder's.
-
-    The caller's implant is left untouched: predicting what someone sees is a
-    question, not an assignment to their device.
-    """
+    """A stand-in implant carrying what the scene delivers to its electrodes"""
     scene = model.scene
     if not model.has_space:
         raise ValueError("A scene is registered against the retina, which "
@@ -2086,10 +2071,6 @@ class Model(Frozen, PrettyPrint):
                             f"{type(implant)}.")
         if self.scene is not None:
             # Thresholding rescales `implant.stim`, and with a scene that
-            # stimulus is derived rather than given: it would be rebuilt from
-            # the scene on every iteration and the scaling thrown away. What
-            # "threshold" even means for a scene -- amplitude range, encoder
-            # gain, scene contrast -- is a design question, not a bug here.
             raise NotImplementedError(
                 "find_threshold scales an implant's own stimulus, but this "
                 "model builds one from its scene instead. Drop the scene "

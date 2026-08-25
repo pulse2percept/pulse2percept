@@ -1065,12 +1065,7 @@ def test_Percept_rgb_play():
 
 @pytest.mark.parametrize('value', [1.8, -0.1, np.nan, np.inf])
 def test_Percept_rgb_rejects_values_outside_the_display_range(value):
-    """An RGB value that is not a color must fail loudly, not saturate quietly
-
-    A compositor that maps arbitrary brightness units onto display intensity
-    can get the scale wrong; a white pixel would look plausible, an error does
-    not.
-    """
+    """An RGB value that is not a color must fail loudly, not saturate quietly"""
     data = np.full((4, 6, 3, 2), 0.5)
     data[1, 2, 0, 1] = value
     with pytest.raises(ValueError):

@@ -108,11 +108,7 @@ def test_the_model_supplies_its_own_vfmap():
 
 @pytest.mark.parametrize('x_dva', [-8.0, 2.5, 7.0])
 def test_a_nonlinear_retinal_map_still_registers(x_dva):
-    """Not 280 um/dva, and not linear either
-
-    The electrode is placed at the retinal image of a known visual-field
-    position, so the pixel it should see is known independently of the map.
-    """
+    """Not 280 um/dva, and not linear either"""
     vfmap = SquareMap()
     implant = implant_at(*vfmap.dva_to_ret(x_dva, 0.0))
     model = model_for(scene_of(), vfmap=vfmap)
@@ -179,12 +175,7 @@ def test_scene_driven_prediction_leaves_the_implant_alone():
 
 
 def test_a_scene_driven_stimulus_still_goes_through_the_device():
-    """The stand-in implant is assigned to, not written behind
-
-    Encoding, the safety checks and whatever else an implant does to a
-    stimulus are the device's business and must not be skipped just because
-    the values came from a scene rather than from the caller.
-    """
+    """The stand-in implant is assigned to, not written behind"""
     grid = ProsthesisSystem(ElectrodeGrid((1, 3), 280),
                             encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
     grid.deactivate('A2')
@@ -204,11 +195,7 @@ def edge_source():
 
 
 def test_preprocessing_runs_on_the_picture_not_on_electrode_values():
-    """An edge filter needs an image, and by sampling time there is none left
-
-    A Sobel filter answers "how fast does brightness change *here*", which no
-    per-electrode operation can reconstruct: one number has no neighbors.
-    """
+    """An edge filter needs an image, and by sampling time there is none left"""
     scene = scene_of(edge_source())
     at_edge = implant_at(*Curcio1990Map().dva_to_ret(0.5, 0.0))
     inside = implant_at(*Curcio1990Map().dva_to_ret(10.0, 0.0))
@@ -227,11 +214,7 @@ def test_preprocessing_runs_on_the_picture_not_on_electrode_values():
 
 
 def test_preprocessing_does_not_reach_native_vision():
-    """What the device does to its input is not what the eye goes through
-
-    The key scientific contract: outside the scotoma the person sees the
-    world, not the implant's edge-filtered or inverted view of it.
-    """
+    """What the device does to its input is not what the eye goes through"""
     source = ramp_source()
     scene = scene_of(source, scotoma=Scotoma.circle(6), scotoma_fill=0.0)
     implant = implant_at(*Curcio1990Map().dva_to_ret(0.0, 0.0))
@@ -288,12 +271,7 @@ def test_a_video_scene_is_preprocessed_the_same_way():
 @pytest.mark.parametrize('returns', [lambda stim: BiphasicPulse(20, 0.45),
                                      lambda stim: np.zeros((4, 4))])
 def test_scene_preprocessing_must_return_a_picture(returns):
-    """Crossing to current early leaves nothing to register spatially
-
-    Assignment lets a ``preprocess`` do the encoder's job, because there the
-    values are already on electrodes. A scene has to be placed in the visual
-    field first, and a pulse train has no pixels to place.
-    """
+    """Crossing to current early leaves nothing to register spatially"""
     scene = scene_of()
     implant = implant_at(0, 0)
     implant.preprocess = returns
@@ -304,12 +282,7 @@ def test_scene_preprocessing_must_return_a_picture(returns):
 
 
 def test_scene_preprocessing_must_preserve_spatial_shape():
-    """A resize would reinterpret `fov`, not just change what is seen
-
-    Fewer pixels across the same `fov` is a coarser device input, but nothing
-    here says so: those pixels would simply be stretched back across the
-    original angular extent.
-    """
+    """A resize would reinterpret `fov`, not just change what is seen"""
     scene = scene_of()
     implant = implant_at(0, 0)
     implant.preprocess = lambda stim: stim.resize((20, 20))
@@ -467,12 +440,7 @@ def test_gaze_moves_the_scotoma_and_the_phosphene_together():
 
 
 def test_a_fixed_vmax_does_not_renormalize_when_gaze_changes():
-    """Nothing rescales the display behind the user's back
-
-    The two gazes land the implant on very different parts of the scene, so
-    the brightest phosphene differs. Under a fixed `vmax` the displayed peaks
-    must differ too; auto-normalization would pin both at white.
-    """
+    """Nothing rescales the display behind the user's back"""
     scene = scene_of(scotoma=Scotoma.circle(12), scotoma_fill=0.0)
     model = model_for(scene, rho=100, xrange=(-4, 4), yrange=(-4, 4),
                       step=0.5)
@@ -519,14 +487,7 @@ def test_a_video_scene_keeps_its_own_timing():
 
 
 def test_a_spatiotemporal_model_composes_against_a_video_scene():
-    """The ordinary spatial+temporal pipeline, with nothing asked of it
-
-    A temporal model summarizes each frame's interval and reports its *end*,
-    so its output times are the video's frame ends rather than its onsets.
-    They still describe one response per video frame, and pairing them off is
-    what keeps a perfectly normal simulation from being rejected for not
-    covering timestamps it never claimed.
-    """
+    """The ordinary spatial+temporal pipeline, with nothing asked of it"""
     frames = np.stack([np.full((SCENE_PX, SCENE_PX), v)
                        for v in (0.2, 0.5, 0.9)], axis=-1)
     source = VideoStimulus(frames, time=[0, 100, 200])
@@ -554,11 +515,7 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
 
 
 def test_a_temporal_stage_does_not_lose_the_visual_field_grid():
-    """A percept rewritten frame by frame has not moved in the visual field
-
-    Without this the grid is dropped, `xdva` silently becomes a list of pixel
-    indices, and a spatiotemporal percept can no longer be placed in a scene.
-    """
+    """A percept rewritten frame by frame has not moved in the visual field"""
     implant = implant_at(0, 0)
     implant.stim = BiphasicPulseTrain(20, 30, 0.45, stim_dur=50)
     model = Model(spatial=ScoreboardSpatial(rho=200, xrange=(-2, 2),
@@ -571,11 +528,7 @@ def test_a_temporal_stage_does_not_lose_the_visual_field_grid():
 
 
 def test_a_single_timed_percept_is_not_broadcast_over_a_video():
-    """One frame at a named instant happened then, not throughout
-
-    Broadcasting it across every video frame would be a silent claim that the
-    model predicted something it was never asked about.
-    """
+    """One frame at a named instant happened then, not throughout"""
     source = VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20])
     scene = Scene(source, fov=(5, 5), scotoma=Scotoma.circle(3))
     grid = ScoreboardModel(xrange=(-2, 2), yrange=(-2, 2),
