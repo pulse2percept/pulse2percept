@@ -8,7 +8,7 @@ from .scotoma import Scotoma
 from ..percepts import Percept
 from ..stimuli import ImageStimulus, VideoStimulus
 from ..topography import Grid2D
-from ..units import as_value, dimensionless, dva
+from ..units import Quantity, as_value, dimensionless, dva
 from ..utils import PrettyPrint
 
 
@@ -91,6 +91,43 @@ def _drop_gray_axis(values):
     return values[:, 0] if values.shape[1] == 1 else values
 
 
+def _percept_sampler(prosthetic, frames):
+    """Read a percept at arbitrary eye-centered ``(y, x)`` coordinates in dva
+
+    Outside the model's own grid there is no percept, and nothing is
+    extrapolated into that space.
+    """
+    ys = np.asarray(prosthetic.ydva, dtype=float)
+    xs = np.asarray(prosthetic.xdva, dtype=float)
+    if ys.size < 2 or xs.size < 2:
+        raise ValueError(f"A percept needs extent in both directions to be "
+                         f"placed in a scene, but this one's grid is "
+                         f"{ys.size} x {xs.size}.")
+    # `Grid2D` meshes its y axis reversed, so row 0 of the data holds the
+    # largest y while `ydva` ascends. Flipping the rows puts the two back in
+    # the same order, which is also the ascending one the interpolator wants.
+    return RegularGridInterpolator((ys, xs), frames[::-1], method='linear',
+                                   bounds_error=False, fill_value=0)
+
+
+def _check_range(vmin, vmax):
+    """Reject a brightness-to-display mapping that cannot be drawn"""
+    if vmax is None:
+        raise ValueError("'vmax' is required: a percept is in arbitrary "
+                         "brightness units, so nothing here can guess which "
+                         "of them displays as white.")
+    vmin, vmax = float(vmin), float(vmax)
+    if not np.isfinite([vmin, vmax]).all():
+        raise ValueError(f"'vmin' ({vmin}) and 'vmax' ({vmax}) must be "
+                         f"finite.")
+    if vmax <= vmin:
+        raise ValueError(f"'vmax' ({vmax}) must be greater than 'vmin' "
+                         f"({vmin}); the percept is in arbitrary brightness "
+                         f"units, and this is what says which of them is "
+                         f"white.")
+    return vmin, vmax
+
+
 class Scene(PrettyPrint):
     """What is visually present, and where native vision is lost
 
@@ -110,9 +147,14 @@ class Scene(PrettyPrint):
     is an implant, which sits on the retina. Gaze moves the scene past both of
     them rather than moving either.
 
-    A scene is read-only once built. ``fov`` is resolved against the source's
-    frame shape, so swapping one out without the other would leave the
-    geometry describing a picture that is no longer there.
+    A scene's source and FOV geometry are fixed after construction: ``fov`` is
+    resolved against the source's frame shape, so swapping one out without the
+    other would leave the geometry describing a picture that is no longer
+    there.
+
+    The scotoma is native vision's business only. What an implant is given to
+    encode is sampled from the source itself, inside the scotoma as well as
+    outside it: a camera does not go blind where its wearer has.
 
     .. versionadded:: 0.11.0
 
@@ -374,6 +416,33 @@ class Scene(PrettyPrint):
         # both just pixels to it:
         return rgb2gray(values.transpose((0, 2, 1)))
 
+    def _rgb_frames(self):
+        """The source as ``(rows, cols, 3, n_frames)``, scotoma not applied
+
+        Grayscale is replicated across the three channels. What is *out there*
+        is the same picture whether or not the eye looking at it can see all
+        of it.
+        """
+        frames = self._frames()
+        if frames.shape[2] == 1:
+            frames = np.repeat(frames, 3, axis=2)
+        return frames
+
+    def _loss_at(self, gaze_xy):
+        """How much native vision is lost at each scene pixel, in [0, 1]
+
+        ``gaze_xy`` is where the eye points, which is what carries the
+        eye-centered scotoma onto the scene's own pixel grid.
+        """
+        n_rows, n_cols = self._frame_shape
+        if self.scotoma is None:
+            return np.zeros((n_rows, n_cols))
+        # `scene = visual field + gaze`, run backwards: where each scene pixel
+        # falls relative to the fovea, which is where the scotoma is.
+        gx, gy = gaze_xy
+        x_scene, y_scene = self._pixel_centers()
+        return self.scotoma(x_scene - gx, y_scene - gy)
+
     def _native_rgb(self, gaze=None):
         """What is left of native vision, as ``(rows, cols, 3, n_frames)``
 
@@ -381,21 +450,16 @@ class Scene(PrettyPrint):
         completely lost, and a linear mix of the two where a graded scotoma
         says vision is partly there.
         """
-        frames = self._frames()
-        if frames.shape[2] == 1:
-            frames = np.repeat(frames, 3, axis=2)
+        frames = self._rgb_frames()
         if self.scotoma is None:
             return frames
         n_frames = frames.shape[-1]
         gaze = _gaze_points(gaze, n_frames)
-        x_scene, y_scene = self._pixel_centers()
         fill = self.scotoma_fill
         out = np.empty(frames.shape, dtype=np.float32)
         for f in range(n_frames):
-            # `scene = visual field + gaze`, run backwards: where each scene
-            # pixel falls relative to the fovea, which is where the scotoma is.
-            gx, gy = gaze[0] if len(gaze) == 1 else gaze[f]
-            loss = self.scotoma(x_scene - gx, y_scene - gy)[..., np.newaxis]
+            loss = self._loss_at(gaze[0] if len(gaze) == 1
+                                 else gaze[f])[..., np.newaxis]
             out[..., f] = (1 - loss) * frames[..., f] + loss * fill
         return out
 
@@ -404,6 +468,126 @@ class Scene(PrettyPrint):
         n_rows, n_cols = self._frame_shape
         cols, rows = np.meshgrid(np.arange(n_cols), np.arange(n_rows))
         return self.pixel_to_dva(cols, rows)
+
+    def _compose(self, prosthetic, vmax, vmin=0, gaze=None):
+        """Native vision with a prosthetic percept painted into the loss
+
+        Each pixel is composed as::
+
+            lost   = maximum(scotoma_fill, prosthetic_rgb)
+            output = (1 - loss) * scene_rgb + loss * lost
+
+        That ``maximum`` is a **display composition rule**, not a
+        physiological model: it puts a luminous phosphene over whatever the
+        lost view looks like, which is what the intact periphery, a complete
+        scotoma, and a phosphene inside one each need. It is deliberately the
+        simplest rule that gets those three right, and it is expected to be
+        replaced when there is science to replace it with.
+
+        The result lives on the scene's own pixel grid, so intact vision
+        passes through untouched rather than being resampled onto the model's.
+
+        Returns
+        -------
+        percept : :py:class:`~pulse2percept.percepts.Percept`
+            An RGB percept of shape ``(Y, X, 3, T)`` in scene coordinates.
+
+        """
+        if not isinstance(prosthetic, Percept):
+            raise TypeError(f"'prosthetic' must be a Percept, not "
+                            f"{type(prosthetic)}.")
+        if prosthetic.is_rgb:
+            raise ValueError("'prosthetic' must be a brightness percept: "
+                             "models produce brightness in arbitrary units, "
+                             "and composing it is what turns that into "
+                             "display intensity.")
+        if not prosthetic._has_space:
+            # Without a `space`, `xdva`/`ydva` are the pixel indices `Data`
+            # fills an omitted axis with. Reading those as degrees would place
+            # the percept somewhere plausible-looking and wrong:
+            raise ValueError("'prosthetic' has no visual-field coordinates, "
+                             "so there is nowhere in the scene to put it. "
+                             "Predict it on a model grid, or pass 'space' "
+                             "when building it.")
+        vmin, vmax = _check_range(vmin, vmax)
+        scene_rgb = self._rgb_frames()
+        pframes, out_time, out_unit = self._prosthetic_frames(prosthetic)
+        n_out = pframes.shape[-1]
+        gaze = _gaze_points(gaze, n_out)
+        n_rows, n_cols = self._frame_shape
+        fill = self.scotoma_fill
+
+        x_scene, y_scene = self._pixel_centers()
+        static = len(gaze) == 1
+        if static:
+            # One gaze looks at the same place in every frame, so the scotoma
+            # is evaluated once and every frame's brightness comes back from a
+            # single call.
+            gx, gy = gaze[0]
+            points = np.column_stack(((y_scene - gy).ravel(),
+                                      (x_scene - gx).ravel()))
+            brightness = _percept_sampler(prosthetic, pframes)(points)
+            brightness = brightness.reshape((n_rows, n_cols, n_out))
+            loss = self._loss_at(gaze[0])[..., np.newaxis]
+
+        out = np.empty((n_rows, n_cols, 3, n_out), dtype=np.float32)
+        for f in range(n_out):
+            if static:
+                frame = brightness[..., f]
+            else:
+                # A gaze per frame: the eye was somewhere else when this frame
+                # came up, so the scotoma and the percept land elsewhere too.
+                gx, gy = gaze[f]
+                points = np.column_stack(((y_scene - gy).ravel(),
+                                          (x_scene - gx).ravel()))
+                sample = _percept_sampler(prosthetic, pframes[..., f:f + 1])
+                frame = sample(points).reshape((n_rows, n_cols))
+                loss = self._loss_at(gaze[f])[..., np.newaxis]
+            phosphene = np.clip((frame - vmin) / (vmax - vmin), 0, 1)
+            lost = np.maximum(fill, phosphene)[..., np.newaxis]
+            native = scene_rgb[..., 0 if scene_rgb.shape[-1] == 1 else f]
+            out[..., f] = (1 - loss) * native + loss * lost
+        return Percept(out, space=self._grid(), time=out_time,
+                       time_unit=out_unit)
+
+    def _prosthetic_frames(self, prosthetic):
+        """Line a percept up with the output frames, and say when they happen
+
+        A still scene has no clock of its own, so a temporal percept sets the
+        output timing. A video does have one and keeps it: the percept is read
+        at the video's frame times instead, and a temporal percept has to
+        cover the whole of it. A one-frame percept stands behind every frame
+        on purpose, which is a different thing from running off the end of a
+        modeled one. Whichever clock wins brings its own unit along, so a
+        percept counted in seconds does not come back in milliseconds.
+        """
+        if self.time is None:
+            return prosthetic.data, prosthetic.time, prosthetic.time_unit
+        n_out = self.n_frames
+        if prosthetic.data.shape[-1] == 1:
+            # A still percept stands behind every frame of the video:
+            return (np.repeat(prosthetic.data, n_out, axis=-1), self.time,
+                    self.time_unit)
+        # Percept interpolation holds the nearest endpoint outside the modeled
+        # interval, so a video that runs past it would be shown a phosphene
+        # that was never predicted:
+        unit = prosthetic.time_unit
+        asked = np.asarray(self.source.times(unit), dtype=float)
+        lo, hi = float(prosthetic.time[0]), float(prosthetic.time[-1])
+        slack = 1e-9 * max(abs(lo), abs(hi), 1.0)
+        if asked.min() < lo - slack or asked.max() > hi + slack:
+            raise ValueError(
+                f"The percept covers {lo:g}-{hi:g} {unit}, but the scene runs "
+                f"{asked.min():g}-{asked.max():g} {unit}. Nothing was modeled "
+                f"outside that interval, and holding the nearest predicted "
+                f"frame there would show a phosphene that was never "
+                f"simulated. Predict the percept over the whole video, or "
+                f"trim the video to the percept.")
+        # `Percept.__getitem__` owns time interpolation; the quantity is what
+        # carries the video's clock across to the percept's own time unit:
+        frames = prosthetic[..., Quantity(np.asarray(self.time),
+                                          self.time_unit)]
+        return frames, self.time, self.time_unit
 
     def _grid(self):
         """A Grid2D on the scene's pixel centers, in scene coordinates

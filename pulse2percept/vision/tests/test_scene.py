@@ -343,6 +343,33 @@ def test_the_scotoma_is_eye_centered_so_gaze_moves_the_scene_past_it():
                             decimal=6)
 
 
+def test_scotoma_does_not_change_what_the_device_sees():
+    """A camera does not go blind where its wearer has
+
+    The scotoma is native vision's business. Masking the source before it
+    reaches the implant would look entirely plausible and simulate the wrong
+    thing: the phosphenes would carry no information exactly where the
+    prosthesis is the only thing left to carry any.
+    """
+    x = np.array([-15.0, -8.0, -2.0, 0.0, 3.0, 9.0, 18.0])
+    y = np.array([0.0, 6.0, -4.0, 0.0, 2.0, -9.0, 5.0])
+    plain = ramp_scene()
+    for fill in (0.0, 0.75, 1.0):
+        blind = ramp_scene(scotoma=Scotoma.circle(10), scotoma_fill=fill)
+        npt.assert_array_equal(blind._sample_at(x, y), plain._sample_at(x, y))
+        npt.assert_array_equal(blind._device_input(x, y),
+                               plain._device_input(x, y))
+    # The test only means something if some of those points are lost and some
+    # are not, and if the source actually varies across them:
+    loss = blind.scotoma(x, y)
+    npt.assert_equal(loss.max() == 1 and loss.min() == 0, True)
+    seen = np.ravel(plain._device_input(x, y))
+    npt.assert_equal(np.unique(seen).size, x.size)
+    # ... and native vision does change, which is what says `fill` was live:
+    npt.assert_equal(np.allclose(blind._native_rgb(), plain._native_rgb()),
+                     False)
+
+
 def test_scotoma_and_fill_are_validated():
     source = ImageStimulus(np.zeros((8, 8)))
     with pytest.raises(TypeError):
