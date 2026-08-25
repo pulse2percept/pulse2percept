@@ -129,6 +129,24 @@ a gray level becomes current and which electrodes may pulse when. Prediction
 does not touch ``implant.stim``: it runs against a stand-in copy, so asking
 what someone sees never rewrites their device.
 
+An implant's ``preprocess`` -- an edge filter, an inversion, a contrast
+stretch -- is applied to the **prosthetic input branch only**, before the
+scene is sampled at the electrode locations, because an image operation needs
+an image and by sampling time there is one number per electrode. Native and
+residual vision always use the original scene: what the device does to its
+own input is not something the eye goes through. Spatial preprocessing
+operates at the scene source's pixel resolution.
+
+.. code-block:: python
+
+    implant.preprocess = lambda stim: stim.filter('sobel')
+
+For a scene, ``preprocess`` must return an
+:py:class:`~pulse2percept.stimuli.ImageStimulus` or
+:py:class:`~pulse2percept.stimuli.VideoStimulus`; a callable that produces
+current directly has nothing left to place in the visual field, and that is
+the encoder's job in any case.
+
 Scene registration is retinal. A model whose ``vfmap`` is a cortical map
 raises rather than pretending cortical registration is solved, and so does an
 implant with no ``encoder``.

@@ -196,6 +196,113 @@ def test_a_scene_driven_stimulus_still_goes_through_the_device():
     npt.assert_equal(trial.stim.unit, grid.stimulus_unit)
 
 
+def edge_source():
+    """A step edge down the middle: 0 to the left of x=0, 1 to the right"""
+    data = np.zeros((SCENE_PX, SCENE_PX))
+    data[:, HALF + 1:] = 1.0
+    return ImageStimulus(data)
+
+
+def test_preprocessing_runs_on_the_picture_not_on_electrode_values():
+    """An edge filter needs an image, and by sampling time there is none left
+
+    A Sobel filter answers "how fast does brightness change *here*", which no
+    per-electrode operation can reconstruct: one number has no neighbors.
+    """
+    scene = scene_of(edge_source())
+    at_edge = implant_at(*Curcio1990Map().dva_to_ret(0.5, 0.0))
+    inside = implant_at(*Curcio1990Map().dva_to_ret(10.0, 0.0))
+    # Untouched, the two electrodes see the two sides of the step:
+    npt.assert_almost_equal(seen_by(model_for(scene), at_edge), [[0.5]],
+                            decimal=3)
+    npt.assert_almost_equal(seen_by(model_for(scene), inside), [[1.0]],
+                            decimal=3)
+    for implant in (at_edge, inside):
+        implant.preprocess = lambda stim: stim.filter('sobel')
+    model = model_for(scene)
+    # Sobel puts everything at the edge and nothing in the flat interior,
+    # which is the opposite ordering from the raw scene:
+    npt.assert_equal(seen_by(model, at_edge)[0, 0] > 0.3, True)
+    npt.assert_almost_equal(seen_by(model, inside), [[0.0]], decimal=4)
+
+
+def test_preprocessing_does_not_reach_native_vision():
+    """What the device does to its input is not what the eye goes through
+
+    The key scientific contract: outside the scotoma the person sees the
+    world, not the implant's edge-filtered or inverted view of it.
+    """
+    source = ramp_source()
+    scene = scene_of(source, scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    implant = implant_at(*Curcio1990Map().dva_to_ret(0.0, 0.0))
+    implant.preprocess = lambda stim: stim.invert()
+    model = model_for(scene, rho=100)
+    # The electrode is at the fovea, where the ramp reads 0.5 either way, so
+    # look somewhere the inversion actually shows:
+    npt.assert_almost_equal(seen_by(model, implant, gaze=(8, 0)),
+                            [[1 - ramp_at(8.0)]], decimal=3)
+    percept = model.predict_percept(implant, gaze=(8, 0) * dva, vmax=100)
+    # Outside the scotoma: the original scene, bit for bit and uninverted.
+    original = np.repeat(source.data.reshape((SCENE_PX, SCENE_PX, 1)), 3,
+                         axis=-1)
+    x, y = scene._pixel_centers()
+    intact = scene.scotoma(x - 8, y) == 0
+    npt.assert_array_equal(percept.data[..., 0][intact], original[intact])
+    # ... and the caller's scene was not rewritten on the way through:
+    npt.assert_array_equal(scene.source.data, source.data)
+
+
+def test_preprocessing_runs_exactly_once():
+    """The stand-in implant must not put the picture through it again"""
+    calls = []
+
+    def counted(stim):
+        calls.append(stim)
+        return stim.invert()
+
+    scene = scene_of()
+    implant = implant_at(0, 0)
+    implant.preprocess = counted
+    model_for(scene).predict_percept(implant)
+    npt.assert_equal(len(calls), 1)
+    # Inversion is not idempotent, so a second pass would show up as the
+    # original ramp coming back:
+    npt.assert_almost_equal(seen_by(model_for(scene), implant, gaze=(8, 0)),
+                            [[1 - ramp_at(8.0)]], decimal=3)
+    # The caller's implant still preprocesses; only the stand-in was told not
+    # to, and only because it had already happened:
+    npt.assert_equal(implant.preprocess is counted, True)
+
+
+def test_a_video_scene_is_preprocessed_the_same_way():
+    frames = np.stack([np.full((SCENE_PX, SCENE_PX), v)
+                       for v in (0.2, 0.8)], axis=-1)
+    scene = scene_of(VideoStimulus(frames, time=[0, 100]))
+    implant = implant_at(0, 0)
+    implant.preprocess = lambda stim: stim.invert()
+    seen = seen_by(model_for(scene), implant)
+    npt.assert_equal(seen.shape, (1, 2))
+    npt.assert_almost_equal(seen.ravel(), [0.8, 0.2], decimal=3)
+
+
+@pytest.mark.parametrize('returns', [lambda stim: BiphasicPulse(20, 0.45),
+                                     lambda stim: np.zeros((4, 4))])
+def test_scene_preprocessing_must_return_a_picture(returns):
+    """Crossing to current early leaves nothing to register spatially
+
+    Assignment lets a ``preprocess`` do the encoder's job, because there the
+    values are already on electrodes. A scene has to be placed in the visual
+    field first, and a pulse train has no pixels to place.
+    """
+    scene = scene_of()
+    implant = implant_at(0, 0)
+    implant.preprocess = returns
+    with pytest.raises(TypeError) as excinfo:
+        model_for(scene).predict_percept(implant)
+    npt.assert_equal('preprocess' in str(excinfo.value), True)
+    npt.assert_equal('encoder' in str(excinfo.value), True)
+
+
 def test_a_scene_needs_an_encoder_and_a_retina():
     """Both failures name what is missing rather than dying downstream"""
     scene = scene_of()

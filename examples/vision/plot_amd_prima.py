@@ -118,6 +118,23 @@ percept.plot()
 plt.title('Looking 8 degrees right and 4 degrees down')
 
 ###############################################################################
+# Processing what the device sees
+# -------------------------------
+#
+# ``implant.preprocess`` is what the device does to its own input, and it runs
+# on the picture, before the scene is sampled at the electrodes -- an edge
+# filter needs an image, and by sampling time there is one number per
+# electrode. It belongs to the prosthetic branch alone: native vision outside
+# the scotoma is unchanged, because the eye does not look through the camera.
+
+implant.preprocess = lambda stim: stim.filter('sobel')
+
+percept = model.predict_percept(implant, gaze=(0, 0) * dva, vmax=40)
+
+percept.plot()
+plt.title('Edge-filtered device input, intact vision around it')
+
+###############################################################################
 # .. note::
 #
 #     This example demonstrates the software workflow. Whether the electrode

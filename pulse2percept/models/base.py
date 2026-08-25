@@ -11,7 +11,7 @@ import multiprocessing
 from scipy.ndimage import gaussian_filter1d
 
 from ..implants import ProsthesisSystem
-from ..stimuli import Stimulus
+from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D, RetinalMap
@@ -215,6 +215,35 @@ def _delivered(implant):
     return stand_in
 
 
+def _device_scene(scene, implant):
+    """The scene as the implant's own input sees it
+
+    An implant's ``preprocess`` is an image operation -- an edge filter, an
+    inversion, a contrast stretch -- so it has to run while there is still an
+    image to operate on, not after the picture has been reduced to one number
+    per electrode. It belongs to the prosthetic branch alone: what the device
+    does to its input is not something the eye's remaining native vision goes
+    through, so the caller's scene is left exactly as it was and the scotoma
+    is deliberately not carried over.
+
+    Preprocessing works at the scene's own pixel resolution. How finely the
+    visual world is represented, where the electrodes sample it, and how
+    finely a model evaluates the percept are three separate things, and this
+    does not try to relate them.
+    """
+    source = implant._preprocess(scene.source)
+    if source is scene.source:
+        return scene
+    if not isinstance(source, (ImageStimulus, VideoStimulus)):
+        raise TypeError(
+            f"This implant's 'preprocess' returned a "
+            f"{type(source).__name__}, which has no pixels to place in the "
+            f"visual field. Preprocessing a scene operates on the picture, so "
+            f"it has to give an ImageStimulus or a VideoStimulus back; "
+            f"turning gray levels into current is the encoder's job.")
+    return Scene(source, fov=scene.fov)
+
+
 def _scene_driven_implant(model, implant, gaze):
     """A stand-in implant carrying what the scene delivers to its electrodes
 
@@ -245,21 +274,25 @@ def _scene_driven_implant(model, implant, gaze):
             "A scene is a picture, and there is no principled default for "
             "turning a gray level into current. Give the implant an "
             "'encoder' (e.g. an AmplitudeEncoder) to say how.")
+    device_scene = _device_scene(scene, implant)
     xy = implant.earray.coordinates(vfmap.tissue_unit)[:, :2].T
     x_vf, y_vf = vfmap.ret_to_dva(*xy)
-    gray = scene._device_input(x_vf, y_vf, gaze=gaze)
+    gray = device_scene._device_input(x_vf, y_vf, gaze=gaze)
     if scene.time is None:
         # A still scene is sampled as a one-frame movie; a `Stimulus` with no
         # time axis wants that frame axis gone, or it reads the frame as a
         # time point:
         gray = gray[:, 0]
     seen = Stimulus(gray, electrodes=implant.electrode_names,
-                    time=scene.time,
-                    metadata=scene.source.metadata)
+                    time=device_scene.time,
+                    metadata=device_scene.source.metadata)
     trial = copy(implant)
+    # Preprocessing already ran, on the picture rather than on the values it
+    # samples to; everything else the setter does is still wanted:
+    trial.preprocess = False
     # Through the setter, so the encoder, the safety checks and whatever else
     # the device does to a stimulus all still happen:
-    trial.stim = seen._inherit_units(scene.source)
+    trial.stim = seen._inherit_units(device_scene.source)
     return trial
 
 

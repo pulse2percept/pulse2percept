@@ -381,6 +381,18 @@ class ProsthesisSystem(PrettyPrint):
         if self.max_current is not None:
             self._require_within_current_limit(stim)
 
+    def _preprocess(self, stim):
+        """Run ``stim`` through whatever this implant's ``preprocess`` says
+
+        The one place that resolves the three forms ``preprocess`` takes: a
+        callable, True (meaning ``preprocess_stim``), or False.
+        """
+        if callable(self.preprocess):
+            return self.preprocess(stim)
+        if self.preprocess:
+            return self.preprocess_stim(stim)
+        return stim
+
     def preprocess_stim(self, stim):
         """Preprocess the stimulus
 
@@ -585,11 +597,7 @@ class ProsthesisSystem(PrettyPrint):
         elif isinstance(data, np.ndarray) and data.size == 0:
             self._stim = None
         else:
-            # Preprocess can be a function (callable) or True/False:
-            if callable(self.preprocess):
-                data = self.preprocess(data)
-            elif self.preprocess:
-                data = self.preprocess_stim(data)
+            data = self._preprocess(data)
             # Convert to stimulus object:
             if isinstance(data, Stimulus):
                 # Already a stimulus object:
