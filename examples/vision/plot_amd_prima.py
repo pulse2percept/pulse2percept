@@ -34,7 +34,7 @@ from pulse2percept.vision import Scene, Scotoma
 
 ###############################################################################
 
-scotoma = Scotoma.circle(8 * dva)
+scotoma = Scotoma.circle(6 * dva)
 
 scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma)
 
@@ -48,8 +48,8 @@ implant.encoder = AmplitudeEncoder(amp_range=(0, 40), freq=20)
 
 ###############################################################################
 
-model = ScoreboardModel(scene=scene, rho=150, xrange=(-6, 6), yrange=(-6, 6),
-                        step=0.1).build()
+model = ScoreboardModel(scene=scene, rho=50, xrange=(-6, 6), yrange=(-6, 6),
+                        step=0.05).build()
 
 ###############################################################################
 
