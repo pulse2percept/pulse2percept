@@ -303,6 +303,40 @@ def test_scene_preprocessing_must_return_a_picture(returns):
     npt.assert_equal('encoder' in str(excinfo.value), True)
 
 
+def test_scene_preprocessing_must_preserve_spatial_shape():
+    """A resize would reinterpret `fov`, not just change what is seen
+
+    Fewer pixels across the same `fov` is a coarser device input, but nothing
+    here says so: those pixels would simply be stretched back across the
+    original angular extent.
+    """
+    scene = scene_of()
+    implant = implant_at(0, 0)
+    implant.preprocess = lambda stim: stim.resize((20, 20))
+    with pytest.raises(ValueError) as excinfo:
+        model_for(scene).predict_percept(implant)
+    npt.assert_equal('shape' in str(excinfo.value), True)
+
+
+def test_scene_preprocessing_must_preserve_the_frame_clock():
+    """Frames are what a video scene is registered against in time"""
+    frames = np.stack([np.full((SCENE_PX, SCENE_PX), v)
+                       for v in (0.2, 0.8)], axis=-1)
+    scene = scene_of(VideoStimulus(frames, time=[0, 100]))
+    implant = implant_at(0, 0)
+    implant.preprocess = lambda stim: VideoStimulus(
+        stim.data.reshape(stim.vid_shape)[..., :1], time=stim.time[:1])
+    with pytest.raises(ValueError) as excinfo:
+        model_for(scene).predict_percept(implant)
+    npt.assert_equal('frame' in str(excinfo.value), True)
+    # The same instants told in seconds rather than milliseconds are the same
+    # clock, and stay allowed:
+    implant.preprocess = lambda stim: VideoStimulus(
+        1 - stim.data.reshape(stim.vid_shape), time=stim.time / 1000 * s)
+    npt.assert_almost_equal(seen_by(model_for(scene), implant).ravel(),
+                            [0.8, 0.2], decimal=3)
+
+
 def test_a_scene_needs_an_encoder_and_a_retina():
     """Both failures name what is missing rather than dying downstream"""
     scene = scene_of()

@@ -145,7 +145,10 @@ For a scene, ``preprocess`` must return an
 :py:class:`~pulse2percept.stimuli.ImageStimulus` or
 :py:class:`~pulse2percept.stimuli.VideoStimulus`; a callable that produces
 current directly has nothing left to place in the visual field, and that is
-the encoder's job in any case.
+the encoder's job in any case. Pixel values and channels are free to change --
+RGB to grayscale is fine -- but the spatial shape and the frame clock are not,
+because ``fov`` describes the geometry of the source it was given, and a
+resize or a re-timing would quietly reinterpret it.
 
 Scene registration is retinal. A model whose ``vfmap`` is a cortical map
 raises rather than pretending cortical registration is solved, and so does an

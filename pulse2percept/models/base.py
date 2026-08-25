@@ -216,20 +216,10 @@ def _delivered(implant):
 
 
 def _device_scene(scene, implant):
-    """The scene as the implant's own input sees it
+    """The visual scene the implant's own input pipeline sees
 
-    An implant's ``preprocess`` is an image operation -- an edge filter, an
-    inversion, a contrast stretch -- so it has to run while there is still an
-    image to operate on, not after the picture has been reduced to one number
-    per electrode. It belongs to the prosthetic branch alone: what the device
-    does to its input is not something the eye's remaining native vision goes
-    through, so the caller's scene is left exactly as it was and the scotoma
-    is deliberately not carried over.
-
-    Preprocessing works at the scene's own pixel resolution. How finely the
-    visual world is represented, where the electrodes sample it, and how
-    finely a model evaluates the percept are three separate things, and this
-    does not try to relate them.
+    Preprocessing applies to the prosthetic branch only and runs before
+    electrode sampling, at the scene source's own resolution.
     """
     source = implant._preprocess(scene.source)
     if source is scene.source:
@@ -241,7 +231,32 @@ def _device_scene(scene, implant):
             f"visual field. Preprocessing a scene operates on the picture, so "
             f"it has to give an ImageStimulus or a VideoStimulus back; "
             f"turning gray levels into current is the encoder's job.")
-    return Scene(source, fov=scene.fov)
+
+    def refuse(what, before, after):
+        raise ValueError(
+            f"This implant's 'preprocess' changed the scene's {what} from "
+            f"{before} to {after}. A scene's 'fov' describes the geometry of "
+            f"the source it was given, so preprocessing may change pixel "
+            f"values and channels, but not spatial shape or timing.")
+
+    if isinstance(source, VideoStimulus) != isinstance(scene.source,
+                                                       VideoStimulus):
+        refuse('kind', type(scene.source).__name__, type(source).__name__)
+    device = Scene(source, fov=scene.fov)
+    if device.shape != scene.shape:
+        refuse('shape', scene.shape, device.shape)
+    if scene.time is not None:
+        # Same instants, told in whichever unit preprocessing handed back:
+        mine = np.asarray(scene.time)
+        theirs = np.asarray(as_value(Quantity(np.asarray(device.time),
+                                              device.time_unit),
+                                     scene.time_unit, 'time'))
+        if mine.size != theirs.size:
+            refuse('frame count', mine.size, theirs.size)
+        if not np.allclose(mine, theirs):
+            refuse('frame times', f'{mine} {scene.time_unit}',
+                   f'{theirs} {scene.time_unit}')
+    return device
 
 
 def _scene_driven_implant(model, implant, gaze):
@@ -278,7 +293,7 @@ def _scene_driven_implant(model, implant, gaze):
     xy = implant.earray.coordinates(vfmap.tissue_unit)[:, :2].T
     x_vf, y_vf = vfmap.ret_to_dva(*xy)
     gray = device_scene._device_input(x_vf, y_vf, gaze=gaze)
-    if scene.time is None:
+    if device_scene.time is None:
         # A still scene is sampled as a one-frame movie; a `Stimulus` with no
         # time axis wants that frame axis gone, or it reads the frame as a
         # time point:
