@@ -3,6 +3,7 @@ import pytest
 import numpy.testing as npt
 from pulse2percept.implants.base import ProsthesisSystem
 from pulse2percept.implants.bvt import BVT24, BVT44
+from pulse2percept.units import DimensionMismatchError, deg, dva, rad
 
 
 @pytest.mark.parametrize('x', (-100, 200))
@@ -149,3 +150,15 @@ def test_BVT44_stim():
     implant = BVT44(stim=np.ones(46))
     npt.assert_equal(implant.stim.shape, (46, 1))
     npt.assert_almost_equal(implant.stim.data, 1)
+
+
+@pytest.mark.parametrize('cls', (BVT24, BVT44))
+def test_BVT_rot_units(cls):
+    """BVT lays out its own electrodes, so it owns this conversion"""
+    bare = cls(rot=30).earray.coordinates()
+    for rot in (30 * deg, np.pi / 6 * rad):
+        npt.assert_allclose(cls(rot=rot).earray.coordinates(), bare,
+                            rtol=1e-12)
+    # Visual angle is a different dimension and is refused:
+    with pytest.raises(DimensionMismatchError):
+        cls(rot=30 * dva)

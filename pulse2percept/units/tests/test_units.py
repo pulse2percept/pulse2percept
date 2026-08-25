@@ -9,8 +9,8 @@ from pulse2percept.units import (Dimension, Unit, Quantity,
                                  DimensionMismatchError, as_value,
                                  dimensionless,
                                  s, ms, us, ns, Hz, kHz, m, cm, mm, um, nm,
-                                 A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, dva,
-                                 xTh)
+                                 A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, deg,
+                                 rad, dva, xTh)
 from pulse2percept.units.base import (TIME, _CANONICAL_SYMBOLS,
                                       _CANONICAL_UNITS)
 
@@ -33,6 +33,7 @@ def test_Dimension():
     # Names:
     npt.assert_equal(Dimension(time=1).name, 'time')
     npt.assert_equal(Dimension(current=1).name, 'electric current')
+    npt.assert_equal(Dimension(angle=1).name, 'angle')
     npt.assert_equal(Dimension(visual_angle=1).name, 'visual angle')
     npt.assert_equal(Dimension(time=-1).name, 'frequency')
     npt.assert_equal(Dimension(current=1, time=1).name, 'charge')
@@ -160,6 +161,7 @@ def test_unit_vocabulary():
                              (uV, 1e-6, 'voltage'),
                              (C, 1, 'charge'), (mC, 1e-3, 'charge'),
                              (uC, 1e-6, 'charge'), (nC, 1e-9, 'charge'),
+                             (rad, 1, 'angle'), (deg, np.pi / 180, 'angle'),
                              (dva, 1, 'visual angle'),
                              (xTh, 1, 'threshold ratio')]:
         npt.assert_almost_equal(unit.scale, scale)
@@ -378,6 +380,27 @@ def test_dva_is_not_a_length():
     # dva is still a perfectly good unit on its own:
     npt.assert_equal((5 * dva).to_value(dva), 5)
     npt.assert_equal(dva.dimension.name, 'visual angle')
+
+
+def test_deg_and_rad_are_ordinary_angles():
+    # Radians are the base scale, so the two convert by a plain factor:
+    npt.assert_almost_equal((180 * deg).to_value(rad), np.pi)
+    npt.assert_almost_equal((np.pi * rad).to_value(deg), 180)
+    npt.assert_equal(180 * deg == np.pi * rad, True)
+    npt.assert_equal(str(45 * deg), '45 deg')
+    # An ordinary angle is not a visual angle, and neither converts to the
+    # other or to anything else:
+    npt.assert_equal(deg.dimension == dva.dimension, False)
+    npt.assert_equal(45 * deg == 45 * dva, False)
+    for bad in (dva, um, ms, dimensionless):
+        with pytest.raises(DimensionMismatchError):
+            (45 * deg).to_value(bad)
+        with pytest.raises(DimensionMismatchError):
+            (1 * rad).to_value(bad)
+        with pytest.raises(DimensionMismatchError):
+            as_value(1 * bad, deg)
+    with pytest.raises(DimensionMismatchError):
+        (45 * deg) + (45 * dva)
 
 
 def test_xTh_is_not_dimensionless():

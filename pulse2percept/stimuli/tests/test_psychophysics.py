@@ -3,8 +3,8 @@ import numpy.testing as npt
 import pytest
 
 from pulse2percept.stimuli import GratingStimulus, BarStimulus
-from pulse2percept.units import (DimensionMismatchError, dimensionless,
-                                 ms, uA)
+from pulse2percept.units import (DimensionMismatchError, deg, dimensionless,
+                                 dva, ms, rad, uA)
 from pulse2percept.units import s as sec
 
 
@@ -87,3 +87,18 @@ def test_psychophysics_time_units():
         npt.assert_equal(unitful.time_unit, ms)
         with pytest.raises(DimensionMismatchError):
             cls((4, 4), time=5 * uA, **kwargs)
+
+
+def test_GratingStimulus_angle_units():
+    """`direction` and `phase` are ordinary angles, not visual angle"""
+    bare = GratingStimulus((4, 4), direction=45, phase=90, time=100)
+    unitful = GratingStimulus((4, 4), direction=45 * deg, phase=90 * deg,
+                              time=100)
+    in_rad = GratingStimulus((4, 4), direction=np.pi / 4 * rad,
+                             phase=np.pi / 2 * rad, time=100)
+    npt.assert_allclose(unitful.data, bare.data, rtol=1e-12)
+    npt.assert_allclose(in_rad.data, bare.data, rtol=1e-12)
+    for kwargs in ({'direction': 10 * dva}, {'phase': 10 * dva},
+                   {'phase': 10 * ms}):
+        with pytest.raises(DimensionMismatchError):
+            GratingStimulus((4, 4), time=100, **kwargs)

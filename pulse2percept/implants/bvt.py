@@ -5,9 +5,8 @@ from skimage.transform import SimilarityTransform
 
 from .base import ProsthesisSystem
 from .electrodes import DiskElectrode
-from .electrode_arrays import (ElectrodeArray, ElectrodeGrid,
-                               _require_plain_angle)
-from ..units import as_value, um
+from .electrode_arrays import ElectrodeArray, ElectrodeGrid
+from ..units import as_value, deg, um
 
 
 class BVT24(ProsthesisSystem):
@@ -55,7 +54,7 @@ class BVT24(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float
+    rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
@@ -84,7 +83,7 @@ class BVT24(ProsthesisSystem):
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
-        _require_plain_angle(rot)
+        rot = as_value(rot, deg, 'rot')
 
         # the positions of the electrodes 1-20, 21a-21m, R1-R2
         x_arr = np.array([1275.0, 850.0, 1275.0, 850.0, 1275.0,
@@ -179,7 +178,7 @@ class BVT44(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float
+    rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
@@ -207,7 +206,7 @@ class BVT44(ProsthesisSystem):
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
-        _require_plain_angle(rot)
+        rot = as_value(rot, deg, 'rot')
 
         # The 44 stimulating electrodes are arranged in a hex grid; two return
         # electrodes are added as well:

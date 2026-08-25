@@ -733,7 +733,7 @@ class RectangleImplant(ProsthesisSystem):
     ----------
     x, y, z : float, optional
         The x, y, z coordinates (um) of the center of the implant
-    rot : float, optional
+    rot : float or Quantity, optional
         The rotation of the implant in degrees
     shape : tuple, optional
         The number of rows and columns in the implant

@@ -29,7 +29,7 @@ class Cortivis(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``Cortivis(x=20 * mm)``); see
         :py:mod:`pulse2percept.units`.
-    rot : float
+    rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.

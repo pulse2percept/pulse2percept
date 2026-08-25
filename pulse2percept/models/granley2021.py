@@ -374,7 +374,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             coordinate.
         n_axons: int, optional
             Number of axons to generate.
-        axons_range: (min, max), optional
+        axons_range: (min, max) of float or Quantity, optional
             The range of angles(in degrees) at which axons exit the optic disc.
             This corresponds to the range of $\\phi_0$ values used in
             [Jansonius2009]_.
@@ -812,7 +812,7 @@ class BiphasicAxonMapModel(Model):
             coordinate.
         n_axons: int, optional
             Number of axons to generate.
-        axons_range: (min, max), optional
+        axons_range: (min, max) of float or Quantity, optional
             The range of angles(in degrees) at which axons exit the optic disc.
             This corresponds to the range of $\\phi_0$ values used in
             [Jansonius2009]_.

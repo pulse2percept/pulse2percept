@@ -36,12 +36,12 @@ Canonical units
      - microns (um)
    * - visual-field coordinates
      - degrees of visual angle (dva)
+   * - geometric angle
+     - degrees (deg)
    * - frequency
      - hertz (Hz)
    * - image and video intensity
      - dimensionless
-   * - implant rotation
-     - degrees
 
 Objects that use a different unit, such as a Percept with its own time base,
 record that unit explicitly.
@@ -86,6 +86,27 @@ Likewise, :py:class:`~pulse2percept.stimuli.ImageStimulus` and
 :py:class:`~pulse2percept.stimuli.VideoStimulus` are dimensionless. A
 :py:class:`~pulse2percept.stimuli.StimulusEncoder` defines how their gray
 levels become electrical stimulation.
+
+Geometric angle
+---------------
+
+``deg`` and ``rad`` measure ordinary geometric angle: implant rotation, image
+rotation, grating direction and phase, and axon polar angle. They convert into
+each other freely, and bare numbers still mean degrees.
+
+.. code-block:: python
+
+    import numpy as np
+    from pulse2percept.implants import ArgusII
+    from pulse2percept.units import deg, rad
+
+    ArgusII(rot=45)              # degrees, as before
+    ArgusII(rot=45 * deg)        # equivalent
+    ArgusII(rot=np.pi / 4 * rad) # equivalent
+
+``dva`` is deliberately a different dimension: it measures visual angle, which
+only becomes a rotation or a retinal distance through a visual field map. So
+``rot=45 * dva`` raises rather than being read as 45 degrees.
 
 Threshold-relative amplitude
 ----------------------------

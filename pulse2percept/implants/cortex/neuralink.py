@@ -295,8 +295,7 @@ class Neuralink(EnsembleImplant):
         rand_insertion_angle : float, optional
             If not none, insert threads at a random offset from perpendicular,
             with a maximum azimuthal rotation of rand_insertion_angle degrees.
-            A plain rotation in degrees, not a unitful quantity: ``dva``
-            measures visual angle, which is a different thing.
+            A plain number of degrees; this one is not unit-aware.
         region : str, optional
             Region of cortex to create implant in.
         Thread : NeuralinkThread, optional

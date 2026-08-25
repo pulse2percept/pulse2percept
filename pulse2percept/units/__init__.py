@@ -22,6 +22,8 @@ from .base import (Dimension, Unit, Quantity, DimensionMismatchError, as_value,
                    V, mV, uV,
                    # charge
                    C, mC, uC, nC,
+                   # angle
+                   rad, deg,
                    # visual angle
                    dva,
                    # threshold ratio
@@ -40,6 +42,7 @@ __all__ = [
     'A', 'mA', 'uA', 'nA',
     'V', 'mV', 'uV',
     'C', 'mC', 'uC', 'nC',
+    'rad', 'deg',
     'dva',
     'xTh',
 ]

@@ -45,7 +45,7 @@ class AlphaIMS(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float
+    rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
@@ -190,7 +190,7 @@ class AlphaAMS(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float
+    rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.

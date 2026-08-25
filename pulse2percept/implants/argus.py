@@ -64,7 +64,7 @@ class ArgusI(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 16 entries or a scalar that is applied
         to all electrodes.
-    rot : float, optional
+    rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
@@ -205,7 +205,7 @@ class ArgusII(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 60 entries or a scalar that is applied
         to all electrodes.
-    rot : float
+    rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
