@@ -7,9 +7,6 @@ import math
 from copy import deepcopy
 import numpy as np
 
-# Angle, visual angle and threshold ratio are three distinct dimensions: an
-# ordinary geometric angle is a pure ratio, whereas converting visual angle or
-# threshold ratio requires model- or subject-specific calibration.
 BASE_DIMENSIONS = ('time', 'length', 'current', 'voltage', 'angle',
                    'visual_angle', 'threshold_ratio')
 
@@ -54,11 +51,7 @@ _EQ_RTOL = 1e-12
 
 
 def _isclose(a, b):
-    """Compare magnitudes up to floating-point conversion noise.
-
-    Return ``NotImplemented`` for values that cannot be compared
-    numerically.
-    """
+    """Compare magnitudes up to floating-point conversion noise."""
     try:
         result = np.isclose(a, b, rtol=_EQ_RTOL, atol=0.0)
     except (TypeError, ValueError):

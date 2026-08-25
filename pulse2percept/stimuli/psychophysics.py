@@ -119,7 +119,7 @@ class BarStimulus(VideoStimulus):
         A tuple specifying the desired height (pixels) and the width (pixels)
         of the grating stimulus.
 
-    direction : scalar in [0, 360) degrees, optional
+    direction : scalar in [0, 360) degrees or Quantity, optional
         Drift direction of the bar.
 
     speed : scalar in pixels/frame, optional

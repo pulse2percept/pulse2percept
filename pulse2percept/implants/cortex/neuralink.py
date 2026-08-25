@@ -10,7 +10,7 @@ from ..ensemble import EnsembleImplant
 from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
 from ..base import ProsthesisSystem
-from ...units import as_value, dva, um
+from ...units import as_value, deg, dva, um
 from ...utils import parse_3d_orient, rename_parameter
 
 
@@ -292,10 +292,9 @@ class Neuralink(EnsembleImplant):
                 Renamed from ``xystep``, which suggested that one step size
                 applies to both axes. The old name still works as a keyword
                 argument, but is deprecated and will be removed in v0.11.0.
-        rand_insertion_angle : float, optional
+        rand_insertion_angle : float or Quantity, optional
             If not none, insert threads at a random offset from perpendicular,
             with a maximum azimuthal rotation of rand_insertion_angle degrees.
-            A plain number of degrees; this one is not unit-aware.
         region : str, optional
             Region of cortex to create implant in.
         Thread : NeuralinkThread, optional
@@ -327,6 +326,9 @@ class Neuralink(EnsembleImplant):
         xrange = as_value(xrange, dva, 'xrange')
         yrange = as_value(yrange, dva, 'yrange')
         step = as_value(step, dva, 'step')
+        # An ordinary rotation, unlike the visual-field coordinates above:
+        rand_insertion_angle = as_value(rand_insertion_angle, deg,
+                                        'rand_insertion_angle')
 
         if locs is None:
             if xrange is None:

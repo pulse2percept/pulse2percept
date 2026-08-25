@@ -8,7 +8,8 @@ Physical Units
 
 Many pulse2percept parameters represent physical quantities. The
 :py:mod:`~pulse2percept.units` module adds dimensional checking and automatic
-conversion while keeping bare numbers fully supported.
+conversion while keeping bare numbers fully supported and consistent with
+older p2p versions.
 
 .. code-block:: python
 
@@ -29,17 +30,17 @@ Canonical units
    * - Quantity
      - Bare number means
    * - stimulus current
-     - microamps (uA)
+     - microamps (``uA``)
    * - stimulus and percept time
      - milliseconds (ms)
    * - electrode and tissue geometry
-     - microns (um)
+     - microns (``um``)
    * - visual-field coordinates
-     - degrees of visual angle (dva)
+     - degrees of visual angle (``dva``)
    * - geometric angle
-     - degrees (deg)
+     - degrees (``deg``)
    * - frequency
-     - hertz (Hz)
+     - hertz (``Hz``)
    * - image and video intensity
      - dimensionless
 
@@ -92,7 +93,7 @@ Geometric angle
 
 ``deg`` and ``rad`` measure ordinary geometric angle: implant rotation, image
 rotation, grating direction and phase, and axon polar angle. They convert into
-each other freely, and bare numbers still mean degrees.
+each other freely, and bare numbers still mean degrees:
 
 .. code-block:: python
 
@@ -104,16 +105,21 @@ each other freely, and bare numbers still mean degrees.
     ArgusII(rot=45 * deg)        # equivalent
     ArgusII(rot=np.pi / 4 * rad) # equivalent
 
-``dva`` is deliberately a different dimension: it measures visual angle, which
-only becomes a rotation or a retinal distance through a visual field map. So
-``rot=45 * dva`` raises rather than being read as 45 degrees.
+``dva`` is deliberately a different dimension: it describes coordinates or
+extent in the visual field, whereas ``deg`` and ``rad`` describe geometric
+rotation.
+A visual field map converts visual-field coordinates to retinal or cortical
+positions; it does not make ``dva`` interchangeable with geometric angle.
 
 Threshold-relative amplitude
 ----------------------------
 
-``xTh`` means a multiple of perceptual threshold, not a current. This matters
-for :py:class:`~pulse2percept.models.BiphasicAxonMapModel`, whose amplitude
-terms are defined relative to threshold.
+Some models (e.g., :py:class:`~pulse2percept.models.BiphasicAxonMapModel`)
+operate on ``xTh``, which means a multiple of perceptual threshold, rather
+than raw current.
+
+Thresholds can be stored in ``implant.thresholds``. When they are set,
+pulses expressed in ``xTh`` will be automatically converted to microamps:
 
 .. code-block:: python
 
