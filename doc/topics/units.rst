@@ -32,7 +32,7 @@ Canonical units
    * - stimulus current
      - microamps (``uA``)
    * - stimulus and percept time
-     - milliseconds (ms)
+     - milliseconds (``ms``)
    * - electrode and tissue geometry
      - microns (``um``)
    * - visual-field coordinates
