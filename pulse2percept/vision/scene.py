@@ -553,21 +553,38 @@ class Scene(PrettyPrint):
     def _prosthetic_frames(self, prosthetic):
         """Line a percept up with the output frames, and say when they happen
 
-        A still scene has no clock of its own, so a temporal percept sets the
-        output timing. A video does have one and keeps it: the percept is read
-        at the video's frame times instead, and a temporal percept has to
-        cover the whole of it. A one-frame percept stands behind every frame
-        on purpose, which is a different thing from running off the end of a
-        modeled one. Whichever clock wins brings its own unit along, so a
-        percept counted in seconds does not come back in milliseconds.
+        A still scene has no clock of its own, so the percept sets the output
+        timing. Against a video there are three cases, in this order:
+
+        *  A percept with one frame and no time axis happened at no particular
+           time, so it stands behind every frame of the video.
+        *  One percept frame per video frame pair off, and the percept's own
+           timestamps describe them. They need not be the video's: a temporal
+           model summarizes each frame's interval and reports its *end*.
+        *  Anything else is read at the video's frame times, which requires
+           the percept to cover the whole of it -- nothing is extrapolated.
+
+        Whichever clock wins brings its own unit along, so a percept counted
+        in seconds does not come back in milliseconds.
         """
         if self.time is None:
             return prosthetic.data, prosthetic.time, prosthetic.time_unit
         n_out = self.n_frames
-        if prosthetic.data.shape[-1] == 1:
-            # A still percept stands behind every frame of the video:
+        n_pros = prosthetic.data.shape[-1]
+        if n_pros == 1 and prosthetic.time is None:
+            # A percept with no clock happened at no particular time, so it
+            # stands behind every frame of the video. One frame that *does*
+            # carry a time happened then and not otherwise, and falls through.
             return (np.repeat(prosthetic.data, n_out, axis=-1), self.time,
                     self.time_unit)
+        if n_pros == n_out:
+            # One modeled response per video frame: they are responses *to*
+            # those frames, so they pair off, and the percept's own timestamps
+            # are the ones that describe them. A temporal model reports the
+            # end of each interval it summarized rather than the frame onset
+            # the scene was sampled at, and resampling it onto the onsets
+            # would be asking it for a percept it never claimed.
+            return prosthetic.data, prosthetic.time, prosthetic.time_unit
         # Percept interpolation holds the nearest endpoint outside the modeled
         # interval, so a video that runs past it would be shown a phosphene
         # that was never predicted:

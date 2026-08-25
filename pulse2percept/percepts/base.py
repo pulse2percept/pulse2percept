@@ -424,6 +424,31 @@ class Percept(Data):
         """
         return self.data.ndim == 4
 
+    def _inherit_space(self, other):
+        """Take the visual-field coordinates of the percept this came from
+
+        A stage that rewrites a percept frame by frame -- a temporal model
+        reading a spatial one -- does not move it in the visual field. Without
+        this the grid is lost and ``xdva``/``ydva`` silently become pixel
+        indices, which read exactly like coordinates.
+        """
+        if not getattr(other, '_has_space', False):
+            return self
+        coords = {name: getattr(other, name) for name in ('ydva', 'xdva')}
+        for dim, name in enumerate(('ydva', 'xdva')):
+            # A one-point axis stores no coordinates at all, so there is
+            # nothing to copy for it; anything else has to line up exactly, or
+            # this was not a stage that merely rewrote the same grid.
+            values = coords[name]
+            if values is not None and np.size(values) != self.data.shape[dim]:
+                return self
+        axes = self._internal['axes']
+        for name, values in coords.items():
+            if values is not None:
+                axes[name] = np.asarray(values)
+        self._has_space = True
+        return self
+
     @property
     def time_unit(self):
         """Unit in which ``time`` is stored.

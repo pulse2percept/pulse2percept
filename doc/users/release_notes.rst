@@ -9,28 +9,15 @@ v0.11.0 Residual Vision (unreleased)
 
 New features:
 
-* New :py:mod:`pulse2percept.vision`, which describes the visual world an
-  implanted eye is looking at: a :py:class:`~pulse2percept.vision.Scene` says
-  what is present and how much of the visual field it covers, and a
-  :py:class:`~pulse2percept.vision.Scotoma` says where native vision is lost
-  (:issue:`668`).
+* New :py:mod:`pulse2percept.vision` introduces
+  :py:class:`~pulse2percept.vision.Scene` and
+  :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
+  residual vision and retinal prostheses (:issue:`668`, :pull:`854`).
 
-* :py:class:`~pulse2percept.models.Model` accepts a ``scene``, and
-  :py:meth:`~pulse2percept.models.Model.predict_percept` takes a ``gaze``. The
-  model follows each electrode out through its own ``vfmap`` to the part of
-  the scene it sees, so registering an image against an implant no longer
-  involves any coordinate arithmetic in user code.
-
-* A scene with a scotoma makes
-  :py:meth:`~pulse2percept.models.Model.predict_percept` return what the
-  person actually sees -- intact native vision outside the lost region and the
-  prosthetic percept inside it -- as one RGB percept. ``vmax`` says which
-  model brightness displays as white, and is required rather than inferred.
-
-* :py:class:`~pulse2percept.percepts.Percept` supports RGB percepts of shape
-  ``(Y, X, 3, T)`` alongside the ``(Y, X, T)`` brightness percepts models
-  produce; :py:meth:`~pulse2percept.percepts.Percept.load` reads one with
-  ``as_gray=False``.
+* Models can predict directly from a visual Scene, automatically registering
+  it to the implant through the model's retinotopy. Scenes with a scotoma
+  return the combined native/prosthetic view as an RGB
+  :py:class:`~pulse2percept.percepts.Percept` (:pull:`854`).
 
 v0.10.0 Encoders (2026-08-23)
 -----------------------------

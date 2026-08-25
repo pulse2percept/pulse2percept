@@ -1365,8 +1365,11 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # by its duty cycle instead:
             resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
             t_percept = t_out
+        # A temporal model rewrites a spatial percept frame by frame; it does
+        # not move it in the visual field, so it hands the grid back on:
         return Percept(resp, space=None, time=t_percept,
-                       time_unit=self.time_unit, metadata={'stim': stim})
+                       time_unit=self.time_unit,
+                       metadata={'stim': stim})._inherit_space(stim)
 
     def _warn_if_blank(self, stim, resp):
         """Point out a percept that came out blank for a polarity reason
@@ -1484,9 +1487,23 @@ class Model(Frozen, PrettyPrint):
     Parameters
     ----------
     spatial: :py:class:`~pulse2percept.models.SpatialModel` or None
-        blah
+        The spatial model, which decides where in the visual field a stimulus
+        is seen. May be given as a class, which is then constructed from
+        ``params``.
     temporal: :py:class:`~pulse2percept.models.TemporalModel` or None
-        blah
+        The temporal model, which decides how the response evolves over time.
+        May be given as a class, which is then constructed from ``params``.
+    scene: :py:class:`~pulse2percept.vision.Scene` or None
+        What the eye is looking at. With a scene,
+        :py:meth:`~pulse2percept.models.Model.predict_percept` registers it
+        against the implant through this model's own ``vfmap`` rather than
+        taking a stimulus from the caller. Belongs to the composite rather
+        than to either component, and is not forwarded to them: it is what
+        connects the retinotopy one of them holds to the implant the other
+        never sees.
+
+        .. versionadded:: 0.11.0
+
     **params:
         Additional keyword arguments(e.g., ``verbose=True``) to be passed to
         either the spatial model, the temporal model, or both.

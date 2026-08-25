@@ -13,13 +13,14 @@ import pytest
 
 from pulse2percept.implants import (ElectrodeGrid, PointSource,
                                     ProsthesisSystem)
-from pulse2percept.models import (Model, NotBuiltError, ScoreboardModel,
-                                  ScoreboardSpatial)
+from pulse2percept.models import (FadingTemporal, Model, NotBuiltError,
+                                  ScoreboardModel, ScoreboardSpatial)
 from pulse2percept.models.base import _scene_driven_implant
 from pulse2percept.models.cortex import ScoreboardModel as CortexScoreboard
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
-                                   ImageStimulus, VideoStimulus)
+                                   BiphasicPulseTrain, ImageStimulus,
+                                   VideoStimulus)
 from pulse2percept.topography import Curcio1990Map, RetinalMap, Watson2014Map
 from pulse2percept.units import dva, ms, s
 from pulse2percept.vision import Scene, Scotoma
@@ -374,6 +375,81 @@ def test_a_video_scene_keeps_its_own_timing():
     npt.assert_equal(np.all(np.diff(peaks) > 0), True)
     # Outside the scotoma every video frame passes through untouched:
     npt.assert_almost_equal(percept.data[0, 0, 0], [0.2, 0.5, 0.9], decimal=6)
+
+
+def test_a_spatiotemporal_model_composes_against_a_video_scene():
+    """The ordinary spatial+temporal pipeline, with nothing asked of it
+
+    A temporal model summarizes each frame's interval and reports its *end*,
+    so its output times are the video's frame ends rather than its onsets.
+    They still describe one response per video frame, and pairing them off is
+    what keeps a perfectly normal simulation from being rejected for not
+    covering timestamps it never claimed.
+    """
+    frames = np.stack([np.full((SCENE_PX, SCENE_PX), v)
+                       for v in (0.2, 0.5, 0.9)], axis=-1)
+    source = VideoStimulus(frames, time=[0, 100, 200])
+    scene = Scene(source, fov=(SCENE_PX, SCENE_PX),
+                  scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+
+    def spatiotemporal(sc):
+        return Model(spatial=ScoreboardSpatial(rho=200, xrange=(-4, 4),
+                                               yrange=(-4, 4), step=0.5,
+                                               vfmap=Curcio1990Map()),
+                     temporal=FadingTemporal(), scene=sc).build()
+
+    prosthetic = spatiotemporal(Scene(source, fov=(SCENE_PX, SCENE_PX)))
+    raw = prosthetic.predict_percept(implant_at(0, 0))
+    # The premise: the two clocks really do differ, frame for frame.
+    npt.assert_almost_equal(raw.time, [100, 200, 300])
+    npt.assert_almost_equal(scene.time, [0, 100, 200])
+
+    percept = spatiotemporal(scene).predict_percept(implant_at(0, 0), vmax=5)
+    npt.assert_equal(percept.shape, (SCENE_PX, SCENE_PX, 3, 3))
+    # The percept's clock describes the output, not the video's onsets:
+    npt.assert_almost_equal(percept.time, [100, 200, 300])
+    # ... and the native frames come through in order, one per output frame:
+    npt.assert_almost_equal(percept.data[0, 0, 0], [0.2, 0.5, 0.9], decimal=5)
+
+
+def test_a_temporal_stage_does_not_lose_the_visual_field_grid():
+    """A percept rewritten frame by frame has not moved in the visual field
+
+    Without this the grid is dropped, `xdva` silently becomes a list of pixel
+    indices, and a spatiotemporal percept can no longer be placed in a scene.
+    """
+    implant = implant_at(0, 0)
+    implant.stim = BiphasicPulseTrain(20, 30, 0.45, stim_dur=50)
+    model = Model(spatial=ScoreboardSpatial(rho=200, xrange=(-2, 2),
+                                            yrange=(-2, 2), step=1),
+                  temporal=FadingTemporal()).build()
+    percept = model.predict_percept(implant)
+    npt.assert_equal(percept._has_space, True)
+    npt.assert_almost_equal(percept.xdva, [-2, -1, 0, 1, 2])
+    npt.assert_almost_equal(percept.ydva, [-2, -1, 0, 1, 2])
+
+
+def test_a_single_timed_percept_is_not_broadcast_over_a_video():
+    """One frame at a named instant happened then, not throughout
+
+    Broadcasting it across every video frame would be a silent claim that the
+    model predicted something it was never asked about.
+    """
+    source = VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20])
+    scene = Scene(source, fov=(5, 5), scotoma=Scotoma.circle(3))
+    grid = ScoreboardModel(xrange=(-2, 2), yrange=(-2, 2),
+                           step=1).build().spatial.grid
+    at_10 = Percept(np.full((5, 5, 1), 20.0), space=grid, time=[10])
+    with pytest.raises(ValueError) as excinfo:
+        scene._compose(at_10, vmax=20)
+    npt.assert_equal('never simulated' in str(excinfo.value), True)
+    # A percept with no clock at all did not happen at any instant, so it does
+    # stand behind every frame:
+    timeless = Percept(np.full((5, 5, 1), 20.0), space=grid)
+    npt.assert_equal(timeless.time, None)
+    composed = scene._compose(timeless, vmax=20)
+    npt.assert_equal(composed.shape[-1], 3)
+    npt.assert_almost_equal(composed.time, [0, 10, 20])
 
 
 def test_a_temporal_percept_must_cover_the_video():

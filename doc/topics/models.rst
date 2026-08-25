@@ -173,8 +173,9 @@ time as the last axis in both::
     (Y, X, T)     perceived brightness in arbitrary units
     (Y, X, 3, T)  RGB intensities in [0, 1]
 
-Models always produce the brightness form. The RGB form exists to display a
-scene alongside a modeled percept:
+Prosthesis models produce brightness percepts. When a
+:py:class:`~pulse2percept.vision.Scene` has a scotoma, scene-driven prediction
+composes that model output with residual vision and returns an RGB percept:
 
 .. code-block:: python
 
