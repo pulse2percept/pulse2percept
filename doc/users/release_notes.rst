@@ -16,6 +16,9 @@ Highlights:
 
 API changes:
 
+* New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
+  wherever p2p already took an angle in degrees.
+
 Bug fixes:
 
 v0.10.0 Encoders (2026-08-23)

@@ -9,7 +9,7 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..units import dva, um
+from ..units import deg, dva, um
 from ..utils import deprecated_alias
 from ..utils.constants import UM_PER_MM, ZORDER
 from ..topography import Watson2014Map
@@ -337,7 +337,7 @@ class AxonMapSpatial(SpatialModel):
         coordinate.
     n_axons : int, optional
         Number of axons to generate.
-    axons_range : (min, max), optional
+    axons_range : (min, max) of float or Quantity, optional
         The range of angles(in degrees) at which axons exit the optic disc.
         This corresponds to the range of $\\phi_0$ values used in
         [Jansonius2009]_.
@@ -420,11 +420,11 @@ class AxonMapSpatial(SpatialModel):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        # `axons_range` is a range of polar angles in degrees rather than a
-        # visual angle, and `ax_segments_range` a radial position in the
-        # Jansonius model's own coordinates, so neither is declared here:
+        # `axons_range` is a range of ordinary polar angles, not visual angle;
+        # `ax_segments_range` is a radial position in the Jansonius model's own
+        # coordinates, so it stays undeclared:
         return {**super().get_param_units(), 'rho': um, 'lam': um,
-                'loc_od': dva, 'meridian_blend': dva}
+                'loc_od': dva, 'meridian_blend': dva, 'axons_range': deg}
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
         """Grows a single axon bundle based on the model by Jansonius (2009)
@@ -1191,7 +1191,7 @@ class AxonMapModel(Model):
         coordinate.
     n_axons : int, optional
         Number of axons to generate.
-    axons_range : (min, max), optional
+    axons_range : (min, max) of float or Quantity, optional
         The range of angles(in degrees) at which axons exit the optic disc.
         This corresponds to the range of $\\phi_0$ values used in
         [Jansonius2009]_.

@@ -2,6 +2,9 @@
 
 import numpy as np
 
+from ..units import as_value, deg
+
+
 def parse_3d_orient(orient, orient_mode='direction'):
     """Parse the orient parameter
     Given either a 3D rotation matrix, vector of angles of rotation,
@@ -16,8 +19,8 @@ def parse_3d_orient(orient, orient_mode='direction'):
             - A length 3 vector specifying the direction that the 
               thread should extend in (if orient_mode == 'direction')
             - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation 
-              in degrees about each axis (x rotation performed first). 
-              (If orient_mode == 'angle')
+              in degrees (or as angle quantities) about each axis
+              (x rotation performed first). (If orient_mode == 'angle')
             - 3D rotation matrix, specifying the direction that the thread 
               should extend in (i.e. a unit vector in the z direction will
               point in the direction after being rotated by this matrix)
@@ -68,6 +71,11 @@ def parse_3d_orient(orient, orient_mode='direction'):
         angles = np.array([rot_x, rot_y, rot_z])
         return angles
 
+    if orient_mode == 'angle':
+        # Only 'angle' takes an angle; a direction vector and a rotation matrix
+        # are dimensionless. Normalized before the array conversion below, so
+        # that a list of quantities is handled elementwise:
+        orient = as_value(orient, deg, 'orient')
     if isinstance(orient, list) or isinstance(orient, tuple):
         orient = np.array(orient)
     if not isinstance(orient, np.ndarray) or orient.shape not in [(3,), (3, 3)]:

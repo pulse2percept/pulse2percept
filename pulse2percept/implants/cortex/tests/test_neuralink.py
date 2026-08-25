@@ -2,8 +2,8 @@ from string import ascii_uppercase
 import warnings
 
 import numpy.testing as npt
-from pulse2percept.units import (DimensionMismatchError, Quantity, dva,
-                                 mm, ms, uA, um)
+from pulse2percept.units import (DimensionMismatchError, Quantity, deg, dva,
+                                 mm, ms, rad, uA, um)
 import numpy as np
 import pytest
 import matplotlib.pyplot as plt
@@ -523,6 +523,26 @@ def test_Neuralink_from_neuropythy_rand_insertion_angle():
                                       rand_insertion_angle=0)
     npt.assert_almost_equal([t.direction for t in nlink.implants.values()],
                             perpendicular)
+
+
+def test_Neuralink_from_neuropythy_rand_insertion_angle_units():
+    """The insertion tilt is an ordinary angle, unlike the dva locations"""
+    locs = np.array([[1., 2.], [-2., 1.], [0., 1.], [2., -2.]])
+
+    def directions(angle):
+        # The tilt is drawn at random, so the seed has to be reset for every
+        # spelling of the same angle:
+        np.random.seed(0)
+        nlink = Neuralink.from_neuropythy(StubNeuropythyMap(), locs=locs,
+                                          rand_insertion_angle=angle)
+        return [t.direction for t in nlink.implants.values()]
+
+    bare = directions(20)
+    npt.assert_allclose(directions(20 * deg), bare, rtol=1e-12)
+    npt.assert_allclose(directions(np.pi / 9 * rad), bare, rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        Neuralink.from_neuropythy(StubNeuropythyMap(), locs=locs,
+                                  rand_insertion_angle=20 * dva)
 
 
 def test_Neuralink_from_neuropythy_surface_mismatch():

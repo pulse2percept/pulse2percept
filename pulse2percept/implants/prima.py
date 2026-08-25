@@ -112,7 +112,7 @@ class PRIMA(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float, optional
+    rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
@@ -218,7 +218,7 @@ class PRIMA75(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float, optional
+    rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
@@ -327,7 +327,7 @@ class PRIMA55(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float, optional
+    rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
@@ -441,7 +441,7 @@ class PRIMA40(ProsthesisSystem):
         to all electrodes.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float, optional
+    rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.

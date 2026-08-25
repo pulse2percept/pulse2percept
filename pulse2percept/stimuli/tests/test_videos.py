@@ -1,8 +1,8 @@
 from pulse2percept.stimuli import (AmplitudeEncoder, VideoStimulus,
                                    BostonTrain, GirlPool)
 from pulse2percept.stimuli.videos import _frame_index
-from pulse2percept.units import (DimensionMismatchError, Hz, kHz, ms, s,
-                                 uA)
+from pulse2percept.units import (DimensionMismatchError, Hz, kHz, deg, dva,
+                                 ms, rad, s, uA)
 from skimage.color import rgb2gray
 from skimage.io import imsave
 from skimage.transform import resize as vid_resize
@@ -381,6 +381,22 @@ def test_VideoStimulus_rotate():
         npt.assert_almost_equal(data[3, 3, i], 1)
         npt.assert_almost_equal(data[0, 4, i], 0)
         npt.assert_almost_equal(data[4, 0, i], 0)
+
+
+@pytest.mark.parametrize('shape', [(5, 5, 3), (5, 5, 3, 2)])
+def test_VideoStimulus_rotate_units(shape):
+    """Both the grayscale and the frame-by-frame path normalize `angle`"""
+    ndarray = np.zeros(shape, dtype=np.float32)
+    ndarray[2, ...] = 1
+    stim = VideoStimulus(ndarray)
+    bare = stim.rotate(90, mode='constant').data
+    npt.assert_allclose(stim.rotate(90 * deg, mode='constant').data, bare,
+                        rtol=1e-12)
+    npt.assert_allclose(stim.rotate(np.pi / 2 * rad, mode='constant').data,
+                        bare, rtol=1e-12)
+    for bad in (90 * dva, 90 * ms):
+        with pytest.raises(DimensionMismatchError):
+            stim.rotate(bad)
 
 
 @pytest.mark.parametrize('shape', [(5, 5, 3), (5, 5, 3, 3)])

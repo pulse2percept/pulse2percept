@@ -1,5 +1,8 @@
 import numpy.testing as npt
 import numpy as np
+import pytest
+
+from pulse2percept.units import DimensionMismatchError, deg, dva, rad
 from pulse2percept.utils import parse_3d_orient
 
 
@@ -114,4 +117,16 @@ def test_parse_3d_orient():
     npt.assert_almost_equal(direction, [1/np.sqrt(2), 1 / np.sqrt(2), 0])
 
 
-
+def test_parse_3d_orient_angle_units():
+    """'angle' mode takes ordinary angles; the other two modes take vectors"""
+    bare = parse_3d_orient([0, 90, 45], orient_mode='angle')
+    for orient in ([0, 90, 45] * deg, (0 * deg, 90 * deg, 45 * deg),
+                   np.array([0, np.pi / 2, np.pi / 4]) * rad):
+        for got, want in zip(parse_3d_orient(orient, orient_mode='angle'),
+                             bare):
+            npt.assert_allclose(got, want, atol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        parse_3d_orient([0, 90, 45] * dva, orient_mode='angle')
+    # A direction vector is dimensionless, so it is left alone:
+    npt.assert_almost_equal(
+        parse_3d_orient([0, 0, 1], orient_mode='direction')[1], [0, 0, 0])

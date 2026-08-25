@@ -14,7 +14,7 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus, _adoptable
-from ..units import as_value, dimensionless, ms
+from ..units import as_value, deg, dimensionless, ms
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
                      frame_interval, HTMLAnimation)
@@ -584,7 +584,7 @@ class VideoStimulus(Stimulus):
 
         Parameters
         ----------
-        angle : float
+        angle : float or Quantity
             Angle by which to rotate each video frame (degrees).
             Positive: counter-clockwise, negative: clockwise
         mode : str, optional
@@ -610,6 +610,7 @@ class VideoStimulus(Stimulus):
         # Rotating in place is the common case, and keeps the pixel names
         # meaningful; ``resize=True`` is available through kwargs:
         kwargs.setdefault('resize', False)
+        angle = as_value(angle, deg, 'angle')
         data = self.data.reshape(self.vid_shape)
         if len(self.vid_shape) == 3:
             # A grayscale video can be fed to `rotate` in one go, with its

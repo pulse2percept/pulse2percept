@@ -19,7 +19,7 @@ from skimage.feature import canny
 
 from .base import Stimulus, _adoptable
 from .names import ElectrodeNames
-from ..units import dimensionless
+from ..units import as_value, deg, dimensionless
 from ..utils import center_image, shift_image, scale_image, trim_image
 from ..utils.images import _as_writable
 
@@ -473,7 +473,7 @@ class ImageStimulus(Stimulus):
 
         Parameters
         ----------
-        angle : float
+        angle : float or Quantity
             Angle by which to rotate the image (degrees).
             Positive: counter-clockwise, negative: clockwise
         mode : str, optional
@@ -499,6 +499,7 @@ class ImageStimulus(Stimulus):
         # Rotating in place is the common case, and keeps the pixel names
         # meaningful; ``resize=True`` is available through kwargs:
         kwargs.setdefault('resize', False)
+        angle = as_value(angle, deg, 'angle')
         img = img_rotate(_as_writable(self.data.reshape(self.img_shape)),
                          angle, mode=mode, **kwargs)
         return ImageStimulus(img, electrodes=self._names_for(img, electrodes),

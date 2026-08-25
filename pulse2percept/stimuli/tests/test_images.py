@@ -9,6 +9,7 @@ from skimage.transform import resize as img_resize
 
 from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus, LogoBVL,
                                    LogoUCSB, SnellenChart)
+from pulse2percept.units import DimensionMismatchError, deg, dva, ms, rad
 
 
 def create_dummy_img(fname, shape, mode, gray=1.0, return_data=False):
@@ -285,6 +286,21 @@ def test_ImageStimulus_rotate():
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[0, 4], 0)
     npt.assert_almost_equal(diag.data.reshape(stim.img_shape)[4, 0], 0)
     os.remove(fname)
+
+
+def test_ImageStimulus_rotate_units():
+    """`angle` is an ordinary angle, not a visual angle"""
+    ndarray = np.zeros((5, 5), dtype=np.float32)
+    ndarray[2, :] = 1
+    stim = ImageStimulus(ndarray)
+    bare = stim.rotate(90, mode='reflect').data
+    npt.assert_allclose(stim.rotate(90 * deg, mode='reflect').data, bare,
+                        rtol=1e-12)
+    npt.assert_allclose(stim.rotate(np.pi / 2 * rad, mode='reflect').data,
+                        bare, rtol=1e-12)
+    for bad in (90 * dva, 90 * ms):
+        with pytest.raises(DimensionMismatchError):
+            stim.rotate(bad)
 
 
 def test_ImageStimulus_rotate_kwargs():

@@ -34,7 +34,7 @@ class IMIE(ProsthesisSystem):
         vitreous humor (sometimes called electrode-retina distance).
         ``z`` can either be a list with 35 entries or a scalar that is applied
         to all electrodes.
-    rot : float
+    rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.

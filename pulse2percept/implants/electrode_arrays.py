@@ -11,7 +11,7 @@ from copy import deepcopy
 
 from .electrodes import Electrode, PointSource, DiskElectrode
 from ..stimuli.names import ElectrodeNames
-from ..units import DimensionMismatchError, Quantity, Unit, as_value, um
+from ..units import Quantity, as_value, deg, um
 from ..utils import PrettyPrint, bijective26_name
 from ..utils.constants import ZORDER
 
@@ -366,23 +366,6 @@ class ElectrodeArray(PrettyPrint):
         return list(self.electrodes.values())
 
 
-def _require_plain_angle(rot):
-    """Refuse a unitful rotation
-
-    ``rot`` is an ordinary rotation of the array in degrees. ``dva`` is the one
-    angle p2p has a unit for, and it means something else entirely: degrees of
-    *visual* angle, converted to a position on the retina or cortex by a visual
-    field map. Without this, a unitful ``rot`` reaches ``np.deg2rad`` and comes
-    back as "operand 'Quantity' does not support ufuncs".
-    """
-    if isinstance(rot, (Quantity, Unit)):
-        raise DimensionMismatchError(
-            f"'rot' is a plain rotation of the array in degrees, not a "
-            f"unitful quantity ({rot}). Note that 'dva' is a unit of visual "
-            f"angle, which is a different thing.")
-    return rot
-
-
 def _get_alphabetic_names(n_electrodes):
     """Create alphabetic electrode names: A-Z, AA-AZ, BA-BZ, etc. """
     return [bijective26_name(i) for i in range(n_electrodes)]
@@ -586,16 +569,16 @@ class ElectrodeGrid(ElectrodeArray):
         # the pitch from `spacing`, translates by (x, y), broadcasts `z` and
         # `r` over the electrodes, and stores `spacing` on the grid itself.
         # Every other electrode keyword travels through **kwargs untouched and
-        # is normalized by the electrode class it belongs to. `rot` is
-        # deliberately not among them: it is a plain angle in degrees, and
-        # `dva` is a unit of *visual* angle, which is a different thing.
+        # is normalized by the electrode class it belongs to.
         spacing = as_value(spacing, um, 'spacing')
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
         if 'r' in kwargs:
             kwargs['r'] = as_value(kwargs['r'], um, 'r')
-        _require_plain_angle(rot)
+        # `deg` is an ordinary geometric angle; `dva` is visual angle, and is
+        # rejected here:
+        rot = as_value(rot, deg, 'rot')
         self.shape = shape
         self.type = type
         self.spacing = spacing

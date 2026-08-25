@@ -7,10 +7,8 @@ import math
 from copy import deepcopy
 import numpy as np
 
-# Visual angle and threshold ratio are distinct dimensions because converting
-# either requires model- or subject-specific calibration.
-BASE_DIMENSIONS = ('time', 'length', 'current', 'voltage', 'visual_angle',
-                   'threshold_ratio')
+BASE_DIMENSIONS = ('time', 'length', 'current', 'voltage', 'angle',
+                   'visual_angle', 'threshold_ratio')
 
 # Human-readable names used in error messages:
 _BASE_LABELS = {
@@ -18,17 +16,18 @@ _BASE_LABELS = {
     'length': 'length',
     'current': 'electric current',
     'voltage': 'voltage',
+    'angle': 'angle',
     'visual_angle': 'visual angle',
     'threshold_ratio': 'threshold ratio',
 }
 
 # Names for common derived dimensions:
 _DERIVED_LABELS = {
-    (0, 0, 0, 0, 0, 0): 'dimensionless',
-    (-1, 0, 0, 0, 0, 0): 'frequency',
-    (1, 0, 1, 0, 0, 0): 'charge',
-    (0, -2, 1, 0, 0, 0): 'current density',
-    (1, -2, 1, 0, 0, 0): 'charge density',
+    (0, 0, 0, 0, 0, 0, 0): 'dimensionless',
+    (-1, 0, 0, 0, 0, 0, 0): 'frequency',
+    (1, 0, 1, 0, 0, 0, 0): 'charge',
+    (0, -2, 1, 0, 0, 0, 0): 'current density',
+    (1, -2, 1, 0, 0, 0, 0): 'charge density',
 }
 
 
@@ -52,11 +51,7 @@ _EQ_RTOL = 1e-12
 
 
 def _isclose(a, b):
-    """Compare magnitudes up to floating-point conversion noise.
-
-    Return ``NotImplemented`` for values that cannot be compared
-    numerically.
-    """
+    """Compare magnitudes up to floating-point conversion noise."""
     try:
         result = np.isclose(a, b, rtol=_EQ_RTOL, atol=0.0)
     except (TypeError, ValueError):
@@ -203,8 +198,15 @@ class Dimension(object):
         return {'_exponents': self._exponents}
 
     def __setstate__(self, state):
-        for key, value in state.items():
-            object.__setattr__(self, key, value)
+        # An exponent tuple is only meaningful against the `BASE_DIMENSIONS`
+        # it was written with. One from a release with a different set of base
+        # dimensions would unpickle happily and mean something else, so refuse
+        # it rather than restore a quietly wrong dimension:
+        exponents = state['_exponents']
+        if len(exponents) != len(BASE_DIMENSIONS):
+            raise ValueError("Cannot restore Dimension with an incompatible "
+                             "base-dimension layout.")
+        object.__setattr__(self, '_exponents', exponents)
 
     def __str__(self):
         return self.name
@@ -743,6 +745,7 @@ TIME = Dimension(time=1)
 LENGTH = Dimension(length=1)
 CURRENT = Dimension(current=1)
 VOLTAGE = Dimension(voltage=1)
+ANGLE = Dimension(angle=1)
 VISUAL_ANGLE = Dimension(visual_angle=1)
 THRESHOLD_RATIO = Dimension(threshold_ratio=1)
 FREQUENCY = TIME ** -1
@@ -802,8 +805,15 @@ uC = Unit(CHARGE, 1e-6, 'uC')
 #: Nanocoulomb
 nC = Unit(CHARGE, 1e-9, 'nC')
 
+#: Radian, the base scale of ordinary angle
+rad = Unit(ANGLE, 1, 'rad')
+#: Degree of ordinary (geometric) angle. p2p's angle-valued APIs are spelled in
+#: degrees, so this is the unit their bare numbers are read in.
+deg = Unit(ANGLE, np.pi / 180, 'deg')
+
 #: Degree of visual angle. Not an ordinary angle: converting dva to a distance
-#: on the retina or cortex requires a visual field map, not a scale factor.
+#: on the retina or cortex requires a visual field map, not a scale factor, so
+#: ``dva`` and ``deg`` are deliberately incompatible.
 dva = Unit(VISUAL_ANGLE, 1, 'dva')
 
 #: Multiple of perceptual threshold ("times threshold"). Becomes a current
@@ -826,6 +836,7 @@ _CANONICAL_UNITS = (dimensionless,
                     A, mA, uA, nA,
                     V, mV, uV,
                     C, mC, uC, nC,
+                    rad, deg,
                     dva, xTh)
 
 for _unit in _CANONICAL_UNITS:

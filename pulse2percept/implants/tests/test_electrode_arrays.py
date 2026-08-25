@@ -7,8 +7,8 @@ from pulse2percept.implants import (DiskElectrode, PointSource,
                                     ElectrodeArray, ElectrodeGrid)
 from pulse2percept.implants import ArgusII
 from pulse2percept.stimuli import ElectrodeNames, Stimulus
-from pulse2percept.units import (DimensionMismatchError, Quantity, cm, dva,
-                                 mm, ms, uA, um)
+from pulse2percept.units import (DimensionMismatchError, Quantity, cm, deg,
+                                 dva, mm, ms, rad, uA, um)
 
 
 def test_ElectrodeArray():
@@ -518,15 +518,27 @@ def test_ElectrodeGrid_dimension_errors():
             ElectrodeGrid(**{'shape': (2, 2), 'spacing': 400, **kwargs})
     with pytest.raises(DimensionMismatchError):
         ElectrodeGrid((2, 2), 400, r=10 * uA, etype=DiskElectrode)
-    # A rotation is a plain angle in degrees. `dva` is visual angle, which is
-    # not the same thing, so it is refused rather than quietly reinterpreted:
+    # A rotation is an ordinary angle. `dva` is visual angle, which is not the
+    # same thing, so it is refused rather than quietly reinterpreted:
     with pytest.raises(DimensionMismatchError) as excinfo:
         ElectrodeGrid((2, 2), 400, rot=5 * dva)
-    npt.assert_equal("'rot' is a plain rotation" in str(excinfo.value), True)
+    npt.assert_equal("expects angle (deg)" in str(excinfo.value), True)
     # A bare `rot` still means degrees, exactly as it always has:
-    rad = np.deg2rad(5)
+    phi = np.deg2rad(5)
     npt.assert_allclose(ElectrodeGrid((2, 2), 400, rot=5)['A1'].x,
-                        -200 * np.cos(rad) + 200 * np.sin(rad), rtol=1e-12)
+                        -200 * np.cos(phi) + 200 * np.sin(phi), rtol=1e-12)
+
+
+def test_ElectrodeGrid_rot_units():
+    """`rot` accepts bare degrees, `deg`, and the equivalent `rad`"""
+    bare = ElectrodeGrid((2, 3), 575.0, x=1200.0, rot=45)
+    for rot in (45 * deg, np.pi / 4 * rad):
+        npt.assert_allclose(ElectrodeGrid((2, 3), 575.0, x=1200.0,
+                                          rot=rot).coordinates(),
+                            bare.coordinates(), rtol=1e-12)
+    # The grid stores a plain number of degrees, whatever it was given:
+    npt.assert_almost_equal(
+        ElectrodeGrid((2, 2), 400, rot=np.pi / 4 * rad).rot, 45)
 
 
 def test_ElectrodeArray_coordinates_subset():

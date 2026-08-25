@@ -19,6 +19,7 @@ from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
 from pulse2percept.models.beyeler2019 import _AXON_CACHE_VERSION
 from pulse2percept.models._beyeler2019 import fast_axon_map
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
+from pulse2percept.units import DimensionMismatchError, deg, dva, rad
 from pulse2percept.utils.testing import assert_warns_msg
 
 # Building an axon map writes a cache to a relative path; keep it in a
@@ -1040,3 +1041,16 @@ def test_AxonMapSpatial_meridian_blend_over_time():
         npt.assert_allclose(percept.data[..., t],
                             model.predict_percept(frame).data[..., 0],
                             atol=1e-6)
+
+
+def test_AxonMapSpatial_axons_range_units():
+    """`axons_range` is a range of ordinary polar angles, stored in degrees"""
+    npt.assert_equal(AxonMapSpatial().get_param_units()['axons_range'], deg)
+    bare = AxonMapSpatial(axons_range=(-30, 30))
+    npt.assert_equal(AxonMapSpatial(axons_range=(-30 * deg, 30 * deg)).
+                     axons_range, bare.axons_range)
+    npt.assert_allclose(
+        AxonMapSpatial(axons_range=np.array([-np.pi, np.pi]) / 6 * rad).
+        axons_range, bare.axons_range, rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        AxonMapSpatial(axons_range=(-30 * dva, 30 * dva))

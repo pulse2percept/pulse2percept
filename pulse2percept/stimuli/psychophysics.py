@@ -4,7 +4,7 @@
 import numpy as np
 
 from .videos import VideoStimulus
-from ..units import as_value, ms
+from ..units import as_value, deg, ms
 from ..utils import radial_mask
 
 
@@ -21,7 +21,7 @@ class GratingStimulus(VideoStimulus):
         A tuple specifying the desired height (pixels) and the width (pixels)
         of the grating stimulus.
 
-    direction : scalar in [0, 360) degrees, optional
+    direction : scalar in [0, 360) degrees or Quantity, optional
         Drift direction of the grating.
 
     spatial_freq : scalar (cycles/pixel), optional
@@ -30,7 +30,7 @@ class GratingStimulus(VideoStimulus):
     temporal_freq : scalar (cycles/frame), optional
         Temporal frequency of the grating in cycles per frame
 
-    phase : scalar (degrees), optional
+    phase : scalar (degrees) or Quantity, optional
         The initial phase of the grating in degrees
 
     contrast : scalar in [0, 1], optional
@@ -73,8 +73,8 @@ class GratingStimulus(VideoStimulus):
         # `time` is a point (or an end point) in time, so it may be given as
         # a quantity; everything below works on plain milliseconds:
         time = as_value(time, ms, 'time')
-        direction = np.deg2rad(direction)
-        phase = np.deg2rad(phase)
+        direction = np.deg2rad(as_value(direction, deg, 'direction'))
+        phase = np.deg2rad(as_value(phase, deg, 'phase'))
         height, width = shape
         x = np.arange(width) - np.ceil(width / 2.0)
         y = np.arange(height) - np.ceil(height / 2.0)
@@ -119,7 +119,7 @@ class BarStimulus(VideoStimulus):
         A tuple specifying the desired height (pixels) and the width (pixels)
         of the grating stimulus.
 
-    direction : scalar in [0, 360) degrees, optional
+    direction : scalar in [0, 360) degrees or Quantity, optional
         Drift direction of the bar.
 
     speed : scalar in pixels/frame, optional

@@ -1,3 +1,4 @@
+import copyreg
 import pickle
 from copy import copy, deepcopy
 
@@ -9,8 +10,8 @@ from pulse2percept.units import (Dimension, Unit, Quantity,
                                  DimensionMismatchError, as_value,
                                  dimensionless,
                                  s, ms, us, ns, Hz, kHz, m, cm, mm, um, nm,
-                                 A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, dva,
-                                 xTh)
+                                 A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, deg,
+                                 rad, dva, xTh)
 from pulse2percept.units.base import (TIME, _CANONICAL_SYMBOLS,
                                       _CANONICAL_UNITS)
 
@@ -33,6 +34,7 @@ def test_Dimension():
     # Names:
     npt.assert_equal(Dimension(time=1).name, 'time')
     npt.assert_equal(Dimension(current=1).name, 'electric current')
+    npt.assert_equal(Dimension(angle=1).name, 'angle')
     npt.assert_equal(Dimension(visual_angle=1).name, 'visual angle')
     npt.assert_equal(Dimension(time=-1).name, 'frequency')
     npt.assert_equal(Dimension(current=1, time=1).name, 'charge')
@@ -160,6 +162,7 @@ def test_unit_vocabulary():
                              (uV, 1e-6, 'voltage'),
                              (C, 1, 'charge'), (mC, 1e-3, 'charge'),
                              (uC, 1e-6, 'charge'), (nC, 1e-9, 'charge'),
+                             (rad, 1, 'angle'), (deg, np.pi / 180, 'angle'),
                              (dva, 1, 'visual angle'),
                              (xTh, 1, 'threshold ratio')]:
         npt.assert_almost_equal(unit.scale, scale)
@@ -380,6 +383,27 @@ def test_dva_is_not_a_length():
     npt.assert_equal(dva.dimension.name, 'visual angle')
 
 
+def test_deg_and_rad_are_ordinary_angles():
+    # Radians are the base scale, so the two convert by a plain factor:
+    npt.assert_almost_equal((180 * deg).to_value(rad), np.pi)
+    npt.assert_almost_equal((np.pi * rad).to_value(deg), 180)
+    npt.assert_equal(180 * deg == np.pi * rad, True)
+    npt.assert_equal(str(45 * deg), '45 deg')
+    # An ordinary angle is not a visual angle, and neither converts to the
+    # other or to anything else:
+    npt.assert_equal(deg.dimension == dva.dimension, False)
+    npt.assert_equal(45 * deg == 45 * dva, False)
+    for bad in (dva, um, ms, dimensionless):
+        with pytest.raises(DimensionMismatchError):
+            (45 * deg).to_value(bad)
+        with pytest.raises(DimensionMismatchError):
+            (1 * rad).to_value(bad)
+        with pytest.raises(DimensionMismatchError):
+            as_value(1 * bad, deg)
+    with pytest.raises(DimensionMismatchError):
+        (45 * deg) + (45 * dva)
+
+
 def test_xTh_is_not_dimensionless():
     # A multiple of threshold is not a plain number: turning it into a current
     # takes a calibration, so nothing may convert between the two silently.
@@ -480,3 +504,35 @@ def test_units_copy_and_pickle():
     npt.assert_almost_equal((1 * restored).to_value(uA), 1000)
     npt.assert_equal(restored * s, mC)
     npt.assert_equal(restored * ms, uC)
+
+
+class StaleDimension(object):
+    """Pickles as a Dimension whose exponent tuple has the wrong length"""
+
+    def __reduce__(self):
+        return (copyreg._reconstructor, (Dimension, object, None),
+                {'_exponents': (0, 0, 1, 0, 0, 0)})
+
+
+def test_Dimension_rejects_stale_pickle():
+    # An exponent tuple written against a different set of base dimensions
+    # would restore into the wrong dimensions:
+    with pytest.raises(ValueError):
+        pickle.loads(pickle.dumps(StaleDimension()))
+
+    # A Unit is protected through the Dimension it carries, and so is a
+    # Quantity through its Unit:
+    class StaleUnit(object):
+        def __reduce__(self):
+            return (copyreg._reconstructor, (Unit, object, None),
+                    {'_dimension': StaleDimension(), '_scale': 1e-6,
+                     '_symbol': 'uA'})
+
+    class StaleQuantity(object):
+        def __reduce__(self):
+            return (copyreg._reconstructor, (Quantity, object, None),
+                    {'_magnitude': 5, '_unit': StaleUnit()})
+
+    for stale in (StaleUnit(), StaleQuantity()):
+        with pytest.raises(ValueError):
+            pickle.loads(pickle.dumps(stale))

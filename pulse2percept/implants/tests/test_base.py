@@ -4,9 +4,9 @@ import pytest
 import numpy.testing as npt
 from pulse2percept import implants
 from pulse2percept.implants import cortex
-from pulse2percept.units import (DimensionMismatchError, Quantity,
-                                 dimensionless, dva, mA, mm, ms, nA, uA, um,
-                                 xTh)
+from pulse2percept.units import (DimensionMismatchError, Quantity, deg,
+                                 dimensionless, dva, mA, mm, ms, nA, rad, uA,
+                                 um, xTh)
 from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
@@ -368,6 +368,14 @@ def test_implant_geometry_units():
     npt.assert_allclose(
         implants.ArgusII(x=0.8625 * mm, z=0.0417 * mm).earray.coordinates(),
         implants.ArgusII(x=862.5, z=41.7).earray.coordinates(), rtol=1e-12)
+
+
+def test_implant_rot_units():
+    """`rot` is an ordinary angle; the grid does the conversion for everyone"""
+    bare = implants.ArgusII(rot=45).earray.coordinates()
+    for rot in (45 * deg, np.pi / 4 * rad):
+        npt.assert_allclose(implants.ArgusII(rot=rot).earray.coordinates(),
+                            bare, rtol=1e-12)
 
 
 def test_implant_per_electrode_z_units():
