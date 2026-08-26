@@ -718,25 +718,24 @@ class ElectrodeGrid(ElectrodeArray):
                 else:
                     x_spc = y_spc * np.sqrt(3) / 2
 
-        # Start with a rectangular grid:
-        x_arr = (np.arange(cols) * x_spc - 0.5 * (cols - 1) * x_spc)
-        y_arr = (np.arange(rows) * y_spc - 0.5 * (rows - 1) * y_spc)
+        # Start with a rectangular grid, laid out from the origin:
+        x_arr = np.arange(cols, dtype=float) * x_spc
+        y_arr = np.arange(rows, dtype=float) * y_spc
         x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
         if self.type.lower() == 'hex':
             if orientation.lower() == 'horizontal':
                 # Shift every other row:
-                x_arr_shift = np.zeros_like(x_arr)
-                x_arr_shift[::2] = 0.5 * x_spc
-                x_arr += x_arr_shift
-                # Make sure the center is at (0, 0)
-                x_arr -= 0.25 * x_spc
-            elif orientation.lower() == 'vertical':
+                x_arr[::2] += 0.5 * x_spc
+            else:
                 # Shift every other column:
-                y_arr_shift = np.zeros_like(y_arr)
-                y_arr_shift[:, ::2] = 0.5 * y_spc
-                y_arr += y_arr_shift
-                # Make sure the center is at (0, 0)
-                y_arr -= 0.25 * y_spc
+                y_arr[:, ::2] += 0.5 * y_spc
+        # Center the lattice on (0, 0) once it is built, rather than assuming
+        # what the stagger did to its extent. (x, y) is the middle of that
+        # extent, not the centroid of the electrode centers: a hex grid with
+        # an odd number of rows has one stagger more often than the other, and
+        # its centroid sits a fraction of a pitch off center.
+        x_arr -= 0.5 * (x_arr.min() + x_arr.max())
+        y_arr -= 0.5 * (y_arr.min() + y_arr.max())
 
         # Rotate the grid and center at (x,y):
         tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])

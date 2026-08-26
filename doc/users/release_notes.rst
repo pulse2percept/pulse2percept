@@ -24,6 +24,11 @@ API changes:
 
 Bug fixes:
 
+* A hexagonal :py:class:`~pulse2percept.implants.ElectrodeGrid` with a single
+  row (or, in vertical orientation, a single column) is now centered on
+  ``(x, y)`` rather than offset by a quarter of the electrode spacing
+  (:pull:`859`)
+
 v0.10.0 Encoders (2026-08-23)
 -----------------------------
 

@@ -323,9 +323,16 @@ def test_GridImplant_hex():
     implant = GridImplant((3, 4), 100, type='hex')
     npt.assert_equal(implant.earray.type, 'hex')
     npt.assert_equal(implant.n_electrodes, 12)
-    # Horizontal hex staggers every other row; a rect grid does not:
-    rect = GridImplant((3, 4), 100)
-    npt.assert_equal(implant['B1'].x != rect['B1'].x, True)
+    # `type` really produces a triangular lattice, not just some other set of
+    # coordinates: every nearest neighbor is exactly one spacing away, which
+    # on a rect grid is only true of the orthogonal ones.
+    xy = implant.earray.coordinates()[:, :2]
+    dist = np.linalg.norm(xy[:, None, :] - xy[None, :, :], axis=-1)
+    np.fill_diagonal(dist, np.inf)
+    npt.assert_almost_equal(dist.min(axis=1), 100)
+    # The array is still centered on (x, y), odd row count and all:
+    npt.assert_almost_equal((xy[:, 0].min() + xy[:, 0].max()) / 2, 0)
+    npt.assert_almost_equal((xy[:, 1].min() + xy[:, 1].max()) / 2, 0)
 
 
 def test_GridImplant_electrode_kwargs():
