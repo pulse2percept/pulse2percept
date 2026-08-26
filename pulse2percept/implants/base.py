@@ -831,6 +831,10 @@ class GridImplant(ProsthesisSystem):
 class RectangleImplant(ProsthesisSystem):
     """ A generic rectangular implant
 
+    .. deprecated:: 0.11.0
+
+        Use :py:class:`~pulse2percept.implants.GridImplant` instead.
+
     Parameters
     ----------
     x, y, z : float, optional

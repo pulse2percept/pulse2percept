@@ -95,18 +95,41 @@ the visual field.
 Custom implants
 ---------------
 
-A custom array usually does not need a new implant class. Wrap an
-:py:class:`~pulse2percept.implants.ElectrodeGrid` in a
-:py:class:`~pulse2percept.implants.ProsthesisSystem`:
+A custom array usually does not need a new implant class. For a regular grid,
+use :py:class:`~pulse2percept.implants.GridImplant`:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ElectrodeGrid, ProsthesisSystem
+    import pulse2percept as p2p
 
-    earray = ElectrodeGrid(shape=(10, 10), spacing=500)
-    implant = ProsthesisSystem(earray=earray)
+    implant = p2p.implants.GridImplant(shape=(10, 10), spacing=500)
 
-For irregular arrays, build an
-:py:class:`~pulse2percept.implants.ElectrodeArray` from individual electrodes.
+Grids can also be hexagonal:
+
+.. code-block:: python
+
+    implant = p2p.implants.GridImplant(shape=(20, 20), spacing=400, type='hex')
+
+By default the electrodes are point sources. Pass an ``etype`` and its
+arguments for electrodes with a physical extent:
+
+.. code-block:: python
+
+    implant = p2p.implants.GridImplant(shape=(20, 20), spacing=400, type='hex',
+                                       etype=p2p.implants.DiskElectrode, r=75)
+
+:py:class:`~pulse2percept.implants.GridImplant` is a convenience only:
+:py:class:`~pulse2percept.implants.ElectrodeGrid` describes the geometry,
+:py:class:`~pulse2percept.implants.ProsthesisSystem` describes the device, and
+the two can still be combined by hand. Do that for an irregular array, built
+from individual electrodes:
+
+.. code-block:: python
+
+    from pulse2percept.implants import ElectrodeArray, ProsthesisSystem
+
+    earray = ElectrodeArray(...)
+    implant = ProsthesisSystem(earray)
+
 :py:class:`~pulse2percept.implants.EnsembleImplant` combines multiple implants
 into one system.

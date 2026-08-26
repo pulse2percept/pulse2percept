@@ -16,6 +16,9 @@ Highlights:
 
 API changes:
 
+* :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
+  of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`)
+
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
 
