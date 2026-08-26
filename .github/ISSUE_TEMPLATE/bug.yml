@@ -1,0 +1,60 @@
+name: Bug report
+description: Report incorrect or unexpected pulse2percept behavior
+type: Bug
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please search existing issues first.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the problem
+      description: What happened, and what did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduce the problem
+      description: |
+        Please provide the smallest code example that reproduces the problem.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Error message or output
+      description: Include the full traceback or other relevant output, if applicable.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: pulse2percept version
+      placeholder: "e.g. 0.10.0 or main"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "e.g. 3.12"
+    validations:
+      required: false
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. macOS 15, Ubuntu 24.04, Windows 11"
+    validations:
+      required: false
