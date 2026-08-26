@@ -6,8 +6,8 @@ import numpy.testing as npt
 import pytest
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants import (ArgusII, CustomRaster, RectangleImplant,
-                                     SequentialRaster)
+from pulse2percept.implants import (ArgusII, CustomRaster, DiskElectrode,
+                                    GridImplant, SequentialRaster)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, BostonTrain,
                                    FrequencyEncoder, ImageStimulus,
@@ -40,7 +40,7 @@ def pixel_implant(shape, raster=None):
     implant's electrodes sit exactly on the pixels of a ``shape`` image, so
     sampling one at the other changes nothing about what gets encoded.
     """
-    implant = RectangleImplant(shape=shape, spacing=200, r=50)
+    implant = GridImplant(shape, 200, etype=DiskElectrode, r=50)
     implant.raster = raster
     return implant
 

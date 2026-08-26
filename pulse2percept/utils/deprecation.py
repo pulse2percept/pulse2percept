@@ -83,13 +83,21 @@ class deprecated:
     removed_version : float or str
         The package version in which the deprecated function/class will be
         removed.
+    extra_msg : str, optional
+        Appended to the warning and to the docstring. Say here what a caller
+        has to change beyond the name when ``alt_func`` is not a drop-in
+        replacement -- different defaults, dropped behavior -- so that
+        swapping one for the other cannot silently change results.
+
+        .. versionadded:: 0.11.0
     """
 
     def __init__(self, alt_func=None, deprecated_version=None,
-                 removed_version=None):
+                 removed_version=None, extra_msg=None):
         self.alt_func = alt_func
         self.deprecated_version = deprecated_version
         self.removed_version = removed_version
+        self.extra_msg = extra_msg
 
     def __call__(self, obj):
         if isinstance(obj, type):
@@ -113,7 +121,8 @@ class deprecated:
         if self.alt_func is not None:
             alt_msg = f"Use ``{self.alt_func}`` instead."
         clause = _version_clause(self.deprecated_version, self.removed_version)
-        return msg + clause + ". " + alt_msg
+        parts = [msg + clause + ".", alt_msg, self.extra_msg or ""]
+        return " ".join(p for p in parts if p)
 
     def _update_doc(self, old_doc, msg=None):
         """Updates the docstring"""

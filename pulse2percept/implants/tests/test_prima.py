@@ -240,3 +240,33 @@ def test_PRIMA40_reshape_stim():
     # reaches it:
     PRIMA40().reshape_stim(LogoBVL())
     
+
+@pytest.mark.parametrize('implant_type, offset', [
+    (PRIMA, (0, 0)),
+    (PRIMA75, (0, 0)),
+    # PRIMA55 and PRIMA40 approximate a circular substrate by deleting
+    # electrodes from a rectangular grid, and those deletions are not quite
+    # symmetric, so the surviving footprint sits half a column pitch and/or a
+    # quarter of a row pitch off (x, y). Pinned as-is: the deletion lists are
+    # the device geometry, and this is what they currently describe.
+    (PRIMA55, (0.25 * np.sqrt(3) * 55, 0.25 * 55)),
+    (PRIMA40, (0, 0.25 * 40)),
+])
+def test_PRIMA_device_center(implant_type, offset):
+    """Where the trimmed device sits relative to the requested (x, y)
+
+    Each PRIMA is a regular hex grid with edge electrodes removed afterwards,
+    so the finished device is centered only if those removals are symmetric --
+    the grid's own centering says nothing about it. The per-electrode
+    coordinate tests would all still pass if a device drifted sideways.
+    """
+    x, y, rot = -100, 400, 37
+    xy = implant_type(x=x, y=y).earray.coordinates()[:, :2]
+    center = 0.5 * (xy.min(axis=0) + xy.max(axis=0))
+    npt.assert_almost_equal(center, np.add([x, y], offset))
+    # `rot` turns the whole footprint about (x, y), so the offset above is a
+    # property of the device rather than of the coordinate axes:
+    th = np.deg2rad(rot)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    rotated = implant_type(x=x, y=y, rot=rot).earray.coordinates()[:, :2]
+    npt.assert_almost_equal(rotated, (R @ (xy - [x, y]).T).T + [x, y])

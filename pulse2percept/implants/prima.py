@@ -7,12 +7,10 @@
 from matplotlib.patches import Circle, RegularPolygon
 
 import numpy as np
-# Using or importing the ABCs from 'collections' instead of from
-# 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
 
 from .base import ProsthesisSystem
-from .electrodes import HexElectrode
+from .electrodes import HexElectrode, _HEX_ORIENTATION
 from .electrode_arrays import ElectrodeGrid
 from ..units import as_value, um
 
@@ -62,12 +60,12 @@ class PhotovoltaicPixel(HexElectrode):
         # Plot two objects: hex honeycomb and circular active electrode
         self.plot_patch = [RegularPolygon, Circle]
         self.plot_kwargs = [{'radius': a, 'numVertices': 6, 'alpha': 0.2,
-                             'orientation': np.radians(30),
+                             'orientation': _HEX_ORIENTATION,
                              'fc': 'k', 'ec': 'k'},
                             {'radius': r, 'linewidth': 0, 'color': 'k',
                              'alpha': 0.5}]
         self.plot_deactivated_kwargs = [{'radius': a, 'numVertices': 6,
-                                         'orientation': np.radians(30),
+                                         'orientation': _HEX_ORIENTATION,
                                          'fc': 'k', 'ec': 'k', 'alpha': 0.1},
                                         {'radius': r, 'linewidth': 0,
                                          'color': 'k', 'alpha': 0.2}]

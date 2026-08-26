@@ -703,6 +703,11 @@ def as_value(value, unit, name=None):
     # particular caller happened to pass a plain number.
     if not isinstance(unit, Unit):
         raise TypeError(f"'unit' must be a Unit object, not {type(unit)}.")
+    # A plain number is already what the caller wants and cannot match any of
+    # the cases below. Worth its own line: this is the boundary every
+    # coordinate of every electrode crosses, and `np.float64` is a `float`.
+    if isinstance(value, (int, float)):
+        return value
     if isinstance(value, Unit):
         # A bare unit is the quantity 1 of that unit, e.g. ``as_value(ms, ms)``:
         value = Quantity(1, value)

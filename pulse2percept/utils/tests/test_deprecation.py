@@ -37,12 +37,23 @@ def mock_function():
     return 10
 
 
+@deprecated(alt_func='qwerty', extra_msg='Pass ``asdf=True`` to keep it.')
+class MockClass5:
+    pass
+
+
 def test_deprecated():
     assert_warns_msg(DeprecationWarning, MockClass1, 'Use ``qwerty`` instead')
     assert_warns_msg(DeprecationWarning, MockClass2().mymethod,
                      'since version 0.1, and will be removed in version 0.2')
     assert_warns_msg(DeprecationWarning, MockClass3, 'deprecated')
     assert_warns_msg(DeprecationWarning, mock_function, 'since version 0.4')
+
+
+def test_deprecated_extra_msg():
+    """A replacement that is not drop-in says so, where the caller sees it"""
+    assert_warns_msg(DeprecationWarning, MockClass5,
+                     'Use ``qwerty`` instead. Pass ``asdf=True`` to keep it.')
 
 
 def test_is_deprecated():

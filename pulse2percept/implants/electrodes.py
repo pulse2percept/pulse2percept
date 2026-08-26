@@ -19,6 +19,22 @@ from ..utils import PrettyPrint
 from ..utils.constants import ZORDER
 
 
+#: Orientation of a flat-side-up hexagon, in radians.
+_HEX_ORIENTATION = np.radians(30)
+
+
+def _is_nonscalar(value):
+    """Whether ``value`` is a sequence where a single number is expected
+
+    The ``float`` shortcut keeps grid building off the ABC
+    ``__instancecheck__`` path: a float is never a sequence, and every
+    coordinate an :py:class:`~pulse2percept.implants.ElectrodeGrid` lays out
+    is a ``np.float64``, which is a float.
+    """
+    return (not isinstance(value, float) and
+            isinstance(value, (Sequence, np.ndarray)))
+
+
 class Electrode(PrettyPrint, metaclass=ABCMeta):
     """Electrode
 
@@ -62,11 +78,11 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
-        if isinstance(x, (Sequence, np.ndarray)):
+        if _is_nonscalar(x):
             raise TypeError(f"x must be a scalar, not {type(x)}.")
-        if isinstance(y, (Sequence, np.ndarray)):
+        if _is_nonscalar(y):
             raise TypeError(f"y must be a scalar, not {type(y)}.")
-        if isinstance(z, (Sequence, np.ndarray)):
+        if _is_nonscalar(z):
             raise TypeError(f"z must be a scalar, not {type(z)}.")
         self.x = x
         self.y = y
@@ -269,7 +285,7 @@ class DiskElectrode(Electrode):
     def __init__(self, x, y, z, r, name=None, activated=True):
         super(DiskElectrode, self).__init__(x, y, z, name, activated=activated)
         r = as_value(r, um, 'r')
-        if isinstance(r, (Sequence, np.ndarray)):
+        if _is_nonscalar(r):
             raise TypeError("Electrode radius must be a scalar.")
         if r <= 0:
             raise ValueError(f"Electrode radius must be > 0, not {r}.")
@@ -377,7 +393,7 @@ class SquareElectrode(Electrode):
         super(SquareElectrode, self).__init__(x, y, z, name=name,
                                               activated=activated)
         a = as_value(a, um, 'a')
-        if isinstance(a, (Sequence, np.ndarray)):
+        if _is_nonscalar(a):
             raise TypeError("Side length must be a scalar.")
         if a <= 0:
             raise ValueError(f"Side length must be > 0, not {a}.")
@@ -438,7 +454,7 @@ class HexElectrode(Electrode):
         super(HexElectrode, self).__init__(x, y, z, name=name,
                                            activated=activated)
         a = as_value(a, um, 'a')
-        if isinstance(a, (Sequence, np.ndarray)):
+        if _is_nonscalar(a):
             raise TypeError("Apothem of the hexagon must be a scalar.")
         if a <= 0:
             raise ValueError(f"Apothem of the hexagon must be > 0, not "
@@ -446,12 +462,12 @@ class HexElectrode(Electrode):
         self.a = a
         self.plot_patch = RegularPolygon
         self.plot_kwargs = {'numVertices': 6, 'radius': a, 'alpha': 0.2,
-                            'orientation': np.radians(30),
+                            'orientation': _HEX_ORIENTATION,
                             'ec': (0.3, 0.3, 0.3, 1),
                             'fc': (1, 1, 1, 0.8)}
         self.plot_deactivated_kwargs = {'numVertices': 6, 'radius': a,
                                         'alpha': 0.2,
-                                        'orientation': np.radians(30),
+                                        'orientation': _HEX_ORIENTATION,
                                         'ec': (0.6, 0.6, 0.6, 1),
                                         'fc': (1, 1, 1, 0.6)}
 

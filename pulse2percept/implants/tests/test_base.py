@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 
 from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
-                                    ProsthesisSystem, RectangleImplant,
-                                    PhotovoltaicPixel)
+                                    GridImplant, ProsthesisSystem,
+                                    RectangleImplant, PhotovoltaicPixel)
 from pulse2percept.stimuli import (Stimulus, ImageStimulus, VideoStimulus,
                                    BostonTrain, LogoBVL)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
@@ -278,6 +278,116 @@ def test_rectangle_implant(ztype, x, y, rot):
     for shape in [(6, 10), (5, 12), (15, 15)]:
         implant = RectangleImplant(shape=shape)
         npt.assert_equal(implant.earray.shape, shape)
+
+
+def test_RectangleImplant_is_deprecated():
+    """Deprecated in favor of GridImplant, but otherwise unchanged"""
+    with pytest.deprecated_call(match='drop-in replacement'):
+        implant = RectangleImplant(shape=(3, 4), spacing=100)
+    # The legacy defaults and geometry survive the deprecation:
+    npt.assert_equal(implant.preprocess, True)
+    npt.assert_equal(implant.earray.shape, (3, 4))
+    npt.assert_equal(isinstance(implant['A1'], DiskElectrode), True)
+    npt.assert_almost_equal(implant['A1'].r, 75.)
+    # Including the left-eye column reversal that GridImplant does not do
+    # (see test_GridImplant_does_not_relabel_the_left_eye):
+    with pytest.deprecated_call():
+        le = RectangleImplant(shape=(3, 4), spacing=100, eye='LE')
+    npt.assert_equal(le['A1'].x > le['A4'].x, True)
+    npt.assert_almost_equal(le['A1'].x, implant['A4'].x)
+
+
+def test_GridImplant_is_a_grid_in_a_prosthesis_system():
+    implant = GridImplant((3, 4), 100)
+    npt.assert_equal(isinstance(implant, ProsthesisSystem), True)
+    npt.assert_equal(isinstance(implant.earray, ElectrodeGrid), True)
+    npt.assert_equal(implant.n_electrodes, 12)
+    npt.assert_equal(implant.earray.shape, (3, 4))
+    npt.assert_equal(implant.electrode_names,
+                     ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4',
+                      'C1', 'C2', 'C3', 'C4'])
+    npt.assert_equal(isinstance(implant['A1'], PointSource), True)
+    # Centered on the origin, 100 um apart:
+    npt.assert_almost_equal(implant['A1'].x, -150)
+    npt.assert_almost_equal(implant['A1'].y, -100)
+    npt.assert_almost_equal(implant['C4'].x, 150)
+    npt.assert_almost_equal(implant['C4'].y, 100)
+    # `shape`/`spacing` are required; there is no default geometry:
+    with pytest.raises(TypeError):
+        GridImplant()
+    with pytest.raises(TypeError):
+        GridImplant((3, 4))
+
+
+def test_GridImplant_hex():
+    implant = GridImplant((3, 4), 100, type='hex')
+    npt.assert_equal(implant.earray.type, 'hex')
+    npt.assert_equal(implant.n_electrodes, 12)
+    # `type` really produces a triangular lattice, not just some other set of
+    # coordinates: every nearest neighbor is exactly one spacing away, which
+    # on a rect grid is only true of the orthogonal ones.
+    xy = implant.earray.coordinates()[:, :2]
+    dist = np.linalg.norm(xy[:, None, :] - xy[None, :, :], axis=-1)
+    np.fill_diagonal(dist, np.inf)
+    npt.assert_almost_equal(dist.min(axis=1), 100)
+    # The array is still centered on (x, y), odd row count and all:
+    npt.assert_almost_equal((xy[:, 0].min() + xy[:, 0].max()) / 2, 0)
+    npt.assert_almost_equal((xy[:, 1].min() + xy[:, 1].max()) / 2, 0)
+
+
+def test_GridImplant_electrode_kwargs():
+    implant = GridImplant((2, 3), 100, etype=DiskElectrode, r=20)
+    npt.assert_equal(implant.n_electrodes, 6)
+    for e in implant.electrode_objects:
+        npt.assert_equal(isinstance(e, DiskElectrode), True)
+        npt.assert_almost_equal(e.r, 20)
+
+
+def test_GridImplant_geometry_passthrough():
+    implant = GridImplant((2, 3), 100, x=200, y=-300, z=50, rot=90)
+    npt.assert_almost_equal(implant.earray.coordinates().mean(axis=0),
+                            [200, -300, 50])
+    # 90 deg CCW about the grid center: (dx, dy) -> (-dy, dx)
+    unrot = GridImplant((2, 3), 100, x=200, y=-300, z=50)
+    dx, dy = unrot['A1'].x - 200, unrot['A1'].y + 300
+    npt.assert_almost_equal(implant['A1'].x, 200 - dy)
+    npt.assert_almost_equal(implant['A1'].y, -300 + dx)
+    # Unitful geometry normalizes to plain microns, as everywhere else:
+    unitful = GridImplant((2, 3), 0.1 * mm, x=0.2 * mm, y=-300 * um,
+                          z=50 * um, rot=90 * deg)
+    npt.assert_allclose(unitful.earray.coordinates(),
+                        implant.earray.coordinates(), rtol=1e-12)
+    with pytest.raises(DimensionMismatchError):
+        GridImplant((2, 3), 2 * dva)
+
+
+def test_GridImplant_device_arguments_reach_ProsthesisSystem():
+    """Everything that is not geometry is handed to ProsthesisSystem as given
+
+    What those arguments then do is ProsthesisSystem's business and is tested
+    there; all a GridImplant owes them is not to drop or reinterpret one.
+    """
+    encoder = AmplitudeEncoder(amp_range=(0, 20))
+    raster = implants.SequentialRaster(2)
+    implant = GridImplant((2, 3), 100, eye='LE',
+                          stim={'A1': BiphasicPulse(10, 1)},
+                          preprocess=True, safe_mode=True, encoder=encoder,
+                          raster=raster, max_current=100)
+    npt.assert_equal(implant.eye, 'LE')
+    npt.assert_equal(implant.stim.electrodes, ['A1'])
+    npt.assert_equal(implant.preprocess, True)
+    npt.assert_equal(implant.safe_mode, True)
+    npt.assert_equal(implant.encoder, encoder)
+    npt.assert_equal(implant.raster, raster)
+    npt.assert_almost_equal(implant.max_current, 100)
+
+
+def test_GridImplant_does_not_relabel_the_left_eye():
+    """Unlike RectangleImplant, a generic grid is the same in either eye"""
+    re = GridImplant((3, 4), 100, eye='RE')
+    le = GridImplant((3, 4), 100, eye='LE')
+    npt.assert_equal(le.electrode_names, re.electrode_names)
+    npt.assert_almost_equal(le.earray.coordinates(), re.earray.coordinates())
 
 
 def test_ProsthesisSystem_reshape_stim_frames_independent():

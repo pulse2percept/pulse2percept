@@ -381,6 +381,61 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
 
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))
+@pytest.mark.parametrize('orientation', ('horizontal', 'vertical'))
+@pytest.mark.parametrize('shape', [(1, 1), (1, 5), (5, 1), (1, 2), (2, 1),
+                                   (2, 2), (3, 3), (3, 4), (4, 3), (4, 4),
+                                   (5, 7), (7, 5)])
+def test_ElectrodeGrid_is_centered(gtype, orientation, shape):
+    """(x, y) is the middle of the electrode extent, whatever the shape.
+
+    A hex grid staggers every other row, which widens its extent by half a
+    pitch -- but only once both staggers are present. A single-row (or, for a
+    vertical grid, single-column) hex grid used to come out a quarter pitch
+    off, because the correction was applied unconditionally.
+    """
+    x, y = 200, -300
+    coords = ElectrodeGrid(shape, 100, x=x, y=y, type=gtype,
+                           orientation=orientation).coordinates()
+    npt.assert_almost_equal((coords[:, 0].min() + coords[:, 0].max()) / 2, x)
+    npt.assert_almost_equal((coords[:, 1].min() + coords[:, 1].max()) / 2, y)
+
+
+def test_ElectrodeGrid_centers_the_extent_not_the_centroid():
+    """The centroid is deliberately not the thing being centered.
+
+    An odd number of rows carries one stagger more often than the other, so
+    the mean of the electrode centers sits a fraction of a pitch off. `x`/`y`
+    describe where the physical array sits, so the extent is what must land
+    on them.
+    """
+    coords = ElectrodeGrid((3, 4), 100, type='hex').coordinates()
+    npt.assert_almost_equal((coords[:, 0].min() + coords[:, 0].max()) / 2, 0)
+    npt.assert_almost_equal(coords[:, 0].mean(), 100 / 12)
+
+
+@pytest.mark.parametrize('orientation', ('horizontal', 'vertical'))
+@pytest.mark.parametrize('shape', [(2, 2), (3, 4), (4, 3), (5, 5)])
+def test_ElectrodeGrid_hex_is_a_triangular_lattice(orientation, shape):
+    """Scalar `spacing` is the nearest-neighbor distance, in every direction
+
+    This is what makes a hex grid hexagonal: on a rectangular grid the
+    diagonal neighbor is further away than the orthogonal one.
+    """
+    spacing = 100
+    coords = ElectrodeGrid(shape, spacing, type='hex',
+                           orientation=orientation).coordinates()[:, :2]
+    dist = np.linalg.norm(coords[:, None, :] - coords[None, :, :], axis=-1)
+    np.fill_diagonal(dist, np.inf)
+    # Every electrode has at least one neighbor exactly `spacing` away, and
+    # none any closer:
+    npt.assert_almost_equal(dist.min(axis=1), spacing)
+    # An interior electrode has all six:
+    if min(shape) >= 3:
+        n_neighbors = np.isclose(dist, spacing).sum(axis=1)
+        npt.assert_equal(n_neighbors.max(), 6)
+
+
+@pytest.mark.parametrize('gtype', ('rect', 'hex'))
 def test_ElectrodeGrid_get_params(gtype):
     # When the electrode_type is 'DiskElectrode'
     # test the default value
