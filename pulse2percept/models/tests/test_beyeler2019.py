@@ -318,13 +318,10 @@ def test_AxonMapModel():
     # Zeros in, zeros out:
     npt.assert_almost_equal(model.predict_percept(np.zeros(60)).data, 0)
 
-    # Implant and model must be built for same eye:
-    with pytest.raises(ValueError):
-        AxonMapModel(implant=ArgusII(eye='LE'), step=5).build()
-    with pytest.raises(ValueError):
-        AxonMapModel(implant=ArgusII(), eye='invalid').build()
-    with pytest.raises(ValueError):
-        AxonMapModel(implant=ArgusII(), step=5).build(eye='invalid')
+    # The eye is the implanted one, and is not settable on its own:
+    npt.assert_equal(AxonMapModel(implant=ArgusII(eye='LE'), step=5).eye, 'LE')
+    with pytest.raises(AttributeError):
+        AxonMapModel(implant=ArgusII(), eye='LE')
 
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
@@ -484,7 +481,7 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
 
     # A single axon fiber with `phi0`=0 should return a single pixel location
     # that corresponds to the optic disc
-        model = AxonMapModel(implant=ArgusII(), loc_od=loc_od, step=2, eye=eye,
+        model = AxonMapModel(implant=ArgusII(eye=eye), loc_od=loc_od, step=2,
                              ax_segments_range=(0, 0),
                              n_ax_segments=1)
         single_fiber = model.spatial._jansonius2009(0)
@@ -1049,3 +1046,66 @@ def test_AxonMapSpatial_axons_range_units():
         axons_range, bare.axons_range, rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
         AxonMapSpatial(implant=ArgusII(), axons_range=(-30 * dva, 30 * dva))
+
+
+def _user_warnings(build):
+    """The UserWarning messages a build emits, and nothing else
+
+    Building an axon map also emits ResourceWarnings from the pickle cache,
+    which have nothing to do with what these tests are about.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        build()
+    return [str(w.message) for w in caught
+            if issubclass(w.category, UserWarning)]
+
+
+def test_axon_map_eye_follows_the_implant():
+    """The eye is the implanted one, and cannot drift out of step with it"""
+    implant = ArgusII(eye='RE')
+    model = AxonMapModel(implant=implant, step=2, n_axons=50,
+                         n_ax_segments=30).build()
+    npt.assert_equal(model.eye, 'RE')
+    # The optic disc is on the nasal side, which is a different side per eye:
+    npt.assert_equal(model.loc_od[0] > 0, True)
+
+    # Turning the *bound implant* around is the one build-invalidating change
+    # the parameter machinery cannot see, so the model checks it itself:
+    implant.eye = 'LE'
+    npt.assert_equal(model.eye, 'LE')
+    npt.assert_equal(model.is_built, False)
+    model.predict_percept({'A1': 20})
+    npt.assert_equal(model.is_built, True)
+    npt.assert_equal(model.loc_od[0] < 0, True)
+
+
+def test_axon_map_warns_when_the_implant_is_not_epiretinal():
+    from pulse2percept.implants import GridImplant, PRIMA75
+    grid = dict(step=1, xrange=(-2, 2), yrange=(-2, 2), n_axons=50,
+                n_ax_segments=30)
+    said = _user_warnings(AxonMapModel(implant=PRIMA75(), **grid).build)
+    npt.assert_equal(any('subretinal' in w for w in said), True)
+    npt.assert_equal(any('ScoreboardModel' in w for w in said), True)
+    # An implant whose placement nobody wrote down says nothing either way.
+    # Its pitch is wide enough not to trip the other warning:
+    quiet = GridImplant(shape=(3, 3), spacing=2000)
+    npt.assert_equal(_user_warnings(AxonMapModel(implant=quiet, **grid).build),
+                     [])
+
+
+@pytest.mark.parametrize('ModelClass', [ScoreboardModel, AxonMapModel])
+def test_rho_wider_than_the_electrode_pitch_warns(ModelClass):
+    from pulse2percept.implants import GridImplant
+    extra = {'n_axons': 50, 'n_ax_segments': 30} if ModelClass is AxonMapModel         else {}
+    grid = dict(step=1, xrange=(-2, 2), yrange=(-2, 2), **extra)
+    dense = ModelClass(implant=GridImplant(shape=(3, 3), spacing=100),
+                       rho=400, **grid)
+    said = _user_warnings(dense.build)
+    # The numbers a reader needs to judge it, not a verdict:
+    npt.assert_equal(any('pitch (100 um)' in w for w in said), True)
+    npt.assert_equal(any('ratio of 4.00' in w for w in said), True)
+    # rho at the pitch is the boundary, and is not warned about:
+    matched = ModelClass(implant=GridImplant(shape=(3, 3), spacing=400),
+                         rho=400, **grid)
+    npt.assert_equal(_user_warnings(matched.build), [])

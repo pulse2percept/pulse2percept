@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import BaseModel, NotBuiltError, _require_stim_dimension
+from ..base import BaseModel, _require_stim_dimension
 from ...percepts import Percept
 from ...implants import ProsthesisSystem
 from ...stimuli import BiphasicPulseTrain
@@ -114,9 +114,9 @@ class DynaphosModel(BaseModel):
         
     .. important::
     
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) un-builds the model, and the
+        next ``predict_percept`` builds it again.
     """
     #: ``step`` used to be called ``xystep``. The old name still reads and
     #: writes ``step``, with a ``DeprecationWarning``. Declared here rather
@@ -443,7 +443,7 @@ class DynaphosModel(BaseModel):
 
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         prepared = self.implant.prepare_stim(source)
         if prepared is None:

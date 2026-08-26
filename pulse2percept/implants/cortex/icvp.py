@@ -71,6 +71,8 @@ class ICVP(ProsthesisSystem):
     # depth of shanks: 650 or 850 um
     # (https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9175335)
 
+    placement = 'intracortical'
+
     def __init__(self, x=15000, y=0, z=0, rot=0, preprocess=False, safe_mode=False):
         # Inspected, broadcast and offset here, before the grid ever sees it:
         z = as_value(z, um, 'z')

@@ -28,7 +28,9 @@ def test_plot_argus_phosphenes():
 
     # Add axon map:
     _, ax = plt.subplots()
-    plot_argus_phosphenes(df, ArgusI(), ax=ax, axon_map=AxonMapModel())
+    argus = ArgusI()
+    plot_argus_phosphenes(df, argus, ax=ax,
+                          axon_map=AxonMapModel(implant=argus))
 
     # Data must be a DataFrame:
     with pytest.raises(TypeError):
@@ -45,7 +47,8 @@ def test_plot_argus_phosphenes():
         plot_argus_phosphenes(df, AlphaAMS())
     # Works only for axon maps:
     with pytest.raises(TypeError):
-        plot_argus_phosphenes(df, ArgusI(), ax=ax, axon_map=ScoreboardModel())
+        plot_argus_phosphenes(df, argus, ax=ax,
+                              axon_map=ScoreboardModel(implant=argus))
     # Manual subject selection
     plot_argus_phosphenes(df[df.electrode == 'B2'], ArgusI(), ax=ax)
     # If no implant given, dataframe must have additional columns:

@@ -414,8 +414,8 @@ calls for a combination that is not already provided as a stand-alone model.
 See :ref:`Computational Models <topics-models>` for details.
 
 
-Why do I have to call ``build()``?
-----------------------------------
+What does ``build()`` do?
+-------------------------
 
 Some models need to perform expensive calculations that depend on their
 parameters but do not need to be repeated for every stimulus.
@@ -424,20 +424,20 @@ Calling ``build()`` performs these calculations once. For example, the Axon Map
 model can precompute retinal nerve fiber trajectories and their relationship
 to the simulation grid.
 
-The usual workflow is therefore:
+You rarely have to call it yourself: ``predict_percept`` builds a model that
+is not built yet, and giving a parameter a new value un-builds the model, so
+the next prediction picks the change up.
 
 .. code-block:: python
 
-    model = SomeModel(...)
-    model.build()
+    model = SomeModel(implant=implant, ...)
 
-    percept1 = model.predict_percept(implant1)
-    percept2 = model.predict_percept(implant2)
+    percept1 = model.predict_percept(stim1)
+    model.rho = 200          # un-builds the model
+    percept2 = model.predict_percept(stim2)   # builds it again
 
-.. note::
-
-    If you later change a parameter that affects a precomputed model quantity
-    or the simulation grid, call ``build()`` again before making predictions.
+Call ``build()`` explicitly when you want to pay that cost at a moment of your
+choosing, or to pass build-time parameters: ``model.build(rho=200)``.
 
 
 Implants and stimulation

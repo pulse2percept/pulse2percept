@@ -99,9 +99,10 @@ fig.tight_layout()
 # Instead, the model was assumed to reach threshold if the model response
 # exceeded some constant :math:`\\theta` over time.
 #
-# A threshold is a property of the stimulus, not of the model, so we build the
-# stimulus at each candidate amplitude and solve for the one whose predicted
-# brightness is :math:`\\theta`:
+# Threshold finding is an optimization over a stimulus parameter, not a
+# generic model operation, so we build the stimulus at each candidate
+# amplitude and solve for the one whose predicted brightness is
+# :math:`\\theta`:
 
 from scipy.optimize import brentq
 

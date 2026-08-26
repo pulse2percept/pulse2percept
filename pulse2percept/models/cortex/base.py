@@ -78,9 +78,9 @@ class CortexSpatial(SpatialModel):
 
     .. important::
 
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) un-builds the model, and the
+        next ``predict_percept`` builds it again.
     """
     @property
     def regions(self):
@@ -287,9 +287,9 @@ class ScoreboardSpatial(CortexSpatial):
 
     .. important ::
     
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) un-builds the model, and the
+        next ``predict_percept`` builds it again.
 
     """
     def __init__(self, **params):
@@ -440,9 +440,9 @@ class ScoreboardModel(Model):
         Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) un-builds the model, and the next
+        ``predict_percept`` builds it again.
 
     """
 

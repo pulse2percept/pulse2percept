@@ -26,9 +26,11 @@ def test_DynaphosModel():
     npt.assert_equal(model.regions, ['v1'])
     npt.assert_equal(model.vfmap.regions, ['v1'])
 
-    # can't set frequency/pulse dur that don't match up
+    # can't set frequency/pulse dur that don't match up. A failed build
+    # leaves the parameters the caller asked for in place, so put them back:
     with pytest.raises(ValueError):
         model.build(freq=300,p_dur=10)
+    model.build(freq=300, p_dur=1)
 
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)

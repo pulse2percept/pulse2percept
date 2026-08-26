@@ -71,9 +71,9 @@ class Thompson2003Spatial(SpatialModel):
 
     .. important ::
 
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) un-builds the model, and the
+        next ``predict_percept`` builds it again.
     """
 
     def get_default_params(self):        
@@ -170,9 +170,9 @@ class Thompson2003Model(Model):
 
     .. important ::
 
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) un-builds the model, and the
+        next ``predict_percept`` builds it again.
 
     """
 

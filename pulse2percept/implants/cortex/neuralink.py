@@ -116,7 +116,8 @@ class EllipsoidElectrode(Electrode):
 
 class NeuralinkThread(ProsthesisSystem, metaclass=ABCMeta):
     """Base class for Neuralink threads"""
-    pass
+
+    placement = 'intracortical'
 
 
 class LinearEdgeThread(NeuralinkThread):
@@ -256,6 +257,8 @@ class LinearEdgeThread(NeuralinkThread):
 
 
 class Neuralink(EnsembleImplant):
+
+    placement = 'intracortical'
 
     @classmethod
     @rename_parameter('xystep', 'step', deprecated_version='0.10.0',

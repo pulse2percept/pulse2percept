@@ -329,6 +329,55 @@ class NotBuiltError(ValueError, AttributeError):
     """
 
 
+#: Declared parameter names per model class, so that ``__setattr__`` below
+#: does not rebuild the default dict on every assignment.
+_declared = {}
+
+
+def _declared_params(model):
+    """The names ``get_default_params`` declares, cached per class"""
+    cls = type(model)
+    names = _declared.get(cls)
+    if names is None:
+        names = _declared[cls] = frozenset(model.get_default_params())
+    return names
+
+
+def _unchanged(before, after):
+    """Whether re-assigning a parameter left it at the same value
+
+    Falls back to "changed" for anything that cannot be compared, which costs
+    at most one rebuild.
+    """
+    if before is after:
+        return True
+    try:
+        return bool(np.all(before == after))
+    except Exception:
+        return False
+
+
+def _invalidating(set_attr):
+    """Wrap ``__setattr__`` so a new parameter value un-builds the model.
+
+    Which parameters a build depends on is not worth enumerating: the
+    expensive ones are the point of building, and re-deriving a grid because
+    ``thresh_percept`` moved is cheaper than being wrong. Assignments that
+    change nothing keep the build, so ``model.rho = model.rho`` is free.
+    """
+
+    def __setattr__(self, name, value):
+        if _is_constructing(self) or name not in _declared_params(self):
+            set_attr(self, name, value)
+            return
+        before = getattr(self, name, None)
+        set_attr(self, name, value)
+        if not _unchanged(before, getattr(self, name, None)):
+            object.__setattr__(self, '_is_built', False)
+
+    return __setattr__
+
+
 class BaseModel(Parametrized, metaclass=ABCMeta):
     """Abstract base class for all models
 
@@ -338,12 +387,21 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     *  Build a model (via ``build``) and flip the ``is_built`` switch
 
+    .. versionchanged:: 0.11.0
+
+        Building is automatic. ``predict_percept`` builds a model that is not
+        built yet, and giving any parameter a new value un-builds it, so
+        ``model.rho = 200`` takes effect on the next prediction.
+
     .. versionchanged:: 0.10.0
 
         Everything other than the build workflow moved to
         :py:class:`~pulse2percept.utils.Parametrized`.
 
     """
+
+    #: A new parameter value invalidates the build; see ``_invalidating``.
+    __setattr__ = _invalidating(Parametrized.__setattr__)
 
     # The units a model's numerical implementation works in. p2p converts a
     # unitful argument to these at the API boundary and hands the kernels
@@ -935,7 +993,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         return self._predict_prepared(self.implant.prepare_stim(source),
                                       t_percept=t_percept)
 
@@ -949,7 +1007,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         override this.
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         if stim is None:
             # Nothing to see here:
@@ -1285,7 +1343,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         if stim is None:
             # Nothing to see here:
             return None
@@ -1866,11 +1924,10 @@ class Model(Frozen, PrettyPrint):
             RGB percept of dimensions Y x X x 3 x T on the scene's pixel grid.
 
         """
-        # Before the scene is sampled and a whole stimulus encoded from it:
-        # not being built is the caller's oldest mistake, and it should not be
-        # reported after two newer ones.
+        # Before the scene is sampled and a whole stimulus encoded from it,
+        # so that a build the caller never asked for does not happen twice:
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         if not isinstance(source, Scene):
             for name, value in (('gaze', gaze), ('vmax', vmax)):
                 if value is not None:
@@ -1904,7 +1961,7 @@ class Model(Frozen, PrettyPrint):
     def _predict_percept(self, stim, t_percept=None):
         """Predict the percept a prepared stimulus produces"""
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         # The sub-models normalize too; doing it here as well keeps the error
         # message below reading in plain milliseconds:
         t_percept = as_value(t_percept, self.time_unit, 't_percept')

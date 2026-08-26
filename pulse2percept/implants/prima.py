@@ -132,6 +132,8 @@ class PRIMA(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
 
+    placement = 'subretinal'
+
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False, safe_mode=False):
         # 85 um pixels with 15 um trenches, 28 um active electrode:
         self.trench = 15  # um
@@ -228,6 +230,8 @@ class PRIMA75(ProsthesisSystem):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
+
+    placement = 'subretinal'
 
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False, safe_mode=False):
         # 70 um pixels with 5 um trenches, 20 um active electrode:
@@ -333,6 +337,8 @@ class PRIMA55(ProsthesisSystem):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
+
+    placement = 'subretinal'
 
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False, safe_mode=False):
         # 50 um pixels with 5 um trenches, 16 um active electrode:
@@ -443,6 +449,8 @@ class PRIMA40(ProsthesisSystem):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'trench')
+
+    placement = 'subretinal'
 
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False, safe_mode=False):
         # 35 um pixels with 5 um trenches, 16 um active electrode:

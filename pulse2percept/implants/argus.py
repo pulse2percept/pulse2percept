@@ -104,6 +104,8 @@ class ArgusI(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
+    placement = 'epiretinal'
+
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True,
                  safe_mode=False, use_legacy_names=False):
         self.eye = eye
@@ -260,6 +262,8 @@ class ArgusII(ProsthesisSystem):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
+
+    placement = 'epiretinal'
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True,
                  safe_mode=False, encoder=_DEVICE_DEFAULT,

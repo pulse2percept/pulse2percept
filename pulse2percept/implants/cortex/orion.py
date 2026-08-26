@@ -59,6 +59,8 @@ class Orion(ProsthesisSystem):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
+    placement = 'epicortical'
+
     def __init__(self, x=15000, y=0, z=0, rot=0, preprocess=False, safe_mode=False):
 
         # This one inspects `z` itself before handing the geometry to

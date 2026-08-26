@@ -1063,3 +1063,28 @@ def test_ProsthesisSystem_partial_calibration_of_xTh_is_refused():
     stim = implant.prepare_stim(uA_source)
     factors = [src.amp_factor for _, src in stim._structured_sources()]
     npt.assert_equal(factors, [2, None])
+
+
+@pytest.mark.parametrize('cls,expected', [
+    (implants.ArgusII, 'epiretinal'),
+    (implants.IMIE, 'epiretinal'),
+    (implants.AlphaAMS, 'subretinal'),
+    (implants.PRIMA75, 'subretinal'),
+    (implants.BVT24, 'suprachoroidal'),
+    (cortex.Orion, 'epicortical'),
+    (cortex.Cortivis, 'intracortical'),
+    (cortex.ICVP, 'intracortical'),
+])
+def test_named_devices_say_where_they_sit(cls, expected):
+    npt.assert_equal(cls.placement, expected)
+    npt.assert_equal(cls().placement, expected)
+
+
+def test_a_generic_array_says_nothing_about_placement():
+    # `placement` records what the literature is unambiguous about; a bare
+    # grid of electrodes is a shape, not a device, and models read `None` as
+    # "no claim" rather than as a placement of its own.
+    npt.assert_equal(implants.GridImplant(shape=(2, 2), spacing=500).placement, None)
+    npt.assert_equal(
+        implants.ProsthesisSystem(implants.PointSource(0, 0, 0)).placement,
+        None)

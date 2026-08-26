@@ -375,13 +375,11 @@ def test_biphasicAxonMapModel():
     source = np.zeros(60)
     npt.assert_almost_equal(model.predict_percept(source).data, 0)
 
-    # Implant and model must be built for same eye:
-    with pytest.raises(ValueError):
-        BiphasicAxonMapModel(implant=ArgusII(eye='LE'), step=5).build()
-    with pytest.raises(ValueError):
-        BiphasicAxonMapModel(implant=ArgusII(), eye='invalid').build()
-    with pytest.raises(ValueError):
-        BiphasicAxonMapModel(implant=ArgusII(), step=5).build(eye='invalid')
+    # The eye is the implanted one, and is not settable on its own:
+    npt.assert_equal(
+        BiphasicAxonMapModel(implant=ArgusII(eye='LE'), step=5).eye, 'LE')
+    with pytest.raises(AttributeError):
+        BiphasicAxonMapModel(implant=ArgusII(), eye='LE')
 
     # Lambda cannot be too small:
     with pytest.raises(ValueError):

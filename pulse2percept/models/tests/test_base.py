@@ -126,9 +126,10 @@ def test_SpatialModel():
     with pytest.raises(ValueError):
         # stim.time==None but requesting t_percept != None
         model.predict_percept(np.ones(16), t_percept=[0, 1, 2])
-    with pytest.raises(NotBuiltError):
-        # must call build first
-        ValidSpatialModel(implant=implant).predict_percept(np.ones(16))
+    # An unbuilt model builds itself rather than refusing:
+    fresh = ValidSpatialModel(implant=implant)
+    npt.assert_equal(fresh.predict_percept(np.ones(16)) is not None, True)
+    npt.assert_equal(fresh.is_built, True)
     with pytest.raises(TypeError):
         # the implant must be a ProsthesisSystem
         ValidSpatialModel(implant=Stimulus(3))
@@ -673,9 +674,12 @@ def test_TemporalModel():
     with pytest.raises(ValueError):
         # stim.time==None but requesting t_percept != None
         ValidTemporalModel().predict_percept(Stimulus(3), t_percept=[0, 1, 2])
-    with pytest.raises(NotBuiltError):
-        # Must call build first:
-        ValidTemporalModel().predict_percept(Stimulus(3))
+    # An unbuilt model builds itself rather than refusing:
+    fresh = ValidTemporalModel()
+    npt.assert_equal(
+        fresh.predict_percept(Stimulus({'A1': [[1, 1]]}, time=[0, 1]))
+        is not None, True)
+    npt.assert_equal(fresh.is_built, True)
     with pytest.raises(TypeError):
         # Must pass a stimulus:
         ValidTemporalModel().build().predict_percept(ArgusI())
@@ -947,6 +951,47 @@ def test_Model_build():
     npt.assert_equal(model.is_built, True)
 
 
+def test_a_new_parameter_value_un_builds_the_model():
+    """Which parameters a build depends on is not enumerated anywhere"""
+    model = ValidSpatialModel(step=1).build()
+    # Assigning the value it already has changes nothing, so the build stands:
+    model.step = model.step
+    model.thresh_percept = 0
+    npt.assert_equal(model.is_built, True)
+    # A different value un-builds it, whether or not the grid depends on it:
+    model.step = 2
+    npt.assert_equal(model.is_built, False)
+    model.build()
+    model.thresh_percept = 0.5
+    npt.assert_equal(model.is_built, False)
+    # Attributes that are not parameters are not the build's business:
+    model.build()
+    model.grid = model.grid
+    npt.assert_equal(model.is_built, True)
+
+
+def test_a_composite_un_builds_the_stage_the_parameter_belongs_to():
+    model = Model(spatial=ValidSpatialModel(step=1),
+                  temporal=ValidTemporalModel()).build()
+    model.step = 2
+    npt.assert_equal(model.spatial.is_built, False)
+    npt.assert_equal(model.temporal.is_built, True)
+    npt.assert_equal(model.is_built, False)
+
+
+@pytest.mark.parametrize('make_model', [
+    lambda: ValidSpatialModel(),
+    lambda: Model(spatial=ValidSpatialModel()),
+    lambda: Model(spatial=ValidSpatialModel(), temporal=FadingTemporal()),
+])
+def test_predict_percept_builds_what_it_needs(make_model):
+    model = make_model()
+    npt.assert_equal(model.is_built, False)
+    npt.assert_equal(model.predict_percept({'A1': np.ones(10)}) is not None,
+                     True)
+    npt.assert_equal(model.is_built, True)
+
+
 def test_Model_names_one_implant():
     """Two implants is contradictory model context, not a precedence question"""
     implant = ArgusI()
@@ -975,9 +1020,6 @@ def test_Model_predict_percept():
 
     # Invalid calls:
     model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
-    with pytest.raises(NotBuiltError):
-        # Must call build first:
-        model.predict_percept({'A1': 1})
     model.build()
     with pytest.raises(ValueError):
         # Cannot request t_percepts that are not multiples of dt:

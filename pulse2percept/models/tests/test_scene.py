@@ -13,8 +13,8 @@ import pytest
 
 from pulse2percept.implants import (ElectrodeGrid, PointSource,
                                     ProsthesisSystem)
-from pulse2percept.models import (FadingTemporal, Model, NotBuiltError,
-                                  ScoreboardModel, ScoreboardSpatial)
+from pulse2percept.models import (FadingTemporal, Model, ScoreboardModel,
+                                  ScoreboardSpatial)
 from pulse2percept.models.base import _scene_stim
 from pulse2percept.models.cortex import ScoreboardModel as CortexScoreboard
 from pulse2percept.percepts import Percept
@@ -329,16 +329,17 @@ def test_a_scene_needs_an_encoder_and_a_retina():
         temporal.predict_percept(scene)
 
 
-def test_an_unbuilt_model_says_so_before_it_samples_anything():
-    """The oldest mistake is reported first, not after two newer ones"""
+def test_an_unbuilt_model_builds_itself_before_it_samples_anything():
+    """A scene is sampled through a bound implant, so the build comes first"""
     unbuilt = ScoreboardModel(implant=implant_at(0, 0), rho=200,
                               xrange=(-3, 3), yrange=(-3, 3), step=1)
-    with pytest.raises(NotBuiltError):
-        unbuilt.predict_percept(scene_of())
-    # ... including when there is a newer mistake waiting behind it:
+    npt.assert_equal(unbuilt.predict_percept(scene_of()) is not None, True)
+    npt.assert_equal(unbuilt.is_built, True)
+    # An implant with no encoder still cannot turn gray levels into current,
+    # and that is now the first thing the caller hears about:
     unbuilt = ScoreboardModel(implant=implant_at(0, 0, encoder=False),
                               rho=200, xrange=(-3, 3), yrange=(-3, 3), step=1)
-    with pytest.raises(NotBuiltError):
+    with pytest.raises(ValueError, match='encoder'):
         unbuilt.predict_percept(scene_of())
 
 

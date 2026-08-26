@@ -71,6 +71,8 @@ class BVT24(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
 
+    placement = 'suprachoroidal'
+
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=False, safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -189,6 +191,8 @@ class BVT44(ProsthesisSystem):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
+
+    placement = 'suprachoroidal'
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='LE', preprocess=False, safe_mode=False):
         self.eye = eye

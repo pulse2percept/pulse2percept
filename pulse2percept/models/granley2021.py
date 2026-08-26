@@ -10,7 +10,7 @@ from ..percepts import Percept
 from ..units import as_value, um, xTh
 from ..utils import FreezeError, rename_parameter
 from ..utils.base import has_own_attr
-from .base import NotBuiltError, BaseModel, _require_stim_dimension
+from .base import BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
 
 # Safety limit for locating delayed temporal peaks.
@@ -573,7 +573,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             Will return None if ``stim`` is None.
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         if stim is None:
             return None
         # Determine what physical quantity the stimulus is:
@@ -868,7 +868,7 @@ class BiphasicAxonMapModel(Model):
             Will return None if ``source`` is None or empty.
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         stim = self._prepared(source)
         if stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:

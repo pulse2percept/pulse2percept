@@ -81,6 +81,40 @@ def _flatten_bundles(bundles):
     return flat, np.concatenate(([0], np.cumsum(lens))), bundle_id
 
 
+def _electrode_pitch(model):
+    """The implant's typical nearest-neighbour spacing, in ``space_unit``
+
+    Returns None when there is nothing to compare: fewer than two electrodes,
+    or an array whose electrodes sit on top of each other.
+    """
+    xyz = model.implant.earray.coordinates(model.space_unit)
+    if len(xyz) < 2:
+        return None
+    # The nearest *other* electrode, so the query asks for two:
+    distances, _ = cKDTree(xyz).query(xyz, k=2)
+    pitch = float(np.median(distances[:, 1]))
+    return pitch if pitch > 0 else None
+
+
+def _warn_rho_vs_pitch(model):
+    """Warn when current spread is wide compared to electrode spacing
+
+    Describes what the numbers mean and leaves them alone: ``rho`` is a fitted
+    perceptual parameter, and the fit is the user's to defend.
+    """
+    pitch = _electrode_pitch(model)
+    if pitch is None or model.rho <= pitch:
+        return
+    overlap = np.exp(-pitch ** 2 / (2 * model.rho ** 2))
+    warnings.warn(
+        f"rho={model.rho:.0f} um is wider than this implant's electrode "
+        f"pitch ({pitch:.0f} um), a ratio of {model.rho / pitch:.2f}. A point "
+        f"one pitch away from an electrode still sees {overlap:.0%} of its "
+        f"peak, so neighbouring electrodes blur into each other and the "
+        f"percept says more about rho than about which electrodes were "
+        f"driven.")
+
+
 class ScoreboardSpatial(SpatialModel):
     """Scoreboard model of [Beyeler2019]_ (spatial module only)
 
@@ -149,9 +183,9 @@ class ScoreboardSpatial(SpatialModel):
         Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) un-builds the model, and the next
+        ``predict_percept`` builds it again.
     """
 
     def get_default_params(self):
@@ -163,6 +197,9 @@ class ScoreboardSpatial(SpatialModel):
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
         return {**super().get_param_units(), 'rho': um}
+
+    def _build(self):
+        _warn_rho_vs_pitch(self)
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
@@ -249,9 +286,9 @@ class ScoreboardModel(Model):
         Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) un-builds the model, and the next
+        ``predict_percept`` builds it again.
 
     """
 
@@ -293,8 +330,6 @@ class AxonMapSpatial(SpatialModel):
         amplitude, summed over the skipped electrodes, so the error at a point
         is bounded by ``min_current_spread`` times the summed amplitude across
         electrodes.
-    eye : {'RE', LE'}, optional
-        Eye for which to generate the axon map.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -367,9 +402,9 @@ class AxonMapSpatial(SpatialModel):
         Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.lam = 100``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.lam = 100``) un-builds the model, and the next
+        ``predict_percept`` builds it again.
 
     Notes
     -----
@@ -387,12 +422,34 @@ class AxonMapSpatial(SpatialModel):
         self.axon_contrib = None
         self.axon_idx_start = None
         self.axon_idx_end = None
+        self._built_eye = None
+
+    @property
+    def eye(self):
+        """The eye the axon map is grown for, which is the implanted one
+
+        .. versionchanged:: 0.11.0
+
+            No longer a parameter of its own. An axon map describes the retina
+            a particular device sits on, so the bound implant is what says
+            which eye, and the two can no longer disagree.
+        """
+        self._require_implant()
+        return self.implant.eye
+
+    @property
+    def is_built(self):
+        """False again once the bound implant has changed eyes
+
+        The one build-invalidating change the parameter machinery cannot see:
+        ``eye`` is not a parameter, and the implant is the same object it was
+        built with.
+        """
+        return super().is_built and self._built_eye == self.implant.eye
 
     def get_default_params(self):
         base_params = super(AxonMapSpatial, self).get_default_params()
         params = {
-            # Left or right eye:
-            'eye': 'RE',
             'rho': 300,
             'lam': 500,
             # Set the (x,y) location of the optic disc:
@@ -889,24 +946,31 @@ class AxonMapSpatial(SpatialModel):
         return tangent.reshape(xc.shape)
 
 
+    def _warn_placement(self):
+        """Warn when the implant is not where nerve fiber bundles run"""
+        placement = self.implant.placement
+        if placement is None or placement == 'epiretinal':
+            return
+        warnings.warn(
+            f"{type(self).__name__} predicts elongated percepts because an "
+            f"epiretinal array stimulates passing nerve fiber bundles. This "
+            f"implant is {placement}, where that mechanism does not apply, so "
+            f"the streaks below are an artifact of the model rather than a "
+            f"prediction about the device. ScoreboardModel is the usual "
+            f"phenomenological starting point for other placements.")
+
     def _correct_loc_od(self):
-        if self.eye.upper() == 'LE':
-            # In a left eye, the optic disc must have a negative x coordinate:
-            self.loc_od = (-np.abs(self.loc_od[0]), self.loc_od[1])
-        elif self.eye.upper() == 'RE':
-            # In a right eye, the optic disc must have a positive x coordinate:
-            self.loc_od = (np.abs(self.loc_od[0]), self.loc_od[1])
-        else:
-            err_str = (f"Eye should be either 'LE' or 'RE', not {self.eye}.")
-            raise ValueError(err_str)
+        """Put the optic disc on the nasal side of whichever eye this is"""
+        sign = -1 if self.eye == 'LE' else 1
+        self.loc_od = (sign * np.abs(self.loc_od[0]), self.loc_od[1])
 
     def _build(self):
         if self.lam < 10:
             raise ValueError('"lam" < 10 is not supported by this model. '
                              'Consider using ScoreboardModel instead.')
-        if self.implant.eye != self.eye:
-            raise ValueError(f"The implant is in {self.implant.eye} but the "
-                             f"model is set up for {self.eye}.")
+        self._warn_placement()
+        _warn_rho_vs_pitch(self)
+        self._built_eye = self.implant.eye
         # In a left eye, the OD must have a negative x coordinate:
         self._correct_loc_od()
         # Check whether pickle file needs to be rebuilt:
@@ -1150,8 +1214,6 @@ class AxonMapModel(Model):
         stimulus amplitude, summed over the skipped electrodes, so the error
         at a point is bounded by ``min_current_spread`` times the summed
         amplitude across electrodes.
-    eye : {'RE', LE'}, optional
-        Eye for which to generate the axon map.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). In a right eye, negative x values correspond to the
@@ -1224,9 +1286,9 @@ class AxonMapModel(Model):
         Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.lam = 100``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.lam = 100``) un-builds the model, and the next
+        ``predict_percept`` builds it again.
 
     Notes
     -----
