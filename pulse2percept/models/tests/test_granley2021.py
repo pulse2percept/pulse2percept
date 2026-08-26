@@ -445,25 +445,6 @@ def test_DefaultStreakModel_deprecated_axlambda():
 
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
-def test_find_threshold_not_supported(model_cls):
-    # This model takes amplitude as a multiple of threshold and reads it off
-    # the pulse train, so the inherited `find_threshold` - which bisects on a
-    # scaled copy of the stimulus data - cannot converge. It has to say so
-    # rather than fail somewhere deeper with a confusing message.
-    model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2), step=1,
-                      n_ax_segments=30).build()
-    source = {'A1': BiphasicPulseTrain(20, 1 * xTh, 0.45,
-                                                     stim_dur=100)}
-    with pytest.raises(NotImplementedError) as excinfo:
-        model.find_threshold(source, 0.5)
-    npt.assert_equal(model_cls.__name__ in str(excinfo.value), True)
-    npt.assert_equal('pulse train' in str(excinfo.value), True)
-    # predict_percept is unaffected:
-    npt.assert_equal(model.predict_percept(source) is not None, True)
-
-
-@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
-                                       BiphasicAxonMapSpatial])
 # Scaling the train itself, and scaling the stimulus the implant made of it;
 # the second is what a user reaches for:
 @pytest.mark.parametrize('compose', [False, True])

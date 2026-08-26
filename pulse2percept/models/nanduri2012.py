@@ -74,7 +74,7 @@ class Nanduri2012Spatial(SpatialModel):
         # electrodes to activation values at X,Y grid locations:
         x_el, y_el, z_el = self._electrode_coords(earray, stim)
         # The disk radius is a size rather than a coordinate, so it is read
-        # directly. `predict_percept` has already refused anything but disks:
+        # directly. `_build` has already refused anything but disks:
         r_el = np.ascontiguousarray([earray[e].r for e in stim.electrodes],
                                     dtype=np.float32)
         return spatial_fast(self._stim_values(stim), x_el, y_el, z_el,

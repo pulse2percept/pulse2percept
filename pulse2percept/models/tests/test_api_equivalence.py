@@ -1,9 +1,9 @@
-"""The new prediction API predicts exactly what the old one did (#XXX)
+"""The new prediction API predicts exactly what the old one did
 
 Every reference below was produced by the pre-refactor pipeline --
 ``implant.stim = source`` followed by ``model.predict_percept(implant)`` -- at
 commit 62d5b4e, and is compared against the same setup written the new way:
-``model = Model(implant=implant)`` followed by
+``model = SomeModel(implant=implant)`` followed by
 ``model.predict_percept(source)``. The API changed; the numbers did not.
 
 Percepts are compared by shape, time axis and three whole-array reductions

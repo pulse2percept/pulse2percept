@@ -18,7 +18,7 @@ from ..topography import Curcio1990Map, Grid2D, RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
                      um, uA)
 from ..vision import Scene
-from ..utils import (PrettyPrint, FreezeError, Frozen, Parametrized, bisect,
+from ..utils import (PrettyPrint, FreezeError, Frozen, Parametrized,
                      deprecated_alias, warn_deprecated_params,
                      rename_deprecated_params)
 from ..utils.base import _is_constructing
@@ -187,16 +187,6 @@ def _spatial_input(stim):
     models instead of the time-resolved pulse schedule.
     """
     return stim._spatial_view()
-
-
-def _rescale(stim, scale):
-    """Return a sampled copy of ``stim`` scaled by ``scale``.
-
-    Metadata and units are preserved.
-    """
-    return Stimulus(scale * stim.data, electrodes=stim.electrodes,
-                    time=stim.time,
-                    metadata=deepcopy(stim.metadata))._inherit_units(stim)
 
 
 def _delivered(stim):
@@ -1041,67 +1031,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                        time_unit=self.time_unit,
                        metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
 
-    def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100):
-        """Find the threshold current for a certain stimulus
-
-        Estimates ``amp_th`` such that the output of
-        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
-
-        .. versionchanged:: 0.11.0
-            Takes the stimulus rather than an implant carrying one, and scales
-            that stimulus rather than a copy of the implant.
-
-        Parameters
-        ----------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The stimulus to use. Stimulus amplitude will be up and down
-            regulated until ``amp_th`` is found.
-        bright_th : float
-            Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search, counted in this model's
-            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
-            (microamps, for every model p2p ships).
-        amp_tol : float, optional
-            Search will stop if candidate range of amplitudes is within
-            ``amp_tol``, in ``stimulus_unit``
-        bright_tol : float, optional
-            Search will stop if model brightness is within ``bright_tol`` of
-            ``bright_th``
-        max_iter : int, optional
-            Search will stop after ``max_iter`` iterations
-
-        Returns
-        -------
-        amp_th : float
-            Threshold current, in ``stimulus_unit``, estimated so that the
-            output of ``model.predict_percept(stim(amp_th))`` is within
-            ``bright_tol`` of ``bright_th``.
-
-        Notes
-        -----
-        *  ``amp_range`` and ``amp_tol`` may be given as unitful quantities
-           (e.g. ``amp_range=(0, 1 * mA)``); the answer comes back as a plain
-           number of microamps. ``bright_th`` and ``bright_tol`` are model
-           output, which is not a physical quantity and carries no unit. See
-           :py:mod:`pulse2percept.units`.
-
-        """
-        if not isinstance(stim, Stimulus):
-            raise TypeError(f"'stim' must be a Stimulus, not {type(stim)}.")
-        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
-        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
-
-        def inner_predict(amp, fnc_predict, stim):
-            return fnc_predict(_rescale(stim,
-                                        amp / stim.data.max())).data.max()
-
-        return bisect(bright_th, inner_predict,
-                      args=[self.predict_percept, stim],
-                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
-                      y_tol=bright_tol, max_iter=max_iter)
-
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
              figsize=None):
         """Plot the model
@@ -1485,72 +1414,6 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             f"pulse2percept.stimuli.AmplitudeEncoder gives it the right "
             f"polarity; otherwise negate it.")
 
-    def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100, t_percept=None):
-        """Find the threshold current for a certain stimulus
-
-        Estimates ``amp_th`` such that the output of
-        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
-
-        Parameters
-        ----------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The stimulus to use. Stimulus amplitude will be up and down
-            regulated until ``amp_th`` is found.
-        bright_th : float
-            Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search, counted in this model's
-            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
-            (microamps, for every model p2p ships).
-        amp_tol : float, optional
-            Search will stop if candidate range of amplitudes is within
-            ``amp_tol``, in ``stimulus_unit``
-        bright_tol : float, optional
-            Search will stop if model brightness is within ``bright_tol`` of
-            ``bright_th``
-        max_iter : int, optional
-            Search will stop after ``max_iter`` iterations
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept, counted in this
-            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
-            (milliseconds, for every model p2p ships).
-            If None, the stimulus' own time points are used.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
-            :py:mod:`pulse2percept.units`.
-
-        Returns
-        -------
-        amp_th : float
-            Threshold current, in ``stimulus_unit``, estimated so that the
-            output of ``model.predict_percept(stim(amp_th))`` is within
-            ``bright_tol`` of ``bright_th``.
-
-        Notes
-        -----
-        *  ``amp_range``, ``amp_tol`` and ``t_percept`` may be given as unitful
-           quantities; the answer comes back as a plain number of microamps.
-           ``bright_th`` and ``bright_tol`` are model output, which is not a
-           physical quantity and carries no unit. See
-           :py:mod:`pulse2percept.units`.
-
-        """
-        if not isinstance(stim, Stimulus):
-            raise TypeError(f"'stim' must be a Stimulus, not {type(stim)}.")
-        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
-        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
-        t_percept = as_value(t_percept, self.time_unit, 't_percept')
-
-        def inner_predict(amp, fnc_predict, stim, **kwargs):
-            _stim = _rescale(stim, amp / stim.data.max())
-            return fnc_predict(_stim, **kwargs).data.max()
-
-        return bisect(bright_th, inner_predict,
-                      args=[self.predict_percept, stim],
-                      kwargs={'t_percept': t_percept},
-                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
-                      y_tol=bright_tol, max_iter=max_iter)
-
 
 class Model(Frozen, PrettyPrint):
     """Computational model
@@ -1695,6 +1558,14 @@ class Model(Frozen, PrettyPrint):
                     "An implant is where a spatial model puts its electrodes, "
                     "and this model has only a temporal component. A temporal "
                     "model is given the stimulus and nothing else.")
+            bound = self.spatial.implant
+            if bound is not None and bound is not implant:
+                raise ValueError(
+                    f"This model was given two different implants: "
+                    f"'implant' is {type(implant).__name__} and the spatial "
+                    f"model is already bound to "
+                    f"{type(bound).__name__}. A model describes one device, "
+                    f"so name it once - either here or on the spatial model.")
             self.spatial.implant = implant
 
     def __getattr__(self, attr):
@@ -2073,76 +1944,6 @@ class Model(Frozen, PrettyPrint):
         elif self.has_time:
             resp = self.temporal.predict_percept(stim, t_percept=t_percept)
         return resp
-
-    def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100, t_percept=None):
-        """Find the threshold current for a certain stimulus
-
-        Estimates ``amp_th`` such that the output of
-        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
-
-        .. versionchanged:: 0.11.0
-            Takes the stimulus rather than an implant carrying one, and scales
-            that stimulus rather than a copy of the implant.
-
-        Parameters
-        ----------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The stimulus to use. Stimulus amplitude will be up and down
-            regulated until ``amp_th`` is found.
-        bright_th : float
-            Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search, counted in this model's
-            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
-            (microamps, for every model p2p ships).
-        amp_tol : float, optional
-            Search will stop if candidate range of amplitudes is within
-            ``amp_tol``
-        bright_tol : float, optional
-            Search will stop if model brightness is within ``bright_tol`` of
-            ``bright_th``
-        max_iter : int, optional
-            Search will stop after ``max_iter`` iterations
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept, counted in this
-            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
-            (milliseconds, for every model p2p ships).
-            If None, the stimulus' own time points are used.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
-            :py:mod:`pulse2percept.units`.
-
-        Returns
-        -------
-        amp_th : float
-            Threshold current, in ``stimulus_unit``, estimated so that the
-            output of ``model.predict_percept(stim(amp_th))`` is within
-            ``bright_tol`` of ``bright_th``.
-
-        Notes
-        -----
-        *  ``amp_range``, ``amp_tol`` and ``t_percept`` may be given as unitful
-           quantities; the answer comes back as a plain number of microamps.
-           ``bright_th`` and ``bright_tol`` are model output, which is not a
-           physical quantity and carries no unit. See
-           :py:mod:`pulse2percept.units`.
-
-        """
-        if not isinstance(stim, Stimulus):
-            raise TypeError(f"'stim' must be a Stimulus, not {type(stim)}.")
-        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
-        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
-        t_percept = as_value(t_percept, self.time_unit, 't_percept')
-
-        def inner_predict(amp, fnc_predict, stim, **kwargs):
-            return fnc_predict(_rescale(stim, amp / stim.data.max()),
-                               **kwargs).data.max()
-
-        return bisect(bright_th, inner_predict,
-                      args=[self.predict_percept, stim],
-                      kwargs={'t_percept': t_percept},
-                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
-                      y_tol=bright_tol, max_iter=max_iter)
 
     @property
     def has_space(self):

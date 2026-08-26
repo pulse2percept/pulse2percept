@@ -179,12 +179,6 @@ The scotoma describes *native* vision only. What the implant is given to
 encode is sampled from the scene itself, inside the lost region as well as
 outside it: a camera does not go blind where its wearer has.
 
-.. note::
-
-    ``find_threshold`` rescales an implant's own stimulus, which a
-    scene-driven model does not take from the caller. It raises rather than
-    silently ignoring the scene.
-
 Percept data layouts
 --------------------
 

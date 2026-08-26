@@ -16,15 +16,6 @@ from ._granley2021 import fast_biphasic_axon_map
 # Safety limit for locating delayed temporal peaks.
 _PEAK_SEARCH_DOUBLINGS = 4
 
-# `find_threshold` bisects on a scaled copy of the stimulus *data*, which this
-# model does not read, so the search cannot converge:
-_FIND_THRESHOLD_MSG = (
-    "{cls} does not support find_threshold. It takes amplitude as a multiple "
-    "of threshold and reads it from the pulse train the stimulus is made of, "
-    "not from the stimulus data, so scaling the data leaves the percept "
-    "unchanged. Vary `amp` when building the BiphasicPulseTrain instead."
-)
-
 
 class DefaultBrightModel(BaseModel):
     """
@@ -670,12 +661,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             return float(max(src.stim_dur for _, src in sources))
         return float(stim.time[-1])
 
-    def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100):
-        """Not supported by this model"""
-        raise NotImplementedError(_FIND_THRESHOLD_MSG.format(
-            cls=type(self).__name__))
-
 
 class BiphasicAxonMapModel(Model):
     """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
@@ -890,14 +875,3 @@ class BiphasicAxonMapModel(Model):
             return None
         _require_stim_dimension(self, stim)
         return self.spatial._predict_prepared(stim, t_percept=t_percept)
-
-    def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100, t_percept=None):
-        """Not supported by this model
-
-        Raises
-        ------
-        NotImplementedError
-        """
-        raise NotImplementedError(_FIND_THRESHOLD_MSG.format(
-            cls=type(self).__name__))

@@ -604,15 +604,6 @@ def test_per_frame_gaze_moves_the_eye_between_video_frames():
         seen_by(model, scene_of(), gaze=gaze)
 
 
-def test_find_threshold_works_on_a_scene_capable_model():
-    """A scene is trial input, so it takes nothing away from thresholding"""
-    model = model_for(implant_at(0, 0))
-    amp_th = model.find_threshold(
-        model.implant.prepare_stim(BiphasicPulse(20, 0.45)), 0.1,
-        amp_range=(0, 200), amp_tol=1)
-    npt.assert_equal(0 < amp_th < 200, True)
-
-
 def test_a_bound_implant_survives_a_deepcopy():
     """A copied model describes the same physical implant"""
     from copy import deepcopy

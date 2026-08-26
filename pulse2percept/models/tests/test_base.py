@@ -18,7 +18,7 @@ from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
                                   FadingTemporal, Model, NotBuiltError,
                                   ScoreboardModel, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
-from pulse2percept.models.base import _blend_meridian, _rescale
+from pulse2percept.models.base import _blend_meridian
 from pulse2percept.models.cortex import (ScoreboardSpatial as
                                          CortexScoreboardSpatial)
 from pulse2percept.units import (DimensionMismatchError, Quantity,
@@ -947,6 +947,17 @@ def test_Model_build():
     npt.assert_equal(model.is_built, True)
 
 
+def test_Model_names_one_implant():
+    """Two implants is contradictory model context, not a precedence question"""
+    implant = ArgusI()
+    # The same object twice says nothing new:
+    model = Model(implant=implant, spatial=ValidSpatialModel(implant=implant))
+    npt.assert_equal(model.implant is implant, True)
+    # Two different ones would have to silently pick a winner:
+    with pytest.raises(ValueError, match='two different implants'):
+        Model(implant=implant, spatial=ValidSpatialModel(implant=ArgusII()))
+
+
 def test_Model_predict_percept():
     # A None Model has nothing to build, nothing to perceive:
     model = Model()
@@ -1007,7 +1018,7 @@ def test_Model_predict_percept_frame_clock(fps):
     # real models: `ValidTemporalModel` returns one row per electrode, not one
     # per grid point, so it cannot consume a spatial percept.
     both = Model(implant=implant,
-                 spatial=ScoreboardSpatial(implant=ArgusII(), xrange=(-2, 2), yrange=(-2, 2),
+                 spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
                                            step=1),
                  temporal=FadingTemporal()).build()
     npt.assert_equal(both.predict_percept(stim).data.shape[-1], 6)
@@ -1091,106 +1102,6 @@ def test_Model_predict_percept_correctly_parallelizes():
 
     # we expect roughly a linear decrease in time as thread count increases
     npt.assert_almost_equal(actual=two_thread_temporal_predict_time, desired=one_thread_temporal_predict_time / 2, decimal=1e-5)
-
-
-class ScalingSpatialModel(ValidSpatialModel):
-    """Spatial model whose brightness equals the stimulus amplitude.
-
-    `find_threshold` bisects on amplitude, so a model with a known,
-    monotonic amplitude-to-brightness mapping gives a predictable threshold.
-    """
-
-    def _predict_spatial(self, earray, stim):
-        if not self.is_built:
-            raise NotBuiltError
-        n_time = 1 if stim.time is None else stim.time.size
-        out = np.zeros((self.grid.x.size, n_time), dtype=np.float32)
-        out[:] = np.abs(stim.data).max()
-        return out
-
-
-class ScalingTemporalModel(ValidTemporalModel):
-    """Temporal model whose brightness equals the stimulus amplitude."""
-
-    def _predict_temporal(self, stim, t_percept):
-        if not self.is_built:
-            raise NotBuiltError
-        out = np.zeros((stim.data.shape[0], len(t_percept)), dtype=np.float32)
-        out[:] = np.abs(stim.data).max()
-        return out
-
-
-def test_SpatialModel_find_threshold():
-    model = ScalingSpatialModel(step=5).build()
-    stim = Stimulus({'A1': 1})
-
-    # Brightness equals amplitude, so the threshold is the target brightness:
-    npt.assert_almost_equal(model.find_threshold(stim, 20), 20, decimal=0)
-    npt.assert_almost_equal(model.find_threshold(stim, 55), 55, decimal=0)
-
-    # `stim` must be a Stimulus:
-    with pytest.raises(TypeError):
-        model.find_threshold(ArgusI(), 20)
-
-
-def test_TemporalModel_find_threshold():
-    model = ScalingTemporalModel().build()
-    stim = Stimulus({'A1': 1})
-
-    npt.assert_almost_equal(model.find_threshold(stim, 20), 20, decimal=0)
-
-    # `stim` must be a Stimulus:
-    with pytest.raises(TypeError):
-        model.find_threshold(ArgusI(), 20)
-
-
-def test_Model_find_threshold():
-    model = Model(spatial=ScalingSpatialModel(step=5)).build()
-    stim = Stimulus({'A1': 1})
-
-    npt.assert_almost_equal(model.find_threshold(stim, 20), 20, decimal=0)
-
-    # `stim` must be a Stimulus:
-    with pytest.raises(TypeError):
-        model.find_threshold(ArgusI(), 20)
-
-
-def test_find_threshold_keeps_encoder_metadata():
-    # `find_threshold` rebuilds the stimulus at each trial amplitude. The
-    # encoder records the video's frame clock in the stimulus metadata, and
-    # that is what decides when `predict_percept` reports a percept -- so a
-    # rebuild that drops it silently evaluates every trial on the 50 Hz
-    # fallback instead of the time base the caller's own `predict_percept`
-    # will use.
-    implant = ArgusI()
-    rng = np.random.default_rng(0)
-    vid = VideoStimulus(rng.random((4, 4, 6)), metadata={'fps': 29.97})
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        stim = AmplitudeEncoder(amp_range=(0, 50), freq=60).encode(
-            vid, implant=implant)
-    n_frames = stim.metadata['encoder']['frame_time'].size
-
-    seen = []
-    model = FadingTemporal(tau=100).build()
-    unwrapped = FadingTemporal.predict_percept
-
-    def spy(self, stim, t_percept=None):
-        percept = unwrapped(self, stim, t_percept=t_percept)
-        seen.append(percept.time.size)
-        return percept
-
-    FadingTemporal.predict_percept = spy
-    try:
-        model.find_threshold(stim, 0.2, max_iter=5)
-        npt.assert_equal(set(seen), {n_frames})
-        seen.clear()
-        # ... and the same through the combined model:
-        Model(temporal=FadingTemporal(tau=100)).build().find_threshold(
-            stim, 0.2, max_iter=5)
-        npt.assert_equal(set(seen), {n_frames})
-    finally:
-        FadingTemporal.predict_percept = unwrapped
 
 
 def test_Model_deepcopy_memo():
@@ -1327,7 +1238,7 @@ def test_model_t_percept_units():
                                 yrange=(-2, 2), step=1).build()
     temporal = FadingTemporal().build()
     composite = Model(implant=implant,
-                      spatial=ScoreboardSpatial(implant=ArgusII(), xrange=(-2, 2), yrange=(-2, 2),
+                      spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
                                                 step=1),
                       temporal=FadingTemporal()).build()
     for model, stim in [(spatial, source),
@@ -1344,37 +1255,6 @@ def test_model_t_percept_units():
     # A single unitful time point, not just a list:
     single = spatial.predict_percept(source, t_percept=0.02 * s)
     npt.assert_allclose(single.time, [20], rtol=1e-12)
-
-
-def test_model_find_threshold_units():
-    """Amplitudes are currents; brightness is not a physical quantity"""
-    implant = ArgusII()
-    trial = implant.prepare_stim(
-        {'A1': BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)})
-    spatial = ScoreboardSpatial(implant=implant, xrange=(-2, 2),
-                                yrange=(-2, 2), step=1).build()
-    composite = Model(implant=implant,
-                      spatial=ScoreboardSpatial(implant=ArgusII(), xrange=(-2, 2), yrange=(-2, 2),
-                                                step=1)).build()
-    for model in (spatial, composite):
-        bare = model.find_threshold(trial, 0.1, amp_range=(0, 200), amp_tol=1)
-        unitful = model.find_threshold(trial, 0.1,
-                                       amp_range=(0, 0.2 * mA), amp_tol=1 * uA)
-        npt.assert_allclose(unitful, bare, rtol=1e-12)
-        # The answer is a plain number of microamps:
-        npt.assert_equal(isinstance(unitful, Quantity), False)
-        with pytest.raises(DimensionMismatchError):
-            model.find_threshold(trial, 0.1, amp_range=(0, 5 * ms))
-        with pytest.raises(DimensionMismatchError):
-            model.find_threshold(trial, 0.1, amp_tol=1 * dva)
-    # ... and on a temporal model, where `t_percept` joins them:
-    temporal = FadingTemporal().build()
-    stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
-    npt.assert_allclose(
-        temporal.find_threshold(stim, 0.01, amp_range=(0, 0.2 * mA),
-                                amp_tol=1 * uA, t_percept=[0, 50] * ms),
-        temporal.find_threshold(stim, 0.01, amp_range=(0, 200), amp_tol=1,
-                                t_percept=[0, 50]), rtol=1e-12)
 
 
 def test_model_requires_a_current_stimulus():
@@ -1400,7 +1280,7 @@ def test_model_requires_a_current_stimulus():
                                 yrange=(-2, 2), step=1).build()
     temporal = FadingTemporal().build()
     composite = Model(implant=implant,
-                      spatial=ScoreboardSpatial(implant=ArgusII(), xrange=(-2, 2), yrange=(-2, 2),
+                      spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
                                                 step=1),
                       temporal=FadingTemporal()).build()
     with pytest.raises(DimensionMismatchError):
@@ -1777,28 +1657,6 @@ def test_spatial_model_reads_modulation_not_pulses():
                      plain.time.size)
 
 
-def test_find_threshold_scales_both_representations():
-    # `find_threshold` varies the amplitude between trials. A spatial model
-    # reads the modulation, so a search that scaled only the pulse train would
-    # evaluate every trial on the unscaled picture and never move.
-    implant = ArgusII()
-    delivered = implant.prepare_stim(LogoBVL())
-    model = ScoreboardModel(implant=implant, xrange=(-12, 12), yrange=(-8, 8),
-                            step=1).build()
-    amp_th = model.find_threshold(delivered, 50, amp_range=(0, 500),
-                                  amp_tol=0.5)
-    npt.assert_equal(0 < amp_th < 500, True)
-    # The answer is a threshold of what `predict_percept` reports, which is
-    # only true if both descriptions were scaled together:
-    modulation = delivered._spatial_view()
-    bare = ScoreboardModel(implant=ArgusII(encoder=None), xrange=(-12, 12),
-                           yrange=(-8, 8), step=1).build()
-    scaled = Stimulus(modulation.data * amp_th / delivered.data.max(),
-                      electrodes=modulation.electrodes)
-    npt.assert_allclose(bare.predict_percept(scaled).data.max(), 50,
-                        rtol=0.05)
-
-
 def _blend_grid(step=0.5, extent=6):
     """A plain dva grid to hand `_blend_meridian`"""
     grid = Grid2D((-extent, extent), (-extent, extent), step=step)
@@ -2089,25 +1947,6 @@ def test_combined_model_still_integrates_the_delivered_pulses():
     # Stripping the modulation view happens on a stand-in, so the prepared
     # stimulus the caller holds keeps its schedule:
     npt.assert_equal(delivered._has_spatial_view, True)
-
-
-def test_find_threshold_scales_an_encoded_stimulus_structurally():
-    # Every trial scales the one schedule, so the modulation a spatial model
-    # reads and the waveform a temporal one would read move together -- and
-    # the search never has to expand either.
-    implant = ArgusII()
-    delivered = implant.prepare_stim(LogoBVL())
-    model = ScoreboardModel(implant=implant, xrange=(-12, 12), yrange=(-8, 8),
-                            step=1).build()
-    # The search reads the delivered peak once, to know what it is scaling
-    # to. From there on nothing needs the pulses:
-    peak = delivered.data.max()
-    with _no_schedule_expansion():
-        trial = delivered * 2
-        npt.assert_equal(type(trial), type(delivered))
-        npt.assert_allclose(trial._spatial_view().data,
-                            2 * delivered._spatial_view().data, rtol=1e-6)
-        npt.assert_equal(np.any(model.predict_percept(trial).data), True)
 
 
 def test_deactivating_an_encoded_electrode_keeps_the_schedule():

@@ -1295,7 +1295,7 @@ def test_encoded_stimulus_transformations_degrade(modify):
 def test_encoded_stimulus_scaling_scales_both_descriptions(factor):
     # Scaling changes how hard each electrode is driven, not when. So the
     # schedule survives -- and the waveform and the modulation behind it move
-    # together, which is what `find_threshold` varies from trial to trial.
+    # together, so a spatial and a spatiotemporal model see the same change.
     stim = AmplitudeEncoder().encode(
         ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
     view = stim._spatial_view()
