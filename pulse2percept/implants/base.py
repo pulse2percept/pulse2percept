@@ -1,11 +1,12 @@
 """:py:class:`~pulse2percept.implants.ProsthesisSystem`,
+   :py:class:`~pulse2percept.implants.GridImplant`,
    :py:class:`~pulse2percept.implants.RectangleImplant`"""
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
 from scipy.interpolate import RegularGridInterpolator
 
-from .electrodes import Electrode, DiskElectrode
+from .electrodes import Electrode, DiskElectrode, PointSource
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
 from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
@@ -724,6 +725,105 @@ class ProsthesisSystem(PrettyPrint):
         """Return a list of all electrode objects in the array"""
         return self.earray.electrode_objects
 
+
+
+class GridImplant(ProsthesisSystem):
+    """A prosthesis system whose electrodes form a regular grid
+
+    Convenience composition of an
+    :py:class:`~pulse2percept.implants.ElectrodeGrid` and a
+    :py:class:`~pulse2percept.implants.ProsthesisSystem`, for the common case
+    where a custom implant is just a grid of electrodes:
+
+    .. code-block:: python
+
+        implant = GridImplant(shape=(10, 10), spacing=500)
+
+    is the same thing as:
+
+    .. code-block:: python
+
+        implant = ProsthesisSystem(ElectrodeGrid(shape=(10, 10), spacing=500))
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    shape : (rows, cols)
+        The number of rows x columns in the grid.
+    spacing : double or (x_spacing, y_spacing)
+        Electrode-to-electrode spacing (um).
+    x/y/z : double, optional
+        3D location (um) of the center of the grid.
+    rot : double, optional
+        Rotation of the grid in degrees (positive angle: counter-clockwise).
+    names : (name_rows, name_cols), optional
+        Naming convention for rows and columns; see
+        :py:class:`~pulse2percept.implants.ElectrodeGrid`.
+    type : {'rect', 'hex'}, optional
+        Grid type ('rect': rectangular, 'hex': hexagonal).
+    orientation : {'horizontal', 'vertical'}, optional
+        Which way a hex grid staggers; see
+        :py:class:`~pulse2percept.implants.ElectrodeGrid`.
+    etype : :py:class:`~pulse2percept.implants.Electrode`, optional
+        A valid Electrode class.
+    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+        A valid source type for a stimulus.
+    eye : 'LE' or 'RE', optional
+        The eye in which the implant is implanted. Device metadata: unlike
+        :py:class:`~pulse2percept.implants.RectangleImplant`, the geometry and
+        the electrode names are the same in either eye.
+    preprocess : bool or callable, optional
+        Whether to preprocess the stimulus whenever a new one is assigned.
+    safe_mode : bool, optional
+        Whether to enforce charge balance.
+    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
+        How the device turns a picture into stimulation.
+    raster : :py:class:`~pulse2percept.implants.Raster`, optional
+        How the stimulator takes turns between electrodes.
+    max_current : float, optional
+        The total current (uA) the stimulator can source at any one instant.
+    **electrode_kwargs :
+        Any additional arguments passed to the ``etype`` constructor, such as
+        radius ``r`` for
+        :py:class:`~pulse2percept.implants.DiskElectrode`.
+
+    Examples
+    --------
+    A 10x10 grid of point sources, 500um apart:
+
+    >>> from pulse2percept.implants import GridImplant
+    >>> from pulse2percept.units import um
+    >>> implant = GridImplant(shape=(10, 10), spacing=500 * um)
+    >>> implant.n_electrodes
+    100
+
+    A hex grid of 75um disk electrodes:
+
+    >>> from pulse2percept.implants import DiskElectrode, GridImplant
+    >>> from pulse2percept.units import um
+    >>> implant = GridImplant(shape=(20, 20), spacing=400 * um, type='hex',
+    ...                       etype=DiskElectrode, r=75 * um)
+    >>> implant['A1']  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    DiskElectrode(activated=True, name='A1', r=75.0, x=-3700.0,
+                  y=-3290.89..., z=0...)
+
+    """
+    # Frozen class: geometry lives on `earray`, not duplicated here
+    __slots__ = ()
+
+    def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
+                 type='rect', orientation='horizontal', etype=PointSource,
+                 stim=None, eye='RE', preprocess=False, safe_mode=False,
+                 encoder=None, raster=None, max_current=None,
+                 **electrode_kwargs):
+        earray = ElectrodeGrid(shape, spacing, x=x, y=y, z=z, rot=rot,
+                               names=names, type=type,
+                               orientation=orientation, etype=etype,
+                               **electrode_kwargs)
+        super().__init__(earray, stim=stim, eye=eye, preprocess=preprocess,
+                         safe_mode=safe_mode, encoder=encoder, raster=raster,
+                         max_current=max_current)
 
 
 class RectangleImplant(ProsthesisSystem):
