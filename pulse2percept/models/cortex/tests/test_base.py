@@ -20,7 +20,7 @@ from pulse2percept.topography import Watson2014Map
 def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # ScoreboardSpatial automatically sets `regions`
     vfmap = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, vfmap=vfmap).build()
+    model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1, vfmap=vfmap).build()
     npt.assert_equal(model.regions, regions)
     npt.assert_equal(model.vfmap.regions, regions)
 
@@ -31,11 +31,11 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     npt.assert_equal(model.rho, 987)
 
     # Nothing in, None out:
-    npt.assert_equal(model.predict_percept(Cortivis()), None)
+    npt.assert_equal(model.predict_percept(None), None)
 
     # Converting ret <=> dva
     vfmap = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=1, vfmap=vfmap).build()
+    model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=1, vfmap=vfmap).build()
     npt.assert_equal(isinstance(model.vfmap, Polimeni2006Map), True)
     if jitter_boundary:
         npt.assert_equal(np.isnan(model.vfmap.dva_to_v1([0], [0])), False)
@@ -54,9 +54,8 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
         if 'v3' in regions:
             npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 36)
 
-    implant = Cortivis(x=1000, stim=np.zeros(96))
     # Zero in = zero out:
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept(np.zeros(96))
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
@@ -67,20 +66,20 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     [['v1'], ['v2'], ['v3'], ['v1', 'v2'], ['v2', 'v3'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 def test_predict_spatial(ModelClass, regions):
     # test that no current can spread between hemispheres
-    model = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.5, rho=100000, regions=regions).build()
-    implant = Orion(x = 15000)
-    implant.stim = {e:5 for e in implant.electrode_names}
-    percept = model.predict_percept(implant)
+    implant = Orion(x=15000)
+    model = ModelClass(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
+                       step=0.5, rho=100000, regions=regions).build()
+    percept = model.predict_percept({e: 5 for e in implant.electrode_names})
     half = percept.shape[1] // 2
     npt.assert_equal(np.all(percept.data[:, half+1:] == 0), True)
     npt.assert_equal(np.all(percept.data[:, :half] != 0), True)
 
     # implant only in v1, shouldnt change with v2/v3
     vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
-    model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), step=0.1, rho=400, vfmap=vfmap).build()
+    model = ModelClass(implant=Cortivis(x=30000, y=0, rot=0), xrange=(-5, 0),
+                       yrange=(-3, 3), step=0.1, rho=400, vfmap=vfmap).build()
     elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
-    implant = Cortivis(x=30000, y=0, rot=0, stim={str(i) : [1, 0] for i in elecs})
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept({str(i): [1, 0] for i in elecs})
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     npt.assert_equal(np.all(percept.data[:, :, 1] == 0), True)
     pmax = percept.data.max()
@@ -94,9 +93,10 @@ def test_predict_spatial(ModelClass, regions):
     if 'v1' in regions:
         # make sure cortical representation is flipped
         vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
-        model = ModelClass(xrange=(-5, 0), yrange=(-3, 3), step=0.1, rho=400, vfmap=vfmap).build()
-        implant = Orion(x=30000, y=0, rot=0, stim={'40' : 1,  '94' :5})
-        percept = model.predict_percept(implant)
+        model = ModelClass(implant=Orion(x=30000, y=0, rot=0),
+                           xrange=(-5, 0), yrange=(-3, 3), step=0.1, rho=400,
+                           vfmap=vfmap).build()
+        percept = model.predict_percept({'40': 1, '94': 5})
         half = model.grid.shape[0] // 2
         npt.assert_equal(np.sum(percept.data[:half, :, :]) >  np.sum(percept.data[half:, :, :]), True)
 
@@ -105,16 +105,18 @@ def test_predict_spatial(ModelClass, regions):
 @pytest.mark.parametrize('regions', [['v1', 'v2'], ['v1', 'v3'], ['v2', 'v3']])
 def test_predict_spatial_regionsum(ModelClass,regions):
     print(regions)
-    model1 = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=10000, regions=regions[0]).build()
-    model2 = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=10000, regions=regions[1]).build()
-    model_both = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=10000, regions=regions).build()
+    implant = Orion(x=10000, y=10000)
+    grid = dict(implant=implant, xrange=(-3, 3), yrange=(-3, 3), step=0.1,
+                rho=10000)
+    model1 = ModelClass(regions=regions[0], **grid).build()
+    model2 = ModelClass(regions=regions[1], **grid).build()
+    model_both = ModelClass(regions=regions, **grid).build()
 
-    implant = Orion(x = 10000, y=10000)
-    implant.stim = {e : 1 for e in implant.electrode_names}
+    source = {e: 1 for e in implant.electrode_names}
 
-    percept1 = model1.predict_percept(implant)
-    percept2 = model2.predict_percept(implant)
-    percept_both = model_both.predict_percept(implant)
+    percept1 = model1.predict_percept(source)
+    percept2 = model2.predict_percept(source)
+    percept_both = model_both.predict_percept(source)
 
     # Separate filtering introduces float32 round-off.
     npt.assert_almost_equal(percept1.data + percept2.data, percept_both.data,
@@ -127,16 +129,18 @@ def test_eq_beyeler(ModelClass, stimval):
     
 
     vfmap = Watson2014Map()
-    cortex = ModelClass(xrange=(-3, 3), yrange=(-3, 3), step=0.1,
-                        rho=200 * stimval, regions=['ret'],
-                        vfmap=vfmap, meridian_blend=0).build()
-    retina = BeyelerScoreboard(xrange=(-3, 3), yrange=(-3, 3), step=0.1, rho=200 * stimval).build()
-
     implant = ArgusII()
-    implant.stim = {e : 3 for e in implant.electrode_names[::stimval+1]}
+    cortex = ModelClass(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
+                        step=0.1, rho=200 * stimval, regions=['ret'],
+                        vfmap=vfmap, meridian_blend=0).build()
+    retina = BeyelerScoreboard(implant=implant, xrange=(-3, 3),
+                               yrange=(-3, 3), step=0.1,
+                               rho=200 * stimval).build()
 
-    p1 = cortex.predict_percept(implant)
-    p2 = retina.predict_percept(implant)
+    source = {e: 3 for e in implant.electrode_names[::stimval + 1]}
+
+    p1 = cortex.predict_percept(source)
+    p2 = retina.predict_percept(source)
 
     npt.assert_equal(p1.data, p2.data)
 
@@ -144,7 +148,7 @@ def test_eq_beyeler(ModelClass, stimval):
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 def test_deepcopy_Scoreboard(ModelClass):
-    original = ModelClass()
+    original = ModelClass(implant=Cortivis())
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects
@@ -167,7 +171,7 @@ def test_deepcopy_Scoreboard(ModelClass):
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 def test_plot(ModelClass):
     # make sure that plotting works before and after building
-    m = ModelClass()
+    m = ModelClass(implant=Cortivis())
     m.plot()
     plt.close()
     m.build()
@@ -178,12 +182,11 @@ def test_plot(ModelClass):
 def test_poli_nlink():
     # make sure that the polimeni map and neuralink work togther with scoreboard
     # since this is an odd combo of 2d map and 3d implant
-    model = ScoreboardModel(rho=800, step=.5).build()
+    implant = LinearEdgeThread(x=20000)
+    model = ScoreboardModel(implant=implant, rho=800, step=.5).build()
     npt.assert_equal(model.grid.v1.z is None, True)
     npt.assert_equal(model.grid.v1.x is None, False)
-    implant = LinearEdgeThread(x=20000,)
-    implant.stim = {e : 1 for e in implant.electrode_names}
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept({e: 1 for e in implant.electrode_names})
     npt.assert_almost_equal(np.sum(percept.data), 32.494125, decimal=3)
     npt.assert_equal(np.sum(percept.data > .05), 4)
 
@@ -205,18 +208,19 @@ def test_CortexSpatial_meridian_blend(ModelClass):
 
     # Close to the midline, so the phosphenes land on the vertical meridian
     implant = Cortivis(x=5000)
-    implant.stim = {e: 1 for e in implant.electrode_names}
-    plain = make(meridian_blend=0)
-    unblended = plain.predict_percept(implant).data
+    source = {e: 1 for e in implant.electrode_names}
+    plain = make(implant=implant, meridian_blend=0)
+    unblended = plain.predict_percept(source).data
     npt.assert_array_less(0, unblended.max())
 
-    default_model = make()
+    default_model = make(implant=implant)
     npt.assert_equal(default_model.meridian_blend, 0.1)
-    default_data = default_model.predict_percept(implant).data
+    default_data = default_model.predict_percept(source).data
     npt.assert_equal(np.array_equal(default_data, unblended), False)
 
     width = 0.5
-    blended = make(meridian_blend=width).predict_percept(implant).data
+    blended = make(implant=implant,
+                   meridian_blend=width).predict_percept(source).data
     npt.assert_equal(blended.shape, unblended.shape)
     npt.assert_equal(blended.dtype, unblended.dtype)
 
@@ -247,10 +251,11 @@ def test_CortexSpatial_meridian_blend_reapplies_threshold():
     # Blending pulls brightness across the meridian, which could otherwise
     # lift a point that `thresh_percept` had zeroed back off zero.
     implant = Cortivis(x=5000)
-    implant.stim = {e: 1 for e in implant.electrode_names}
-    model = ScoreboardModel(xrange=(-5, 5), yrange=(-5, 5), step=0.2, rho=800,
-                            meridian_blend=0.5, thresh_percept=0.1).build()
-    data = model.predict_percept(implant).data
+    model = ScoreboardModel(implant=implant, xrange=(-5, 5), yrange=(-5, 5),
+                            step=0.2, rho=800, meridian_blend=0.5,
+                            thresh_percept=0.1).build()
+    data = model.predict_percept(
+        {e: 1 for e in implant.electrode_names}).data
     npt.assert_equal(np.any(data > 0), True)
     # Nothing survives strictly between zero and the threshold:
     npt.assert_equal(np.any((np.abs(data) > 0) & (np.abs(data) < 0.1)), False)

@@ -1144,9 +1144,9 @@ def test_model_prediction_stays_grayscale():
     """Adding RGB must not change what a model returns"""
     from pulse2percept.implants import ArgusII
     from pulse2percept.models import ScoreboardModel
-    model = ScoreboardModel(rho=200, xrange=(-4, 4), yrange=(-4, 4),
-                            step=1).build()
-    percept = model.predict_percept(ArgusII(stim={'A8': 30}))
+    model = ScoreboardModel(implant=ArgusII(), rho=200, xrange=(-4, 4),
+                            yrange=(-4, 4), step=1).build()
+    percept = model.predict_percept({'A8': 30})
     npt.assert_equal(percept.is_rgb, False)
     npt.assert_equal(percept.data.ndim, 3)
     npt.assert_equal(percept.shape, (9, 9, 1))

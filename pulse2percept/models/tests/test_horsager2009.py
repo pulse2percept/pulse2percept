@@ -25,11 +25,12 @@ def test_Horsager2009Temporal():
 
     # Nothing in, None out:
     implant = ProsthesisSystem(PointSource(0, 0, 0))
-    npt.assert_equal(model.predict_percept(implant.stim), None)
+    npt.assert_equal(model.predict_percept(implant.prepare_stim(None)),
+                     None)
 
     # Zero in = zero out:
-    implant.stim = np.zeros((1, 6))
-    percept = model.predict_percept(implant.stim, t_percept=[0, 1, 2])
+    percept = model.predict_percept(implant.prepare_stim(np.zeros((1, 6))),
+                                    t_percept=[0, 1, 2])
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, (1, 1, 3))
     npt.assert_almost_equal(percept.data, 0)
@@ -38,8 +39,8 @@ def test_Horsager2009Temporal():
     # loop, because `idx_frame` is incremented after a write; also doesn't
     # make much sense):
     with pytest.raises(ValueError):
-        implant.stim = np.ones((1, 100))
-        model.predict_percept(implant.stim, t_percept=[0.2, 0.2])
+        model.predict_percept(implant.prepare_stim(np.ones((1, 100))),
+                              t_percept=[0.2, 0.2])
 
     # Single-pulse brightness from Fig.3. These three (amp, phase_dur) pairs sit
     # on one threshold curve in the paper, so the model should call them equally
@@ -124,8 +125,7 @@ def test_Horsager2009Model():
                                   stim_dur=200, cathodic_first=True)
         model1 = Horsager2009Model().build()
         model2 = Horsager2009Temporal().build()
-        implant = ProsthesisSystem(PointSource(0, 0, 0), stim=stim)
-        npt.assert_almost_equal(model1.predict_percept(implant).data,
+        npt.assert_almost_equal(model1.predict_percept(stim).data,
                                 model2.predict_percept(stim).data)
 
 

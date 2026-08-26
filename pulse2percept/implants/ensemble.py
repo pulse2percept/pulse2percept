@@ -246,8 +246,9 @@ class EnsembleImplant(ProsthesisSystem):
         form of its own: a dict keyed by the ensemble's own implant keys, which
         gives each constituent implant a source of its own. Each is prepared by
         the implant it belongs to -- with that implant's encoder, raster,
-        thresholds and safety limits -- and the results are merged onto the
-        combined array.
+        thresholds and safety limits -- and the merged result then goes through
+        the ensemble's own pipeline, so an ensemble-level ``preprocess`` or
+        ``safe_mode`` still has the last word.
 
         .. versionchanged:: 0.11.0
             Replaces ``merge_stimuli``, which read a stimulus stored on each
@@ -276,8 +277,12 @@ class EnsembleImplant(ProsthesisSystem):
         """
         if isinstance(source, dict) and source and \
                 all(key in self._implants for key in source):
-            return self._merged({key: implant.prepare_stim(source.get(key))
-                                 for key, implant in self._implants.items()})
+            prepared = {key: implant.prepare_stim(source.get(key))
+                        for key, implant in self._implants.items()}
+            # Through the ensemble's own pipeline, not around it: merging is
+            # how the per-implant input becomes one stimulus, not a second way
+            # of preparing one. `None` falls through unchanged.
+            source = self._merged(prepared)
         return super().prepare_stim(source)
 
     def _structured_children(self, prepared):

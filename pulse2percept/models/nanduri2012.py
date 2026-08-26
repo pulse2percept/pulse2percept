@@ -86,14 +86,11 @@ class Nanduri2012Spatial(SpatialModel):
                             self.thresh_percept,
                             self.n_threads)
 
-    def predict_percept(self, implant, t_percept=None):
+    def _build(self):
         if not np.all([isinstance(e, DiskElectrode)
-                       for e in implant.electrode_objects]):
+                       for e in self.implant.electrode_objects]):
             raise TypeError("The Nanduri2012 spatial model only supports "
                             "DiskElectrode arrays.")
-        return super(Nanduri2012Spatial, self).predict_percept(
-            implant, t_percept=t_percept
-        )
 
 
 class Nanduri2012Temporal(TemporalModel):

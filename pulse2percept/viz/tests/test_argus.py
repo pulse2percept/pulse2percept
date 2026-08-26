@@ -64,12 +64,13 @@ def test_plot_argus_phosphenes():
 @pytest.mark.parametrize('ImplantType', (ArgusI, ArgusII))
 def test_plot_argus_simulated_phosphenes(ImplantType):
     implant = ImplantType()
-    implant.stim = {'A1': [1, 0, 0], 'B2': [0, 1, 0], 'C3': [0, 0, 1]}
-    percepts = ScoreboardModel().build().predict_percept(implant)
+    source = {'A1': [1, 0, 0], 'B2': [0, 1, 0], 'C3': [0, 0, 1]}
+    model = ScoreboardModel(implant=implant).build()
+    percepts = model.predict_percept(source)
 
     plot_argus_simulated_phosphenes(percepts, implant)
 
     # Add axon map:
     _, ax = plt.subplots()
     plot_argus_simulated_phosphenes(percepts, implant, ax=ax,
-                                    axon_map=AxonMapModel())
+                                    axon_map=AxonMapModel(implant=implant))

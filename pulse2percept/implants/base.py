@@ -265,8 +265,8 @@ class ProsthesisSystem(PrettyPrint):
             f"{_describe_unit(self.stimulus_unit)}, but this stimulus is "
             f"measured in {_describe_unit(stim.unit)}. Give the implant an "
             f"'encoder' (pulse2percept.stimuli.AmplitudeEncoder or "
-            f"FrequencyEncoder) so that image or video input is encoded on "
-            f"assignment, encode it yourself first, or give the implant a "
+            f"FrequencyEncoder) so that image or video input is encoded during "
+            f"'prepare_stim', encode it yourself first, or give the implant a "
             f"'preprocess' function that does.")
 
     @staticmethod

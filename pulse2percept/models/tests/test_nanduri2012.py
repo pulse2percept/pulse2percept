@@ -14,7 +14,7 @@ from pulse2percept.utils import FreezeError
 
 def test_Nanduri2012Spatial():
     # Nanduri2012Spatial automatically sets `atten_a`:
-    model = Nanduri2012Spatial(step=5)
+    model = Nanduri2012Spatial(implant=ArgusI(), step=5)
 
     # User can set `atten_a`:
     model.atten_a = 12345
@@ -23,31 +23,29 @@ def test_Nanduri2012Spatial():
     npt.assert_equal(model.atten_a, 987)
 
     # Nothing in, None out:
-    npt.assert_equal(model.predict_percept(ArgusI()), None)
+    npt.assert_equal(model.predict_percept(None), None)
 
     # Zero in = zero out:
-    implant = ArgusI(stim=np.zeros(16))
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept(np.zeros(16))
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
 
-    # Only works for DiskElectrode arrays:
+    # Only works for DiskElectrode arrays, which is a fact about the implant
+    # the model is bound to, so it is caught when that model is built:
     with pytest.raises(TypeError):
-        implant = ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)))
-        implant.stim = 1
-        model.predict_percept(implant)
+        Nanduri2012Spatial(
+            implant=ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)))
+        ).build()
     with pytest.raises(TypeError):
-        implant = ProsthesisSystem(ElectrodeArray([DiskElectrode(0, 0, 0, 100),
-                                                   PointSource(100, 100, 0)]))
-        implant.stim = [1, 1]
-        model.predict_percept(implant)
+        Nanduri2012Spatial(implant=ProsthesisSystem(ElectrodeArray(
+            [DiskElectrode(0, 0, 0, 100), PointSource(100, 100, 0)]))).build()
 
     # Multiple frames are processed independently:
-    model = Nanduri2012Spatial(atten_a=14000, step=5,
+    model = Nanduri2012Spatial(implant=ArgusI(), atten_a=14000, step=5,
                                xrange=(-20, 20), yrange=(-15, 15))
     model.build()
-    percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
+    percept = model.predict_percept({'A1': [1, 2]})
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, :], pmax)
@@ -64,7 +62,7 @@ def test_Nanduri2012Spatial():
 
 
 def test_eq_Nanduri2012Spatial():
-    nanduri_spatial = Nanduri2012Spatial()
+    nanduri_spatial = Nanduri2012Spatial(implant=ArgusI())
 
     # Assert not equal for differing classes
     npt.assert_equal(nanduri_spatial == int, False)
@@ -81,13 +79,13 @@ def test_eq_Nanduri2012Spatial():
     npt.assert_equal(nanduri_spatial == copied, True)
 
     # Assert differing objects aren't equal
-    differing_model = Nanduri2012Model()
+    differing_model = Nanduri2012Model(implant=ArgusI())
     differing_model.xrange = (-10, 10)
     npt.assert_equal(nanduri_spatial == differing_model, False)
 
 
 def test_deepcopy_Nanduri2012Spatial():
-    original = Nanduri2012Spatial()
+    original = Nanduri2012Spatial(implant=ArgusI())
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects
@@ -114,11 +112,11 @@ def test_Nanduri2012Temporal(scale_out):
         model.rho = 100
 
     # Nothing in, None out:
-    npt.assert_equal(model.predict_percept(ArgusI().stim), None)
+    npt.assert_equal(model.predict_percept(ArgusI().prepare_stim(None)), None)
 
     # Zero in = zero out:
-    implant = ArgusI(stim=np.zeros((16, 100)))
-    percept = model.predict_percept(implant.stim, t_percept=[0, 1, 2])
+    stim = ArgusI().prepare_stim(np.zeros((16, 100)))
+    percept = model.predict_percept(stim, t_percept=[0, 1, 2])
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, (16, 1, 3))
     npt.assert_almost_equal(percept.data, 0)
@@ -127,8 +125,8 @@ def test_Nanduri2012Temporal(scale_out):
     # loop, because `idx_frame` is incremented after a write; also doesn't
     # make much sense):
     with pytest.raises(ValueError):
-        implant.stim = np.ones((16, 100))
-        model.predict_percept(implant.stim, t_percept=[0.2, 0.2])
+        model.predict_percept(ArgusI().prepare_stim(np.ones((16, 100))),
+                              t_percept=[0.2, 0.2])
 
     # Brightness scales differently with amplitude vs frequency:
     model = Nanduri2012Temporal(dt=5e-3, scale_out=scale_out)
@@ -141,9 +139,10 @@ def test_Nanduri2012Temporal(scale_out):
     for amp in np.linspace(0, 50, 5):
         # implant.stim = PulseTrain(model.dt, freq=20, amp=amp, dur=sdur,
         #                           pulse_dur=pdur, interphase_dur=pdur)
-        implant.stim = BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
-                                          stim_dur=sdur)
-        percept = model.predict_percept(implant.stim, t_percept=t_percept)
+        stim = implant.prepare_stim(
+            BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
+                               stim_dur=sdur))
+        percept = model.predict_percept(stim, t_percept=t_percept)
         bright_amp.append(percept.data.max())
     # These shifted by under 1.5% in 0.10.0, when the kernel stopped advancing
     # only one stimulus frame per simulation step: a pulse edge and the sample
@@ -156,9 +155,10 @@ def test_Nanduri2012Temporal(scale_out):
     for freq in np.linspace(0, 100, 5):
         # implant.stim = PulseTrain(model.dt, freq=freq, amp=20, dur=sdur,
         #                           pulse_dur=pdur, interphase_dur=pdur)
-        implant.stim = BiphasicPulseTrain(freq, 20, pdur, interphase_dur=pdur,
-                                          stim_dur=sdur)
-        percept = model.predict_percept(implant.stim, t_percept=t_percept)
+        stim = implant.prepare_stim(
+            BiphasicPulseTrain(freq, 20, pdur, interphase_dur=pdur,
+                               stim_dur=sdur))
+        percept = model.predict_percept(stim, t_percept=t_percept)
         bright_freq.append(percept.data.max())
     bright_freq_ref = np.array([0.0, 0.03892, 0.07297, 0.10686, 0.13841])
     npt.assert_almost_equal(bright_freq, scale_out * bright_freq_ref,
@@ -180,7 +180,7 @@ def test_deepcopy_Nanduri2012Temporal():
     npt.assert_equal(original != copied, True)
 
 def test_Nanduri2012Model():
-    model = Nanduri2012Model(step=5)
+    model = Nanduri2012Model(implant=ArgusI(), step=5)
     npt.assert_equal(hasattr(model, 'has_time'), True)
     npt.assert_equal(model.has_time, True)
 
@@ -208,7 +208,7 @@ def test_Nanduri2012Model():
 
 
 def test_deepcopy_Nanduri2012Model():
-    original = Nanduri2012Model()
+    original = Nanduri2012Model(implant=ArgusI())
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects
@@ -224,68 +224,70 @@ def test_deepcopy_Nanduri2012Model():
 
 def test_Nanduri2012Model_predict_percept():
     # Nothing in = nothing out:
-    model = Nanduri2012Model(xrange=(0, 0), yrange=(0, 0))
+    model = Nanduri2012Model(implant=ArgusI(), xrange=(0, 0), yrange=(0, 0))
     model.build()
-    implant = ArgusI(stim=None)
-    npt.assert_equal(model.predict_percept(implant), None)
-    implant.stim = np.zeros(16)
-    npt.assert_almost_equal(model.predict_percept(implant).data, 0)
+    npt.assert_equal(model.predict_percept(None), None)
+    npt.assert_almost_equal(model.predict_percept(np.zeros(16)).data, 0)
 
     # Single-pixel model same as TemporalModel:
-    implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
-    # implant.stim = PulseTrain(5e-6)
-    implant.stim = BiphasicPulseTrain(20, 20, 0.45, interphase_dur=0.45)
+    single = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
+    model = Nanduri2012Model(implant=single, xrange=(0, 0), yrange=(0, 0))
+    model.build()
+    train = BiphasicPulseTrain(20, 20, 0.45, interphase_dur=0.45)
     t_percept = [0, 0.01, 1.0]
-    percept = model.predict_percept(implant, t_percept=t_percept)
+    percept = model.predict_percept(train, t_percept=t_percept)
     temp = Nanduri2012Temporal().build()
-    temp = temp.predict_percept(implant.stim, t_percept=t_percept)
+    temp = temp.predict_percept(single.prepare_stim(train),
+                                t_percept=t_percept)
     npt.assert_almost_equal(percept.data, temp.data, decimal=4)
 
-    # Only works for DiskElectrode arrays:
+    # Only works for DiskElectrode arrays, which the bound implant either is
+    # or is not, so it is caught when the model is built:
     with pytest.raises(TypeError):
-        implant = ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)))
-        implant.stim = 1
-        model.predict_percept(implant)
+        Nanduri2012Model(
+            implant=ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0))),
+            xrange=(0, 0), yrange=(0, 0)).build()
     with pytest.raises(TypeError):
-        implant = ProsthesisSystem(ElectrodeArray([DiskElectrode(0, 0, 0, 100),
-                                                   PointSource(100, 100, 0)]))
-        implant.stim = [1, 1]
-        model.predict_percept(implant)
+        Nanduri2012Model(implant=ProsthesisSystem(ElectrodeArray(
+            [DiskElectrode(0, 0, 0, 100), PointSource(100, 100, 0)])),
+            xrange=(0, 0), yrange=(0, 0)).build()
 
     # Requested times must be multiples of model.dt:
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
-    # implant.stim = PulseTrain(tsample)
-    implant.stim = BiphasicPulseTrain(20, 20, 0.45)
+    model = Nanduri2012Model(implant=implant, xrange=(0, 0), yrange=(0, 0))
+    model.build()
+    train = BiphasicPulseTrain(20, 20, 0.45)
     model.temporal.dt = 0.1
     with pytest.raises(ValueError):
-        model.predict_percept(implant, t_percept=[0.01])
+        model.predict_percept(train, t_percept=[0.01])
     with pytest.raises(ValueError):
-        model.predict_percept(implant, t_percept=[0.01, 1.0])
+        model.predict_percept(train, t_percept=[0.01, 1.0])
     with pytest.raises(ValueError):
-        model.predict_percept(implant, t_percept=np.arange(0, 0.5, 0.101))
-    model.predict_percept(implant, t_percept=np.arange(0, 0.5, 1.0000001))
+        model.predict_percept(train, t_percept=np.arange(0, 0.5, 0.101))
+    model.predict_percept(train, t_percept=np.arange(0, 0.5, 1.0000001))
 
     # Can't request the same time more than once (this would break the Cython
     # loop, because `idx_frame` is incremented after a write; also doesn't
     # make much sense):
     with pytest.raises(ValueError):
-        model.predict_percept(implant, t_percept=[0.2, 0.2])
+        model.predict_percept(train, t_percept=[0.2, 0.2])
 
     # It's ok to extrapolate beyond `stim` if the `extrapolate` flag is set:
     model.temporal.dt = 1e-2
-    npt.assert_almost_equal(model.predict_percept(implant,
+    npt.assert_almost_equal(model.predict_percept(train,
                                                   t_percept=10000).data, 0)
 
     # Output shape must be determined by t_percept:
-    npt.assert_equal(model.predict_percept(implant, t_percept=0).shape,
+    npt.assert_equal(model.predict_percept(train, t_percept=0).shape,
                      (1, 1, 1))
-    npt.assert_equal(model.predict_percept(implant, t_percept=[0, 1]).shape,
+    npt.assert_equal(model.predict_percept(train, t_percept=[0, 1]).shape,
                      (1, 1, 2))
 
     # Brightness vs. size (use values from Nanduri paper):
-    model = Nanduri2012Model(step=0.5, xrange=(-4, 4), yrange=(-4, 4))
-    model.build()
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+    model = Nanduri2012Model(implant=implant, step=0.5, xrange=(-4, 4),
+                             yrange=(-4, 4))
+    model.build()
     amp_th = 30
     bright_th = 0.107
     stim_dur = 1000.0
@@ -294,10 +296,9 @@ def test_Nanduri2012Model_predict_percept():
     amp_factors = [1, 6]
     frames_amp = []
     for amp_f in amp_factors:
-        implant.stim = BiphasicPulseTrain(20, amp_f * amp_th, pdur,
-                                          interphase_dur=pdur,
-                                          stim_dur=stim_dur)
-        percept = model.predict_percept(implant, t_percept=t_percept)
+        train = BiphasicPulseTrain(20, amp_f * amp_th, pdur,
+                                   interphase_dur=pdur, stim_dur=stim_dur)
+        percept = model.predict_percept(train, t_percept=t_percept)
         idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
         brightest_frame = percept.data[..., idx_frame]
         frames_amp.append(brightest_frame)
@@ -305,10 +306,9 @@ def test_Nanduri2012Model_predict_percept():
     freqs = [20, 120]
     frames_freq = []
     for freq in freqs:
-        implant.stim = BiphasicPulseTrain(freq, 1.25 * amp_th, pdur,
-                                          interphase_dur=pdur,
-                                          stim_dur=stim_dur)
-        percept = model.predict_percept(implant, t_percept=t_percept)
+        train = BiphasicPulseTrain(freq, 1.25 * amp_th, pdur,
+                                   interphase_dur=pdur, stim_dur=stim_dur)
+        percept = model.predict_percept(train, t_percept=t_percept)
         idx_frame = np.argmax(np.max(percept.data, axis=(0, 1)))
         brightest_frame = percept.data[..., idx_frame]
         frames_freq.append(brightest_frame)

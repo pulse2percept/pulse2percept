@@ -13,7 +13,7 @@ from ..units import deg, dva, um
 from ..utils import deprecated_alias
 from ..utils.constants import UM_PER_MM, ZORDER
 from ..topography import Watson2014Map
-from ..implants import ProsthesisSystem, ElectrodeArray
+from ..implants import ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
 from .base import _blend_meridian
@@ -904,6 +904,9 @@ class AxonMapSpatial(SpatialModel):
         if self.lam < 10:
             raise ValueError('"lam" < 10 is not supported by this model. '
                              'Consider using ScoreboardModel instead.')
+        if self.implant.eye != self.eye:
+            raise ValueError(f"The implant is in {self.implant.eye} but the "
+                             f"model is set up for {self.eye}.")
         # In a left eye, the OD must have a negative x coordinate:
         self._correct_loc_od()
         # Check whether pickle file needs to be rebuilt:
@@ -1236,11 +1239,3 @@ class AxonMapModel(Model):
                                            temporal=None,
                                            **params)
 
-    def predict_percept(self, implant, t_percept=None):
-        # Need to add an additional check before running the base method:
-        if isinstance(implant, ProsthesisSystem):
-            if implant.eye != self.spatial.eye:
-                raise ValueError(f"The implant is in {implant.eye} but the model was "
-                                 f"built for {self.spatial.eye}.")
-        return super(AxonMapModel, self).predict_percept(implant,
-                                                         t_percept=t_percept)

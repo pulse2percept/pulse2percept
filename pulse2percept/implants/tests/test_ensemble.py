@@ -9,7 +9,7 @@ from pulse2percept.implants import (EnsembleImplant, PointSource, ProsthesisSyst
 from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.models.cortex.base import ScoreboardModel
-from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.stimuli import BiphasicPulseTrain, MonophasicPulse
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 
@@ -170,6 +170,25 @@ def test_prepare_stim_merges_per_implant_input():
     stim = ensemble.prepare_stim(np.ones(120) * 3)
     npt.assert_equal(stim.data.shape, (120, 1))
     npt.assert_equal(stim.data, 3)
+
+
+def test_prepare_stim_merged_goes_through_the_ensemble_pipeline():
+    """Merging is how per-implant input becomes one stimulus, not a way around
+
+    The children prepare their own halves, but what the ensemble delivers is
+    still the ensemble's to preprocess and to check.
+    """
+    ensemble = EnsembleImplant([Orion(), Orion(x=-35000)],
+                               preprocess=lambda s: s * -2)
+    stim = ensemble.prepare_stim({0: np.ones(60), 1: np.ones(60) * 2})
+    npt.assert_almost_equal(stim.data[:60], -2)
+    npt.assert_almost_equal(stim.data[60:], -4)
+
+    # ... and an ensemble-level safety check still refuses what it should,
+    # even though neither child enforces charge balance of its own:
+    unsafe = EnsembleImplant([Orion(), Orion(x=-35000)], safe_mode=True)
+    with pytest.raises(ValueError, match='charge-balanced'):
+        unsafe.prepare_stim({0: {'96': MonophasicPulse(20, 0.45)}})
 
 
 def test_EnsembleImplant_from_coords_units():

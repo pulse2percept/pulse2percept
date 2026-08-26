@@ -73,9 +73,9 @@ def test_endtoend_amplitude_modulation():
     # Four gray levels, evenly spaced, one per electrode:
     implant = make_implant(one_per_group())
     img = ImageStimulus(np.array([[0.25, 0.50], [0.75, 1.00]]))
-    stim = AmplitudeEncoder(amp_range=(0, 50), freq=20,
-                            frame_dur=200).encode(img, implant=implant)
-    implant.stim = stim
+    stim = implant.prepare_stim(
+        AmplitudeEncoder(amp_range=(0, 50), freq=20,
+                         frame_dur=200).encode(img, implant=implant))
     npt.assert_equal(list(stim.electrodes), NAMES)
 
     # --- what the encoder produced --------------------------------------
@@ -102,11 +102,10 @@ def test_endtoend_amplitude_modulation():
     # `models.base._spatial_input`). Wrapping the schedule in an ordinary
     # `Stimulus` is what asks for the delivered pulses instead, which is what
     # makes the raster visible below:
-    npt.assert_equal(implant.stim._spatial_view().shape, (4, 1))
-    implant.stim = Stimulus(stim)
-    model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), step=0.2,
-                              rho=200).build()
-    percept = model.predict_percept(implant)
+    npt.assert_equal(stim._spatial_view().shape, (4, 1))
+    model = ScoreboardSpatial(implant=implant, xrange=(-4, 4), yrange=(-4, 4),
+                              step=0.2, rho=200).build()
+    percept = model.predict_percept(Stimulus(stim))
     here, middle = at_electrodes(model, implant)
     # Brightest over time, since no two electrodes are ever on together:
     env = percept.data.max(axis=-1)
@@ -151,9 +150,9 @@ def test_endtoend_frequency_modulation():
     # electrode sets, so nothing has to be quantized away:
     implant = make_implant(one_per_group())
     img = ImageStimulus(np.array([[0.25, 1 / 3], [0.5, 1.0]]))
-    stim = FrequencyEncoder(freq_range=(0, 200), amp=50,
-                            frame_dur=200).encode(img, implant=implant)
-    implant.stim = stim
+    stim = implant.prepare_stim(
+        FrequencyEncoder(freq_range=(0, 200), amp=50,
+                         frame_dur=200).encode(img, implant=implant))
 
     # --- what the encoder produced --------------------------------------
     # One amplitude for everyone; the gray level sets the rate instead:
@@ -180,7 +179,7 @@ def test_endtoend_frequency_modulation():
     # --- what the model made of it --------------------------------------
     # A temporal model integrates the pulses, so more pulses is brighter even
     # though every pulse carries the same current:
-    percept = FadingTemporal().build().predict_percept(implant.stim)
+    percept = FadingTemporal().build().predict_percept(stim)
     # One percept frame per video frame -- the image is a single 200 ms frame:
     npt.assert_equal(percept.data.shape, (4, 1, 1))
     bright = percept.data[:, 0, 0]
@@ -224,9 +223,9 @@ def test_endtoend_raster_order(order):
     img = ImageStimulus(np.array([[0.25, 0.50], [0.75, 1.00]]))
     implant = make_implant(CustomRaster({n: g
                                          for n, g in zip(NAMES, order)}))
-    stim = AmplitudeEncoder(amp_range=(0, 50), freq=20,
-                            frame_dur=200).encode(img, implant=implant)
-    implant.stim = stim
+    stim = implant.prepare_stim(
+        AmplitudeEncoder(amp_range=(0, 50), freq=20,
+                         frame_dur=200).encode(img, implant=implant))
 
     # Each electrode starts in the slot its group was given -- 50 ms period
     # split four ways is 12.5 ms per slot:
@@ -244,10 +243,9 @@ def test_endtoend_raster_order(order):
     # the order the raster puts them in, and each is as bright as its own gray
     # level regardless of when its turn comes. Asked of the delivered pulses,
     # because that is where a raster lives (see `_spatial_input`):
-    implant.stim = Stimulus(stim)
-    model = ScoreboardSpatial(xrange=(-4, 4), yrange=(-4, 4), step=0.2,
-                              rho=200).build()
-    percept = model.predict_percept(implant)
+    model = ScoreboardSpatial(implant=implant, xrange=(-4, 4), yrange=(-4, 4),
+                              step=0.2, rho=200).build()
+    percept = model.predict_percept(Stimulus(stim))
     here, _ = at_electrodes(model, implant)
     env = percept.data.max(axis=-1)
     bright = np.array([env[here[n]] for n in NAMES])
@@ -279,14 +277,14 @@ def test_endtoend_raster_is_what_separates_the_groups():
 
     implant.max_current = 60
     with pytest.raises(ValueError, match='raster'):
-        implant.stim = plain
+        implant.prepare_stim(plain)
     # Giving the implant the raster is enough -- the encoder picks it up, and
     # the same image now fits inside the current limit:
     implant.raster = one_per_group()
-    implant.stim = AmplitudeEncoder(amp_range=(0, 50), freq=20,
-                                    frame_dur=200).encode(img,
-                                                          implant=implant)
-    npt.assert_almost_equal(np.abs(implant.stim.data).sum(axis=0).max(), 50.0)
+    rastered = implant.prepare_stim(
+        AmplitudeEncoder(amp_range=(0, 50), freq=20,
+                         frame_dur=200).encode(img, implant=implant))
+    npt.assert_almost_equal(np.abs(rastered.data).sum(axis=0).max(), 50.0)
 
 
 def test_endtoend_slow_train_stays_lit_for_the_whole_video():
@@ -307,23 +305,26 @@ def test_endtoend_slow_train_stays_lit_for_the_whole_video():
     peak it reached is what stops the report from depending on sampling phase.
     """
     # Argus II's own defaults: an amplitude encoder at 6 Hz, and a six-group
-    # raster. So the whole setup is `ArgusII(stim=BostonTrain())`.
+    # raster. So the whole setup is `ArgusII().prepare_stim(BostonTrain())`.
+    implant = ArgusII()
     with pytest.warns(UserWarning, match='deliver no pulse'):
         # 6 Hz against 29.97 fps: most frames carry no pulse of their own, and
         # the encoder says so. That is a property of the stimulus, not a reason
         # for the percept to go dark:
-        implant = ArgusII(stim=BostonTrain())
+        delivered = implant.prepare_stim(BostonTrain())
     # The encoder schedules pulses across the whole video, not just its start.
     # The last of the six raster groups takes its turn 5 x 2 = 10 ms behind the
     # first, which is what puts the final pulse past the 3000.5 ms that an
     # unrastered Argus II would end on:
-    onset = implant.stim.time[np.any(implant.stim.data < 0, axis=0)]
+    onset = delivered.time[np.any(delivered.data < 0, axis=0)]
     npt.assert_almost_equal(onset.max(), 3010.5, decimal=1)
 
-    model = Model(spatial=ScoreboardSpatial(xrange=(-12, 12), yrange=(-8, 8),
+    model = Model(implant=implant,
+                  spatial=ScoreboardSpatial(xrange=(-12, 12), yrange=(-8, 8),
                                             step=1),
                   temporal=FadingTemporal(tau=100)).build()
-    percept = model.predict_percept(implant)
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        percept = model.predict_percept(BostonTrain())
     # One percept frame per video frame, covering the whole video:
     npt.assert_equal(percept.data.shape[-1], 94)
     npt.assert_array_less(3000, percept.time[-1])

@@ -17,7 +17,7 @@ from pulse2percept.utils.testing import assert_warns_msg
 
 def test_Thompson2003Spatial():
     # Thompson2003Spatial automatically sets `radius`:
-    model = Thompson2003Spatial(step=5)
+    model = Thompson2003Spatial(implant=ArgusI(), step=5)
     # User can set `radius`:
     model.radius = 123
     npt.assert_equal(model.radius, 123)
@@ -25,25 +25,25 @@ def test_Thompson2003Spatial():
     npt.assert_equal(model.radius, 987)
 
     # Nothing in, None out:
-    npt.assert_equal(model.predict_percept(ArgusI()), None)
+    npt.assert_equal(model.predict_percept(None), None)
 
     # Converting ret <=> dva
-    model2 = Thompson2003Spatial(vfmap=Watson2014DisplaceMap())
+    model2 = Thompson2003Spatial(implant=ArgusI(),
+                                 vfmap=Watson2014DisplaceMap())
     npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
                      True)
 
-    implant = ArgusI(stim=np.zeros(16))
     # Zero in = zero out:
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept(np.zeros(16))
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
 
     # Multiple frames are processed independently:
-    model = Thompson2003Spatial(radius=200, step=5,
+    model = Thompson2003Spatial(implant=ArgusI(), radius=200, step=5,
                                 xrange=(-20, 20), yrange=(-15, 15))
     model.build()
-    percept = model.predict_percept(ArgusI(stim={'A1': [1, 0], 'B3': [0, 2]}))
+    percept = model.predict_percept({'A1': [1, 0], 'B3': [0, 2]})
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, 0], pmax[0])
@@ -54,7 +54,7 @@ def test_Thompson2003Spatial():
 
 
 def test_deepcopy_Thompson2003Spatial():
-    original = Thompson2003Spatial()
+    original = Thompson2003Spatial(implant=ArgusII())
     copied = copy.deepcopy(original)
 
     # Assert they are different objects
@@ -81,7 +81,7 @@ def test_deepcopy_Thompson2003Spatial():
 
 
 def test_Thompson2003Model():
-    model = Thompson2003Model(step=5)
+    model = Thompson2003Model(implant=ArgusI(), step=5)
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, False)
     npt.assert_equal(hasattr(model.spatial, 'radius'), True)
@@ -98,21 +98,21 @@ def test_Thompson2003Model():
     npt.assert_equal(isinstance(model.vfmap, Curcio1990Map), True)
     npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
     npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
-    model2 = Thompson2003Model(vfmap=Watson2014DisplaceMap())
+    model2 = Thompson2003Model(implant=ArgusI(),
+                               vfmap=Watson2014DisplaceMap())
     npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
                      True)
     # Nothing in, None out:
-    npt.assert_equal(model.predict_percept(ArgusI()), None)
+    npt.assert_equal(model.predict_percept(None), None)
 
     # Zero in = zero out:
-    implant = ArgusI(stim=np.zeros(16))
-    npt.assert_almost_equal(model.predict_percept(implant).data, 0)
+    npt.assert_almost_equal(model.predict_percept(np.zeros(16)).data, 0)
 
     # Multiple frames are processed independently:
-    model = Thompson2003Model(radius=1000, step=5,
+    model = Thompson2003Model(implant=ArgusI(), radius=1000, step=5,
                               xrange=(-20, 20), yrange=(-15, 15))
     model.build()
-    percept = model.predict_percept(ArgusI(stim={'A1': [1, 2]}))
+    percept = model.predict_percept({'A1': [1, 2]})
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, :], pmax)
@@ -122,13 +122,13 @@ def test_Thompson2003Model():
 
 
 def test_Thompson2003Model_predict_percept():
-    model = Thompson2003Model(step=0.55, radius=100, thresh_percept=0,
+    model = Thompson2003Model(implant=ArgusII(), step=0.55, radius=100, thresh_percept=0,
                               xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     # Single-electrode stim:
     img_stim = np.zeros(60)
     img_stim[47] = 1
-    percept = model.predict_percept(ArgusII(stim=img_stim))
+    percept = model.predict_percept(img_stim)
     # Single bright pixel, very small Gaussian kernel:
     npt.assert_equal(np.sum(percept.data > 0.5), 1)
     npt.assert_equal(np.sum(percept.data > 0.00001), 1)
@@ -136,28 +136,29 @@ def test_Thompson2003Model_predict_percept():
     npt.assert_almost_equal(percept.data[33, 46, 0], np.max(percept.data))
 
     # Full Argus II: 60 bright spots
-    model = Thompson2003Model(step=0.55, radius=100)
+    model = Thompson2003Model(implant=ArgusII(), step=0.55, radius=100)
     model.build()
-    percept = model.predict_percept(ArgusII(stim=np.ones(60)))
+    percept = model.predict_percept(np.ones(60))
     npt.assert_equal(np.sum(np.isclose(percept.data, 1.0, rtol=0.1, atol=0.1)),
                      84)
 
     # Model gives same outcome as Spatial:
-    spatial = Thompson2003Spatial(step=1, radius=100)
+    spatial = Thompson2003Spatial(implant=ArgusII(), step=1, radius=100)
     spatial.build()
-    spatial_percept = model.predict_percept(ArgusII(stim=np.ones(60)))
+    spatial_percept = model.predict_percept(np.ones(60))
     npt.assert_almost_equal(percept.data, spatial_percept.data)
     npt.assert_equal(percept.time, None)
 
     # Warning for nonzero electrode-retina distances
-    implant = ArgusI(stim=np.ones(16), z=10)
+    raised = Thompson2003Model(implant=ArgusII(z=10), step=0.55, radius=100)
+    raised.build()
     msg = ("Nonzero electrode-retina distances do not have any effect on the "
            "model output.")
-    assert_warns_msg(UserWarning, model.predict_percept, msg, implant)
+    assert_warns_msg(UserWarning, raised.predict_percept, msg, np.ones(60))
 
 
 def test_deepcopy_Thompson2003Model():
-    original = Thompson2003Model()
+    original = Thompson2003Model(implant=ArgusII())
     copied = copy.deepcopy(original)
 
     # Assert they are different objects
