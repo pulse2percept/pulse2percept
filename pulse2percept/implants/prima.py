@@ -7,9 +7,10 @@
 from matplotlib.patches import Circle, RegularPolygon
 
 import numpy as np
+from collections.abc import Sequence
 
 from .base import ProsthesisSystem
-from .electrodes import HexElectrode, _HEX_ORIENTATION, _is_nonscalar
+from .electrodes import HexElectrode, _HEX_ORIENTATION
 from .electrode_arrays import ElectrodeGrid
 from ..units import as_value, um
 
@@ -50,7 +51,7 @@ class PhotovoltaicPixel(HexElectrode):
         super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name,
                                                 activated=activated)
         r = as_value(r, um, 'r')
-        if _is_nonscalar(r):
+        if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Radius of the active electrode must be a scalar.")
         if r <= 0:
             raise ValueError("Radius of the active electrode must be > 0, not "

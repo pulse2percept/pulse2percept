@@ -827,13 +827,22 @@ class GridImplant(ProsthesisSystem):
 
 
 @deprecated(alt_func='GridImplant', deprecated_version='0.11.0',
-            removed_version='0.12.0')
+            removed_version='0.12.0',
+            extra_msg='Not a drop-in replacement: pass '
+                      '``etype=DiskElectrode, r=75, preprocess=True`` to keep '
+                      'these defaults, and note that a left-eye grid keeps '
+                      'the column names of a right-eye one.')
 class RectangleImplant(ProsthesisSystem):
     """ A generic rectangular implant
 
     .. deprecated:: 0.11.0
 
-        Use :py:class:`~pulse2percept.implants.GridImplant` instead.
+        Use :py:class:`~pulse2percept.implants.GridImplant` instead, although
+        that is not a drop-in replacement. Pass
+        ``etype=DiskElectrode, r=75`` to keep the old geometry and
+        ``preprocess=True`` to keep preprocessing.
+        Also note that left and right eyes have the same column names (no
+        automatic flipping).
 
     Parameters
     ----------
@@ -855,12 +864,6 @@ class RectangleImplant(ProsthesisSystem):
         Whether to preprocess the stimulus
     safe_mode : bool, optional
         Whether to enforce charge balance
-
-    Notes
-    -----
-    *  Lengths may be given as plain numbers of microns or as unitful
-       quantities (e.g. ``spacing=0.4 * mm``). See
-       :py:mod:`pulse2percept.units`.
 
     """
     def __init__(self, x=0, y=0, z=0, rot=0, shape=(15, 15), r=150./2, spacing=400., eye='RE', stim=None,

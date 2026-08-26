@@ -282,7 +282,7 @@ def test_rectangle_implant(ztype, x, y, rot):
 
 def test_RectangleImplant_is_deprecated():
     """Deprecated in favor of GridImplant, but otherwise unchanged"""
-    with pytest.deprecated_call(match='Use ``GridImplant`` instead'):
+    with pytest.deprecated_call(match='not a drop-in replacement'):
         implant = RectangleImplant(shape=(3, 4), spacing=100)
     # The legacy defaults and geometry survive the deprecation:
     npt.assert_equal(implant.preprocess, True)
@@ -362,27 +362,24 @@ def test_GridImplant_geometry_passthrough():
 
 
 def test_GridImplant_device_arguments_reach_ProsthesisSystem():
-    implant = GridImplant((2, 3), 100, eye='LE', stim={'A1': 5},
-                          safe_mode=False, max_current=100)
+    """Everything that is not geometry is handed to ProsthesisSystem as given
+
+    What those arguments then do is ProsthesisSystem's business and is tested
+    there; all a GridImplant owes them is not to drop or reinterpret one.
+    """
+    encoder = AmplitudeEncoder(amp_range=(0, 20))
+    raster = implants.SequentialRaster(2)
+    implant = GridImplant((2, 3), 100, eye='LE',
+                          stim={'A1': BiphasicPulse(10, 1)},
+                          preprocess=True, safe_mode=True, encoder=encoder,
+                          raster=raster, max_current=100)
     npt.assert_equal(implant.eye, 'LE')
     npt.assert_equal(implant.stim.electrodes, ['A1'])
-    npt.assert_almost_equal(implant.max_current, 100)
-    with pytest.raises(ValueError):
-        GridImplant((2, 3), 100, max_current=1, stim={'A1': 5})
-    # An encoder is what makes an image assignable at all:
-    encoder = AmplitudeEncoder(amp_range=(0, 20))
-    implant = GridImplant((2, 3), 100, encoder=encoder)
+    npt.assert_equal(implant.preprocess, True)
+    npt.assert_equal(implant.safe_mode, True)
     npt.assert_equal(implant.encoder, encoder)
-    implant.stim = ImageStimulus(np.ones((2, 3)))
-    npt.assert_equal(len(implant.stim.electrodes), implant.n_electrodes)
-    # Without an encoder, a picture is refused rather than silently read as
-    # microamps:
-    with pytest.raises(DimensionMismatchError):
-        GridImplant((2, 3), 100, stim=ImageStimulus(np.ones((2, 3))))
-    # Safe mode rejects a stimulus that is not charge-balanced:
-    with pytest.raises(ValueError):
-        GridImplant((2, 3), 100, safe_mode=True,
-                    stim=MonophasicPulse(10, 1))
+    npt.assert_equal(implant.raster, raster)
+    npt.assert_almost_equal(implant.max_current, 100)
 
 
 def test_GridImplant_does_not_relabel_the_left_eye():
