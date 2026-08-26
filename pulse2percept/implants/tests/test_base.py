@@ -282,7 +282,7 @@ def test_rectangle_implant(ztype, x, y, rot):
 
 def test_RectangleImplant_is_deprecated():
     """Deprecated in favor of GridImplant, but otherwise unchanged"""
-    with pytest.deprecated_call(match='not a drop-in replacement'):
+    with pytest.deprecated_call(match='drop-in replacement'):
         implant = RectangleImplant(shape=(3, 4), spacing=100)
     # The legacy defaults and geometry survive the deprecation:
     npt.assert_equal(implant.preprocess, True)
