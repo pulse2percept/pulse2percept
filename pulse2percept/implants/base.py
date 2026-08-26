@@ -14,7 +14,7 @@ from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
 from ..stimuli.base import _describe_unit
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
-from ..utils import PrettyPrint
+from ..utils import PrettyPrint, deprecated
 
 
 class ProsthesisSystem(PrettyPrint):
@@ -826,6 +826,8 @@ class GridImplant(ProsthesisSystem):
                          max_current=max_current)
 
 
+@deprecated(alt_func='GridImplant', deprecated_version='0.11.0',
+            removed_version='0.12.0')
 class RectangleImplant(ProsthesisSystem):
     """ A generic rectangular implant
 

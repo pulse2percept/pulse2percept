@@ -280,6 +280,23 @@ def test_rectangle_implant(ztype, x, y, rot):
         npt.assert_equal(implant.earray.shape, shape)
 
 
+def test_RectangleImplant_is_deprecated():
+    """Deprecated in favor of GridImplant, but otherwise unchanged"""
+    with pytest.deprecated_call(match='Use ``GridImplant`` instead'):
+        implant = RectangleImplant(shape=(3, 4), spacing=100)
+    # The legacy defaults and geometry survive the deprecation:
+    npt.assert_equal(implant.preprocess, True)
+    npt.assert_equal(implant.earray.shape, (3, 4))
+    npt.assert_equal(isinstance(implant['A1'], DiskElectrode), True)
+    npt.assert_almost_equal(implant['A1'].r, 75.)
+    # Including the left-eye column reversal that GridImplant does not do
+    # (see test_GridImplant_does_not_relabel_the_left_eye):
+    with pytest.deprecated_call():
+        le = RectangleImplant(shape=(3, 4), spacing=100, eye='LE')
+    npt.assert_equal(le['A1'].x > le['A4'].x, True)
+    npt.assert_almost_equal(le['A1'].x, implant['A4'].x)
+
+
 def test_GridImplant_is_a_grid_in_a_prosthesis_system():
     implant = GridImplant((3, 4), 100)
     npt.assert_equal(isinstance(implant, ProsthesisSystem), True)
