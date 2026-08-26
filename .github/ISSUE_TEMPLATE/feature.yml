@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest an improvement or new capability
+type: Feature
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please search existing issues first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+      description: |
+        Describe the use case or limitation. Focus on the problem rather than
+        the implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        Describe the API or behavior you would like, if you have something
+        specific in mind.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: |
+        Add examples, papers, device specifications, screenshots, or other
+        context that would help evaluate the request.
+    validations:
+      required: false
