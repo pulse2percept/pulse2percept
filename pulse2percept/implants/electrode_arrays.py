@@ -2,7 +2,7 @@
    :py:class:`~pulse2percept.implants.ElectrodeGrid`"""
 from matplotlib.colors import Normalize
 import numpy as np
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from collections.abc import Iterable
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
@@ -191,7 +191,7 @@ class ElectrodeArray(PrettyPrint):
         if not isinstance(electrode, Electrode):
             raise TypeError(f"Electrode {name} must be an Electrode object, not "
                             f"{type(electrode)}.")
-        if name in self.electrode_names:
+        if name in self._electrodes:
             raise ValueError(f"Cannot add electrode: key '{name}' already "
                              f"exists.")
         self._electrodes.update({name: electrode})
@@ -204,7 +204,7 @@ class ElectrodeArray(PrettyPrint):
         name: int|str|...
             Electrode name or index
         """
-        if name not in self.electrode_names:
+        if name not in self._electrodes:
             raise ValueError(f"Cannot remove electrode: key '{name}' does not "
                              f"exist")
         del self.electrodes[name]
@@ -753,9 +753,18 @@ class ElectrodeGrid(ElectrodeArray):
                 # If `r` is a scalar, choose same radius for all electrodes:
                 r_arr = np.ones(n_elecs, dtype=float) * kwargs['r']
             # Create a grid of DiskElectrode objects:
-            for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-                self.add_electrode(name, DiskElectrode(x, y, z, r, name=name))
+            elecs = [DiskElectrode(ex, ey, ez, er, name=nm)
+                     for ex, ey, ez, er, nm in zip(x_arr, y_arr, z_arr, r_arr,
+                                                   names)]
         else:
             # Pass keyword arguments to the electrode constructor:
-            for x, y, z, name in zip(x_arr, y_arr, z_arr, names):
-                self.add_electrode(name, etype(x, y, z, name=name, **kwargs))
+            elecs = [etype(ex, ey, ez, name=nm, **kwargs)
+                     for ex, ey, ez, nm in zip(x_arr, y_arr, z_arr, names)]
+        # Populated in one shot rather than through ``add_electrode``: on a
+        # grid every name is known up front, so a duplicate shows up as a
+        # short dict instead of costing a lookup per electrode.
+        self._electrodes = OrderedDict(zip(names, elecs))
+        if len(self._electrodes) != n_elecs:
+            dupe = next(nm for nm, n in Counter(names).items() if n > 1)
+            raise ValueError(f"Cannot add electrode: key '{dupe}' already "
+                             f"exists.")
