@@ -72,7 +72,7 @@ class ArgusI(ProsthesisSystem):
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
-        preprocessing method whenever a new stimulus is assigned, or a custom
+        preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -88,7 +88,7 @@ class ArgusI(ProsthesisSystem):
     >>> from pulse2percept.implants import ArgusI
     >>> ArgusI(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     ArgusI(earray=ElectrodeGrid, eye='RE', preprocess=True,
-           safe_mode=False, shape=(4, 4), stim=None)
+           safe_mode=False, shape=(4, 4))
 
     Get access to electrode 'B1', either by name or by row/column index:
 
@@ -104,8 +104,8 @@ class ArgusI(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 preprocess=True, safe_mode=False, use_legacy_names=False):
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True,
+                 safe_mode=False, use_legacy_names=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -124,10 +124,6 @@ class ArgusI(ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
                                     rot=rot, etype=DiskElectrode, r=r_arr,
                                     names=names)
-
-        # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes:
-        self.stim = stim
 
         # Set left/right eye:
         if not isinstance(eye, str):
@@ -213,7 +209,7 @@ class ArgusII(ProsthesisSystem):
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
-        preprocessing method whenever a new stimulus is assigned, or a custom
+        preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -222,7 +218,7 @@ class ArgusII(ProsthesisSystem):
         :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz, which is
         the rate Argus II runs its video at. Pass ``encoder=None`` to switch
         automatic encoding off, so that an image or a video assigned to
-        ``stim`` is refused rather than encoded.
+        an image or a video is refused rather than encoded.
 
         .. versionadded:: 0.10.0
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
@@ -242,7 +238,7 @@ class ArgusII(ProsthesisSystem):
     >>> ArgusII(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     ArgusII(earray=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
             preprocess=True, raster=SequentialRaster, safe_mode=False,
-            shape=(6, 10), stim=None)
+            shape=(6, 10))
 
     Get access to electrode 'E7', either by name or by row/column index:
 
@@ -254,19 +250,19 @@ class ArgusII(ProsthesisSystem):
     DiskElectrode(activated=True, name='E7', r=112.5, x=862.5,
                   y=862.5, z=100.0)
 
-    Because the device brings its own encoder, a picture can be assigned
-    straight to ``stim`` and comes back as current:
+    Because the device brings its own encoder, a picture can be presented
+    directly and comes back as current:
 
     >>> from pulse2percept.stimuli import LogoBVL
-    >>> ArgusII(stim=LogoBVL()).stim.unit
+    >>> ArgusII().prepare_stim(LogoBVL()).unit
     uA
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 preprocess=True, safe_mode=False, encoder=_DEVICE_DEFAULT,
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True,
+                 safe_mode=False, encoder=_DEVICE_DEFAULT,
                  raster=_DEVICE_DEFAULT):
         self.safe_mode = safe_mode
         self.preprocess = preprocess
@@ -288,7 +284,6 @@ class ArgusII(ProsthesisSystem):
         # Beware of race condition: Stim must be set last, because it requires
         # indexing into self.electrodes -- and, for a picture, the encoder and
         # raster set just above:
-        self.stim = stim
 
         # Set left/right eye:
         if not isinstance(eye, str):

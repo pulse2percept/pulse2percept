@@ -97,15 +97,15 @@ def test_ArgusI(ztype, x, y, rot):
     npt.assert_equal(argus.electrode_names[15], 'M1')
     npt.assert_equal(argus.electrode_names[0], 'L6')
 
-    # Set a stimulus via dict:
-    argus = implants.ArgusI(stim={'B3': 13})
-    npt.assert_equal(argus.stim.shape, (1, 1))
-    npt.assert_equal(argus.stim.electrodes, ['B3'])
+    # Prepare a stimulus via dict:
+    stim = implants.ArgusI().prepare_stim({'B3': 13})
+    npt.assert_equal(stim.shape, (1, 1))
+    npt.assert_equal(stim.electrodes, ['B3'])
 
-    # Set a stimulus via array:
-    argus = implants.ArgusI(stim=np.ones(16))
-    npt.assert_equal(argus.stim.shape, (16, 1))
-    npt.assert_almost_equal(argus.stim.data, 1)
+    # Prepare a stimulus via array:
+    stim = implants.ArgusI().prepare_stim(np.ones(16))
+    npt.assert_equal(stim.shape, (16, 1))
+    npt.assert_almost_equal(stim.data, 1)
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
@@ -181,15 +181,15 @@ def test_ArgusII(ztype, x, y, rot):
         npt.assert_equal(after[el].x < before[el].x, True)
         npt.assert_equal(after[el].y > before[el].y, True)
 
-    # Set a stimulus via dict:
-    argus = implants.ArgusII(stim={'B7': 13})
-    npt.assert_equal(argus.stim.shape, (1, 1))
-    npt.assert_equal(argus.stim.electrodes, ['B7'])
+    # Prepare a stimulus via dict:
+    stim = implants.ArgusII().prepare_stim({'B7': 13})
+    npt.assert_equal(stim.shape, (1, 1))
+    npt.assert_equal(stim.electrodes, ['B7'])
 
-    # Set a stimulus via array:
-    argus = implants.ArgusII(stim=np.ones(60))
-    npt.assert_equal(argus.stim.shape, (60, 1))
-    npt.assert_almost_equal(argus.stim.data, 1)
+    # Prepare a stimulus via array:
+    stim = implants.ArgusII().prepare_stim(np.ones(60))
+    npt.assert_equal(stim.shape, (60, 1))
+    npt.assert_almost_equal(stim.data, 1)
 
 
 def test_ArgusII_defaults():
@@ -223,16 +223,16 @@ def test_ArgusII_defaults():
     npt.assert_equal(implants.ArgusII(raster=None).encoder is None, False)
     # ... and switching the raster off really does stop the multiplexing: every
     # electrode then fires on the same schedule, at the same instant.
-    unrastered = implants.ArgusII(raster=None, stim=LogoBVL())
-    npt.assert_equal(unrastered.stim.metadata['encoder']['cycle'], None)
+    unrastered = implants.ArgusII(raster=None).prepare_stim(LogoBVL())
+    npt.assert_equal(unrastered.metadata['encoder']['cycle'], None)
     # There is an instant at which every electrode is at its own peak, so the
     # stimulator has to source the whole array at once:
-    npt.assert_almost_equal(np.abs(unrastered.stim.data).sum(axis=0).max(),
-                            np.abs(unrastered.stim.data).max(axis=1).sum(),
+    npt.assert_almost_equal(np.abs(unrastered.data).sum(axis=0).max(),
+                            np.abs(unrastered.data).max(axis=1).sum(),
                             decimal=3)
-    rastered = implants.ArgusII(stim=LogoBVL())
-    npt.assert_array_less(np.abs(rastered.stim.data).sum(axis=0).max(),
-                          np.abs(unrastered.stim.data).sum(axis=0).max())
+    rastered = implants.ArgusII().prepare_stim(LogoBVL())
+    npt.assert_array_less(np.abs(rastered.data).sum(axis=0).max(),
+                          np.abs(unrastered.data).sum(axis=0).max())
     # ... and either can be replaced outright:
     custom = implants.ArgusII(encoder=AmplitudeEncoder(freq=20),
                               raster=SequentialRaster(3))
@@ -244,41 +244,42 @@ def test_ArgusII_defaults():
         implants.ArgusII(raster='line')
 
 
-def test_ArgusII_encodes_pictures_on_assignment():
-    """The device's own defaults are what make `ArgusII(stim=picture)` work"""
-    argus = implants.ArgusII(stim=LogoBVL())
-    npt.assert_equal(argus.stim.unit, uA)
-    npt.assert_equal(argus.stim.shape[0], argus.n_electrodes)
-    npt.assert_equal(list(argus.stim.electrodes), list(argus.electrode_names))
+def test_ArgusII_encodes_pictures_on_preparation():
+    """The device's own defaults are what make `prepare_stim(picture)` work"""
+    argus = implants.ArgusII()
+    stim = argus.prepare_stim(LogoBVL())
+    npt.assert_equal(stim.unit, uA)
+    npt.assert_equal(stim.shape[0], argus.n_electrodes)
+    npt.assert_equal(list(stim.electrodes), list(argus.electrode_names))
     # 6 Hz over the 500 ms an image is treated as lasting is three pulses:
-    npt.assert_almost_equal(argus.stim.time[-1], 500)
-    npt.assert_almost_equal(np.abs(argus.stim.data).max(), 50, decimal=4)
+    npt.assert_almost_equal(stim.time[-1], 500)
+    npt.assert_almost_equal(np.abs(stim.data).max(), 50, decimal=4)
     # The raster is in there too: six groups, each 2 ms behind the one before:
-    npt.assert_almost_equal(argus.stim.metadata['encoder']['cycle'], 12)
+    npt.assert_almost_equal(stim.metadata['encoder']['cycle'], 12)
     # ... which is what a raster is for: at no instant is more than one group
     # of electrodes drawing current.
-    groups = argus.raster.groups(argus.stim.electrodes)
-    for column in argus.stim.data.T:
+    groups = argus.raster.groups(stim.electrodes)
+    for column in stim.data.T:
         npt.assert_equal(np.unique(groups[column != 0]).size <= 1, True)
 
     # A video keeps its own frame clock, which is what a model reports at:
     with pytest.warns(UserWarning, match='deliver no pulse'):
         # 6 Hz against 29.97 fps: most frames carry no pulse of their own
-        argus = implants.ArgusII(stim=BostonTrain())
-    npt.assert_equal(argus.stim.unit, uA)
-    meta = argus.stim.metadata['encoder']
+        stim = argus.prepare_stim(BostonTrain())
+    npt.assert_equal(stim.unit, uA)
+    meta = stim.metadata['encoder']
     npt.assert_equal(meta['frame_time'].size, 94)
     npt.assert_almost_equal(meta['frame_dur'], 1000 / 29.97, decimal=3)
 
     # Without an encoder the very same picture is refused, since there is no
     # default mapping from a gray level onto an amplitude:
     with pytest.raises(DimensionMismatchError):
-        implants.ArgusII(encoder=None, stim=LogoBVL())
+        implants.ArgusII(encoder=None).prepare_stim(LogoBVL())
 
     # And the whole point of it: a picture goes straight into a model, with no
     # encoding step for the caller to spell out.
-    model = AxonMapModel(xrange=(-4, 4), yrange=(-3, 3), step=1, rho=200,
-                         lam=100).build()
-    percept = model.predict_percept(implants.ArgusII(stim=LogoBVL()))
+    model = AxonMapModel(implant=argus, xrange=(-4, 4), yrange=(-3, 3), step=1,
+                         rho=200, lam=100).build()
+    percept = model.predict_percept(LogoBVL())
     npt.assert_equal(percept.data.shape[:2], model.grid.x.shape)
     npt.assert_equal(np.any(percept.data > 0), True)

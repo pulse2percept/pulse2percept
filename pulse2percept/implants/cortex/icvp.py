@@ -36,12 +36,9 @@ class ICVP(ProsthesisSystem):
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
         system.
-    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-        A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
-        object (e.g., scalar, NumPy array, pulse train).
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
-        preprocessing method whenever a new stimulus is assigned, or a custom
+        preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -53,7 +50,7 @@ class ICVP(ProsthesisSystem):
     >>> from pulse2percept.implants.cortex import Orion
     >>> ICVP() # doctest: +NORMALIZE_WHITESPACE
     ICVP(earray=ElectrodeGrid, preprocess=False, 
-         safe_mode=False, shape=(5, 4), stim=None)
+         safe_mode=False, shape=(5, 4))
 
     Get access to electrode '11':
 
@@ -74,8 +71,7 @@ class ICVP(ProsthesisSystem):
     # depth of shanks: 650 or 850 um
     # (https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9175335)
 
-    def __init__(self, x=15000, y=0, z=0, rot=0, stim=None,
-                 preprocess=False, safe_mode=False):
+    def __init__(self, x=15000, y=0, z=0, rot=0, preprocess=False, safe_mode=False):
         # Inspected, broadcast and offset here, before the grid ever sees it:
         z = as_value(z, um, 'z')
         if not np.isclose(z, 0):
@@ -112,10 +108,6 @@ class ICVP(ProsthesisSystem):
             self.earray.remove_electrode(e)
 
         self.earray.deactivate(['R', 'C'])
-
-        # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes:
-        self.stim = stim
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

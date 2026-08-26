@@ -20,47 +20,44 @@ from ..utils import PrettyPrint, deprecated
 class ProsthesisSystem(PrettyPrint):
     """Visual prosthesis system
 
-    A visual prosthesis combines an electrode array and (optionally) a
-    stimulus. This is the base class for prosthesis systems such as
+    A visual prosthesis describes an electrode array together with the input
+    pipeline that turns what is presented to the device into the stimulation
+    its electrodes deliver (see
+    :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`). This is
+    the base class for prosthesis systems such as
     :py:class:`~pulse2percept.implants.ArgusII` and
     :py:class:`~pulse2percept.implants.AlphaIMS`.
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.11.0
+        An implant no longer stores a stimulus. ``implant.stim = source``
+        became ``delivered = implant.prepare_stim(source)``, and a model is
+        given the source rather than the implant (see
+        :py:meth:`~pulse2percept.models.Model.predict_percept`).
 
     Parameters
     ----------
     earray : :py:class:`~pulse2percept.implants.ElectrodeArray` or
              :py:class:`~pulse2percept.implants.Electrode`
         The electrode array used to deliver electrical stimuli to the retina.
-    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-        A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
-        object (e.g., scalar, NumPy array, pulse train). It must be electrical
-        (see
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`), or
-        an image or a video that the implant's ``encoder`` turns into one.
-
-        .. versionchanged:: 0.10.0
-            A stimulus that is neither a current nor something the implant's
-            ``encoder`` can turn into one is refused here, instead of at the
-            point where a model tries to read it.
     eye : 'LE' or 'RE'
         A string indicating whether the system is implanted in the left ('LE')
         or right eye ('RE')
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
-        preprocessing method whenever a new stimulus is assigned, or a custom
+        preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
         Safety is an electrical property, so this also requires the stimulus
         to be measured in units of current.
     encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
-        How the device turns a picture into stimulation. If given, assigning an
-        image or a video to
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim` encodes it
-        first, so that ``implant.stim`` always ends up electrical. If None,
-        such a stimulus is refused, since there is no principled default
-        mapping from a gray level to an amplitude or a frequency.
+        How the device turns a picture into stimulation. If given, preparing an
+        image or a video encodes it first, so that what comes back is always
+        electrical. If None, such a stimulus is refused, since there is no
+        principled default mapping from a gray level to an amplitude or a
+        frequency.
 
         .. versionadded:: 0.10.0
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
@@ -73,7 +70,7 @@ class ProsthesisSystem(PrettyPrint):
         .. versionadded:: 0.10.0
     max_current : float, optional
         The total current (uA) the stimulator can source at any one instant,
-        summed over all electrodes. If given, assigning a stimulus that exceeds
+        summed over all electrodes. If given, preparing a stimulus that exceeds
         it raises. If None, no such check is performed.
 
         May be given as a plain number of microamps or as a unitful quantity
@@ -90,20 +87,20 @@ class ProsthesisSystem(PrettyPrint):
     >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
     >>> implant = ProsthesisSystem(DiskElectrode(200, -50, 10, 100), eye='LE')
 
-    .. note::
-
-        A stimulus can also be assigned later (see
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim`).
-
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_stim', '_eye', 'safe_mode', 'preprocess',
+    __slots__ = ('_earray', '_eye', 'safe_mode', 'preprocess',
                  '_encoder', '_raster', '_max_current', '_thresholds')
 
     #: Physical quantity delivered by the implant. Subclasses may override.
     stimulus_unit = uA
 
-    def __init__(self, earray, stim=None, eye='RE', preprocess=False,
+    #: Where the device sits relative to the tissue it stimulates, where the
+    #: literature is unambiguous about it; None where it is not, or where the
+    #: class describes a family rather than a device.
+    placement = None
+
+    def __init__(self, earray, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None):
         self.earray = earray
         self.eye = eye
@@ -112,14 +109,11 @@ class ProsthesisSystem(PrettyPrint):
         self.encoder = encoder
         self.raster = raster
         self.max_current = max_current
-        # Assign stimulus last because encoding depends on the initialized
-        # encoder, raster, and electrode array.
-        self.stim = stim
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = {
-            'earray': self.earray, 'stim': self.stim, 'safe_mode': self.safe_mode,
+            'earray': self.earray, 'safe_mode': self.safe_mode,
             'preprocess': self.preprocess
         }
         if hasattr(self, "eye"):
@@ -189,24 +183,22 @@ class ProsthesisSystem(PrettyPrint):
         """Perceptual threshold current (uA) for each electrode.
 
         Assign a single current for the whole array, a per-electrode dict,
-        or None to clear the calibration. Threshold-relative pulse trains
-        are recalibrated when this property changes.
+        or None to clear the calibration. Threshold-relative pulse trains are
+        calibrated against whatever is in force at the moment
+        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` runs.
 
         .. versionadded:: 0.10.0
+
+        .. versionchanged:: 0.11.0
+            Changing thresholds affects the next stimulus prepared, rather
+            than rewriting one the implant was holding.
         """
         return dict(getattr(self, '_thresholds', None) or {})
 
     @thresholds.setter
     def thresholds(self, thresholds):
         """Threshold setter (called upon ``self.thresholds = ...``)"""
-        previous = getattr(self, '_thresholds', {})
         self._thresholds = self._normalize_thresholds(thresholds)
-        try:
-            self._recalibrate_stim()
-        except Exception:
-            # Thresholds and stimulus move together or not at all:
-            self._thresholds = previous
-            raise
 
     def _normalize_thresholds(self, thresholds):
         """Return thresholds as a mapping of electrode names to uA."""
@@ -225,19 +217,6 @@ class ProsthesisSystem(PrettyPrint):
             if threshold is not None:
                 normalized[name] = threshold
         return normalized
-
-    def _recalibrate_stim(self):
-        """Recalibrate the stored stimulus for the thresholds now in force"""
-        stim = getattr(self, '_stim', None)
-        if stim is None:
-            return
-        calibrated = self._calibrated(stim)
-        if calibrated is stim:
-            return
-        # Checked before it is stored, so a rejected stimulus is not the one
-        # left behind:
-        self.check_stim(calibrated)
-        self._stim = calibrated
 
     def _calibrated(self, stim):
         """Apply implant thresholds to retained ``BiphasicPulseTrain`` sources.
@@ -340,7 +319,8 @@ class ProsthesisSystem(PrettyPrint):
     def check_stim(self, stim):
         """Quality-check the stimulus
 
-        This method is executed every time a new value is assigned to ``stim``.
+        This method is executed every time a stimulus is prepared (see
+        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`).
 
         If ``safe_mode`` is set to True, this function will only allow stimuli
         that are charge-balanced. If ``max_current`` is set, it will only allow
@@ -349,9 +329,9 @@ class ProsthesisSystem(PrettyPrint):
         Both are questions about electricity, and neither can be answered about
         a stimulus that is not a current, so each raises a
         :py:class:`~pulse2percept.units.DimensionMismatchError` on one. In the
-        ordinary flow this cannot happen: assigning to
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stim` has already
-        checked the stimulus against
+        ordinary flow this cannot happen:
+        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` has
+        already checked the stimulus against
         :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`.
         ``check_stim`` is public, though, and may be handed anything.
 
@@ -393,7 +373,7 @@ class ProsthesisSystem(PrettyPrint):
     def preprocess_stim(self, stim):
         """Preprocess the stimulus
 
-        This methods is executed every time a new value is assigned to ``stim``.
+        This method is executed every time a stimulus is prepared.
 
         No preprocessing is performed by default, but the user can define their
         own method in implants that inherit from
@@ -463,7 +443,8 @@ class ProsthesisSystem(PrettyPrint):
                 f"does not match the number of electrodes in the implant ({self.n_electrodes})."
             )
 
-    def plot(self, annotate=False, autoscale=True, ax=None, stim_cmap=False):
+    def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
+             stim_cmap=False):
         """Plot
 
         Parameters
@@ -475,6 +456,13 @@ class ProsthesisSystem(PrettyPrint):
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type, optional
+            What is presented to the device. Prepared through
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`,
+            so the colors show what the electrodes actually deliver. Required
+            by ``stim_cmap``.
+
+            .. versionadded:: 0.11.0
         stim_cmap : bool, str, or matplotlib colormap, optional
             If not false, the fill color of the plotted electrodes will vary based
             on maximum stimulus amplitude on each electrode. The chosen colormap
@@ -485,27 +473,22 @@ class ProsthesisSystem(PrettyPrint):
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
-        stim = None
+        color_stim = None
         if stim_cmap:
-            if self.stim is None:
-                raise ValueError("Must assign a stimulus in order to enable stimulus coloring")
-            stim = self.stim
+            color_stim = self.prepare_stim(stim)
+            if color_stim is None:
+                raise ValueError("Must pass a stimulus ('stim') in order to "
+                                 "enable stimulus coloring.")
             if stim_cmap == True:
                 stim_cmap = 'YlOrRd'
-        return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax, color_stim=stim, cmap=stim_cmap)
+        return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                                color_stim=color_stim, cmap=stim_cmap)
 
     def activate(self, electrodes):
         self.earray.activate(electrodes)
 
     def deactivate(self, electrodes):
         self.earray.deactivate(electrodes)
-        # Switching an electrode off rewrites the stimulus, so it is replaced
-        # rather than modified in place: it may be an object the caller still
-        # holds, and one defined by more than its samples cannot lose an
-        # electrode and remain one unless it says how (see
-        # `Stimulus._without_electrodes`).
-        if self.stim is not None:
-            self._stim = self.stim._without_electrodes(electrodes)
 
     @property
     def earray(self):
@@ -526,37 +509,50 @@ class ProsthesisSystem(PrettyPrint):
                             f"{type(earray)}.")
         self._earray = earray
 
-    @property
-    def stim(self):
-        """Stimulus
+    def prepare_stim(self, source):
+        """Turn what is presented to the device into what it delivers
 
         A stimulus can be created from many source types, such as scalars,
         NumPy arrays, and dictionaries (see
         :py:class:`~pulse2percept.stimuli.Stimulus` for a complete list).
 
-        A stimulus can be assigned either in the
-        :py:class:`~pulse2percept.implants.ProsthesisSystem` constructor
-        or later by assigning a value to `stim`.
-
         .. note::
            Unless when using dictionary notation, the number of stimuli must
            equal the number of electrodes in ``earray``.
 
-        What is stored is always something the implant can deliver; for an
+        What comes back is always something the implant can deliver; for an
         electrical prosthesis that means a current (see
         :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`).
         An image or a video is not that, so it is run through the implant's
         :py:attr:`~pulse2percept.implants.ProsthesisSystem.encoder` on the way
-        in. Without an encoder there is no principled default mapping from a
-        gray level to an amplitude or a frequency, so assigning one raises a
+        through. Without an encoder there is no principled default mapping from
+        a gray level to an amplitude or a frequency, so one raises a
         :py:class:`~pulse2percept.units.DimensionMismatchError`: say which you
         want with an
         :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` or a
         :py:class:`~pulse2percept.stimuli.FrequencyEncoder`.
 
-        .. versionchanged:: 0.10.0
-            A non-electrical stimulus is encoded on assignment if the implant
-            has an encoder, and refused otherwise.
+        The implant keeps no trial state: ``source`` is not modified, the
+        result is not stored, and every call reads the implant as it stands.
+        Changing
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` or
+        deactivating an electrode therefore affects the *next* call.
+
+        .. versionadded:: 0.11.0
+            Replaces the ``stim`` property, which stored the result on the
+            implant.
+
+        Parameters
+        ----------
+        source : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            What is presented to the device: an electrical stimulus, or an
+            image or video for the implant's ``encoder`` to turn into one.
+
+        Returns
+        -------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` or None
+            The stimulation this implant's electrodes would deliver. None if
+            ``source`` is None or empty.
 
         Examples
         --------
@@ -566,92 +562,85 @@ class ProsthesisSystem(PrettyPrint):
         >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
         >>> from pulse2percept.stimuli import BiphasicPulse
         >>> implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
-        >>> implant.stim = BiphasicPulse(30, 0.45)
+        >>> stim = implant.prepare_stim(BiphasicPulse(30, 0.45))
 
         Stimulate Electrode B7 in Argus II with 13 uA:
 
         >>> from pulse2percept.implants import ArgusII
-        >>> implant = ArgusII(stim={'B7': 13})
+        >>> stim = ArgusII().prepare_stim({'B7': 13})
 
-        Argus II comes with an encoder, so an image can be assigned directly:
+        Argus II comes with an encoder, so an image can be presented directly:
 
         >>> from pulse2percept.stimuli import LogoBVL
-        >>> implant = ArgusII(stim=LogoBVL())
-        >>> implant.stim.unit
+        >>> ArgusII().prepare_stim(LogoBVL()).unit
         uA
 
         """
-        return self._stim
+        # An empty source is not stimulation, and there is nothing to prepare:
+        if source is None:
+            return None
+        if isinstance(source, (list, tuple, dict)) and not source:
+            return None
+        if isinstance(source, np.ndarray) and source.size == 0:
+            return None
 
-    @stim.setter
-    def stim(self, data):
-        """Stimulus setter (called upon ``self.stim = data``)"""
-        # if stim is empty or None
-        if data is None:
-            self._stim = None
-        elif isinstance(data, (list, tuple, dict)) and not data:
-            self._stim = None
-        elif isinstance(data, np.ndarray) and data.size == 0:
-            self._stim = None
+        data = self._preprocess(source)
+        # Convert to stimulus object:
+        if isinstance(data, Stimulus):
+            # Already a stimulus object:
+            stim = data
+        elif isinstance(data, dict):
+            # Electrode names already provided by keys:
+            stim = Stimulus(data)
         else:
-            data = self._preprocess(data)
-            # Convert to stimulus object:
-            if isinstance(data, Stimulus):
-                # Already a stimulus object:
-                stim = data
-            elif isinstance(data, dict):
-                # Electrode names already provided by keys:
-                stim = Stimulus(data)
-            else:
-                # Use electrode names as stimulus coordinates:
-                stim = Stimulus(data, electrodes=self.electrode_names)
+            # Use electrode names as stimulus coordinates:
+            stim = Stimulus(data, electrodes=self.electrode_names)
 
-            # A picture is not something an implant can deliver, so this is
-            # where it becomes stimulation. Preprocessing goes first and may
-            # have done the job already (a `preprocess` that encodes is exactly
-            # as valid as an `encoder`), in which case there is nothing
-            # dimensionless left to encode. What comes back knows both what
-            # the device delivers and what it was asked for, so there is one
-            # stimulus here and not two (see `Stimulus._spatial_view`).
-            if (self.encoder is not None and
-                    stim.unit.dimension.is_dimensionless and
-                    stim.unit.dimension != self.stimulus_unit.dimension):
-                stim = self.encoder.encode(stim, implant=self)
+        # A picture is not something an implant can deliver, so this is
+        # where it becomes stimulation. Preprocessing goes first and may
+        # have done the job already (a `preprocess` that encodes is exactly
+        # as valid as an `encoder`), in which case there is nothing
+        # dimensionless left to encode. What comes back knows both what
+        # the device delivers and what it was asked for, so there is one
+        # stimulus here and not two (see `Stimulus._spatial_view`).
+        if (self.encoder is not None and
+                stim.unit.dimension.is_dimensionless and
+                stim.unit.dimension != self.stimulus_unit.dimension):
+            stim = self.encoder.encode(stim, implant=self)
 
-            # If the stim is larger than the number of electrodes, most commonly
-            # we're dealing with an image or video stim. In this case, we might
-            # want to try and reshape the stimulus to fit the array:
-            if len(stim.electrodes) > self.n_electrodes:
-                stim = self.reshape_stim(stim)
+        # If the stim is larger than the number of electrodes, most commonly
+        # we're dealing with an image or video stim. In this case, we might
+        # want to try and reshape the stimulus to fit the array:
+        if len(stim.electrodes) > self.n_electrodes:
+            stim = self.reshape_stim(stim)
 
-            # Whatever came in is now a Stimulus laid out on this implant's
-            # electrodes. Whether it is a stimulus the implant can *deliver*
-            # is the next question, and it is asked before anything else looks
-            # at the numbers:
-            self._require_deliverable_stim(stim)
+        # Whatever came in is now a Stimulus laid out on this implant's
+        # electrodes. Whether it is a stimulus the implant can *deliver*
+        # is the next question, and it is asked before anything else looks
+        # at the numbers:
+        self._require_deliverable_stim(stim)
 
-            # Make sure all electrode names are valid:
-            for electrode in stim.electrodes:
-                # Invalid index will return None:
-                if not self.earray[electrode]:
-                    raise ValueError(f'Electrode "{electrode}" not found in '
-                                     f'implant.')
-            # Remove deactivated electrodes from the stimulus. Removal
-            # rewrites the stimulus, so it happens on a copy: the caller's
-            # object is theirs, and a stimulus defined by more than its
-            # samples keeps that description only if it says how to drop an
-            # electrode (see `Stimulus._without_electrodes`).
-            off = [name for (name, e) in self.electrodes.items()
-                   if not e.activated and name in stim.electrodes]
-            if off:
-                stim = stim._without_electrodes(off)
-            # Calibrate a copy; do not mutate the caller's stimulus.
-            stim = self._calibrated(deepcopy(stim))
-            # Perform safety checks, etc. These are all questions about what
-            # gets delivered, so they are asked of the calibrated pulse train:
-            self.check_stim(stim)
-            # Store stimulus:
-            self._stim = stim
+        # Make sure all electrode names are valid:
+        for electrode in stim.electrodes:
+            # Invalid index will return None:
+            if not self.earray[electrode]:
+                raise ValueError(f'Electrode "{electrode}" not found in '
+                                 f'implant.')
+        # Remove deactivated electrodes from the stimulus. Removal
+        # rewrites the stimulus, so it happens on a copy: the caller's
+        # object is theirs, and a stimulus defined by more than its
+        # samples keeps that description only if it says how to drop an
+        # electrode (see `Stimulus._without_electrodes`).
+        off = [name for (name, e) in self.electrodes.items()
+               if not e.activated and name in stim.electrodes]
+        if off:
+            stim = stim._without_electrodes(off)
+        # Calibrate a copy; do not mutate the caller's stimulus.
+        stim = self._calibrated(deepcopy(stim))
+        # Perform safety checks, etc. These are all questions about what
+        # gets delivered, so they are asked of the calibrated pulse train:
+        self.check_stim(stim)
+        return stim
 
     @property
     def eye(self):
@@ -767,14 +756,12 @@ class GridImplant(ProsthesisSystem):
         :py:class:`~pulse2percept.implants.ElectrodeGrid`.
     etype : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class.
-    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-        A valid source type for a stimulus.
     eye : 'LE' or 'RE', optional
         The eye in which the implant is implanted. Device metadata: unlike
         :py:class:`~pulse2percept.implants.RectangleImplant`, the geometry and
         the electrode names are the same in either eye.
     preprocess : bool or callable, optional
-        Whether to preprocess the stimulus whenever a new one is assigned.
+        Whether to preprocess a stimulus whenever one is prepared.
     safe_mode : bool, optional
         Whether to enforce charge balance.
     encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
@@ -814,14 +801,14 @@ class GridImplant(ProsthesisSystem):
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
                  type='rect', orientation='horizontal', etype=PointSource,
-                 stim=None, eye='RE', preprocess=False, safe_mode=False,
+                 eye='RE', preprocess=False, safe_mode=False,
                  encoder=None, raster=None, max_current=None,
                  **electrode_kwargs):
         earray = ElectrodeGrid(shape, spacing, x=x, y=y, z=z, rot=rot,
                                names=names, type=type,
                                orientation=orientation, etype=etype,
                                **electrode_kwargs)
-        super().__init__(earray, stim=stim, eye=eye, preprocess=preprocess,
+        super().__init__(earray, eye=eye, preprocess=preprocess,
                          safe_mode=safe_mode, encoder=encoder, raster=raster,
                          max_current=max_current)
 
@@ -858,15 +845,13 @@ class RectangleImplant(ProsthesisSystem):
         The distance (um) between electrodes in the implant
     eye : str, optional
         The eye in which the implant is implanted
-    stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-        A valid source type for a stimulus
     preprocess : bool, optional
         Whether to preprocess the stimulus
     safe_mode : bool, optional
         Whether to enforce charge balance
 
     """
-    def __init__(self, x=0, y=0, z=0, rot=0, shape=(15, 15), r=150./2, spacing=400., eye='RE', stim=None,
+    def __init__(self, x=0, y=0, z=0, rot=0, shape=(15, 15), r=150./2, spacing=400., eye='RE',
                  preprocess=True, safe_mode=False):
         self.safe_mode = safe_mode
         self.preprocess = preprocess
@@ -874,7 +859,6 @@ class RectangleImplant(ProsthesisSystem):
         names = ('A', '1')
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
                                     rot=rot, names=names, etype=DiskElectrode)
-        self.stim = stim
 
         # Set left/right eye:
         if not isinstance(eye, str):

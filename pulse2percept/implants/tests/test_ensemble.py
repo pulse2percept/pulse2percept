@@ -39,9 +39,8 @@ def test_EnsembleImplant():
     npt.assert_equal(ensemble.electrode_names, ['A-0','B-0'])
 
     # predict_percept smoke test
-    ensemble.stim = [1,1]
-    model = ScoreboardModel().build()
-    model.predict_percept(ensemble)
+    model = ScoreboardModel(implant=ensemble).build()
+    model.predict_percept([1, 1])
 
 # we essentially just need to make sure that electrode names are
 # set properly, the rest of the EnsembleImplant functionality 
@@ -116,62 +115,61 @@ def test_from_cortical_map():
     npt.assert_approx_equal(ensemble['2-1'].z, c2['1'].z, 5)
 
 
-def test_merge_stimuli():
-    implant = EnsembleImplant([Orion(),
-                               Orion(x=-35000)])
-    npt.assert_equal(implant.stim is None, True)
-    implant = EnsembleImplant([Orion(stim=np.ones(60)),
-                               Orion(x=-35000)])
-    npt.assert_equal(implant.stim.data.shape, (120, 1))
-    npt.assert_equal(implant.stim.electrodes, implant.electrode_names)
-    implant = EnsembleImplant([Orion(stim=np.ones(60)),
-                               Orion(x=-35000, stim=np.ones(60)*2)])
-    npt.assert_equal(implant.stim.data.shape, (120, 1))
-    npt.assert_equal(implant.stim.electrodes, implant.electrode_names)
-    npt.assert_equal(implant.stim.data[:60], 1)
-    npt.assert_equal(implant.stim.data[60:], 2)
+def test_prepare_stim_merges_per_implant_input():
+    """A dict keyed by implant gives each constituent its own source"""
+    ensemble = EnsembleImplant([Orion(), Orion(x=-35000)])
+    npt.assert_equal(ensemble.prepare_stim(None), None)
+    npt.assert_equal(ensemble.prepare_stim({}), None)
+    # A key left out contributes zeros, but the rest still merge:
+    stim = ensemble.prepare_stim({0: np.ones(60)})
+    npt.assert_equal(stim.data.shape, (120, 1))
+    npt.assert_equal(stim.electrodes, ensemble.electrode_names)
+    stim = ensemble.prepare_stim({0: np.ones(60), 1: np.ones(60) * 2})
+    npt.assert_equal(stim.data.shape, (120, 1))
+    npt.assert_equal(stim.electrodes, ensemble.electrode_names)
+    npt.assert_equal(stim.data[:60], 1)
+    npt.assert_equal(stim.data[60:], 2)
 
     # with time
-    implant = EnsembleImplant([Orion(stim=np.ones((60, 5))),
-                               Orion(x=-35000, stim=np.ones((60, 2))*2)])
-    npt.assert_equal(implant.stim.data.shape, (120, 5))
-    npt.assert_equal(implant.stim.data[:60], 1)
-    npt.assert_equal(implant.stim.data[60:, :2], 2)
-    npt.assert_equal(implant.stim.data[60:, 2:], 0)
+    stim = ensemble.prepare_stim({0: np.ones((60, 5)),
+                                  1: np.ones((60, 2)) * 2})
+    npt.assert_equal(stim.data.shape, (120, 5))
+    npt.assert_equal(stim.data[:60], 1)
+    npt.assert_equal(stim.data[60:, :2], 2)
+    npt.assert_equal(stim.data[60:, 2:], 0)
     # A merge of sampled waveforms has no structure to keep:
-    npt.assert_equal(implant.stim._structured_sources(), None)
+    npt.assert_equal(stim._structured_sources(), None)
 
     # biphasic pulse trains
-    implant1 = Orion()
-    implant1.stim = {e : BiphasicPulseTrain(50, 1, .45) for e in implant1.electrode_names}
-    implant2 = Orion(x=-35000)
-    implant2.stim = {e : BiphasicPulseTrain(20, 2, .85) for e in implant2.electrode_names}
-    implant = EnsembleImplant([implant1, implant2])
+    names = Orion().electrode_names
+    stim = ensemble.prepare_stim(
+        {0: {e: BiphasicPulseTrain(50, 1, .45) for e in names},
+         1: {e: BiphasicPulseTrain(20, 2, .85) for e in names}})
     # Asked before `.data`: reading the waveform must not be what builds it.
     # Each child electrode keeps the train that drives it, under the name the
     # ensemble gives it, so a model still sees two clocks and not one array:
-    sources = implant.stim._structured_sources()
-    npt.assert_equal([e for e, _ in sources], implant.electrode_names)
+    sources = stim._structured_sources()
+    npt.assert_equal([e for e, _ in sources], ensemble.electrode_names)
     sources = dict(sources)
     npt.assert_equal((sources['0-96'].freq, sources['0-96'].phase_dur),
                      (50, .45))
     npt.assert_equal((sources['1-96'].freq, sources['1-96'].phase_dur),
                      (20, .85))
-    npt.assert_equal(implant.stim.data.shape, (120, 471))
+    npt.assert_equal(stim.data.shape, (120, 471))
     # Two implants that pulse at the same instant get there by accumulating
     # their own way, so merging their time axes needs a tolerance:
-    npt.assert_equal(np.all(np.diff(implant.stim.time) > 0.95 * DT), True)
+    npt.assert_equal(np.all(np.diff(stim.time) > 0.95 * DT), True)
 
     # with cortivis and orion
-    implant = EnsembleImplant([Orion(stim=np.ones(60)),
-                                 Cortivis(x=10000, stim=np.ones(96)*2)])
-    npt.assert_equal(implant.stim.data.shape, (156, 1))
+    mixed = EnsembleImplant([Orion(), Cortivis(x=10000)])
+    npt.assert_equal(
+        mixed.prepare_stim({0: np.ones(60), 1: np.ones(96) * 2}).data.shape,
+        (156, 1))
 
-    # make sure supplying stim still overrides individual implants
-    implant = EnsembleImplant([Orion(stim=np.ones(60)*2),
-                               Orion(x=-35000, stim=np.ones(60)*2)], stim=np.ones(120)*3)
-    npt.assert_equal(implant.stim.data.shape, (120, 1))
-    npt.assert_equal(implant.stim.data, 3)
+    # A source that is not keyed by implant is laid out on the whole array:
+    stim = ensemble.prepare_stim(np.ones(120) * 3)
+    npt.assert_equal(stim.data.shape, (120, 1))
+    npt.assert_equal(stim.data, 3)
 
 
 def test_EnsembleImplant_from_coords_units():

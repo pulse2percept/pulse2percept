@@ -319,7 +319,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         if (implant is not None and
                 isinstance(stim, (ImageStimulus, VideoStimulus))):
             # Sample the source at the electrode locations. This is the same
-            # step that assigning an image or a video to `implant.stim` would
+            # step that presenting an image or a video to an implant would
             # perform, done here so that the pulse trains below are built at
             # electrode resolution rather than at pixel resolution. It is also
             # where RGB becomes gray. Row count is not a usable test of whether
@@ -806,7 +806,7 @@ class StimulusEncoder(PrettyPrint, metaclass=ABCMeta):
         Returns
         -------
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The encoded stimulus, ready to assign to ``implant.stim``.
+            The encoded stimulus, ready for the implant to deliver.
             Its amplitudes are in microamps and its time axis in
             milliseconds, whatever units the encoder's own parameters were
             given in.
@@ -874,7 +874,7 @@ class AmplitudeEncoder(StimulusEncoder):
     >>> import pulse2percept as p2p
     >>> implant = p2p.implants.ArgusII()
     >>> implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
-    >>> implant.stim = p2p.stimuli.BostonTrain()
+    >>> stim = implant.prepare_stim(p2p.stimuli.BostonTrain())
 
     The same thing spelled out, for an implant that is not to keep the encoder:
 
@@ -1016,7 +1016,7 @@ frame_dur, stretch
     >>> implant = p2p.implants.ArgusII(raster=None)
     >>> implant.encoder = p2p.stimuli.FrequencyEncoder(freq_range=(0, 300),
     ...                                                amp=50, clock=1)
-    >>> implant.stim = p2p.stimuli.BostonTrain()
+    >>> stim = implant.prepare_stim(p2p.stimuli.BostonTrain())
 
     """
     __slots__ = ('freq_range', 'amp')

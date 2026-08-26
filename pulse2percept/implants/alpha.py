@@ -53,7 +53,7 @@ class AlphaIMS(ProsthesisSystem):
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
-        preprocessing method whenever a new stimulus is assigned, or a custom
+        preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -66,7 +66,7 @@ class AlphaIMS(ProsthesisSystem):
     >>> from pulse2percept.implants import AlphaIMS
     >>> AlphaIMS(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     AlphaIMS(earray=ElectrodeGrid, eye='RE', preprocess=True,
-             safe_mode=False, shape=(39, 39), stim=None)
+             safe_mode=False, shape=(39, 39))
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
@@ -83,8 +83,7 @@ class AlphaIMS(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', stim=None,
-                 preprocess=True, safe_mode=False):
+    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=True, safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -143,10 +142,6 @@ class AlphaIMS(ProsthesisSystem):
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
-        # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes:
-        self.stim = stim
-
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
@@ -198,7 +193,7 @@ class AlphaAMS(ProsthesisSystem):
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
-        preprocessing method whenever a new stimulus is assigned, or a custom
+        preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -211,7 +206,7 @@ class AlphaAMS(ProsthesisSystem):
     >>> from pulse2percept.implants import AlphaAMS
     >>> AlphaAMS(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     AlphaAMS(earray=ElectrodeGrid, eye='RE', preprocess=True,
-             safe_mode=False, shape=(40, 40), stim=None)
+             safe_mode=False, shape=(40, 40))
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
@@ -228,8 +223,7 @@ class AlphaAMS(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 preprocess=True, safe_mode=False):
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True, safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -240,10 +234,6 @@ class AlphaAMS(ProsthesisSystem):
         self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=z,
                                     rot=rot, etype=DiskElectrode,
                                     r=elec_radius)
-
-        # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes:
-        self.stim = stim
 
         # Set left/right eye:
         # Unfortunately, in the left eye the labeling of columns is reversed...

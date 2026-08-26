@@ -483,21 +483,18 @@ def test_ProsthesisSystem_max_current():
         implant.max_current = 0
     # 60 electrodes at 20 uA each is 1200 uA at once:
     implant.max_current = 1500
-    implant.stim = np.full(60, 20)
-    npt.assert_equal(implant.stim.shape, (60, 1))
+    npt.assert_equal(implant.prepare_stim(np.full(60, 20)).shape, (60, 1))
     implant.max_current = 1000
     with pytest.raises(ValueError):
-        implant.stim = np.full(60, 20)
+        implant.prepare_stim(np.full(60, 20))
     # The sign does not matter: what the stimulator sources is the sum of the
     # magnitudes:
     with pytest.raises(ValueError):
-        implant.stim = np.full(60, -20)
+        implant.prepare_stim(np.full(60, -20))
     # A single electrode is well within the limit:
-    implant.stim = {'A1': 900}
-    npt.assert_almost_equal(implant.stim.data.max(), 900)
+    npt.assert_almost_equal(implant.prepare_stim({'A1': 900}).data.max(), 900)
     # An empty stimulus has nothing to check:
-    implant.stim = None
-    npt.assert_equal(implant.stim, None)
+    npt.assert_equal(implant.prepare_stim(None), None)
 
 
 def test_Raster_units():

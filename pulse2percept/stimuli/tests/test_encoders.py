@@ -290,9 +290,8 @@ def test_AmplitudeEncoder_implant():
     npt.assert_equal(np.abs(enc.data).max() <= 50, True)
     # ... and it is small enough to be worth doing:
     npt.assert_equal(enc.data.nbytes < 1e6, True)
-    # It can be assigned to the implant without any further reshaping:
-    implant.stim = enc
-    npt.assert_equal(implant.stim.shape, enc.shape)
+    # It can be prepared by the implant without any further reshaping:
+    npt.assert_equal(implant.prepare_stim(enc).shape, enc.shape)
     # Sampling first and encoding second gives the same answer as encoding an
     # already-downsampled video, which is what makes this a pure optimization
     # for amplitude modulation:
@@ -440,8 +439,7 @@ def test_FrequencyEncoder_implant():
         BostonTrain(), implant=implant)
     npt.assert_equal(enc.shape[0], implant.n_electrodes)
     npt.assert_almost_equal(np.abs(enc.data).max(), 50)
-    implant.stim = enc
-    npt.assert_equal(implant.stim.shape, enc.shape)
+    npt.assert_equal(implant.prepare_stim(enc).shape, enc.shape)
     # The clock is what makes this tractable at all: without one, the same
     # clip needs several times as many time points:
     unclocked = FrequencyEncoder(freq_range=(0, 300), amp=50).encode(
@@ -560,12 +558,14 @@ def test_StimulusEncoder_raster_current_limit():
     implant.max_current = 1000
     vid = VideoStimulus(np.ones((6, 10, 3)), metadata={'fps': 30})
     with pytest.raises(ValueError, match='raster'):
-        implant.stim = AmplitudeEncoder(amp_range=(50, 50), freq=30).encode(
-            vid, implant=implant)
+        implant.prepare_stim(AmplitudeEncoder(amp_range=(50, 50),
+                                              freq=30).encode(vid,
+                                                              implant=implant))
     implant.raster = SequentialRaster(6)
-    implant.stim = AmplitudeEncoder(amp_range=(50, 50), freq=30).encode(
-        vid, implant=implant)
-    npt.assert_almost_equal(np.abs(implant.stim.data).sum(axis=0).max(), 500)
+    stim = implant.prepare_stim(
+        AmplitudeEncoder(amp_range=(50, 50), freq=30).encode(vid,
+                                                             implant=implant))
+    npt.assert_almost_equal(np.abs(stim.data).sum(axis=0).max(), 500)
     # A raster that cannot get through all its groups within a frame is not a
     # usable schedule:
     implant.raster = SequentialRaster(6, group_dur=20)
@@ -1352,17 +1352,17 @@ def test_encoded_stimulus_validates_while_it_schedules():
                      'deliver no pulse at all')
 
 
-def test_encoded_stimulus_survives_assignment_unrendered():
-    # An implant stores a copy of what it is given; that copy has no more
+def test_encoded_stimulus_survives_preparation_unrendered():
+    # Preparation returns a copy of what it is given; that copy has no more
     # reason to hold a waveform than the original did.
     implant = ArgusII()
-    implant.stim = AmplitudeEncoder().encode(
-        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
-    npt.assert_equal(_rendered(implant.stim), False)
-    npt.assert_equal(len(implant.stim.electrodes), 60)
-    # Assigning the picture itself goes through the implant's own encoder, and
-    # arrives just as unexpanded:
-    encoded = ArgusII(encoder=AmplitudeEncoder())
-    encoded.stim = ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8))
-    npt.assert_equal(_rendered(encoded.stim), False)
-    npt.assert_equal(encoded.stim.data.shape[0], 60)
+    img = ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8))
+    stim = implant.prepare_stim(AmplitudeEncoder().encode(img,
+                                                          implant=implant))
+    npt.assert_equal(_rendered(stim), False)
+    npt.assert_equal(len(stim.electrodes), 60)
+    # Presenting the picture itself goes through the implant's own encoder,
+    # and arrives just as unexpanded:
+    stim = ArgusII(encoder=AmplitudeEncoder()).prepare_stim(img)
+    npt.assert_equal(_rendered(stim), False)
+    npt.assert_equal(stim.data.shape[0], 60)

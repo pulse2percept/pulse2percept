@@ -68,13 +68,11 @@ class EllipsoidElectrode(Electrode):
         
         self.rot, self.angles, self.direction = parse_3d_orient(orient, orient_mode)
 
-
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
         params.update({'rx': self.rx, 'ry': self.ry, 'rz': self.rz, 'angles': self.angles})
         return params
-
 
     def electric_potential(self, x, y, z, v0):
         raise NotImplementedError
@@ -128,7 +126,7 @@ class LinearEdgeThread(NeuralinkThread):
     def __init__(self, x=0, y=0, z=0, orient=np.array([0,0,1]), orient_mode='direction', 
                  r=5, n_elecs=32, spacing=50, insertion_depth=0, 
                  electrode=EllipsoidElectrode,
-                 stim=None, preprocess=False, safe_mode=False):
+                 preprocess=False, safe_mode=False):
         """
         Neuralink thread
         
@@ -209,8 +207,6 @@ class LinearEdgeThread(NeuralinkThread):
         self.earray = ElectrodeArray(electrodes)
         self.safe_mode = safe_mode
         self.preprocess = preprocess
-        self.stim = stim
-
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -374,7 +370,6 @@ class Neuralink(EnsembleImplant):
             else:
                 direction = rot_direction
 
-
             location = surface_points[:, i]
             name = ''
             j = i
@@ -435,7 +430,7 @@ class Neuralink(EnsembleImplant):
 
     
 
-    def __init__(self, threads, stim=None, preprocess=False, safe_mode=False):
+    def __init__(self, threads, preprocess=False, safe_mode=False):
         """
         Neuralink implant, consisting of one or more 
         :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`s.
@@ -449,12 +444,9 @@ class Neuralink(EnsembleImplant):
         threads : collection of NeuralinkThread
             Collection (list) of NeuralinkThread objects to combine into an \
             implant.
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-            A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
-            object (e.g., scalar, NumPy array, pulse train).
         preprocess : bool or callable, optional
             Either True/False to indicate whether to execute the implant's default
-            preprocessing method whenever a new stimulus is assigned, or a custom
+            preprocessing method whenever a stimulus is prepared, or a custom
             function (callable).
         safe_mode : bool, optional
             If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -467,7 +459,7 @@ class Neuralink(EnsembleImplant):
             for thread in threads:
                 if not isinstance(thread, NeuralinkThread):
                     raise TypeError("threads must be a collection of NeuralinkThread objects")
-        super().__init__(threads, stim=stim, preprocess=preprocess, safe_mode=safe_mode)
+        super().__init__(threads, preprocess=preprocess, safe_mode=safe_mode)
     
     def plot3D(self, ax=None, **kwargs):
         """Plot the implant in 3D space

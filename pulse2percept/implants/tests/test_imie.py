@@ -81,20 +81,14 @@ def test_IMIE(x, y, rot, eye):
         npt.assert_equal(after[el].y > before[el].y, True)
 
 def test_IMIE_stim():
-    # Assign a stimulus:
+    # Prepare a stimulus via dict:
     implant = implants.IMIE()
-    implant.stim = {'A3': 1}
-    npt.assert_equal(implant.stim.electrodes, ['A3'])
-    npt.assert_equal(implant.stim.time, None)
-    npt.assert_equal(implant.stim.data, [[1]])
+    stim = implant.prepare_stim({'A3': 1})
+    npt.assert_equal(stim.electrodes, ['A3'])
+    npt.assert_equal(stim.time, None)
+    npt.assert_equal(stim.data, [[1]])
 
-    # You can also assign the stimulus in the constructor:
-    implants.IMIE(stim={'A3': 1})
-    npt.assert_equal(implant.stim.electrodes, ['A3'])
-    npt.assert_equal(implant.stim.time, None)
-    npt.assert_equal(implant.stim.data, [[1]])
-
-    # Set a stimulus via array:
-    implant = implants.IMIE(stim=np.ones(256))
-    npt.assert_equal(implant.stim.shape, (256, 1))
-    npt.assert_almost_equal(implant.stim.data, 1)
+    # Prepare a stimulus via array:
+    stim = implant.prepare_stim(np.ones(256))
+    npt.assert_equal(stim.shape, (256, 1))
+    npt.assert_almost_equal(stim.data, 1)

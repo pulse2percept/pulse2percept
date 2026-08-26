@@ -11,7 +11,7 @@ from ..utils import rename_parameter
 class EnsembleImplant(ProsthesisSystem):
     
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_implants', '_earray', '_stim', 'safe_mode', 'preprocess')
+    __slots__ = ('_implants', '_earray', 'safe_mode', 'preprocess')
 
     @classmethod
     @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
@@ -181,22 +181,19 @@ class EnsembleImplant(ProsthesisSystem):
         
         return cls(implant_list)
 
-    def __init__(self, implants, stim=None, preprocess=False,safe_mode=False):
+    def __init__(self, implants, preprocess=False, safe_mode=False):
         """Ensemble implant
 
         An ensemble implant combines multiple implants into one larger electrode array
         for the purpose of modeling tandem implants, e.g. ICVP, Neuralink
-        
+
         Parameters
         ----------
         implants : list or dict
             A list or dict of implants to be combined.
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-            A valid source type for the :py:class:`~pulse2percept.stimuli.Stimulus`
-            object (e.g., scalar, NumPy array, pulse train).
         preprocess : bool or callable, optional
             Either True/False to indicate whether to execute the implant's default
-            preprocessing method whenever a new stimulus is assigned, or a custom
+            preprocessing method whenever a stimulus is prepared, or a custom
             function (callable).
         safe_mode : bool, optional
             If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -204,14 +201,10 @@ class EnsembleImplant(ProsthesisSystem):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
         self.implants = implants
-        # self.stim might be set in self.implants = implants, so don't override it 
-        # unless the user actually passes a stimulus
-        if stim is not None or not hasattr(self, 'stim'):
-            self.stim = stim
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        return {'implants': self.implants, 'earray': self.earray, 'stim': self.stim,
+        return {'implants': self.implants, 'earray': self.earray,
                 'safe_mode': self.safe_mode, 'preprocess': self.preprocess}
 
     @property
@@ -243,15 +236,58 @@ class EnsembleImplant(ProsthesisSystem):
                 electrodes[str(i) + "-" + str(name)] = electrode
             
         self._earray = ElectrodeArray(electrodes)
-        self.merge_stimuli()
-        
-    def _structured_children(self):
+
+    def prepare_stim(self, source):
+        """Turn what is presented to the ensemble into what it delivers
+
+        Accepts everything
+        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`
+        does, laid out on the ensemble's combined electrode array, plus one
+        form of its own: a dict keyed by the ensemble's own implant keys, which
+        gives each constituent implant a source of its own. Each is prepared by
+        the implant it belongs to -- with that implant's encoder, raster,
+        thresholds and safety limits -- and the results are merged onto the
+        combined array.
+
+        .. versionchanged:: 0.11.0
+            Replaces ``merge_stimuli``, which read a stimulus stored on each
+            constituent implant. Per-implant input is now named at the call.
+
+        Parameters
+        ----------
+        source : dict or :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            Either one source for the whole ensemble, or ``{implant_key:
+            source}``. A key that is missing contributes zeros.
+
+        Returns
+        -------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` or None
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from pulse2percept.implants import EnsembleImplant
+        >>> from pulse2percept.implants.cortex import Orion
+        >>> ensemble = EnsembleImplant([Orion(), Orion(x=-35000)])
+        >>> ensemble.prepare_stim({0: np.ones(60),
+        ...                        1: 2 * np.ones(60)}).data.shape
+        (120, 1)
+
+        """
+        if isinstance(source, dict) and source and \
+                all(key in self._implants for key in source):
+            return self._merged({key: implant.prepare_stim(source.get(key))
+                                 for key, implant in self._implants.items()})
+        return super().prepare_stim(source)
+
+    def _structured_children(self, prepared):
         """One source per ensemble electrode, or ``None``"""
         sources = {}
         for i, implant in self._implants.items():
-            if implant.stim is None:
+            stim = prepared.get(i)
+            if stim is None:
                 return None
-            child = implant.stim._structured_sources()
+            child = stim._structured_sources()
             if child is None:
                 return None
             child = {str(e): src for e, src in child}
@@ -265,98 +301,98 @@ class EnsembleImplant(ProsthesisSystem):
         # Ensemble order, not the order the children happened to be built in:
         return {name: sources[name] for name in self.electrode_names}
 
-    def merge_stimuli(self):
-        """Constructs the combined stimulus for all implants in self._implants"""
-        if any([i.stim for i in self._implants.values()]):
-            # An implant with no stimulus contributes zeros and no
-            # interpretation of them, so only the ones that have a stimulus
-            # decide what the merged numbers mean:
-            present = [i.stim for i in self._implants.values()
-                       if i.stim is not None]
-            if len({(s.unit, s.time_unit) for s in present}) > 1:
-                names = ', '.join(sorted({_describe_unit(s.unit)
-                                          for s in present}))
-                raise DimensionMismatchError(
-                    f"Cannot merge stimuli measured in different units "
-                    f"({names}). Convert them to a common unit first.")
+    def _merged(self, prepared):
+        """Combine one prepared stimulus per constituent implant into one"""
+        if not any(stim is not None for stim in prepared.values()):
+            return None
+        # An implant with no stimulus contributes zeros and no
+        # interpretation of them, so only the ones that have a stimulus
+        # decide what the merged numbers mean:
+        present = [stim for stim in prepared.values() if stim is not None]
+        if len({(s.unit, s.time_unit) for s in present}) > 1:
+            names = ', '.join(sorted({_describe_unit(s.unit)
+                                      for s in present}))
+            raise DimensionMismatchError(
+                f"Cannot merge stimuli measured in different units "
+                f"({names}). Convert them to a common unit first.")
 
-            # The metadata of each implant is stored under 'user'; concatenate
-            # those, keyed by which implant they came from:
-            user_metadata = {str(i): implant.stim.metadata['user']
-                             for i, implant in self._implants.items()
-                             if implant.stim is not None}
+        # The metadata of each implant is stored under 'user'; concatenate
+        # those, keyed by which implant they came from:
+        user_metadata = {str(i): stim.metadata['user']
+                         for i, stim in prepared.items()
+                         if stim is not None}
 
-            # runtime import to avoid circular import
-            from ..stimuli import Stimulus
+        # runtime import to avoid circular import
+        from ..stimuli import Stimulus
 
-            sources = self._structured_children()
-            if sources is not None:
-                # Every electrode has a source of its own, so the ensemble is
-                # that collection
-                merged = Stimulus(sources, electrodes=self.electrode_names,
-                                  metadata=user_metadata)
-                self.stim = merged._inherit_units(present[0])
-                return
-
-            # Need to combine all stimuli
-            # The ith stim is a np array of shape (implant[i].n_electrodes, len(times[i]))
-            # i.e. the amplitude of each electrode at each time point in times[i]
-            # HOWEVER, the times are not necessarily the same across implants
-            # So we need to create a new times array that is the union of all times
-            # and then interpolate the stimuli for each implant to this new time array
-            # Also, times[i] can be None if the stim is not temporal; in this case, we
-            # just line it up with the first time point. Finally, if the
-            # stim is none, then we just set it to all 0's, for all the time points
-            stims = []
-            times = []
-            for i, implant in self._implants.items():
-                if implant.stim is not None:
-                    stims.append(implant.stim)
-                    times.append(implant.stim.time)
-                else:
-                    stims.append(None)
-                    times.append(None)
-
-            # Collect all time points, ignoring None
-            valid_times = [t for t in times if t is not None]
-            
-            if valid_times:
-                # Get the union of all time points. Two implants that pulse at
-                # the same instant get there by accumulating their own way, so
-                # an exact `np.unique` would keep both copies and leave the
-                # merged axis with points closer together than DT:
-                t_sorted, starts_group, _ = unique_time_points(valid_times)
-                new_times = t_sorted[starts_group]
-            else:
-                new_times = None  # No time-dependent stimulation
-            
-            # Create a new list to hold interpolated stimuli
-            new_stims = []
-            num_timepoints = len(new_times) if new_times is not None else 1
-            for i, (stim, t) in enumerate(zip(stims, times)):
-                n_electrodes = len(self._implants[list(self._implants.keys())[i]].electrode_names)
-                if stim is None:
-                    # If stim is None, create a zero array of shape (n_electrodes, len(new_times))
-                    new_stim = np.zeros((n_electrodes, num_timepoints))
-                elif t is None:
-                    # If stim exists but has no time information, assume all values correspond to first time point
-                    # fill the rest with 0s
-                    new_stim = np.zeros((n_electrodes, num_timepoints))
-                    new_stim[:, 0] = stim.data[:, 0]
-                else:
-                    # Interpolate the stim data to new_times
-                    new_stim = np.zeros((n_electrodes, len(new_times)))
-                    for j in range(stim.data.shape[0]):  # Interpolate each electrode separately
-                        # if the stim ends, make it 0 instead of repeating the last value. Only interpolate
-                        # for the times that are in the original stim
-                        new_stim[j] = np.interp(new_times, t, stim.data[j], left=0, right=0)
-                
-                new_stims.append(new_stim)
-            
-            # Combine all new_stims into a final array (stack along a new axis if needed)
-            merged = Stimulus(np.concatenate(new_stims), time=new_times,
-                              electrodes=self.electrode_names,
+        sources = self._structured_children(prepared)
+        if sources is not None:
+            # Every electrode has a source of its own, so the ensemble is
+            # that collection
+            merged = Stimulus(sources, electrodes=self.electrode_names,
                               metadata=user_metadata)
-            # The merge concatenates raw data arrays, so the result would
-            # otherwise fall back to the default (current) reading of them:
-            self.stim = merged._inherit_units(present[0])
+            return merged._inherit_units(present[0])
+
+        # Need to combine all stimuli
+        # The ith stim is a np array of shape (implant[i].n_electrodes, len(times[i]))
+        # i.e. the amplitude of each electrode at each time point in times[i]
+        # HOWEVER, the times are not necessarily the same across implants
+        # So we need to create a new times array that is the union of all times
+        # and then interpolate the stimuli for each implant to this new time array
+        # Also, times[i] can be None if the stim is not temporal; in this case, we
+        # just line it up with the first time point. Finally, if the
+        # stim is none, then we just set it to all 0's, for all the time points
+        stims = []
+        times = []
+        for i in self._implants:
+            stim = prepared.get(i)
+            if stim is not None:
+                stims.append(stim)
+                times.append(stim.time)
+            else:
+                stims.append(None)
+                times.append(None)
+
+        # Collect all time points, ignoring None
+        valid_times = [t for t in times if t is not None]
+        
+        if valid_times:
+            # Get the union of all time points. Two implants that pulse at
+            # the same instant get there by accumulating their own way, so
+            # an exact `np.unique` would keep both copies and leave the
+            # merged axis with points closer together than DT:
+            t_sorted, starts_group, _ = unique_time_points(valid_times)
+            new_times = t_sorted[starts_group]
+        else:
+            new_times = None  # No time-dependent stimulation
+        
+        # Create a new list to hold interpolated stimuli
+        new_stims = []
+        num_timepoints = len(new_times) if new_times is not None else 1
+        for i, (stim, t) in enumerate(zip(stims, times)):
+            n_electrodes = len(self._implants[list(self._implants.keys())[i]].electrode_names)
+            if stim is None:
+                # If stim is None, create a zero array of shape (n_electrodes, len(new_times))
+                new_stim = np.zeros((n_electrodes, num_timepoints))
+            elif t is None:
+                # If stim exists but has no time information, assume all values correspond to first time point
+                # fill the rest with 0s
+                new_stim = np.zeros((n_electrodes, num_timepoints))
+                new_stim[:, 0] = stim.data[:, 0]
+            else:
+                # Interpolate the stim data to new_times
+                new_stim = np.zeros((n_electrodes, len(new_times)))
+                for j in range(stim.data.shape[0]):  # Interpolate each electrode separately
+                    # if the stim ends, make it 0 instead of repeating the last value. Only interpolate
+                    # for the times that are in the original stim
+                    new_stim[j] = np.interp(new_times, t, stim.data[j], left=0, right=0)
+            
+            new_stims.append(new_stim)
+        
+        # Combine all new_stims into a final array (stack along a new axis if needed)
+        merged = Stimulus(np.concatenate(new_stims), time=new_times,
+                          electrodes=self.electrode_names,
+                          metadata=user_metadata)
+        # The merge concatenates raw data arrays, so the result would
+        # otherwise fall back to the default (current) reading of them:
+        return merged._inherit_units(present[0])
