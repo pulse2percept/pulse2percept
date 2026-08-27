@@ -7,6 +7,7 @@ from ..utils import sample
 from ..topography import Curcio1990Map
 from ..units import um
 from ..models import Model, SpatialModel
+from .base import _warn_ignores_z
 from ._thompson2003 import fast_thompson2003
 
 # Log all warnings.warn() at the WARNING level:
@@ -90,10 +91,7 @@ class Thompson2003Spatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        if not np.allclose([e.z for e in earray.electrode_objects], 0):
-            msg = ("Nonzero electrode-retina distances do not have any effect "
-                   "on the model output.")
-            warnings.warn(msg)
+        _warn_ignores_z(self, earray)
         radius = self.radius
         if radius is None:
             if not hasattr(earray, 'spacing'):

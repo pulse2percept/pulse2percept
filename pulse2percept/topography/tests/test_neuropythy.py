@@ -564,13 +564,12 @@ def test_fsaverage_scoreboard(fsaverage):
     # `meridian_blend=0`: the sums below pin the neuropythy map, not the
     # default postprocessing. The blend is covered by
     # `test_CortexSpatial_meridian_blend`.
-    model = ScoreboardModel(rho=800, step=.25, vfmap=fsaverage,
-                            meridian_blend=0).build()
     implants = [Neuralink.from_neuropythy(fsaverage, xrange=(-3, 3),
                                           yrange=(-3, 3), region=region)
                 for region in ['v1', 'v2', 'v3']]
     implant = EnsembleImplant(implants)
-    implant.stim = {e: 1 for e in implant.electrode_names}
-    percept = model.predict_percept(implant)
+    model = ScoreboardModel(implant=implant, rho=800, step=.25,
+                            vfmap=fsaverage, meridian_blend=0)
+    percept = model.predict_percept({e: 1 for e in implant.electrode_names})
     npt.assert_almost_equal(np.sum(percept.data), 20245.445, decimal=1)
     npt.assert_almost_equal(np.max(percept.data), 86.4913, decimal=1)

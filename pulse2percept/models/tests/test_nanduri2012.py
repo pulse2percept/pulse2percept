@@ -137,8 +137,6 @@ def test_Nanduri2012Temporal(scale_out):
     implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
     bright_amp = []
     for amp in np.linspace(0, 50, 5):
-        # implant.stim = PulseTrain(model.dt, freq=20, amp=amp, dur=sdur,
-        #                           pulse_dur=pdur, interphase_dur=pdur)
         stim = implant.prepare_stim(
             BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
                                stim_dur=sdur))
@@ -153,8 +151,6 @@ def test_Nanduri2012Temporal(scale_out):
 
     bright_freq = []
     for freq in np.linspace(0, 100, 5):
-        # implant.stim = PulseTrain(model.dt, freq=freq, amp=20, dur=sdur,
-        #                           pulse_dur=pdur, interphase_dur=pdur)
         stim = implant.prepare_stim(
             BiphasicPulseTrain(freq, 20, pdur, interphase_dur=pdur,
                                stim_dur=sdur))

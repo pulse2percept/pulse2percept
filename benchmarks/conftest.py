@@ -104,8 +104,10 @@ def make_model(scenario, n_threads, axon_pickle):
     Benchmarks that measure ``build`` need a new model for every round, and
     they need it built outside the timed section.
     """
-    def _make(ignore_pickle=False):
+    def _make(implant, ignore_pickle=False):
         kwargs = {'verbose': False, 'n_threads': n_threads}
+        if scenario.binds_implant:
+            kwargs['implant'] = implant
         if scenario.caches_axons:
             kwargs['axon_pickle'] = axon_pickle
             kwargs['ignore_pickle'] = ignore_pickle
@@ -115,21 +117,27 @@ def make_model(scenario, n_threads, axon_pickle):
 
 @pytest.fixture(scope='module')
 def implant(scenario):
-    """An implant with the scenario's stimulus already assigned."""
-    return scenario.implant(scenario.stimulus())
+    """The scenario's device."""
+    return scenario.implant()
 
 
 @pytest.fixture(scope='module')
-def built_model(make_model):
+def source(scenario, implant):
+    """What ``predict_percept`` is handed."""
+    return scenario.source(implant, scenario.stimulus())
+
+
+@pytest.fixture(scope='module')
+def built_model(make_model, implant):
     """A model that has been built once, shared by the benchmarks that need
     one. ``predict_percept`` does not mutate the model, so reuse is safe."""
-    return make_model().build()
+    return make_model(implant).build()
 
 
 @pytest.fixture(scope='module')
-def percept(built_model, implant):
+def percept(built_model, source):
     """A predicted percept, for the benchmarks that consume one."""
-    return built_model.predict_percept(implant)
+    return built_model.predict_percept(source)
 
 
 @pytest.fixture

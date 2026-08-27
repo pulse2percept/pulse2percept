@@ -168,15 +168,16 @@ logo_dilate.save('dilated_logo.png')
 # We just have to resize the image first so that the number of pixels in the
 # image matches the number of electrodes in the implant.
 #
-# But let's start from the top. The first two steps are to create a model and
-# choose an implant:
-
-# Simulate only what we need (14x14 deg sampled at 0.1 deg):
-model = p2p.models.ScoreboardModel(xrange=(-7, 7), yrange=(-7, 7), step=0.1)
-model.build()
+# But let's start from the top. The first two steps are to choose an implant
+# and create a model bound to it:
 
 from pulse2percept.implants import AlphaAMS
 implant = AlphaAMS()
+
+# Simulate only what we need (14x14 deg sampled at 0.1 deg):
+model = p2p.models.ScoreboardModel(implant=implant, xrange=(-7, 7),
+                                   yrange=(-7, 7), step=0.1)
+model.build()
 
 # Show the visual field we're simulating (dashed lines) atop the implant:
 model.plot()
@@ -187,7 +188,7 @@ implant.plot()
 # all we need to do is downscale the image to the size of the grid, and then
 # *encode* it:
 
-implant.stim = logo_gray.resize(implant.shape).encode()
+stim_gray = logo_gray.resize(implant.shape).encode()
 
 ##############################################################################
 # The downscaling assigns the pixels of the image to the electrodes in
@@ -211,10 +212,10 @@ implant.stim = logo_gray.resize(implant.shape).encode()
 #    In the near future, this will be done automatically using an implant's
 #    ``preprocess`` method.
 #
-# Then the implant can be passed to the model's
+# Then the stimulus can be passed to the model's
 # :py:meth:`~pulse2percept.models.ScoreboardModel.predict_percept` method:
 
-percept_gray = model.predict_percept(implant)
+percept_gray = model.predict_percept(stim_gray)
 
 ##############################################################################
 # .. note ::
@@ -228,8 +229,8 @@ percept_gray = model.predict_percept(implant)
 # resulting percept, we can re-run the model on ``logo_dilate`` and plot the
 # two percepts side-by-side:
 
-implant.stim = logo_dilate.trim().resize(implant.shape).encode()
-percept_dilate = model.predict_percept(implant)
+stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
+percept_dilate = model.predict_percept(stim_dilate)
 
 fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(10, 4))
 percept_gray.plot(ax=ax1)
@@ -248,7 +249,7 @@ percept_dilate.plot(ax=ax2)
 # (0.46 ms phase duration), lasting 500 ms overall. Gray levels in the range
 # [0, 1] are mapped onto currents in the range [0, 50] uA:
 
-implant.stim = logo_dilate.trim().resize(implant.shape).encode()
+stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
 
 ##############################################################################
 # We can customize the range of amplitudes to be used by passing a keyword
@@ -262,17 +263,18 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 # ``encode`` is a shorthand for
 # :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, which offers the full
 # set of options. Give one to an implant and the implant encodes whatever
-# picture is assigned to it -- sampling it at the electrode locations *before*
+# picture it is handed -- sampling it at the electrode locations *before*
 # building the pulse trains, which for a video is the difference between a
 # stimulus of a few hundred kilobytes and one of a few hundred megabytes:
 #
 # .. code-block:: python
 #
 #     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
-#     implant.stim = p2p.stimuli.BostonTrain()
+#     delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
 #
 # :py:class:`~pulse2percept.implants.ArgusII` brings one along already, so
-# ``p2p.implants.ArgusII(stim=p2p.stimuli.BostonTrain())`` is the whole setup.
+# ``model.predict_percept(p2p.stimuli.BostonTrain())`` on a model bound to one
+# is the whole setup.
 #
 # The other way to encode a gray level is as a pulse *rate* at fixed amplitude,
 # which is what :py:class:`~pulse2percept.stimuli.FrequencyEncoder` does. It is
@@ -284,7 +286,7 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 #
 #     implant.encoder = p2p.stimuli.FrequencyEncoder(freq_range=(0, 300),
 #                                                    amp=50, clock=1)
-#     implant.stim = p2p.stimuli.BostonTrain()
+#     delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
 #
 # A real stimulator usually cannot drive every electrode at once, because the
 # current it can source at any instant is limited. Give the implant a
@@ -298,7 +300,7 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 #
 #     implant.max_current = 1000  # uA, summed over electrodes
 #     implant.raster = p2p.implants.SequentialRaster(6)  # one row at a time
-#     implant.stim = video
+#     delivered = implant.prepare_stim(video)
 #
 # The raster belongs to the implant, and is the only place the schedule is
 # described: assigning one binds it to that implant, so
@@ -322,7 +324,8 @@ implant.stim = logo_dilate.trim().resize(implant.shape).encode()
 # with a proper temporal model, such as
 # :py:class:`~pulse2percept.models.Horsager2009Temporal`:
 
-model = p2p.models.Model(spatial=p2p.models.ScoreboardSpatial,
+model = p2p.models.Model(implant=implant,
+                         spatial=p2p.models.ScoreboardSpatial,
                          temporal=p2p.models.Horsager2009Temporal)
 
 ##############################################################################
@@ -352,7 +355,7 @@ model.build(xrange=(-7, 7), yrange=(-7, 7), step=0.1, rho=50)
 # time points to :py:meth:`~pulse2percept.Model.predict_percept` (e.g.,
 # ``t_percept=np.arange(500)`` to get an output every millisecond):
 
-percept = model.predict_percept(implant)
+percept = model.predict_percept(stim_dilate)
 
 ##############################################################################
 # The output of the model is a :py:class:`~pulse2percept.percepts.Percept`

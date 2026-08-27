@@ -152,9 +152,13 @@ def test_Thompson2003Model_predict_percept():
     # Warning for nonzero electrode-retina distances
     raised = Thompson2003Model(implant=ArgusII(z=10), step=0.55, radius=100)
     raised.build()
-    msg = ("Nonzero electrode-retina distances do not have any effect on the "
-           "model output.")
-    assert_warns_msg(UserWarning, raised.predict_percept, msg, np.ones(60))
+    # Framed as a limitation of the model, not as a claim that distance is
+    # irrelevant, and named so the reader knows which model is silent about it:
+    assert_warns_msg(UserWarning, raised.predict_percept,
+                     "Thompson2003Spatial does not model electrode-retina distance",
+                     np.ones(60))
+    assert_warns_msg(UserWarning, raised.predict_percept,
+                     "not parameterized by this model", np.ones(60))
 
 
 def test_deepcopy_Thompson2003Model():

@@ -1,22 +1,25 @@
 """Pipelines exercised by the benchmark suite.
 
 A :class:`Scenario` is one end-to-end path through the library: build a
-stimulus, hand it to an implant, build a model, predict a percept. The
-benchmark functions in ``test_predict.py`` are written once and parametrized
-over :data:`SCENARIOS`, so adding a case means adding an entry here and
-nothing else.
+stimulus, bind a model to an implant, predict a percept. The benchmark
+functions in ``test_predict.py`` are written once and parametrized over
+:data:`SCENARIOS`, so adding a case means adding an entry here and nothing
+else.
 
 The scenarios below are the reference workloads for the library's main purpose
 -- predicting a percept from a stimulus, an implant and a phosphene model. The
 first two correspond to these one-liners::
 
-    p2p.models.AxonMapModel(yrange=(-8, 8), xrange=(-12, 12)).build(
-        ).predict_percept(as_current(p2p.implants.ArgusII(),
-                                     p2p.stimuli.LogoBVL()))
+    implant = p2p.implants.ArgusII()
+    p2p.models.AxonMapModel(implant=implant, yrange=(-8, 8),
+                            xrange=(-12, 12)).predict_percept(
+        as_current(implant, p2p.stimuli.LogoBVL()))
 
-    p2p.models.ScoreboardModel(yrange=(-4, 4), xrange=(-4, 4), rho=50,
-                               step=0.1).build().predict_percept(as_current(
-        p2p.implants.PRIMA(), p2p.stimuli.LogoBVL().invert()))
+    implant = p2p.implants.PRIMA()
+    p2p.models.ScoreboardModel(implant=implant, yrange=(-4, 4),
+                               xrange=(-4, 4), rho=50,
+                               step=0.1).predict_percept(
+        as_current(implant, p2p.stimuli.LogoBVL().invert()))
 
 The :func:`as_current` wrapper is a benchmark-only detail; see its docstring
 for why these workloads do not go through an encoder the way user code should.
@@ -38,8 +41,8 @@ import pulse2percept as p2p
 def array_ptrain(implant_cls, amp=20):
     """A ``BiphasicPulseTrain`` on *every* electrode of ``implant_cls``.
 
-    Handing a bare ``BiphasicPulseTrain`` to an implant assigns it to a single
-    electrode -- ``ArgusII(stim=BiphasicPulseTrain(...)).stim.shape`` is
+    Handing a bare ``BiphasicPulseTrain`` to an implant drives a single
+    electrode -- ``ArgusII().prepare_stim(BiphasicPulseTrain(...)).shape`` is
     ``(1, 29)``, not ``(60, 29)``. A benchmark built that way would exercise
     one sixtieth of the per-electrode work the kernels actually do, and would
     barely move if that work regressed. Every pulse-train scenario below goes
@@ -62,7 +65,7 @@ def array_ptrain(implant_cls, amp=20):
 
 #: Microamps that a gray level of 1.0 stands for in :func:`as_current`.
 #:
-#: One, so that the amplitudes are numerically what an image assigned straight
+#: One, so that the amplitudes are numerically what an image handed straight
 #: to an implant used to produce, and these benchmarks stay comparable across
 #: the release that made the reinterpretation explicit. Nothing here depends on
 #: the value -- the kernels below do the same arithmetic on any amplitude --
@@ -87,22 +90,23 @@ def as_current(implant, picture, amp_max=GRAY_LEVEL_UA):
     instead, on the amplitudes ``reshape_stim`` has resampled onto the
     implant's electrodes. What the kernels see does not change: the same
     electrodes, the same number of columns, the same numbers in them.
+
+    Returns the source a model is handed, not a prepared stimulus: the implant
+    prepares it inside ``predict_percept``, and ``prepare_stim`` is measured
+    on its own by the ``implant`` benchmark.
     """
     stim = implant.reshape_stim(picture)
     data = stim.data * amp_max
     if stim.time is None:
         # A *flat* sequence means N electrodes stimulated once each with no
-        # time component, which is what an image assigned to an implant
+        # time component, which is what an image handed to an implant
         # produces. Handing over the (N, 1) array instead would give it a time
         # axis of [0], and a spatial model takes a different path through
         # `predict_percept` for a stimulus that has one -- so the benchmark
         # would quietly start measuring something else.
-        data = data.ravel()
-        implant.stim = p2p.stimuli.Stimulus(data, electrodes=stim.electrodes)
-    else:
-        implant.stim = p2p.stimuli.Stimulus(data, electrodes=stim.electrodes,
-                                            time=stim.time)
-    return implant
+        return p2p.stimuli.Stimulus(data.ravel(), electrodes=stim.electrodes)
+    return p2p.stimuli.Stimulus(data, electrodes=stim.electrodes,
+                                time=stim.time)
 
 
 @dataclass(frozen=True)
@@ -116,11 +120,20 @@ class Scenario:
     stimulus : callable
         Takes no arguments, returns a stimulus.
     implant : callable
-        Takes a stimulus, returns a ``ProsthesisSystem``.
+        Takes no arguments, returns a ``ProsthesisSystem``.
+    source : callable, optional
+        Takes the implant and the stimulus, returns what ``predict_percept``
+        is given. Defaults to the stimulus unchanged; the image scenarios use
+        :func:`as_current`.
     model : callable
         Takes keyword arguments, returns an *unbuilt* model. Always receives
-        ``verbose`` and ``n_threads``; also receives ``axon_pickle`` and
-        ``ignore_pickle`` when ``caches_axons`` is True.
+        ``verbose`` and ``n_threads``; also receives ``implant`` unless
+        ``binds_implant`` is False, and ``axon_pickle``/``ignore_pickle``
+        when ``caches_axons`` is True.
+    binds_implant : bool
+        Whether the model takes an ``implant``. False for a temporal-only
+        model, which never sees an electrode and is handed the stimulus
+        directly.
     caches_axons : bool
         Whether the model caches its axon map to disk. ``AxonMapSpatial``
         pickles the grown axon bundles to ``axons.pickle`` in the working
@@ -148,6 +161,8 @@ class Scenario:
     stimulus: Callable
     implant: Callable
     model: Callable
+    source: Callable = lambda implant, stim: stim
+    binds_implant: bool = True
     caches_axons: bool = False
     slow: bool = False
     plottable: bool = True
@@ -157,7 +172,8 @@ SCENARIOS = [
     Scenario(
         id='argus2_axonmap_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL(),
-        implant=lambda stim: as_current(p2p.implants.ArgusII(), stim),
+        implant=p2p.implants.ArgusII,
+        source=as_current,
         model=lambda **kwargs: p2p.models.AxonMapModel(xrange=(-12, 12),
                                                        yrange=(-8, 8),
                                                        **kwargs),
@@ -166,7 +182,8 @@ SCENARIOS = [
     Scenario(
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
-        implant=lambda stim: as_current(p2p.implants.PRIMA(), stim),
+        implant=p2p.implants.PRIMA,
+        source=as_current,
         model=lambda **kwargs: p2p.models.ScoreboardModel(xrange=(-4, 4),
                                                           yrange=(-4, 4),
                                                           rho=50, step=0.1,
@@ -180,7 +197,7 @@ SCENARIOS = [
         id='argus2_biphasic_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.ArgusII,
                                       amp=20 * p2p.units.xTh),
-        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        implant=p2p.implants.ArgusII,
         model=lambda **kwargs: p2p.models.BiphasicAxonMapModel(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
         caches_axons=True,
@@ -192,7 +209,7 @@ SCENARIOS = [
     Scenario(
         id='argus2_nanduri2012_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
-        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        implant=p2p.implants.ArgusII,
         model=lambda **kwargs: p2p.models.Nanduri2012Model(
             xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
     ),
@@ -202,8 +219,9 @@ SCENARIOS = [
     Scenario(
         id='argus2_horsager2009_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
-        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        implant=p2p.implants.ArgusII,
         model=lambda **kwargs: p2p.models.Horsager2009Model(**kwargs),
+        binds_implant=False,
         plottable=False,
     ),
     # Thompson 2003: a spatial-only model taking an image, and the only
@@ -211,7 +229,8 @@ SCENARIOS = [
     Scenario(
         id='argus2_thompson2003_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL(),
-        implant=lambda stim: as_current(p2p.implants.ArgusII(), stim),
+        implant=p2p.implants.ArgusII,
+        source=as_current,
         model=lambda **kwargs: p2p.models.Thompson2003Model(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
     ),
@@ -221,7 +240,7 @@ SCENARIOS = [
     Scenario(
         id='argus2_scoreboard_fading_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
-        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        implant=p2p.implants.ArgusII,
         model=lambda **kwargs: p2p.models.Model(
             spatial=p2p.models.ScoreboardSpatial(xrange=(-4, 4),
                                                  yrange=(-4, 4), step=0.5),
@@ -233,7 +252,8 @@ SCENARIOS = [
     Scenario(
         id='argus2_axonmap_bostontrain',
         stimulus=lambda: p2p.stimuli.BostonTrain().rgb2gray(),
-        implant=lambda stim: as_current(p2p.implants.ArgusII(), stim),
+        implant=p2p.implants.ArgusII,
+        source=as_current,
         model=lambda **kwargs: p2p.models.AxonMapModel(xrange=(-12, 12),
                                                        yrange=(-8, 8),
                                                        **kwargs),

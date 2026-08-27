@@ -33,18 +33,14 @@ from pulse2percept.models import AxonMapModel
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
-# For illustrative purpose, also show the map of fiber
-# bundles in the optic fiber layer:
-model = AxonMapModel()
-model.plot(ax=ax[0])
-# Argus I is typically implanted at a 30-45deg angle:
-ArgusI(rot=-30).plot(ax=ax[0], annotate=True)
-ax[0].set_title('Argus I')
-
-model.plot(ax=ax[1])
-# Argus II is typically implanted at a 30-45deg angle:
-ArgusII(rot=-30).plot(ax=ax[1], annotate=False)
-ax[1].set_title('Argus II')
+# Argus I and II are typically implanted at a 30-45deg angle. For illustrative
+# purpose, also show the map of fiber bundles in the optic fiber layer -- an
+# axon map is grown for a particular eye, so each model names its implant:
+for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
+                             (ax[1], ArgusII(rot=-30), 'Argus II')]:
+    AxonMapModel(implant=implant).plot(ax=axis)
+    implant.plot(ax=axis, annotate=title == 'Argus I')
+    axis.set_title(title)
 
 ###############################################################################
 # PRIMA Bionic Vision System (Pixium Vision SA)

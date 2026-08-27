@@ -26,7 +26,8 @@ Rasters are attached to an implant:
         amp_range=(0, 50),
         freq=20,
     )
-    implant.stim = p2p.stimuli.BostonTrain()
+
+    delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
 
 Electrodes in one group may pulse together; different groups occupy different
 time slots.

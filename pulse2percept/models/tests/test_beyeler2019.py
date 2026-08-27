@@ -186,9 +186,13 @@ def test_ScoreboardModel_predict_percept():
     # Warning for nonzero electrode-retina distances
     raised = ScoreboardModel(implant=ArgusII(z=10), step=0.55, rho=100)
     raised.build()
-    msg = ("Nonzero electrode-retina distances do not have any effect on the "
-           "model output.")
-    assert_warns_msg(UserWarning, raised.predict_percept, msg, np.ones(60))
+    # Framed as a limitation of the model, not as a claim that distance is
+    # irrelevant, and named so the reader knows which model is silent about it:
+    assert_warns_msg(UserWarning, raised.predict_percept,
+                     "ScoreboardSpatial does not model electrode-retina distance",
+                     np.ones(60))
+    assert_warns_msg(UserWarning, raised.predict_percept,
+                     "not parameterized by this model", np.ones(60))
 
 
 def test_AxonMapSpatial():
@@ -680,9 +684,13 @@ def test_AxonMapModel_predict_percept():
     raised = AxonMapModel(implant=ArgusII(z=10), step=1, rho=100, lam=40,
                           meridian_blend=0, n_axons=250, n_ax_segments=200,
                           ignore_pickle=True).build()
-    msg = ("Nonzero electrode-retina distances do not have any effect on the "
-           "model output.")
-    assert_warns_msg(UserWarning, raised.predict_percept, msg, np.ones(60))
+    # Framed as a limitation of the model, not as a claim that distance is
+    # irrelevant, and named so the reader knows which model is silent about it:
+    assert_warns_msg(UserWarning, raised.predict_percept,
+                     "AxonMapSpatial does not model electrode-retina distance",
+                     np.ones(60))
+    assert_warns_msg(UserWarning, raised.predict_percept,
+                     "not parameterized by this model", np.ones(60))
 
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))

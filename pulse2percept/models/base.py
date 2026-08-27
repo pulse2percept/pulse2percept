@@ -388,6 +388,21 @@ def _warn_rho_vs_pitch(model):
         f"driven.")
 
 
+def _warn_ignores_z(model, earray):
+    """Warn that this model's kernel reads x and y only
+
+    Not a claim that electrode-retina distance does not matter -- it is
+    expected to -- only that this model does not represent it.
+    """
+    if np.allclose([e.z for e in earray.electrode_objects], 0):
+        return
+    warnings.warn(
+        f"{type(model).__name__} does not model electrode-retina distance: "
+        f"nonzero z values have no effect on threshold or current spread. In "
+        f"a real implant, distance is expected to affect both, but that "
+        f"relationship is not parameterized by this model.")
+
+
 class BaseModel(Parametrized, metaclass=ABCMeta):
     """Abstract base class for all models
 
@@ -546,8 +561,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         """Build the model
 
         Every model must have a ```build`` method, which is meant to perform
-        all expensive one-time calculations. You must call ``build`` before
-        calling ``predict_percept``.
+        all expensive one-time calculations. ``predict_percept`` calls it for
+        you when the model is not built; call it yourself to pay the cost at a
+        moment of your choosing, or to pass build-time parameters.
 
         .. important::
 
@@ -605,10 +621,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     *  ``build``: builds the spatial grid used to calculate the percept.
        You can add your own ``_build`` method (note the underscore) that
        performs additional expensive one-time calculations.
-    *  ``predict_percept``: predicts the percepts based on an implant/stimulus.
-       Don't customize this method - implement your own ``_predict_spatial``
-       instead (see below).
-       A user must call ``build`` before calling ``predict_percept``.
+    *  ``predict_percept``: predicts the percept a stimulus produces on the
+       bound implant. Don't customize this method - implement your own
+       ``_predict_spatial`` instead (see below). It builds the model first if
+       it is not built.
 
     To create your own spatial model, you must subclass ``SpatialModel`` and
     provide an implementation for:
@@ -906,8 +922,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Build the model
 
         Performs expensive one-time calculations, such as building the spatial
-        grid used to predict a percept. You must call ``build`` before
-        calling ``predict_percept``.
+        grid used to predict a percept. ``predict_percept`` calls it for you
+        when the model is not built.
 
         .. important::
 
@@ -1168,9 +1184,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     *  ``build``: builds the model in order to calculate the percept.
        You can add your own ``_build`` method (note the underscore) that
        performs additional expensive one-time calculations.
-    *  ``predict_percept``: predicts the percepts based on an implant/stimulus.
-       You can add your own ``_predict_temporal`` method to customize this
-       step. A user must call ``build`` before calling ``predict_percept``.
+    *  ``predict_percept``: predicts the percept a stimulus produces. You can
+       add your own ``_predict_temporal`` method to customize this step. It
+       builds the model first if it is not built.
 
     To create your own temporal model, you must subclass ``SpatialModel`` and
     provide an implementation for:
@@ -1876,9 +1892,7 @@ class Model(Frozen, PrettyPrint):
                         vmin=0):
         """Predict a percept
 
-        .. important ::
-
-            You must call ``build`` before calling ``predict_percept``.
+        Builds the model first if it is not built.
 
         Given an ordinary stimulus source, this predicts what the bound
         implant delivers for it (see

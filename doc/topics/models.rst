@@ -4,7 +4,8 @@
 Computational Models
 ====================
 
-A model predicts the response to stimulation. Most users work with
+A model predicts the response to stimulation *by a particular device*, so it
+is bound to an implant and handed the stimulus. Most users work with
 :py:class:`~pulse2percept.models.Model`, which can contain a spatial component,
 a temporal component, or both:
 
@@ -63,20 +64,85 @@ assumptions are relevant.
 Basic usage
 -----------
 
-Models follow the same workflow: initialize, build, then predict a percept from
-an implant containing a stimulus.
+Models follow the same workflow: choose an implant, bind a model to it, then
+predict a percept from a stimulus.
 
 .. code-block:: python
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII(stim={'A8': 30})
-    model = p2p.models.ScoreboardModel(rho=200).build()
-    percept = model.predict_percept(implant)
+    implant = p2p.implants.ArgusII()
+    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
+    percept = model.predict_percept({'A8': 30})
 
-``build()`` performs one-time setup such as constructing an axon map. The result
-of ``predict_percept`` is a
+The result of ``predict_percept`` is a
 :py:class:`~pulse2percept.percepts.Percept`.
+
+Source, delivered stimulation, percept
+--------------------------------------
+
+Three different objects appear in that one line, and it is worth keeping them
+apart::
+
+    source → implant → delivered stimulation → model → percept
+
+**Source**
+    What is presented to the device: a
+    :py:class:`~pulse2percept.stimuli.Stimulus` (or a dict or array that
+    becomes one), an :py:class:`~pulse2percept.stimuli.ImageStimulus`, a
+    :py:class:`~pulse2percept.stimuli.VideoStimulus`, or a
+    :py:class:`~pulse2percept.vision.Scene`.
+
+**Delivered stimulation**
+    The current the electrodes actually produce, which the implant derives from
+    the source: ``implant.prepare_stim(source)``. This is where encoding,
+    raster scheduling, threshold calibration and the safety checks happen. A
+    model does it for you; call it yourself when you want to see it.
+
+**Percept**
+    What the bound model predicts: ``model.predict_percept(source)``.
+
+Building
+--------
+
+Models perform expensive one-time setup -- constructing a simulation grid,
+growing an axon map -- before they can predict anything. That happens by
+itself:
+
+.. code-block:: python
+
+    model = p2p.models.AxonMapModel(implant=implant)
+
+    # Builds automatically:
+    percept = model.predict_percept(stim)
+
+    # Changing a model parameter invalidates the existing build:
+    model.rho = 250
+
+    # Rebuilds automatically:
+    percept = model.predict_percept(stim)
+
+Rebinding the implant invalidates the build the same way, since a build
+describes one device's geometry. Call ``model.build()`` yourself when you would
+rather pay the cost at a moment of your choosing, want to inspect the built
+grid or axon map, or want to pass build-time parameters
+(``model.build(rho=250)``).
+
+Electrode-retina distance
+-------------------------
+
+:py:class:`~pulse2percept.models.ScoreboardModel` and
+:py:class:`~pulse2percept.models.AxonMapModel` read electrode ``x`` and ``y``
+only. Nonzero ``z`` has no effect on threshold or on how far current spreads,
+and building against such an array warns as much.
+
+This is a limitation of the models, not a claim about the biology: a larger
+electrode-target distance is expected to raise threshold and broaden spatial
+recruitment. pulse2percept does not have the psychophysical evidence to
+parameterize that relationship, so it does not invent one. ``rho`` remains an
+effective *perceptual* spread parameter, fitted to what an individual reports
+seeing, and it is the right place to express that a particular subject's
+phosphenes are large -- whatever the reason.
 
 .. _topics-models-scene:
 
@@ -98,8 +164,8 @@ what someone is *looking at* instead, give the model a
     implant = p2p.implants.ArgusII()
     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
 
-    model = p2p.models.ScoreboardModel(scene=scene, rho=200).build()
-    percept = model.predict_percept(implant, gaze=(0, 0) * dva)
+    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
+    percept = model.predict_percept(scene, gaze=(0, 0) * dva)
 
 Four objects divide the problem between them:
 
@@ -125,9 +191,9 @@ neither does an eye-centered
 ``(x, y)`` to fixate, or one per video frame to move the eye between frames.
 
 The sampled values go to ``implant.encoder``, so the implant still decides how
-a gray level becomes current and which electrodes may pulse when. Prediction
-does not touch ``implant.stim``: it runs against a stand-in copy, so asking
-what someone sees never rewrites their device.
+a gray level becomes current and which electrodes may pulse when. A scene is
+trial input like any other source: the model holds none of it, and asking what
+someone sees changes nothing about their device.
 
 An implant's ``preprocess`` -- an edge filter, an inversion, a contrast
 stretch -- is applied to the **prosthetic input branch only**, before the
@@ -166,9 +232,9 @@ lost region, and the prosthetic percept inside it -- as a single RGB
 
     scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva,
                              scotoma=p2p.vision.Scotoma.circle(8 * dva))
-    model = p2p.models.ScoreboardModel(scene=scene, rho=200).build()
+    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
 
-    percept = model.predict_percept(implant, gaze=(0, 0) * dva, vmax=50)
+    percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=50)
 
 ``vmax`` is required here and is not inferred: model brightness is in
 arbitrary units, so which brightness counts as white is a claim about the
@@ -223,9 +289,14 @@ Classes ending in ``Model`` are complete model objects. Classes ending in
 .. code-block:: python
 
     model = p2p.models.Model(
+        implant=implant,
         spatial=p2p.models.ScoreboardSpatial(),
         temporal=p2p.models.Nanduri2012Temporal(),
-    ).build()
+    )
+
+The implant belongs to the spatial component -- a temporal model never sees an
+electrode -- and naming it on the parent is shorthand for that. Naming a
+*different* one on both raises rather than silently picking a winner.
 
 This is useful when the spatial and temporal assumptions come from different
 models. The combined model handles the intermediate representation and returns

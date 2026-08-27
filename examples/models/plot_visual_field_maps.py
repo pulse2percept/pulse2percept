@@ -98,8 +98,8 @@ for ax, transform in zip(axes, transforms):
 # levels are not microamps, and `encode` is the step that says how much
 # current each one stands for.
 implant = p2p.implants.AlphaAMS()
-implant.stim = p2p.stimuli.LogoUCSB().encode(implant=implant)
-implant.stim
+stim = p2p.stimuli.LogoUCSB().encode(implant=implant)
+stim
 
 ###############################################################################
 # We can easily switch out the visual field maps by passing a ``vfmap``
@@ -108,10 +108,9 @@ implant.stim
 
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
-    model = p2p.models.ScoreboardModel(xrange=(-6, 6), yrange=(-6, 6),
-                                       vfmap=transform)
-    model.build()
-    model.predict_percept(implant).plot(ax=ax)
+    model = p2p.models.ScoreboardModel(implant=implant, xrange=(-6, 6),
+                                       yrange=(-6, 6), vfmap=transform)
+    model.predict_percept(stim).plot(ax=ax)
     ax.set_title(transform.__class__.__name__)
 
 ###############################################################################
@@ -137,7 +136,8 @@ for ax, transform in zip(axes, transforms):
 # coordinates in V1, V2, and V3. 
 fig, ax = plt.subplots(ncols=2, figsize=(9, 4))
 vfmap = p2p.topography.Polimeni2006Map(regions=['v1', 'v2', 'v3']) # simulate all 3 regions
-model = p2p.models.cortex.ScoreboardModel(vfmap=vfmap)
+model = p2p.models.cortex.ScoreboardModel(implant=p2p.implants.cortex.Orion(),
+                                          vfmap=vfmap)
 model.build()
 vfmap.plot(ax=ax[0])
 ax[0].set_title('Polimeni Mapping')

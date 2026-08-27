@@ -23,25 +23,22 @@ def test_stimulus(benchmark, scenario, peak_memory):
 
 
 @pytest.mark.benchmark(group='implant')
-def test_implant(benchmark, scenario, peak_memory):
-    """Assigning the stimulus to the implant.
+def test_implant(benchmark, scenario, implant, source, peak_memory):
+    """Preparing the stimulus the device delivers.
 
     This is not just bookkeeping: an image stimulus has far more pixels than
-    the array has electrodes, so the setter downsamples it onto the electrode
-    grid. Building the stimulus happens in ``setup`` and is not timed.
+    the array has electrodes, so preparation downsamples it onto the electrode
+    grid. Building the stimulus happens in the fixtures and is not timed.
     """
-    def setup():
-        return (scenario.stimulus(),), {}
-
-    implant = benchmark.pedantic(scenario.implant, setup=setup, rounds=20,
-                                 iterations=1, warmup_rounds=1)
-    stim = scenario.stimulus()
-    benchmark.extra_info['peak_mem_mb'] = peak_memory(scenario.implant, stim)
+    benchmark(implant.prepare_stim, source)
+    benchmark.extra_info['peak_mem_mb'] = peak_memory(implant.prepare_stim,
+                                                      source)
     benchmark.extra_info['n_electrodes'] = implant.n_electrodes
 
 
 @pytest.mark.benchmark(group='build')
-def test_build(benchmark, scenario, make_model, peak_memory, n_threads):
+def test_build(benchmark, scenario, implant, make_model, peak_memory,
+               n_threads):
     """Building the model, with any on-disk cache already warm.
 
     This is the path a user hits on every run after the first, so it is the
@@ -52,20 +49,21 @@ def test_build(benchmark, scenario, make_model, peak_memory, n_threads):
     if scenario.caches_axons:
         # Populate the cache first so this benchmark measures the warm path
         # no matter which order the tests run in.
-        make_model(ignore_pickle=False).build()
+        make_model(implant, ignore_pickle=False).build()
 
     def setup():
-        return (make_model(ignore_pickle=False),), {}
+        return (make_model(implant, ignore_pickle=False),), {}
 
     benchmark.pedantic(lambda model: model.build(), setup=setup, rounds=5,
                        iterations=1, warmup_rounds=1)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(
-        lambda: make_model(ignore_pickle=False).build())
+        lambda: make_model(implant, ignore_pickle=False).build())
     benchmark.extra_info['n_threads'] = n_threads
 
 
 @pytest.mark.benchmark(group='build')
-def test_build_cold(benchmark, scenario, make_model, peak_memory, n_threads):
+def test_build_cold(benchmark, scenario, implant, make_model, peak_memory,
+                    n_threads):
     """Building the model from scratch, ignoring the on-disk cache.
 
     This is the actual Jansonius-model computation -- the part worth
@@ -76,22 +74,27 @@ def test_build_cold(benchmark, scenario, make_model, peak_memory, n_threads):
                     f'the same as a warm one (see test_build)')
 
     def setup():
-        return (make_model(ignore_pickle=True),), {}
+        return (make_model(implant, ignore_pickle=True),), {}
 
     benchmark.pedantic(lambda model: model.build(), setup=setup, rounds=5,
                        iterations=1, warmup_rounds=1)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(
-        lambda: make_model(ignore_pickle=True).build())
+        lambda: make_model(implant, ignore_pickle=True).build())
     benchmark.extra_info['n_threads'] = n_threads
 
 
 @pytest.mark.benchmark(group='predict_percept')
-def test_predict_percept(benchmark, built_model, implant, peak_memory,
+def test_predict_percept(benchmark, built_model, source, peak_memory,
                          n_threads):
-    """Predicting the percept: the headline number for this library."""
-    percept = benchmark(built_model.predict_percept, implant)
+    """Predicting the percept: the headline number for this library.
+
+    Includes the bound implant's own preparation of the source, which
+    ``predict_percept`` performs and which the ``implant`` group above times
+    separately.
+    """
+    percept = benchmark(built_model.predict_percept, source)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(
-        built_model.predict_percept, implant)
+        built_model.predict_percept, source)
     benchmark.extra_info['n_threads'] = n_threads
     benchmark.extra_info['percept_shape'] = str(percept.shape)
 
@@ -105,8 +108,9 @@ def test_end_to_end(benchmark, scenario, make_model, peak_memory, n_threads):
     cache to a temporary directory instead of the current one.
     """
     def run():
-        implant = scenario.implant(scenario.stimulus())
-        return make_model().build().predict_percept(implant)
+        implant = scenario.implant()
+        source = scenario.source(implant, scenario.stimulus())
+        return make_model(implant).predict_percept(source)
 
     percept = benchmark(run)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(run)

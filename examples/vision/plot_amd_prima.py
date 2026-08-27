@@ -48,19 +48,20 @@ implant.encoder = AmplitudeEncoder(amp_range=(0, 40), freq=20)
 
 ###############################################################################
 
-model = ScoreboardModel(scene=scene, rho=50, xrange=(-6, 6), yrange=(-6, 6),
-                        step=0.05).build()
+model = ScoreboardModel(implant=implant, rho=50, xrange=(-6, 6),
+                        yrange=(-6, 6), step=0.05)
 
 ###############################################################################
+# The scene is trial input, like any other stimulus:
 
-percept = model.predict_percept(implant, gaze=(0, 0) * dva, vmax=40)
+percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=40)
 
 percept.plot()
 plt.title('Native vision with a PRIMA percept in the scotoma')
 
 ###############################################################################
 
-percept = model.predict_percept(implant, gaze=(8, -4) * dva, vmax=40)
+percept = model.predict_percept(scene, gaze=(8, -4) * dva, vmax=40)
 
 percept.plot()
 plt.title('Looking 8 degrees right and 4 degrees down')
@@ -69,7 +70,7 @@ plt.title('Looking 8 degrees right and 4 degrees down')
 
 implant.preprocess = lambda stim: stim.filter('sobel')
 
-percept = model.predict_percept(implant, gaze=(0, 0) * dva, vmax=40)
+percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=40)
 
 percept.plot()
 plt.title('Edge-filtered device input, intact vision around it')

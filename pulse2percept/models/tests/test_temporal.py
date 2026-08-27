@@ -433,9 +433,9 @@ def test_TemporalModel_reduce_fallback():
 
 def test_TemporalModel_blank_percept_warning():
     # Brightness in FadingTemporal is driven by cathodic (negative) current,
-    # so an all-positive stimulus -- which is what assigning a grayscale image
-    # or video directly to `implant.stim` produces -- integrates away to
-    # nothing. That used to be silent:
+    # so an all-positive stimulus -- which is what an unencoded grayscale image
+    # or video amounts to -- integrates away to nothing. That used to be
+    # silent:
     anodic = Stimulus(np.ones((4, 10)), time=np.arange(10) * 10.0)
     model = FadingTemporal().build()
     with pytest.warns(UserWarning, match='all-zero percept'):

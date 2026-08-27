@@ -13,7 +13,7 @@ the two.
 Basic usage
 -----------
 
-Attach an encoder to an implant, then assign an image or video:
+Attach an encoder to an implant, then hand it an image or video:
 
 .. code-block:: python
 
@@ -24,10 +24,16 @@ Attach an encoder to an implant, then assign an image or video:
         amp_range=(0, 50),
         freq=20,
     )
-    implant.stim = p2p.stimuli.BostonTrain()
 
-Dimensionless input is encoded on assignment. Electrical stimuli bypass the
-encoder.
+    model = p2p.models.ScoreboardModel(implant=implant)
+    percept = model.predict_percept(p2p.stimuli.BostonTrain())
+
+Dimensionless input is encoded when the implant prepares it. Electrical stimuli
+bypass the encoder. To see the pulses themselves:
+
+.. code-block:: python
+
+    delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
 
 Encoding can also be explicit:
 
@@ -35,7 +41,6 @@ Encoding can also be explicit:
 
     source = p2p.stimuli.BostonTrain()
     stim = implant.encoder.encode(source, implant=implant)
-    implant.stim = stim
 
 Passing the implant samples the source at its electrode locations before pulse
 trains are constructed, so the resulting Stimulus has one row per implant
@@ -78,7 +83,7 @@ What an encoded stimulus contains
 An encoded Stimulus retains both the requested frame-level modulation and the
 delivered pulse schedule. Spatial-only models use the frame-level modulation;
 temporal models use the delivered electrical pulses. The result is the same
-whether encoding happened explicitly or during assignment to the implant.
+whether encoding happened explicitly or inside ``prepare_stim``.
 
 Waveform samples are generated lazily, so encoding a large image or video does
 not allocate the full electrical waveform until something needs it.

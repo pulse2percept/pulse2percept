@@ -58,7 +58,8 @@ Lets use our map in a model and visualize the transform
 
 .. code-block:: python
 
-    model = p2p.models.cortex.ScoreboardModel(vfmap=nmap, regions=['v1'])
+    model = p2p.models.cortex.ScoreboardModel(
+        implant=p2p.implants.cortex.Cortivis(), vfmap=nmap, regions=['v1'])
     model.build()
     fig, axes = plt.subplots(ncols=2, figsize=(10, 4))
     model.plot(style='cell', ax=axes[0])
@@ -119,10 +120,12 @@ Lets place a Neuralink implant across the right hemisphere of the cortex:
 .. code-block:: python
 
     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
-    model = p2p.models.cortex.ScoreboardModel(vfmap=nmap, xrange=(-4, 0), yrange=(-4, 4), step=.25).build()
+    model = p2p.models.cortex.ScoreboardModel(vfmap=nmap, xrange=(-4, 0), yrange=(-4, 4), step=.25)
     nlink = p2p.implants.cortex.Neuralink.from_neuropythy(
         nmap, xrange=model.xrange, yrange=model.yrange, step=1, rand_insertion_angle=0
     )
+    model.implant = nlink
+    model.build()
     print(len(nlink.implants), " total threads")
 
     fig = plt.figure(figsize=(10, 4))
@@ -140,12 +143,13 @@ electrode on each thread, using the scoreboard model:
 
     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'], jitter_boundary=True)
     model = p2p.models.cortex.ScoreboardModel(rho=800, xrange=(-15, 15), yrange=(-15, 15),
-                                              step=.25, vfmap=nmap).build()
+                                              step=.25, vfmap=nmap)
     nlink = p2p.implants.cortex.Neuralink.from_neuropythy(
         nmap, xrange=model.xrange, yrange=model.yrange, step=3, rand_insertion_angle=0
     )
-    nlink.stim = {e: 1 for e in [i for i in nlink.electrode_names if i[-1] == '1']}
-    percept = model.predict_percept(nlink)
+    model.implant = nlink
+    stim = {e: 1 for e in [i for i in nlink.electrode_names if i[-1] == '1']}
+    percept = model.predict_percept(stim)
     percept.plot()
 
 """

@@ -61,27 +61,25 @@ earray = ElectrodeArray(DiskElectrode(0, 0, 0, 260))
 # :py:class:`~pulse2percept.implants.AlphaIMS`. Alternatively, we can wrap the
 # electrode array created above with a
 # :py:class:`~pulse2percept.implants.ProsthesisSystem` to create our own
-# retinal implant. We will also assign the above created stimulus to it:
+# retinal implant:
 
 from pulse2percept.implants import ProsthesisSystem
-implant = ProsthesisSystem(earray, stim=stim)
+implant = ProsthesisSystem(earray)
 
 ###############################################################################
 # Running the model
 # -----------------
 #
-# Interacting with a model always involves three steps:
+# Interacting with a model always involves two steps:
 #
-# 1.  **Initalize** the model by passing the desired parameters.
-# 2.  **Build** the model to perform (sometimes expensive) one-time setup
-#     computations.
-# 3.  **Predict** the percept for a given stimulus.
+# 1.  **Initalize** the model, bound to the implant it describes, by passing
+#     the desired parameters.
+# 2.  **Predict** the percept for a given stimulus.
 #
 # In the following, we will run the Nanduri model on a single pixel, (0, 0):
 
 from pulse2percept.models import Nanduri2012Model
-model = Nanduri2012Model(xrange=(0, 0), yrange=(0, 0))
-model.build()
+model = Nanduri2012Model(implant=implant, xrange=(0, 0), yrange=(0, 0))
 
 ###############################################################################
 # .. note::
@@ -92,13 +90,12 @@ model.build()
 #     :py:class:`~pulse2percept.models.Nanduri2012Model` will pass the stimulus
 #     through the spatial model first.
 #
-# After building the model, we are ready to predict the percept.
-#
-# The input to the model is an implant containing a stimulus (usually a pulse
-# train), which is processed in time by a number of linear filtering steps as
-# well as a stationary nonlinearity (a sigmoid).
+# The input to the model is the stimulus (usually a pulse train), which the
+# implant delivers and which is then processed in time by a number of linear
+# filtering steps as well as a stationary nonlinearity (a sigmoid). The model
+# performs its one-time setup computations on this first call:
 import numpy as np
-percept = model.predict_percept(implant, t_percept=np.arange(1000))
+percept = model.predict_percept(stim, t_percept=np.arange(1000))
 
 ###############################################################################
 # The output of the model is a :py:class:`~pulse2percept.percepts.Percept`
@@ -117,9 +114,12 @@ bright_th
 # then drop off slowly (over the time course of seconds).
 # This is consistent with behavioral reports from Argus II users.
 
+# What the device actually delivers, rather than the description above:
+delivered = implant.prepare_stim(stim)
+
 fig, ax = plt.subplots(figsize=(12, 5))
-ax.plot(implant.stim.time,
-        -0.02 + 0.01 * implant.stim.data[0, :] / implant.stim.data.max(),
+ax.plot(delivered.time,
+        -0.02 + 0.01 * delivered.data[0, :] / delivered.data.max(),
         linewidth=3, label='pulse')
 ax.plot(percept.time, percept.data[0, 0, :], linewidth=3, label='percept')
 ax.plot([0, stim_dur], [bright_th, bright_th], 'k--', label='max brightness')
@@ -159,10 +159,10 @@ for amp in amps:
     # following:
     # 1. Generate a pulse train with amplitude `amp`, 20 Hz frequency, 0.5 s
     #    duration, pulse duration `pdur`, and interphase gap `pdur`:
-    implant.stim = BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
-                                      stim_dur=stim_dur)
+    trial = BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
+                               stim_dur=stim_dur)
     # 2. Run the temporal model:
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept(trial)
     # 3. Find the largest value in percept, this will be the predicted
     # brightness:
     bright_pred = percept.data.max()
@@ -182,10 +182,10 @@ for freq in freqs:
     # following:
     # 1. Generate a pulse train with amplitude `amp`, 20 Hz frequency, 0.5 s
     #    duration, pulse duration `pdur`, and interphase gap `pdur`:
-    implant.stim = BiphasicPulseTrain(freq, 20, pdur, interphase_dur=pdur,
-                                      stim_dur=stim_dur)
+    trial = BiphasicPulseTrain(freq, 20, pdur, interphase_dur=pdur,
+                               stim_dur=stim_dur)
     # 2. Run the temporal model
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept(trial)
     # 3. Find the largest value in percept, this will be the predicted
     # brightness:
     bright_pred = percept.data.max()
@@ -220,8 +220,8 @@ fig.tight_layout()
 # specified in degrees of visual angle (dva). They are sampled at ``xydva``
 # dva:
 
-model = Nanduri2012Model(step=0.5, xrange=(-4, 4), yrange=(-4, 4))
-model.build()
+model = Nanduri2012Model(implant=implant, step=0.5, xrange=(-4, 4),
+                         yrange=(-4, 4))
 
 ###############################################################################
 # We will again apply the model to a whole range of amplitude and frequency
@@ -240,10 +240,10 @@ for amp_f in amp_factors:
     # For each value in the `amp_factors` vector, now stored as `amp_f`, do:
     # 1. Generate a pulse train with amplitude `amp_f` * `amp_th`, frequency
     #    20Hz, 0.5s duration, pulse duration `pdur`, and interphase gap `pdur`:
-    implant.stim = BiphasicPulseTrain(20, amp_f * amp_th, pdur,
-                                      interphase_dur=pdur, stim_dur=stim_dur)
+    trial = BiphasicPulseTrain(20, amp_f * amp_th, pdur,
+                               interphase_dur=pdur, stim_dur=stim_dur)
     # 2. Run the temporal model:
-    percept = model.predict_percept(implant, t_percept=t_percept)
+    percept = model.predict_percept(trial, t_percept=t_percept)
     # 3. Save the brightest frame:
     frames_amp.append(percept.max(axis='frames'))
 
@@ -258,10 +258,10 @@ for freq in freqs:
     # 1. Generate a pulse train with amplitude 1.25 * `amp_th`, frequency
     #    `freq`, 0.5s duration, pulse duration `pdur`, and interphase gap
     #    `pdur`:
-    implant.stim = BiphasicPulseTrain(freq, 1.25 * amp_th, pdur,
-                                      interphase_dur=pdur, stim_dur=stim_dur)
+    trial = BiphasicPulseTrain(freq, 1.25 * amp_th, pdur,
+                               interphase_dur=pdur, stim_dur=stim_dur)
     # 2. Run the temporal model:
-    percept = model.predict_percept(implant, t_percept=t_percept)
+    percept = model.predict_percept(trial, t_percept=t_percept)
     # 3. Save the brightest frame:
     frames_freq.append(percept.max(axis='frames'))
 

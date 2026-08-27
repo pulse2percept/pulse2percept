@@ -16,7 +16,7 @@ from ..topography import Watson2014Map
 from ..implants import ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
-from .base import _blend_meridian, _warn_rho_vs_pitch
+from .base import _blend_meridian, _warn_ignores_z, _warn_rho_vs_pitch
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)        
 
@@ -169,10 +169,7 @@ class ScoreboardSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        if not np.allclose([e.z for e in earray.electrode_objects], 0):
-            msg = ("Nonzero electrode-retina distances do not have any effect "
-                   "on the model output.")
-            warnings.warn(msg)
+        _warn_ignores_z(self, earray)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         x_el, y_el, _ = self._electrode_coords(earray, stim)
@@ -1005,10 +1002,7 @@ class AxonMapSpatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at specific times ``t``"""
-        if not np.allclose([e.z for e in earray.electrode_objects], 0):
-            msg = ("Nonzero electrode-retina distances do not have any effect "
-                   "on the model output.")
-            warnings.warn(msg)
+        _warn_ignores_z(self, earray)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         x_el, y_el, _ = self._electrode_coords(earray, stim)

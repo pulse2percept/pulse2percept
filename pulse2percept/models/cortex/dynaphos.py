@@ -246,8 +246,8 @@ class DynaphosModel(BaseModel):
         """Build the model
 
         Performs expensive one-time calculations, such as building the spatial
-        grid used to predict a percept. You must call ``build`` before
-        calling ``predict_percept``.
+        grid used to predict a percept. ``predict_percept`` calls it for you
+        when the model is not built.
 
         Parameters
         ----------

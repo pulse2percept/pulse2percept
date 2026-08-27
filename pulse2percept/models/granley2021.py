@@ -827,11 +827,8 @@ class BiphasicAxonMapModel(Model):
     def predict_percept(self, source, t_percept=None):
         """Predict a percept.
 
-        Overrides base predict percept to keep desired time axes
-
-        .. note::
-
-            You must call ``build`` before calling ``predict_percept``.
+        Overrides base predict percept to keep desired time axes.
+        Builds the model first if it is not built.
 
         .. important::
 
