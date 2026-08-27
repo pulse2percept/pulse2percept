@@ -13,29 +13,38 @@ from ..utils.base import has_own_attr
 from .base import BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
 
-# Safety limit for locating delayed temporal peaks.
+#: Maximum horizon expansions when locating delayed temporal peaks.
 _PEAK_SEARCH_DOUBLINGS = 4
 
 
 class DefaultBrightModel(BaseModel):
-    """
-    Default model to be used for brightness scaling in BiphasicAxonMapModel
-    Implements Eq 4 from [Granley2021]_
-    Fit using data from [Nanduri2012]_ and [Weitz2015]_
+    """Brightness scaling from [Granley2021]_.
 
-    Parameters:
-    ------------
-    do_thresholding : bool, optional
-        Set to true to enable probabilistic phosphene appearance at near-threshold
-        amplitudes
+    Implements the amplitude- and frequency-dependent factor in Eq. 4, using the
+    phase-duration threshold correction from Eq. 3. Coefficients were fit to
+    [Nanduri2012]_ and [Weitz2015]_.
+
+    The default brightness factor is
+
+    .. math::
+
+        F_{\mathrm{bright}} =
+        a_2 \tilde{a} + a_3 f + a_4,
+
+    where :math:`f` is pulse frequency and :math:`\tilde{a}` is
+    threshold-scaled amplitude.
+
+    Parameters
+    ----------
     a0, a1 : float, optional
-        Linear regression coefficients (slope and intercept) of pulse_duration
-        vs threshold curve (Eq 3). Amplitude factor will be scaled by
-        a0*pdur + a1.
-    a2, a3, a4: float, optional
-        Linear regression coefficients for brightness vs amplitude and frequency (Eq 4)
-        F_bright = a2*scaled_amp + a3*freq + a4
-    """
+        Slope and intercept of the phase-duration threshold correction,
+        ``a0 * pdur + a1``.
+    a2 : float, optional
+        Coefficient for threshold-scaled amplitude in Eq. 4.
+    a3 : float, optional
+        Coefficient for frequency in Eq. 4.
+    a4 : float, optional
+        Intercept in Eq. 4."""
 
     def __init__(self, **params):
         super(DefaultBrightModel, self).__init__(**params)
@@ -52,48 +61,73 @@ class DefaultBrightModel(BaseModel):
         return params
 
     def scale_threshold(self, pdur):
-        """
-        Based on eq 3 in paper, this function produces the factor that amplitude
-        will be scaled by to produce a_tilde. Computes A_0 * t + A_1 (1/threshold)
-        .. note::
-            This equation has been updated from the original paper, and has been refit
-            to data from Argus II users from Horsager et al. 2009.
-        """
+        """Return the phase-duration threshold scaling from Eq. 3.
+
+        Uses the Argus II refit to [Horsager2009]_ data rather than the
+        coefficients in the original publication."""
         return self.a1 + self.a0*pdur
 
     def predict_freq_amp(self, amp, freq):
-        """ Eq 4 in paper, A_2*A_tilde + A_3*f + A_4 """
+        """Return the Eq. 4 brightness factor."""
         return self.a2*amp + self.a3*freq + self.a4
 
     def __call__(self, freq, amp, pdur):
-        """
-        Main function to be called by BiphasicAxonMapModel
-        Outputs value by which brightness contribution for each electrode should
-        be scaled by (F_bright).
-        Must support batching (freq, amp, pdur may be arrays)
-        """
-        # Scale amp according to pdur (Eq 3 in paper) and then calculate F_{bright}
+        """Return the brightness scaling factor.
+
+        ``freq``, ``amp``, and ``pdur`` may be scalars or arrays."""
         F_bright = self.predict_freq_amp(amp * self.scale_threshold(pdur), freq)
         return F_bright
 
 
 class DefaultSizeModel(BaseModel):
-    """
-    Default model to be used for size (rho) scaling in BiphasicAxonMapModel
-    Implements Eq 5 from [Granley2021]_
-    Fit using data from [Nanduri2012]_ and [Weitz2015]_
+    """Phosphene-size scaling from [Granley2021]_.
 
-    Parameters:
-    ------------
-    rho :  float32
-        Rho parameter of BiphasicAxonMapModel (spatial decay rate)
+    Implements the size scaling of [Granley2021]_, using p2p's Argus II
+    phase-duration threshold refit (i.e., different from Eq. 5 in the published
+    paper).
+
+    With threshold-scaled amplitude :math:`\tilde{a}`, the default size
+    factor is
+
+    .. math::
+
+        F_{\mathrm{size}} =
+        \max\left(
+            a_5 \tilde{a} + a_6,\,
+            \frac{\mathrm{min\_rho}^2}{\rho^2}
+        \right),
+
+    so that
+
+    .. math::
+
+        \rho_{\mathrm{eff}} = \rho \sqrt{F_{\mathrm{size}}}
+        \geq \mathrm{min\_rho}.
+        
+    Parameters
+    ----------
+    rho : float or Quantity, optional
+        Baseline Gaussian spatial decay away from the axon, in microns.
+        Larger values produce broader phosphenes. The effective spatial
+        spread is additionally modulated by amplitude and pulse duration
+        according to [Granley2021]_.
+
+        .. important::
+
+            Electrode-retina distance (``z``) does not directly affect ``rho``.
+            Electrode-specific detection thresholds may capture its effect on
+            stimulation sensitivity, but not on baseline spatial spread.
+
+    min_rho : float or Quantity, optional
+        Minimum effective ``rho``, in microns. Prevents pulse-dependent
+        size scaling from shrinking the spatial decay below this value.
     a0, a1 : float, optional
-        Linear regression coefficients (slope and intercept) of pulse_duration
-        vs threshold curve (Eq 3). Amplitude factor will be scaled by
-        a0*pdur + a1.
-    a5, a6 : float, optional
-        Linear regression coefficients for size vs amplitude (Eq 5)
-        F_size = a5*scaled_amp + a6
+        Slope and intercept of the phase-duration threshold correction,
+        ``a0 * pdur + a1``.
+    a5 : float, optional
+        Coefficient for threshold-scaled amplitude in Eq. 5.
+    a6 : float, optional
+        Intercept in Eq. 5.
     """
 
     def __init__(self, rho, **params):
@@ -107,55 +141,68 @@ class DefaultSizeModel(BaseModel):
             'a1': 0.054326,
             'a5': 1.0812,
             'a6': -0.35338,
-            # dont let rho be scaled below this threshold
             'min_rho': 10,
         }
         return params
 
     def get_param_units(self):
-        """Return a dict of the units that parameters are stored in"""
-        # `rho` is a constructor argument rather than a default parameter, but
-        # it is still an attribute this object normalizes, and declaring it
-        # here is what makes `DefaultSizeModel(0.2 * mm)` work. a0-a6 are
-        # regression coefficients from the paper and take plain numbers:
+        """Return units used to store model parameters."""
+        # ``rho`` is a constructor argument but still needs normalization.
         return {**super().get_param_units(), 'rho': um, 'min_rho': um}
 
     def scale_threshold(self, pdur):
-        """
-        Based on eq 3 in paper, this function produces the factor that amplitude
-        will be scaled by to produce a_tilde. Computes A_0 * t + A_1 (1/threshold)
-        .. note::
-            This equation has been updated from the original paper, and has been refit
-            to data from Argus II users from Horsager et al. 2009.
-        """
+        """Return the phase-duration threshold scaling from Eq. 3.
+
+        Uses the Argus II refit to [Horsager2009]_ data rather than the
+        coefficients in the original publication."""
         return self.a1 + self.a0*pdur
 
     def __call__(self, freq, amp, pdur):
-        """
-        Main function to be called by BiphasicAxonMapModel
-        Outputs value for each electrode that rho should be scaled by (F_size)
-        Must support batching (freq, amp, pdur may be arrays)
-        """
+        """Return ``F_size`` for each stimulus condition.
+
+        ``F_size`` scales ``rho ** 2`` and is floored so the effective ``rho`` does
+        not fall below ``min_rho``. Inputs may be scalars or arrays."""
         min_f_size = self.min_rho**2 / self.rho**2
         F_size = self.a5 * amp * self.scale_threshold(pdur) + self.a6
         return np.maximum(F_size, min_f_size)
 
 
 class DefaultStreakModel(BaseModel):
-    """
-    Default model to be used for streak length (lambda) scaling in BiphasicAxonMapModel
-    Implements Eq 6 from [Granley2021]_
-    Fit using data from [Weitz2015]_
+    """Phosphene-streak scaling from [Granley2021]_.
 
-    Parameters:
-    ------------
-    lam :  float32
-        ``lam`` parameter of BiphasicAxonMapModel (axonal decay rate)
-    a7, a8, a9: float, optional
-        Regression coefficients for streak length vs pulse duration (Eq 6)
-        F_streak = -a7*pdur^a8 + a9
-    """
+    Implements the pulse-duration-dependent factor in Eq. 6. Coefficients were
+    fit to [Weitz2015]_.
 
+    The default streak-length factor is
+
+    .. math::
+
+        F_{\mathrm{streak}} =
+        \max\left(
+            a_9 - a_7 t^{a_8},\,
+            \frac{\mathrm{min\_lambda}^2}{\lambda^2}
+        \right),
+
+    where :math:`t` is phase duration. Therefore
+
+    .. math::
+
+        \lambda_{\mathrm{eff}} =
+        \lambda \sqrt{F_{\mathrm{streak}}}
+        \geq \mathrm{min\_lambda}.
+        
+    Parameters
+    ----------
+    lam : float or Quantity, optional
+        Baseline Gaussian decay along the axon, in microns. Larger values
+        produce longer phosphene streaks. The effective decay is additionally
+        modulated by pulse duration according to [Granley2021]_.
+    min_lambda : float or Quantity, optional
+        Minimum effective ``lam``, in microns. Prevents pulse-dependent
+        streak-length scaling from shrinking the axonal decay below this value.
+    a7, a8, a9 : float, optional
+        Regression coefficients in ``a9 - a7 * pdur ** a8``.
+    """
     def __init__(self, lam, **params):
         super(DefaultStreakModel, self).__init__(**params)
         self.lam = lam
@@ -166,31 +213,26 @@ class DefaultStreakModel(BaseModel):
             'a7': 0.54,
             'a8': 0.21,
             'a9': 1.56,
-            # dont let lambda be scaled below this threshold
             'min_lambda': 10,
         }
         return params
 
     def get_param_units(self):
-        """Return a dict of the units that parameters are stored in"""
-        # `lam` is a constructor argument rather than a default parameter; see
-        # `DefaultSizeModel.get_param_units`. `min_lambda` is a floor on it,
-        # so it is a length too:
+        """Return units used to store model parameters."""
+        # ``lam`` is a constructor argument but still needs normalization.
         return {**super().get_param_units(), 'lam': um, 'min_lambda': um}
 
     def __call__(self, freq, amp, pdur):
-        """
-        Main function to be called by BiphasicAxonMapModel
-        Outputs value for each electrode that lambda should be scaled by (F_streak)
-        Must support batching (freq, amp, pdur may be arrays)
-        """
+        """Return ``F_streak`` for each stimulus condition.
+
+        ``F_streak`` scales ``lam ** 2`` and is floored so the effective ``lam`` does
+        not fall below ``min_lambda``. Inputs may be scalars or arrays."""
         min_f_streak = self.min_lambda**2 / self.lam ** 2
         F_streak = self.a9 - self.a7 * pdur ** self.a8
         return np.maximum(F_streak, min_f_streak)
 
 
-#: What to do about a pulse whose amplitude is a current of unknown
-#: threshold. Formatted with the failing electrode.
+#: Error for a current-valued pulse without threshold calibration.
 _NO_THRESHOLD_MSG = (
     "This model takes amplitude as a multiple of perceptual threshold, and "
     "electrode {electrode} is driven at {amp:.1f} uA with no threshold to "
@@ -201,35 +243,30 @@ _NO_THRESHOLD_MSG = (
 
 
 def _pulse_train_params(stim):
-    """Return Granley pulse parameters for each driven electrode.
+    """Return Granley stimulus parameters for each active electrode.
 
-    Parameters are read from retained ``BiphasicPulseTrain`` objects
-    without rendering their waveforms. Amplitudes are returned in
-    multiples of threshold; zero-amplitude electrodes are omitted.
+    Parameters are read from retained
+    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects without
+    rendering their waveforms. Amplitude is returned in multiples of threshold;
+    zero-amplitude electrodes are omitted.
 
     Raises
     ------
     TypeError
-        If a driven electrode is not a zero-delay
-        :class:`~pulse2percept.stimuli.BiphasicPulseTrain`.
+        If an active electrode is not an undelayed ``BiphasicPulseTrain``.
     ValueError
-        If a current-valued amplitude has no threshold calibration.
-    """
+        If a current-valued amplitude has no threshold calibration."""
     sources = stim._structured_sources()
     if sources is None:
-        # No pulse train is retained anywhere. A stimulus of nothing but
-        # zeros is not one either, but it has always been answered with a
-        # zero percept rather than an error -- and it is the only case that
-        # costs a waveform this model otherwise never asks for:
+        # Preserve the historical zero-stimulus result; this is the only case
+        # that requires rendering a waveform.
         if not np.any(stim.data):
             return []
         raise TypeError("All stimuli must be BiphasicPulseTrains with no "
                         "delay dur")
     params = []
     for electrode, source in sources:
-        # The exact class, not a subclass: this model's parameters are the
-        # ones `BiphasicPulseTrain` is made of, and nothing else has been
-        # shown to mean the same thing to it.
+        # Require the exact pulse-train contract used to derive the model.
         if type(source) is not BiphasicPulseTrain or source.delay_dur != 0:
             raise TypeError(f"All stimuli must be BiphasicPulseTrains with "
                             f"no delay dur (Failing electrode: {electrode})")
@@ -243,144 +280,148 @@ def _pulse_train_params(stim):
     return params
 
 
-#: The three effect models are set up by ``BiphasicAxonMapSpatial.__init__``
-#: and are excluded from its attribute forwarding, in both directions.
+#: Effect models excluded from attribute forwarding.
 _EFFECT_MODELS = ('bright_model', 'size_model', 'streak_model')
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
-    """ BiphasicAxonMapModel of [Granley2021]_ (spatial model)
+    """Biphasic axon-map model of [Granley2021]_ (spatial module only).
 
-    An AxonMapModel where phosphene brightness, size, and streak length scale
-    according to amplitude, frequency, and pulse duration
+    Extends :py:class:`~pulse2percept.models.AxonMapSpatial` with the
+    stimulus-dependent brightness, size, and streak-length scaling of
+    [Granley2021]_. The model returns one representative spatial percept for the
+    full biphasic pulse train.
 
-    All stimuli must be BiphasicPulseTrains.
+    Stimuli must retain :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
+    structure. Amplitude may be given in multiples of perceptual threshold
+    (:py:data:`~pulse2percept.units.xTh`) or as current when a threshold calibration
+    is available.
 
-    This model is different than other spatial models in that it calculates
-    one representative percept from all time steps of the stimulus.
+    Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
+    Their arguments are frequency, amplitude in multiples of threshold, and phase
+    duration.
 
-    Brightness, size, and streak length scaling are controlled by the effects models
-    bright_model, size_model, and streak model respectively. By default, these are
-    set to classes that implement Eqs 3-6 from Granley 2021. These models can be
-    individually customized by setting the bright_model, size_model, or streak_model
-    to any python callable with signature f(freq, amp, pdur)
+    When paired with a temporal model, this spatial prediction is treated as the
+    peak percept and multiplied by a normalized temporal response.
 
-    .. note::
+    The spatial response is
 
-        When combined with a temporal model, the Granley prediction is treated
-        as the peak spatial percept. The temporal model supplies a normalized
-        brightness time course, yielding a space-time-separable percept
-        ``P(x, y, t) = G(x, y) k(t)``. ``thresh_percept`` of the temporal
-        model is ignored, because its response is normalized before being
-        applied to the Granley percept.
+    .. math::
 
-        :py:class:`~pulse2percept.models.FadingTemporal` and
-        :py:class:`~pulse2percept.models.AlphaTemporal` are the generic
-        envelopes to reach for: the first fades from stimulus onset, the
-        second rises to a peak first.
+        I(r, \theta) =
+        \max_{p \in R(\theta)}
+        \sum_{e \in E}
+        F_{\mathrm{bright}}
+        \exp\left(
+            -\frac{d_e^2}{2 \rho^2 F_{\mathrm{size}}}
+            -\frac{d_{\mathrm{soma}}^2}
+                {2 \lambda^2 F_{\mathrm{streak}}}
+        \right),
+
+    where :math:`d_e` is the distance from an axon segment to electrode
+    :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from that
+    segment to the ganglion cell body. Thus the effective spatial scales are
+
+    .. math::
+
+        \rho_{\mathrm{eff}} = \rho \sqrt{F_{\mathrm{size}}},
+        \qquad
+        \lambda_{\mathrm{eff}} = \lambda \sqrt{F_{\mathrm{streak}}}.
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The implant whose stimulation this model predicts. Required before
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        Implant whose electrode geometry and eye are modeled. Required before
         building or predicting.
 
         .. versionadded:: 0.11.0
 
-    bright_model: callable, optional
-        Model used to modulate percept brightness with amplitude, frequency,
-        and pulse duration
-    size_model: callable, optional
-        Model used to modulate percept size with amplitude, frequency, and
-        pulse duration
-    streak_model: callable, optional
-        Model used to modulate percept streak length with amplitude, frequency,
-        and pulse duration
-    **params: optional
-        Additional params for AxonMapModel.
+    bright_model : callable, optional
+        Maps ``(freq, amp, pdur)`` to a multiplicative brightness factor.
+        Defaults to :class:`DefaultBrightModel`.
+    size_model : callable, optional
+        Maps ``(freq, amp, pdur)`` to ``F_size``, which scales ``rho ** 2``.
+        Defaults to :class:`DefaultSizeModel`.
+    streak_model : callable, optional
+        Maps ``(freq, amp, pdur)`` to ``F_streak``, which scales
+        ``lam ** 2``. Defaults to :class:`DefaultStreakModel`.
+    rho : float or Quantity, optional
+        Gaussian decay constant for spread from an electrode to nearby axon
+        segments, in microns. Larger values broaden the percept.
+    lam : float or Quantity, optional
+        Gaussian decay constant along the axon between stimulation site and
+        soma, in microns. Larger values lengthen the percept.
 
-        Options:
-        --------
-        lam: double, optional
-            Exponential decay constant along the axon(microns).
-        rho: double, optional
-            Exponential decay constant away from the axon(microns).
-        min_current_spread: float, optional
-            An electrode is skipped at axon segments where its current spread
-            has decayed below this fraction of its peak. The decay is scaled
-            per electrode by that electrode's ``F_size``. The default (1e-8)
-            is a deliberate approximation: what gets dropped is the
-            exponential *times* that electrode's ``F_bright``, summed over
-            the skipped electrodes, so the error at a point is bounded by
-            ``min_current_spread`` times the summed ``F_bright`` across
-            electrodes.
-        eye: {'RE', LE'}, optional
-            Eye for which to generate the axon map.
-        xrange : (x_min, x_max), optional
-            A tuple indicating the range of x values to simulate (in degrees of
-            visual angle). In a right eye, negative x values correspond to the
-            temporal retina, and positive x values to the nasal retina. In a left
-            eye, the opposite is true.
-        yrange : tuple, (y_min, y_max)
-            A tuple indicating the range of y values to simulate (in degrees of
-            visual angle). Negative y values correspond to the superior retina,
-            and positive y values to the inferior retina.
-        step : int, double, tuple
-            Step size for the range of (x,y) values to simulate (in degrees of
-            visual angle). For example, to create a grid with x values [0, 0.5, 1]
-            use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
-            and y axes different step sizes.
-        grid_type : {'rectangular', 'hexagonal'}
-            Whether to simulate points on a rectangular or hexagonal grid
-        vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
-            An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
-            object that provides retinotopic mappings.
-            By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
-            used.
-        n_gray : int, optional
-            The number of gray levels to use. If an integer is given, k-means
-            clustering is used to compress the color space of the percept into
-            ``n_gray`` bins. If None, no compression is performed.
-        noise : float or int, optional
-            Adds salt-and-pepper noise to each percept frame. An integer will be
-            interpreted as the number of pixels to subject to noise in each
-            frame. A float between 0 and 1 will be interpreted as a ratio of
-            pixels to subject to noise in each frame.
-        loc_od, loc_od: (x,y), optional
-            Location of the optic disc in degrees of visual angle. Note that the
-            optic disc in a left eye will be corrected to have a negative x
-            coordinate.
-        n_axons: int, optional
-            Number of axons to generate.
-        axons_range: (min, max) of float or Quantity, optional
-            The range of angles(in degrees) at which axons exit the optic disc.
-            This corresponds to the range of $\\phi_0$ values used in
-            [Jansonius2009]_.
-        n_ax_segments: int, optional
-            Number of segments an axon is made of.
-        ax_segments_range: (min, max), optional
-            Lower and upper bounds for the radial position values(polar coords)
-            for each axon.
-        min_ax_sensitivity: float, optional
-            Axon segments whose contribution to brightness is smaller than this
-            value will be pruned to improve computational efficiency. Set to a
-            value between 0 and 1.
-        meridian_blend : float, optional
-            Gaussian standard deviation (dva) for smoothing across the
-            horizontal meridian. Default: 1. Set to 0 to disable.
+        .. versionchanged:: 0.10.0
+            Renamed from ``axlambda``; ``axlambda`` was removed in 0.11.0.
 
-            .. versionadded:: 0.10.0
-        axon_pickle: str, optional
-            File name in which to store precomputed axon maps.
-        ignore_pickle: bool, optional
-            A flag whether to ignore the pickle file in future calls to
-            ``model.build()``.
-        n_threads : int, optional
-            Number of CPU threads to use during parallelization using OpenMP.
-            Defaults to max number of user CPU cores.
-        n_jobs : int, optional
-            Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
-    """
+    xrange : (float, float) or Quantity, optional
+        Horizontal visual-field extent in degrees of visual angle. A physical
+        retinal extent may instead be resolved through ``vfmap``.
+    yrange : (float, float) or Quantity, optional
+        Vertical visual-field extent in degrees of visual angle. A physical
+        retinal extent may instead be resolved through ``vfmap``.
+    step : float, (float, float), or Quantity, optional
+        Grid spacing in degrees of visual angle. A pair specifies separate x
+        and y spacing.
+
+        .. versionchanged:: 0.10.0
+            Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
+
+    grid_type : {'rectangular', 'hexagonal'}, optional
+        Sampling lattice used for the visual-field grid.
+    thresh_percept : float, optional
+        Brightness values below this threshold are set to zero.
+    min_current_spread : float, optional
+        Fraction of peak current spread below which an electrode may be
+        skipped at an axon segment. The cutoff is scaled by ``F_size``.
+        Set to 0 to disable.
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+        Retinotopic map between visual-field and retinal coordinates. Defaults
+        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+    n_gray : int or None, optional
+        Number of gray levels in the returned percept. ``None`` disables
+        gray-level quantization.
+    noise : float, int, or None, optional
+        Salt-and-pepper noise applied to each percept frame. An integer gives
+        the number of affected pixels; a float in [0, 1] gives their fraction.
+    loc_od : (float, float) or Quantity, optional
+        Optic-disc location in degrees of visual angle. Its horizontal sign is
+        set from the bound implant's eye.
+    n_axons : int, optional
+        Number of nerve fiber bundles generated.
+    axons_range : (float, float) or Quantity, optional
+        Range of initial bundle angles ``phi0`` in the Jansonius model.
+    n_ax_segments : int, optional
+        Number of radial samples used to generate each bundle.
+    ax_segments_range : (float, float), optional
+        Radial-coordinate range used to generate each bundle in the Jansonius
+        model.
+    min_ax_sensitivity : float, optional
+        Minimum relative axon sensitivity retained during precomputation.
+    meridian_blend : float or Quantity, optional
+        Gaussian standard deviation for blending across the horizontal
+        meridian, in degrees of visual angle. Set to 0 to disable.
+
+        .. versionadded:: 0.10.0
+
+    axon_pickle : str, optional
+        File used to cache generated axon bundles.
+    ignore_pickle : bool, optional
+        If True, regenerate axon bundles instead of loading ``axon_pickle``.
+    verbose : bool, optional
+        Whether to print status messages.
+    ndim : list of int, optional
+        Dimensionalities of ``vfmap`` accepted by the model.
+    n_threads : int, optional
+        Number of OpenMP threads.
+    n_jobs : int or None, optional
+        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+    Notes
+    -----
+    ``ax_segments_range`` values above 90 are outside the range for which this
+    axon-map construction is considered reliable."""
     extra_stimulus_units = (xTh,)
 
     def __init__(self, **params):
@@ -394,52 +435,36 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         for key, val in params.items():
             if key in ['bright_model', 'size_model', 'streak_model']:
                 continue
-            # `super().__init__` has already warned about any deprecated name
-            # among these, so set the current one rather than warn twice:
+            # Deprecated names were already handled by ``super().__init__``.
             spec = self._renamed_params.get(key)
             setattr(self, spec.new_name if spec else key, val)
 
     def __getattr__(self, attr):
-        # Called when normal attribute access fails. The effect models
-        # themselves are never forwarded through: asking one of them for
-        # itself would recurse.
+        # Do not forward the effect-model attributes themselves.
         if attr in _EFFECT_MODELS:
             raise AttributeError(f"{attr} not found")
-        # `has_own_attr` rather than `getattr`, which would re-enter this
-        # method: until the constructor has set all three, there is nothing to
-        # forward through, and the caller (`Parametrized.__init__` setting a
-        # default, say) wants the AttributeError anyway.
+        # Avoid recursion, and do not forward until all effect models exist.
         if not all(has_own_attr(self, name) for name in _EFFECT_MODELS):
             raise AttributeError(f"{attr} not found")
-        # Check if bright/size/streak model has param
         for m in [self.bright_model, self.size_model, self.streak_model]:
             if hasattr(m, attr):
                 return getattr(m, attr)
         raise AttributeError(f"{attr} not found")
 
     def __setattr__(self, name, value):
-        """Called when an attribute is set
-        This method is called when a new attribute is set(e.g.,
-        ``model.a=2``). This is allowed in the constructor, but will raise a
-        ``FreezeError`` elsewhere.
-        ``model.a = X`` can be used as a shorthand to set ``model.bright_model.a``,
-        etc
-        """
+        """Set a spatial or effect-model parameter.
+
+        Parameters shared with an effect model, including ``rho`` and ``lam``, are
+        forwarded to both."""
         found = False
-        # Try to set it ourselves, but can't use get_attr. Probe the type
-        # rather than read the attribute, so that a `deprecated_alias` does
-        # not warn just for being asked whether it exists:
+        # Probe without triggering deprecated aliases.
         if has_own_attr(self, name):
-            # if we get here, we have the attribute, not (neccesarily) an effects model
             try:
                 super().__setattr__(name, value)
                 found = True
             except AttributeError:
                 pass
-        # Check whether the attribute is a part of any
-        # bright/size/streak model. Note that this runs even when the spatial
-        # model already took the assignment above: `rho` and `lam` live in
-        # both places and have to stay in step.
+        # Shared parameters such as ``rho`` and ``lam`` must stay synchronized.
         if name not in _EFFECT_MODELS + ('is_built', '_is_built'):
             try:
                 for m in [self.bright_model, self.size_model, self.streak_model]:
@@ -449,22 +474,14 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             except (AttributeError, FreezeError):
                 pass
         if not found:
-            # No legitimate destination, so let `Frozen` decide: a new
-            # attribute is fine during construction and a `FreezeError`
-            # afterwards.
+            # Let ``Frozen`` handle genuinely new attributes.
             super().__setattr__(name, value)
 
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
         params = {
-            # Callable model used to modulate percept brightness with amplitude,
-            # frequency, and pulse duration
             'bright_model': None,
-            # Callable model used to modulate percept size with amplitude,
-            # frequency, and pulse duration
             'size_model': None,
-            # Callable model used to modulate percept streak length with amplitude,
-            # frequency, and pulse duration
             'streak_model': None,
         }
         return {**base_params, **params}
@@ -480,7 +497,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         super(BiphasicAxonMapSpatial, self)._build()
 
     def _predict_spatial(self, earray, stim):
-        """Predicts the percept"""
+        """Predict the representative spatial percept."""
         if not isinstance(earray, ElectrodeArray):
             raise TypeError("Implant must be of type ElectrodeArray but it is " +
                             str(type(earray)))
@@ -491,8 +508,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         active = [p[0] for p in params]
         elec_params = np.array([p[1:4] for p in params],
                                dtype=np.float32).reshape((-1, 3))
-        # Only the electrodes that are actually driven, in the order they were
-        # collected above:
+        # Match coordinates to the active-electrode order above.
         xyz = earray.coordinates(self.space_unit, electrodes=active)
         x = np.ascontiguousarray(xyz[:, 0], dtype=np.float32)
         y = np.ascontiguousarray(xyz[:, 1], dtype=np.float32)
@@ -504,9 +520,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         streak_effects = np.array(self.streak_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
                                   dtype=np.float32).reshape((-1))
         amps = np.array(elec_params[:, 1], dtype=np.float32).reshape((-1))
-        # A non-finite factor propagates through the kernel's exponent into
-        # the segment brightness, where abs(nan) > abs(px_bright). So we need
-        # to catch it here:
+        # Reject values that would make the kernel's exponent non-finite.
         for name, effects in (('bright_model', bright_effects),
                               ('size_model', size_effects),
                               ('streak_model', streak_effects)):
@@ -514,9 +528,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                 raise ValueError(f"{type(self).__name__}.{name} returned a "
                                  f"non-finite scaling factor. Scaling factors "
                                  f"must be finite.")
-        # The kernel rescales each segment's sensitivity by 1 / F_streak and
-        # each phosphene's size by F_size, both in an exponent, so neither of
-        # them may be negative:
+        # ``F_size`` and ``F_streak`` appear in exponent denominators.
         for name, effects in (('size_model', size_effects),
                               ('streak_model', streak_effects)):
             if np.any(effects <= 0):
@@ -538,47 +550,28 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.n_threads)
 
     def _predict_prepared(self, stim, t_percept=None):
-        """Predict the spatial response with model-specific time handling.
+        """Predict from an already prepared stimulus.
 
-        Avoids intermediate computation used by the generic spatial path.
-
-        Parameters
-        ----------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The stimulus the bound implant delivers.
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms). This
-            model's numerical contract is fixed to milliseconds.
-            If None, the stimulus' own time points are used.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
-            see :py:mod:`pulse2percept.units`.
-
-        Returns
-        -------
-        percept: :py:class:`~pulse2percept.models.Percept`
-            A Percept object whose ``data`` container has dimensions Y x X x 1.
-            Will return None if ``stim`` is None.
-        """
+        This model summarizes the full pulse train as one spatial percept. If
+        ``t_percept`` contains multiple times, the representative percept occupies
+        the first output frame and later frames are zero."""
         if not self.is_built:
             self.build()
         if stim is None:
             return None
-        # Determine what physical quantity the stimulus is:
         _require_stim_dimension(self, stim)
-        # Determine which pulse trains the stimulus is made of:
         params = _pulse_train_params(stim)
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         n_time = 1 if t_percept is None else np.array([t_percept]).size
         if not params:
-            # Nothing is driven above zero amplitude:
             resp = np.zeros(list(self.grid.x.shape) + [n_time],
                             dtype=np.float32)
         else:
             resp = np.zeros(list(self.grid.x.shape) + [n_time])
-            # Response goes in first frame
+            # The representative Granley percept occupies the first frame.
             resp[:, :, 0] = self._predict_spatial(
                 self.implant.earray, stim).reshape(self.grid.x.shape)
-        # This override bypasses SpatialModel._predict_prepared:
+        # Apply the same spatial postprocessing as the generic path.
         resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
@@ -587,13 +580,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     def _combine_temporal(self, percept, temporal, stim, t_percept):
         """Apply a normalized temporal response to the spatial percept."""
         dur = self._envelope_dur(stim)
-        # A unit drive of the polarity this temporal model responds to (see
-        # `TemporalModel._drive_sign`), held for exactly the stimulation
-        # duration:
+        # Canonical unit drive, held for the stimulation duration.
         envelope = Stimulus(np.array([[float(temporal._drive_sign), 0.0]]),
                             electrodes=['envelope'], time=[0, dur],
                             metadata=stim.metadata.get('user'))
-        # Leave the caller's own model untouched:
+        # Do not modify the caller's temporal model.
         probe = deepcopy(temporal)
         probe.thresh_percept = 0
         peak = self._envelope_peak(probe, envelope)
@@ -650,156 +641,142 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
 
 class BiphasicAxonMapModel(Model):
-    """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
+    """Biphasic axon-map model of [Granley2021]_.
 
-    An AxonMapModel where phosphene brightness, size, and streak length scale
-    according to amplitude, frequency, and pulse duration.
+    Extends :py:class:`~pulse2percept.models.AxonMapModel` with the
+    stimulus-dependent brightness, size, and streak-length scaling of
+    [Granley2021]_. The model returns one representative percept for the full
+    biphasic pulse train.
 
-    All stimuli must be BiphasicPulseTrains.
+    Stimuli must retain :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
+    structure. Give amplitude in multiples of perceptual threshold
+    (:py:data:`~pulse2percept.units.xTh`) or provide a threshold calibration for
+    current-valued amplitudes. Threshold is the 50%-detection current for a train
+    at the same frequency and 0.45 ms phase duration [Granley2021]_; the model
+    applies its own phase-duration correction.
 
-    This model is different than other spatial models in that it calculates
-    one representative percept from all time steps of the stimulus.
+    Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
+    Their arguments are frequency, amplitude in multiples of threshold, and phase
+    duration.
 
-    Brightness, size, and streak length scaling are controlled by the
-    parameters bright_model, size_model, and streak model respectively.
-    By default, these are set to classes that implement Eqs 3-6 from
-    [Granley2021]_. These models can be individually customized by setting
-    the bright_model, size_model, or streak_model to any python callable
-    with signature ``f(freq, amp, pdur)``.
+    The spatial response is
 
-    .. important::
+    .. math::
 
-        This model works in multiples of perceptual threshold, so give
-        amplitude in :py:data:`~pulse2percept.units.xTh` (``2 * xTh``), or
-        calibrate the electrode with ``threshold_amp`` or
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` and
-        give it in microamps.
+        I(r, \theta) =
+        \max_{p \in R(\theta)}
+        \sum_{e \in E}
+        F_{\mathrm{bright}}
+        \exp\left(
+            -\frac{d_e^2}{2 \rho^2 F_{\mathrm{size}}}
+            -\frac{d_{\mathrm{soma}}^2}
+                {2 \lambda^2 F_{\mathrm{streak}}}
+        \right),
 
-        Threshold is the 50%-detection current for a train at the same
-        frequency and 0.45 ms phase duration [Granley2021]_. If frequency
-        changes, the threshold may change too. The model applies the
-        phase-duration correction itself; do not pre-correct the supplied
-        threshold.
+    where :math:`d_e` is the distance from an axon segment to electrode
+    :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from that
+    segment to the ganglion cell body. Thus the effective spatial scales are
 
-        This model reads amplitude, frequency and pulse duration off the
-        :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
-        stimulus is made of, not off its samples. Scaling a pulse train
-        (``pt * 2``) or the stimulus assembled from one
-        (``stim * 2``) gives a train at the new amplitude and does
-        change the percept, while editing the data array in place does not.
-        A stimulus that is only samples -- a raw waveform, an appended
-        sequence of two trains, anything whose amplitudes were rewritten --
-        is refused rather than predicted from numbers that no longer
-        describe it.
+    .. math::
+
+        \rho_{\mathrm{eff}} = \rho \sqrt{F_{\mathrm{size}}},
+        \qquad
+        \lambda_{\mathrm{eff}} = \lambda \sqrt{F_{\mathrm{streak}}}.
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The implant whose stimulation this model predicts. Required before
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        Implant whose electrode geometry and eye are modeled. Required before
         building or predicting.
 
         .. versionadded:: 0.11.0
 
-    bright_model: callable, optional
-        Model used to modulate percept brightness with amplitude, frequency,
-        and pulse duration
-    size_model: callable, optional
-        Model used to modulate percept size with amplitude, frequency, and
-        pulse duration
-    streak_model: callable, optional
-        Model used to modulate percept streak length with amplitude, frequency,
-        and pulse duration
-    do_thresholding: boolean
-        Use probabilistic sigmoid thresholding, default: False
-    **params: dict, optional
-        Arguments to be passed to AxonMapSpatial
+    bright_model : callable, optional
+        Maps ``(freq, amp, pdur)`` to a multiplicative brightness factor.
+        Defaults to :class:`DefaultBrightModel`.
+    size_model : callable, optional
+        Maps ``(freq, amp, pdur)`` to ``F_size``, which scales ``rho ** 2``.
+        Defaults to :class:`DefaultSizeModel`.
+    streak_model : callable, optional
+        Maps ``(freq, amp, pdur)`` to ``F_streak``, which scales
+        ``lam ** 2``. Defaults to :class:`DefaultStreakModel`.
+    rho : float or Quantity, optional
+        Gaussian decay constant for spread from an electrode to nearby axon
+        segments, in microns. Larger values broaden the percept.
+    lam : float or Quantity, optional
+        Gaussian decay constant along the axon between stimulation site and
+        soma, in microns. Larger values lengthen the percept.
 
-        Options:
-        ^^^^^^^^
-        lam: double, optional
-            Exponential decay constant along the axon(microns).
-        rho: double, optional
-            Exponential decay constant away from the axon(microns).
-        min_current_spread: float, optional
-            An electrode is skipped at axon segments where its current spread
-            has decayed below this fraction of its peak. The decay is scaled
-            per electrode by that electrode's ``F_size``. The default (1e-8)
-            is a deliberate approximation: what gets dropped is the
-            exponential *times* that electrode's ``F_bright``, summed over
-            the skipped electrodes, so the error at a point is bounded by
-            ``min_current_spread`` times the summed ``F_bright`` across
-            electrodes. That is negligible for a typical array, but it grows
-            with both array size and brightness scaling, and it can zero out
-            points that are merely dim. Set to 0 to sum over every electrode
-            and get the exact result.
-        eye: {'RE', LE'}, optional
-            Eye for which to generate the axon map.
-        xrange : (x_min, x_max), optional
-            A tuple indicating the range of x values to simulate (in degrees of
-            visual angle). In a right eye, negative x values correspond to the
-            temporal retina, and positive x values to the nasal retina. In a left
-            eye, the opposite is true.
-        yrange : tuple, (y_min, y_max)
-            A tuple indicating the range of y values to simulate (in degrees of
-            visual angle). Negative y values correspond to the superior retina,
-            and positive y values to the inferior retina.
-        step : int, double, tuple
-            Step size for the range of (x,y) values to simulate (in degrees of
-            visual angle). For example, to create a grid with x values [0, 0.5, 1]
-            use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
-            and y axes different step sizes.
-        grid_type : {'rectangular', 'hexagonal'}
-            Whether to simulate points on a rectangular or hexagonal grid
-        vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
-            An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
-            object that provides retinotopic mappings.
-            By default, :py:class:`~pulse2percept.topography.Watson2014Map` is
-            used.
-        n_gray : int, optional
-            The number of gray levels to use. If an integer is given, k-means
-            clustering is used to compress the color space of the percept into
-            ``n_gray`` bins. If None, no compression is performed.
-        noise : float or int, optional
-            Adds salt-and-pepper noise to each percept frame. An integer will be
-            interpreted as the number of pixels to subject to noise in each
-            frame. A float between 0 and 1 will be interpreted as a ratio of
-            pixels to subject to noise in each frame.
-        loc_od, loc_od: (x,y), optional
-            Location of the optic disc in degrees of visual angle. Note that the
-            optic disc in a left eye will be corrected to have a negative x
-            coordinate.
-        n_axons: int, optional
-            Number of axons to generate.
-        axons_range: (min, max) of float or Quantity, optional
-            The range of angles(in degrees) at which axons exit the optic disc.
-            This corresponds to the range of $\\phi_0$ values used in
-            [Jansonius2009]_.
-        n_ax_segments: int, optional
-            Number of segments an axon is made of.
-        ax_segments_range: (min, max), optional
-            Lower and upper bounds for the radial position values(polar coords)
-            for each axon.
-        min_ax_sensitivity: float, optional
-            Axon segments whose contribution to brightness is smaller than this
-            value will be pruned to improve computational efficiency. Set to a
-            value between 0 and 1.
-        meridian_blend : float, optional
-            Gaussian standard deviation (dva) for smoothing across the
-            horizontal meridian. Default: 1. Set to 0 to disable.
+        .. versionchanged:: 0.10.0
+            Renamed from ``axlambda``; ``axlambda`` was removed in 0.11.0.
 
-            .. versionadded:: 0.10.0
-        axon_pickle: str, optional
-            File name in which to store precomputed axon maps.
-        ignore_pickle: bool, optional
-            A flag whether to ignore the pickle file in future calls to
-            ``model.build()``.
-        n_threads : int, optional
-            Number of CPU threads to use during parallelization using OpenMP.
-            Defaults to max number of user CPU cores.
-        n_jobs : int, optional
-            Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
+    xrange : (float, float) or Quantity, optional
+        Horizontal visual-field extent in degrees of visual angle. A physical
+        retinal extent may instead be resolved through ``vfmap``.
+    yrange : (float, float) or Quantity, optional
+        Vertical visual-field extent in degrees of visual angle. A physical
+        retinal extent may instead be resolved through ``vfmap``.
+    step : float, (float, float), or Quantity, optional
+        Grid spacing in degrees of visual angle. A pair specifies separate x
+        and y spacing.
 
-    """
+        .. versionchanged:: 0.10.0
+            Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
+
+    grid_type : {'rectangular', 'hexagonal'}, optional
+        Sampling lattice used for the visual-field grid.
+    thresh_percept : float, optional
+        Brightness values below this threshold are set to zero.
+    min_current_spread : float, optional
+        Fraction of peak current spread below which an electrode may be
+        skipped at an axon segment. The cutoff is scaled by ``F_size``.
+        Set to 0 to disable.
+    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+        Retinotopic map between visual-field and retinal coordinates. Defaults
+        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+    n_gray : int or None, optional
+        Number of gray levels in the returned percept. ``None`` disables
+        gray-level quantization.
+    noise : float, int, or None, optional
+        Salt-and-pepper noise applied to each percept frame. An integer gives
+        the number of affected pixels; a float in [0, 1] gives their fraction.
+    loc_od : (float, float) or Quantity, optional
+        Optic-disc location in degrees of visual angle. Its horizontal sign is
+        set from the bound implant's eye.
+    n_axons : int, optional
+        Number of nerve fiber bundles generated.
+    axons_range : (float, float) or Quantity, optional
+        Range of initial bundle angles ``phi0`` in the Jansonius model.
+    n_ax_segments : int, optional
+        Number of radial samples used to generate each bundle.
+    ax_segments_range : (float, float), optional
+        Radial-coordinate range used to generate each bundle in the Jansonius
+        model.
+    min_ax_sensitivity : float, optional
+        Minimum relative axon sensitivity retained during precomputation.
+    meridian_blend : float or Quantity, optional
+        Gaussian standard deviation for blending across the horizontal
+        meridian, in degrees of visual angle. Set to 0 to disable.
+
+        .. versionadded:: 0.10.0
+
+    axon_pickle : str, optional
+        File used to cache generated axon bundles.
+    ignore_pickle : bool, optional
+        If True, regenerate axon bundles instead of loading ``axon_pickle``.
+    verbose : bool, optional
+        Whether to print status messages.
+    ndim : list of int, optional
+        Dimensionalities of ``vfmap`` accepted by the model.
+    n_threads : int, optional
+        Number of OpenMP threads.
+    n_jobs : int or None, optional
+        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+    Notes
+    -----
+    ``ax_segments_range`` values above 90 are outside the range for which this
+    axon-map construction is considered reliable."""
 
     def __init__(self, **params):
         super(BiphasicAxonMapModel, self).__init__(

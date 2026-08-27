@@ -131,10 +131,8 @@ def _frame_clock(stim, dt, unit=ms):
         return None
     if frame_time.size == 0 or not np.isfinite(frame_dur) or frame_dur <= 0:
         return None
-    # An encoder records its frame clock in milliseconds (see
-    # `pulse2percept.stimuli.StimulusEncoder`), and what comes back has to be
-    # in the calling model's own time unit, since that is what it compares
-    # `dt` and `t_percept` in. A no-op for every model p2p ships:
+    # Encoder frame metadata is stored in milliseconds; convert it to the
+    # model's time unit before comparing it with `dt` or `t_percept`.
     if unit != ms:
         frame_time = Quantity(frame_time, ms).to_value(unit)
         frame_dur = Quantity(frame_dur, ms).to_value(unit)
@@ -389,24 +387,15 @@ def _warn_ignores_z(model, earray):
 
 
 class BaseModel(Parametrized, metaclass=ABCMeta):
-    """Abstract base class for all models
+    """Abstract base class for computational models.
 
-    Adds the build workflow on top of
-    :py:class:`~pulse2percept.utils.Parametrized`, which supplies the
-    parameter, pretty-printing, equality and deep-copy machinery:
-
-    *  Build a model (via ``build``) and flip the ``is_built`` switch
+    Adds build state to :py:class:`~pulse2percept.utils.Parametrized`.
+    Changing a declared model parameter invalidates the build; prediction
+    rebuilds automatically when needed.
 
     .. versionchanged:: 0.11.0
-
-        ``predict_percept`` builds automatically. Changing a model parameter
-        invalidates the build, so the new value is used on the next prediction.
-
-    .. versionchanged:: 0.10.0
-
-        Everything other than the build workflow moved to
-        :py:class:`~pulse2percept.utils.Parametrized`.
-
+        ``predict_percept`` builds automatically after construction or a
+        parameter change.
     """
 
     def __setattr__(self, name, value):
@@ -422,16 +411,8 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         if not _unchanged(before, getattr(self, name, None)):
             object.__setattr__(self, '_is_built', False)
 
-    # The units a model's numerical implementation works in. p2p converts a
-    # unitful argument to these at the API boundary and hands the kernels
-    # ordinary numbers, so these are a statement about what the numbers *are*,
-    # not a setting to change: a model that wanted different ones would have to
-    # be written against them throughout. A model uses whichever apply to it --
-    # a purely temporal model has no use for `space_unit`.
-    #
-    # Their purpose is to spare a model's internals from knowing where the
-    # canonical units are fixed. `earray.coordinates(self.space_unit)` says
-    # what it needs; `[e.x for e in ...]` merely happens to be right.
+    # Numerical kernels receive plain values in these canonical units.
+    # They define the model's numerical contract, not user-configurable units.
 
     #: The unit stimulus values are expressed in
     stimulus_unit = uA
@@ -443,12 +424,12 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     time_unit = ms
 
     def __init__(self, **params):
-        """BaseModel constructor
+        """Initialize a model from declared parameters.
 
         Parameters
         ----------
-        **params : optional keyword arguments
-            All keyword arguments must be listed in ``get_default_params``
+        **params : keyword arguments
+            Values for parameters declared by ``get_default_params``.
         """
         super().__init__(**params)
         # This flag will be flipped once the ``build`` method was called
@@ -459,22 +440,10 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         pass
 
     def _stim_values(self, stim):
-        """The stimulus values a kernel consumes, in ``stimulus_unit``
+        """Return stimulus values in ``stimulus_unit``.
 
-        One half of the numerical boundary (``_electrode_coords`` and
-        ``_stim_times`` are the others). A model's implementation asks for
-        what it consumes, so that declaring a different ``stimulus_unit``
-        actually delivers different numbers rather than silently leaving the
-        kernel to remember a factor of a thousand.
-
-        For every model p2p ships this is the identity: ``stimulus_unit`` is
-        microamps and :py:class:`~pulse2percept.stimuli.Stimulus`
-        canonicalizes to microamps, so ``values`` hands back the stored array
-        without touching it.
-
-        A :py:class:`~pulse2percept.percepts.Percept` is passed through: a
-        temporal model is applied to one as readily as to a stimulus, and
-        brightness is model output rather than a physical quantity.
+        Stimuli are converted at the model boundary; percept values are passed
+        through because brightness is not a physical stimulus quantity.
         """
         if not isinstance(stim, Stimulus):
             return stim.data
@@ -482,81 +451,61 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         return stim.values(self.stimulus_unit)
 
     def _stim_times(self, stim):
-        """The stimulus time axis a kernel consumes, in ``time_unit``
+        """Return the time axis in ``time_unit``.
 
-        The time counterpart of :py:meth:`_stim_values`. A stimulus stores
-        milliseconds; a model that declared some other ``time_unit`` gets its
-        own.
-
-        A :py:class:`~pulse2percept.percepts.Percept` is converted the same
-        way. Its *values* are brightness and stay exactly as they are, but its
-        time axis is a physical quantity like any other, and this is the
-        boundary a spatial model's output crosses on its way into a temporal
-        model: the two need not count in the same unit.
+        Applies to both stimuli and percepts.
         """
         if not isinstance(stim, (Stimulus, Percept)):
             return stim.time
         return stim.times(self.time_unit)
 
     def _to_stim_time(self, t, stim):
-        """Express a model-side time in the stimulus' own unit
-
-        ``t_percept`` arrives in ``time_unit`` and is used both to index the
-        stimulus (which counts in *its* unit) and to label the percept. This
-        is the one conversion that goes the other way.
-        """
+        """Convert model-side times to the stimulus time unit."""
         if t is None or not isinstance(stim, (Stimulus, Percept)) \
                 or stim.time_unit == self.time_unit:
             return t
         return Quantity(t, self.time_unit).to_value(stim.time_unit)
 
     def _electrode_coords(self, earray, stim):
-        """Where the electrodes a stimulus names are, ready for a kernel
+        """Return stimulus electrode coordinates in ``space_unit``.
 
-        Returns one contiguous float32 array per axis, expressed in
-        ``space_unit``, which is what the Cython kernels take.
-
-        Asks for ``stim.electrodes`` rather than for the array as it stands,
-        because a stimulus need not name every electrode of the implant and
-        need not name them in array order: what the kernel needs is one
-        coordinate per *row of the stimulus*.
+        Coordinates follow ``stim.electrodes`` order and are returned as
+        contiguous float32 arrays for the numerical kernels.
 
         Parameters
         ----------
         earray : :py:class:`~pulse2percept.implants.ElectrodeArray`
-            The electrode array to look the coordinates up in.
+            Electrode array containing the named electrodes.
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The stimulus whose electrodes to look up.
+            Stimulus whose electrode ordering is required.
 
         Returns
         -------
-        x, y, z : (n_electrodes,) np.ndarray of np.float32
-
+        x, y, z : tuple of ndarray
+            Coordinate arrays with shape ``(n_electrodes,)``.
         """
         xyz = earray.coordinates(self.space_unit, electrodes=stim.electrodes)
         return tuple(np.ascontiguousarray(xyz[:, i], dtype=np.float32)
                      for i in range(3))
 
     def build(self, **build_params):
-        """Build the model
+        """Build the model.
 
-        Every model must have a ```build`` method for expensive one-time
-        calculations. ``predict_percept`` calls it automatically when needed;
-        call it explicitly to build eagerly or pass build-time parameters.
-
-        .. important::
-
-            Don't override this method if you are building your own model.
-            Customize ``_build`` instead.
+        Runs expensive one-time setup after applying any supplied model
+        parameters. ``predict_percept`` builds automatically when needed.
 
         Parameters
         ----------
-        build_params : additional parameters to set
-            You can overwrite parameters that are listed in
-            ``get_default_params``. Trying to add new class attributes outside
-            of that will cause a ``FreezeError``.
-            Example: ``model.build(param1=val)``
+        **build_params : keyword arguments
+            Declared model parameters to set before building.
 
+        Returns
+        -------
+        self
+
+        Notes
+        -----
+        Subclasses should override ``_build``, not this method.
         """
         # Via `set_params`, not a bare `setattr` loop, so that a deprecated or
         # renamed parameter is handled here exactly as it is in the
@@ -580,11 +529,8 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
             return memodict[id(self)]
         implant = getattr(self, '_implant', None)
         if implant is not None:
-            # The implant is the device a model is pointed at, not part of the
-            # model's own state, so a copy describes the same physical
-            # implant. Seeding the memo is what shares it: it also keeps
-            # `copy.implant is model.implant`, and stops the rebuild below
-            # from being invalidated by a freshly copied device.
+            # The implant is model context, not model state. Share it across
+            # copies so geometry-dependent build state remains valid.
             memodict.setdefault(id(implant), implant)
         copied = super().__deepcopy__(memodict)
         if self.is_built:
@@ -593,74 +539,68 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
 
 class SpatialModel(BaseModel, metaclass=ABCMeta):
-    """Abstract base class for all spatial models
+    """Abstract base class for spatial models.
 
-    Provides basic functionality for all spatial models:
+    Spatial models map electrode stimulation to brightness on a sampled
+    visual-field grid. Subclasses implement ``_predict_spatial`` and may
+    override ``_build`` for precomputation.
 
-    *  ``build``: builds the spatial grid used to calculate the percept.
-       You can add your own ``_build`` method (note the underscore) that
-       performs additional expensive one-time calculations.
-    *  ``predict_percept``: predicts the percept a stimulus produces on the
-       bound implant. Don't customize this method - implement your own
-       ``_predict_spatial`` instead (see below). It builds the model first if
-       it is not built.
+    Parameters
+    ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        Implant whose electrode geometry is modeled. Required before building
+        or predicting.
 
-    To create your own spatial model, you must subclass ``SpatialModel`` and
-    provide an implementation for:
+        .. versionadded:: 0.11.0
 
-    *  ``_predict_spatial``: This method should accept an ElectrodeArray as well
-       as a Stimulus, and compute the brightness at all spatial coordinates of
-       ``self.grid``, returned as a 2D NumPy array (space x time).
+    xrange : (float, float) or Quantity, optional
+        Horizontal visual-field extent in degrees of visual angle. On retinal
+        maps, a physical retinal extent may be given instead and is resolved
+        through ``vfmap``.
+    yrange : (float, float) or Quantity, optional
+        Vertical visual-field extent in degrees of visual angle. On retinal
+        maps, a physical retinal extent may be given instead and is resolved
+        through ``vfmap``.
+    step : float, (float, float), or Quantity, optional
+        Grid spacing in degrees of visual angle. A pair specifies separate x
+        and y spacing.
 
-       .. note ::
+        .. versionchanged:: 0.10.0
+            Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-           The ``_`` in the method name indicates that this is a private method,
-           meaning that it should not be called by the user. Instead, the user
-           should call ``predict_percept``, which in turn will call
-           ``_predict_spatial``.
-           The same logic applies to ``build`` (called by the user; don't touch)
-           and ``_build`` (called by ``build``; customize this instead).
-
-    In addition, you can customize the following:
-
-    *  ``__init__``: the constructor can be used to define additional
-       parameters (note that you cannot add parameters on-the-fly)
-    *  ``get_default_params``: all settable model parameters must be listed by
-       this method
-    *  ``_build`` (optional): a way to add one-time computations to the build
-       process
-
-    .. versionadded:: 0.6
-
-    .. note ::
-
-        You will not be able to add more parameters outside the constructor;
-        e.g., ``model.newparam = 1`` will lead to a ``FreezeError``.
+    grid_type : {'rectangular', 'hexagonal'}, optional
+        Sampling lattice used for the visual-field grid.
+    thresh_percept : float, optional
+        Brightness values below this threshold are set to zero.
+    min_current_spread : float, optional
+        Fraction of peak Gaussian current spread below which an electrode may
+        be skipped at a grid point. Set to 0 to disable the cutoff.
+    vfmap : VisualFieldMap, optional
+        Retinotopic map between visual-field and tissue coordinates.
+    n_gray : int or None, optional
+        Number of gray levels in the returned percept. ``None`` disables
+        gray-level quantization.
+    noise : float, int, or None, optional
+        Salt-and-pepper noise applied to each percept frame. An integer gives
+        the number of affected pixels; a float in [0, 1] gives their fraction.
+    verbose : bool, optional
+        Whether to print status messages.
+    ndim : list of int, optional
+        Dimensionalities of ``vfmap`` accepted by the model.
+    n_threads : int, optional
+        Number of OpenMP threads.
+    n_jobs : int or None, optional
+        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
 
     Notes
     -----
-    *  ``xrange`` and ``yrange`` say which patch of the **visual field** to
-       simulate, in degrees of visual angle, and may be given as plain numbers
-       or as unitful quantities (e.g. ``xrange=(-12 * dva, 12 * dva)``).
+    ``xrange`` and ``yrange`` always describe the simulated visual field and
+    are stored in degrees of visual angle. A retinal length is only shorthand
+    for selecting that extent through ``vfmap``; the resulting grid is still
+    uniformly sampled in visual angle. ``step`` therefore only accepts angular
+    spacing.
 
-       .. versionchanged:: 0.10.0
-
-          On a retinal model they may also be given as a physical extent
-          (e.g. ``xrange=(-4 * mm, 4 * mm)``), which the model's ``vfmap``
-          resolves into the visual field range that piece of retina covers.
-          Each range is converted along its own retinal meridian, and the grid
-          that results is rectangular and uniformly sampled in dva exactly as
-          it always was -- under a nonlinear map it is therefore not the image
-          of a retinal rectangle. The range is stored in dva either way, so
-          changing ``vfmap`` afterwards does not reinterpret it. This is
-          shorthand, not a unit conversion: ``step`` has no such spelling,
-          since a grid spaced evenly on the retina is a different grid from
-          one spaced evenly in the visual field.
-
-    .. seealso ::
-
-        *  `Basic Concepts > Computational Models > Building your own model
-           <topics-models-building-your-own>`
+    .. versionadded:: 0.6
     """
 
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
@@ -675,13 +615,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     @property
     def implant(self):
-        """The prosthesis system this model predicts percepts for
+        """The prosthesis system whose geometry this model uses.
 
-        A spatial model says where in the visual field the electrodes of a
-        particular device are seen, so the device is model context rather than
-        trial input: it is named once, and
-        :py:meth:`~pulse2percept.models.SpatialModel.predict_percept` is then
-        given the stimulus. Rebinding invalidates the build.
+        Rebinding invalidates the spatial build.
 
         .. versionadded:: 0.11.0
         """
@@ -689,7 +625,12 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     @implant.setter
     def implant(self, implant):
-        """Implant setter (called upon ``self.implant = implant``)"""
+        """The prosthesis system whose geometry this model uses.
+
+        Rebinding the implant invalidates the spatial build.
+
+        .. versionadded:: 0.11.0
+        """
         if implant is not None and not isinstance(implant, ProsthesisSystem):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, "
                             f"not {type(implant)}.")
@@ -717,57 +658,33 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         super().set_params(**_vfmap_first(params))
 
     def _normalize_param_value(self, name, value):
-        """Convert a unitful parameter into the unit it is stored in
+        """Normalize a parameter to its stored unit.
 
-        Extends the generic conversion (see
-        :py:meth:`~pulse2percept.utils.Parametrized._normalize_param_value`)
-        with the one parameter whose unit is not the whole story: a *physical*
-        ``xrange``/``yrange`` is shorthand for the visual field range that
-        extent covers, which only the model's visual field map can say.
-        Everything else, ``step`` included, is converted as usual.
+        Physical ``xrange`` and ``yrange`` values are resolved through ``vfmap``;
+        other unitful parameters use the generic conversion.
         """
         if name in ('xrange', 'yrange') and _length_valued(value):
             return self._retinal_range_to_dva(name, value)
         return super()._normalize_param_value(name, value)
 
     def _retinal_range_to_dva(self, name, value):
-        """Resolve a retinal extent into the visual field range it spans
+        """Resolve a retinal extent to a visual-field range.
 
-        The model simulates a patch of the *visual field*, sampled uniformly in
-        degrees of visual angle, and that is what ``xrange``/``yrange`` are and
-        stay. Giving them in microns says which patch by naming the piece of
-        retina it lands on; the map turns that into degrees here, once, and
-        what is stored afterwards is an ordinary pair of dva. Changing
-        ``vfmap`` later therefore does not reinterpret a range that has already
-        been resolved -- the same rule an implant's coordinates follow.
-
-        Each range is converted along its own retinal meridian: ``xrange``
-        through ``ret_to_dva(x, 0)`` and ``yrange`` through
-        ``ret_to_dva(0, y)``. The grid built from the result is rectangular and
-        uniformly sampled in dva, exactly as it is for a range given in degrees,
-        so under a nonlinear map it is not the image of a retinal rectangle.
-        Naming retinal lengths says how far to simulate; it does not change what
-        the grid is uniform in.
-
-        This is deliberately not a unit conversion, and
-        :py:class:`~pulse2percept.units.Quantity` will not do it: how far a
-        degree reaches on tissue is what a visual field map is for. It is also
-        deliberately not offered for ``step``, since a grid spaced evenly on
-        the retina is not the same grid as one spaced evenly in the visual
-        field, and only the latter is what :py:class:`Grid2D` builds.
+        ``xrange`` is converted along the horizontal retinal meridian and
+        ``yrange`` along the vertical meridian. The result is stored in degrees of
+        visual angle and is not reinterpreted if ``vfmap`` changes later.
 
         Parameters
         ----------
         name : {'xrange', 'yrange'}
-            Which of the two ranges is being assigned.
+            Range being assigned.
         value : (min, max)
-            The extent, as a pair of lengths.
+            Retinal extent.
 
         Returns
         -------
-        (min_dva, max_dva) : tuple of float
-            The same extent in degrees of visual angle, in increasing order.
-
+        tuple of float
+            Visual-field extent in increasing order.
         """
         vfmap = getattr(self, 'vfmap', None)
         if not isinstance(vfmap, RetinalMap):
@@ -803,32 +720,19 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
-            # Implant geometry used by the spatial model:
             'implant': None,
-            # We will be simulating a patch of the visual field (xrange/yrange
-            # in degrees of visual angle), at a given spatial resolution (step
-            # size):
             'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
             'step': 0.25,  # dva
             'grid_type': 'rectangular',
-            # Below threshold, percept has brightness zero:
             'thresh_percept': 0,
-            # An electrode whose Gaussian current spread at a point has fallen
-            # below this is skipped for that point:
             'min_current_spread': 1e-8,
-            # Visual field map (retinotopy) to be used:
             'vfmap': Curcio1990Map(),
-            # Number of gray levels to use in the percept:
             'n_gray': None,
-            # Salt-and-pepper noise on the output:
             'noise': None,
-            # True: print status messages, 0: silent
             'verbose': True,
-            # default to 2d model. 3d models should override this
             'ndim' : [2],
-            # Number of OpenMP threads. `n_jobs` is an alias that writes
-            # through to `n_threads`, so it has to be applied *after* it:
+            # `n_jobs` writes through to `n_threads`, so it must come last.
             'n_threads': multiprocessing.cpu_count(),
             'n_jobs': None,
         }
@@ -852,35 +756,21 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         }
 
     def _cutoff_r2(self, rho):
-        """Squared distance at which an electrode stops contributing
+        """Return the squared distance where Gaussian spread is negligible.
 
-        Models with a Gaussian current spread ``exp(-r^2 / (2 rho^2))`` spend
-        most of their time on (point, electrode) pairs whose Gaussian has
-        already underflowed the result. This converts ``min_current_spread``
-        into the squared distance at which that happens, for the spatial
-        kernels to compare against.
-
-        .. note::
-
-            The default ``min_current_spread`` of 1e-8 corresponds to a radius
-            of about 6.1 ``rho``. The kernels compare the Gaussian against the
-            cutoff *before* scaling it by the stimulus amplitude and summing
-            over electrodes, so what is dropped at a point is
-            ``sum_i gauss_i * amplitude_i`` over the electrodes outside the
-            cutoff.
-
-            Set it to 0 to sum over every electrode no matter how distant and get
-            the exact result, or raise it to trade more accuracy for speed.
+        For a spread ``exp(-r**2 / (2 * rho**2))``, converts
+        ``min_current_spread`` to a squared-distance cutoff. The default 1e-8 is
+        about 6.1 ``rho``; 0 disables the cutoff.
 
         Parameters
         ----------
         rho : float
-            The model's current-spread decay constant (microns).
+            Current-spread decay constant in microns.
 
         Returns
         -------
-        cutoff_r2 : np.float32
-            Squared distance (microns^2), or ``inf`` if no cutoff applies.
+        np.float32
+            Squared distance in microns squared, or ``inf`` if disabled.
         """
         min_spread = self.min_current_spread
         if min_spread is None or min_spread <= 0:
@@ -891,25 +781,19 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         return np.float32(-2.0 * rho ** 2 * np.log(min_spread))
 
     def build(self, **build_params):
-        """Build the model
+        """Build the spatial model.
 
-        Performs expensive one-time calculations, such as building the spatial
-        grid used to predict a percept. ``predict_percept`` calls it for you
-        when the model is not built.
-
-        .. important::
-
-            Don't override this method if you are building your own model.
-            Customize ``_build`` instead.
+        Applies any supplied parameters, validates the implant and visual-field
+        map, builds the sampling grid, then runs ``_build``.
 
         Parameters
         ----------
-        build_params: additional parameters to set
-            You can overwrite parameters that are listed in
-            ``get_default_params``. Trying to add new class attributes outside
-            of that will cause a ``FreezeError``.
-            Example: ``model.build(param1=val)``
+        **build_params : keyword arguments
+            Declared model parameters to set before building.
 
+        Returns
+        -------
+        self
         """
         # See `BaseModel.build`:
         self.set_params(**build_params)
@@ -926,22 +810,19 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     @abstractmethod
     def _predict_spatial(self, earray, stim):
-        """Customized spatial response
-
-        Called by the user from ``predict_percept`` after error checking.
+        """Compute the spatial response.
 
         Parameters
         ----------
-        earray: :py:class:`~pulse2percept.implants.ElectrodeArray`
-            A valid electrode array.
-        stim : :py:meth:`~pulse2percept.stimuli.Stimulus`
-            A valid stimulus with a 2D data container (n_electrodes, n_time).
+        earray : :py:class:`~pulse2percept.implants.ElectrodeArray`
+            Electrode array for the bound implant.
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Prepared stimulus with shape electrodes x time.
 
         Returns
         -------
-        percept: np.ndarray
-            A 2D NumPy array that has the same dimensions as the input stimulus
-            (n_electrodes, n_time).
+        np.ndarray
+            Brightness with shape grid points x time.
         """
         raise NotImplementedError
 
@@ -950,59 +831,31 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         return resp
 
     def predict_percept(self, source, t_percept=None):
-        """Predict the spatial response
-
-        .. important::
-
-            Don't override this method if you are creating your own model.
-            Customize ``_predict_spatial`` instead.
-
-        .. note::
-
-            **This method reads modulation frames, not pulses.** Where the
-            prepared stimulus was produced by the implant's own
-            :py:class:`~pulse2percept.stimuli.StimulusEncoder`, what is read
-            is one amplitude per electrode per frame of the source video,
-            rather than the pulse train delivering it.
-
-            A pulse train says *when* current flows, and a raster says which
-            electrodes are allowed to flow together. Both are facts about
-            time, and a model with no temporal component can express neither:
-            handed the train, it would report the stimulus one instant at a
-            time, so an encoded image would come back as a sequence of raster
-            slots instead of as the image. So an image gives one percept
-            frame, and a video one percept frame per video frame.
-
-            :py:class:`~pulse2percept.models.Model` hands its spatial stage
-            the delivered pulse train instead whenever it also has a temporal
-            stage, since integrating those pulses is what that stage is for.
-
-        .. versionchanged:: 0.11.0
-            Takes the stimulus source rather than an implant; the implant is
-            the one this model is bound to.
+        """Predict the spatial response.
 
         Parameters
         ----------
-        source : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-            What is presented to the device. Anything
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`
-            accepts, including an image or a video for the implant's encoder.
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept, counted in this
-            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
-            (milliseconds, for every model p2p ships).
-            If None, the time points of the stimulus being read are used --
-            the frame times, for an encoded stimulus.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
-            :py:mod:`pulse2percept.units`.
+        source : stimulus source
+            Anything accepted by
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`.
+        t_percept : float or array-like, optional
+            Output times in ``time_unit``. If omitted, use the source time points.
+            Unitful times are accepted.
 
         Returns
         -------
-        percept: :py:class:`~pulse2percept.models.Percept`
-            A Percept object whose ``data`` container has dimensions Y x X x T,
-            and whose time axis is labelled in ``time_unit``.
-            Will return None if ``source`` is None or empty.
+        percept : :py:class:`~pulse2percept.percepts.Percept` or None
+            Percept with shape Y x X x T, or ``None`` for an empty source.
 
+        Notes
+        -----
+        For an encoded image or video, a spatial-only model uses frame-level
+        modulation rather than the delivered pulse train. In a composite
+        :py:class:`Model` with a temporal stage, the spatial stage receives the
+        delivered train so the temporal model can integrate it.
+
+        .. versionchanged:: 0.11.0
+            Takes the stimulus source rather than an implant carrying a stimulus.
         """
         if not self.is_built:
             self.build()
@@ -1060,17 +913,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 _, t_unique, inverse = np.unique(stim.data.T, axis=0,
                                                  return_index=True,
                                                  return_inverse=True)
-                # np.unique orders what it returns by stimulus value, not by
-                # time, so `t_unique` comes back shuffled with respect to the
-                # time axis. Sort it back into chronological order and remap
-                # `inverse` to match, so that the de-duplicated stimulus below
-                # is built with strictly increasing time. The percept is
-                # correct either way -- `inverse` undoes whatever order was
-                # used -- but a Stimulus with shuffled time warns, and any
-                # model that looks at `stim.time` would read it wrong.
-                # np.ravel: NumPy has changed the shape of `inverse` for
-                # axis-wise calls between 2.x releases, and the remap below
-                # needs it flat.
+                # np.unique orders rows by value, not time. Restore chronological
+                # order and remap `inverse`; flatten it for NumPy 2.x shape
+                # differences in axis-wise unique.
                 order = np.argsort(t_unique)
                 t_unique = t_unique[order]
                 rank = np.empty_like(order)
@@ -1145,83 +990,40 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
 
 class TemporalModel(BaseModel, metaclass=ABCMeta):
-    """Abstract base class for all temporal models
+    """Abstract base class for temporal models.
 
-    Provides basic functionality for all temporal models:
-
-    *  ``build``: builds the model in order to calculate the percept.
-       You can add your own ``_build`` method (note the underscore) that
-       performs additional expensive one-time calculations.
-    *  ``predict_percept``: predicts the percept a stimulus produces. You can
-       add your own ``_predict_temporal`` method to customize this step. It
-       builds the model first if it is not built.
-
-    To create your own temporal model, you must subclass ``SpatialModel`` and
-    provide an implementation for:
-
-    *  ``_predict_temporal``: a method that accepts either a
-       :py:class:`~pulse2percept.stimuli.Stimulus` or a
-       :py:class:`~pulse2percept.percepts.Percept` object and a list of time
-       points at which to calculate the resulting percept, returned as a 2D
-       NumPy array (space x time).
-
-    In addition, you can customize the following:
-
-    *  ``__init__``: the constructor can be used to define additional
-       parameters (note that you cannot add parameters on-the-fly)
-    *  ``get_default_params``: all settable model parameters must be listed by
-       this method
-    *  ``_build`` (optional): a way to add one-time computations to the build
-       process
+    Temporal models map a time-varying stimulus or percept to brightness over
+    time. Subclasses implement ``_predict_temporal`` and may override
+    ``_build`` for precomputation.
 
     Parameters
     ----------
-    dt : float, optional
-        Sampling time step of the simulation (ms)
+    dt : float or Quantity, optional
+        Simulation time step. Plain values are interpreted as milliseconds.
     thresh_percept : float, optional
-        Below threshold, the percept has brightness zero.
+        Brightness values below this threshold are set to zero.
     reduce : {'last', 'peak'}, optional
-        How a percept time point summarizes the interval since the previous
-        one, when ``predict_percept`` picks the output times itself (that is,
-        when ``t_percept`` is None). ``'last'`` reports the brightness at the
-        instant the interval ended, which is what every version before 0.10.0
-        did and what the published models still default to. ``'peak'`` reports
-        the highest brightness reached over the interval.
-
-        Peak is worth reaching for because electrical stimulation is pulsatile:
-        the brightness an interval produces rises and falls within it, so the
-        closing instant says more about where in the pulse cycle it fell than
-        about the interval. Peak rather than mean because what a pulse train
-        produces is a flash, and averaging over the gaps that follow would
-        scale every interval by its duty cycle instead.
-        :py:class:`~pulse2percept.models.FadingTemporal` defaults to it.
-
-        How exactly it is computed depends on the model. One that sets
-        ``_reduces_intervals`` tracks the peak across every ``dt`` step inside
-        its own integrator, which is exact at any output rate. Any other model
-        is sampled at several instants per interval instead, which cannot catch
-        a transient shorter than the resulting step; see ``_FRAME_SUBSAMPLES``.
-
-        Naming ``t_percept`` overrides this: an explicit time point is a
-        request for that instant, and is always answered with the brightness
-        there.
-
-        .. versionadded:: 0.10.0
+        How automatically selected output intervals are summarized.
+        ``'last'`` reports brightness at the interval endpoint; ``'peak'``
+        reports the maximum brightness reached in the interval. Explicit
+        ``t_percept`` values always request those exact instants.
+    verbose : bool, optional
+        Whether to print status messages.
     n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
+        Number of OpenMP threads.
+    n_jobs : int or None, optional
+        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+    Notes
+    -----
+    Models with ``_reduces_intervals = True`` compute ``'peak'`` within the
+    integrator. Other temporal models approximate it by subsampling each
+    output interval.
 
     .. versionadded:: 0.6
 
-    .. note ::
-
-        You will not be able to add more parameters outside the constructor;
-        e.g., ``model.newparam = 1`` will lead to a ``FreezeError``.
-
-    .. seealso ::
-
-        *  `Basic Concepts > Computational Models > Building your own model
-           <topics-models-building-your-own>`
+    .. versionchanged:: 0.10.0
+        Added ``reduce``.
     """
 
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
@@ -1238,9 +1040,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return default model parameters."""
         params = {
-            'dt': 0.005,  # Simulation time step (ms)
+            'dt': 0.005,  # ms
             'thresh_percept': 0,
-            'reduce': 'last',  # How automatically chosen intervals are summarized
+            'reduce': 'last',
             'verbose': True,
             'n_threads': multiprocessing.cpu_count(),
             'n_jobs': None,  # Alias for n_threads; must be applied last
@@ -1255,100 +1057,55 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
     @abstractmethod
     def _predict_temporal(self, stim, t_percept):
-        """Customized temporal response
-
-        Called by the user from ``predict_percept`` after error checking.
+        """Compute the temporal response.
 
         Parameters
         ----------
-        stim : :py:meth:`~pulse2percept.stimuli.Stimulus`
-            A valid stimulus with a 2D data container (n_electrodes, n_time).
-        t_percept : list of floats
-            The time points at which to output a percept (ms).
+        stim : Stimulus or Percept
+            Time-varying input.
+        t_percept : array-like
+            Output times in milliseconds.
 
         Returns
         -------
-        percept: np.ndarray
-            A 2D NumPy array (space x time) that specifies the percept at each
-            spatial location and time step.
+        np.ndarray
+            Response with shape space x time.
 
         Notes
         -----
-        A model that can summarize an interval rather than sample an instant
-        takes a third argument, ``reduce`` ('peak' or 'last'), and sets
-        ``_reduces_intervals = True``. ``predict_percept`` only passes the
-        argument to models that advertise it, so an override with the
-        two-argument signature above keeps working.
+        Models that support exact interval reduction accept a third ``reduce``
+        argument and set ``_reduces_intervals = True``.
         """
         raise NotImplementedError
 
     def predict_percept(self, stim, t_percept=None):
-        """Predict the temporal response
-
-        .. important ::
-
-            Don't override this method if you are creating your own model.
-            Customize ``_predict_temporal`` instead.
+        """Predict the temporal response.
 
         Parameters
         ----------
-        stim: : py: class: `~pulse2percept.stimuli.Stimulus` or
-               : py: class: `~pulse2percept.models.Percept`
-            Either a Stimulus or a Percept object. The temporal model will be
-            applied to each spatial location in the stimulus/percept.
-        t_percept : float or list of floats, optional
-            The time points at which to output a percept, counted in this
-            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
-            (milliseconds, for every model p2p ships). May be given as a
-            unitful quantity (e.g. ``[0, 20] * ms``); see
-            :py:mod:`pulse2percept.units`.
-            If None, the percept will be output once per frame of the video the
-            stimulus was encoded from, or failing that once every 20 ms (50 Hz
-            frame rate), starting at zero and stopping at the last frame
-            boundary the stimulus reaches.
-
-            .. note ::
-
-                A stimulus shorter than a single frame still gets one frame,
-                whose time point therefore falls after the end of the
-                stimulus. That is the only case in which the output runs past
-                the stimulus, and it is what makes a brief pulse visible at
-                all: reporting it only at t=0 would describe it before it had
-                had any effect. Name ``t_percept`` to be reported at
-                particular instants instead.
+        stim : Stimulus or Percept
+            Time-varying input. The temporal model is applied independently at
+            each spatial location.
+        t_percept : float or array-like, optional
+            Output times in ``time_unit``. Unitful times are accepted. If omitted,
+            encoded video frame times are used when available; otherwise output is
+            sampled every 20 ms, with at least one frame for a shorter stimulus.
 
         Returns
         -------
-        percept : :py:class:`~pulse2percept.models.Percept`
-            A Percept object whose ``data`` container has dimensions Y x X x T.
-            Will return None if ``stim`` is None.
+        percept : :py:class:`~pulse2percept.percepts.Percept` or None
+            Percept with shape Y x X x T, or ``None`` if ``stim`` is ``None``.
 
         Notes
         -----
-        *  If a list of time points is provided for ``t_percept``, the values
-           will automatically be sorted.
-
-        *  Naming ``t_percept`` asks for the brightness *at those instants*.
-           Leaving it None asks the model to pick the output times, and
-           ``reduce`` then says what each point reports about the interval
-           leading up to it -- the closing instant, or the peak reached over
-           it.
-
-           The distinction matters because electrical stimulation is pulsatile.
-           A 20 Hz train of 0.46 ms biphasic pulses drives brightness in
-           sub-millisecond transients at a 1.8% duty cycle, so an instant
-           sampled from it is almost always an instant between pulses. Worse,
-           the sampling phase walks: against a 29.97 fps video the frame
-           (33.37 ms) and the pulse period (50 ms) are incommensurate, so which
-           electrodes a frame catches drifts from frame to frame. Under a
-           raster, where each group pulses in its own slot, that shows up as
-           groups appearing in the wrong order or not at all.
+        Explicit ``t_percept`` values sample brightness at those instants.
+        Otherwise ``reduce`` determines whether each output interval reports its
+        endpoint or peak. Requested times are sorted and must lie on the ``dt``
+        grid.
 
         .. versionchanged:: 0.10.0
-
-            Output times chosen by the model can summarize their interval
-            instead of sampling its final instant. See ``reduce``.
-
+            Automatically selected output times may summarize intervals via
+            ``reduce``.
         """
         if not self.is_built:
             self.build()
@@ -1378,37 +1135,17 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
         reduce, t_out, sub_idx = 'last', None, None
         if t_percept is None:
-            # Nobody asked for a particular instant, so the output times are
-            # this model's to choose -- and having chosen them it owes a
-            # summary of each interval rather than a sample of one instant out
-            # of it. `reduce` says which summary; see the docstring.
+            # With automatic output times, `reduce` summarizes each interval.
             reduce = self.reduce
             if reduce not in ('peak', 'last'):
                 raise ValueError(f"'reduce' must be 'peak' or 'last', not "
                                  f"{self.reduce!r}.")
-            # A stimulus that came out of an encoder knows the frame rate of
-            # the video behind it, and that is the rate worth reporting at:
-            # one percept frame per video frame. Failing that, output at a
-            # 50 Hz frame rate, starting at zero and stopping at the last
-            # frame boundary the stimulus reaches:
+            # Prefer encoder frame timing; otherwise report at 50 Hz.
             frames = _frame_clock(stim, self.dt, unit=self.time_unit)
             if frames is None:
-                # One frame every 20 ms is a 50 Hz frame rate no matter what
-                # this model counts in, so the interval is converted rather
-                # than written down as the number 20. `nextafter` is what
-                # makes `arange`'s half-open end include a stimulus that ends
-                # exactly on a frame boundary and stop short of one that does
-                # not, without inventing a unit of time to add to it.
-                #
-                # The floor at `frame_dur` is the one case where the output
-                # does run past the end of the stimulus, and it is deliberate:
-                # a stimulus shorter than a single frame would otherwise be
-                # reported only at t=0, before it had had any effect at all.
-                # Brightness outlives the stimulus that caused it, so the one
-                # frame containing it is what is worth reporting; ask for
-                # something else by naming `t_percept`. Unlike the millisecond
-                # of slack this replaced, a frame means the same thing in any
-                # `time_unit`.
+                # Convert 20 ms into the model's unit. `nextafter` makes an exact
+                # frame boundary inclusive. The minimum one-frame duration keeps
+                # sub-frame stimuli visible instead of reporting only t=0.
                 frame_dur = as_value(20 * ms, self.time_unit)
                 end = np.maximum(frame_dur, _time[-1])
                 t_out = np.arange(0, np.nextafter(end, np.inf), frame_dur)
@@ -1445,10 +1182,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             self._warn_if_blank(_stim, resp)
         resp = resp.reshape(_space + [t_percept.size])
         if sub_idx is not None:
-            # Collapse each interval's samples down to the largest. Peak, not
-            # mean, because what a pulse train produces is a flash, and
-            # averaging it over the gaps that follow would scale every interval
-            # by its duty cycle instead:
+            # Preserve pulse-driven peaks rather than averaging them over gaps.
             resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
             t_percept = t_out
         # A temporal model rewrites a spatial percept frame by frame; it does
@@ -1458,13 +1192,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                        metadata={'stim': stim})._inherit_space(stim)
 
     def _warn_if_blank(self, stim, resp):
-        """Point out a percept that came out blank for a polarity reason
-
-        A stimulus of the wrong sign is not an error -- the model integrates it
-        and rectifies the result away -- so it otherwise looks exactly like a
-        stimulus that was simply too weak to see. Assigning a grayscale image
-        or video that was never encoded lands here, because gray levels are
-        nonnegative and most temporal models are driven by cathodic current.
+        """Warn when stimulus polarity explains an all-zero response.
         """
         if np.any(resp) or not np.any(stim.data):
             return
@@ -1482,57 +1210,34 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
 
 class Model(Frozen, PrettyPrint):
-    """Computational model
+    """Composite computational model.
 
-    To build your own model, you can mix and match spatial and temporal models
-    at will.
+    Combines an optional spatial model with an optional temporal model.
 
-    For example, to create a model that combines the scoreboard model described
-    in [Beyeler2019]_ with the temporal model cascade described in
-    [Nanduri2012]_, use the following:
-
-    .. code-block :: python
+    .. code-block:: python
 
         model = Model(spatial=ScoreboardSpatial(),
                       temporal=Nanduri2012Temporal())
 
-    .. seealso ::
-
-        *  `Basic Concepts > Computational Models > Building your own model
-           <topics-models-building-your-own>`
-
-    .. versionadded:: 0.6
-
     Parameters
     ----------
-    spatial: :py:class:`~pulse2percept.models.SpatialModel` or None
-        The spatial model, which decides where in the visual field a stimulus
-        is seen. May be given as a class, which is then constructed from
-        ``params``.
-    temporal: :py:class:`~pulse2percept.models.TemporalModel` or None
-        The temporal model, which decides how the response evolves over time.
-        May be given as a class, which is then constructed from ``params``.
-    implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        The device this model predicts percepts for. Stored on the spatial
-        model, which is what needs it, and read back through ``model.implant``;
-        there is one implant, not a copy per component. A temporal-only model
-        never sees an electrode, and so does not take one.
+    spatial : :py:class:`~pulse2percept.models.SpatialModel` or type, optional
+        Spatial model instance or class.
+    temporal : :py:class:`~pulse2percept.models.TemporalModel` or type, optional
+        Temporal model instance or class.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        Implant used by the spatial component.
 
         .. versionadded:: 0.11.0
+    **params : keyword arguments
+        Parameters forwarded to the spatial and temporal components. A name
+        present on both components is applied to both.
 
-    **params:
-        Additional keyword arguments(e.g., ``verbose=True``) to be passed to
-        either the spatial model, the temporal model, or both.
-
+    .. versionadded:: 0.6
     """
 
-    # A composite reports the units of whichever component actually consumes
-    # the quantity, because those are the units its own arguments are read in
-    # and its own percept is written in. Spelled out here rather than left to
-    # `__getattr__`, which answers with a *dict* when both components have the
-    # attribute; and each one falls back on the canonical default, because a
-    # Model with neither component still has to be able to normalize its
-    # arguments. See `BaseModel` for what the three of them mean.
+    # Composite units come from the component that consumes or emits the
+    # quantity. Define them explicitly because `__getattr__` may return both.
 
     @property
     def stimulus_unit(self):
@@ -1568,14 +1273,10 @@ class Model(Frozen, PrettyPrint):
 
     @property
     def time_unit(self):
-        """The unit time is expressed in
+        """Time unit used by the final model stage.
 
-        ``t_percept`` is read in, and the resulting
-        :py:class:`~pulse2percept.percepts.Percept` is written in, the unit of
-        the last stage of the pipeline: the temporal model if there is one,
-        the spatial model otherwise. The two need not agree -- a spatial model
-        counting in seconds hands its percept to a temporal model counting in
-        milliseconds and the time axis is converted on the way across.
+        ``t_percept`` and the returned percept use the temporal model's unit when
+        present, otherwise the spatial model's unit.
         """
         if self.has_time:
             return self.temporal.time_unit
@@ -1587,11 +1288,8 @@ class Model(Frozen, PrettyPrint):
         # Only the spatial component depends on implant geometry, so do not
         # forward `implant` to the temporal component:
         implant = params.pop('implant', None)
-        # A sub-model passed as a *class* is constructed from `params` below,
-        # and `set_params` then hands the same dict to the resulting instance.
-        # Both paths rewrite renamed parameters, so an old name reaching this
-        # constructor would otherwise be warned about twice. Settle it once,
-        # up front, and let the two paths downstream see only the new name:
+        # Normalize renamed parameters once before class construction and
+        # subsequent `set_params`, avoiding duplicate warnings.
         for model in (spatial, temporal):
             if isinstance(model, type):
                 params = rename_deprecated_params(
@@ -1634,22 +1332,10 @@ class Model(Frozen, PrettyPrint):
             self.spatial.implant = implant
 
     def __getattr__(self, attr):
-        """Called when the default attr access fails with an AttributeError
+        """Forward missing attributes to model components.
 
-        This method is called when the user tries to access an attribute(e.g.,
-        ``model.a``), but ``a`` could not be found(either because it is part
-        of the spatial / temporal model or because it doesn't exist).
-
-        Returns
-        -------
-        attr: any
-            Checks both spatial and temporal models and:
-
-            *  returns the attribute if found.
-            *  if the attribute exists in both spatial / temporal model,
-               returns a dictionary ``{'spatial': attr, 'temporal': attr}``.
-            *  if the attribtue is not found, raises an AttributeError.
-
+        If both components define the attribute, return a dictionary with
+        ``'spatial'`` and ``'temporal'`` entries.
         """
         # Check the spatial/temporal model:
         try:
@@ -1673,22 +1359,14 @@ class Model(Frozen, PrettyPrint):
         return {'spatial': spatial, 'temporal': temporal}
 
     def __setattr__(self, name, value):
-        """Called when an attribute is set
+        """Set a composite attribute or forward a model parameter.
 
-        This method is called when a new attribute is set(e.g.,
-        ``model.a=2``). This is allowed in the constructor, but will raise a
-        ``FreezeError`` elsewhere.
-
-        ``model.a = X`` can be used as a shorthand to set ``model.spatial.a``
-        and / or ``model.temporal.a``.
-
+        Attributes created during construction stay on the composite. Later
+        assignments are forwarded to the spatial and/or temporal component.
         """
         if _is_constructing(self):
-            # `self.spatial = ...`, and whatever attributes a subclass
-            # constructor creates, belong to the composite object. User
-            # parameters do not: `set_params` forwards those explicitly, so
-            # that `rho` passed to the constructor still reaches the
-            # sub-models rather than shadowing them here.
+            # Constructor-owned attributes stay on the composite; user parameters
+            # are forwarded explicitly by `set_params`.
             super().__setattr__(name, value)
             return
         self._set_component_param(name, value)
@@ -1716,18 +1394,7 @@ class Model(Frozen, PrettyPrint):
             raise FreezeError(err_str)
 
     def __deepcopy__(self, memodict=None):
-        """
-        Perform a deep copy of the Model object.
-
-        Parameters
-        ----------
-        memodict: dict
-            Dictionary of objects already copied during the current copying pass.
-
-        Returns
-            Deep copy of the object
-        -------
-
+        """Return a deep copy of the model.
         """
         if memodict is None:
             memodict = {}
@@ -1739,13 +1406,8 @@ class Model(Frozen, PrettyPrint):
         spatial = attributes.pop('spatial', None)
         temporal = attributes.pop('temporal', None)
         result = self.__class__(**attributes)
-        # Whatever the constructor made, replace it with our copies. Model
-        # parameters (e.g. `rho`) are forwarded to the sub-models by
-        # `__setattr__`, so they live in `spatial`/`temporal`, not in
-        # `self.__dict__` -- reconstructing from the constructor alone would
-        # silently reset them to their defaults. This bypasses
-        # `Model.__setattr__`, which outside the constructor forwards
-        # attributes to the sub-models; it is the assignment __init__ makes.
+        # Restore copied sub-models after construction; their parameters do not
+        # live in the composite `__dict__`. Bypass forwarding `__setattr__`.
         if spatial is not None:
             object.__setattr__(result, 'spatial', spatial)
         if temporal is not None:
@@ -1756,18 +1418,7 @@ class Model(Frozen, PrettyPrint):
         return result
 
     def __eq__(self, other):
-        """
-        Equality operator for Model.
-
-        Parameters
-        ----------
-        other: Model
-            Model to compare against
-
-        Returns
-        -------
-        bool:
-            True if the compared objects have identical attributes, False otherwise.
+        """Return whether two models have equal spatial and temporal components.
         """
         if not isinstance(other, self.__class__):
             return False
@@ -1790,28 +1441,18 @@ class Model(Frozen, PrettyPrint):
         return params
 
     def set_params(self, params):
-        """Set model parameters
+        """Set component model parameters.
 
-        This is a convenience function to set parameters that might be part of
-        the spatial model, the temporal model, or both.
-
-        Alternatively, you can set the parameter directly, e.g.
-        ``model.spatial.verbose = True``.
-
-        .. note::
-
-            If a parameter exists in both spatial and temporal models(e.g.,
-            ``verbose``), both models will be updated.
+        A parameter present on both spatial and temporal components is applied to
+        both.
 
         Parameters
         ----------
-        params: dict
-            A dictionary of parameters to set.
+        params : dict
+            Parameter values to set.
         """
-        # A Model built from *instances* never routes through
-        # ``BaseModel.__init__``, so the deprecated names have to be caught
-        # here too. Collect both sides first so a parameter deprecated on the
-        # spatial *and* temporal model only warns once.
+        # Instance-based composites bypass `BaseModel.__init__`; collect
+        # deprecations from both components and warn once.
         specs = {}
         renamed = {}
         for model in (self.spatial, self.temporal):
@@ -1819,36 +1460,24 @@ class Model(Frozen, PrettyPrint):
             renamed.update(getattr(model, '_renamed_params', {}))
         warn_deprecated_params(type(self).__name__, params, specs)
         params = rename_deprecated_params(type(self).__name__, params, renamed)
-        # Each parameter is forwarded to the sub-models one at a time, so the
-        # order they are applied in is decided here rather than by
-        # `SpatialModel.set_params`. See `_vfmap_first`:
-        #
-        # Forwarding directly rather than via `setattr`: `set_params` also
-        # runs from inside `__init__`, where an assignment to `self` would
-        # land on the composite object instead of the sub-models.
+        # Apply `vfmap` first, then forward directly to components. During
+        # construction, assigning on `self` would create composite attributes.
         for key, val in _vfmap_first(params).items():
             self._set_component_param(key, val)
 
     def build(self, **build_params):
-        """Build the model
-
-        Performs expensive one-time calculations, such as building the spatial
-        grid used to predict a percept.
+        """Build all model components.
 
         Unlike prediction-time auto-building, this rebuilds every component.
 
         Parameters
         ----------
-        build_params: additional parameters to set
-            You can overwrite parameters that are listed in
-            ``get_default_params``. Trying to add new class attributes outside
-            of that will cause a ``FreezeError``.
-            Example: ``model.build(param1=val)``
+        **build_params : keyword arguments
+            Component parameters to set before building.
 
         Returns
         -------
         self
-
         """
         self.set_params(build_params)
         if self.has_space:
@@ -1870,75 +1499,34 @@ class Model(Frozen, PrettyPrint):
 
     def predict_percept(self, source, t_percept=None, gaze=None, vmax=None,
                         vmin=0):
-        """Predict a percept
-
-        Builds whichever components are not built yet.
-
-        For an ordinary source, the bound implant prepares the delivered
-        stimulation before prediction. For a
-        :py:class:`~pulse2percept.vision.Scene`, electrode locations are mapped
-        through ``vfmap`` to sample the scene, then encoded by the implant
-        before prediction.
-
-        If the scene also has a
-        :py:class:`~pulse2percept.vision.Scotoma`, the result is what the
-        person actually sees: intact native vision outside the lost region,
-        and the prosthetic percept inside it, as one RGB percept on the
-        scene's own pixel grid.
-
-        .. versionchanged:: 0.11.0
-
-            Takes what is presented to the device -- a stimulus source or a
-            scene -- rather than an implant carrying a stimulus. ``gaze``,
-            ``vmax`` and ``vmin`` are what a scene needs, and are rejected
-            without one.
+        """Predict a percept.
 
         Parameters
         ----------
-        source : :py:class:`~pulse2percept.stimuli.Stimulus` source type or
-                 :py:class:`~pulse2percept.vision.Scene`
-            What is presented to the device: anything
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`
-            accepts, or a scene the implanted eye is looking at.
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept, counted in this
-            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
-            (milliseconds, for every model p2p ships).
-            If None, the time points of the prepared stimulus are used.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
-            :py:mod:`pulse2percept.units`.
+        source : stimulus source or :py:class:`~pulse2percept.vision.Scene`
+            What is presented to the device: anything accepted by
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`, or a
+            visual scene.
+        t_percept : float or array-like, optional
+            Output times in ``time_unit``. Unitful times are accepted.
         gaze : (x, y) or (n_frames, 2), optional
-            Where the eye is pointing: the scene location that currently falls
-            on the fovea, in degrees of visual angle (e.g. ``(5, 0) * dva``).
-            Defaults to the origin. One pair fixates; one pair per frame moves
-            the eye between the frames of a video scene. The implant does not
-            move when gaze does, and neither does an eye-centered scotoma --
-            the scene moves past them. Requires a scene.
-
-            .. versionadded:: 0.11.0
-
+            Scene location falling on the fovea, in degrees of visual angle.
+            Requires ``source`` to be a scene.
         vmax : float, optional
-            The perceived brightness that displays as white. Required when the
-            scene has a scotoma, because the result is then a picture rather
-            than model output: a percept is in arbitrary units, so nothing
-            here can guess the transfer function.
-
-            .. versionadded:: 0.11.0
-
+            Percept brightness mapped to white when composing a scene with a
+            scotoma. Required for scotoma composition.
         vmin : float, optional
-            The perceived brightness that displays as black. Brightness maps
-            linearly onto [0, 1] between the two, and is clipped outside them.
-
-            .. versionadded:: 0.11.0
+            Percept brightness mapped to black for scotoma composition.
 
         Returns
         -------
-        percept: :py:class:`~pulse2percept.models.Percept`
-            Without a scene, or with one that has no scotoma: a brightness
-            percept whose ``data`` has dimensions Y x X x T, and None if
-            ``source`` is None or empty. With a scene that has a scotoma: an
-            RGB percept of dimensions Y x X x 3 x T on the scene's pixel grid.
+        percept : :py:class:`~pulse2percept.percepts.Percept` or None
+            Brightness percept for ordinary prediction. For a scene with a scotoma,
+            returns an RGB percept on the scene pixel grid.
 
+        .. versionchanged:: 0.11.0
+            ``source`` is now the presented stimulus or scene rather than an implant
+            carrying a stimulus.
         """
         # Scene sampling depends on the current spatial build:
         self._build_stale()

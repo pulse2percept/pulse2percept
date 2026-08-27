@@ -17,80 +17,116 @@ def _require_disk_electrodes(electrodes):
 
 
 class Nanduri2012Spatial(SpatialModel):
-    """Spatial response model of [Nanduri2012]_
+    r"""Spatial response model of [Nanduri2012]_.
 
-    Implements the spatial response model described in [Nanduri2012]_, which
-    assumes that the spatial activation of retinal tissue is equivalent to the
-    "current spread" :math:`I`, described as a function of distance :math:`r`
-    from the center of the stimulating electrode:
+        Models retinal activation as the sum of current spread from disk
+        electrodes. For electrode :math:`e`, define the lateral distance from its
+        center
 
-    .. math::
+        .. math::
 
-        I(r) =
-        \\begin{cases}
-            \\frac{\\verb!atten_a!}{\\verb!atten_a! + (r-a)^\\verb!atten_n!}
-                & r > a \\\\
-            1 & r \\leq a
-        \\end{cases}
+            s_e(x,y) =
+            \sqrt{(x-x_e)^2 + (y-y_e)^2}
 
-    where :math:`a` is the radius of the electrode (see Eq.2 in the paper).
+        and the distance to the nearest point on the electrode disk
 
-    .. note::
+        .. math::
 
-        Use this class if you just want the spatial response model.
-        Use :py:class:`~pulse2percept.models.Nanduri2012Model` if you want both
-        the spatial and temporal model.
+            d_e(x,y) =
+            \sqrt{
+                z_e^2 +
+                \max\left[s_e(x,y)-a_e,\,0\right]^2
+            },
 
-    Parameters
-    ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The implant whose stimulation this model predicts. Required before
-        building or predicting.
+        where :math:`a_e` is electrode radius and :math:`z_e` is electrode-retina
+        distance. The spatial response is
 
-        .. versionadded:: 0.11.0
+        .. math::
 
-    atten_a : float, optional
-        Nominator of the attentuation function
-    atten_n : float32, optional
-        Exponent of the attenuation function's denominator
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
-        An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
-        object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.topography.Curcio1990Map` is
-        used.
-    n_gray : int, optional
-        The number of gray levels to use. If an integer is given, k-means
-        clustering is used to compress the color space of the percept into
-        ``n_gray`` bins. If None, no compression is performed.
-    noise : float or int, optional
-        Adds salt-and-pepper noise to each percept frame. An integer will be
-        interpreted as the number of pixels to subject to noise in each frame.
-        A float between 0 and 1 will be interpreted as a ratio of pixels to
-        subject to noise in each frame.
-    n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
-    n_jobs : int, optional
-        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
+            I(x,y,t) =
+            \sum_{e \in E}
+            A_e(t)
+            \frac{\mathrm{atten\_a}}
+                 {\mathrm{atten\_a} + d_e(x,y)^{\mathrm{atten\_n}}}.
 
-    """
+        Thus activation is uniform beneath an electrode when :math:`z_e=0` and
+        decays with distance from its edge. This is the p2p implementation of the
+        current-spread model in Eq. 2 of [Nanduri2012]_, extended to include the
+        electrode ``z`` coordinate.
+
+        Only :py:class:`~pulse2percept.implants.DiskElectrode` arrays are
+        supported because the model depends explicitly on electrode radius.
+
+        Use this class for the spatial component alone. Use
+        :py:class:`~pulse2percept.models.Nanduri2012Model` for the combined
+        spatial-temporal model.
+
+        Parameters
+        ----------
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+            Implant whose electrode geometry is modeled. Required before building
+            or predicting.
+
+            .. versionadded:: 0.11.0
+
+        atten_a : float, optional
+            Attenuation scale in Eq. 2. Current spread falls to half its maximum
+            when :math:`d = \mathrm{atten\_a}^{1/\mathrm{atten\_n}}`.
+            Distances are evaluated in microns. Default: 14000.
+        atten_n : float, optional
+            Exponent controlling the falloff of current spread with distance.
+            Larger values produce a steeper tail. Default: 1.69.
+        xrange : (float, float) or Quantity, optional
+            Horizontal visual-field extent in degrees of visual angle. A physical
+            retinal extent may instead be resolved through ``vfmap``.
+        yrange : (float, float) or Quantity, optional
+            Vertical visual-field extent in degrees of visual angle. A physical
+            retinal extent may instead be resolved through ``vfmap``.
+        step : float, (float, float), or Quantity, optional
+            Grid spacing in degrees of visual angle. A pair specifies separate x
+            and y spacing.
+
+            .. versionchanged:: 0.10.0
+                Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
+
+        grid_type : {'rectangular', 'hexagonal'}, optional
+            Sampling lattice used for the visual-field grid.
+        thresh_percept : float, optional
+            Brightness values below this threshold are set to zero.
+        min_current_spread : float, optional
+            Inherited Gaussian current-spread cutoff. This parameter is not used
+            by ``Nanduri2012Spatial``.
+        vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+            Retinotopic map between visual-field and retinal coordinates. Defaults
+            to :py:class:`~pulse2percept.topography.Curcio1990Map`.
+        n_gray : int or None, optional
+            Number of gray levels in the returned percept. ``None`` disables
+            gray-level quantization.
+        noise : float, int, or None, optional
+            Salt-and-pepper noise applied to each percept frame. An integer gives
+            the number of affected pixels; a float in [0, 1] gives their fraction.
+        verbose : bool, optional
+            Whether to print status messages.
+        ndim : list of int, optional
+            Dimensionalities of ``vfmap`` accepted by the model.
+        n_threads : int, optional
+            Number of OpenMP threads.
+        n_jobs : int or None, optional
+            Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+        """
 
     def get_default_params(self):
-        """Returns all settable parameters of the Nanduri model"""
+        """Return default model parameters."""
         base_params = super(Nanduri2012Spatial, self).get_default_params()
         params = {'atten_a': 14000, 'atten_n': 1.69}
         return {**base_params, **params}
 
     def _predict_spatial(self, earray, stim):
-        """Predicts the brightness at spatial locations"""
-        # Re-check because the bound implant's electrode array may change
-        # after the model was built.
+        """Predict the spatial response."""
+        # The bound implant may have changed since the last build.
         _require_disk_electrodes(earray.electrode_objects)
-        # This does the expansion of a compact stimulus and a list of
-        # electrodes to activation values at X,Y grid locations:
         x_el, y_el, z_el = self._electrode_coords(earray, stim)
-        # The disk radius is a size rather than a coordinate, so it is read
-        # directly:
+        # Radius is not part of the coordinate array.
         r_el = np.ascontiguousarray([earray[e].r for e in stim.electrodes],
                                     dtype=np.float32)
         return spatial_fast(self._stim_values(stim), x_el, y_el, z_el,
@@ -107,97 +143,143 @@ class Nanduri2012Spatial(SpatialModel):
 
 
 class Nanduri2012Temporal(TemporalModel):
-    """Temporal model of [Nanduri2012]_
+    r"""Temporal response model of [Nanduri2012]_.
 
-    Implements the temporal response model described in [Nanduri2012]_, which
-    assumes that the temporal activation of retinal tissue is the output of a
-    linear-nonlinear model cascade (see Fig.6 in the paper).
+        Implements the linear-nonlinear cascade in Fig. 6 of [Nanduri2012]_.
+        With stimulus amplitude :math:`A(t)`, the fast response and charge
+        accumulation are
 
-    .. note::
+        .. math::
 
-        Use this class if you just want the temporal response model.
-        Use :py:class:`~pulse2percept.models.Nanduri2012Model` if you want both
-        the spatial and temporal model.
+            \tau_1 \frac{dR_1}{dt} &= A(t) - R_1(t), \\
 
-    Parameters
-    ----------
-    dt : float, optional
-        Sampling time step (ms)
-    tau1: float, optional
-        Time decay constant for the fast leaky integrater.
-    tau2: float, optional
-        Time decay constant for the charge accumulation.
-    tau3: float, optional
-        Time decay constant for the slow leaky integrator.
-    eps: float, optional
-        Scaling factor applied to charge accumulation.
-    asymptote: float, optional
-        Asymptote of the logistic function used in the stationary nonlinearity
-        stage.
-    slope: float, optional
-        Slope of the logistic function in the stationary nonlinearity stage.
-    shift: float, optional
-        Shift of the logistic function in the stationary nonlinearity stage.
-    scale_out : float32, optional
-        A scaling factor applied to the output of the model
-    thresh_percept : float, optional
-        Below threshold, the percept has brightness zero.
-    n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
-    n_jobs : int, optional
-        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
+            \frac{dC}{dt} &= \max[A(t), 0], \\
 
-    """
+            \tau_2 \frac{dR_2}{dt} &= C(t) - R_2(t).
 
-    # Unlike the other temporal models, this one is driven by anodic current;
-    # see ``TemporalModel._drive_sign``:
+        The two pathways are combined by half-wave rectification,
+
+        .. math::
+
+            R_3(t) =
+            \max\left[
+                R_1(t) - \epsilon_{\mathrm{ms}} R_2(t),\,0
+            \right],
+
+        where :math:`\epsilon_{\mathrm{ms}} = \epsilon / 1000` because p2p
+        integrates time in milliseconds while the original parameterization used
+        microseconds.
+
+        A logistic nonlinearity sets the peak response. Let
+
+        .. math::
+
+            R_{3,\max} = \max_t R_3(t)
+
+        and
+
+        .. math::
+
+            g =
+            \frac{\mathrm{asymptote}}{R_{3,\max}}
+            \sigma\left(
+                \frac{R_{3,\max} - \mathrm{shift}}{\mathrm{slope}}
+            \right),
+
+        where :math:`\sigma(u)=1/(1+e^{-u})`. The entire :math:`R_3(t)` trace is
+        multiplied by this gain, so the scaled peak equals the logistic response.
+
+        The result then passes through three identical slow leaky integrators,
+
+        .. math::
+
+            \tau_3 \frac{dR_{4a}}{dt} &= gR_3 - R_{4a}, \\
+
+            \tau_3 \frac{dR_{4b}}{dt} &= R_{4a} - R_{4b}, \\
+
+            \tau_3 \frac{dB}{dt} &= R_{4b} - B,
+
+        and the predicted brightness is ``scale_out`` :math:`\times B(t)`.
+
+        Positive current drives the model. Use this class for the temporal
+        component alone. Use :py:class:`~pulse2percept.models.Nanduri2012Model`
+        for the combined spatial-temporal model.
+
+        Parameters
+        ----------
+        dt : float or Quantity, optional
+            Simulation time step, in milliseconds. Default: 0.005 ms.
+        tau1 : float or Quantity, optional
+            Time constant of the fast response :math:`R_1`, in milliseconds.
+            Default: 0.42 ms.
+        tau2 : float or Quantity, optional
+            Time constant of the filtered charge accumulation :math:`R_2`, in
+            milliseconds. Default: 45.25 ms.
+        tau3 : float or Quantity, optional
+            Time constant of each of the three final leaky-integrator stages, in
+            milliseconds. Default: 26.25 ms.
+        eps : float, optional
+            Strength of the subtractive charge-accumulation pathway. The public
+            value retains the original microsecond parameterization and is divided
+            by 1000 internally for millisecond integration. Default: 8.73.
+        asymptote : float, optional
+            Upper asymptote of the logistic peak-response nonlinearity. Default:
+            14.
+        slope : float, optional
+            Scale parameter controlling the steepness of the logistic
+            nonlinearity. Default: 3.
+        shift : float, optional
+            Midpoint of the logistic nonlinearity along :math:`R_{3,\max}`.
+            Default: 16.
+        scale_out : float, optional
+            Multiplicative scaling applied to the final brightness. Default: 1.
+        thresh_percept : float, optional
+            Brightness values below this threshold are set to zero. Default: 0.
+        reduce : {'peak', 'last'}, optional
+            How automatically chosen output points summarize the preceding
+            interval. ``'last'`` reports brightness at the output instant;
+            ``'peak'`` approximates the interval peak by subsampling. Explicit
+            ``t_percept`` values always request those instants. Default:
+            ``'last'``.
+        verbose : bool, optional
+            Whether to print status messages. Default: True.
+        n_threads : int, optional
+            Number of OpenMP threads. Defaults to all available CPU cores.
+        n_jobs : int or None, optional
+            Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+        """
+
+    # Positive current drives the Nanduri temporal cascade.
     _drive_sign = 1
 
     def get_default_params(self):
         base_params = super(Nanduri2012Temporal, self).get_default_params()
         params = {
-            # Time decay for the ganglion cell impulse response:
             'tau1': 0.42,
-            # Time decay for the charge accumulation:
             'tau2': 45.25,
-            # Time decay for the slow leaky integrator:
             'tau3': 26.25,
-            # Scaling factor applied to charge accumulation:
             'eps': 8.73,
-            # Asymptote of the sigmoid:
             'asymptote': 14.0,
-            # Slope of the sigmoid:
             'slope': 3.0,
-            # Shift of the sigmoid:
             'shift': 16.0,
-            # Scale the output:
             'scale_out': 1.0
         }
         return {**base_params, **params}
 
     def get_param_units(self):
-        """Return a dict of the units that parameters are stored in"""
-        # Only the three time constants have a unit the model commits to; the
-        # sigmoid's asymptote, slope and shift act on brightness, and `eps`
-        # and `scale_out` are fitted scaling terms:
+        """Return units used to store model parameters."""
         return {**super().get_param_units(), 'tau1': ms, 'tau2': ms,
                 'tau3': ms}
 
     def _predict_temporal(self, stim, t_percept):
-        """Predict the temporal response"""
-        # Pass the stimulus as a 2D NumPy array to the fast Cython function:
+        """Predict the temporal response."""
         time = self._stim_times(stim)
         stim_data = self._stim_values(stim).reshape((-1, len(time)))
-        # Calculate at which simulation time steps we need to output a percept.
-        # This is basically t_percept/self.dt, but we need to beware of
-        # floating point rounding errors! 29.999 will be rounded down to 29 by
-        # np.uint32, so we need to np.round it first:
+        # Round before casting so floating-point noise cannot shift a sample.
         idx_percept = np.uint32(np.round(t_percept / self.dt))
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct multiples "
                              f"of `dt`={self.dt:.2e}")
-        # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
                              time.astype(np.float32),
                              idx_percept,
@@ -207,72 +289,86 @@ class Nanduri2012Temporal(TemporalModel):
 
 
 class Nanduri2012Model(Model):
-    """[Nanduri2012]_ Model
+    r"""Combined spatial-temporal model of [Nanduri2012]_.
 
-    Implements the model described in [Nanduri2012]_, where percepts are
-    circular and their brightness evolves over time.
+        Combines :py:class:`~pulse2percept.models.Nanduri2012Spatial` with
+        :py:class:`~pulse2percept.models.Nanduri2012Temporal`. See those classes
+        for the spatial current-spread equation and temporal cascade.
 
-    The model combines two parts:
+        Parameters
+        ----------
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+            Implant whose electrode geometry is modeled. Required before building
+            or predicting.
 
-    *  :py:class:`~pulse2percept.models.Nanduri2012Spatial` is used to
-       calculate the spatial activation function, which is assumed to be
-       equivalent to the "current spread" described as a function of distance
-       from the center of the stimulating electrode (see Eq.2 in the paper).
-    *  :py:class:`~pulse2percept.models.Nanduri2012Temporal` is used to
-       calculate the temporal activation function, which is assumed to be the
-       output of a linear-nonlinear cascade model (see Fig.6 in the paper).
+            .. versionadded:: 0.11.0
 
-    Parameters
-    ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The implant whose stimulation this model predicts. Required before
-        building or predicting.
+        atten_a : float, optional
+            Spatial attenuation scale. Default: 14000.
+        atten_n : float, optional
+            Exponent controlling spatial attenuation. Default: 1.69.
+        xrange : (float, float) or Quantity, optional
+            Horizontal visual-field extent in degrees of visual angle. A physical
+            retinal extent may instead be resolved through ``vfmap``.
+        yrange : (float, float) or Quantity, optional
+            Vertical visual-field extent in degrees of visual angle. A physical
+            retinal extent may instead be resolved through ``vfmap``.
+        step : float, (float, float), or Quantity, optional
+            Grid spacing in degrees of visual angle. A pair specifies separate x
+            and y spacing.
 
-        .. versionadded:: 0.11.0
+            .. versionchanged:: 0.10.0
+                Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    atten_a : float, optional
-        Nominator of the attentuation function (Eq.2 in the paper)
-    atten_n : float32, optional
-        Exponent of the attenuation function's denominator (Eq.2 in the paper)
-    dt : float, optional
-        Sampling time step (ms)
-    tau1: float, optional
-        Time decay constant for the fast leaky integrater.
-    tau2: float, optional
-        Time decay constant for the charge accumulation.
-    tau3: float, optional
-        Time decay constant for the slow leaky integrator.
-    eps: float, optional
-        Scaling factor applied to charge accumulation.
-    asymptote: float, optional
-        Asymptote of the logistic function used in the stationary nonlinearity
-        stage.
-    slope: float, optional
-        Slope of the logistic function in the stationary nonlinearity stage.
-    shift: float, optional
-        Shift of the logistic function in the stationary nonlinearity stage.
-    scale_out : float32, optional
-        A scaling factor applied to the output of the model
-    thresh_percept: float, optional
-        Below threshold, the percept has brightness zero.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
-        An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
-        object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.topography.Curcio1990Map` is
-        used.
-    n_gray : int, optional
-        The number of gray levels to use. If an integer is given, k-means
-        clustering is used to compress the color space of the percept into
-        ``n_gray`` bins. If None, no compression is performed.
-    noise : float or int, optional
-        Adds salt-and-pepper noise to each percept frame. An integer will be
-        interpreted as the number of pixels to subject to noise in each frame.
-        A float between 0 and 1 will be interpreted as a ratio of pixels to
-        subject to noise in each frame.
-    n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
-
-    """
+        grid_type : {'rectangular', 'hexagonal'}, optional
+            Sampling lattice used for the visual-field grid.
+        vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+            Retinotopic map between visual-field and retinal coordinates. Defaults
+            to :py:class:`~pulse2percept.topography.Curcio1990Map`.
+        n_gray : int or None, optional
+            Number of gray levels in the returned percept. ``None`` disables
+            gray-level quantization.
+        noise : float, int, or None, optional
+            Salt-and-pepper noise applied to each percept frame.
+        min_current_spread : float, optional
+            Inherited Gaussian current-spread cutoff. Not used by the Nanduri
+            spatial model.
+        dt : float or Quantity, optional
+            Simulation time step, in milliseconds. Default: 0.005 ms.
+        tau1 : float or Quantity, optional
+            Fast-response time constant, in milliseconds. Default: 0.42 ms.
+        tau2 : float or Quantity, optional
+            Charge-accumulation time constant, in milliseconds. Default:
+            45.25 ms.
+        tau3 : float or Quantity, optional
+            Time constant of the final three-stage low-pass cascade, in
+            milliseconds. Default: 26.25 ms.
+        eps : float, optional
+            Strength of the subtractive charge-accumulation pathway. Default:
+            8.73.
+        asymptote : float, optional
+            Upper asymptote of the logistic peak-response nonlinearity. Default:
+            14.
+        slope : float, optional
+            Scale parameter of the logistic nonlinearity. Default: 3.
+        shift : float, optional
+            Midpoint of the logistic nonlinearity. Default: 16.
+        scale_out : float, optional
+            Multiplicative scaling applied to final brightness. Default: 1.
+        thresh_percept : float, optional
+            Brightness values below this threshold are set to zero. Default: 0.
+        reduce : {'peak', 'last'}, optional
+            Temporal interval reduction used for automatically selected output
+            times. Default: ``'last'``.
+        verbose : bool, optional
+            Whether to print status messages. Default: True.
+        ndim : list of int, optional
+            Dimensionalities of ``vfmap`` accepted by the spatial model.
+        n_threads : int, optional
+            Number of OpenMP threads.
+        n_jobs : int or None, optional
+            Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+        """
 
     def __init__(self, **params):
         super(Nanduri2012Model, self).__init__(spatial=Nanduri2012Spatial(),

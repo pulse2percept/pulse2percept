@@ -1,5 +1,5 @@
 """:py:class:`~pulse2percept.models.Horsager2009Model`,
-   :py:class:`~pulse2percept.models.`Horsager2009Temporal` [Horsager2009]_"""
+   :py:class:`~pulse2percept.models.Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
 from .base import Model, TemporalModel
 from ..units import ms
@@ -7,84 +7,116 @@ from ._horsager2009 import temporal_fast
 
 
 class Horsager2009Temporal(TemporalModel):
-    """Temporal model of [Horsager2009]_
+    r"""Temporal model of [Horsager2009]_.
 
-    Implements the temporal response model described in [Horsager2009]_, which
-    assumes that the temporal activation of retinal tissue is the output of a
-    linear-nonlinear model cascade (see Fig.2 in the paper).
+    Implements the linear-nonlinear cascade from Fig. 2 of [Horsager2009]_.
+    With stimulus current :math:`A(t)`, the fast pathway and charge
+    accumulation are
 
-    .. note ::
+    .. math::
 
-        Use this class if you want to combine the temporal model with a spatial
-        model.
-        Use :py:class:`~pulse2percept.models.Horsager2009Model` if you want a
-        a standalone model.
+        \tau_1 \frac{dR_1}{dt} &= -A(t) - R_1(t), \\
+
+        \frac{dC}{dt} &= \max[A(t), 0], \\
+
+        \tau_2 \frac{dR_2}{dt} &= C(t) - R_2(t).
+
+    Thus negative current drives the fast response, while positive current
+    contributes to accumulated charge. The two pathways combine through a
+    rectifying power nonlinearity,
+
+    .. math::
+
+        R_3(t) =
+        \left[
+            \max\left(
+                R_1(t) - \epsilon_{\mathrm{ms}} R_2(t), 0
+            \right)
+        \right]^\beta,
+
+    where :math:`\epsilon_{\mathrm{ms}} = \epsilon / 1000` because p2p
+    integrates time in milliseconds while the original parameterization used
+    microseconds.
+
+    The result passes through three identical slow leaky integrators,
+
+    .. math::
+
+        \tau_3 \frac{dR_{4a}}{dt} &= R_3 - R_{4a}, \\
+
+        \tau_3 \frac{dR_{4b}}{dt} &= R_{4a} - R_{4b}, \\
+
+        \tau_3 \frac{dB}{dt} &= R_{4b} - B,
+
+    and :math:`B(t)` is the predicted brightness.
+
+    Use this class to combine the temporal model with a spatial model. Use
+    :py:class:`~pulse2percept.models.Horsager2009Model` for the standalone
+    temporal model.
 
     Parameters
     ----------
-    dt : float, optional
-        Sampling time step (ms)
-    tau1 : float, optional
-        Time decay constant for the fast leaky integrater.
-    tau2 : float, optional
-        Time decay constant for the charge accumulation.
-    tau3 : float, optional
-        Time decay constant for the slow leaky integrator.
+    dt : float or Quantity, optional
+        Simulation time step, in milliseconds. Default: 0.005 ms.
+    tau1 : float or Quantity, optional
+        Time constant of the fast response :math:`R_1`, in milliseconds.
+        Default: 0.42 ms.
+    tau2 : float or Quantity, optional
+        Time constant of the filtered charge accumulation :math:`R_2`, in
+        milliseconds. Default: 45.25 ms.
+    tau3 : float or Quantity, optional
+        Time constant of each of the three final leaky-integrator stages, in
+        milliseconds. Default: 26.25 ms.
     eps : float, optional
-        Scaling factor applied to charge accumulation. Common values at
-        threshold: 2.25, suprathreshold: 8.73.
+        Strength of the subtractive charge-accumulation pathway. The public
+        value retains the original microsecond parameterization and is divided
+        by 1000 internally for millisecond integration. Default: 2.25.
+        [Horsager2009]_ also reports 8.73 for the suprathreshold fit.
     beta : float, optional
-        Power nonlinearity (exponent of the half-wave rectification).
-        Common values at threshold: 3.43, suprathreshold: 0.83.
-    thresh_percept: float, optional
-        Below threshold, the percept has brightness zero.
-    n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
-
+        Exponent of the rectifying power nonlinearity. Default: 3.43.
+        [Horsager2009]_ also reports 0.83 for the suprathreshold fit.
+    thresh_percept : float, optional
+        Brightness values below this threshold are set to zero. Default: 0.
+    reduce : {'peak', 'last'}, optional
+        How automatically chosen output points summarize the preceding
+        interval. ``'last'`` reports brightness at the output instant;
+        ``'peak'`` approximates the interval peak by subsampling. Explicit
+        ``t_percept`` values always request those instants. Default:
+        ``'last'``.
+    verbose : bool, optional
+        Whether to print status messages. Default: True.
+    n_threads : int, optional
+        Number of OpenMP threads. Defaults to all available CPU cores.
+    n_jobs : int or None, optional
+        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
     def get_default_params(self):
         base_params = super(Horsager2009Temporal, self).get_default_params()
         params = {
-            # Time decay for the ganglion cell impulse response:
             'tau1': 0.42,
-            # Time decay for the charge accumulation:
             'tau2': 45.25,
-            # Time decay for the slow leaky integrator:
             'tau3': 26.25,
-            # Scaling factor applied to charge accumulation:
             'eps': 2.25,
-            # Exponent:
             'beta': 3.43
         }
-        # This is subtle: Rather than calling `params.update(base_params)`, we
-        # call `base_params.update(params)`. This will overwrite `base_params`
-        # with values from `params`, which allows us to set `thresh_percept`=0
-        # rather than what the BaseModel dictates:
         base_params.update(params)
         return base_params
 
     def get_param_units(self):
-        """Return a dict of the units that parameters are stored in"""
-        # The three time constants of the model cascade. `eps` and `beta` are
-        # fitted scaling and exponent terms, and take plain numbers:
+        """Return units used to store model parameters."""
         return {**super().get_param_units(), 'tau1': ms, 'tau2': ms,
                 'tau3': ms}
 
     def _predict_temporal(self, stim, t_percept):
-        """Predict the temporal response"""
-        # Pass the stimulus as a 2D NumPy array to the fast Cython function:
+        """Predict the temporal response."""
         time = self._stim_times(stim)
         stim_data = self._stim_values(stim).reshape((-1, len(time)))
-        # Calculate at which simulation time steps we need to output a percept.
-        # This is basically t_percept/self.dt, but we need to beware of
-        # floating point rounding errors! 29.999 will be rounded down to 29 by
-        # np.uint32, so we need to np.round it first:
+        # Round before casting so floating-point noise cannot shift a sample.
         idx_percept = np.uint32(np.round(t_percept / self.dt))
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct multiples "
                              f"of `dt`={self.dt:.2e}")
-        # Cython returns a 2D (space x time) NumPy array:
         return temporal_fast(stim_data.astype(np.float32),
                              time.astype(np.float32),
                              idx_percept,
@@ -93,38 +125,43 @@ class Horsager2009Temporal(TemporalModel):
 
 
 class Horsager2009Model(Model):
-    """[Horsager2009]_ Standalone model
+    """Standalone temporal model of [Horsager2009]_.
 
-    Implements the temporal response model described in [Horsager2009]_, which
-    assumes that the temporal activation of retinal tissue is the output of a
-    linear-nonlinear model cascade (see Fig.2 in the paper).
-
-    .. note ::
-
-        Use this class if you want a standalone model.
-        Use :py:class:`~pulse2percept.models.Horsager2009Temporal` if you want
-        to combine the temporal model with a spatial model.
+    Uses :py:class:`~pulse2percept.models.Horsager2009Temporal` without a
+    spatial component. See that class for the model equations. Use
+    ``Horsager2009Temporal`` instead when combining the temporal cascade with
+    a spatial model.
 
     Parameters
     ----------
-    dt : float, optional
-        Sampling time step (ms)
-    tau1 : float, optional
-        Time decay constant for the fast leaky integrater.
-    tau2 : float, optional
-        Time decay constant for the charge accumulation.
-    tau3 : float, optional
-        Time decay constant for the slow leaky integrator.
+    dt : float or Quantity, optional
+        Simulation time step, in milliseconds. Default: 0.005 ms.
+    tau1 : float or Quantity, optional
+        Time constant of the fast response, in milliseconds. Default:
+        0.42 ms.
+    tau2 : float or Quantity, optional
+        Time constant of the filtered charge accumulation, in milliseconds.
+        Default: 45.25 ms.
+    tau3 : float or Quantity, optional
+        Time constant of each final leaky-integrator stage, in milliseconds.
+        Default: 26.25 ms.
     eps : float, optional
-        Scaling factor applied to charge accumulation. Common values at
-        threshold: 0.00225, suprathreshold: 0.00873.
-        Power nonlinearity (exponent of the half-wave rectification).
-        Common values at threshold: 3.43, suprathreshold: 0.83.
-    thresh_percept: float, optional
-        Below threshold, the percept has brightness zero.
-    n_threads: int, optional
-            Number of CPU threads to use during parallelization using OpenMP. Defaults to max number of user CPU cores.
-
+        Strength of the subtractive charge-accumulation pathway. Default:
+        2.25. [Horsager2009]_ also reports 8.73 for the suprathreshold fit.
+    beta : float, optional
+        Exponent of the rectifying power nonlinearity. Default: 3.43.
+        [Horsager2009]_ also reports 0.83 for the suprathreshold fit.
+    thresh_percept : float, optional
+        Brightness values below this threshold are set to zero. Default: 0.
+    reduce : {'peak', 'last'}, optional
+        How automatically chosen output points summarize the preceding
+        interval. Default: ``'last'``.
+    verbose : bool, optional
+        Whether to print status messages. Default: True.
+    n_threads : int, optional
+        Number of OpenMP threads. Defaults to all available CPU cores.
+    n_jobs : int or None, optional
+        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
     def __init__(self, **params):
