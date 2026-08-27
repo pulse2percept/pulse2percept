@@ -1,7 +1,8 @@
 from pulse2percept.viz import (plot_argus_phosphenes,
                                plot_argus_simulated_phosphenes)
 from pulse2percept.implants import ArgusI, ArgusII, AlphaAMS
-from pulse2percept.models import AxonMapModel, ScoreboardModel
+from pulse2percept.models import (AxonMapModel, AxonMapSpatial,
+                                  ScoreboardModel)
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -59,13 +60,14 @@ def test_plot_argus_phosphenes():
 
 
 # Parametrize over the class, not over instances: arguments to `parametrize`
-# are built at import time and shared across invocations, so mutating one
-# (as this test does with `implant.stim`) would leak state between tests.
+# are built at import time and shared across invocations, so a test that
+# mutated one would leak state into the others.
 @pytest.mark.parametrize('ImplantType', (ArgusI, ArgusII))
 def test_plot_argus_simulated_phosphenes(ImplantType):
     implant = ImplantType()
-    implant.stim = {'A1': [1, 0, 0], 'B2': [0, 1, 0], 'C3': [0, 0, 1]}
-    percepts = ScoreboardModel().build().predict_percept(implant)
+    source = {'A1': [1, 0, 0], 'B2': [0, 1, 0], 'C3': [0, 0, 1]}
+    model = ScoreboardModel(implant=implant).build()
+    percepts = model.predict_percept(source)
 
     plot_argus_simulated_phosphenes(percepts, implant)
 
@@ -73,3 +75,33 @@ def test_plot_argus_simulated_phosphenes(ImplantType):
     _, ax = plt.subplots()
     plot_argus_simulated_phosphenes(percepts, implant, ax=ax,
                                     axon_map=AxonMapModel())
+
+
+def test_the_plotted_implant_owns_the_axon_laterality(monkeypatch):
+    """One implant in the picture, so one eye -- the caller's `argus`
+
+    Asserted on where the bundles are grown from rather than on the drawn
+    lines: this plot windows bundles to the array's own extent, and nothing
+    survives that in a synthetic dataset.
+    """
+    df = pd.DataFrame([
+        {'subject': 'S1', 'electrode': 'A1', 'image': np.random.rand(10, 10),
+         'xrange': (-10, 10), 'yrange': (-10, 10)},
+    ])
+    grown = []
+    unwrapped = AxonMapSpatial.grow_axon_bundles
+
+    def spy(self, **kwargs):
+        grown.append((self.implant.eye, tuple(self.loc_od)))
+        return unwrapped(self, **kwargs)
+
+    monkeypatch.setattr(AxonMapSpatial, 'grow_axon_bundles', spy)
+    # A model bound to the other eye, which used to be what decided:
+    axon_map = AxonMapModel(implant=ArgusII(eye='RE'), loc_od=(15.5, 1.5))
+    _, ax = plt.subplots()
+    plot_argus_phosphenes(df, ArgusII(eye='LE'), ax=ax, axon_map=axon_map)
+    # The optic disc is nasal, so a left eye puts it at negative x:
+    npt.assert_equal(grown, [('LE', (-15.5, 1.5))])
+    # ... and the caller's model is left pointed where it was:
+    npt.assert_equal(axon_map.implant.eye, 'RE')
+    npt.assert_equal(tuple(axon_map.loc_od), (15.5, 1.5))

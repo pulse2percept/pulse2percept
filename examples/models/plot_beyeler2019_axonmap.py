@@ -32,15 +32,16 @@ exponentially:
 
 The axon map model can be instantiated and run in three steps.
 
-Creating the model
-------------------
+Choosing an implant
+-------------------
 
-The first step is to instantiate the
-:py:class:`~pulse2percept.models.AxonMapModel` class by calling its
-constructor method.
-The two most important parameters to set are ``rho`` and ``lam`` from
-the equation above (here set to 150 micrometers and 500 micrometers,
-respectively):
+A model predicts what a *particular* device produces, so the first step is to
+specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
+
+In the following, we will use an
+:py:class:`~pulse2percept.implants.ArgusII` implant. By default, the implant
+will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
+meridian (rot=0):
 
 """
 # sphinx_gallery_thumbnail_number = 2
@@ -48,7 +49,20 @@ respectively):
 import numpy as np
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
-model = AxonMapModel(rho=150, lam=500)
+
+implant = ArgusII()
+
+##############################################################################
+# Creating the model
+# ------------------
+#
+# The second step is to instantiate the
+# :py:class:`~pulse2percept.models.AxonMapModel` class, bound to that implant.
+# The two most important parameters to set are ``rho`` and ``lam`` from
+# the equation above (here set to 150 micrometers and 500 micrometers,
+# respectively):
+
+model = AxonMapModel(implant=implant, rho=150, lam=500)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -66,8 +80,7 @@ print(model)
 # * ``step``: The resolution (in dva) at which to sample the visual field.
 #   For example, we are currently sampling at 0.25 dva in both x and y
 #   direction.
-# * ``loc_od_x``, ``loc_od_y``: the location of the center of the optic disc
-#   (in dva)
+# * ``loc_od``: the location of the center of the optic disc (in dva)
 # * ``thresh_percept``: You can also define a brightness threshold, below which
 #   the predicted output brightness will be zero. It is currently set to
 #   ``1/sqrt(e)``, because that will make the radius of the predicted percept
@@ -80,44 +93,21 @@ print(model)
 # * ``axons_range``: the range of angles (in degrees) to use at which axon
 #   trajectories emanate from the center of the optic disc
 # * ``n_ax_segments``: the number of segments each generated axon should have
-# * ``n_ax_segments_range``: the range of distances (in dva) to use, measured
+# * ``ax_segments_range``: the range of distances (in dva) to use, measured
 #   from the center of the optic disc, at which axon segments should be placed
-# * ``axons_pickle``: path to a pickle file where previously generated axon
+# * ``axon_pickle``: path to a pickle file where previously generated axon
 #   maps are stored
 #
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand.
 #
-# Then build the model. This is a necessary step before you can actually use
-# the model to predict a percept, as it performs a number of expensive setup
-# computations (e.g., building the axon map, calculating electric potentials):
-
-model.build()
-
-##############################################################################
-# .. important ::
+# Before it can predict anything, the model performs a number of expensive
+# setup computations (building the axon map, laying out the simulation grid).
+# That happens automatically the first time you ask for a percept, and again
+# whenever you change a model parameter. You can also trigger it yourself with
+# ``model.build()`` -- useful when you would rather pay the cost at a moment of
+# your choosing, or want to inspect the built axon map first.
 #
-#     You need to build a model only once. After that, you can apply any number
-#     of stimuli -- or even apply the model to different implants -- without
-#     having to rebuild (which takes time).
-#
-#     However, if you change important model parameters outside the constructor
-#     (e.g., by directly setting ``model.lam = 100``), you will have to
-#     call ``model.build()`` again for your changes to take effect.
-#
-# Assigning a stimulus
-# --------------------
-# The second step is to specify a visual prosthesis from the
-# :py:mod:`~pulse2percept.implants` module.
-#
-# In the following, we will create an
-# :py:class:`~pulse2percept.implants.ArgusII` implant. By default, the implant
-# will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
-# meridian (rot=0):
-
-implant = ArgusII()
-
-##############################################################################
 # You can inspect the location of the implant with respect to the underlying
 # nerve fiber bundles using the built-in plot methods:
 
@@ -129,22 +119,16 @@ implant.plot()
 # By default, the plots will be added to the current Axes object.
 # Alternatively, you can pass ``ax=`` to specify in which Axes to plot.
 #
-# The easiest way to assign a stimulus to the implant is to pass a NumPy array
-# that specifies the current amplitude to be applied to every electrode in the
-# implant.
-#
-# For example, the following sends 1 microamp to all 60 electrodes of the
-# implant:
-
-implant.stim = np.ones(60)
-
-##############################################################################
 # Predicting the percept
 # ----------------------
-# The third step is to apply the model to predict the percept resulting from
-# the specified stimulus. Note that this may take some time on your machine:
+# The third step is to hand the model a stimulus. The easiest kind is a NumPy
+# array that specifies the current amplitude to be applied to every electrode
+# in the implant.
+#
+# For example, the following sends 1 microamp to all 60 electrodes and predicts
+# the resulting percept. Note that this may take some time on your machine:
 
-percept = model.predict_percept(implant)
+percept = model.predict_percept(np.ones(60))
 
 ##############################################################################
 # The resulting percept is stored in a
@@ -163,15 +147,16 @@ ax.set_title('Predicted percept')
 # depending on the location of the implant. You can convince yourself of that
 # by re-running the model on an implant shifted and rotated across the retina:
 
-implant = ArgusII(x=-50, y=50, rot=-45)
+model.implant = ArgusII(x=-50, y=50, rot=-45)
 model.plot()
-implant.plot()
+model.implant.plot()
 
 ##############################################################################
-# The resulting percepts should look very different from the previous example:
+# The resulting percepts should look very different from the previous example.
+# Rebinding the implant invalidated the build, so the model rebuilds itself
+# here:
 
-implant.stim = np.ones(60)
-percept = model.predict_percept(implant)
+percept = model.predict_percept(np.ones(60))
 ax = percept.plot()
 ax.set_title('Predicted percept')
 
@@ -193,9 +178,9 @@ ax.set_title('Predicted percept')
 # However, you may have to increase the number of axons and number of segments
 # per axon to get a smooth percept out:
 
-model = AxonMapModel(rho=200, lam=10, n_axons=3000, n_ax_segments=3000)
-model.build()
-percept = model.predict_percept(implant)
+model = AxonMapModel(implant=model.implant, rho=200, lam=10, n_axons=3000,
+                     n_ax_segments=3000)
+percept = model.predict_percept(np.ones(60))
 ax = percept.plot()
 ax.set_title('Predicted percept')
 

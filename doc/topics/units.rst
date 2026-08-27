@@ -129,7 +129,7 @@ pulses expressed in ``xTh`` will be automatically converted to microamps:
     train = BiphasicPulseTrain(20, 2 * xTh, 0.45)
 
     implant.thresholds = {'A4': 80 * uA}
-    implant.stim = {'A4': train}  # calibrated to 160 uA
+    implant.prepare_stim({'A4': train})  # calibrated to 160 uA
 
 Without a threshold, the train remains in ``xTh``. Current-based safety checks
 and models require calibration to a physical current.

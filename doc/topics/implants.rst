@@ -4,9 +4,9 @@
 Visual Prostheses
 =================
 
-An implant describes where stimulation is delivered: its electrodes, their
-geometry and location, and the stimulus assigned to them. The implant does not
-predict vision; that is the model's job.
+An implant describes the device: its electrodes, their geometry and location,
+and how a source stimulus becomes the current those electrodes deliver. The
+implant does not predict vision; that is the model's job.
 
 All implants derive from
 :py:class:`~pulse2percept.implants.ProsthesisSystem`. The attributes used most
@@ -15,16 +15,21 @@ often are:
 ``earray``
     The :py:class:`~pulse2percept.implants.ElectrodeArray`.
 
-``stim``
-    The :py:class:`~pulse2percept.stimuli.Stimulus` assigned to the implant.
-
 ``eye``
     The implanted eye for retinal systems.
+
+``placement``
+    Where the device sits relative to the tissue it stimulates
+    (``'epiretinal'``, ``'subretinal'``, ``'suprachoroidal'``,
+    ``'epicortical'``, ``'intracortical'``), or ``None`` for a generic array.
 
 ``encoder`` and ``raster``
     Optional device behavior used when visual input is converted to electrical
     stimulation. These are covered later in :ref:`topics-encoders` and
     :ref:`topics-rasters`.
+
+An implant holds no stimulus. What it delivers is derived from a source, on
+demand, by :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`.
 
 Basic use
 ---------
@@ -43,6 +48,30 @@ directly:
     implant.electrode_names
     implant.earray.coordinates()
     implant.plot()
+
+Preparing a stimulus
+--------------------
+
+:py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` converts a
+source into stimulation the device can deliver:
+
+.. code-block:: python
+
+    delivered = implant.prepare_stim({'A8': 30})
+    delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
+
+Preparation includes preprocessing, image/video encoding, resampling onto the
+electrode array, raster scheduling, threshold calibration, and safety checks.
+The result is returned as a :py:class:`~pulse2percept.stimuli.Stimulus` and is
+not stored on the implant.
+
+Models call ``prepare_stim`` internally. Call it directly when the delivered
+stimulation itself is of interest:
+
+.. code-block:: python
+
+    implant.prepare_stim(source).plot()
+    implant.plot(stim=source, stim_cmap=True)
 
 Available implants
 ------------------

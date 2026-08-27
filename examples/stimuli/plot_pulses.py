@@ -142,9 +142,9 @@ from pulse2percept.stimuli import AmplitudeEncoder, SnellenChart
 
 implant = ArgusII()
 encoder = AmplitudeEncoder(amp_range=(0, 50), freq=20)
-implant.stim = encoder.encode(SnellenChart().invert(), implant=implant)
+stim = encoder.encode(SnellenChart().invert(), implant=implant)
 
-implant.stim.plot(time=(0, 100))
+stim.plot(time=(0, 100))
 
 ##############################################################################
 # Color is current, centered on zero, so the cathodic and anodic phase of each
@@ -155,4 +155,4 @@ implant.stim.plot(time=(0, 100))
 # Zoom in time with ``time=``, and drill down into individual waveforms by
 # naming electrodes:
 
-implant.stim.plot(electrodes=['A1', 'C7', 'F10'])
+stim.plot(electrodes=['A1', 'C7', 'F10'])

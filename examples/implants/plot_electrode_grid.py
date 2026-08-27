@@ -125,7 +125,11 @@ offset_grid = ElectrodeGrid((11, 13), 500, type='hex', x=-600, y=200, z=150,
 # We can also plot the grid on top of a map of retinal nerve fiber bundles:
 
 
-AxonMapModel().plot()
+# An axon map is grown for a particular eye, so the model needs the implant
+# the grid belongs to:
+from pulse2percept.implants import ProsthesisSystem
+
+AxonMapModel(implant=ProsthesisSystem(offset_grid)).plot()
 offset_grid.plot()
 
 ##############################################################################
@@ -140,6 +144,11 @@ offset_grid.plot()
 
 from pulse2percept.implants import GridImplant
 
-implant = GridImplant((11, 13), 500, type='hex', etype=DiskElectrode, r=100,
-                      stim={'A1': 20})
+implant = GridImplant((11, 13), 500, type='hex', etype=DiskElectrode, r=100)
 implant.plot()
+
+##############################################################################
+# The implant is what a model is bound to, and what turns a source stimulus
+# into the current its electrodes deliver:
+
+implant.prepare_stim({'A1': 20})

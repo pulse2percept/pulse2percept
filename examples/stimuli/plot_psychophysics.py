@@ -98,27 +98,21 @@ stim.play()
 # To demonstrate, we will pass a ``GratingStimululus`` to an
 # :py:class:`~pulse2percept.implants.ArgusII` implant and use the
 # :py:class:`~pulse2percept.models.AxonMapModel` [Beyeler2019]_ to interpret it:
-#
-# .. important ::
-#   
-#   Don't forget to build the model before using ``predict_percept``
-#
 
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
 
-model = AxonMapModel()
-model.build()
-
 implant = ArgusII()
+model = AxonMapModel(implant=implant)
+
 grating = GratingStimulus((25,25), temporal_freq=0.1)
 # A model reads current, so the video is encoded first. Its frames are 20 ms
 # apart, so the pulse rate has to be at least 50 Hz for every frame to get a
 # pulse; asking for a percept at the video's own frame times then gives one
 # percept frame per video frame:
-implant.stim = grating.encode(implant=implant, freq=50)
+stim = grating.encode(implant=implant, freq=50)
 
-percept = model.predict_percept(implant, t_percept=grating.time)
+percept = model.predict_percept(stim, t_percept=grating.time)
 percept.play()
 
 #####################################################################################
@@ -139,16 +133,12 @@ percept.play()
 # In the following example, we will invert the stimulus before passing it to the
 # implant:
 
-model = AxonMapModel()
-model.build()
-
-implant = ArgusII()
 grating = GratingStimulus((25,25), temporal_freq=0.1).invert()
 # A model reads current, so the video is encoded first. Its frames are 20 ms
 # apart, so the pulse rate has to be at least 50 Hz for every frame to get a
 # pulse; asking for a percept at the video's own frame times then gives one
 # percept frame per video frame:
-implant.stim = grating.encode(implant=implant, freq=50)
+stim = grating.encode(implant=implant, freq=50)
 
-percept = model.predict_percept(implant, t_percept=grating.time)
+percept = model.predict_percept(stim, t_percept=grating.time)
 percept.play()

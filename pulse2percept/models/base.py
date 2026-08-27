@@ -1,6 +1,5 @@
 """:py:class:`~pulse2percept.models.BaseModel`,
    :py:class:`~pulse2percept.models.Model`,
-   :py:class:`~pulse2percept.models.NotBuiltError`,
    :py:class:`~pulse2percept.models.SpatialModel`,
    :py:class:`~pulse2percept.models.TemporalModel`"""
 import warnings
@@ -9,6 +8,7 @@ from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
 from scipy.ndimage import gaussian_filter1d
+from scipy.spatial import cKDTree
 
 from ..implants import ProsthesisSystem
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
@@ -18,7 +18,7 @@ from ..topography import Curcio1990Map, Grid2D, RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
                      um, uA)
 from ..vision import Scene
-from ..utils import (PrettyPrint, FreezeError, Frozen, Parametrized, bisect,
+from ..utils import (PrettyPrint, FreezeError, Frozen, Parametrized,
                      deprecated_alias, warn_deprecated_params,
                      rename_deprecated_params)
 from ..utils.base import _is_constructing
@@ -180,39 +180,24 @@ def _require_stim_dimension(model, stim):
         f"{_describe_unit(stim.unit)}.")
 
 
-def _spatial_input(implant):
-    """Return the spatial view of an implant stimulus.
+def _spatial_input(stim):
+    """Return the spatial view of a prepared stimulus.
 
     Encoded stimuli expose frame-level modulation to spatial-only
     models instead of the time-resolved pulse schedule.
     """
-    return implant.stim._spatial_view()
+    return stim._spatial_view()
 
 
-def _rescale(stim, scale):
-    """Return a sampled copy of ``stim`` scaled by ``scale``.
+def _delivered(stim):
+    """Return the delivered pulse train for a prepared stimulus.
 
-    Metadata and units are preserved.
+    Encoded stimuli carry a frame-level view for spatial-only models. Remove that
+    view before a temporal stage integrates the waveform.
     """
-    return Stimulus(scale * stim.data, electrodes=stim.electrodes,
-                    time=stim.time,
-                    metadata=deepcopy(stim.metadata))._inherit_units(stim)
-
-
-def _rescaled_implant(implant, amp):
-    """Return a copy of ``implant`` with its stimulus scaled to peak at ``amp``."""
-    trial = deepcopy(implant)
-    trial.stim = implant.stim * (amp / implant.stim.data.max())
-    return trial
-
-
-def _delivered(implant):
-    """Return an implant whose spatial input is the delivered pulse train."""
-    if implant.stim is None or not implant.stim._has_spatial_view:
-        return implant
-    stand_in = copy(implant)
-    stand_in._stim = Stimulus(implant.stim)
-    return stand_in
+    if stim is None or not stim._has_spatial_view:
+        return stim
+    return Stimulus(stim)
 
 
 def _device_scene(scene, implant):
@@ -255,13 +240,14 @@ def _device_scene(scene, implant):
     return device
 
 
-def _scene_driven_implant(model, implant, gaze):
-    """A stand-in implant carrying what the scene delivers to its electrodes"""
-    scene = model.scene
+def _scene_stim(model, scene, gaze):
+    """Prepare electrode stimulation sampled from a scene."""
     if not model.has_space:
         raise ValueError("A scene is registered against the retina, which "
                          "needs a spatial model. This model has only a "
                          "temporal one.")
+    model.spatial._require_implant()
+    implant = model.implant
     vfmap = getattr(model.spatial, 'vfmap', None)
     if not isinstance(vfmap, RetinalMap):
         raise ValueError(
@@ -286,14 +272,11 @@ def _scene_driven_implant(model, implant, gaze):
     seen = Stimulus(gray, electrodes=implant.electrode_names,
                     time=device_scene.time,
                     metadata=device_scene.source.metadata)
-    trial = copy(implant)
-    # Preprocessing already ran, on the picture rather than on the values it
-    # samples to; everything else the setter does is still wanted:
-    trial.preprocess = False
-    # Through the setter, so the encoder, the safety checks and whatever else
-    # the device does to a stimulus all still happen:
-    trial.stim = seen._inherit_units(device_scene.source)
-    return trial
+    # Preprocessing already ran on the scene source. Use a shallow copy with
+    # preprocessing disabled for the remaining preparation steps:
+    device = copy(implant)
+    device.preprocess = False
+    return device.prepare_stim(seen._inherit_units(device_scene.source))
 
 
 def _blend_meridian(resp, grid, meridian, width):
@@ -336,12 +319,74 @@ def _blend_meridian(resp, grid, meridian, width):
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
-class NotBuiltError(ValueError, AttributeError):
-    """Exception class used to raise if model is used before building
+#: Parameter names declared by each model class, cached for ``__setattr__``.
+_declared = {}
 
-    This class inherits from both ValueError and AttributeError to help with
-    exception handling and backward compatibility.
+
+def _declared_params(model):
+    """Return cached parameter names declared by ``get_default_params``."""
+    cls = type(model)
+    names = _declared.get(cls)
+    if names is None:
+        names = _declared[cls] = frozenset(model.get_default_params())
+    return names
+
+
+def _unchanged(before, after):
+    """Return whether an assignment preserves the current value.
+
+    Values that cannot be compared are treated as changed.
     """
+    if before is after:
+        return True
+    try:
+        return bool(np.all(before == after))
+    except Exception:
+        return False
+
+
+def _electrode_pitch(model):
+    """Return median nearest-neighbor electrode spacing in ``space_unit``.
+
+    Distances use the dimensions represented by ``vfmap`` so that pitch matches
+    the coordinates used for prediction. Returns ``None`` for fewer than two
+    electrodes or zero spacing.
+    """
+    coords = model.implant.earray.coordinates(model.space_unit)
+    coords = coords[:, :model.vfmap.ndim]
+    if len(coords) < 2:
+        return None
+    # The nearest *other* electrode, so the query asks for two:
+    distances, _ = cKDTree(coords).query(coords, k=2)
+    pitch = float(np.median(distances[:, 1]))
+    return pitch if pitch > 0 else None
+
+
+def _warn_rho_vs_pitch(model):
+    """Warn when ``rho`` exceeds the implant's median electrode spacing."""
+    pitch = _electrode_pitch(model)
+    if pitch is None or model.rho <= pitch:
+        return
+    overlap = np.exp(-pitch ** 2 / (2 * model.rho ** 2))
+    warnings.warn(
+        f"rho={model.rho:.0f} um is wider than this implant's electrode "
+        f"pitch ({pitch:.0f} um), a ratio of {model.rho / pitch:.2f}. A point "
+        f"one pitch away from an electrode still sees {overlap:.0%} of its "
+        f"peak, so neighbouring electrodes blur into each other and the "
+        f"percept says more about rho than about which electrodes were "
+        f"driven.")
+
+
+def _warn_ignores_z(model, earray):
+    """Warn when a model ignores nonzero electrode ``z`` coordinates."""
+    if np.allclose([e.z for e in earray.electrode_objects], 0):
+        return
+    warnings.warn(
+        f"{type(model).__name__} does not model electrode-retina distance: "
+        f"nonzero z values do not change its response. In a real implant, "
+        f"distance is expected to affect stimulation threshold and spatial "
+        f"recruitment, but that relationship is not parameterized by this "
+        f"model.")
 
 
 class BaseModel(Parametrized, metaclass=ABCMeta):
@@ -353,12 +398,30 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     *  Build a model (via ``build``) and flip the ``is_built`` switch
 
+    .. versionchanged:: 0.11.0
+
+        ``predict_percept`` builds automatically. Changing a model parameter
+        invalidates the build, so the new value is used on the next prediction.
+
     .. versionchanged:: 0.10.0
 
         Everything other than the build workflow moved to
         :py:class:`~pulse2percept.utils.Parametrized`.
 
     """
+
+    def __setattr__(self, name, value):
+        """Invalidate the build when a declared parameter changes.
+
+        Assignments that preserve the current value leave the build intact.
+        """
+        if _is_constructing(self) or name not in _declared_params(self):
+            super().__setattr__(name, value)
+            return
+        before = getattr(self, name, None)
+        super().__setattr__(name, value)
+        if not _unchanged(before, getattr(self, name, None)):
+            object.__setattr__(self, '_is_built', False)
 
     # The units a model's numerical implementation works in. p2p converts a
     # unitful argument to these at the API boundary and hands the kernels
@@ -478,9 +541,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def build(self, **build_params):
         """Build the model
 
-        Every model must have a ```build`` method, which is meant to perform
-        all expensive one-time calculations. You must call ``build`` before
-        calling ``predict_percept``.
+        Every model must have a ```build`` method for expensive one-time
+        calculations. ``predict_percept`` calls it automatically when needed;
+        call it explicitly to build eagerly or pass build-time parameters.
 
         .. important::
 
@@ -516,6 +579,14 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         # already-copied model would be rebuilt on every revisit.
         if id(self) in memodict:
             return memodict[id(self)]
+        implant = getattr(self, '_implant', None)
+        if implant is not None:
+            # The implant is the device a model is pointed at, not part of the
+            # model's own state, so a copy describes the same physical
+            # implant. Seeding the memo is what shares it: it also keeps
+            # `copy.implant is model.implant`, and stops the rebuild below
+            # from being invalidated by a freshly copied device.
+            memodict.setdefault(id(implant), implant)
         copied = super().__deepcopy__(memodict)
         if self.is_built:
             copied.build()
@@ -530,10 +601,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     *  ``build``: builds the spatial grid used to calculate the percept.
        You can add your own ``_build`` method (note the underscore) that
        performs additional expensive one-time calculations.
-    *  ``predict_percept``: predicts the percepts based on an implant/stimulus.
-       Don't customize this method - implement your own ``_predict_spatial``
-       instead (see below).
-       A user must call ``build`` before calling ``predict_percept``.
+    *  ``predict_percept``: predicts the percept a stimulus produces on the
+       bound implant. Don't customize this method - implement your own
+       ``_predict_spatial`` instead (see below). It builds the model first if
+       it is not built.
 
     To create your own spatial model, you must subclass ``SpatialModel`` and
     provide an implementation for:
@@ -607,6 +678,40 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # `_vfmap_first`.
         super().__init__(**_vfmap_first(params))
         self.grid = None
+
+    @property
+    def implant(self):
+        """The prosthesis system this model predicts percepts for
+
+        A spatial model says where in the visual field the electrodes of a
+        particular device are seen, so the device is model context rather than
+        trial input: it is named once, and
+        :py:meth:`~pulse2percept.models.SpatialModel.predict_percept` is then
+        given the stimulus. Rebinding invalidates the build.
+
+        .. versionadded:: 0.11.0
+        """
+        return getattr(self, '_implant', None)
+
+    @implant.setter
+    def implant(self, implant):
+        """Implant setter (called upon ``self.implant = implant``)"""
+        if implant is not None and not isinstance(implant, ProsthesisSystem):
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
+        if implant is not getattr(self, '_implant', None):
+            # Spatial build state depends on implant geometry:
+            self._is_built = False
+        self._implant = implant
+
+    def _require_implant(self):
+        """Raise if no implant is bound to the spatial model."""
+        if not isinstance(self.implant, ProsthesisSystem):
+            raise ValueError(
+                f"{type(self).__name__} predicts what a particular implant "
+                f"produces, so it needs one: "
+                f"{type(self).__name__}(implant=ArgusII()). The stimulus is "
+                f"what 'predict_percept' takes.")
 
     def set_params(self, **params):
         """Set the parameters of this model
@@ -704,6 +809,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
+            # Implant geometry used by the spatial model:
+            'implant': None,
             # We will be simulating a patch of the visual field (xrange/yrange
             # in degrees of visual angle), at a given spatial resolution (step
             # size):
@@ -793,8 +900,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Build the model
 
         Performs expensive one-time calculations, such as building the spatial
-        grid used to predict a percept. You must call ``build`` before
-        calling ``predict_percept``.
+        grid used to predict a percept. ``predict_percept`` calls it for you
+        when the model is not built.
 
         .. important::
 
@@ -812,6 +919,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         # See `BaseModel.build`:
         self.set_params(**build_params)
+        self._require_implant()
         if self.vfmap.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
                              f"visual field map has {self.vfmap.ndim} dimensions.")
@@ -847,7 +955,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Hook for spatial-model postprocessing."""
         return resp
 
-    def predict_percept(self, implant, t_percept=None):
+    def predict_percept(self, source, t_percept=None):
         """Predict the spatial response
 
         .. important::
@@ -857,8 +965,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. note::
 
-            **This method reads modulation frames, not pulses.** Where
-            ``implant.stim`` was produced by the implant's own
+            **This method reads modulation frames, not pulses.** Where the
+            prepared stimulus was produced by the implant's own
             :py:class:`~pulse2percept.stimuli.StimulusEncoder`, what is read
             is one amplitude per electrode per frame of the source video,
             rather than the pulse train delivering it.
@@ -874,17 +982,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             :py:class:`~pulse2percept.models.Model` hands its spatial stage
             the delivered pulse train instead whenever it also has a temporal
             stage, since integrating those pulses is what that stage is for.
-            Models that replace ``predict_percept`` outright rather than
-            customizing ``_predict_spatial`` --
-            :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` and
-            :py:class:`~pulse2percept.models.cortex.DynaphosModel` -- read
-            ``implant.stim`` directly and are unaffected by any of this.
+
+        .. versionchanged:: 0.11.0
+            Takes the stimulus source rather than an implant; the implant is
+            the one this model is bound to.
 
         Parameters
         ----------
-        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            A valid prosthesis system. A stimulus can be passed via
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
+        source : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            What is presented to the device. Anything
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`
+            accepts, including an image or a video for the implant's encoder.
         t_percept: float or list of floats, optional
             The time points at which to output a percept, counted in this
             model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
@@ -899,26 +1007,33 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         percept: :py:class:`~pulse2percept.models.Percept`
             A Percept object whose ``data`` container has dimensions Y x X x T,
             and whose time axis is labelled in ``time_unit``.
-            Will return None if ``implant.stim`` is None.
+            Will return None if ``source`` is None or empty.
 
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
-                            f"not {type(implant)}.")
+            self.build()
+        return self._predict_prepared(self.implant.prepare_stim(source),
+                                      t_percept=t_percept)
+
+    def _predict_prepared(self, stim, t_percept=None):
+        """Predict the spatial response to an already prepared stimulus.
+
+        Composite models use this path to prepare stimulation once before running
+        spatial and temporal stages.
+        """
+        if not self.is_built:
+            self.build()
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
-        if implant.stim is None:
+        if stim is None:
             # Nothing to see here:
             return None
-        source = _spatial_input(implant)
+        source = _spatial_input(stim)
         _require_stim_dimension(self, source)
         if source.time is None and t_percept is not None:
-            # A single-frame source (an image) modulates the electrodes to one
-            # steady thing, so there are no times to ask about even though the
-            # pulse train delivering it does have a time axis:
+            # Static modulation has no time axis even if its encoded pulse
+            # train does:
             what = ("the modulation behind this stimulus"
-                    if source is not implant.stim else "stimulus")
+                    if source is not stim else "stimulus")
             raise ValueError(f"Cannot calculate spatial response at times "
                              f"t_percept={t_percept} because {what} does not "
                              f"have a time component.")
@@ -976,73 +1091,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                     stim[:, stim.time[t_unique]], electrodes=stim.electrodes,
                     time=uniq_time
                 )._inherit_units(stim)._inherit_metadata(stim)
-                resp_unique = self._predict_spatial(implant.earray, stim_unique)
+                resp_unique = self._predict_spatial(self.implant.earray,
+                                                    stim_unique)
                 # reconstruct original time points, making sure to preserve C ordering
                 resp = resp_unique[..., inverse].copy(order='C')
             else:
-                resp = self._predict_spatial(implant.earray, stim)
+                resp = self._predict_spatial(self.implant.earray, stim)
         resp = self._postprocess_spatial(resp)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
                        metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
-
-    def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100):
-        """Find the threshold current for a certain stimulus
-
-        Estimates ``amp_th`` such that the output of
-        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
-
-        Parameters
-        ----------
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            The implant and its stimulus to use. Stimulus amplitude will be
-            up and down regulated until ``amp_th`` is found.
-        bright_th : float
-            Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search, counted in this model's
-            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
-            (microamps, for every model p2p ships).
-        amp_tol : float, optional
-            Search will stop if candidate range of amplitudes is within
-            ``amp_tol``, in ``stimulus_unit``
-        bright_tol : float, optional
-            Search will stop if model brightness is within ``bright_tol`` of
-            ``bright_th``
-        max_iter : int, optional
-            Search will stop after ``max_iter`` iterations
-
-        Returns
-        -------
-        amp_th : float
-            Threshold current, in ``stimulus_unit``, estimated so that the
-            output of ``model.predict_percept(stim(amp_th))`` is within
-            ``bright_tol`` of ``bright_th``.
-
-        Notes
-        -----
-        *  ``amp_range`` and ``amp_tol`` may be given as unitful quantities
-           (e.g. ``amp_range=(0, 1 * mA)``); the answer comes back as a plain
-           number of microamps. ``bright_th`` and ``bright_tol`` are model
-           output, which is not a physical quantity and carries no unit. See
-           :py:mod:`pulse2percept.units`.
-
-        """
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem, not "
-                            f"{type(implant)}.")
-        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
-        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
-
-        def inner_predict(amp, fnc_predict, implant):
-            return fnc_predict(_rescaled_implant(implant, amp)).data.max()
-
-        return bisect(bright_th, inner_predict,
-                      args=[self.predict_percept, implant],
-                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
-                      y_tol=bright_tol, max_iter=max_iter)
 
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
              figsize=None):
@@ -1099,9 +1158,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     *  ``build``: builds the model in order to calculate the percept.
        You can add your own ``_build`` method (note the underscore) that
        performs additional expensive one-time calculations.
-    *  ``predict_percept``: predicts the percepts based on an implant/stimulus.
-       You can add your own ``_predict_temporal`` method to customize this
-       step. A user must call ``build`` before calling ``predict_percept``.
+    *  ``predict_percept``: predicts the percept a stimulus produces. You can
+       add your own ``_predict_temporal`` method to customize this step. It
+       builds the model first if it is not built.
 
     To create your own temporal model, you must subclass ``SpatialModel`` and
     provide an implementation for:
@@ -1298,7 +1357,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
+            self.build()
         if stim is None:
             # Nothing to see here:
             return None
@@ -1410,9 +1469,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         A stimulus of the wrong sign is not an error -- the model integrates it
         and rectifies the result away -- so it otherwise looks exactly like a
         stimulus that was simply too weak to see. Assigning a grayscale image
-        or video straight to ``implant.stim`` lands here, because gray levels
-        are nonnegative and most temporal models are driven by cathodic
-        current.
+        or video that was never encoded lands here, because gray levels are
+        nonnegative and most temporal models are driven by cathodic current.
         """
         if np.any(resp) or not np.any(stim.data):
             return
@@ -1427,72 +1485,6 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             f"has none. Encoding an image or a video with "
             f"pulse2percept.stimuli.AmplitudeEncoder gives it the right "
             f"polarity; otherwise negate it.")
-
-    def find_threshold(self, stim, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100, t_percept=None):
-        """Find the threshold current for a certain stimulus
-
-        Estimates ``amp_th`` such that the output of
-        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
-
-        Parameters
-        ----------
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The stimulus to use. Stimulus amplitude will be up and down
-            regulated until ``amp_th`` is found.
-        bright_th : float
-            Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search, counted in this model's
-            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
-            (microamps, for every model p2p ships).
-        amp_tol : float, optional
-            Search will stop if candidate range of amplitudes is within
-            ``amp_tol``, in ``stimulus_unit``
-        bright_tol : float, optional
-            Search will stop if model brightness is within ``bright_tol`` of
-            ``bright_th``
-        max_iter : int, optional
-            Search will stop after ``max_iter`` iterations
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept, counted in this
-            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
-            (milliseconds, for every model p2p ships).
-            If None, ``implant.stim.time`` is used.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
-            :py:mod:`pulse2percept.units`.
-
-        Returns
-        -------
-        amp_th : float
-            Threshold current, in ``stimulus_unit``, estimated so that the
-            output of ``model.predict_percept(stim(amp_th))`` is within
-            ``bright_tol`` of ``bright_th``.
-
-        Notes
-        -----
-        *  ``amp_range``, ``amp_tol`` and ``t_percept`` may be given as unitful
-           quantities; the answer comes back as a plain number of microamps.
-           ``bright_th`` and ``bright_tol`` are model output, which is not a
-           physical quantity and carries no unit. See
-           :py:mod:`pulse2percept.units`.
-
-        """
-        if not isinstance(stim, Stimulus):
-            raise TypeError(f"'stim' must be a Stimulus, not {type(stim)}.")
-        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
-        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
-        t_percept = as_value(t_percept, self.time_unit, 't_percept')
-
-        def inner_predict(amp, fnc_predict, stim, **kwargs):
-            _stim = _rescale(stim, amp / stim.data.max())
-            return fnc_predict(_stim, **kwargs).data.max()
-
-        return bisect(bright_th, inner_predict,
-                      args=[self.predict_percept, stim],
-                      kwargs={'t_percept': t_percept},
-                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
-                      y_tol=bright_tol, max_iter=max_iter)
 
 
 class Model(Frozen, PrettyPrint):
@@ -1526,14 +1518,11 @@ class Model(Frozen, PrettyPrint):
     temporal: :py:class:`~pulse2percept.models.TemporalModel` or None
         The temporal model, which decides how the response evolves over time.
         May be given as a class, which is then constructed from ``params``.
-    scene: :py:class:`~pulse2percept.vision.Scene` or None
-        What the eye is looking at. With a scene,
-        :py:meth:`~pulse2percept.models.Model.predict_percept` registers it
-        against the implant through this model's own ``vfmap`` rather than
-        taking a stimulus from the caller. Belongs to the composite rather
-        than to either component, and is not forwarded to them: it is what
-        connects the retinotopy one of them holds to the implant the other
-        never sees.
+    implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        The device this model predicts percepts for. Stored on the spatial
+        model, which is what needs it, and read back through ``model.implant``;
+        there is one implant, not a copy per component. A temporal-only model
+        never sees an electrode, and so does not take one.
 
         .. versionadded:: 0.11.0
 
@@ -1600,7 +1589,10 @@ class Model(Frozen, PrettyPrint):
             return self.spatial.time_unit
         return BaseModel.time_unit
 
-    def __init__(self, spatial=None, temporal=None, scene=None, **params):
+    def __init__(self, spatial=None, temporal=None, **params):
+        # Only the spatial component depends on implant geometry, so do not
+        # forward `implant` to the temporal component:
+        implant = params.pop('implant', None)
         # A sub-model passed as a *class* is constructed from `params` below,
         # and `set_params` then hands the same dict to the resulting instance.
         # Both paths rewrite renamed parameters, so an old name reaching this
@@ -1629,15 +1621,23 @@ class Model(Frozen, PrettyPrint):
                 raise TypeError(f"'temporal' must be a TemporalModel instance, "
                                 f"not {type(temporal)}.")
         self.temporal = temporal
-        # The scene belongs to the composite, not to either component: it is
-        # what connects the retinotopy one of them holds to the implant the
-        # other never sees. Deliberately not forwarded to `set_params`.
-        if scene is not None and not isinstance(scene, Scene):
-            raise TypeError(f"'scene' must be a Scene object, not "
-                            f"{type(scene)}.")
-        self.scene = scene
         # Use user-specified parameter values instead of defaults:
         self.set_params(params)
+        if implant is not None:
+            if not self.has_space:
+                raise ValueError(
+                    "An implant is where a spatial model puts its electrodes, "
+                    "and this model has only a temporal component. A temporal "
+                    "model is given the stimulus and nothing else.")
+            bound = self.spatial.implant
+            if bound is not None and bound is not implant:
+                raise ValueError(
+                    f"This model was given two different implants: "
+                    f"'implant' is {type(implant).__name__} and the spatial "
+                    f"model is already bound to "
+                    f"{type(bound).__name__}. A model describes one device, "
+                    f"so name it once - either here or on the spatial model.")
+            self.spatial.implant = implant
 
     def __getattr__(self, attr):
         """Called when the default attr access fails with an AttributeError
@@ -1744,12 +1744,7 @@ class Model(Frozen, PrettyPrint):
         # the constructor, so those cannot be passed in as parameters:
         spatial = attributes.pop('spatial', None)
         temporal = attributes.pop('temporal', None)
-        # Same reason: a subclass constructor may splat its keyword arguments
-        # into the sub-models, which do not accept a scene.
-        scene = attributes.pop('scene', None)
         result = self.__class__(**attributes)
-        if scene is not None:
-            object.__setattr__(result, 'scene', scene)
         # Whatever the constructor made, replace it with our copies. Model
         # parameters (e.g. `rho`) are forwarded to the sub-models by
         # `__setattr__`, so they live in `spatial`/`temporal`, not in
@@ -1793,8 +1788,6 @@ class Model(Frozen, PrettyPrint):
     def _pprint_params(self):
         """Return a dictionary of parameters to pretty - print"""
         params = {'spatial': self.spatial, 'temporal': self.temporal}
-        if self.scene is not None:
-            params['scene'] = self.scene
         # Also display the parameters from the spatial/temporal model:
         if self.has_space:
             params.update(self.spatial._pprint_params())
@@ -1848,6 +1841,8 @@ class Model(Frozen, PrettyPrint):
         Performs expensive one-time calculations, such as building the spatial
         grid used to predict a percept.
 
+        Unlike prediction-time auto-building, this rebuilds every component.
+
         Parameters
         ----------
         build_params: additional parameters to set
@@ -1868,20 +1863,28 @@ class Model(Frozen, PrettyPrint):
             self.temporal.build()
         return self
 
-    def predict_percept(self, implant, t_percept=None, gaze=None, vmax=None,
+    def _build_stale(self):
+        """Build only components whose cached state is invalid.
+
+        This avoids rebuilding an unchanged spatial stage during temporal parameter
+        sweeps, and vice versa.
+        """
+        if self.has_space and not self.spatial.is_built:
+            self.spatial.build()
+        if self.has_time and not self.temporal.is_built:
+            self.temporal.build()
+
+    def predict_percept(self, source, t_percept=None, gaze=None, vmax=None,
                         vmin=0):
         """Predict a percept
 
-        .. important ::
+        Builds whichever components are not built yet.
 
-            You must call ``build`` before calling ``predict_percept``.
-
-        Without a :py:class:`~pulse2percept.vision.Scene`, this predicts what
-        ``implant.stim`` produces, as it always has. With one, the model is
-        the glue: it follows each electrode out through its own ``vfmap`` to
-        the place in the scene that electrode sees, hands those values to the
-        implant's ``encoder``, and predicts the percept that results. The
-        caller's ``implant.stim`` is not touched.
+        For an ordinary source, the bound implant prepares the delivered
+        stimulation before prediction. For a
+        :py:class:`~pulse2percept.vision.Scene`, electrode locations are mapped
+        through ``vfmap`` to sample the scene, then encoded by the implant
+        before prediction.
 
         If the scene also has a
         :py:class:`~pulse2percept.vision.Scotoma`, the result is what the
@@ -1891,22 +1894,23 @@ class Model(Frozen, PrettyPrint):
 
         .. versionchanged:: 0.11.0
 
-            Added ``gaze``, ``vmax`` and ``vmin``, which are what a scene
-            needs and are rejected without one.
+            Takes what is presented to the device -- a stimulus source or a
+            scene -- rather than an implant carrying a stimulus. ``gaze``,
+            ``vmax`` and ``vmin`` are what a scene needs, and are rejected
+            without one.
 
         Parameters
         ----------
-        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            A valid prosthesis system. A stimulus can be passed via
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`. With a
-            scene the stimulus comes from the scene instead, and the implant
-            supplies its electrode locations, its ``encoder`` and its device
-            scheduling.
+        source : :py:class:`~pulse2percept.stimuli.Stimulus` source type or
+                 :py:class:`~pulse2percept.vision.Scene`
+            What is presented to the device: anything
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`
+            accepts, or a scene the implanted eye is looking at.
         t_percept: float or list of floats, optional
             The time points at which to output a percept, counted in this
             model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
             (milliseconds, for every model p2p ships).
-            If None, ``implant.stim.time`` is used.
+            If None, the time points of the prepared stimulus are used.
             May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
             :py:mod:`pulse2percept.units`.
         gaze : (x, y) or (n_frames, 2), optional
@@ -1938,156 +1942,81 @@ class Model(Frozen, PrettyPrint):
         percept: :py:class:`~pulse2percept.models.Percept`
             Without a scene, or with one that has no scotoma: a brightness
             percept whose ``data`` has dimensions Y x X x T, and None if
-            ``implant.stim`` is None. With a scene that has a scotoma: an RGB
-            percept of dimensions Y x X x 3 x T on the scene's pixel grid.
+            ``source`` is None or empty. With a scene that has a scotoma: an
+            RGB percept of dimensions Y x X x 3 x T on the scene's pixel grid.
 
         """
-        # Before the scene is sampled and a whole stimulus encoded from it:
-        # not being built is the caller's oldest mistake, and it should not be
-        # reported after two newer ones.
-        if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
-        if self.scene is None:
+        # Scene sampling depends on the current spatial build:
+        self._build_stale()
+        if not isinstance(source, Scene):
             for name, value in (('gaze', gaze), ('vmax', vmax)):
                 if value is not None:
                     raise ValueError(
                         f"'{name}' says where an implanted eye is looking in "
-                        f"a scene, and this model has none. Build it with "
-                        f"'scene' to place one.")
+                        f"a scene, and this prediction is not about one. Pass "
+                        f"a Scene to place one.")
             if vmin != 0:
                 raise ValueError("'vmin' maps a percept onto a display, which "
                                  "only happens for a scene with a scotoma.")
-            return self._predict_percept(implant, t_percept)
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
-                            f"not {type(implant)}.")
-        trial = _scene_driven_implant(self, implant, gaze)
-        resp = self._predict_percept(trial, t_percept)
-        if self.scene.scotoma is None or resp is None:
+            return self._predict_percept(self._prepared(source), t_percept)
+        resp = self._predict_percept(_scene_stim(self, source, gaze),
+                                     t_percept)
+        if source.scotoma is None or resp is None:
             # Nothing is lost, so there is nothing to compose the percept
             # into: what the implant produces is the whole answer.
             return resp
-        return self.scene._compose(resp, vmax, vmin=vmin, gaze=gaze)
+        return source._compose(resp, vmax, vmin=vmin, gaze=gaze)
 
-    def _predict_percept(self, implant, t_percept=None):
-        """Predict the percept an implant's own stimulus produces"""
-        if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
-                            f"{type(implant)}.")
+    def _prepared(self, source):
+        """Prepare a source for the bound implant.
+
+        Temporal-only models have no implant and return the source unchanged.
+        """
+        if not self.has_space:
+            return source
+        self.spatial._require_implant()
+        return self.implant.prepare_stim(source)
+
+    def _predict_percept(self, stim, t_percept=None):
+        """Predict the percept a prepared stimulus produces"""
+        self._build_stale()
         # The sub-models normalize too; doing it here as well keeps the error
         # message below reading in plain milliseconds:
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
-        if implant.stim is None or (not self.has_space and not self.has_time):
+        if stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
-        _require_stim_dimension(self, implant.stim)
+        _require_stim_dimension(self, stim)
         # `_has_time_axis`, not `stim.time`: whether there is a time axis is a
         # question a stimulus can answer from its structure, and asking it for
         # the axis itself would generate the waveform behind it.
-        has_time_axis = _has_time_axis(implant.stim)
+        has_time_axis = _has_time_axis(stim)
         if not has_time_axis and t_percept is not None:
             raise ValueError(f"Cannot calculate temporal response at times "
                              f"t_percept={t_percept}, because stimulus/percept does not "
                              f"have a time component.")
 
         if self.has_space and self.has_time:
-            # Need to calculate the spatial response at all stimulus points
-            # (i.e., whenever the stimulus changes)
-            resp = self.spatial.predict_percept(_delivered(implant),
-                                                t_percept=None)
+            # Run the spatial stage on the delivered pulse train; the temporal
+            # stage integrates those pulses.
+            resp = self.spatial._predict_prepared(_delivered(stim),
+                                                  t_percept=None)
             if has_time_axis:
                 combine = getattr(self.spatial, '_combine_temporal', None)
                 if resp.time is None and combine is not None:
-                    # A spatial model hands over a percept with no time axis,
-                    # so the spatial model decides what to do with it:
-                    resp = combine(resp, self.temporal, implant.stim,
-                                   t_percept)
+                    # Allow a spatial model to define custom temporal
+                    # combination for a timeless intermediate percept:
+                    resp = combine(resp, self.temporal, stim, t_percept)
                 else:
                     # Then pass that to the temporal model, which will output
                     # at all `t_percept` time steps:
                     resp = self.temporal.predict_percept(resp,
                                                          t_percept=t_percept)
         elif self.has_space:
-            resp = self.spatial.predict_percept(implant, t_percept=t_percept)
+            resp = self.spatial._predict_prepared(stim, t_percept=t_percept)
         elif self.has_time:
-            resp = self.temporal.predict_percept(implant.stim,
-                                                 t_percept=t_percept)
+            resp = self.temporal.predict_percept(stim, t_percept=t_percept)
         return resp
-
-    def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100, t_percept=None):
-        """Find the threshold current for a certain stimulus
-
-        Estimates ``amp_th`` such that the output of
-        ``model.predict_percept(stim(amp_th))`` is approximately ``bright_th``.
-
-        Parameters
-        ----------
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            The implant and its stimulus to use. Stimulus amplitude will be
-            up and down regulated until ``amp_th`` is found.
-        bright_th : float
-            Model output (brightness) that's considered "at threshold".
-        amp_range : (amp_lo, amp_hi), optional
-            Range of amplitudes to search, counted in this model's
-            :py:attr:`~pulse2percept.models.BaseModel.stimulus_unit`
-            (microamps, for every model p2p ships).
-        amp_tol : float, optional
-            Search will stop if candidate range of amplitudes is within
-            ``amp_tol``
-        bright_tol : float, optional
-            Search will stop if model brightness is within ``bright_tol`` of
-            ``bright_th``
-        max_iter : int, optional
-            Search will stop after ``max_iter`` iterations
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept, counted in this
-            model's :py:attr:`~pulse2percept.models.BaseModel.time_unit`
-            (milliseconds, for every model p2p ships).
-            If None, ``implant.stim.time`` is used.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``); see
-            :py:mod:`pulse2percept.units`.
-
-        Returns
-        -------
-        amp_th : float
-            Threshold current, in ``stimulus_unit``, estimated so that the
-            output of ``model.predict_percept(stim(amp_th))`` is within
-            ``bright_tol`` of ``bright_th``.
-
-        Notes
-        -----
-        *  ``amp_range``, ``amp_tol`` and ``t_percept`` may be given as unitful
-           quantities; the answer comes back as a plain number of microamps.
-           ``bright_th`` and ``bright_tol`` are model output, which is not a
-           physical quantity and carries no unit. See
-           :py:mod:`pulse2percept.units`.
-
-        """
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem, not "
-                            f"{type(implant)}.")
-        if self.scene is not None:
-            # Thresholding rescales `implant.stim`, and with a scene that
-            raise NotImplementedError(
-                "find_threshold scales an implant's own stimulus, but this "
-                "model builds one from its scene instead. Drop the scene "
-                "(or use a second model without one) to find a threshold.")
-        amp_range = as_value(amp_range, self.stimulus_unit, 'amp_range')
-        amp_tol = as_value(amp_tol, self.stimulus_unit, 'amp_tol')
-        t_percept = as_value(t_percept, self.time_unit, 't_percept')
-
-        def inner_predict(amp, fnc_predict, implant, **kwargs):
-            return fnc_predict(_rescaled_implant(implant, amp),
-                               **kwargs).data.max()
-
-        return bisect(bright_th, inner_predict,
-                      args=[self.predict_percept, implant],
-                      kwargs={'t_percept': t_percept},
-                      x_lo=amp_range[0], x_hi=amp_range[1], x_tol=amp_tol,
-                      y_tol=bright_tol, max_iter=max_iter)
 
     @property
     def has_space(self):

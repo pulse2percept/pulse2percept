@@ -72,12 +72,9 @@ and predict the resulting percept:
     from pulse2percept.implants import ArgusII
     from pulse2percept.models import ScoreboardModel
 
-    implant = ArgusII(stim={'A8': 30})
+    model = ScoreboardModel(implant=ArgusII())
 
-    model = ScoreboardModel()
-    model.build()
-
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept({'A8': 30})
     percept.plot()
 
 Here, ``30`` means 30 microamps because that is the documented unit for
@@ -87,13 +84,13 @@ electrical stimulation. You can also write the unit explicitly:
 
     from pulse2percept.units import uA
 
-    implant = ArgusII(stim={'A8': 30 * uA})
+    percept = model.predict_percept({'A8': 30 * uA})
 
 Or, as a one-liner:
 
 .. code-block:: python
 
-    ScoreboardModel().build().predict_percept(ArgusII(stim={'A8': 30})).plot()
+    ScoreboardModel(implant=ArgusII()).predict_percept({'A8': 30}).plot()
 
 .. important::
 
@@ -367,14 +364,14 @@ pulse amplitude, whereas
 frequency.
 
 Devices whose video processing is known carry an encoder of their own, in
-which case ``implant.stim = image`` encodes for you.
+which case handing the model an image encodes it for you.
 :py:class:`~pulse2percept.implants.ArgusII` is one of them. Assign a different
 encoder to ``implant.encoder`` to say how the encoding should be done, or
 ``None`` to switch it off.
 
 If you already know the electrical stimulation you want to simulate, construct
-a :py:class:`~pulse2percept.stimuli.Stimulus` directly or assign stimulation
-to the implant. An electrical stimulus never goes through the encoder.
+a :py:class:`~pulse2percept.stimuli.Stimulus` directly. An electrical stimulus
+never goes through the encoder.
 
 .. important::
 
@@ -414,8 +411,8 @@ calls for a combination that is not already provided as a stand-alone model.
 See :ref:`Computational Models <topics-models>` for details.
 
 
-Why do I have to call ``build()``?
-----------------------------------
+What does ``build()`` do?
+-------------------------
 
 Some models need to perform expensive calculations that depend on their
 parameters but do not need to be repeated for every stimulus.
@@ -424,20 +421,20 @@ Calling ``build()`` performs these calculations once. For example, the Axon Map
 model can precompute retinal nerve fiber trajectories and their relationship
 to the simulation grid.
 
-The usual workflow is therefore:
+You rarely have to call it yourself: ``predict_percept`` builds a model that
+is not built yet, and giving a parameter a new value un-builds the model, so
+the next prediction picks the change up.
 
 .. code-block:: python
 
-    model = SomeModel(...)
-    model.build()
+    model = SomeModel(implant=implant, ...)
 
-    percept1 = model.predict_percept(implant1)
-    percept2 = model.predict_percept(implant2)
+    percept1 = model.predict_percept(stim1)
+    model.rho = 200          # un-builds the model
+    percept2 = model.predict_percept(stim2)   # builds it again
 
-.. note::
-
-    If you later change a parameter that affects a precomputed model quantity
-    or the simulation grid, call ``build()`` again before making predictions.
+Call ``build()`` explicitly when you want to pay that cost at a moment of your
+choosing, or to pass build-time parameters: ``model.build(rho=200)``.
 
 
 Implants and stimulation
@@ -463,14 +460,14 @@ See :ref:`Basic Concepts: Implants <topics-implants>` for details.
 How do I control which electrodes are stimulated?
 -------------------------------------------------
 
-For simple static stimulation, you can assign values by electrode name:
+For simple static stimulation, name the electrodes and their amplitudes:
 
 .. code-block:: python
 
-    implant.stim = {
+    percept = model.predict_percept({
         'A8': 30,
         'A9': 20,
-    }
+    })
 
 Only the listed electrodes are active.
 
@@ -499,13 +496,14 @@ For example:
 .. code-block:: python
 
     from pulse2percept.implants import ArgusII
+    from pulse2percept.models import ScoreboardModel
     from pulse2percept.stimuli import BostonTrain
 
-    implant = ArgusII(stim=BostonTrain())
+    model = ScoreboardModel(implant=ArgusII())
+    percept = model.predict_percept(BostonTrain())
 
 :py:class:`~pulse2percept.implants.ArgusII` comes with an encoder of its own,
-so the video is encoded on assignment. To say how, give the implant a
-different one:
+so the video is encoded for you. To say how, give the implant a different one:
 
 .. code-block:: python
 
@@ -514,10 +512,10 @@ different one:
 
     implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 50 * uA),
                                                freq=20 * Hz))
-    implant.stim = BostonTrain()
 
-Either way the resulting ``implant.stim`` is electrical stimulation and can be
-passed to a computational model in the usual way.
+Either way ``implant.prepare_stim(BostonTrain())`` is the electrical
+stimulation the device would deliver, which is also what the bound model
+reads.
 
 .. note::
 

@@ -49,7 +49,12 @@ from pulse2percept.implants import ArgusII
 from pulse2percept.models import BiphasicAxonMapModel
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.units import uA, xTh
-model = BiphasicAxonMapModel(rho=200, lam=800)
+
+# Models with an axon map are well suited for epiretinal implants, such as
+# Argus II. A model predicts what a particular device produces, so it is bound
+# to one:
+implant = ArgusII()
+model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -68,25 +73,16 @@ print(model)
 # parameters, see the Axon Map Tutorial
 #
 #
-# Next, build the model to perform expensive, one time calculations,
-# and specify a visual prosthesis from the
-# :py:mod:`~pulse2percept.implants` module. Models with an axon map are well 
-# suited for epiretinal implants, such as Argus II.
+# Before it can predict anything, the model performs expensive, one-time
+# calculations (growing the axon map). That happens automatically the first
+# time you ask for a percept, and again whenever you change a model parameter
+# such as ``model.a5``. You can also trigger it yourself with
+# ``model.build()``, which is what the next line does so that the axon map
+# exists to be plotted:
+
 model.build()
-implant = ArgusII()
 
 ##############################################################################
-# .. important ::
-#
-#     You need to build a model only once. After that, you can apply any number
-#     of stimuli -- or even apply the model to different implants -- without
-#     having to rebuild (which takes time).
-#
-#     However, if you change model parameters
-#     (e.g., by directly setting ``model.a5 = 2``), you will have to
-#     call ``model.build()`` again for your changes to take effect.
-#
-#
 # You can visualize the location of the implant and the axon map
 
 model.plot()
@@ -107,8 +103,10 @@ plt.show()
 # The following creates a train with 20Hz frequency, 1xTh amplitude, and
 # 0.45ms phase duration.
 
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 0.45)}
-implant.stim.plot()
+stim = {'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)}
+
+# What the device would deliver, which is also what the model reads:
+implant.prepare_stim(stim).plot()
 
 ##############################################################################
 # The plot is in ``xTh``, not microamps: how much current 1xTh is depends on
@@ -117,15 +115,15 @@ implant.stim.plot()
 ##############################################################################
 # Finally, you can predict the percept resulting from stimulation
 
-percept = model.predict_percept(implant)
+percept = model.predict_percept(stim)
 ax = percept.plot()
 ax.set_title('Predicted percept')
 plt.show()
 ##############################################################################
 # Increasing the frequency will make phosphenes brighter
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(50, 1 * xTh, 0.45)}
-new_percept = model.predict_percept(implant)
+new_percept = model.predict_percept(
+    {'A4': BiphasicPulseTrain(50, 1 * xTh, 0.45)})
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("20 Hz")
@@ -138,8 +136,8 @@ plt.show()
 ##############################################################################
 # Increasing amplitude increases both size and brightness
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 3 * xTh, 0.45)}
-new_percept = model.predict_percept(implant)
+new_percept = model.predict_percept(
+    {'A4': BiphasicPulseTrain(20, 3 * xTh, 0.45)})
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("1xTh")
@@ -150,8 +148,8 @@ plt.show()
 # Increasing phase duration lowers threshold in the Granley model, so a fixed
 # ``xTh`` amplitude produces a larger and brighter percept
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 4)}
-new_percept = model.predict_percept(implant)
+new_percept = model.predict_percept(
+    {'A4': BiphasicPulseTrain(20, 1 * xTh, 4)})
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("0.45ms")
@@ -162,8 +160,8 @@ plt.show()
 # If you compensate for this threshold change by decreasing amplitude, the
 # remaining effect of increasing phase duration is a shorter streak
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 0.023835 * xTh, 20)}
-new_percept = model.predict_percept(implant)
+new_percept = model.predict_percept(
+    {'A4': BiphasicPulseTrain(20, 0.023835 * xTh, 20)})
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("0.45ms")
@@ -186,8 +184,9 @@ plt.show()
 
 calibrated = ArgusII()
 calibrated.thresholds = {'A4': 80 * uA}
-calibrated.stim = {'A4': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
-print(f"{calibrated.stim.data.max():.0f} uA")
+delivered = calibrated.prepare_stim({'A4': BiphasicPulseTrain(20, 2 * xTh,
+                                                              0.45)})
+print(f"{delivered.data.max():.0f} uA")
 
 #################################################################################
 # ``threshold_amp=80 * uA`` instead calibrates a single train. Calibration
@@ -224,15 +223,13 @@ print(model.size_model.a5)
 # scaling can easily be disabled by setting ``a0`` to 0 and ``a1`` to 1. If we increase 
 # pulse duration like we did previously, we will now see that only streak length decreases, 
 # and we no longer have to change amplitude to account for change in threshold
-model = BiphasicAxonMapModel(rho=200, lam=800)
+model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
 model.a0 = 0
 model.a1 = 1
-model.build()
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 0.45)}
-percept = model.predict_percept(implant)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 20)}
-new_percept = model.predict_percept(implant)
+percept = model.predict_percept({'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)})
+new_percept = model.predict_percept(
+    {'A4': BiphasicPulseTrain(20, 1 * xTh, 20)})
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("0.45ms")
@@ -253,17 +250,15 @@ plt.show()
 # will probably be enough. However, the effect models are completely modular, and 
 # can be replaced by any python callable with the parameters frequency, amplitude, 
 # and pulse duration. For example, we can easily change the model to no longer scale size
-model = BiphasicAxonMapModel(rho=200, lam=800)
+model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
 def size_modulation(freq, amp, pdur):
     return 1
 model.size_model = size_modulation
-model.build()
 
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 1 * xTh, 0.45)}
-percept = model.predict_percept(implant)
-implant.stim = {'A4' : BiphasicPulseTrain(20, 3 * xTh, 0.45)}
-new_percept = model.predict_percept(implant)
+percept = model.predict_percept({'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)})
+new_percept = model.predict_percept(
+    {'A4': BiphasicPulseTrain(20, 3 * xTh, 0.45)})
 new_percept.plot(ax=axes[1])
 percept.plot(ax=axes[0], vmax=new_percept.max())
 axes[0].set_title("1xTh")

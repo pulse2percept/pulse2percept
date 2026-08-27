@@ -171,11 +171,9 @@ def check_model_builds() -> list[str]:
         # grid spacing parameter `xystep` -> `step`. Ask the installed model
         # which spelling it takes rather than assuming the current one.
         spacing = "step" if hasattr(ScoreboardModel(), "step") else "xystep"
-        model = ScoreboardModel(xrange=(-4, 4), yrange=(-4, 4),
-                                **{spacing: 1}).build()
-        implant = ArgusII()
-        implant.stim = {e: 1 for e in ("A1", "F10")}
-        percept = model.predict_percept(implant)
+        model = ScoreboardModel(implant=ArgusII(), xrange=(-4, 4),
+                                yrange=(-4, 4), **{spacing: 1})
+        percept = model.predict_percept({e: 1 for e in ("A1", "F10")})
         if percept is None or percept.data.size == 0:
             return ["ScoreboardModel produced an empty percept"]
         print(f"  ScoreboardModel -> percept {percept.data.shape}, ok")

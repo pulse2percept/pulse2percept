@@ -140,10 +140,9 @@ plot_argus_phosphenes(data, argus, axon_map=model)
 # in [Beyeler2019]_, we can tailor the axon map parameters to Subject 2:
 
 import numpy as np
-model = AxonMapModel(rho=315, lam=500, loc_od=(16.2, 1.38),
+model = AxonMapModel(implant=argus, rho=315, lam=500, loc_od=(16.2, 1.38),
                      xrange=(-30, 30), yrange=(-22.5, 22.5),
                      thresh_percept=1 / np.sqrt(np.e))
-model.build()
 
 ###############################################################################
 # Now we need to activate one electrode at a time, and predict the resulting
@@ -159,7 +158,7 @@ electrodes = data.electrode.unique()
 # Activate one electrode at a time:
 import numpy as np
 from pulse2percept.stimuli import Stimulus
-argus.stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
+stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
 
 ###############################################################################
 # Using the model's
@@ -167,7 +166,7 @@ argus.stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
 # a Percept object where each frame is the percept generated from activating
 # a single electrode:
 
-percepts = model.predict_percept(argus)
+percepts = model.predict_percept(stim)
 percepts.play()
 
 ###############################################################################

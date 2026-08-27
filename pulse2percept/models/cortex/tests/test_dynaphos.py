@@ -21,54 +21,56 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
 from pulse2percept.utils.testing import assert_warns_msg
 
 def test_DynaphosModel():
-    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
+    model = DynaphosModel(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
 
     npt.assert_equal(model.regions, ['v1'])
     npt.assert_equal(model.vfmap.regions, ['v1'])
 
-    # can't set frequency/pulse dur that don't match up
+    # can't set frequency/pulse dur that don't match up. A failed build
+    # leaves the parameters the caller asked for in place, so put them back:
     with pytest.raises(ValueError):
         model.build(freq=300,p_dur=10)
+    model.build(freq=300, p_dur=1)
 
     # Nothing in, None out:
-    npt.assert_equal(model.predict_percept(Cortivis()), None)
+    npt.assert_equal(model.predict_percept(None), None)
 
-    implant = Cortivis(x=1000, stim={e:BiphasicPulseTrain(freq=300,amp=0,phase_dur=1) for e in Cortivis().electrode_names})
+    source = {e:BiphasicPulseTrain(freq=300,amp=0,phase_dur=1) for e in Cortivis().electrode_names}
     # Zero in = zero out:
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept(source)
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, list(model.grid.x.shape)+[51]) # 51 time points
     npt.assert_almost_equal(percept.data, 0)
 
     # Can't pass stimulus with no time component
     with pytest.raises(ValueError):
-        model.predict_percept(Cortivis(stim=[300 for e in Cortivis().electrode_names]))
+        model.predict_percept([300 for e in Cortivis().electrode_names])
 
 def test_predict_spatial():
     # test that no current can spread between hemispheres
-    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), step=0.5).build()
-    implant = Orion(x = 15000)
-    implant.stim = {e:BiphasicPulseTrain(freq=300,amp=2000,phase_dur=0.17) for e in implant.electrode_names}
+    implant = Orion(x=15000)
+    model = DynaphosModel(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
+                          step=0.5).build()
+    source = {e: BiphasicPulseTrain(freq=300, amp=2000, phase_dur=0.17)
+              for e in implant.electrode_names}
     # Check brightest frame of percept
-    percept = model.predict_percept(implant).max(axis='frames')
+    percept = model.predict_percept(source).max(axis='frames')
     half = percept.shape[1] // 2
     npt.assert_equal(np.all(percept[:, half+1:] == 0), True)
     npt.assert_equal(np.all(percept[:, :half] != 0), True)
 
 def test_temporal_predict():
-    model = DynaphosModel(step=0.1).build()
+    model = DynaphosModel(implant=Cortivis(), step=0.1).build()
     # User can set params
     model.dt = 40
     npt.assert_equal(model.dt, 40)
-
-    implant = Cortivis(stim=np.zeros((96, 100)))
 
     # Can't request the same time more than once (this would break the Cython
     # loop, because `idx_frame` is incremented after a write; also doesn't
     # make much sense):
     with pytest.raises(ValueError):
-        implant.stim = np.ones((96, 100))
-        model.predict_percept(implant, t_percept=[0.2, 0.2])
+        source = np.ones((96, 100))
+        model.predict_percept(source, t_percept=[0.2, 0.2])
 
     # Brightness scales with amplitude. The train is built on the model's own
     # clock, so that the duty cycle driving the activation is the one that
@@ -80,20 +82,23 @@ def test_temporal_predict():
     sdur = 1000.0  # stimulus duration (ms)
     pdur = model.p_dur  # (ms)
     t_percept = np.arange(0, sdur, 20)
-    implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+    single = DynaphosModel(
+        implant=ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
+        step=0.1, dt=20).build()
     bright_amp = []
     for amp in np.linspace(20, 70, 5):
-        implant.stim = BiphasicPulseTrain(model.freq, amp, pdur,
+        source = BiphasicPulseTrain(model.freq, amp, pdur,
                                           interphase_dur=pdur, stim_dur=sdur)
-        percept = model.predict_percept(implant, t_percept=t_percept)
+        percept = single.predict_percept(source, t_percept=t_percept)
         bright_amp.append(percept.data.max())
     bright_amp_ref = np.array([0.0, 0.0, 0.4636, 0.7247, 0.8891])
     npt.assert_almost_equal(bright_amp, bright_amp_ref, decimal=3)
     npt.assert_equal(np.all(np.diff(bright_amp) >= 0), True)
 
     # Test that default models give expected values
-    implant = Orion(x=15000, stim={'55': BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)})
-    percept = model.predict_percept(implant)
+    orion = DynaphosModel(implant=Orion(x=15000), step=0.1, dt=20).build()
+    percept = orion.predict_percept(
+        {'55': BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)})
     npt.assert_equal(np.sum(percept.data > 0.0122), 147)
     npt.assert_equal(np.sum(percept.data > 0.0375), 96)
     npt.assert_equal(np.sum(percept.data > 0.3305), 49)
@@ -101,7 +106,7 @@ def test_temporal_predict():
     npt.assert_equal(np.sum(percept.data > 0.8883), 9)
 
 def test_deepcopy_Dynaphos():
-    original = DynaphosModel()
+    original = DynaphosModel(implant=Cortivis())
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects
@@ -124,7 +129,7 @@ def test_deepcopy_Dynaphos():
 
 def test_dynaphos_plot():
     # make sure that plotting works before and after building
-    m = DynaphosModel()
+    m = DynaphosModel(implant=Cortivis())
     m.plot()
     plt.close()
     m.build()
@@ -140,33 +145,31 @@ def test_DynaphosModel_units():
     with a tolerance rather than for equality.
     """
     kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), step=0.5)
-    bare = DynaphosModel(rheobase=23.9, **kwargs).build()
-    unitful = DynaphosModel(rheobase=0.0239 * mA, **kwargs).build()
+    bare = DynaphosModel(implant=Cortivis(), rheobase=23.9, **kwargs).build()
+    unitful = DynaphosModel(implant=Cortivis(), rheobase=0.0239 * mA, **kwargs).build()
     npt.assert_allclose(unitful.rheobase, 23.9, rtol=1e-12)
     npt.assert_equal(isinstance(unitful.rheobase, Quantity), False)
-    implant = Cortivis(stim={'11': BiphasicPulseTrain(20, 50, 0.45,
-                                                      stim_dur=100)})
-    npt.assert_allclose(unitful.predict_percept(implant).data,
-                        bare.predict_percept(implant).data, rtol=1e-6)
+    source = {'11': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)}
+    npt.assert_allclose(unitful.predict_percept(source).data,
+                        bare.predict_percept(source).data, rtol=1e-6)
     # The model states what its numbers mean:
     npt.assert_equal((bare.stimulus_unit, bare.space_unit, bare.time_unit),
                      (uA, um, ms))
     with pytest.raises(DimensionMismatchError):
-        DynaphosModel(rheobase=5 * ms)
+        DynaphosModel(implant=Cortivis(), rheobase=5 * ms)
 
 
 def test_DynaphosModel_t_percept_units():
     """This model overrides `predict_percept`, so it normalizes for itself"""
-    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), step=1).build()
-    implant = Cortivis(stim={'11': BiphasicPulseTrain(20, 50, 0.45,
-                                                      stim_dur=100)})
-    bare = model.predict_percept(implant, t_percept=[0, 20, 40])
+    model = DynaphosModel(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=1).build()
+    source = {'11': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)}
+    bare = model.predict_percept(source, t_percept=[0, 20, 40])
     for spelling in ([0, 20, 40] * ms, np.array([0, .02, .04]) * s):
-        unitful = model.predict_percept(implant, t_percept=spelling)
+        unitful = model.predict_percept(source, t_percept=spelling)
         npt.assert_allclose(unitful.data, bare.data, rtol=1e-12)
         npt.assert_allclose(unitful.time, [0, 20, 40], rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
-        model.predict_percept(implant, t_percept=[0, 20] * uA)
+        model.predict_percept(source, t_percept=[0, 20] * uA)
 
 
 def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
@@ -177,23 +180,23 @@ def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
     stimulus was over, and for a model counting in anything but milliseconds
     it would have been meaningless.
     """
-    stim = BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)
-    implant = Cortivis(stim={'11': stim})
-    kwargs = dict(xrange=(-2, 2), yrange=(-2, 2), step=1)
+    source = {'11': BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)}
+    delivered = Cortivis().prepare_stim(source)
+    kwargs = dict(implant=Cortivis(), xrange=(-2, 2), yrange=(-2, 2), step=1)
 
     # Coarser than a millisecond, which is the case the literal was written
     # for, and still the same clock it always produced:
     model = DynaphosModel(dt=2, **kwargs).build()
-    npt.assert_allclose(model.predict_percept(implant).time,
+    npt.assert_allclose(model.predict_percept(source).time,
                         np.arange(0, 11, 2), rtol=1e-12)
 
     # Finer than a millisecond, which is where it overshot:
     model = DynaphosModel(dt=0.5, **kwargs).build()
-    percept = model.predict_percept(implant)
+    percept = model.predict_percept(source)
     npt.assert_allclose(percept.time, np.arange(0, 10.25, 0.5), rtol=1e-12)
-    npt.assert_equal(percept.time[-1] <= implant.stim.time[-1], True)
+    npt.assert_equal(percept.time[-1] <= delivered.time[-1], True)
     # The endpoint is included, not dropped:
-    npt.assert_allclose(percept.time[-1], implant.stim.time[-1], rtol=1e-12)
+    npt.assert_allclose(percept.time[-1], delivered.time[-1], rtol=1e-12)
 
 
 def test_DynaphosModel_deprecated_xystep():
@@ -203,7 +206,7 @@ def test_DynaphosModel_deprecated_xystep():
     msg = "The 'xystep' parameter of DynaphosModel is deprecated"
     assert_warns_msg(DeprecationWarning, DynaphosModel, msg, xystep=1)
     with pytest.warns(DeprecationWarning):
-        model = DynaphosModel(xrange=(-2, 2), yrange=(-2, 2), xystep=1)
+        model = DynaphosModel(implant=Cortivis(), xrange=(-2, 2), yrange=(-2, 2), xystep=1)
     npt.assert_almost_equal(model.step, 1)
 
     assert_warns_msg(DeprecationWarning, setattr, msg, model, 'xystep', 2)
@@ -220,12 +223,12 @@ def test_DynaphosModel_deprecated_xystep():
     # Both names are the same parameter, so supplying both must raise:
     for params in ({'xystep': 1, 'step': 2}, {'step': 2, 'xystep': 1}):
         with pytest.raises(TypeError, match="same parameter"):
-            DynaphosModel(**params)
+            DynaphosModel(implant=Cortivis(), **params)
 
     # The new name stays silent:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
-        model = DynaphosModel(step=1)
+        model = DynaphosModel(implant=Cortivis(), step=1)
         model.step = 2
         npt.assert_almost_equal(model.step, 2)
 
@@ -234,14 +237,14 @@ def test_dynaphos_reads_the_pulse_train_itself():
     # The same train has to predict the same percept however it is assigned.
     # That used to be false: a bare train carried no per-electrode metadata
     # and was simulated on the model's default clock instead of its own.
-    model = DynaphosModel(step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
+    model = DynaphosModel(
+        implant=ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
+        step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
     model.dt = 20
     t_percept = np.arange(0, 200, 20)
 
     def predict(stim):
-        implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
-        implant.stim = stim
-        return model.predict_percept(implant, t_percept=t_percept).data
+        return model.predict_percept(stim, t_percept=t_percept).data
 
     def train():
         return BiphasicPulseTrain(300, 100, 0.17, interphase_dur=0.17,
@@ -259,16 +262,17 @@ def test_dynaphos_reads_the_pulse_train_itself():
 def test_dynaphos_uses_its_defaults_for_an_arbitrary_waveform():
     # No pulse train behind the samples, so there is no clock to read and the
     # model simulates on its own -- which is what it has always done:
-    model = DynaphosModel(step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
+    model = DynaphosModel(
+        implant=ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
+        step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
     model.dt = 20
-    implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
-    implant.stim = Stimulus([[0, 100, 100, 0]], time=[0, 1, 199, 200])
-    percept = model.predict_percept(implant, t_percept=np.arange(0, 200, 20))
+    source = Stimulus([[0, 100, 100, 0]], time=[0, 1, 199, 200])
+    percept = model.predict_percept(source, t_percept=np.arange(0, 200, 20))
     npt.assert_equal(np.any(percept.data), True)
     # A train whose own clock happens to be the model's gives the same answer
     # as the defaults do, which is what says the defaults were used:
     model.freq, model.p_dur = 111, 0.29
-    other = model.predict_percept(implant,
+    other = model.predict_percept(source,
                                   t_percept=np.arange(0, 200, 20)).data
     npt.assert_equal(np.allclose(percept.data, other), False)
 
@@ -278,38 +282,43 @@ def test_dynaphos_reads_the_clock_before_compression():
     # it no longer describe it. The parameters have to be taken first -- and
     # compression drops the electrodes driven at zero, so what is left has to
     # still line up with the right train.
-    model = DynaphosModel(step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
-    model.dt = 20
     implant = ProsthesisSystem(ElectrodeArray([
         DiskElectrode(0, 0, 0, 260), DiskElectrode(1000, 0, 0, 260)]))
-    implant.stim = {0: BiphasicPulseTrain(300, 0, 0.17, stim_dur=200),
-                    1: BiphasicPulseTrain(300, 100, 0.17, stim_dur=200)}
-    both = model.predict_percept(implant, t_percept=np.arange(0, 200, 20))
+    model = DynaphosModel(implant=implant, step=0.5, xrange=(-2, 2),
+                          yrange=(-2, 2)).build()
+    model.dt = 20
+    both = model.predict_percept(
+        {0: BiphasicPulseTrain(300, 0, 0.17, stim_dur=200),
+         1: BiphasicPulseTrain(300, 100, 0.17, stim_dur=200)},
+        t_percept=np.arange(0, 200, 20))
     # Only the second electrode survives compression, and it is the second
     # train's clock that has to reach the simulation:
-    implant.stim = {1: BiphasicPulseTrain(300, 100, 0.17, stim_dur=200)}
     npt.assert_allclose(both.data,
                         model.predict_percept(
-                            implant, t_percept=np.arange(0, 200, 20)).data)
+                            {1: BiphasicPulseTrain(300, 100, 0.17,
+                                                   stim_dur=200)},
+                            t_percept=np.arange(0, 200, 20)).data)
 
 
 def _ensemble_of_two_clocks():
-    """Two implants driven at different frequencies, merged into one"""
-    fast = Orion(stim={e: BiphasicPulseTrain(50, 300, 0.45, stim_dur=100)
-                       for e in Orion().electrode_names})
-    slow = Orion(x=-35000,
-                 stim={e: BiphasicPulseTrain(20, 300, 0.85, stim_dur=100)
-                       for e in Orion().electrode_names})
-    return EnsembleImplant([fast, slow])
+    """Two implants driven at different frequencies, and their merged input"""
+    ensemble = EnsembleImplant([Orion(), Orion(x=-35000)])
+    names = Orion().electrode_names
+    source = {0: {e: BiphasicPulseTrain(50, 300, 0.45, stim_dur=100)
+                  for e in names},
+              1: {e: BiphasicPulseTrain(20, 300, 0.85, stim_dur=100)
+                  for e in names}}
+    return ensemble, source
 
 
 def test_dynaphos_reads_ensemble_clocks():
     # An ensemble keeps its members' trains rather than sampling them away,
     # so every member is simulated at the clock it was built with instead of
     # the model's own default.
-    ensemble = _ensemble_of_two_clocks()
-    clocks = _pulse_train_clocks(ensemble.stim)
-    npt.assert_equal(len(clocks), len(ensemble.stim.electrodes))
+    ensemble, source = _ensemble_of_two_clocks()
+    stim = ensemble.prepare_stim(source)
+    clocks = _pulse_train_clocks(stim)
+    npt.assert_equal(len(clocks), len(stim.electrodes))
     npt.assert_equal(sorted(set(clocks.values())), [(20, 0.85), (50, 0.45)])
     # ...and the members keep their own, rather than sharing one:
     npt.assert_equal(clocks['0-96'], (50, 0.45))
@@ -317,17 +326,17 @@ def test_dynaphos_reads_ensemble_clocks():
 
 
 def test_dynaphos_ensemble_prediction_uses_those_clocks():
-    model = DynaphosModel(xrange=(-3, 3), yrange=(-3, 3), step=1).build()
-    ensemble = _ensemble_of_two_clocks()
-    with_clocks = model.predict_percept(ensemble).data
+    ensemble, source = _ensemble_of_two_clocks()
+    model = DynaphosModel(implant=ensemble, xrange=(-3, 3), yrange=(-3, 3),
+                          step=1).build()
+    with_clocks = model.predict_percept(source).data
     npt.assert_equal(np.any(with_clocks), True)
     # The same waveform with the trains behind it taken away is back on the
     # model's default clock
-    waveform_only = _ensemble_of_two_clocks()
-    waveform_only.stim = Stimulus(ensemble.stim.data,
-                                  electrodes=ensemble.stim.electrodes,
-                                  time=ensemble.stim.time)
-    npt.assert_equal(_pulse_train_clocks(waveform_only.stim), None)
+    stim = ensemble.prepare_stim(source)
+    waveform_only = Stimulus(stim.data, electrodes=stim.electrodes,
+                             time=stim.time)
+    npt.assert_equal(_pulse_train_clocks(waveform_only), None)
     npt.assert_equal(
         np.allclose(with_clocks,
                     model.predict_percept(waveform_only).data), False)

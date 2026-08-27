@@ -164,23 +164,24 @@ def test_every_spelling_builds_the_same_object():
           'ElectrodeGrid.spacing')
     # A central electrode and a grid wide enough to hold its phosphene, so
     # that the comparisons below have something in them:
-    implant = ArgusII(stim={'C5': BiphasicPulseTrain(20, 41.7, 0.45,
-                                                     stim_dur=100)})
-    grid = dict(xrange=(-8, 8), yrange=(-8, 8), step=2)
+    implant = ArgusII()
+    source = {'C5': BiphasicPulseTrain(20, 41.7, 0.45, stim_dur=100)}
+    grid = dict(implant=implant, xrange=(-8, 8), yrange=(-8, 8), step=2)
     _same(lambda r: ScoreboardSpatial(rho=r, **grid).build(), length, lengths,
-          lambda m: m.predict_percept(implant).data, 'ScoreboardSpatial.rho')
+          lambda m: m.predict_percept(source).data, 'ScoreboardSpatial.rho')
     _same(lambda lam: AxonMapSpatial(lam=lam, rho=575, n_axons=100,
                                      n_ax_segments=50, **grid).build(),
           length, lengths,
-          lambda m: m.predict_percept(implant).data, 'AxonMapSpatial.lam')
+          lambda m: m.predict_percept(source).data, 'AxonMapSpatial.lam')
 
     # --- Visual angle -----------------------------------------------------
     _same(lambda a: Grid2D((-a, a), (-a, a), step=0.5), angle, angles,
           lambda g: g.x, 'Grid2D.x_range')
-    _same(lambda a: ScoreboardSpatial(rho=575, xrange=(-4 * a, 4 * a),
+    _same(lambda a: ScoreboardSpatial(implant=implant, rho=575,
+                                      xrange=(-4 * a, 4 * a),
                                       yrange=(-4 * a, 4 * a),
                                       step=a).build(), angle, angles,
-          lambda m: m.predict_percept(implant).data,
+          lambda m: m.predict_percept(source).data,
           'ScoreboardSpatial.xrange')
     _same(lambda a: EnsembleImplant.from_cortical_map(
         Cortivis, Polimeni2006Map(), xrange=(-a, a), yrange=(-a, a),
@@ -192,19 +193,23 @@ def test_every_spelling_builds_the_same_object():
           lambda xy: np.asarray(xy, dtype=float), 'Watson2014Map.dva_to_ret')
 
     # --- And a whole pipeline, spelled unitfully end to end ---------------
-    bare = Model(spatial=ScoreboardSpatial(rho=575, **grid),
+    imp_bare = ArgusII(x=575)
+    imp_unit = ArgusII(x=0.575 * mm)
+    bare = Model(implant=imp_bare,
+                 spatial=ScoreboardSpatial(rho=575, xrange=(-8, 8),
+                                           yrange=(-8, 8), step=2),
                  temporal=FadingTemporal(tau=20)).build()
-    unitful = Model(spatial=ScoreboardSpatial(rho=0.575 * mm,
+    unitful = Model(implant=imp_unit,
+                    spatial=ScoreboardSpatial(rho=0.575 * mm,
                                               xrange=(-8 * dva, 8 * dva),
                                               yrange=(-8 * dva, 8 * dva),
                                               step=2 * dva),
                     temporal=FadingTemporal(tau=0.02 * s)).build()
-    imp_bare = ArgusII(x=575, stim={'C5': BiphasicPulseTrain(
-        20, 41.7, 0.45, stim_dur=100)})
-    imp_unit = ArgusII(x=0.575 * mm, stim={'C5': BiphasicPulseTrain(
-        0.02 * (1 / ms), 0.0417 * mA, 450 * us, stim_dur=0.1 * s)})
-    p_bare = bare.predict_percept(imp_bare, t_percept=[0, 20, 40])
-    p_unit = unitful.predict_percept(imp_unit, t_percept=[0, 0.02 * s,
+    src_bare = {'C5': BiphasicPulseTrain(20, 41.7, 0.45, stim_dur=100)}
+    src_unit = {'C5': BiphasicPulseTrain(
+        0.02 * (1 / ms), 0.0417 * mA, 450 * us, stim_dur=0.1 * s)}
+    p_bare = bare.predict_percept(src_bare, t_percept=[0, 20, 40])
+    p_unit = unitful.predict_percept(src_unit, t_percept=[0, 0.02 * s,
                                                           40000 * us])
     npt.assert_equal(np.any(p_bare.data), True)
     npt.assert_allclose(p_unit.data, p_bare.data, rtol=1e-6)
@@ -222,14 +227,15 @@ def test_the_whole_rejection_matrix():
     """
     img = ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6)))
     current = Stimulus({'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)})
-    model = ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2), step=1).build()
+    model = ScoreboardSpatial(implant=ArgusII(), xrange=(-2, 2),
+                              yrange=(-2, 2), step=1).build()
 
     # dimensionless -> implant: an implant delivers current, so a picture is
-    # refused where it is assigned rather than where it is eventually read.
+    # refused where it is prepared rather than where it is eventually read.
     # (Argus II ships with an encoder, which would otherwise turn the picture
     # into the current the implant does deliver.)
     with pytest.raises(DimensionMismatchError):
-        ArgusII(preprocess=False, encoder=None, stim=img)
+        ArgusII(preprocess=False, encoder=None).prepare_stim(img)
 
     # dimensionless -> model: gray levels are not small currents. The implant
     # above is the outer boundary; this is the one behind it, so it is reached
@@ -238,7 +244,8 @@ def test_the_whole_rejection_matrix():
         stimulus_unit = dimensionless
 
     with pytest.raises(DimensionMismatchError):
-        model.predict_percept(Projector(preprocess=False, stim=img))
+        ScoreboardSpatial(implant=Projector(preprocess=False), xrange=(-2, 2),
+                          yrange=(-2, 2), step=1).build().predict_percept(img)
 
     # current -> encoder: an encoder is what *makes* current out of pictures.
     with pytest.raises(DimensionMismatchError):
@@ -261,9 +268,10 @@ def test_the_whole_rejection_matrix():
     # (see `SpatialModel._retinal_range_to_dva`), but that is shorthand for a
     # visual field extent, not a conversion, and it is offered nowhere else:
     with pytest.raises(DimensionMismatchError):
-        ScoreboardSpatial(step=100 * um)
+        ScoreboardSpatial(implant=ArgusII(), step=100 * um)
     with pytest.raises(DimensionMismatchError):
-        CortexScoreboardSpatial(xrange=(-2 * mm, 2 * mm))
+        CortexScoreboardSpatial(implant=ArgusII(),
+                                xrange=(-2 * mm, 2 * mm))
 
     # current -> time, and time -> current.
     with pytest.raises(DimensionMismatchError):
@@ -271,17 +279,17 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         BiphasicPulse(50 * ms, 0.45)
     with pytest.raises(DimensionMismatchError):
-        model.predict_percept(ArgusII(stim=current), t_percept=[0, 20] * uA)
+        model.predict_percept(current, t_percept=[0, 20] * uA)
     with pytest.raises(DimensionMismatchError):
         ProsthesisSystem(ArgusII().earray, max_current=5 * ms)
 
     # dimensionless -> safety check: there is no charge in a picture.
     with pytest.raises(DimensionMismatchError):
-        ProsthesisSystem(ArgusII().earray, safe_mode=True, preprocess=False,
-                         stim=img)
+        ProsthesisSystem(ArgusII().earray, safe_mode=True,
+                         preprocess=False).prepare_stim(img)
     with pytest.raises(DimensionMismatchError):
-        ProsthesisSystem(ArgusII().earray, max_current=20, preprocess=False,
-                         stim=img)
+        ProsthesisSystem(ArgusII().earray, max_current=20,
+                         preprocess=False).prepare_stim(img)
 
     # A bare number is never rejected, anywhere. That is the other half of the
     # contract, and the reason none of the above needs a deprecation cycle:

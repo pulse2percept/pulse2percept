@@ -25,10 +25,15 @@ For most electrical stimulation, start with a
         stim_dur=500,
     )
 
-    implant = p2p.implants.ArgusII(stim={'A5': pulse_train})
+    implant = p2p.implants.ArgusII()
+    model = p2p.models.ScoreboardModel(implant=implant)
+
+    percept = model.predict_percept({'A5': pulse_train})
 
 The dictionary key selects the electrode; unlisted electrodes receive no
-stimulation.
+stimulation. A stimulus is trial input, not implant state: the implant turns it
+into the current its electrodes deliver
+(``implant.prepare_stim({'A5': pulse_train})``) and keeps nothing.
 
 Common waveform classes include:
 

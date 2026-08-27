@@ -7,6 +7,7 @@ from ..utils import sample
 from ..topography import Curcio1990Map
 from ..units import um
 from ..models import Model, SpatialModel
+from .base import _warn_ignores_z
 from ._thompson2003 import fast_thompson2003
 
 # Log all warnings.warn() at the WARNING level:
@@ -29,6 +30,12 @@ class Thompson2003Spatial(SpatialModel):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
+
+        .. versionadded:: 0.11.0
+
     radius : double, optional
         Disk radius describing phosphene size (microns).
         If None, disk diameter is chosen as the electrode-to-electrode spacing
@@ -71,9 +78,9 @@ class Thompson2003Spatial(SpatialModel):
 
     .. important ::
 
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the
+        next ``predict_percept`` builds it again.
     """
 
     def get_default_params(self):        
@@ -90,10 +97,7 @@ class Thompson2003Spatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        if not np.allclose([e.z for e in earray.electrode_objects], 0):
-            msg = ("Nonzero electrode-retina distances do not have any effect "
-                   "on the model output.")
-            warnings.warn(msg)
+        _warn_ignores_z(self, earray)
         radius = self.radius
         if radius is None:
             if not hasattr(earray, 'spacing'):
@@ -127,6 +131,14 @@ class Thompson2003Model(Model):
         Use this class if you want a standalone model.
         Use :py:class:`~pulse2percept.models.Thompson2003Spatial` if you want
         to combine the spatial model with a temporal model.
+
+    Parameters
+    ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
+
+        .. versionadded:: 0.11.0
 
     radius : double, optional
         Disk radius describing phosphene size (microns).
@@ -170,9 +182,9 @@ class Thompson2003Model(Model):
 
     .. important ::
 
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the
+        next ``predict_percept`` builds it again.
 
     """
 

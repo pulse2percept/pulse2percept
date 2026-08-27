@@ -135,15 +135,16 @@ computation.
    * - ``stimulus``
      - Building the stimulus, before any implant exists.
    * - ``implant``
-     - Assigning the stimulus to the implant, including the downsampling of an
-       image or video onto the electrode grid.
+     - Source to device-ready stimulation: the downsampling of an image or
+       video onto the electrode grid, then ``implant.prepare_stim``.
    * - ``build``
      - ``model.build()``, both warm (``test_build``, what a user hits on every
        run after the first) and cold (``test_build_cold``, ignoring the on-disk
        axon cache -- the actual computation, and the thing worth optimizing).
        Same group, so the two sit side by side in the report.
    * - ``predict_percept``
-     - The headline number.
+     - The headline number. Includes the preparation timed on its own by
+       ``implant``, because that is what a prediction does.
    * - ``end_to_end``
      - The whole one-liner.
    * - ``plot``
@@ -194,7 +195,7 @@ automatically and no other file changes. For example, a temporal model:
     Scenario(
         id='argus2_axonmap_fading',
         stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
-        implant=lambda stim: p2p.implants.ArgusII(stim=stim),
+        implant=p2p.implants.ArgusII,
         model=lambda **kwargs: p2p.models.Model(
             spatial=p2p.models.AxonMapSpatial(xrange=(-12, 12),
                                               yrange=(-8, 8)),
@@ -210,10 +211,11 @@ problem: it is a kernel this check cannot see regress at all.
 Four things to know.
 
 **Stimulate the whole array.** Handing a bare ``BiphasicPulseTrain`` to an
-implant assigns it to one electrode, not all of them -- ``ArgusII(stim=...)``
-then has a stimulus of shape ``(1, 29)`` rather than ``(60, 29)``. A benchmark
-built that way exercises a sixtieth of the per-electrode work and barely moves
-when that work regresses. Use the ``array_ptrain`` helper, as above.
+implant drives one electrode, not all of them --
+``ArgusII().prepare_stim(...)`` then has shape ``(1, 29)`` rather than
+``(60, 29)``. A benchmark built that way exercises a sixtieth of the
+per-electrode work and barely moves when that work regresses. Use the
+``array_ptrain`` helper, as above.
 
 **Match the stimulus to the model.** ``BiphasicAxonMapModel`` reads pulse
 parameters off each electrode and rejects an image, and its amplitude is a
@@ -222,7 +224,7 @@ than a current; a temporal model given a single-frame stimulus measures
 nothing temporal.
 
 **An image is not a stimulus.** Gray levels are dimensionless, and both
-``implant.stim`` and ``predict_percept`` refuse them; user code turns an image
+``prepare_stim`` and ``predict_percept`` refuse them; user code turns an image
 into current with a ``StimulusEncoder``. A benchmark that did the same would
 measure a pulse train per electrode rather than the single static frame the
 image scenarios exist for, so they call the ``as_current`` helper instead,
@@ -234,9 +236,9 @@ handed to ``Model(...)`` itself reach *both* sub-models, and ``Parametrized``
 freezes attributes, so anything the temporal model does not recognize raises
 rather than being quietly ignored.
 
-**Set the capability flags.** A temporal-only model's percept has no spatial
-grid, and ``Percept.plot`` raises on one, so such a scenario needs
-``plottable=False``. And if the scenario takes more than a few seconds per
+**Set the capability flags.** A temporal-only model takes no ``implant``, so
+such a scenario needs ``binds_implant=False``; its percept also has no spatial
+grid, and ``Percept.plot`` raises on one, so it needs ``plottable=False`` too. And if the scenario takes more than a few seconds per
 ``predict_percept`` call, mark it ``slow=True`` so it stays out of the default
 run:
 

@@ -99,27 +99,36 @@ fig.tight_layout()
 # Instead, the model was assumed to reach threshold if the model response
 # exceeded some constant :math:`\\theta` over time.
 #
-# The process of finding the stimulus amplitude needed to achieve model output
-# :math:`\\theta` can be automated with the help of the
-# :py:meth:`~pulse2percept.models.Horsager2009Temporal.find_threshold` method.
-#
-# We will run this method on every data point from the ones selected above:
+# Threshold finding is an optimization over a stimulus parameter, not a
+# generic model operation, so we build the stimulus at each candidate
+# amplitude and solve for the one whose predicted brightness is
+# :math:`\\theta`:
+
+from scipy.optimize import brentq
+
+
+def threshold_amp(make_stim, theta, amp_range=(0, 300)):
+    """Amplitude (uA) whose predicted max brightness matches ``theta``"""
+    def objective(amp):
+        stim = make_stim(amp)
+        percept = model.predict_percept(stim,
+                                        t_percept=np.arange(stim.duration))
+        return percept.data.max() - theta
+    return brentq(objective, *amp_range)
+
+
+###############################################################################
+# We run this on every data point from the ones selected above:
 
 amp_th = []
 for _, row in single_pulse.iterrows():
-        # Set up a biphasic pulse with amplitude 1uA - the amplitude will be
-        # up-and-down regulated by find_threshold until the output matches
-        # theta:
-    stim = BiphasicPulse(1, row['pulse_dur'],
-                         interphase_dur=row['interphase_dur'],
-                         stim_dur=row['stim_dur'],
-                         cathodic_first=True)
-    # Find the current that gives model output theta. Search amplitudes in the
-    # range [0, 300] uA. Stop the search once the candidate amplitudes are
-    # within 1 uA, or the model output is within 0.1 of theta:
-    amp_th.append(model.find_threshold(stim, row['theta'],
-                                       amp_range=(0, 300), amp_tol=1,
-                                       bright_tol=0.1))
+    def pulse_at(amp):
+        return BiphasicPulse(amp, row['pulse_dur'],
+                             interphase_dur=row['interphase_dur'],
+                             stim_dur=row['stim_dur'],
+                             cathodic_first=True)
+
+    amp_th.append(threshold_amp(pulse_at, row['theta']))
 
 plt.semilogx(single_pulse.pulse_dur, single_pulse.stim_amp, 's', label='data')
 plt.semilogx(single_pulse.pulse_dur, amp_th, 'k-', linewidth=3, label='model')
@@ -148,12 +157,13 @@ fixed_dur = data[(data.stim_type == 'fixed_duration') &
 # Find the threshold:
 amp_th = []
 for _, row in fixed_dur.iterrows():
-    stim = BiphasicPulseTrain(row['stim_freq'], 1, row['pulse_dur'],
-                              interphase_dur=row['interphase_dur'],
-                              stim_dur=row['stim_dur'], cathodic_first=True)
-    amp_th.append(model.find_threshold(stim, row['theta'],
-                                       amp_range=(0, 300), amp_tol=1,
-                                       bright_tol=0.1))
+    def train_at(amp):
+        return BiphasicPulseTrain(row['stim_freq'], amp, row['pulse_dur'],
+                                  interphase_dur=row['interphase_dur'],
+                                  stim_dur=row['stim_dur'],
+                                  cathodic_first=True)
+
+    amp_th.append(threshold_amp(train_at, row['theta']))
 
 plt.semilogx(fixed_dur.stim_freq, fixed_dur.stim_amp, 's', label='data')
 plt.semilogx(fixed_dur.stim_freq, amp_th, 'k-', linewidth=3, label='model')
@@ -182,8 +192,6 @@ plt.title('Fig. 4B: S05 (C3), 0.075 ms pulse width')
 # N pulses.
 #
 # For example, the following recreates a pulse train used in Fig. 5B:
-
-from pulse2percept.stimuli import BiphasicPulseTrain
 
 n_pulses = 2
 freq = 3

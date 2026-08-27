@@ -4,7 +4,10 @@
 Computational Models
 ====================
 
-A model predicts the response to stimulation. Most users work with
+A model with a spatial component predicts the response to stimulation *by a
+particular device*, so it is bound to an implant and handed the stimulus.
+A temporal-only model describes one location's response over time and needs
+no implant. Most users work with
 :py:class:`~pulse2percept.models.Model`, which can contain a spatial component,
 a temporal component, or both:
 
@@ -63,20 +66,80 @@ assumptions are relevant.
 Basic usage
 -----------
 
-Models follow the same workflow: initialize, build, then predict a percept from
-an implant containing a stimulus.
+Models follow the same workflow: choose an implant, bind a model to it, then
+predict a percept from a stimulus.
 
 .. code-block:: python
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII(stim={'A8': 30})
-    model = p2p.models.ScoreboardModel(rho=200).build()
-    percept = model.predict_percept(implant)
+    implant = p2p.implants.ArgusII()
+    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
+    percept = model.predict_percept({'A8': 30})
 
-``build()`` performs one-time setup such as constructing an axon map. The result
-of ``predict_percept`` is a
+The result of ``predict_percept`` is a
 :py:class:`~pulse2percept.percepts.Percept`.
+
+Source, delivered stimulation, percept
+--------------------------------------
+
+The prediction pipeline distinguishes the source, delivered stimulation, and
+percept::
+
+    source → implant → delivered stimulation → model → percept
+
+**Source**
+    Input presented to the device: a
+    :py:class:`~pulse2percept.stimuli.Stimulus` (or compatible scalar, array,
+    or dict), :py:class:`~pulse2percept.stimuli.ImageStimulus`,
+    :py:class:`~pulse2percept.stimuli.VideoStimulus`, or
+    :py:class:`~pulse2percept.vision.Scene`.
+
+**Delivered stimulation**
+    Electrical stimulation after implant preprocessing, encoding, raster
+    scheduling, threshold calibration, and safety checks. Models call
+    ``implant.prepare_stim(source)`` internally; call it directly to inspect
+    the delivered stimulus.
+
+**Percept**
+    Model output from ``model.predict_percept(source)``.
+
+Building
+--------
+
+Models build automatically on first prediction. Changing a model parameter
+invalidates the affected component, which is rebuilt when needed:
+
+.. code-block:: python
+
+    model = p2p.models.AxonMapModel(implant=implant)
+
+    # Builds automatically:
+    percept = model.predict_percept(stim)
+
+    # Rebuilds the spatial component:
+    model.rho = 250
+    percept = model.predict_percept(stim)
+
+Rebinding the implant also invalidates the spatial build because it depends on
+device geometry. ``model.build()`` forces a full rebuild and can be used to
+build eagerly or pass build-time parameters (``model.build(rho=250)``).
+
+Electrode-retina distance
+-------------------------
+
+:py:class:`~pulse2percept.models.ScoreboardModel`,
+:py:class:`~pulse2percept.models.AxonMapModel` and
+:py:class:`~pulse2percept.models.Thompson2003Model` use electrode ``x`` and
+``y`` coordinates only. Nonzero ``z`` values therefore do not affect their
+output and produce a warning.
+
+This is a model limitation. Electrode-target distance is expected to affect
+stimulation threshold and spatial recruitment, but pulse2percept does not
+currently parameterize that relationship because the required psychophysical
+evidence is insufficient. In the Scoreboard and AxonMap models, ``rho`` remains
+an effective perceptual spread parameter fitted to subject reports rather than
+inferred from electrode-retina distance.
 
 .. _topics-models-scene:
 
@@ -98,10 +161,10 @@ what someone is *looking at* instead, give the model a
     implant = p2p.implants.ArgusII()
     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
 
-    model = p2p.models.ScoreboardModel(scene=scene, rho=200).build()
-    percept = model.predict_percept(implant, gaze=(0, 0) * dva)
+    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
+    percept = model.predict_percept(scene, gaze=(0, 0) * dva)
 
-Four objects divide the problem between them:
+Scene prediction separates four responsibilities:
 
 =========  ==================================================================
 Scene      What is visually present, and where native vision is lost.
@@ -110,8 +173,8 @@ Model      Knows the retinotopy, and so connects Scene to Implant.
 Percept    What the simulated observer sees.
 =========  ==================================================================
 
-The model is the glue because it is the only object that holds a retinotopy
-*and* is handed an implant. Each electrode is followed out along this chain::
+The model maps implant coordinates into the visual field through its
+retinotopic map. Each electrode follows this chain::
 
     retinal coordinate (um)
       -> vfmap.ret_to_dva -> eye-centered visual field (dva)
@@ -124,10 +187,9 @@ neither does an eye-centered
 :py:class:`~pulse2percept.vision.Scotoma`: the scene moves past them. Pass one
 ``(x, y)`` to fixate, or one per video frame to move the eye between frames.
 
-The sampled values go to ``implant.encoder``, so the implant still decides how
-a gray level becomes current and which electrodes may pulse when. Prediction
-does not touch ``implant.stim``: it runs against a stand-in copy, so asking
-what someone sees never rewrites their device.
+The sampled values are passed to ``implant.encoder``, which maps gray levels
+to current and applies device timing constraints. A scene is per-prediction
+input and is not stored on the model or implant.
 
 An implant's ``preprocess`` -- an edge filter, an inversion, a contrast
 stretch -- is applied to the **prosthetic input branch only**, before the
@@ -141,18 +203,15 @@ operates at the scene source's pixel resolution.
 
     implant.preprocess = lambda stim: stim.filter('sobel')
 
-For a scene, ``preprocess`` must return an
+For scene input, ``preprocess`` must return an
 :py:class:`~pulse2percept.stimuli.ImageStimulus` or
-:py:class:`~pulse2percept.stimuli.VideoStimulus`; a callable that produces
-current directly has nothing left to place in the visual field, and that is
-the encoder's job in any case. Pixel values and channels are free to change --
-RGB to grayscale is fine -- but the spatial shape and the frame clock are not,
-because ``fov`` describes the geometry of the source it was given, and a
-resize or a re-timing would quietly reinterpret it.
+:py:class:`~pulse2percept.stimuli.VideoStimulus`; conversion to electrical
+stimulation belongs to the encoder. Pixel values and channels may change, but
+spatial shape and frame timing must remain unchanged because ``fov`` and the
+frame clock refer to the original scene.
 
-Scene registration is retinal. A model whose ``vfmap`` is a cortical map
-raises rather than pretending cortical registration is solved, and so does an
-implant with no ``encoder``.
+Scene registration currently requires a retinal ``vfmap`` and an implant
+``encoder``. A cortical ``vfmap`` or missing encoder raises ``ValueError``.
 
 Residual vision
 ~~~~~~~~~~~~~~~
@@ -166,24 +225,17 @@ lost region, and the prosthetic percept inside it -- as a single RGB
 
     scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva,
                              scotoma=p2p.vision.Scotoma.circle(8 * dva))
-    model = p2p.models.ScoreboardModel(scene=scene, rho=200).build()
+    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
 
-    percept = model.predict_percept(implant, gaze=(0, 0) * dva, vmax=50)
+    percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=50)
 
 ``vmax`` is required here and is not inferred: model brightness is in
 arbitrary units, so which brightness counts as white is a claim about the
 display, not about the model. Holding it fixed across calls is what keeps two
 gazes comparable.
 
-The scotoma describes *native* vision only. What the implant is given to
-encode is sampled from the scene itself, inside the lost region as well as
-outside it: a camera does not go blind where its wearer has.
-
-.. note::
-
-    ``find_threshold`` rescales an implant's own stimulus, which a
-    scene-driven model does not take from the caller. It raises rather than
-    silently ignoring the scene.
+The scotoma affects *native* vision only. Prosthetic encoding samples the
+unmasked scene, including locations inside the scotoma.
 
 Percept data layouts
 --------------------
@@ -229,9 +281,14 @@ Classes ending in ``Model`` are complete model objects. Classes ending in
 .. code-block:: python
 
     model = p2p.models.Model(
+        implant=implant,
         spatial=p2p.models.ScoreboardSpatial(),
         temporal=p2p.models.Nanduri2012Temporal(),
-    ).build()
+    )
+
+The implant belongs to the spatial component -- a temporal model never sees an
+electrode -- and naming it on the parent is shorthand for that. Naming a
+*different* one on both raises rather than silently picking a winner.
 
 This is useful when the spatial and temporal assumptions come from different
 models. The combined model handles the intermediate representation and returns

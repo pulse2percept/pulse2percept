@@ -62,23 +62,17 @@ def test_BVT24(x, y, rot, eye):
 
 
 def test_BVT24_stim():
-    # Assign a stimulus:
+    # Prepare a stimulus via dict:
     implant = BVT24()
-    implant.stim = {'C1': 1}
-    npt.assert_equal(implant.stim.electrodes, ['C1'])
-    npt.assert_equal(implant.stim.time, None)
-    npt.assert_equal(implant.stim.data, [[1]])
+    stim = implant.prepare_stim({'C1': 1})
+    npt.assert_equal(stim.electrodes, ['C1'])
+    npt.assert_equal(stim.time, None)
+    npt.assert_equal(stim.data, [[1]])
 
-    # You can also assign the stimulus in the constructor:
-    BVT24(stim={'C1': 1})
-    npt.assert_equal(implant.stim.electrodes, ['C1'])
-    npt.assert_equal(implant.stim.time, None)
-    npt.assert_equal(implant.stim.data, [[1]])
-
-    # Set a stimulus via array:
-    implant = BVT24(stim=np.ones(35))
-    npt.assert_equal(implant.stim.shape, (35, 1))
-    npt.assert_almost_equal(implant.stim.data, 1)
+    # Prepare a stimulus via array:
+    stim = implant.prepare_stim(np.ones(35))
+    npt.assert_equal(stim.shape, (35, 1))
+    npt.assert_almost_equal(stim.data, 1)
 
 
 @pytest.mark.parametrize('x', (-100, 200))
@@ -133,23 +127,17 @@ def test_BVT44(x, y, rot, eye):
 
 
 def test_BVT44_stim():
-    # Assign a stimulus:
+    # Prepare a stimulus via dict:
     implant = BVT44()
-    implant.stim = {'A1': 1}
-    npt.assert_equal(implant.stim.electrodes, ['A1'])
-    npt.assert_equal(implant.stim.time, None)
-    npt.assert_equal(implant.stim.data, [[1]])
+    stim = implant.prepare_stim({'A1': 1})
+    npt.assert_equal(stim.electrodes, ['A1'])
+    npt.assert_equal(stim.time, None)
+    npt.assert_equal(stim.data, [[1]])
 
-    # You can also assign the stimulus in the constructor:
-    BVT44(stim={'A1': 1})
-    npt.assert_equal(implant.stim.electrodes, ['A1'])
-    npt.assert_equal(implant.stim.time, None)
-    npt.assert_equal(implant.stim.data, [[1]])
-
-    # Set a stimulus via array:
-    implant = BVT44(stim=np.ones(46))
-    npt.assert_equal(implant.stim.shape, (46, 1))
-    npt.assert_almost_equal(implant.stim.data, 1)
+    # Prepare a stimulus via array:
+    stim = implant.prepare_stim(np.ones(46))
+    npt.assert_equal(stim.shape, (46, 1))
+    npt.assert_almost_equal(stim.data, 1)
 
 
 @pytest.mark.parametrize('cls', (BVT24, BVT44))

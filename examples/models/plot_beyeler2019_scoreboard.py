@@ -32,12 +32,23 @@ where :math:`\\rho` is the spatial decay constant.
 
 The scoreboard model can be instantiated and run in three simple steps.
 
+Choosing an implant
+-------------------
+
+A model predicts what a *particular* device produces, so the first step is to
+specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
+
+In the following, we will use a
+:py:class:`~pulse2percept.implants.PRIMA75` implant. By default, the implant
+will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
+meridian (rot=0).
+
 Creating the model
 ------------------
 
-The first step is to instantiate the
-:py:class:`~pulse2percept.models.ScoreboardModel` class by calling its
-constructor method.
+The second step is to instantiate the
+:py:class:`~pulse2percept.models.ScoreboardModel` class, bound to that
+implant.
 
 The model simulates a patch of the visual field specified by ``xrange`` and
 ``yrange`` (in degrees of visual angle), sampled at a step size of ``step``.
@@ -55,8 +66,12 @@ and sample it at 0.05deg resolution:
 """
 # sphinx_gallery_thumbnail_number = 2
 
+from pulse2percept.implants import PRIMA75
 from pulse2percept.models import ScoreboardModel
-model = ScoreboardModel(xrange=(-3, 3), yrange=(-3, 3), step=0.05)
+
+implant = PRIMA75()
+model = ScoreboardModel(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
+                        step=0.05)
 
 ##############################################################################
 # Parameters you don't specify will take on default values. You can inspect
@@ -85,32 +100,14 @@ print(model)
 model.rho = 20
 
 ##############################################################################
-# Then build the model. This is a necessary step before you can actually use
-# the model to predict a percept, as it performs a number of expensive setup
-# computations (e.g., building the spatial reference frame, calculating
-# electric potentials):
+# Before it can predict anything, the model performs a number of expensive
+# setup computations (building the spatial reference frame). That happens
+# automatically the first time you ask for a percept, and again whenever you
+# change a model parameter -- as the ``model.rho`` assignment above just did.
+# You can also trigger it yourself with ``model.build()``, which is what the
+# next line does so that the grid exists to be plotted:
 
 model.build()
-
-##############################################################################
-# .. note::
-#
-#     You need to build a model only once. After that, you can apply any number
-#     of stimuli -- or even apply the model to different implants -- without
-#     having to rebuild (which takes time).
-#
-# Assigning a stimulus
-# --------------------
-# The second step is to specify a visual prosthesis from the
-# :py:mod:`~pulse2percept.implants` module.
-#
-# In the following, we will create an
-# :py:class:`~pulse2percept.implants.PRIMA75` implant. By default, the implant
-# will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
-# meridian (rot=0):
-
-from pulse2percept.implants import PRIMA75
-implant = PRIMA75()
 
 ##############################################################################
 # We can visualize the implant and verify that we are simulating the correct
@@ -120,34 +117,29 @@ model.plot()
 implant.plot()
 
 ##############################################################################
-# The gray window indicates the extent of the grid that was created during
-# ``model.build()`` using the values specified by ``xrange``, ``yrange``, and
-# ``step``. As we can see, the window well-covers the implant that we want
-# to simulate.
+# The gray window indicates the extent of the grid, built from the values
+# specified by ``xrange``, ``yrange``, and ``step``. As we can see, the window
+# well-covers the implant that we want to simulate.
 #
-# The easiest way to assign a stimulus to the implant is to pass a NumPy array
-# that specifies the current amplitude to be applied to every electrode in the
-# implant.
+# Predicting the percept
+# ----------------------
 #
-# For example, the following sends 10 microamps to all 142 electrodes of the
-# implant:
+# The third step is to hand the model a stimulus. The easiest kind is a NumPy
+# array that specifies the current amplitude to be applied to every electrode
+# in the implant.
+#
+# For example, the following sends 10 microamps to all 142 electrodes and
+# predicts the resulting percept. Note that this may take some time on your
+# machine:
 
 import numpy as np
-implant.stim = 10 * np.ones(142)
+percept = model.predict_percept(10 * np.ones(142))
 
 ##############################################################################
 # .. note::
 #
 #     Some models can handle stimuli that have both a spatial and a temporal
 #     component. The scoreboard model cannot.
-#
-# Predicting the percept
-# ----------------------
-#
-# The third step is to apply the model to predict the percept resulting from
-# the specified stimulus. Note that this may take some time on your machine:
-
-percept = model.predict_percept(implant)
 
 ##############################################################################
 # The resulting percept is stored in a
@@ -176,7 +168,7 @@ ax.set_title('Predicted percept')
 # ``hexbin`` function). Additional parameters can be passed to ``hexbin`` as
 # keyword arguments of :py:meth:`~pulse2percept.percepts.Percept.plot`:
 
-percept = model.predict_percept(implant)
+percept = model.predict_percept(10 * np.ones(142))
 percept.plot(kind='hex', cmap='inferno')
 
 
@@ -192,8 +184,6 @@ implant.plot(annotate=True)
 ##############################################################################
 # This makes it easier to pick an electrode; e.g., F7:
 
-implant.stim = {'F7': 10}
-
-percept = model.predict_percept(implant)
+percept = model.predict_percept({'F7': 10})
 
 percept.plot()

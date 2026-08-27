@@ -4,26 +4,17 @@ import numpy as np
 from copy import deepcopy
 
 from . import AxonMapSpatial, Model
-from ..implants import ProsthesisSystem, ElectrodeArray
+from ..implants import ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
 from ..units import as_value, um, xTh
 from ..utils import FreezeError, rename_parameter
 from ..utils.base import has_own_attr
-from .base import NotBuiltError, BaseModel, _require_stim_dimension
+from .base import BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
 
 # Safety limit for locating delayed temporal peaks.
 _PEAK_SEARCH_DOUBLINGS = 4
-
-# `find_threshold` bisects on a scaled copy of the stimulus *data*, which this
-# model does not read, so the search cannot converge:
-_FIND_THRESHOLD_MSG = (
-    "{cls} does not support find_threshold. It takes amplitude as a multiple "
-    "of threshold and reads it from the pulse train the stimulus is made of, "
-    "not from the stimulus data, so scaling the data leaves the percept "
-    "unchanged. Vary `amp` when building the BiphasicPulseTrain instead."
-)
 
 
 class DefaultBrightModel(BaseModel):
@@ -297,6 +288,12 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
+
+        .. versionadded:: 0.11.0
+
     bright_model: callable, optional
         Model used to modulate percept brightness with amplitude, frequency,
         and pulse duration
@@ -559,20 +556,19 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self._cutoff_r2(self.rho),
             self.n_threads)
 
-    def predict_percept(self, implant, t_percept=None):
-        """ Predicts the spatial response
-        Override base predict percept to have desired timesteps and
-        remove unneccesary computation
+    def _predict_prepared(self, stim, t_percept=None):
+        """Predict the spatial response with model-specific time handling.
+
+        Avoids intermediate computation used by the generic spatial path.
 
         Parameters
         ----------
-        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            A valid prosthesis system. A stimulus can be passed via
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            The stimulus the bound implant delivers.
         t_percept: float or list of floats, optional
             The time points at which to output a percept (ms). This
             model's numerical contract is fixed to milliseconds.
-            If None, ``implant.stim.time`` is used.
+            If None, the stimulus' own time points are used.
             May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
             see :py:mod:`pulse2percept.units`.
 
@@ -580,24 +576,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         -------
         percept: :py:class:`~pulse2percept.models.Percept`
             A Percept object whose ``data`` container has dimensions Y x X x 1.
-            Will return None if ``implant.stim`` is None.
+            Will return None if ``stim`` is None.
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
-                            f"not {type(implant)}.")
-        if implant.eye != self.eye:
-            raise ValueError(f"The implant is in {implant.eye} but the model "
-                             f"was built for {self.eye}.")
-        if implant.stim is None:
+            self.build()
+        if stim is None:
             return None
         # Determine what physical quantity the stimulus is:
-        _require_stim_dimension(self, implant.stim)
+        _require_stim_dimension(self, stim)
         # Determine which pulse trains the stimulus is made of:
-        params = _pulse_train_params(implant.stim)
+        params = _pulse_train_params(stim)
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
-        stim = implant.stim
         n_time = 1 if t_percept is None else np.array([t_percept]).size
         if not params:
             # Nothing is driven above zero amplitude:
@@ -607,8 +596,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             resp = np.zeros(list(self.grid.x.shape) + [n_time])
             # Response goes in first frame
             resp[:, :, 0] = self._predict_spatial(
-                implant.earray, stim).reshape(self.grid.x.shape)
-        # This override bypasses SpatialModel.predict_percept:
+                self.implant.earray, stim).reshape(self.grid.x.shape)
+        # This override bypasses SpatialModel._predict_prepared:
         resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
@@ -678,12 +667,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             return float(max(src.stim_dur for _, src in sources))
         return float(stim.time[-1])
 
-    def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100):
-        """Not supported by this model"""
-        raise NotImplementedError(_FIND_THRESHOLD_MSG.format(
-            cls=type(self).__name__))
-
 
 class BiphasicAxonMapModel(Model):
     """ BiphasicAxonMapModel of [Granley2021]_ (standalone model)
@@ -721,7 +704,7 @@ class BiphasicAxonMapModel(Model):
         :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
         stimulus is made of, not off its samples. Scaling a pulse train
         (``pt * 2``) or the stimulus assembled from one
-        (``implant.stim * 2``) gives a train at the new amplitude and does
+        (``stim * 2``) gives a train at the new amplitude and does
         change the percept, while editing the data array in place does not.
         A stimulus that is only samples -- a raw waveform, an appended
         sequence of two trains, anything whose amplitudes were rewritten --
@@ -730,6 +713,12 @@ class BiphasicAxonMapModel(Model):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
+
+        .. versionadded:: 0.11.0
+
     bright_model: callable, optional
         Model used to modulate percept brightness with amplitude, frequency,
         and pulse duration
@@ -846,69 +835,3 @@ class BiphasicAxonMapModel(Model):
     def __init__(self, **params):
         super(BiphasicAxonMapModel, self).__init__(
             spatial=BiphasicAxonMapSpatial(), temporal=None, **params)
-
-    def predict_percept(self, implant, t_percept=None):
-        """Predict a percept.
-
-        Overrides base predict percept to keep desired time axes
-
-        .. note::
-
-            You must call ``build`` before calling ``predict_percept``.
-
-        .. important::
-
-            This model works in multiples of perceptual threshold, so give
-            amplitude in :py:data:`~pulse2percept.units.xTh` (``2 * xTh``),
-            or calibrate the electrode with ``threshold_amp`` or
-            :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`
-            and give it in microamps. See
-            :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` for what
-            counts as threshold here.
-
-            The model reads the intended amplitude, frequency and pulse
-            duration off the
-            :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
-            stimulus is made of, not off its samples. Editing the data array
-            in place will not change the predicted percept.
-
-        Parameters
-        ----------
-        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            A valid prosthesis system. A stimulus can be passed via
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms). This
-            model's numerical contract is fixed to milliseconds.
-            If None, ``implant.stim.time`` is used.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
-            see :py:mod:`pulse2percept.units`.
-
-        Returns
-        -------
-        percept: :py:class:`~pulse2percept.models.Percept`
-            A Percept object whose ``data`` container has dimensions Y x X x T.
-            Will return None if ``implant.stim`` is None.
-        """
-        if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
-                            f"{type(implant)}.")
-        if implant.stim is None or (not self.has_space and not self.has_time):
-            # Nothing to see here:
-            return None
-        _require_stim_dimension(self, implant.stim)
-        resp = self.spatial.predict_percept(implant, t_percept=t_percept)
-        return resp
-
-    def find_threshold(self, implant, bright_th, amp_range=(0, 999), amp_tol=1,
-                       bright_tol=0.1, max_iter=100, t_percept=None):
-        """Not supported by this model
-
-        Raises
-        ------
-        NotImplementedError
-        """
-        raise NotImplementedError(_FIND_THRESHOLD_MSG.format(
-            cls=type(self).__name__))

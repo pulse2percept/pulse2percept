@@ -2,7 +2,7 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, 
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import Model, SpatialModel, _blend_meridian
+from ..base import Model, SpatialModel, _blend_meridian, _warn_rho_vs_pitch
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...units import DimensionMismatchError, dva, um
@@ -78,9 +78,9 @@ class CortexSpatial(SpatialModel):
 
     .. important::
 
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the
+        next ``predict_percept`` builds it again.
     """
     @property
     def regions(self):
@@ -226,6 +226,12 @@ class ScoreboardSpatial(CortexSpatial):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
+
+        .. versionadded:: 0.11.0
+
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     min_current_spread : float, optional
@@ -287,9 +293,9 @@ class ScoreboardSpatial(CortexSpatial):
 
     .. important ::
     
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the
+        next ``predict_percept`` builds it again.
 
     """
     def __init__(self, **params):
@@ -311,6 +317,9 @@ class ScoreboardSpatial(CortexSpatial):
         # Cortical coordinates are stored in microns (see `CorticalMap`), and
         # the current spread is compared against them:
         return {**super().get_param_units(), 'rho': um, 'meridian_blend': dva}
+
+    def _build(self):
+        _warn_rho_vs_pitch(self)
 
     def _postprocess_spatial(self, resp):
         """Blend the percept across the vertical meridian
@@ -380,6 +389,12 @@ class ScoreboardModel(Model):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
+
+        .. versionadded:: 0.11.0
+
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     min_current_spread : float, optional
@@ -440,16 +455,12 @@ class ScoreboardModel(Model):
         Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
 
     .. important ::
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the next
+        ``predict_percept`` builds it again.
 
     """
 
-    def __init__(self, scene=None, **params):
-        # `scene` is composite state and this is the one standalone model that
-        # forwards its keyword arguments to the spatial model, which does not
-        # take one. Named here so it goes only to `Model.__init__`.
-        super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(**params),
-                                              temporal=None, scene=scene,
-                                              **params)
+    def __init__(self, **params):
+        super(ScoreboardModel, self).__init__(
+            spatial=ScoreboardSpatial(**params), temporal=None, **params)

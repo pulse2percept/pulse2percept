@@ -62,7 +62,7 @@ class BVT24(ProsthesisSystem):
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
-        preprocessing method whenever a new stimulus is assigned, or a custom
+        preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -71,8 +71,9 @@ class BVT24(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', stim=None,
-                 preprocess=False, safe_mode=False):
+    placement = 'suprachoroidal'
+
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=False, safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -134,9 +135,6 @@ class BVT24(ProsthesisSystem):
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
 
-        # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes:
-        self.stim = stim
 
 
 class BVT44(ProsthesisSystem):
@@ -186,7 +184,7 @@ class BVT44(ProsthesisSystem):
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
-        preprocessing method whenever a new stimulus is assigned, or a custom
+        preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
@@ -194,8 +192,9 @@ class BVT44(ProsthesisSystem):
     # Frozen class: User cannot add more class attributes
     __slots__ = ()
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='LE', stim=None,
-                 preprocess=False, safe_mode=False):
+    placement = 'suprachoroidal'
+
+    def __init__(self, x=0, y=0, z=0, rot=0, eye='LE', preprocess=False, safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -238,6 +237,3 @@ class BVT44(ProsthesisSystem):
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
 
-        # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes:
-        self.stim = stim

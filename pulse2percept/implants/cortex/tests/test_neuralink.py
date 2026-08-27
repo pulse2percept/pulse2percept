@@ -234,7 +234,6 @@ def test_LinearEdgeThread_defaults():
     npt.assert_almost_equal(thread.spacing, 50)
     npt.assert_almost_equal(thread.insertion_depth, 0)
     npt.assert_equal(thread.electrode, EllipsoidElectrode)
-    npt.assert_equal(thread.stim, None)
     npt.assert_equal(thread.safe_mode, False)
     npt.assert_equal(thread.preprocess, False)
     # The thread also sticks out of the cortex, for visualization:
@@ -277,12 +276,12 @@ def test_LinearEdgeThread_custom_electrode():
 
 
 def test_LinearEdgeThread_stim():
-    thread = LinearEdgeThread(n_elecs=3, stim={'0': 1, '2': 3})
-    npt.assert_equal(thread.stim.electrodes, ['0', '2'])
-    npt.assert_almost_equal(thread.stim.data.ravel(), [1, 3])
+    stim = LinearEdgeThread(n_elecs=3).prepare_stim({'0': 1, '2': 3})
+    npt.assert_equal(stim.electrodes, ['0', '2'])
+    npt.assert_almost_equal(stim.data.ravel(), [1, 3])
     # safe_mode rejects stimuli that are not charge-balanced:
     with pytest.raises(ValueError):
-        LinearEdgeThread(n_elecs=3, safe_mode=True, stim={'0': 1})
+        LinearEdgeThread(n_elecs=3, safe_mode=True).prepare_stim({'0': 1})
 
 
 def test_LinearEdgeThread_pprint():
@@ -294,7 +293,7 @@ def test_LinearEdgeThread_pprint():
     npt.assert_equal(params['n_elecs'], 4)
     npt.assert_equal(params['spacing'], 25)
     # Inherited from ProsthesisSystem:
-    npt.assert_equal(params['stim'], None)
+    npt.assert_equal(params['safe_mode'], False)
     npt.assert_equal('LinearEdgeThread' in str(thread), True)
 
 
@@ -334,13 +333,13 @@ def test_Neuralink_requires_threads():
 
 def test_Neuralink_stim():
     nlink = Neuralink({'A': LinearEdgeThread(n_elecs=2),
-                       'B': LinearEdgeThread(500, 500, n_elecs=2)},
-                      stim={'A-0': 1, 'B-1': 2})
-    npt.assert_equal(nlink.stim.electrodes, ['A-0', 'B-1'])
-    npt.assert_almost_equal(nlink.stim.data.ravel(), [1, 2])
+                       'B': LinearEdgeThread(500, 500, n_elecs=2)})
+    stim = nlink.prepare_stim({'A-0': 1, 'B-1': 2})
+    npt.assert_equal(stim.electrodes, ['A-0', 'B-1'])
+    npt.assert_almost_equal(stim.data.ravel(), [1, 2])
     with pytest.raises(ValueError):
-        Neuralink([LinearEdgeThread(n_elecs=2)], safe_mode=True,
-                  stim={'0-0': 1})
+        Neuralink([LinearEdgeThread(n_elecs=2)],
+                  safe_mode=True).prepare_stim({'0-0': 1})
 
 
 def _ax3d():

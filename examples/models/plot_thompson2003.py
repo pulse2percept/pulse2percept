@@ -19,21 +19,23 @@ The model can be loaded as follows (using 10% dropout rate):
 import matplotlib.pyplot as plt
 import numpy as np
 import pulse2percept as p2p
-model = p2p.models.Thompson2003Model(step=0.2, dropout=0.1)
-model.build()
+
+# A model predicts what a particular device produces, so it is bound to one.
+# Here we will use an :py:class:`~pulse2percept.implants.ArgusII` implant:
+implant = p2p.implants.ArgusII()
+model = p2p.models.Thompson2003Model(implant=implant, step=0.2, dropout=0.1)
 
 ###############################################################################
-# After building the model, we are ready to predict percepts.
-# Here we will use an :py:class:`~pulse2percept.implants.ArgusII` implant.
+# We are ready to predict percepts; the model builds itself on the first call.
 #
-# One way to assign a stimulus is to pass a NumPy array with the same number of
+# One way to describe a stimulus is a NumPy array with the same number of
 # elements as there are electrodes in the array (i.e., 60).
 # Choosing values from ``np.arange(60)`` will assign a different number to
 # every electrode. We should thus expect to see 60 circular phosphenes that get
 # gradually brighter from one electrode to the next:
 
-implant = p2p.implants.ArgusII(stim=np.arange(60))
-percept = model.predict_percept(implant)
+stim = np.arange(60)
+percept = model.predict_percept(stim)
 percept.plot()
 
 ###############################################################################
@@ -43,7 +45,7 @@ percept.plot()
 fig, axes = plt.subplots(ncols=4, figsize=(15, 6))
 for ax, drop in zip(axes, [0, 0.25, 0.5, 0.75]):
     model.build(dropout=drop)
-    model.predict_percept(implant).plot(ax=ax)
+    model.predict_percept(stim).plot(ax=ax)
     ax.set_title(f"{100*drop}% dropout")
 fig.tight_layout()
 
@@ -65,6 +67,6 @@ fig.tight_layout()
 # percept frame per video frame:
 
 video = p2p.stimuli.BostonTrain()
-implant.stim = video.encode(implant=implant, freq=30)
+encoded = video.encode(implant=implant, freq=30)
 model.build(dropout=0.2)
-model.predict_percept(implant, t_percept=video.time).play()
+model.predict_percept(encoded, t_percept=video.time).play()

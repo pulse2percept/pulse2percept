@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import BaseModel, NotBuiltError, _require_stim_dimension
+from ..base import BaseModel, _require_stim_dimension
 from ...percepts import Percept
 from ...implants import ProsthesisSystem
 from ...stimuli import BiphasicPulseTrain
@@ -51,6 +51,12 @@ class DynaphosModel(BaseModel):
     
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
+
+        .. versionadded:: 0.11.0
+
     dt : float, optional
         Sampling time step of the simulation (ms)
     regions : list of str, optional
@@ -114,9 +120,9 @@ class DynaphosModel(BaseModel):
         
     .. important::
     
-        If you change important model parameters outside the constructor (e.g.,
-        by directly setting ``model.xrange = (-10, 10)``), you will have to call
-        ``model.build()`` again for your changes to take effect.
+        Changing a model parameter outside the constructor (e.g., by directly
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the
+        next ``predict_percept`` builds it again.
     """
     #: ``step`` used to be called ``xystep``. The old name still reads and
     #: writes ``step``, with a ``DeprecationWarning``. Declared here rather
@@ -142,10 +148,36 @@ class DynaphosModel(BaseModel):
 
             self.vfmap.regions = self.regions
             self.grid = None
+
+    @property
+    def implant(self):
+        """The prosthesis system this model predicts percepts for
+
+        Model context rather than trial input: named once, and
+        :py:meth:`predict_percept` is then given the stimulus. Rebinding
+        invalidates the build.
+
+        .. versionadded:: 0.11.0
+        """
+        return getattr(self, '_implant', None)
+
+    @implant.setter
+    def implant(self, implant):
+        """Implant setter (called upon ``self.implant = implant``)"""
+        if implant is not None and not isinstance(implant, ProsthesisSystem):
+            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
+                            f"not {type(implant)}.")
+        if implant is not getattr(self, '_implant', None):
+            self._is_built = False
+        self._implant = implant
+
     
     def get_default_params(self):
             """Returns all settable parameters of the Dynaphos model"""
             params = {
+                # The device whose electrodes this model places in the visual
+                # field. Required before building or predicting:
+                'implant': None,
                 'xrange': (-5, 5),  # dva
                 'yrange': (-5, 5),  # dva
                 'step': 0.25,  # dva
@@ -220,8 +252,8 @@ class DynaphosModel(BaseModel):
         """Build the model
 
         Performs expensive one-time calculations, such as building the spatial
-        grid used to predict a percept. You must call ``build`` before
-        calling ``predict_percept``.
+        grid used to predict a percept. ``predict_percept`` calls it for you
+        when the model is not built.
 
         Parameters
         ----------
@@ -236,6 +268,12 @@ class DynaphosModel(BaseModel):
         from ...topography import Grid2D
         # See `BaseModel.build`:
         self.set_params(**build_params)
+        if not isinstance(self.implant, ProsthesisSystem):
+            raise ValueError(
+                f"{type(self).__name__} predicts what a particular implant "
+                f"produces, so it needs one: "
+                f"{type(self).__name__}(implant=Cortivis()). The stimulus is "
+                f"what 'predict_percept' takes.")
         # check that freq/pdur fit. `freq` counts cycles per second, and every
         # duration in this model is in milliseconds:
         window_dur = MS_PER_S / self.freq
@@ -384,18 +422,22 @@ class DynaphosModel(BaseModel):
                 frame_idx = frame_idx + 1
         return np.asarray(bright)
     
-    def predict_percept(self, implant, t_percept=None):
+    def predict_percept(self, source, t_percept=None):
         """Predict the spatiotemporal response
+
+        .. versionchanged:: 0.11.0
+            Takes the stimulus source rather than an implant; the implant is
+            the one this model is bound to.
 
         Parameters
         ----------
-        implant: :py:class:`~pulse2percept.implants.ProsthesisSystem`
-            A valid prosthesis system. A stimulus can be passed via
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.stim`.
+        source : :py:class:`~pulse2percept.stimuli.Stimulus` source type
+            What is presented to the device; see
+            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`.
         t_percept: float or list of floats, optional
             The time points at which to output a percept (ms). This
             model's numerical contract is fixed to milliseconds.
-            If None, ``implant.stim.time`` is used.
+            If None, the prepared stimulus' own time points are used.
             May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
             see :py:mod:`pulse2percept.units`.
 
@@ -403,28 +445,26 @@ class DynaphosModel(BaseModel):
         -------
         percept: :py:class:`~pulse2percept.models.Percept`
             A Percept object whose ``data`` container has dimensions Y x X x T.
-            Will return None if ``implant.stim`` is None.
+            Will return None if ``source`` is None or empty.
 
         """
         if not self.is_built:
-            raise NotBuiltError("You must call ``build`` first.")
-        if not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
-                            f"not {type(implant)}.")
+            self.build()
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
-        if implant.stim is None:
+        prepared = self.implant.prepare_stim(source)
+        if prepared is None:
             # Nothing to see here:
             return None
-        _require_stim_dimension(self, implant.stim)
-        if implant.stim.time is None and t_percept is not None:
+        _require_stim_dimension(self, prepared)
+        if prepared.time is None and t_percept is not None:
             raise ValueError(f"Cannot calculate spatial response at times "
                              f"t_percept={t_percept} because stimulus does not "
                              f"have a time component.")
-        if implant.stim.time is None:
+        if prepared.time is None:
             raise ValueError(f"Cannot calculate response because stimulus does not "
                              f"have a time component.")
         # Make sure we don't change the user's Stimulus object:
-        stim = deepcopy(implant.stim)
+        stim = deepcopy(prepared)
         # The pulse clock is a question about what the stimulus is made of,
         # and compressing it answers "samples, and nothing else". So ask
         # first; the waveform below is what the time evolution runs on:
@@ -458,8 +498,8 @@ class DynaphosModel(BaseModel):
             # Stimulus was compressed to zero:
             resp = np.zeros((self.grid.x.size, n_time), dtype=np.float32)
         else:
-            resp = self._predict_percept(implant.earray, stim, t_percept,
-                                         clocks)
+            resp = self._predict_percept(self.implant.earray, stim,
+                                         t_percept, clocks)
         return Percept(resp.reshape(list(self.grid.x.shape) + [t_percept.size]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
