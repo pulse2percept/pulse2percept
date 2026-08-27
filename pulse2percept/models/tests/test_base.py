@@ -15,7 +15,7 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
-                                  FadingTemporal, Model, NotBuiltError,
+                                  FadingTemporal, Model,
                                   ScoreboardModel, ScoreboardSpatial,
                                   SpatialModel, TemporalModel)
 from pulse2percept.models.base import _blend_meridian
@@ -81,8 +81,6 @@ class ValidSpatialModel(SpatialModel):
         return params
 
     def _predict_spatial(self, earray, stim):
-        if not self.is_built:
-            raise NotBuiltError
         n_time = 1 if stim.time is None else stim.time.size
         return np.zeros((self.grid.x.size, n_time), dtype=np.float32)
 
@@ -448,8 +446,6 @@ def test_SpatialModel_plot():
 class ValidTemporalModel(TemporalModel):
 
     def _predict_temporal(self, stim, t_percept):
-        if not self.is_built:
-            raise NotBuiltError
         return np.zeros((stim.data.shape[0], len(t_percept)), dtype=np.float32)
 
 

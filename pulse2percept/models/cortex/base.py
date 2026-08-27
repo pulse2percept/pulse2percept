@@ -2,7 +2,7 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, 
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import Model, SpatialModel, _blend_meridian
+from ..base import Model, SpatialModel, _blend_meridian, _warn_rho_vs_pitch
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...units import DimensionMismatchError, dva, um
@@ -311,6 +311,9 @@ class ScoreboardSpatial(CortexSpatial):
         # Cortical coordinates are stored in microns (see `CorticalMap`), and
         # the current spread is compared against them:
         return {**super().get_param_units(), 'rho': um, 'meridian_blend': dva}
+
+    def _build(self):
+        _warn_rho_vs_pitch(self)
 
     def _postprocess_spatial(self, resp):
         """Blend the percept across the vertical meridian

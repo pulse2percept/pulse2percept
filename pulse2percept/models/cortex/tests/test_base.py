@@ -259,3 +259,49 @@ def test_CortexSpatial_meridian_blend_reapplies_threshold():
     npt.assert_equal(np.any(data > 0), True)
     # Nothing survives strictly between zero and the threshold:
     npt.assert_equal(np.any((np.abs(data) > 0) & (np.abs(data) < 0.1)), False)
+
+
+def _user_warnings(build):
+    """The UserWarning messages a build emits, and nothing else"""
+    import warnings
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        build()
+    return [str(w.message) for w in caught
+            if issubclass(w.category, UserWarning)]
+
+
+def _cortex_grid(ndim):
+    return dict(xrange=(-3, 3), yrange=(-3, 3), step=1,
+                vfmap=Polimeni2006Map(regions=['v1'], jitter_boundary=True,
+                                      ndim=ndim))
+
+
+@pytest.mark.parametrize('ndim', [2, 3])
+def test_cortical_scoreboard_warns_when_rho_is_wider_than_the_pitch(ndim):
+    """The same Gaussian spread as the retinal model, so the same warning"""
+    grid = _cortex_grid(ndim)
+    # Cortivis' 400 um pitch, against a current spread three times as wide:
+    said = _user_warnings(
+        ScoreboardModel(implant=Cortivis(), rho=1200, **grid).build)
+    npt.assert_equal(any('pitch (400 um)' in w for w in said), True)
+    npt.assert_equal(any('ratio of 3.00' in w for w in said), True)
+    npt.assert_equal(
+        _user_warnings(ScoreboardModel(implant=Cortivis(), rho=400,
+                                       **grid).build), [])
+
+
+def test_a_three_dimensional_map_counts_depth_as_spacing():
+    """Pitch is measured in whichever dimensions the model reads
+
+    A Neuralink thread stacks its electrodes along z at one (x, y). A 3-D map
+    reads that depth and sees 50 um neighbours; a 2-D one projects them onto
+    the same point, where there is no spacing left to compare rho against.
+    """
+    thread = LinearEdgeThread()
+    said = _user_warnings(
+        ScoreboardModel(implant=thread, rho=200, **_cortex_grid(3)).build)
+    npt.assert_equal(any('pitch (50 um)' in w for w in said), True)
+    npt.assert_equal(
+        _user_warnings(ScoreboardModel(implant=thread, rho=200,
+                                       **_cortex_grid(2)).build), [])

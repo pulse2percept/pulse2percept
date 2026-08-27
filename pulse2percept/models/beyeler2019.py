@@ -16,7 +16,7 @@ from ..topography import Watson2014Map
 from ..implants import ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
-from .base import _blend_meridian
+from .base import _blend_meridian, _warn_rho_vs_pitch
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)        
 
@@ -79,40 +79,6 @@ def _flatten_bundles(bundles):
         raise ValueError("Every bundle must have at least one segment.")
     flat = np.ascontiguousarray(np.concatenate(distinct))
     return flat, np.concatenate(([0], np.cumsum(lens))), bundle_id
-
-
-def _electrode_pitch(model):
-    """The implant's typical nearest-neighbour spacing, in ``space_unit``
-
-    Returns None when there is nothing to compare: fewer than two electrodes,
-    or an array whose electrodes sit on top of each other.
-    """
-    xyz = model.implant.earray.coordinates(model.space_unit)
-    if len(xyz) < 2:
-        return None
-    # The nearest *other* electrode, so the query asks for two:
-    distances, _ = cKDTree(xyz).query(xyz, k=2)
-    pitch = float(np.median(distances[:, 1]))
-    return pitch if pitch > 0 else None
-
-
-def _warn_rho_vs_pitch(model):
-    """Warn when current spread is wide compared to electrode spacing
-
-    Describes what the numbers mean and leaves them alone: ``rho`` is a fitted
-    perceptual parameter, and the fit is the user's to defend.
-    """
-    pitch = _electrode_pitch(model)
-    if pitch is None or model.rho <= pitch:
-        return
-    overlap = np.exp(-pitch ** 2 / (2 * model.rho ** 2))
-    warnings.warn(
-        f"rho={model.rho:.0f} um is wider than this implant's electrode "
-        f"pitch ({pitch:.0f} um), a ratio of {model.rho / pitch:.2f}. A point "
-        f"one pitch away from an electrode still sees {overlap:.0%} of its "
-        f"peak, so neighbouring electrodes blur into each other and the "
-        f"percept says more about rho than about which electrodes were "
-        f"driven.")
 
 
 class ScoreboardSpatial(SpatialModel):
@@ -956,8 +922,9 @@ class AxonMapSpatial(SpatialModel):
             f"epiretinal array stimulates passing nerve fiber bundles. This "
             f"implant is {placement}, where that mechanism does not apply, so "
             f"the streaks below are an artifact of the model rather than a "
-            f"prediction about the device. ScoreboardModel is the usual "
-            f"phenomenological starting point for other placements.")
+            f"prediction about the device. A placement-appropriate "
+            f"local-response scoreboard model is a safer phenomenological "
+            f"starting point.")
 
     def _correct_loc_od(self):
         """Put the optic disc on the nasal side of whichever eye this is"""

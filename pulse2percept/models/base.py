@@ -1,6 +1,5 @@
 """:py:class:`~pulse2percept.models.BaseModel`,
    :py:class:`~pulse2percept.models.Model`,
-   :py:class:`~pulse2percept.models.NotBuiltError`,
    :py:class:`~pulse2percept.models.SpatialModel`,
    :py:class:`~pulse2percept.models.TemporalModel`"""
 import warnings
@@ -9,6 +8,7 @@ from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
 from scipy.ndimage import gaussian_filter1d
+from scipy.spatial import cKDTree
 
 from ..implants import ProsthesisSystem
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
@@ -321,14 +321,6 @@ def _blend_meridian(resp, grid, meridian, width):
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
-class NotBuiltError(ValueError, AttributeError):
-    """Exception class used to raise if model is used before building
-
-    This class inherits from both ValueError and AttributeError to help with
-    exception handling and backward compatibility.
-    """
-
-
 #: Declared parameter names per model class, so that ``__setattr__`` below
 #: does not rebuild the default dict on every assignment.
 _declared = {}
@@ -357,25 +349,43 @@ def _unchanged(before, after):
         return False
 
 
-def _invalidating(set_attr):
-    """Wrap ``__setattr__`` so a new parameter value un-builds the model.
+def _electrode_pitch(model):
+    """The implant's typical nearest-neighbour spacing, in ``space_unit``
 
-    Which parameters a build depends on is not worth enumerating: the
-    expensive ones are the point of building, and re-deriving a grid because
-    ``thresh_percept`` moved is cheaper than being wrong. Assignments that
-    change nothing keep the build, so ``model.rho = model.rho`` is free.
+    Measured in the dimensions the model actually reads: a model whose visual
+    field map is two-dimensional drops ``z`` when it predicts, so it must drop
+    ``z`` here too, or electrodes it sees as neighbours look far apart.
+
+    Returns None when there is nothing to compare: fewer than two electrodes,
+    or an array whose electrodes coincide in those dimensions.
     """
+    coords = model.implant.earray.coordinates(model.space_unit)
+    coords = coords[:, :model.vfmap.ndim]
+    if len(coords) < 2:
+        return None
+    # The nearest *other* electrode, so the query asks for two:
+    distances, _ = cKDTree(coords).query(coords, k=2)
+    pitch = float(np.median(distances[:, 1]))
+    return pitch if pitch > 0 else None
 
-    def __setattr__(self, name, value):
-        if _is_constructing(self) or name not in _declared_params(self):
-            set_attr(self, name, value)
-            return
-        before = getattr(self, name, None)
-        set_attr(self, name, value)
-        if not _unchanged(before, getattr(self, name, None)):
-            object.__setattr__(self, '_is_built', False)
 
-    return __setattr__
+def _warn_rho_vs_pitch(model):
+    """Warn when current spread is wide compared to electrode spacing
+
+    Describes what the numbers mean and leaves them alone: ``rho`` is a fitted
+    perceptual parameter, and the fit is the user's to defend.
+    """
+    pitch = _electrode_pitch(model)
+    if pitch is None or model.rho <= pitch:
+        return
+    overlap = np.exp(-pitch ** 2 / (2 * model.rho ** 2))
+    warnings.warn(
+        f"rho={model.rho:.0f} um is wider than this implant's electrode "
+        f"pitch ({pitch:.0f} um), a ratio of {model.rho / pitch:.2f}. A point "
+        f"one pitch away from an electrode still sees {overlap:.0%} of its "
+        f"peak, so neighbouring electrodes blur into each other and the "
+        f"percept says more about rho than about which electrodes were "
+        f"driven.")
 
 
 class BaseModel(Parametrized, metaclass=ABCMeta):
@@ -400,8 +410,22 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     """
 
-    #: A new parameter value invalidates the build; see ``_invalidating``.
-    __setattr__ = _invalidating(Parametrized.__setattr__)
+    def __setattr__(self, name, value):
+        """Giving a declared parameter a new value un-builds the model
+
+        Which parameters a build depends on is not worth enumerating: the
+        expensive ones are the point of building, and re-deriving a grid
+        because ``thresh_percept`` moved is cheaper than being wrong.
+        Assignments that change nothing keep the build, so
+        ``model.rho = model.rho`` is free.
+        """
+        if _is_constructing(self) or name not in _declared_params(self):
+            super().__setattr__(name, value)
+            return
+        before = getattr(self, name, None)
+        super().__setattr__(name, value)
+        if not _unchanged(before, getattr(self, name, None)):
+            object.__setattr__(self, '_is_built', False)
 
     # The units a model's numerical implementation works in. p2p converts a
     # unitful argument to these at the API boundary and hands the kernels

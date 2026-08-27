@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.viz.plot_argus_simulated_phosphenes`"""
 import numpy as np
 import pandas as pd
+from copy import copy
 from os.path import dirname, join
 from skimage.io import imread
 from skimage.measure import moments as img_moments
@@ -210,7 +211,13 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
                    zorder=ZORDER['foreground'])
 
     if axon_map is not None:
-        axon_bundles = axon_map.grow_axon_bundles(n_bundles=100, prune=False)
+        # `argus` is the implant this plot is about, so it is also what says
+        # which eye the bundles run in. A shallow copy takes the model's axon
+        # parameters without pointing the caller's model somewhere else:
+        spatial = copy(axon_map.spatial)
+        spatial.implant = argus
+        spatial._correct_loc_od()
+        axon_bundles = spatial.grow_axon_bundles(n_bundles=100, prune=False)
         # Draw axon pathways:
         for bundle in axon_bundles:
             # Flip y upside down for dva:
