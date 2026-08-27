@@ -10,6 +10,11 @@ Percepts are compared by shape, time axis and three whole-array reductions
 rather than element by element: a change in what any electrode contributes
 moves at least one of them, and pinning three numbers per case keeps the
 references readable.
+
+``percept.data`` is float32, so the reductions carry a few ulps of slack that
+varies with the platform's ``exp`` and the compiler's floating-point
+contraction. ``RTOL`` is loose enough to absorb that and still orders of
+magnitude tighter than any change in the pipeline would be.
 """
 import warnings
 
@@ -62,6 +67,11 @@ REFERENCE = {
 }
 
 
+#: Ten times float32 epsilon: the reductions are computed in float64, but from
+#: float32 inputs.
+RTOL = 1e-6
+
+
 def assert_matches_reference(name, percept):
     shape, time, total, peak, sumsq = REFERENCE[name]
     data = np.asarray(percept.data, dtype=np.float64)
@@ -71,9 +81,9 @@ def assert_matches_reference(name, percept):
     else:
         npt.assert_allclose([percept.time[0], percept.time[-1]], time,
                             rtol=1e-12)
-    npt.assert_allclose(data.sum(), total, rtol=1e-9)
-    npt.assert_allclose(data.max(), peak, rtol=1e-9)
-    npt.assert_allclose((data ** 2).sum(), sumsq, rtol=1e-9)
+    npt.assert_allclose(data.sum(), total, rtol=RTOL)
+    npt.assert_allclose(data.max(), peak, rtol=RTOL)
+    npt.assert_allclose((data ** 2).sum(), sumsq, rtol=RTOL)
 
 
 def picture():
