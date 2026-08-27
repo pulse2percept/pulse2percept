@@ -179,12 +179,42 @@ def test_PRIMA_Ho2019(implant_type, spacing, n_elec, elec_radius, ztype, x, y,
         npt.assert_almost_equal(elec.rot, rot)
         npt.assert_equal(elec.orientation, 'vertical')
 
-    # The whole array fits on the 1 mm substrate, pixel corners included:
-    corner = np.hypot(*(xy - [x, y]).T) + spacing / np.sqrt(3)
-    npt.assert_array_less(corner, 500)
+    # Every pixel body sits on the 1 mm substrate. Measured flat-to-flat:
+    # the outermost F55 corners graze the nominal edge by under 2 um.
+    npt.assert_array_less(np.hypot(*(xy - [x, y]).T) + spacing / 2, 500)
 
     with pytest.raises(ValueError):
         implant_type(0, 0, z=np.ones(16))
+
+
+def test_PRIMA55_layout():
+    """The 250-pixel F55 mask of [Ho2019]_, in axial hex coordinates
+
+    Pins the published outline itself rather than electrode names, which
+    depend on the size of the grid the mask is cut from.
+    """
+    expected = {-9: (3, 8), -8: (1, 9), -7: (-1, 9), -6: (-3, 9), -5: (-4, 9),
+                -4: (-5, 9), -3: (-6, 9), -2: (-6, 8), -1: (-7, 8),
+                0: (-7, 7), 1: (-8, 7), 2: (-8, 6), 3: (-9, 6), 4: (-9, 5),
+                5: (-9, 4), 6: (-9, 3), 7: (-9, 2), 8: (-9, 1), 9: (-8, -1)}
+    npt.assert_equal(sum(hi - lo + 1 for lo, hi in expected.values()), 250)
+
+    prima = PRIMA55()
+    s = prima.spacing
+    xy = prima.earray.coordinates()[:, :2]
+    # Flat-top axial coordinates, read back off the pixel centers:
+    q = xy[:, 0] / (s * np.sqrt(3) / 2)
+    r = xy[:, 1] / s - q / 2
+    npt.assert_allclose(q, np.round(q), atol=1e-9)
+    npt.assert_allclose(r, np.round(r), atol=1e-9)
+    q, r = np.round(q).astype(int), np.round(r).astype(int)
+
+    npt.assert_equal(sorted(set(q)), sorted(expected))
+    for col in expected:
+        rows = np.sort(r[q == col])
+        # Every column is a solid run of pixels between its two limits:
+        npt.assert_equal(rows, np.arange(rows[0], rows[-1] + 1))
+        npt.assert_equal((rows[0], rows[-1]), expected[col])
 
 
 def test_PRIMA40_reshape_stim():

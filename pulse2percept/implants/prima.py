@@ -15,36 +15,94 @@ from .electrode_arrays import ElectrodeGrid
 from ..units import as_value, um
 
 
+#: Layout of the F55 array of [Ho2019]_ in axial hex coordinates: for each
+#: column ``q``, the inclusive range of rows ``r`` that carries a pixel.
+#: Recovered from the published device image; exactly 250 pixels.
+_F55_AXIAL_SPANS = {
+    -9: (3, 8), -8: (1, 9), -7: (-1, 9), -6: (-3, 9), -5: (-4, 9),
+    -4: (-5, 9), -3: (-6, 9), -2: (-6, 8), -1: (-7, 8), 0: (-7, 7),
+    1: (-8, 7), 2: (-8, 6), 3: (-9, 6), 4: (-9, 5), 5: (-9, 4),
+    6: (-9, 3), 7: (-9, 2), 8: (-9, 1), 9: (-8, -1),
+}
+
+
+def _axial_rows(spans):
+    """Grid row index of every ``(q, r)`` in an axial-coordinate mask
+
+    On an ``orientation='vertical'`` hex grid, axial column ``q`` is grid
+    column ``j = q - min(spans)``, and axial row ``r`` is grid row
+    ``r + (j + 1) // 2``, offset so the lowest one is row 0. The ``(j + 1)
+    // 2`` term undoes the half-spacing stagger the grid applies to its
+    even-numbered columns.
+    """
+    q0 = min(spans)
+    ij = [(r + ((q - q0) + 1) // 2, q - q0)
+          for q, (r_lo, r_hi) in spans.items()
+          for r in range(r_lo, r_hi + 1)]
+    lo = min(i for i, _ in ij)
+    return [(i - lo, j) for i, j in ij]
+
+
+def _axial_mask_shape(spans):
+    """Smallest ``(rows, cols)`` hex grid holding an axial-coordinate mask"""
+    ij = _axial_rows(spans)
+    return max(i for i, _ in ij) + 1, max(spans) - min(spans) + 1
+
+
+def _device_frame(earray, x, y, rot):
+    """Electrode coordinates relative to ``(x, y)``, with ``rot`` undone"""
+    xy = earray.coordinates()[:, :2] - np.array([x, y], dtype=float)
+    c, s = np.cos(np.radians(rot)), np.sin(np.radians(rot))
+    return xy @ np.array([[c, -s], [s, c]])
+
+
+def _recenter(earray, x, y, rot):
+    """Shift a trimmed array so its footprint is centered on ``(x, y)``
+
+    :py:class:`~pulse2percept.implants.ElectrodeGrid` centers the untrimmed
+    lattice, and whichever pixels survive a trim generally sit a fraction of
+    the spacing off that center. The correction is computed in the unrotated
+    device frame, so a rotated device is the unrotated one turned about
+    ``(x, y)`` rather than a differently trimmed array.
+    """
+    off = -0.5 * (lambda p: p.min(axis=0) + p.max(axis=0))(
+        _device_frame(earray, x, y, rot))
+    c, s = np.cos(np.radians(rot)), np.sin(np.radians(rot))
+    dx, dy = off[0] * c - off[1] * s, off[0] * s + off[1] * c
+    for elec in earray.electrode_objects:
+        elec.x += dx
+        elec.y += dy
+
+
 def _trim_to_disc(earray, n_pixels, x, y, rot):
     """Trim a hex grid down to the ``n_pixels`` pixels nearest its center
 
-    Photovoltaic arrays are diced from a round substrate, so the pixels that
-    survive are the lattice sites closest to its center. Only the pixel count
-    is published, not the exact boundary, so the outline this produces is the
-    most circular one with that count.
-
-    Ties -- a boundary shell that only partly fits -- are broken so that
-    antipodal sites are kept together, leaving the array symmetric under a
-    half turn about ``(x, y)``. Angles are measured in the unrotated device
-    frame, so ``rot`` turns the device without changing which pixels it has.
+    For a device whose pixel count and substrate diameter are published but
+    whose outline is not: the pixels kept are the lattice sites closest to the
+    center of the substrate, which is the most circular layout with that
+    count. It is not the fabrication mask. Distances and the tie-breaking
+    angle are measured in the unrotated device frame, so ``rot`` turns the
+    device without changing which pixels it has.
     """
-    xy = earray.coordinates()[:, :2] - np.array([x, y], dtype=float)
-    th = -np.radians(rot)
-    rotm = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
-    # Rounded, so that sites that are the same distance out are recognized as
-    # one shell despite the rotation's round-off:
-    xy = np.round(xy @ rotm.T, 6)
+    xy = _device_frame(earray, x, y, rot)
+    # Rounded, so that round-off from the rotation cannot reorder two sites
+    # that are the same distance out:
     r = np.round(np.hypot(*xy.T), 6)
-    # A site and its antipode map onto the same representative, so they sort
-    # adjacently and a partly-kept shell stays half-turn symmetric:
-    flip = np.where((xy[:, 1] > 0) | ((xy[:, 1] == 0) & (xy[:, 0] >= 0)),
-                    1.0, -1.0)
-    rep = xy * flip[:, np.newaxis]
-    ang = np.round(np.arctan2(rep[:, 1], rep[:, 0]), 6)
-    order = np.lexsort((flip, ang, r))
+    ang = np.round(np.arctan2(xy[:, 1], xy[:, 0]), 6)
     names = np.asarray(list(earray.electrodes))
-    for name in names[order[n_pixels:]]:
+    for name in names[np.lexsort((ang, r))[n_pixels:]]:
         earray.remove_electrode(name)
+    _recenter(earray, x, y, rot)
+
+
+def _trim_to_axial_mask(earray, spans, x, y, rot):
+    """Trim a hex grid down to the pixels named by an axial-coordinate mask"""
+    cols = max(spans) - min(spans) + 1
+    keep = {i * cols + j for i, j in _axial_rows(spans)}
+    for idx, name in enumerate(list(earray.electrodes)):
+        if idx not in keep:
+            earray.remove_electrode(name)
+    _recenter(earray, x, y, rot)
 
 
 class PhotovoltaicPixel(HexElectrode):
@@ -366,11 +424,12 @@ class PRIMA55(ProsthesisSystem):
     center of the array is located at 3D location (x,y,z), given in microns,
     and the array is rotated by rotation angle ``rot``, given in degrees.
 
-    Each hexagonal pixel is 55 um wide (flat-to-flat) and neighboring
-    pixel centers are 55 um apart, on a 1 mm circular substrate: the pixel
-    bodies tile the array without an open gap between them. Adjacent rows are
-    therefore separated by ``55 * sqrt(3) / 2`` = 48 um. The active
-    electrode at the center of each pixel is a disk 14 um in diameter.
+    Each hexagonal pixel is 55 um wide (flat-to-flat) and neighboring pixel
+    centers are 55 um apart, on a 1 mm circular substrate: the pixel bodies
+    tile the array without an open gap between them. Adjacent rows are
+    therefore separated by ``55 * sqrt(3) / 2`` = 48 um. The active electrode
+    at the center of each pixel is a disk 14 um in diameter. The 250 pixels
+    cover 921 x 880 um of the substrate.
 
     .. versionadded:: 0.7
 
@@ -417,9 +476,9 @@ class PRIMA55(ProsthesisSystem):
     *  The 1 um isolation trenches between pixels are covered by the shared
        return electrode and are not open gaps, so the pixel bodies are drawn
        the full 55 um wide.
-    *  [Ho2019]_ publishes the pixel count and the substrate diameter but not
-       the exact outline, so the 250 pixels are the lattice sites closest to
-       the center of the substrate.
+    *  The outline is the one visible in the published device image, stored
+       as :py:data:`_F55_AXIAL_SPANS`: the range of rows carrying a pixel in
+       each of the 19 columns.
 
     """
     # Frozen class: User cannot add more class attributes
@@ -433,8 +492,8 @@ class PRIMA55(ProsthesisSystem):
         self.pixel_width = 55  # um, flat-to-flat
         self.gap = self.spacing - self.pixel_width  # um, open inter-pixel gap
         elec_radius = 7  # um
-        # Large enough to cover the substrate; trimmed to a disc below:
-        self.shape = (24, 24)
+        # Just large enough to hold the published layout:
+        self.shape = _axial_mask_shape(_F55_AXIAL_SPANS)
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -454,7 +513,7 @@ class PRIMA55(ProsthesisSystem):
                                     orientation='vertical',
                                     etype=PhotovoltaicPixel, r=elec_radius,
                                     a=self.pixel_width / 2)
-        _trim_to_disc(self.earray, 250, x, y, rot)
+        _trim_to_axial_mask(self.earray, _F55_AXIAL_SPANS, x, y, rot)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -484,11 +543,12 @@ class PRIMA40(ProsthesisSystem):
     center of the array is located at 3D location (x,y,z), given in microns,
     and the array is rotated by rotation angle ``rot``, given in degrees.
 
-    Each hexagonal pixel is 40 um wide (flat-to-flat) and neighboring
-    pixel centers are 40 um apart, on a 1 mm circular substrate: the pixel
-    bodies tile the array without an open gap between them. Adjacent rows are
-    therefore separated by ``40 * sqrt(3) / 2`` = 35 um. The active
-    electrode at the center of each pixel is a disk 10 um in diameter.
+    Each hexagonal pixel is 40 um wide (flat-to-flat) and neighboring pixel
+    centers are 40 um apart, on a 1 mm circular substrate: the pixel bodies
+    tile the array without an open gap between them. Adjacent rows are
+    therefore separated by ``40 * sqrt(3) / 2`` = 35 um. The active electrode
+    at the center of each pixel is a disk 10 um in diameter. The 502 pixels
+    cover 947 x 960 um of the substrate.
 
     .. versionadded:: 0.7
 
@@ -536,8 +596,11 @@ class PRIMA40(ProsthesisSystem):
        return electrode and are not open gaps, so the pixel bodies are drawn
        the full 40 um wide.
     *  [Ho2019]_ publishes the pixel count and the substrate diameter but not
-       the exact outline, so the 502 pixels are the lattice sites closest to
-       the center of the substrate.
+       the outline, so the 502 pixels are the lattice sites nearest the center
+       of the substrate. That is an approximation, not the fabrication mask.
+       Published images of a 40 um array showing a larger hexagonal region
+       are of the later 1.5 mm, 821-pixel device, which this class does not
+       model.
 
     """
     # Frozen class: User cannot add more class attributes
@@ -551,8 +614,9 @@ class PRIMA40(ProsthesisSystem):
         self.pixel_width = 40  # um, flat-to-flat
         self.gap = self.spacing - self.pixel_width  # um, open inter-pixel gap
         elec_radius = 5  # um
-        # Large enough to cover the substrate; trimmed to a disc below:
-        self.shape = (32, 32)
+        # Smallest grid that holds the 502 nearest sites without the trim
+        # having to split a ring of equidistant ones:
+        self.shape = (26, 27)
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
