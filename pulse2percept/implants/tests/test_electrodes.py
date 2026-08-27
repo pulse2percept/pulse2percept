@@ -174,6 +174,9 @@ def test_HexElectrode_geometry():
     # Deactivated bodies have the same geometry, only a different color:
     npt.assert_almost_equal(_hex_extent(vert, deactivated=True),
                             _hex_extent(vert))
+    # A standalone hexagon defaults to flat-top, which is how HexElectrode
+    # has always been drawn; only a grid overrides it:
+    npt.assert_equal(HexElectrode(0, 0, 0, a).orientation, 'vertical')
     with pytest.raises(ValueError):
         HexElectrode(0, 0, 0, a, orientation='diagonal')
 

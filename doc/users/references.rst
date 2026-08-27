@@ -64,6 +64,11 @@ Studies referenced throughout the Documentation:
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.
+.. [Ho2019] E Ho, T Smith, T Kamins, K Mathieson, D Palanker (2019).
+            Characteristics of prosthetic vision in rats with subretinal flat
+            and pillar electrode arrays. *Journal of Neural Engineering*
+            16(6):066027, doi:`10.1088/1741-2552/ab34b3
+            <https://doi.org/10.1088/1741-2552/ab34b3>`_.
 .. [Horsager2009] A Horsager, SH Greenwald, JD Weiland, MS Humayun, RJ
                   Greenberg, MJ McMahon, GM Boynton, I Fine (2009). Predicting
                   visual sensitivity in retinal prosthesis patients.

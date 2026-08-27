@@ -131,106 +131,60 @@ def test_PRIMA75(ztype, x, y, rot):
         PRIMA75(0, 0, z=np.ones(16))
 
 
+@pytest.mark.parametrize('implant_type, spacing, n_elec, elec_radius', [
+    (PRIMA55, 55, 250, 7),
+    (PRIMA40, 40, 502, 5),
+])
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
-def test_PRIMA55(ztype, x, y, rot):
-    # 50 um pixels with 5 um trenches:
-    spacing = 55
-    # Roughly a 18x21 grid, but edges are trimmed off:
-    n_elec = 273
-    # Create an Prima and make sure location is correct
-    # Height `z` can either be a float or a list
-    z = -100 if ztype == 'float' else -np.ones(273) * 20
+def test_PRIMA_Ho2019(implant_type, spacing, n_elec, elec_radius, ztype, x, y,
+                      rot):
+    """The F55/F40 arrays of Ho et al. (2019)
 
-    prima = PRIMA55(x, y, z=z, rot=rot)
+    Pixel bodies tile the lattice with no open gap, so pixel width equals the
+    nearest-neighbor center spacing, and the published pixel count fits on the
+    1 mm circular substrate.
+    """
+    # Height `z` can either be a float or a list:
+    z = -100 if ztype == 'float' else -np.ones(n_elec) * 20
+    prima = implant_type(x, y, z=z, rot=rot)
 
     # Slots:
     npt.assert_equal(hasattr(prima, '__slots__'), True)
     npt.assert_equal(hasattr(prima, '__dict__'), False)
 
-    # Make sure number of electrodes is correct
-    npt.assert_equal(len(prima.earray.electrodes), n_elec)
+    # The published pixel count:
     npt.assert_equal(prima.n_electrodes, n_elec)
+    npt.assert_equal(len(prima.earray.electrodes), n_elec)
 
-    # Coordinates of C8 when device is not rotated:
-    xy = np.array([-142.89, -371.25]).T
-    # Rotate
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-    # Then off-set: Make sure first electrode is placed
-    # correctly
-    npt.assert_almost_equal(prima['C8'].x, xy[0] + x, decimal=2)
-    npt.assert_almost_equal(prima['C8'].y, xy[1] + y, decimal=2)
+    xy = prima.earray.coordinates()[:, :2]
+    # Nearest-neighbor center spacing, in every direction:
+    dist = np.linalg.norm(xy[:, None, :] - xy[None, :, :], axis=-1)
+    np.fill_diagonal(dist, np.inf)
+    npt.assert_almost_equal(dist.min(), spacing)
+    npt.assert_almost_equal(dist.min(axis=1), spacing)
+    # Row spacing is derived, not independent:
+    npt.assert_almost_equal(prima.row_spacing, spacing * np.sqrt(3) / 2)
 
-    # Make sure the radius is correct
-    for e in ['B12', 'C15', 'D17', 'E19', 'F11', 'G13', 'H14']:
-        npt.assert_almost_equal(prima[e].r, 8)
+    for elec in prima.earray.electrode_objects:
+        # Pixel bodies are as wide as the lattice, with no open gap:
+        npt.assert_almost_equal(elec.width, spacing)
+        npt.assert_almost_equal(prima.pixel_width, spacing)
+        npt.assert_almost_equal(prima.gap, 0)
+        # Active electrode:
+        npt.assert_almost_equal(elec.r, elec_radius)
+        # Hex bodies turn with the lattice:
+        npt.assert_almost_equal(elec.rot, rot)
+        npt.assert_equal(elec.orientation, 'vertical')
 
-    # Make sure the pitch is correct:
-    distF6E6 = np.sqrt((prima['E6'].x - prima['F6'].x) ** 2 +
-                       (prima['E6'].y - prima['F6'].y) ** 2)
-    npt.assert_almost_equal(distF6E6, spacing)
-    distF6E7 = np.sqrt((prima['E7'].x - prima['F6'].x) ** 2 +
-                       (prima['E7'].y - prima['F6'].y) ** 2)
-    npt.assert_almost_equal(distF6E7, spacing)
+    # The whole array fits on the 1 mm substrate, pixel corners included:
+    corner = np.hypot(*(xy - [x, y]).T) + spacing / np.sqrt(3)
+    npt.assert_array_less(corner, 500)
 
     with pytest.raises(ValueError):
-        PRIMA55(0, 0, z=np.ones(16))
-
-
-@pytest.mark.parametrize('ztype', ('float', 'list'))
-@pytest.mark.parametrize('x', (-100, 200))
-@pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('rot', (-45, 60))
-def test_PRIMA40(ztype, x, y, rot):
-    # 35 um pixel with 5 um trenches:
-    spacing = 40
-    # Roughly a 25x28 grid, but edges are trimmed off:
-    n_elec = 532
-    # Create an Prima and make sure location is correct
-    # Height `z` can either be a float or a list
-    z = -100 if ztype == 'float' else -np.ones(532) * 20
-
-    prima = PRIMA40(x, y, z=z, rot=rot)
-
-    # Slots:
-    npt.assert_equal(hasattr(prima, '__slots__'), True)
-    npt.assert_equal(hasattr(prima, '__dict__'), False)
-
-    # Make sure number of electrodes is correct
-    npt.assert_equal(len(prima.earray.electrodes), n_elec)
-    npt.assert_equal(prima.n_electrodes, n_elec)
-
-    # Coordinates of D16 when device is not rotated:
-    xy = np.array([51.96, -370.0]).T
-    # Rotate
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-    # Then off-set: Make sure first electrode is placed
-    # correctly
-    npt.assert_almost_equal(prima['D16'].x, xy[0] + x, decimal=2)
-    npt.assert_almost_equal(prima['D16'].y, xy[1] + y, decimal=2)
-
-    # Make sure the radius is correct
-    for e in ['B14', 'C15', 'D17', 'E19', 'F11', 'G13', 'H14']:
-        npt.assert_almost_equal(prima[e].r, 8)
-
-    # Make sure the pitch is correct:
-    distF6E6 = np.sqrt((prima['E6'].x - prima['F6'].x) ** 2 +
-                       (prima['E6'].y - prima['F6'].y) ** 2)
-    npt.assert_almost_equal(distF6E6, spacing)
-    distF6E7 = np.sqrt((prima['E7'].x - prima['F6'].x) ** 2 +
-                       (prima['E7'].y - prima['F6'].y) ** 2)
-    npt.assert_almost_equal(distF6E7, spacing)
-
-    with pytest.raises(ValueError):
-        PRIMA40(0, 0, z=np.ones(16))
+        implant_type(0, 0, z=np.ones(16))
 
 
 def test_PRIMA40_reshape_stim():
@@ -244,13 +198,11 @@ def test_PRIMA40_reshape_stim():
 @pytest.mark.parametrize('implant_type, offset', [
     (PRIMA, (0, 0)),
     (PRIMA75, (0, 0)),
-    # PRIMA55 and PRIMA40 approximate a circular substrate by deleting
-    # electrodes from a rectangular grid, and those deletions are not quite
-    # symmetric, so the surviving footprint sits half a column pitch and/or a
-    # quarter of a row pitch off (x, y). Pinned as-is: the deletion lists are
-    # the device geometry, and this is what they currently describe.
-    (PRIMA55, (0.25 * np.sqrt(3) * 55, 0.25 * 55)),
-    (PRIMA40, (0, 0.25 * 40)),
+    # PRIMA55 and PRIMA40 keep the pixels nearest the center of the substrate,
+    # taking whole antipodal pairs, so their footprints are centered on (x, y)
+    # and symmetric under a half turn:
+    (PRIMA55, (0, 0)),
+    (PRIMA40, (0, 0)),
 ])
 def test_PRIMA_device_center(implant_type, offset):
     """Where the trimmed device sits relative to the requested (x, y)

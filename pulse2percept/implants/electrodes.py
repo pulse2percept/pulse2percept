@@ -454,7 +454,9 @@ class HexElectrode(Electrode):
         of :py:class:`~pulse2percept.implants.ElectrodeGrid`.
         'horizontal' gives a pointy-top hexagon (flats left/right, apothem
         measured along x); 'vertical' gives a flat-top hexagon (flats
-        up/down, apothem measured along y).
+        up/down, apothem measured along y). The default is the flat-top
+        hexagon a standalone ``HexElectrode`` has always been drawn as; a
+        grid overrides it with its own lattice orientation.
 
         .. versionadded:: 0.11.0
     rot : double, optional
@@ -475,7 +477,7 @@ class HexElectrode(Electrode):
     __slots__ = ('a', 'orientation', 'rot')
 
     def __init__(self, x, y, z, a, name=None, activated=True,
-                 orientation='horizontal', rot=0):
+                 orientation='vertical', rot=0):
         super(HexElectrode, self).__init__(x, y, z, name=name,
                                            activated=activated)
         a = as_value(a, um, 'a')
