@@ -48,12 +48,6 @@ class CortexSpatial(SpatialModel):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``xystep``, which suggested that one step size
-            applies to both axes. The old name still works, but is
-            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -258,12 +252,6 @@ class ScoreboardSpatial(CortexSpatial):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``xystep``, which suggested that one step size
-            applies to both axes. The old name still works, but is
-            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
@@ -421,12 +409,6 @@ class ScoreboardModel(Model):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``xystep``, which suggested that one step size
-            applies to both axes. The old name still works, but is
-            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional

@@ -333,87 +333,19 @@ def test_AxonMapModel():
 
 
 @pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
-def test_AxonMap_deprecated_axlambda(cls):
-    # `lam` was called `axlambda` until 0.10.0. The old name still works,
-    # everywhere the new one does, but warns:
-    msg = "The 'axlambda' parameter of"
-    assert_warns_msg(DeprecationWarning, cls, msg, implant=ArgusII(),
-                     axlambda=400)
-    with pytest.warns(DeprecationWarning):
-        model = cls(implant=ArgusII(), axlambda=400)
-    npt.assert_equal(model.lam, 400)
-
-    # Setting and getting the attribute:
-    assert_warns_msg(DeprecationWarning, setattr, msg, model, 'axlambda', 500)
-    npt.assert_equal(model.lam, 500)
-    with pytest.warns(DeprecationWarning):
-        npt.assert_equal(model.axlambda, 500)
-
-    # And `set_params` and `build`. `Model.set_params` takes a dict, whereas
-    # `SpatialModel.set_params` takes keyword arguments:
-    if cls is AxonMapModel:
-        set_params = lambda: model.set_params({'axlambda': 600})
-    else:
-        set_params = lambda: model.set_params(axlambda=600)
-    assert_warns_msg(DeprecationWarning, set_params, msg)
-    npt.assert_equal(model.lam, 600)
-    # `build` reads the axon cache, which raises a ResourceWarning of its own,
-    # so this one cannot insist on a single warning:
-    with pytest.warns(DeprecationWarning, match="'axlambda' parameter"):
-        model.build(axlambda=700)
-    npt.assert_equal(model.lam, 700)
-
-    # The new name stays silent:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        model = cls(lam=400)
-        model.lam = 500
-        npt.assert_equal(model.lam, 500)
-
-
-@pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
-def test_AxonMap_axlambda_and_lam_collide(cls):
-    # `axlambda` and `lam` are the same parameter, so supplying both must
-    # raise rather than let the order they were passed in decide the value.
-    # `**kwargs` preserves insertion order, so check both spellings:
-    for params in ({'axlambda': 400, 'lam': 500},
-                   {'lam': 500, 'axlambda': 400}):
-        with pytest.raises(TypeError, match="same parameter"):
-            cls(**params)
-        model = cls(step=5)
-        with pytest.raises(TypeError, match="same parameter"):
-            model.build(**params)
-        with pytest.raises(TypeError, match="same parameter"):
-            if cls is AxonMapModel:
-                model.set_params(params)
-            else:
-                model.set_params(**params)
-
-
-@pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
-def test_AxonMap_axlambda_warning_blames_caller(cls):
-    # A deprecation warning is only actionable if it points at the line that
-    # used the old name. The alias is reached directly on a spatial model, but
-    # through `Model.__getattr__`/`__setattr__` on a composite one, so the
-    # attribution has to hold for both:
-    model = cls(step=5)
-    with pytest.warns(DeprecationWarning) as record:
-        model.axlambda
-    npt.assert_equal(record[0].filename, __file__)
-    with pytest.warns(DeprecationWarning) as record:
-        model.axlambda = 400
-    npt.assert_equal(record[0].filename, __file__)
-    # The constructor reaches it through a chain of `super().__init__` calls
-    # instead, whose depth differs between the two classes:
-    with pytest.warns(DeprecationWarning) as record:
+def test_AxonMap_removed_axlambda(cls):
+    # `lam` was called `axlambda` until 0.10.0; the old name was removed
+    # in 0.11.0, so it is now an unknown parameter:
+    with pytest.raises(AttributeError):
         cls(axlambda=400)
-    npt.assert_equal(record[0].filename, __file__)
+    with pytest.raises(AttributeError):
+        model = cls(step=5)
+        if cls is AxonMapModel:
+            model.set_params({'axlambda': 400})
+        else:
+            model.set_params(axlambda=400)
 
 
-# Build the model inside the test, not in the decorator: arguments to
-# `parametrize` are evaluated at import time, so building here would run on
-# every pytest invocation (even `--collect-only`, even when this test is
-# deselected) and would surface any failure as a collection error.
 @pytest.mark.parametrize('build', (False, True))
 def test_deepcopy_AxonMapModel(build):
     original = AxonMapModel(implant=ArgusII())
@@ -933,10 +865,8 @@ def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
     """A cache naming the grid step `xystep` is regrown, and stays quiet
 
     The parameter dict is versioned along with the payload, so a cache written
-    before the rename is discarded outright. Reading it instead would probe
-    `self.xystep` -- a deprecated name the caller never used -- and warn about
-    it on every build, since the stale entry validates and the file is
-    therefore never rewritten.
+    before the 0.10.0 rename is discarded outright rather than validated
+    against a model that no longer has a `xystep` parameter.
     """
     pickle_file = str(tmp_path / 'axons.pickle')
 

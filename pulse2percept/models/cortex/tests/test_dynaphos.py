@@ -2,7 +2,6 @@ import numpy.testing as npt
 import pytest
 import numpy as np
 import copy
-import warnings
 import matplotlib.pyplot as plt
 
 from pulse2percept.models.cortex import DynaphosModel
@@ -18,7 +17,6 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    Stimulus)
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
                                  ms, s, uA, um)
-from pulse2percept.utils.testing import assert_warns_msg
 
 def test_DynaphosModel():
     model = DynaphosModel(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
@@ -197,40 +195,6 @@ def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
     npt.assert_equal(percept.time[-1] <= delivered.time[-1], True)
     # The endpoint is included, not dropped:
     npt.assert_allclose(percept.time[-1], delivered.time[-1], rtol=1e-12)
-
-
-def test_DynaphosModel_deprecated_xystep():
-    # `step` was called `xystep` until 0.10.0. Dynaphos derives from
-    # `BaseModel` rather than `SpatialModel` and lays out its own grid, so it
-    # declares the alias itself and has to be checked separately:
-    msg = "The 'xystep' parameter of DynaphosModel is deprecated"
-    assert_warns_msg(DeprecationWarning, DynaphosModel, msg, xystep=1)
-    with pytest.warns(DeprecationWarning):
-        model = DynaphosModel(implant=Cortivis(), xrange=(-2, 2), yrange=(-2, 2), xystep=1)
-    npt.assert_almost_equal(model.step, 1)
-
-    assert_warns_msg(DeprecationWarning, setattr, msg, model, 'xystep', 2)
-    npt.assert_almost_equal(model.step, 2)
-    with pytest.warns(DeprecationWarning):
-        npt.assert_almost_equal(model.xystep, 2)
-
-    assert_warns_msg(DeprecationWarning, model.set_params, msg, xystep=1)
-    npt.assert_almost_equal(model.step, 1)
-    assert_warns_msg(DeprecationWarning, model.build, msg, xystep=0.5)
-    npt.assert_almost_equal(model.step, 0.5)
-    npt.assert_almost_equal(np.unique(np.diff(model.grid.x[0, :]))[0], 0.5)
-
-    # Both names are the same parameter, so supplying both must raise:
-    for params in ({'xystep': 1, 'step': 2}, {'step': 2, 'xystep': 1}):
-        with pytest.raises(TypeError, match="same parameter"):
-            DynaphosModel(implant=Cortivis(), **params)
-
-    # The new name stays silent:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        model = DynaphosModel(implant=Cortivis(), step=1)
-        model.step = 2
-        npt.assert_almost_equal(model.step, 2)
 
 
 def test_dynaphos_reads_the_pulse_train_itself():

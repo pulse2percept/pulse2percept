@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 import copy
-import warnings
 
 import numpy as np
 import pytest
@@ -23,7 +22,6 @@ from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, mm, ms, s, uA, um,
                                  xTh)
 from pulse2percept.utils.base import FreezeError
-from pulse2percept.utils.testing import assert_warns_msg
 
 # Building an axon map writes a cache to a relative path; keep it in a
 # temporary directory instead of wherever pytest was started from:
@@ -386,59 +384,13 @@ def test_biphasicAxonMapModel():
         BiphasicAxonMapModel(implant=ArgusII(), lam=9).build()
 
 
-@pytest.mark.parametrize('cls', [BiphasicAxonMapSpatial, BiphasicAxonMapModel])
-def test_biphasicAxonMap_deprecated_axlambda(cls):
-    # `lam` was called `axlambda` until 0.10.0. The old name still works, and
-    # still reaches the streak model, but warns. These classes inherit the
-    # alias from `AxonMapSpatial`, so pin the class the message names: it has
-    # to be the one the user is holding, not the one it was declared on.
-    msg = f"The 'axlambda' parameter of {cls.__name__} is deprecated"
-    assert_warns_msg(DeprecationWarning, cls, msg, axlambda=400)
-    with pytest.warns(DeprecationWarning):
-        model = cls(implant=ArgusII(), axlambda=400)
-    npt.assert_equal(model.lam, 400)
-    npt.assert_equal(model.streak_model.lam, 400)
-
-    # Reached through the descriptor rather than the constructor, the alias
-    # only ever sees the spatial model, even on the composite:
-    spatial_msg = ("The 'axlambda' parameter of BiphasicAxonMapSpatial is "
-                   "deprecated")
-    assert_warns_msg(DeprecationWarning, setattr, spatial_msg, model,
-                     'axlambda', 500)
-    npt.assert_equal(model.lam, 500)
-    npt.assert_equal(model.streak_model.lam, 500)
-    with pytest.warns(DeprecationWarning, match="BiphasicAxonMapSpatial"):
-        npt.assert_equal(model.axlambda, 500)
-
-    # Supplying both names is an error, whichever order they come in:
-    for params in ({'axlambda': 400, 'lam': 500},
-                   {'lam': 500, 'axlambda': 400}):
-        with pytest.raises(TypeError, match="same parameter"):
-            cls(implant=ArgusII(), **params)
-
-    # The new name stays silent:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        model = cls(implant=ArgusII(), lam=400)
-        model.lam = 500
-        npt.assert_equal(model.lam, 500)
-        npt.assert_equal(model.streak_model.lam, 500)
-
-
-def test_DefaultStreakModel_deprecated_axlambda():
-    # The streak model takes `lam` in its signature, so the old name is only
-    # forwarded as a keyword argument:
-    assert_warns_msg(DeprecationWarning, DefaultStreakModel,
-                     "The 'axlambda' parameter of DefaultStreakModel is "
-                     "deprecated since version 0.10.0, and will be removed in "
-                     "version 0.11.0. Use 'lam' instead.", axlambda=200)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        npt.assert_equal(DefaultStreakModel(axlambda=200).lam, 200)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        npt.assert_equal(DefaultStreakModel(lam=200).lam, 200)
-        npt.assert_equal(DefaultStreakModel(200).lam, 200)
+def test_DefaultStreakModel_removed_axlambda():
+    # The streak model took `axlambda` as a keyword until 0.10.0; the old
+    # name was removed in 0.11.0:
+    with pytest.raises(TypeError):
+        DefaultStreakModel(axlambda=200)
+    npt.assert_equal(DefaultStreakModel(lam=200).lam, 200)
+    npt.assert_equal(DefaultStreakModel(200).lam, 200)
 
 
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,

@@ -665,6 +665,9 @@ class HTMLAnimation(FuncAnimation):
             kwargs.setdefault('interval', float(intervals.mean()))
         self._intervals = intervals
         super().__init__(fig, func, frames, *args, **kwargs)
+        # Avoid Matplotlib's "deleted without rendering warning", which
+        # turns into an unraisable exception wherever warnings are errors:
+        self._draw_was_started = True
 
     def _display_intervals(self, fps, n_frames):
         """How long each frame stays up (in ms), one value per frame"""
@@ -761,9 +764,6 @@ class HTMLAnimation(FuncAnimation):
             default_mode = 'loop' if self._repeat else 'once'
         intervals = self._display_intervals(
             fps, int(np.shape(self._frame_data)[-1]))
-        # We are rendering the animation ourselves, so silence Matplotlib's
-        # "Animation was deleted without rendering anything" warning:
-        self._draw_was_started = True
         # Rendering the sprite sheet is the expensive part, so only do it once:
         key = (tuple(intervals), default_mode)
         if self._html is None or self._html[0] != key:

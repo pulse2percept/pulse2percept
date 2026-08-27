@@ -1,5 +1,4 @@
 from string import ascii_uppercase
-import warnings
 
 import numpy.testing as npt
 from pulse2percept.units import (DimensionMismatchError, Quantity, deg, dva,
@@ -14,7 +13,6 @@ from pulse2percept.implants.cortex import (EllipsoidElectrode, LinearEdgeThread,
                                            NeuralinkThread, Neuralink, Cortivis)
 from pulse2percept.topography import Grid2D, NeuropythyMap, Polimeni2006Map
 from pulse2percept.topography.cortex import CorticalMap
-from pulse2percept.utils.testing import assert_warns_msg
 
 
 class StubNeuropythyMap(NeuropythyMap):
@@ -617,35 +615,3 @@ def test_LinearEdgeThread_units():
             LinearEdgeThread(**kwargs)
     with pytest.raises(DimensionMismatchError):
         EllipsoidElectrode(rx=1 * ms)
-
-
-@pytest.mark.parametrize('factory, vfmap', [
-    ('from_neuropythy', None),
-    ('from_cortical_map', Polimeni2006Map()),
-])
-def test_Neuralink_deprecated_xystep(factory, vfmap):
-    # `step` was called `xystep` until 0.10.0. Both `Neuralink` factories
-    # take it as an ordinary signature argument, so the old name is forwarded:
-    if factory == 'from_neuropythy':
-        args = (StubNeuropythyMap(),)
-    else:
-        args = (LinearEdgeThread, vfmap)
-    build = getattr(Neuralink, factory)
-    kwargs = {'xrange': (-1, 1), 'yrange': (0, 0)}
-
-    msg = f"The 'xystep' parameter of Neuralink.{factory} is deprecated"
-    assert_warns_msg(DeprecationWarning, build, msg, *args, xystep=1, **kwargs)
-    with pytest.warns(DeprecationWarning):
-        old = build(*args, xystep=1, **kwargs)
-    new = build(*args, step=1, **kwargs)
-    npt.assert_almost_equal([[t.x, t.y, t.z] for t in old.implants.values()],
-                            [[t.x, t.y, t.z] for t in new.implants.values()])
-
-    # Both names are the same parameter, so supplying both must raise:
-    with pytest.raises(TypeError, match="same parameter"):
-        build(*args, xystep=1, step=1, **kwargs)
-
-    # The new name stays silent:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        build(*args, step=1, **kwargs)
