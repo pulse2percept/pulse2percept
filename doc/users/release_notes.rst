@@ -32,16 +32,18 @@ API changes:
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`)
 
-* New :py:class:`~pulse2percept.implants.Ho2019Array` and
+* New :py:class:`~pulse2percept.implants.Ho2019FlatArray` and
   :py:class:`~pulse2percept.implants.Huang2021Array` take the pixel size as
-  their first argument: ``Ho2019Array(55)``/``Ho2019Array(40)`` for the flat
-  1 mm arrays of [Ho2019]_, and ``Huang2021Array(55/40/30/20)`` for the 1.5 mm
-  vertical-junction arrays of [Huang2021]_, with 421, 821, 1388 and 2806
-  exposed pixels (:pull:`865`)
+  their first argument: ``Ho2019FlatArray(55)`` and ``Ho2019FlatArray(40)`` for
+  the flat 1 mm arrays of [Ho2019]_, and ``Huang2021Array(55)``,
+  ``Huang2021Array(40)``, ``Huang2021Array(30)`` and ``Huang2021Array(20)`` for
+  the 1.5 mm vertical-junction arrays of [Huang2021]_, with 421, 821, 1388 and
+  2806 exposed pixels (:pull:`865`)
 
 * ``PRIMA55`` and ``PRIMA40`` are deprecated: both papers describe a 55 um and
-  a 40 um array, so the names are ambiguous. They resolve to the [Ho2019]_
-  devices, ``Ho2019Array(55)`` and ``Ho2019Array(40)`` (:pull:`865`)
+  a 40 um array, so the names are ambiguous. They are now deprecated wrappers
+  for the [Ho2019]_ devices, ``Ho2019FlatArray(55)`` and
+  ``Ho2019FlatArray(40)`` (:pull:`865`)
 
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
@@ -81,7 +83,7 @@ Bug fixes:
   Pixel centers are unchanged (:pull:`865`)
 
 * ``PRIMA55`` and ``PRIMA40`` (now
-  :py:class:`~pulse2percept.implants.Ho2019Array`) model the F55 and F40
+  :py:class:`~pulse2percept.implants.Ho2019FlatArray`) model the F55 and F40
   arrays of [Ho2019]_: 250 and 502 pixels (was 273 and 532), as wide as their
   center spacing with no open gap, and 14 um and 10 um active electrodes (was
   16 um). Correcting the layouts changes which electrode names these two

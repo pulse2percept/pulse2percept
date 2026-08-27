@@ -77,11 +77,13 @@ ax[1].set_title('PRIMA-75')
 
 ###############################################################################
 # In addition, the developers are working on miniaturizing the device, in two
-# distinct device families. :py:class:`~pulse2percept.implants.Ho2019Array`
+# distinct device families. :py:class:`~pulse2percept.implants.Ho2019FlatArray`
 # models the experimental flat F55 and F40 arrays of [Ho2019]_, which have 250
 # and 502 pixels on a 1 mm circular substrate. (``PRIMA55`` and ``PRIMA40``
-# are deprecated aliases for ``Ho2019Array(55)`` and ``Ho2019Array(40)``: both
-# families contain a 55um and a 40um device, so the old names are ambiguous.)
+# are deprecated wrappers for ``Ho2019FlatArray(55)`` and
+# ``Ho2019FlatArray(40)``: both families contain a 55um and a 40um device, so
+# the old names are ambiguous. [Ho2019]_ also describes pillar arrays Pil55
+# and Pil40, which pulse2percept does not model.)
 #
 # Unlike PRIMA-75, these arrays have no open trench between pixels: their
 # 1um isolation trenches are covered by the shared return electrode, so the
@@ -90,17 +92,17 @@ ax[1].set_title('PRIMA-75')
 # "pixel pitch"). Their active electrodes are 14um and 10um in diameter.
 #
 # [Ho2019]_ gives the pixel count and the substrate diameter, and the F55
-# outline is visible in the published device image. The F40 outline is not
+# outline is reconstructed from its Fig. 2(a). The F40 outline is not
 # published, so pulse2percept places its 502 pixels on the lattice sites
 # nearest the center of the substrate.
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
-Ho2019Array(55).plot(ax=ax[0])
-ax[0].set_title('Ho2019Array(55) - F55')
+Ho2019FlatArray(55).plot(ax=ax[0])
+ax[0].set_title('Ho2019FlatArray(55) - F55')
 
-Ho2019Array(40).plot(ax=ax[1])
-ax[1].set_title('Ho2019Array(40) - F40')
+Ho2019FlatArray(40).plot(ax=ax[1])
+ax[1].set_title('Ho2019FlatArray(40) - F40')
 
 ###############################################################################
 # :py:class:`~pulse2percept.implants.Huang2021Array` models the later
@@ -112,11 +114,11 @@ ax[1].set_title('Ho2019Array(40) - F40')
 # ``n_electrodes`` counts only the exposed, stimulating pixels: 421, 821, 1388
 # and 2806. The die carries more pixels than that (526, 1027, 1735 and 3508),
 # but a peripheral common return electrode covers roughly 20% of them. Those
-# covered pixels cannot inject current, so they are not modeled as
-# individually addressable electrodes; ``n_total_pixels`` reports the
-# fabricated count.
+# covered pixels are not exposed as independently stimulating pixels, so they
+# are not modeled as individually addressable electrodes; ``n_total_pixels``
+# reports the fabricated count.
 #
-# The outlines are reconstructed from published device imagery, registered to
+# The outlines are reconstructed from Fig. 7 of [Huang2021]_, registered to
 # the triangular lattice, and constrained to reproduce the published
 # exposed-pixel counts. Three rim pixels of the 20um layout fall outside the
 # published quadrant and are inferred; only one of the three is meaningfully

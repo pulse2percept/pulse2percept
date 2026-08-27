@@ -10,7 +10,7 @@ from matplotlib.patches import Circle, Polygon, RegularPolygon
 from scipy.spatial import cKDTree
 
 from pulse2percept.implants import (PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55,
-                                    PRIMA40, Ho2019Array, Huang2021Array)
+                                    PRIMA40, Ho2019FlatArray, Huang2021Array)
 from pulse2percept.stimuli import LogoBVL
 from pulse2percept.units import deg, mm, um
 from pulse2percept.utils.constants import ZORDER
@@ -252,7 +252,7 @@ def _nn_spacing(implant):
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
-def test_Ho2019Array(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
+def test_Ho2019FlatArray(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
     """The F55/F40 arrays of Ho et al. (2019)
 
     Pixel bodies tile the lattice with no open gap, so pixel width equals the
@@ -261,7 +261,7 @@ def test_Ho2019Array(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
     """
     # Height `z` can either be a float or a list:
     z = -100 if ztype == 'float' else -np.ones(n_elec) * 20
-    prima = Ho2019Array(pixel_size, x, y, z=z, rot=rot)
+    prima = Ho2019FlatArray(pixel_size, x, y, z=z, rot=rot)
 
     # Slots:
     npt.assert_equal(hasattr(prima, '__slots__'), True)
@@ -300,38 +300,38 @@ def test_Ho2019Array(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
     npt.assert_array_less(np.hypot(verts[..., 0], verts[..., 1]), 500)
 
     with pytest.raises(ValueError):
-        Ho2019Array(pixel_size, 0, 0, z=np.ones(16))
+        Ho2019FlatArray(pixel_size, 0, 0, z=np.ones(16))
 
 
 @pytest.mark.parametrize('pixel_size', (55, 40))
-def test_Ho2019Array_units(pixel_size):
+def test_Ho2019FlatArray_units(pixel_size):
     """Unitful placement must trim the array exactly like bare microns
 
     The trimming works off the array's coordinates, so it has to normalize
     ``x``/``y`` and read the rotation back off the grid rather than trusting
     whatever the caller spelled them as.
     """
-    bare = Ho2019Array(pixel_size, x=1000, y=-500, z=-100, rot=30)
-    unitful = Ho2019Array(pixel_size * um, x=1 * mm, y=-0.5 * mm, z=-0.1 * mm,
-                          rot=30 * deg)
+    bare = Ho2019FlatArray(pixel_size, x=1000, y=-500, z=-100, rot=30)
+    unitful = Ho2019FlatArray(pixel_size * um, x=1 * mm, y=-0.5 * mm,
+                              z=-0.1 * mm, rot=30 * deg)
     npt.assert_equal(list(unitful.earray.electrodes),
                      list(bare.earray.electrodes))
     npt.assert_allclose(unitful.earray.coordinates(),
                         bare.earray.coordinates(), atol=1e-9)
 
 
-def test_Ho2019Array_pixel_size():
+def test_Ho2019FlatArray_pixel_size():
     """Exactly two variants, and nothing in between"""
     for pixel_size in (20, 30, 45, 54.9, 75, 100):
         with pytest.raises(ValueError, match='does not model'):
-            Ho2019Array(pixel_size)
+            Ho2019FlatArray(pixel_size)
     with pytest.raises(TypeError):
-        Ho2019Array([40, 55])
-    # A size Huang2021Array does model is still not a Ho2019Array size:
+        Ho2019FlatArray([40, 55])
+    # A size Huang2021Array does model is still not a Ho2019FlatArray size:
     npt.assert_equal(Huang2021Array(30).n_electrodes, 1388)
 
 
-def test_Ho2019Array_F55_layout():
+def test_Ho2019FlatArray_F55_layout():
     """The 250-pixel F55 mask of [Ho2019]_, in axial hex coordinates
 
     Pins the published outline itself rather than electrode names, which
@@ -342,7 +342,7 @@ def test_Ho2019Array_F55_layout():
                 0: (-7, 7), 1: (-8, 7), 2: (-8, 6), 3: (-9, 6), 4: (-9, 5),
                 5: (-9, 4), 6: (-9, 3), 7: (-9, 2), 8: (-9, 1), 9: (-8, -1)}
     npt.assert_equal(sum(hi - lo + 1 for lo, hi in expected.values()), 250)
-    npt.assert_equal(_axial_spans(Ho2019Array(55)),
+    npt.assert_equal(_axial_spans(Ho2019FlatArray(55)),
                      _normalized_spans(expected))
 
 
@@ -351,7 +351,7 @@ def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
     """The old names still build the Ho et al. (2019) arrays they always did"""
     with pytest.deprecated_call(match='Ho et al'):
         old = old_cls(x=-100, y=400, rot=30)
-    new = Ho2019Array(pixel_size, x=-100, y=400, rot=30)
+    new = Ho2019FlatArray(pixel_size, x=-100, y=400, rot=30)
     npt.assert_equal(list(old.earray.electrodes),
                      list(new.earray.electrodes))
     npt.assert_allclose(old.earray.coordinates(), new.earray.coordinates())
@@ -484,8 +484,8 @@ def _substrate(implant, **kwargs):
 
 
 #: Every round-substrate device, paired with the radius (um) of its die.
-ROUND_DEVICES = ([(PRIMA75, 500), (partial(Ho2019Array, 55), 500),
-                  (partial(Ho2019Array, 40), 500)] +
+ROUND_DEVICES = ([(PRIMA75, 500), (partial(Ho2019FlatArray, 55), 500),
+                  (partial(Ho2019FlatArray, 40), 500)] +
                  [(partial(Huang2021Array, s), 750)
                   for s in (55, 40, 30, 20)])
 
@@ -495,9 +495,9 @@ ROUND_DEVICES = ([(PRIMA75, 500), (partial(Ho2019Array, 55), 500),
 def test_PRIMA_round_substrate(implant_type, radius, rot):
     """The round devices sit on a circular die centered on (x, y)
 
-    ``Ho2019Array(40)`` keeps the lattice sites nearest the substrate center
-    rather than a footprint centered on them, so the substrate must come from
-    the requested position and not from where the pixels ended up.
+    ``Ho2019FlatArray(40)`` keeps the lattice sites nearest the substrate
+    center rather than a footprint centered on them, so the substrate must
+    come from the requested position, not from where the pixels ended up.
     """
     x, y = -100, 400
     ax, patch = _substrate(implant_type(x=x, y=y, rot=rot))
@@ -561,8 +561,8 @@ def test_PRIMA_substrate_holds_pixels(implant_type, radius):
 
 @pytest.mark.parametrize('implant_type, radius, whole_bodies', [
     (PRIMA, None, True), (PRIMA75, 500, False),
-    (partial(Ho2019Array, 55), 500, True),
-    (partial(Ho2019Array, 40), 500, True),
+    (partial(Ho2019FlatArray, 55), 500, True),
+    (partial(Ho2019FlatArray, 40), 500, True),
     (partial(Huang2021Array, 40), 750, True),
 ])
 def test_PRIMA_pixel_bodies_vs_substrate(implant_type, radius, whole_bodies):
@@ -586,7 +586,7 @@ def test_PRIMA_pixel_bodies_vs_substrate(implant_type, radius, whole_bodies):
 
 
 @pytest.mark.parametrize('implant_type', [
-    PRIMA, PRIMA75, partial(Ho2019Array, 55), partial(Ho2019Array, 40),
+    PRIMA, PRIMA75, partial(Ho2019FlatArray, 55), partial(Ho2019FlatArray, 40),
     partial(Huang2021Array, 55), partial(Huang2021Array, 20),
 ])
 def test_PRIMA_plot_passthrough(implant_type):
@@ -614,18 +614,18 @@ def test_PRIMA40_reshape_stim():
     # old approach runs out of memory easily. A picture is not a stimulus an
     # implant can deliver, so the sampling is exercised where an encoder
     # reaches it:
-    Ho2019Array(40).reshape_stim(LogoBVL())
+    Ho2019FlatArray(40).reshape_stim(LogoBVL())
 
 
 @pytest.mark.parametrize('implant_type, offset', [
     (PRIMA, (0, 0)),
     (PRIMA75, (0, 0)),
     # The reconstructed masks are centered on the substrate, since where they
-    # sit on the die is not published. Ho2019Array(40) instead keeps the 502
-    # lattice sites nearest the substrate center, and a discrete lattice
+    # sit on the die is not published. Ho2019FlatArray(40) instead keeps the
+    # 502 lattice sites nearest the substrate center, and a discrete lattice
     # leaves that footprint a quarter of a spacing off center:
-    (partial(Ho2019Array, 55), (0, 0)),
-    (partial(Ho2019Array, 40), (0, -0.25 * 40)),
+    (partial(Ho2019FlatArray, 55), (0, 0)),
+    (partial(Ho2019FlatArray, 40), (0, -0.25 * 40)),
     (partial(Huang2021Array, 55), (0, 0)),
     (partial(Huang2021Array, 20), (0, 0)),
 ])

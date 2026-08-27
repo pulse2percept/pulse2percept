@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.implants.PhotovoltaicPixel`,
    :py:class:`~pulse2percept.implants.PRIMA`,
    :py:class:`~pulse2percept.implants.PRIMA75`,
-   :py:class:`~pulse2percept.implants.Ho2019Array`,
+   :py:class:`~pulse2percept.implants.Ho2019FlatArray`,
    :py:class:`~pulse2percept.implants.Huang2021Array`"""
 
 import matplotlib.pyplot as plt
@@ -20,7 +20,7 @@ from ..utils.constants import ZORDER
 
 #: Layout of the F55 array of [Ho2019]_ in axial hex coordinates: for each
 #: column ``q``, the inclusive range of rows ``r`` that carries a pixel.
-#: Recovered from the published device image; exactly 250 pixels.
+#: Recovered from Fig. 2(a) of [Ho2019]_; exactly 250 pixels.
 _HO2019_F55_AXIAL_SPANS = {
     -9: (3, 8), -8: (1, 9), -7: (-1, 9), -6: (-3, 9), -5: (-4, 9),
     -4: (-5, 9), -3: (-6, 9), -2: (-6, 8), -1: (-7, 8), 0: (-7, 7),
@@ -31,8 +31,8 @@ _HO2019_F55_AXIAL_SPANS = {
 #: Exposed (stimulating) pixels of the vertical-junction arrays of
 #: [Huang2021]_ in axial hex coordinates: for each pixel size (um) and column
 #: ``q``, the inclusive range of rows ``r`` that carries an exposed pixel.
-#: Reconstructed from the published device imagery, registered to the
-#: triangular lattice, and constrained to the published exposed-pixel counts.
+#: Reconstructed from Fig. 7 of [Huang2021]_, registered to the triangular
+#: lattice, and constrained to the published exposed-pixel counts.
 #: The peripheral pixels covered by the common return electrode are not in
 #: here; see ``_HUANG2021_TOTAL_PIXELS`` for the fabricated totals.
 _HUANG2021_AXIAL_SPANS = {
@@ -66,9 +66,9 @@ _HUANG2021_AXIAL_SPANS = {
         18: (-20, 0), 19: (-19, -1), 20: (-18, -4), 21: (-16, -7),
     },
     # Three of the 2806 exposed pixels -- (11, 19), (24, 3) and (0, 27) -- lie
-    # outside the quadrant published for this variant and are inferred: they
-    # are the sites the published total requires, placed at the nearest
-    # admissible rim positions. Only (0, 27) is meaningfully ambiguous;
+    # outside the quadrant Fig. 7 of [Huang2021]_ shows for this variant and
+    # are inferred: they are the sites the published total requires, at the
+    # nearest admissible rim positions. Only (0, 27) is meaningfully ambiguous;
     # (-9, 31) is an almost exact geometric tie, and (0, 27) wins by sitting
     # fractionally closer to the fitted center of the active region. Full-
     # device imagery or CAD would settle that one site.
@@ -93,8 +93,9 @@ _HUANG2021_AXIAL_SPANS = {
 
 #: Pixels fabricated on each [Huang2021]_ die, keyed by pixel size (um). Larger
 #: than the exposed counts in ``_HUANG2021_AXIAL_SPANS``: the peripheral common
-#: return electrode covers roughly 20% of the pixels, which therefore do not
-#: stimulate and are not modeled as electrodes.
+#: return electrode covers roughly 20% of the pixels, which are therefore not
+#: exposed as independently stimulating pixels and are not modeled as
+#: electrodes.
 _HUANG2021_TOTAL_PIXELS = {55: 526, 40: 1027, 30: 1735, 20: 3508}
 
 
@@ -631,12 +632,13 @@ class PRIMA75(ProsthesisSystem):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Ho2019Array(ProsthesisSystem):
+class Ho2019FlatArray(ProsthesisSystem):
     """Create a flat photovoltaic array of [Ho2019]_ on the retina
 
-    The experimental subretinal arrays of [Ho2019]_, placed in the subretinal
-    space such that the center of the array is located at 3D location (x,y,z),
-    given in microns, and rotated by rotation angle ``rot``, given in degrees.
+    The experimental flat subretinal arrays of [Ho2019]_, placed in the
+    subretinal space such that the center of the array is located at 3D
+    location (x,y,z), given in microns, and rotated by rotation angle
+    ``rot``, given in degrees.
 
     Two variants are available, both on a 1 mm circular substrate:
 
@@ -685,16 +687,18 @@ class Ho2019Array(ProsthesisSystem):
 
     Notes
     -----
-    *  These are experimental flat arrays, not clinical PRIMA implants. The
-       later 1.5 mm vertical-junction devices, which also come in 55 um and
-       40 um pixel sizes, are
+    *  These are experimental arrays, not clinical PRIMA implants. [Ho2019]_
+       describes four devices: the flat F55/F40 modeled here and the pillar
+       arrays Pil55/Pil40, which pulse2percept does not model.
+    *  The later 1.5 mm vertical-junction devices, which also come in 55 um
+       and 40 um pixel sizes, are a different family; see
        :py:class:`~pulse2percept.implants.Huang2021Array`.
     *  [Ho2019]_ calls the row spacing the "pixel pitch". The nearest-neighbor
        center spacing, which is what ``spacing`` means here, is the pixel size.
     *  The 1 um isolation trenches between pixels are covered by the shared
        return electrode and are not open gaps, so the pixel bodies are drawn
        the full pixel width.
-    *  The F55 outline is the one visible in the published device image, stored
+    *  The F55 outline is reconstructed from Fig. 2(a) of [Ho2019]_ and stored
        as ``_HO2019_F55_AXIAL_SPANS``: the range of rows carrying a pixel in
        each of the 19 columns. Where that outline sits on the die is not
        published, so it is centered on the requested position.
@@ -713,7 +717,7 @@ class Ho2019Array(ProsthesisSystem):
     def __init__(self, pixel_size, x=0, y=0, z=-100, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HO2019_VARIANTS,
-                                         'Ho2019Array')
+                                         'Ho2019FlatArray')
         spec = _HO2019_VARIANTS[self.pixel_size]
         self.spacing = self.pixel_size  # um, nearest-neighbor center-to-center
         self.pixel_width = self.pixel_size  # um, flat-to-flat
@@ -849,17 +853,17 @@ class Huang2021Array(ProsthesisSystem):
     -----
     *  These are the later 1.5 mm vertical-junction devices. The 55 um and
        40 um flat arrays of [Ho2019]_ are a different family, on a 1 mm
-       substrate; see :py:class:`~pulse2percept.implants.Ho2019Array`.
+       substrate; see :py:class:`~pulse2percept.implants.Ho2019FlatArray`.
     *  ``n_electrodes`` counts the exposed pixels, the ones that stimulate.
        ``n_total_pixels`` counts every pixel fabricated on the die. The
        difference is the peripheral ring covered by the common return
-       electrode: those pixels exist in silicon but cannot inject current, so
-       they are not individually addressable electrodes here.
+       electrode: those pixels are not exposed as independently stimulating
+       pixels, so they are not individually addressable electrodes here.
     *  The fabrication and isolation trenches between pixels are not open
        gaps, so ``gap`` is 0 and the pixel bodies are drawn the full pixel
        width.
-    *  The exposed-pixel outlines are reconstructed from the published device
-       imagery, registered to the triangular lattice, and constrained to
+    *  The exposed-pixel outlines are reconstructed from Fig. 7 of
+       [Huang2021]_, registered to the triangular lattice, and constrained to
        reproduce the published exposed-pixel counts. Where an outline sits on
        the die is determined far less reliably than which pixels it contains,
        so each mask is centered on the requested position.
@@ -952,23 +956,23 @@ class Huang2021Array(ProsthesisSystem):
         return self.spacing * np.sqrt(3) / 2
 
 
-@deprecated(alt_func='Ho2019Array(55)', deprecated_version='0.11.0',
+@deprecated(alt_func='Ho2019FlatArray(55)', deprecated_version='0.11.0',
             removed_version='0.12.0',
             extra_msg='The name is ambiguous: 55 um arrays appear in two '
                       'device families. This one is the flat F55 array of '
                       'Ho et al. (2019); the 1.5 mm vertical-junction array '
                       'of Huang et al. (2021) is ``Huang2021Array(55)``.')
-class PRIMA55(Ho2019Array):
+class PRIMA55(Ho2019FlatArray):
     """Create a PRIMA-55 array on the retina
 
     .. deprecated:: 0.11.0
 
-        Use :py:class:`~pulse2percept.implants.Ho2019Array` with
+        Use :py:class:`~pulse2percept.implants.Ho2019FlatArray` with
         ``pixel_size=55`` instead. The geometry is unchanged; only the name
         is, because [Huang2021]_ describes a different 55 um array.
 
     Takes the same arguments as
-    :py:class:`~pulse2percept.implants.Ho2019Array`, minus ``pixel_size``.
+    :py:class:`~pulse2percept.implants.Ho2019FlatArray`, minus ``pixel_size``.
     """
     __slots__ = ()
 
@@ -978,23 +982,23 @@ class PRIMA55(Ho2019Array):
                          preprocess=preprocess, safe_mode=safe_mode)
 
 
-@deprecated(alt_func='Ho2019Array(40)', deprecated_version='0.11.0',
+@deprecated(alt_func='Ho2019FlatArray(40)', deprecated_version='0.11.0',
             removed_version='0.12.0',
             extra_msg='The name is ambiguous: 40 um arrays appear in two '
                       'device families. This one is the flat F40 array of '
                       'Ho et al. (2019); the 1.5 mm vertical-junction array '
                       'of Huang et al. (2021) is ``Huang2021Array(40)``.')
-class PRIMA40(Ho2019Array):
+class PRIMA40(Ho2019FlatArray):
     """Create a PRIMA-40 array on the retina
 
     .. deprecated:: 0.11.0
 
-        Use :py:class:`~pulse2percept.implants.Ho2019Array` with
+        Use :py:class:`~pulse2percept.implants.Ho2019FlatArray` with
         ``pixel_size=40`` instead. The geometry is unchanged; only the name
         is, because [Huang2021]_ describes a different 40 um array.
 
     Takes the same arguments as
-    :py:class:`~pulse2percept.implants.Ho2019Array`, minus ``pixel_size``.
+    :py:class:`~pulse2percept.implants.Ho2019FlatArray`, minus ``pixel_size``.
     """
     __slots__ = ()
 

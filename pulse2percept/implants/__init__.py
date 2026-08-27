@@ -34,7 +34,7 @@ from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
 from .bvt import BVT24, BVT44
 from .prima import (PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40,
-                    Ho2019Array, Huang2021Array)
+                    Ho2019FlatArray, Huang2021Array)
 from .imie import IMIE
 from .ensemble import EnsembleImplant
 from . import cortex
@@ -56,7 +56,7 @@ __all__ = [
     'EnsembleImplant',
     'GridImplant',
     'HexElectrode',
-    'Ho2019Array',
+    'Ho2019FlatArray',
     'Huang2021Array',
     'PhotovoltaicPixel',
     'PointSource',
