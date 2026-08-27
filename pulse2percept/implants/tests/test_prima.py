@@ -302,21 +302,49 @@ def test_PRIMA_square_substrate(rot):
 
 @pytest.mark.parametrize('implant_type', (PRIMA, PRIMA75, PRIMA55, PRIMA40))
 def test_PRIMA_substrate_holds_pixels(implant_type):
-    """Every pixel body is drawn on the substrate, corners included"""
+    """No pixel is drawn off the substrate
+
+    Every pixel center is on the die, and the drawing is clipped to it, so a
+    rim pixel the diced edge cuts through renders as the truncated cell the
+    device actually has rather than as a whole hexagon hanging over the edge.
+    """
+    implant = implant_type()
+    xy = implant.earray.coordinates()[:, :2]
+    if implant_type is PRIMA:
+        npt.assert_array_less(np.abs(xy), 1000)
+    else:
+        npt.assert_array_less(np.hypot(*xy.T), 500)
+
+    ax, substrate = _substrate(implant)
+    clipped = ax.collections[0].get_clip_path()
+    npt.assert_equal(clipped is not None, True)
+    npt.assert_allclose(
+        clipped.get_fully_transformed_path().get_extents().extents,
+        substrate.get_path().transformed(
+            substrate.get_transform()).get_extents().extents, atol=1e-6)
+
+
+@pytest.mark.parametrize('implant_type, whole_bodies', [
+    (PRIMA, True), (PRIMA75, False), (PRIMA55, True), (PRIMA40, True),
+])
+def test_PRIMA_pixel_bodies_vs_substrate(implant_type, whole_bodies):
+    """Which devices carry only whole pixels, and which have a cut rim
+
+    142 whole 70 um hexagons do not fit inside a 1 mm circle at 75 um
+    spacing, so PRIMA75 necessarily has a truncated outer ring; the other
+    three carry only complete pixel bodies.
+    """
     implant = implant_type()
     xy = implant.earray.coordinates()[:, :2]
     th = np.radians(np.arange(6) * 60)
     verts = (xy[:, np.newaxis, :] + implant.pixel_width / np.sqrt(3) *
              np.column_stack([np.cos(th), np.sin(th)])).reshape(-1, 2)
-    if implant_type is PRIMA:
-        npt.assert_array_less(np.abs(verts), 1000)
-    elif implant_type is PRIMA75:
-        # The corner pixels of this hand-trimmed layout overhang a nominal
-        # 500 um radius by ~22 um. [Lorach2015]_ gives the substrate only as
-        # ~1 mm, so the overhang is drawn rather than trimmed away.
-        npt.assert_array_less(np.hypot(*verts.T), 525)
-    else:
-        npt.assert_array_less(np.hypot(*verts.T), 500)
+    outside = (np.abs(verts).max(axis=1) > 1000 if implant_type is PRIMA
+               else np.hypot(*verts.T) > 500)
+    npt.assert_equal(not outside.any(), whole_bodies)
+    if not whole_bodies:
+        # Seven rim pixels of the 142 are cut by the edge of the chip:
+        npt.assert_equal(len(np.unique(np.where(outside)[0] // 6)), 7)
 
 
 @pytest.mark.parametrize('implant_type', (PRIMA, PRIMA75, PRIMA55, PRIMA40))

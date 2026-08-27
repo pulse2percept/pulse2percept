@@ -125,7 +125,7 @@ def _trim_to_axial_mask(earray, spans, center):
 
 
 def _plot_substrate(ax, center, rot, radius=None, side=None):
-    """Draw a PRIMA substrate outline and return the axes to plot pixels on
+    """Draw a PRIMA substrate outline and return ``(ax, patch)``
 
     The silicon die, not the pixel array: give either a ``radius`` for a round
     substrate or a ``side`` for a square one. The patch goes in at background
@@ -141,13 +141,27 @@ def _plot_substrate(ax, center, rot, radius=None, side=None):
              'lw': 1, 'zorder': ZORDER['background']}
     if radius is not None:
         # A disc is its own rotation, so `rot` does not enter here:
-        ax.add_patch(Circle(center, radius=radius, **style))
+        patch = Circle(center, radius=radius, **style)
     else:
         th = np.radians(rot) + np.radians(45 + 90 * np.arange(4))
         corner = side / np.sqrt(2) * np.column_stack([np.cos(th), np.sin(th)])
-        ax.add_patch(Polygon(np.asarray(center, dtype=float) + corner,
-                             closed=True, **style))
-    return ax
+        patch = Polygon(np.asarray(center, dtype=float) + corner, closed=True,
+                        **style)
+    ax.add_patch(patch)
+    return ax, patch
+
+
+def _clip_pixels(ax, substrate, drawn_before):
+    """Clip the pixels an implant just drew to its substrate outline
+
+    A pixel at the rim of a round die is diced through: the lattice site and
+    its stimulation are unaffected, but the silicon of the hexagon is cut off
+    at the edge of the chip. p2p draws every pixel as a whole hexagon, so the
+    truncation is applied here, to the drawing.
+    """
+    for coll in ax.collections:
+        if coll not in drawn_before:
+            coll.set_clip_path(substrate)
 
 
 class PhotovoltaicPixel(HexElectrode):
@@ -345,14 +359,18 @@ class PRIMA(ProsthesisSystem):
 
         Takes the same arguments as
         :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
-        the substrate behind the pixels.
+        the substrate behind the pixels. Pixels at the rim are clipped to
+        the substrate outline, since the die cuts through them.
 
         .. versionadded:: 0.11.0
         """
-        ax = _plot_substrate(ax, self._substrate_center, self.earray.rot,
-                             side=2000)
-        return super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
-                            stim=stim, stim_cmap=stim_cmap)
+        ax, substrate = _plot_substrate(ax, self._substrate_center,
+                                        self.earray.rot, side=2000)
+        drawn = list(ax.collections)
+        ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                          stim=stim, stim_cmap=stim_cmap)
+        _clip_pixels(ax, substrate, drawn)
+        return ax
 
     @property
     def row_spacing(self):
@@ -412,6 +430,10 @@ class PRIMA75(ProsthesisSystem):
     *  [Lorach2015]_ calls the 65 um row spacing the "pixel pitch". The
        nearest-neighbor center spacing, which is what ``spacing`` means here,
        is 75 um.
+    *  142 whole 70 um hexagons do not fit inside a 1 mm circle at this
+       spacing, so the peripheral pixels of the real device are cut through
+       by the diced edge of the chip. Every pixel center is on the substrate;
+       :py:meth:`plot` clips the seven rim pixels whose bodies cross it.
 
     """
     # Frozen class: User cannot add more class attributes
@@ -479,14 +501,18 @@ class PRIMA75(ProsthesisSystem):
 
         Takes the same arguments as
         :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
-        the substrate behind the pixels.
+        the substrate behind the pixels. Pixels at the rim are clipped to
+        the substrate outline, since the die cuts through them.
 
         .. versionadded:: 0.11.0
         """
-        ax = _plot_substrate(ax, self._substrate_center, self.earray.rot,
-                             radius=500)
-        return super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
-                            stim=stim, stim_cmap=stim_cmap)
+        ax, substrate = _plot_substrate(ax, self._substrate_center,
+                                        self.earray.rot, radius=500)
+        drawn = list(ax.collections)
+        ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                          stim=stim, stim_cmap=stim_cmap)
+        _clip_pixels(ax, substrate, drawn)
+        return ax
 
     @property
     def row_spacing(self):
@@ -560,7 +586,7 @@ class PRIMA55(ProsthesisSystem):
        return electrode and are not open gaps, so the pixel bodies are drawn
        the full 55 um wide.
     *  The outline is the one visible in the published device image, stored
-       as :py:data:`_F55_AXIAL_SPANS`: the range of rows carrying a pixel in
+       as ``_F55_AXIAL_SPANS``: the range of rows carrying a pixel in
        each of the 19 columns.
 
     """
@@ -618,14 +644,18 @@ class PRIMA55(ProsthesisSystem):
 
         Takes the same arguments as
         :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
-        the substrate behind the pixels.
+        the substrate behind the pixels. Pixels at the rim are clipped to
+        the substrate outline, since the die cuts through them.
 
         .. versionadded:: 0.11.0
         """
-        ax = _plot_substrate(ax, self._substrate_center, self.earray.rot,
-                             radius=500)
-        return super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
-                            stim=stim, stim_cmap=stim_cmap)
+        ax, substrate = _plot_substrate(ax, self._substrate_center,
+                                        self.earray.rot, radius=500)
+        drawn = list(ax.collections)
+        ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                          stim=stim, stim_cmap=stim_cmap)
+        _clip_pixels(ax, substrate, drawn)
+        return ax
 
     @property
     def row_spacing(self):
@@ -760,14 +790,18 @@ class PRIMA40(ProsthesisSystem):
 
         Takes the same arguments as
         :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
-        the substrate behind the pixels.
+        the substrate behind the pixels. Pixels at the rim are clipped to
+        the substrate outline, since the die cuts through them.
 
         .. versionadded:: 0.11.0
         """
-        ax = _plot_substrate(ax, self._substrate_center, self.earray.rot,
-                             radius=500)
-        return super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
-                            stim=stim, stim_cmap=stim_cmap)
+        ax, substrate = _plot_substrate(ax, self._substrate_center,
+                                        self.earray.rot, radius=500)
+        drawn = list(ax.collections)
+        ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                          stim=stim, stim_cmap=stim_cmap)
+        _clip_pixels(ax, substrate, drawn)
+        return ax
 
     @property
     def row_spacing(self):

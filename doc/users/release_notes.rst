@@ -39,12 +39,41 @@ API changes:
   experiment-specific optimizations over stimulus parameters and should be
   implemented at that level.
 
+* The PRIMA implants replace ``trench`` with ``pixel_width`` (flat-to-flat
+  width of the hexagonal pixel body) and ``gap`` (open gap between pixel
+  bodies), plus a derived ``row_spacing``. ``spacing`` keeps its meaning:
+  nearest-neighbor center-to-center distance (:pull:`667`).
+
+* :py:class:`~pulse2percept.implants.HexElectrode` takes ``orientation`` and
+  ``rot``, so hexagonal bodies face the nearest-neighbor axis of the lattice
+  they sit on and turn with it (:pull:`667`).
+
+* The PRIMA implants plot their substrate: 2 x 2 mm for
+  :py:class:`~pulse2percept.implants.PRIMA`, 1 mm circular for the others.
+  Pixels are clipped to it, so the rim pixels the diced edge cuts through are
+  no longer drawn as whole hexagons (:pull:`667`).
+
 Bug fixes:
 
 * A hexagonal :py:class:`~pulse2percept.implants.ElectrodeGrid` with a single
   row (or, in vertical orientation, a single column) is now centered on
   ``(x, y)`` rather than offset by a quarter of the electrode spacing
   (:pull:`859`)
+
+* :py:class:`~pulse2percept.implants.HexElectrode` sized its hexagon by
+  passing the apothem ``a`` to Matplotlib as a circumradius, drawing every
+  hexagonal pixel 13% too small (:pull:`667`)
+
+* :py:class:`~pulse2percept.implants.PRIMA` pixels are 100 um wide, not 85 um
+  wide with 15 um trenches, an interpretation no primary source supports.
+  Pixel centers are unchanged (:pull:`667`)
+
+* :py:class:`~pulse2percept.implants.PRIMA55` and
+  :py:class:`~pulse2percept.implants.PRIMA40` model the F55 and F40 arrays of
+  [Ho2019]_: 250 and 502 pixels (was 273 and 532), as wide as their center
+  spacing with no open gap, and 14 um and 10 um active electrodes (was 16 um).
+  Correcting the layouts changes which electrode names these two devices have
+  (:pull:`667`)
 
 v0.10.0 Encoders (2026-08-23)
 -----------------------------

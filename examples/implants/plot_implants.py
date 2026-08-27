@@ -49,15 +49,21 @@ for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
 # :py:class:`~pulse2percept.implants.PRIMA` is a subretinal device developed
 # at Stanford University and commercialized by Pixium Vision.
 #
-# There are several versions of the PRIMA device.
-# The device used in clinical trial `NCT03392324`_ consists of 378 85um-wide
-# pixels separated by 15um trenches (i.e., 100um pixel pitch), arranged in a
-# 2-mm wide hexagonal pattern, and is available in pulse2percept simply as
+# There are several versions of the PRIMA device. Each is a hexagonal array
+# of photovoltaic pixels, described here by three numbers: the *pixel width*
+# (flat-to-flat width of the hexagonal pixel body), the *center spacing*
+# between nearest-neighbor pixels, and the *row spacing* between adjacent
+# rows, which follows from the other two as ``spacing * sqrt(3) / 2``.
+#
+# The device used in clinical trial `NCT03392324`_ has 378 pixels 100um wide
+# on a 100um center spacing (86.6um row spacing), on a 2 x 2 mm substrate, and
+# is available in pulse2percept simply as
 # :py:class:`~pulse2percept.implants.PRIMA` [Palanker2020]_.
 #
-# :py:class:`~pulse2percept.implants.PRIMA75` is a newer version of the device,
-# consisting of 142 70um-wide pixels separated by 5um trenches (i.e., 75um
-# pixel pitch), arranged in a 1-mm wide hexagonal pattern [Lorach2015]_.
+# :py:class:`~pulse2percept.implants.PRIMA75` is a newer version of the
+# device, with 142 pixels 70um wide on a 75um center spacing, leaving a 5um
+# open trench between pixel bodies, on a 1 mm substrate [Lorach2015]_. Its
+# 65um row spacing is what [Lorach2015]_ calls the "pixel pitch".
 #
 # .. _NCT03392324: https://www.clinicaltrials.gov/ct2/show/NCT03392324
 
@@ -70,20 +76,22 @@ PRIMA75().plot(ax=ax[1])
 ax[1].set_title('PRIMA-75')
 
 ###############################################################################
-# In addition, the developers are working on miniaturizing the device. At least
-# two other prototypes are currently in development:
+# In addition, the developers are working on miniaturizing the device.
+# :py:class:`~pulse2percept.implants.PRIMA55` and
+# :py:class:`~pulse2percept.implants.PRIMA40` model the experimental F55 and
+# F40 arrays of [Ho2019]_, which have 250 and 502 pixels on a 1 mm circular
+# substrate. Their class names are kept for backwards compatibility.
 #
-# :py:class:`~pulse2percept.implants.PRIMA55` consists of 50um-wide pixels
-# separated by 5um trenches (i.e., 55um pixel pitch), whereas
-# :py:class:`~pulse2percept.implants.PRIMA40` consists of 35um-wide pixels
-# separated by 5um trenches (i.e., 40um pixel pitch).
+# Unlike PRIMA-75, these arrays have no open trench between pixels: their
+# 1um isolation trenches are covered by the shared return electrode, so the
+# pixel bodies tile the array and the pixel width equals the center spacing,
+# 55um and 40um (47.6um and 34.6um row spacing, which [Ho2019]_ calls the
+# "pixel pitch"). Their active electrodes are 14um and 10um in diameter.
 #
-# The exact geometric arrangement of these two prototypes have not been
-# published yet. The devices available in pulse2percept assume that the arrays
-# fit on a circular 1mm-diameter substrate, which yields 273 electrodes for
-# PRIMA-55 and 532 electrodes for PRIMA-40.
-# These prototypes will be updated once more information about them is
-# available.
+# [Ho2019]_ gives the pixel count and the substrate diameter, and the F55
+# outline is visible in the published device image. The F40 outline is not
+# published, so pulse2percept places its 502 pixels on the lattice sites
+# nearest the center of the substrate.
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
