@@ -135,8 +135,8 @@ computation.
    * - ``stimulus``
      - Building the stimulus, before any implant exists.
    * - ``implant``
-     - ``implant.prepare_stim(source)``, including the downsampling of an
-       image or video onto the electrode grid.
+     - Source to device-ready stimulation: the downsampling of an image or
+       video onto the electrode grid, then ``implant.prepare_stim``.
    * - ``build``
      - ``model.build()``, both warm (``test_build``, what a user hits on every
        run after the first) and cold (``test_build_cold``, ignoring the on-disk

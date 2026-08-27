@@ -46,7 +46,7 @@ does that for you, but you can ask for it directly:
     delivered = implant.prepare_stim(stim)
     delivered.plot()
 
-Physical quantities can be written explicitly with :mod:pulse2percept.units; 
+Physical quantities can be written explicitly with :mod:`pulse2percept.units`; 
 bare numbers are also accepted in the documented canonical units.
 
 Images and Videos

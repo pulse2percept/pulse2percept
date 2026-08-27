@@ -398,9 +398,10 @@ def _warn_ignores_z(model, earray):
         return
     warnings.warn(
         f"{type(model).__name__} does not model electrode-retina distance: "
-        f"nonzero z values have no effect on threshold or current spread. In "
-        f"a real implant, distance is expected to affect both, but that "
-        f"relationship is not parameterized by this model.")
+        f"nonzero z values do not change its response. In a real implant, "
+        f"distance is expected to affect stimulation threshold and spatial "
+        f"recruitment, but that relationship is not parameterized by this "
+        f"model.")
 
 
 class BaseModel(Parametrized, metaclass=ABCMeta):

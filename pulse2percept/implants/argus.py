@@ -219,8 +219,8 @@ class ArgusII(ProsthesisSystem):
         How the device turns a picture into stimulation. Defaults to a fresh
         :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz, which is
         the rate Argus II runs its video at. Pass ``encoder=None`` to switch
-        automatic encoding off, so that an image or a video assigned to
-        an image or a video is refused rather than encoded.
+        automatic encoding off, so that an image or video input is refused
+        rather than encoded.
 
         .. versionadded:: 0.10.0
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
@@ -284,10 +284,6 @@ class ArgusII(ProsthesisSystem):
                         if encoder is _DEVICE_DEFAULT else encoder)
         self.raster = (SequentialRaster(6, group_dur=2 * ms)
                        if raster is _DEVICE_DEFAULT else raster)
-
-        # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes -- and, for a picture, the encoder and
-        # raster set just above:
 
         # Set left/right eye:
         if not isinstance(eye, str):

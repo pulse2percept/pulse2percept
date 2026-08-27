@@ -23,16 +23,25 @@ def test_stimulus(benchmark, scenario, peak_memory):
 
 
 @pytest.mark.benchmark(group='implant')
-def test_implant(benchmark, scenario, implant, source, peak_memory):
-    """Preparing the stimulus the device delivers.
+def test_implant(benchmark, scenario, implant, peak_memory):
+    """Turning a source into the stimulation the device delivers.
 
     This is not just bookkeeping: an image stimulus has far more pixels than
-    the array has electrodes, so preparation downsamples it onto the electrode
-    grid. Building the stimulus happens in the fixtures and is not timed.
+    the array has electrodes, so it has to be resampled onto the electrode
+    grid first. That resampling is ``scenario.source``, so it is timed here
+    rather than done once in a fixture. Constructing the stimulus itself
+    happens in ``setup`` and is not timed.
     """
-    benchmark(implant.prepare_stim, source)
-    benchmark.extra_info['peak_mem_mb'] = peak_memory(implant.prepare_stim,
-                                                      source)
+    def prepare(stim):
+        return implant.prepare_stim(scenario.source(implant, stim))
+
+    def setup():
+        return (scenario.stimulus(),), {}
+
+    benchmark.pedantic(prepare, setup=setup, rounds=20, iterations=1,
+                       warmup_rounds=1)
+    benchmark.extra_info['peak_mem_mb'] = peak_memory(prepare,
+                                                      scenario.stimulus())
     benchmark.extra_info['n_electrodes'] = implant.n_electrodes
 
 
@@ -89,8 +98,8 @@ def test_predict_percept(benchmark, built_model, source, peak_memory,
     """Predicting the percept: the headline number for this library.
 
     Includes the bound implant's own preparation of the source, which
-    ``predict_percept`` performs and which the ``implant`` group above times
-    separately.
+    ``predict_percept`` performs. The ``implant`` group above times that same
+    work separately, so the two groups overlap rather than add up.
     """
     percept = benchmark(built_model.predict_percept, source)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(

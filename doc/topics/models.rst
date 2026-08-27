@@ -4,8 +4,10 @@
 Computational Models
 ====================
 
-A model predicts the response to stimulation *by a particular device*, so it
-is bound to an implant and handed the stimulus. Most users work with
+A model with a spatial component predicts the response to stimulation *by a
+particular device*, so it is bound to an implant and handed the stimulus.
+A temporal-only model describes one location's response over time and needs
+no implant. Most users work with
 :py:class:`~pulse2percept.models.Model`, which can contain a spatial component,
 a temporal component, or both:
 
@@ -131,18 +133,20 @@ grid or axon map, or want to pass build-time parameters
 Electrode-retina distance
 -------------------------
 
-:py:class:`~pulse2percept.models.ScoreboardModel` and
-:py:class:`~pulse2percept.models.AxonMapModel` read electrode ``x`` and ``y``
-only. Nonzero ``z`` has no effect on threshold or on how far current spreads,
-and building against such an array warns as much.
+:py:class:`~pulse2percept.models.ScoreboardModel`,
+:py:class:`~pulse2percept.models.AxonMapModel` and
+:py:class:`~pulse2percept.models.Thompson2003Model` read electrode ``x`` and
+``y`` only. Nonzero ``z`` does not change their response at all, and building
+against such an array warns as much.
 
 This is a limitation of the models, not a claim about the biology: a larger
-electrode-target distance is expected to raise threshold and broaden spatial
-recruitment. pulse2percept does not have the psychophysical evidence to
-parameterize that relationship, so it does not invent one. ``rho`` remains an
-effective *perceptual* spread parameter, fitted to what an individual reports
-seeing, and it is the right place to express that a particular subject's
-phosphenes are large -- whatever the reason.
+electrode-target distance is expected to raise stimulation threshold and
+broaden spatial recruitment. pulse2percept does not have the psychophysical
+evidence to parameterize that relationship, so it does not invent one. For the
+first two models, ``rho`` remains an effective *perceptual* spread parameter,
+fitted to what an individual reports seeing, and it is the right place to
+express that a particular subject's phosphenes are large -- whatever the
+reason.
 
 .. _topics-models-scene:
 

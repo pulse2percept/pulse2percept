@@ -117,9 +117,6 @@ class IMIE(ProsthesisSystem):
             new_e = DiskElectrode(newx, newy, newz, small_radius, name=elec)
             self.earray.add_electrode(elec, new_e)
 
-        # Beware of race condition: Stim must be set last, because it requires
-        # indexing into self.electrodes:   
-
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()

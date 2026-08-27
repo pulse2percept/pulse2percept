@@ -80,8 +80,7 @@ print(model)
 # * ``step``: The resolution (in dva) at which to sample the visual field.
 #   For example, we are currently sampling at 0.25 dva in both x and y
 #   direction.
-# * ``loc_od_x``, ``loc_od_y``: the location of the center of the optic disc
-#   (in dva)
+# * ``loc_od``: the location of the center of the optic disc (in dva)
 # * ``thresh_percept``: You can also define a brightness threshold, below which
 #   the predicted output brightness will be zero. It is currently set to
 #   ``1/sqrt(e)``, because that will make the radius of the predicted percept
@@ -94,9 +93,9 @@ print(model)
 # * ``axons_range``: the range of angles (in degrees) to use at which axon
 #   trajectories emanate from the center of the optic disc
 # * ``n_ax_segments``: the number of segments each generated axon should have
-# * ``n_ax_segments_range``: the range of distances (in dva) to use, measured
+# * ``ax_segments_range``: the range of distances (in dva) to use, measured
 #   from the center of the optic disc, at which axon segments should be placed
-# * ``axons_pickle``: path to a pickle file where previously generated axon
+# * ``axon_pickle``: path to a pickle file where previously generated axon
 #   maps are stored
 #
 # To change parameter values, either pass them directly to the constructor
