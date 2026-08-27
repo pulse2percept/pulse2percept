@@ -4,7 +4,8 @@
    :py:class:`~pulse2percept.implants.PRIMA55`, 
    :py:class:`~pulse2percept.implants.PRIMA40`"""
 
-from matplotlib.patches import Circle, RegularPolygon
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Polygon, RegularPolygon
 
 import numpy as np
 from collections.abc import Sequence
@@ -13,6 +14,7 @@ from .base import ProsthesisSystem
 from .electrodes import HexElectrode
 from .electrode_arrays import ElectrodeGrid
 from ..units import as_value, um
+from ..utils.constants import ZORDER
 
 
 #: Layout of the F55 array of [Ho2019]_ in axial hex coordinates: for each
@@ -49,36 +51,35 @@ def _axial_mask_shape(spans):
     return max(i for i, _ in ij) + 1, max(spans) - min(spans) + 1
 
 
-def _device_frame(earray, x, y):
-    """Electrode coordinates relative to ``(x, y)``, with the grid's rotation
+def _device_frame(earray, center):
+    """Electrode coordinates relative to ``center``, with the grid's rotation
     undone
 
-    Takes the rotation from ``earray``, which stores it normalized, and
-    normalizes ``x`` and ``y`` here, so a unitful ``PRIMA55(x=1 * mm,
-    rot=30 * deg)`` trims exactly like the bare-number spelling.
+    ``center`` is in microns and the rotation comes from ``earray``, which
+    stores it normalized, so a unitful ``PRIMA55(x=1 * mm, rot=30 * deg)``
+    trims exactly like the bare-number spelling.
     """
-    center = np.array([as_value(x, um, 'x'), as_value(y, um, 'y')],
-                      dtype=float)
     c, s = np.cos(np.radians(earray.rot)), np.sin(np.radians(earray.rot))
-    return (earray.coordinates()[:, :2] - center) @ np.array([[c, -s], [s, c]])
+    return ((earray.coordinates()[:, :2] - np.asarray(center, dtype=float))
+            @ np.array([[c, -s], [s, c]]))
 
 
-def _recenter(earray, x, y):
-    """Shift a trimmed array so its footprint is centered on ``(x, y)``
+def _recenter(earray, center):
+    """Shift a trimmed array so its footprint is centered on ``center``
 
     For a layout whose registration against the substrate is not published:
     :py:class:`~pulse2percept.implants.ElectrodeGrid` centers the untrimmed
     lattice, so whichever pixels survive a trim generally sit a fraction of
     the spacing off that center. The correction is computed in the unrotated
     device frame, so a rotated device is the unrotated one turned about
-    ``(x, y)`` rather than a differently trimmed array.
+    ``center`` rather than a differently trimmed array.
 
     Do not apply this to a layout that is *defined* relative to the substrate
     center, such as one from :py:func:`_trim_to_disc`: shifting those pixels
     changes the lattice phase and they are no longer the sites the rule
     selected.
     """
-    xy = _device_frame(earray, x, y)
+    xy = _device_frame(earray, center)
     off = -0.5 * (xy.min(axis=0) + xy.max(axis=0))
     c, s = np.cos(np.radians(earray.rot)), np.sin(np.radians(earray.rot))
     dx, dy = off[0] * c - off[1] * s, off[0] * s + off[1] * c
@@ -87,8 +88,8 @@ def _recenter(earray, x, y):
         elec.y += dy
 
 
-def _trim_to_disc(earray, n_pixels, x, y):
-    """Trim a hex grid down to the ``n_pixels`` pixels nearest ``(x, y)``
+def _trim_to_disc(earray, n_pixels, center):
+    """Trim a hex grid down to the ``n_pixels`` pixels nearest ``center``
 
     For a device whose pixel count and substrate diameter are published but
     whose outline is not: the pixels kept are the lattice sites closest to the
@@ -100,7 +101,7 @@ def _trim_to_disc(earray, n_pixels, x, y):
     Distances and the tie-breaking angle are measured in the unrotated device
     frame, so ``rot`` turns the device without changing which pixels it has.
     """
-    xy = _device_frame(earray, x, y)
+    xy = _device_frame(earray, center)
     # Rounded, so that round-off from the rotation cannot reorder two sites
     # that are the same distance out:
     r = np.round(np.hypot(*xy.T), 6)
@@ -110,7 +111,7 @@ def _trim_to_disc(earray, n_pixels, x, y):
         earray.remove_electrode(name)
 
 
-def _trim_to_axial_mask(earray, spans, x, y):
+def _trim_to_axial_mask(earray, spans, center):
     """Trim a hex grid down to the pixels named by an axial-coordinate mask"""
     cols = max(spans) - min(spans) + 1
     keep = {i * cols + j for i, j in _axial_rows(spans)}
@@ -120,7 +121,33 @@ def _trim_to_axial_mask(earray, spans, x, y):
     # The mask fixes which pixels exist, but not where the reconstructed
     # outline sits on the substrate; centering it there is the modeling
     # choice:
-    _recenter(earray, x, y)
+    _recenter(earray, center)
+
+
+def _plot_substrate(ax, center, rot, radius=None, side=None):
+    """Draw a PRIMA substrate outline and return the axes to plot pixels on
+
+    The silicon die, not the pixel array: give either a ``radius`` for a round
+    substrate or a ``side`` for a square one. The patch goes in at background
+    z-order so the pixels stay on top however the caller layers its own
+    drawing, and it enters the data limits, so ``autoscale`` sees the chip and
+    not just the pixels.
+    """
+    if ax is None:
+        ax = plt.gca()
+    # Deliberately low-contrast: the substrate says where the chip ends, and
+    # should not compete with the pixels drawn on it.
+    style = {'fc': (0.92, 0.92, 0.92, 1), 'ec': (0.6, 0.6, 0.6, 1),
+             'lw': 1, 'zorder': ZORDER['background']}
+    if radius is not None:
+        # A disc is its own rotation, so `rot` does not enter here:
+        ax.add_patch(Circle(center, radius=radius, **style))
+    else:
+        th = np.radians(rot) + np.radians(45 + 90 * np.arange(4))
+        corner = side / np.sqrt(2) * np.column_stack([np.cos(th), np.sin(th)])
+        ax.add_patch(Polygon(np.asarray(center, dtype=float) + corner,
+                             closed=True, **style))
+    return ax
 
 
 class PhotovoltaicPixel(HexElectrode):
@@ -257,7 +284,8 @@ class PRIMA(ProsthesisSystem):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
+    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
+                 '_substrate_center')
 
     placement = 'subretinal'
 
@@ -277,6 +305,9 @@ class PRIMA(ProsthesisSystem):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
+        # The substrate is centered on the requested position, which is not
+        # the same point as the center of the pixels that survive trimming:
+        self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
 
         # A per-electrode `z` is one entry per surviving pixel, not one per
         # site of the untrimmed grid, so it is written on after trimming:
@@ -307,6 +338,21 @@ class PRIMA(ProsthesisSystem):
                                  f"{z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
+
+    def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
+             stim_cmap=False):
+        """Plot the implant on its 2 x 2 mm substrate
+
+        Takes the same arguments as
+        :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
+        the substrate behind the pixels.
+
+        .. versionadded:: 0.11.0
+        """
+        ax = _plot_substrate(ax, self._substrate_center, self.earray.rot,
+                             side=2000)
+        return super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                            stim=stim, stim_cmap=stim_cmap)
 
     @property
     def row_spacing(self):
@@ -369,7 +415,8 @@ class PRIMA75(ProsthesisSystem):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
+    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
+                 '_substrate_center')
 
     placement = 'subretinal'
 
@@ -389,6 +436,9 @@ class PRIMA75(ProsthesisSystem):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
+        # The substrate is centered on the requested position, which is not
+        # the same point as the center of the pixels that survive trimming:
+        self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
 
         # A per-electrode `z` is one entry per surviving pixel, not one per
         # site of the untrimmed grid, so it is written on after trimming:
@@ -422,6 +472,21 @@ class PRIMA75(ProsthesisSystem):
                                  f"{z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
+
+    def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
+             stim_cmap=False):
+        """Plot the implant on its 1 mm substrate
+
+        Takes the same arguments as
+        :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
+        the substrate behind the pixels.
+
+        .. versionadded:: 0.11.0
+        """
+        ax = _plot_substrate(ax, self._substrate_center, self.earray.rot,
+                             radius=500)
+        return super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                            stim=stim, stim_cmap=stim_cmap)
 
     @property
     def row_spacing(self):
@@ -500,7 +565,8 @@ class PRIMA55(ProsthesisSystem):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
+    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
+                 '_substrate_center')
 
     placement = 'subretinal'
 
@@ -520,6 +586,9 @@ class PRIMA55(ProsthesisSystem):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
+        # The substrate is centered on the requested position, which is not
+        # the same point as the center of the pixels that survive trimming:
+        self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
 
         # A per-electrode `z` is one entry per surviving pixel, not one per
         # site of the untrimmed grid, so it is written on after trimming:
@@ -531,7 +600,8 @@ class PRIMA55(ProsthesisSystem):
                                     orientation='vertical',
                                     etype=PhotovoltaicPixel, r=elec_radius,
                                     a=self.pixel_width / 2)
-        _trim_to_axial_mask(self.earray, _F55_AXIAL_SPANS, x, y)
+        _trim_to_axial_mask(self.earray, _F55_AXIAL_SPANS,
+                            self._substrate_center)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -541,6 +611,21 @@ class PRIMA55(ProsthesisSystem):
                                  f"{z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
+
+    def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
+             stim_cmap=False):
+        """Plot the implant on its 1 mm substrate
+
+        Takes the same arguments as
+        :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
+        the substrate behind the pixels.
+
+        .. versionadded:: 0.11.0
+        """
+        ax = _plot_substrate(ax, self._substrate_center, self.earray.rot,
+                             radius=500)
+        return super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                            stim=stim, stim_cmap=stim_cmap)
 
     @property
     def row_spacing(self):
@@ -615,16 +700,15 @@ class PRIMA40(ProsthesisSystem):
        the full 40 um wide.
     *  [Ho2019]_ publishes the pixel count and the substrate diameter but not
        the outline, so the 502 pixels are the lattice sites nearest the center
-       of the substrate, and their bounding box therefore sits a quarter of
-       a spacing below it. That is an approximation, not the fabrication
-       mask.
-       Published images of a 40 um array showing a larger hexagonal region
-       are of the later 1.5 mm, 821-pixel device, which this class does not
-       model.
+       of the substrate, and their bounding box therefore sits a quarter of a
+       spacing below it. That is an approximation, not the fabrication mask.
+    *  Published images of a 40 um array with a larger hexagonal outline show
+       the later 1.5 mm, 821-pixel device, which this class does not model.
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
+    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
+                 '_substrate_center')
 
     placement = 'subretinal'
 
@@ -645,6 +729,9 @@ class PRIMA40(ProsthesisSystem):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
+        # The substrate is centered on the requested position, which is not
+        # the same point as the center of the pixels that survive trimming:
+        self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
 
         # A per-electrode `z` is one entry per surviving pixel, not one per
         # site of the untrimmed grid, so it is written on after trimming:
@@ -656,7 +743,7 @@ class PRIMA40(ProsthesisSystem):
                                     orientation='vertical',
                                     etype=PhotovoltaicPixel, r=elec_radius,
                                     a=self.pixel_width / 2)
-        _trim_to_disc(self.earray, 502, x, y)
+        _trim_to_disc(self.earray, 502, self._substrate_center)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -666,6 +753,21 @@ class PRIMA40(ProsthesisSystem):
                                  f"{z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
+
+    def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
+             stim_cmap=False):
+        """Plot the implant on its 1 mm substrate
+
+        Takes the same arguments as
+        :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
+        the substrate behind the pixels.
+
+        .. versionadded:: 0.11.0
+        """
+        ax = _plot_substrate(ax, self._substrate_center, self.earray.rot,
+                             radius=500)
+        return super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
+                            stim=stim, stim_cmap=stim_cmap)
 
     @property
     def row_spacing(self):

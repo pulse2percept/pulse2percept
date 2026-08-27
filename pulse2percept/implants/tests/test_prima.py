@@ -3,12 +3,14 @@ matplotlib.use('Agg')
 import numpy as np
 import pytest
 import numpy.testing as npt
-from matplotlib.patches import Circle, RegularPolygon
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Polygon, RegularPolygon
 
 from pulse2percept.implants import (PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55,
                                     PRIMA40)
 from pulse2percept.stimuli import LogoBVL
 from pulse2percept.units import deg, mm
+from pulse2percept.utils.constants import ZORDER
 from pulse2percept.models import ScoreboardModel
 
 def test_PhotovoltaicPixel():
@@ -235,6 +237,107 @@ def test_PRIMA55_layout():
         # Every column is a solid run of pixels between its two limits:
         npt.assert_equal(rows, np.arange(rows[0], rows[-1] + 1))
         npt.assert_equal((rows[0], rows[-1]), expected[col])
+
+
+def _substrate(implant, **kwargs):
+    """Plot an implant on a fresh axis and return its substrate patch
+
+    Closes the figure before returning: the axes stays readable, and a stray
+    open figure would otherwise become the `plt.gca()` that the next test
+    draws onto.
+    """
+    fig, ax = plt.subplots()
+    implant.plot(ax=ax, **kwargs)
+    patches = [p for p in ax.patches if isinstance(p, (Circle, Polygon))]
+    npt.assert_equal(len(patches), 1)
+    plt.close(fig)
+    return ax, patches[0]
+
+
+@pytest.mark.parametrize('implant_type, radius', [
+    (PRIMA75, 500), (PRIMA55, 500), (PRIMA40, 500),
+])
+@pytest.mark.parametrize('rot', (0, 30))
+def test_PRIMA_round_substrate(implant_type, radius, rot):
+    """The round devices sit on a 1 mm circular die centered on (x, y)
+
+    PRIMA40 keeps the lattice sites nearest the substrate center rather than
+    a footprint centered on them, so the substrate must come from the
+    requested position and not from where the pixels ended up.
+    """
+    x, y = -100, 400
+    ax, patch = _substrate(implant_type(x=x, y=y, rot=rot))
+    npt.assert_almost_equal(patch.center, (x, y))
+    npt.assert_almost_equal(patch.radius, radius)
+    # Behind the pixels, whatever order they were added in:
+    npt.assert_array_less(patch.get_zorder(), ZORDER['foreground'])
+    # ...and inside the view, so `autoscale` shows the chip and not just the
+    # pixels:
+    npt.assert_array_less(ax.get_xlim()[0], x - radius)
+    npt.assert_array_less(x + radius, ax.get_xlim()[1])
+    npt.assert_array_less(ax.get_ylim()[0], y - radius)
+    npt.assert_array_less(y + radius, ax.get_ylim()[1])
+
+
+@pytest.mark.parametrize('rot', (0, 30, -45))
+def test_PRIMA_square_substrate(rot):
+    """Clinical PRIMA sits on a 2 x 2 mm die that turns with the implant"""
+    x, y = -100, 400
+    ax, patch = _substrate(PRIMA(x=x, y=y, rot=rot))
+    corners = patch.get_xy()[:4]
+    npt.assert_almost_equal(corners.mean(axis=0), (x, y))
+    edges = np.roll(corners, -1, axis=0) - corners
+    npt.assert_almost_equal(np.linalg.norm(edges, axis=1), 2000)
+    # Square, and turned by `rot`:
+    npt.assert_almost_equal(np.abs(np.sum(edges[0] * edges[1])), 0)
+    npt.assert_almost_equal(
+        np.mod(np.degrees(np.arctan2(edges[0, 1], edges[0, 0])) - rot, 90), 0)
+    npt.assert_array_less(patch.get_zorder(), ZORDER['foreground'])
+    # The whole die is in view, including the corner the rotation swings out:
+    npt.assert_array_less(ax.get_xlim()[0], corners[:, 0].min())
+    npt.assert_array_less(corners[:, 0].max(), ax.get_xlim()[1])
+    npt.assert_array_less(ax.get_ylim()[0], corners[:, 1].min())
+    npt.assert_array_less(corners[:, 1].max(), ax.get_ylim()[1])
+
+
+@pytest.mark.parametrize('implant_type', (PRIMA, PRIMA75, PRIMA55, PRIMA40))
+def test_PRIMA_substrate_holds_pixels(implant_type):
+    """Every pixel body is drawn on the substrate, corners included"""
+    implant = implant_type()
+    xy = implant.earray.coordinates()[:, :2]
+    th = np.radians(np.arange(6) * 60)
+    verts = (xy[:, np.newaxis, :] + implant.pixel_width / np.sqrt(3) *
+             np.column_stack([np.cos(th), np.sin(th)])).reshape(-1, 2)
+    if implant_type is PRIMA:
+        npt.assert_array_less(np.abs(verts), 1000)
+    elif implant_type is PRIMA75:
+        # The corner pixels of this hand-trimmed layout overhang a nominal
+        # 500 um radius by ~22 um. [Lorach2015]_ gives the substrate only as
+        # ~1 mm, so the overhang is drawn rather than trimmed away.
+        npt.assert_array_less(np.hypot(*verts.T), 525)
+    else:
+        npt.assert_array_less(np.hypot(*verts.T), 500)
+
+
+@pytest.mark.parametrize('implant_type', (PRIMA, PRIMA75, PRIMA55, PRIMA40))
+def test_PRIMA_plot_passthrough(implant_type):
+    """The substrate override keeps the rest of `plot` working"""
+    implant = implant_type()
+    fig, ax = plt.subplots()
+    # `stim_cmap` is not exercised here: colouring a PhotovoltaicPixel is
+    # broken upstream of this override, since it draws two patches and
+    # `ElectrodeArray.plot` colours only single-patch electrodes.
+    implant.plot(ax=ax, annotate=True)
+    npt.assert_equal(len(ax.texts), implant.n_electrodes)
+    npt.assert_equal(len(ax.collections), 1)
+    plt.close(fig)
+    # A unitful position places the substrate the same way a bare one does:
+    _, bare = _substrate(implant_type(x=1000, y=-500))
+    _, unitful = _substrate(implant_type(x=1 * mm, y=-0.5 * mm))
+    if isinstance(bare, Circle):
+        npt.assert_almost_equal(unitful.center, bare.center)
+    else:
+        npt.assert_almost_equal(unitful.get_xy(), bare.get_xy())
 
 
 def test_PRIMA40_reshape_stim():
