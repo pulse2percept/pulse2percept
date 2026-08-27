@@ -76,11 +76,12 @@ PRIMA75().plot(ax=ax[1])
 ax[1].set_title('PRIMA-75')
 
 ###############################################################################
-# In addition, the developers are working on miniaturizing the device.
-# :py:class:`~pulse2percept.implants.PRIMA55` and
-# :py:class:`~pulse2percept.implants.PRIMA40` model the experimental F55 and
-# F40 arrays of [Ho2019]_, which have 250 and 502 pixels on a 1 mm circular
-# substrate. Their class names are kept for backwards compatibility.
+# In addition, the developers are working on miniaturizing the device, in two
+# distinct device families. :py:class:`~pulse2percept.implants.Ho2019Array`
+# models the experimental flat F55 and F40 arrays of [Ho2019]_, which have 250
+# and 502 pixels on a 1 mm circular substrate. (``PRIMA55`` and ``PRIMA40``
+# are deprecated aliases for ``Ho2019Array(55)`` and ``Ho2019Array(40)``: both
+# families contain a 55um and a 40um device, so the old names are ambiguous.)
 #
 # Unlike PRIMA-75, these arrays have no open trench between pixels: their
 # 1um isolation trenches are covered by the shared return electrode, so the
@@ -95,11 +96,40 @@ ax[1].set_title('PRIMA-75')
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
-PRIMA55().plot(ax=ax[0])
-ax[0].set_title('PRIMA-55')
+Ho2019Array(55).plot(ax=ax[0])
+ax[0].set_title('Ho2019Array(55) - F55')
 
-PRIMA40().plot(ax=ax[1])
-ax[1].set_title('PRIMA-40')
+Ho2019Array(40).plot(ax=ax[1])
+ax[1].set_title('Ho2019Array(40) - F40')
+
+###############################################################################
+# :py:class:`~pulse2percept.implants.Huang2021Array` models the later
+# vertical-junction arrays of [Huang2021]_, which come in 55um, 40um, 30um and
+# 20um pixel sizes on a 1.5 mm circular substrate. Pixel bodies again tile the
+# lattice with no open gap, and the active electrode at the center of each
+# pixel is 40% of the pixel size across (22um, 16um, 12um and 8um).
+#
+# ``n_electrodes`` counts only the exposed, stimulating pixels: 421, 821, 1388
+# and 2806. The die carries more pixels than that (526, 1027, 1735 and 3508),
+# but a peripheral common return electrode covers roughly 20% of them. Those
+# covered pixels cannot inject current, so they are not modeled as
+# individually addressable electrodes; ``n_total_pixels`` reports the
+# fabricated count.
+#
+# The outlines are reconstructed from published device imagery, registered to
+# the triangular lattice, and constrained to reproduce the published
+# exposed-pixel counts. Three rim pixels of the 20um layout fall outside the
+# published quadrant and are inferred; only one of the three is meaningfully
+# ambiguous.
+
+fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 10))
+
+for axis, pixel_size in zip(ax.ravel(), [55, 40, 30, 20]):
+    implant = Huang2021Array(pixel_size)
+    implant.plot(ax=axis)
+    axis.set_title(f'Huang2021Array({pixel_size}) - '
+                   f'{implant.n_electrodes} of {implant.n_total_pixels} '
+                   f'pixels exposed')
 
 ###############################################################################
 # BVT Bionic Eye System (Bionic Vision Technologies)

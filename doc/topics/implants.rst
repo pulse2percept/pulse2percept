@@ -93,8 +93,8 @@ prostheses:
        :py:class:`~pulse2percept.implants.AlphaAMS`,
        :py:class:`~pulse2percept.implants.PRIMA`,
        :py:class:`~pulse2percept.implants.PRIMA75`,
-       :py:class:`~pulse2percept.implants.PRIMA55`,
-       :py:class:`~pulse2percept.implants.PRIMA40`
+       :py:class:`~pulse2percept.implants.Ho2019Array`,
+       :py:class:`~pulse2percept.implants.Huang2021Array`
    * - Suprachoroidal
      - :py:class:`~pulse2percept.implants.BVT24`,
        :py:class:`~pulse2percept.implants.BVT44`
@@ -107,6 +107,37 @@ prostheses:
 These classes are research-software representations based on published device
 descriptions, not manufacturer-validated simulators. See each class's API
 documentation for geometry-specific assumptions.
+
+The subretinal photovoltaic arrays come in three groups, which are easy to
+confuse because two of them contain both a 55 um and a 40 um device:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Family
+     - Devices
+   * - Clinical/historical PRIMA
+     - :py:class:`~pulse2percept.implants.PRIMA` (100 um),
+       :py:class:`~pulse2percept.implants.PRIMA75`
+   * - Flat experimental arrays, [Ho2019]_, 1 mm die
+     - ``Ho2019Array(55)`` (F55), ``Ho2019Array(40)`` (F40)
+   * - Vertical-junction arrays, [Huang2021]_, 1.5 mm die
+     - ``Huang2021Array(55)``, ``Huang2021Array(40)``,
+       ``Huang2021Array(30)``, ``Huang2021Array(20)``
+
+``PRIMA55`` and ``PRIMA40`` are deprecated aliases for ``Ho2019Array(55)`` and
+``Ho2019Array(40)``.
+
+For the [Huang2021]_ arrays, ``n_electrodes`` counts the exposed, stimulating
+pixels only (421, 821, 1388 and 2806). ``n_total_pixels`` counts every pixel
+fabricated on the die (526, 1027, 1735 and 3508); the difference is the
+peripheral ring covered by the common return electrode, which cannot inject
+current and is therefore not modeled as individually addressable electrodes.
+The exposed-pixel outlines are reconstructed from published device imagery,
+registered to the triangular lattice, and constrained to reproduce the
+published exposed-pixel counts. Three rim pixels of the 20 um layout fall
+outside the published quadrant and are inferred; only one of the three is
+meaningfully ambiguous.
 
 Coordinate systems
 ------------------

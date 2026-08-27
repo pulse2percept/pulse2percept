@@ -74,6 +74,11 @@ Studies referenced throughout the Documentation:
                   visual sensitivity in retinal prosthesis patients.
                   *Investigative Ophthalmology & Visual Science*
                   50(4):1483-1491.
+.. [Huang2021] TW Huang, T Kamins, ZC Chen, D Palanker (2021). Vertical-junction
+               photodiodes for smaller pixels in retinal prostheses. *Journal
+               of Neural Engineering* 18(3):036015,
+               doi:`10.1088/1741-2552/abe6b8
+               <https://doi.org/10.1088/1741-2552/abe6b8>`_.
 .. [Jansonius2009] NM Jansonius, J Nevalainen, B Selig, LM Zangwill, PA Sample,
                    WM Budde, JB Jonas, WA Lagreze, PJ Airaksinen, R Vonthein,
                    LA Levin, J Paetzold, U Schiefer (2009). A mathematical

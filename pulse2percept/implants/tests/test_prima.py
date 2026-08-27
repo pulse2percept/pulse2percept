@@ -1,15 +1,18 @@
 import matplotlib
 matplotlib.use('Agg')
+from functools import partial
+
 import numpy as np
 import pytest
 import numpy.testing as npt
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon, RegularPolygon
+from scipy.spatial import cKDTree
 
 from pulse2percept.implants import (PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55,
-                                    PRIMA40)
+                                    PRIMA40, Ho2019Array, Huang2021Array)
 from pulse2percept.stimuli import LogoBVL
-from pulse2percept.units import deg, mm
+from pulse2percept.units import deg, mm, um
 from pulse2percept.utils.constants import ZORDER
 from pulse2percept.models import ScoreboardModel
 
@@ -134,16 +137,122 @@ def test_PRIMA75(ztype, x, y, rot):
         PRIMA75(0, 0, z=np.ones(16))
 
 
-@pytest.mark.parametrize('implant_type, spacing, n_elec, elec_radius', [
-    (PRIMA55, 55, 250, 7),
-    (PRIMA40, 40, 502, 5),
+#: The Huang et al. (2021) exposed-pixel masks, spelled out here so that a
+#: "simplification" of the module constant back into a circular crop, or any
+#: other silent change of layout, fails loudly. Pinned as normalized axial
+#: spans (see `_axial_spans`), independently of the module's own constant.
+_EXPECTED_HUANG_SPANS = {
+    55: {
+        -12: (3, 9), -11: (1, 10), -10: (-1, 11), -9: (-3, 12), -8: (-4, 12),
+        -7: (-5, 12), -6: (-6, 12), -5: (-7, 12), -4: (-8, 12), -3: (-8, 12),
+        -2: (-9, 11), -1: (-10, 11), 0: (-10, 10), 1: (-11, 10), 2: (-11, 9),
+        3: (-11, 8), 4: (-12, 8), 5: (-12, 7), 6: (-12, 6), 7: (-12, 5),
+        8: (-11, 4), 9: (-11, 2), 10: (-10, 1), 11: (-9, -1), 12: (-7, -5),
+    },
+    40: {
+        -17: (6, 11), -16: (3, 13), -15: (0, 14), -14: (-1, 15), -13: (-3, 16),
+        -12: (-4, 17), -11: (-5, 17), -10: (-6, 17), -9: (-7, 17),
+        -8: (-8, 17), -7: (-9, 17), -6: (-10, 17), -5: (-11, 17),
+        -4: (-11, 16), -3: (-12, 16), -2: (-12, 15), -1: (-13, 15),
+        0: (-13, 14), 1: (-14, 14), 2: (-14, 13), 3: (-15, 13), 4: (-15, 12),
+        5: (-16, 12), 6: (-16, 11), 7: (-16, 10), 8: (-17, 9), 9: (-17, 8),
+        10: (-17, 7), 11: (-17, 6), 12: (-17, 5), 13: (-16, 4), 14: (-16, 3),
+        15: (-15, 1), 16: (-14, -1), 17: (-13, -3),
+    },
+    30: {
+        -23: (8, 13), -22: (4, 16), -21: (1, 18), -20: (-1, 19), -19: (-3, 20),
+        -18: (-4, 20), -17: (-6, 21), -16: (-7, 21), -15: (-8, 21),
+        -14: (-9, 21), -13: (-10, 21), -12: (-11, 21), -11: (-12, 21),
+        -10: (-13, 21), -9: (-14, 21), -8: (-15, 21), -7: (-16, 21),
+        -6: (-17, 21), -5: (-17, 20), -4: (-18, 20), -3: (-18, 19),
+        -2: (-19, 19), -1: (-20, 19), 0: (-20, 18), 1: (-20, 18), 2: (-21, 17),
+        3: (-21, 16), 4: (-22, 16), 5: (-22, 15), 6: (-22, 14), 7: (-22, 13),
+        8: (-23, 13), 9: (-23, 12), 10: (-23, 11), 11: (-23, 10), 12: (-23, 9),
+        13: (-23, 8), 14: (-22, 6), 15: (-22, 5), 16: (-22, 4), 17: (-21, 2),
+        18: (-20, 0), 19: (-19, -1), 20: (-18, -4), 21: (-16, -7),
+    },
+    20: {
+        -34: (11, 21), -33: (8, 24), -32: (5, 26), -31: (3, 27), -30: (1, 28),
+        -29: (-1, 29), -28: (-3, 30), -27: (-5, 30), -26: (-6, 31),
+        -25: (-8, 31), -24: (-9, 31), -23: (-10, 32), -22: (-11, 32),
+        -21: (-13, 32), -20: (-14, 32), -19: (-15, 32), -18: (-16, 32),
+        -17: (-17, 32), -16: (-17, 32), -15: (-18, 32), -14: (-19, 32),
+        -13: (-20, 32), -12: (-21, 31), -11: (-22, 31), -10: (-22, 31),
+        -9: (-23, 30), -8: (-23, 30), -7: (-24, 30), -6: (-24, 29),
+        -5: (-25, 29), -4: (-25, 29), -3: (-26, 28), -2: (-26, 28),
+        -1: (-27, 27), 0: (-28, 27), 1: (-28, 26), 2: (-29, 25), 3: (-29, 25),
+        4: (-29, 24), 5: (-30, 23), 6: (-30, 23), 7: (-30, 22), 8: (-31, 21),
+        9: (-31, 20), 10: (-31, 19), 11: (-31, 19), 12: (-31, 18),
+        13: (-31, 17), 14: (-31, 16), 15: (-31, 15), 16: (-31, 14),
+        17: (-31, 12), 18: (-31, 11), 19: (-30, 10), 20: (-30, 9),
+        21: (-30, 7), 22: (-29, 6), 23: (-29, 4), 24: (-28, 3), 25: (-27, 1),
+        26: (-26, -1), 27: (-25, -4), 28: (-23, -6), 29: (-20, -10),
+    },
+}
+
+#: pixel size (um), exposed pixels, pixels fabricated on the die, active
+#: electrode diameter (um), for the four arrays of [Huang2021]_.
+HUANG_VARIANTS = [(55, 421, 526, 22), (40, 821, 1027, 16),
+                  (30, 1388, 1735, 12), (20, 2806, 3508, 8)]
+
+
+def _normalized_spans(spans):
+    """Axial spans with their lowest column and row shifted to zero
+
+    A mask read back off pixel coordinates only recovers the lattice up to a
+    translation, so both sides of a comparison are anchored the same way.
+    """
+    q0 = min(spans)
+    r0 = min(lo for lo, _ in spans.values())
+    return {q - q0: (lo - r0, hi - r0) for q, (lo, hi) in spans.items()}
+
+
+def _axial_spans(implant):
+    """Read an implant's pixel layout back off its electrode coordinates
+
+    Returns normalized ``{q: (r_min, r_max)}`` in flat-top axial hex
+    coordinates, asserting on the way that the pixels sit on one triangular
+    lattice and that every column is a solid run.
+    """
+    s = implant.spacing
+    # In the unrotated device frame: axial coordinates are read off the
+    # lattice axes, which turn with the implant.
+    th = np.radians(implant.earray.rot)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    xy = implant.earray.coordinates()[:, :2] @ R
+    q = xy[:, 0] / (s * np.sqrt(3) / 2)
+    r = xy[:, 1] / s - q / 2
+    # Anchored on the lowest site rather than on the origin: recentering the
+    # reconstructed mask on the substrate can offset the lattice by a
+    # fraction of a spacing, but never breaks its integer structure.
+    q, r = q - q.min(), r - r.min()
+    npt.assert_allclose(q, np.round(q), atol=1e-9)
+    npt.assert_allclose(r, np.round(r), atol=1e-9)
+    q, r = np.round(q).astype(int), np.round(r).astype(int)
+
+    spans = {}
+    for col in np.unique(q):
+        rows = np.sort(r[q == col])
+        npt.assert_equal(rows, np.arange(rows[0], rows[-1] + 1))
+        spans[int(col)] = (int(rows[0]), int(rows[-1]))
+    return spans
+
+
+def _nn_spacing(implant):
+    """Distance (um) from each pixel to its nearest neighbor"""
+    xy = implant.earray.coordinates()[:, :2]
+    return cKDTree(xy).query(xy, k=2)[0][:, 1]
+
+
+@pytest.mark.parametrize('pixel_size, n_elec, elec_radius', [
+    (55, 250, 7),
+    (40, 502, 5),
 ])
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
-def test_PRIMA_Ho2019(implant_type, spacing, n_elec, elec_radius, ztype, x, y,
-                      rot):
+def test_Ho2019Array(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
     """The F55/F40 arrays of Ho et al. (2019)
 
     Pixel bodies tile the lattice with no open gap, so pixel width equals the
@@ -152,7 +261,7 @@ def test_PRIMA_Ho2019(implant_type, spacing, n_elec, elec_radius, ztype, x, y,
     """
     # Height `z` can either be a float or a list:
     z = -100 if ztype == 'float' else -np.ones(n_elec) * 20
-    prima = implant_type(x, y, z=z, rot=rot)
+    prima = Ho2019Array(pixel_size, x, y, z=z, rot=rot)
 
     # Slots:
     npt.assert_equal(hasattr(prima, '__slots__'), True)
@@ -166,15 +275,16 @@ def test_PRIMA_Ho2019(implant_type, spacing, n_elec, elec_radius, ztype, x, y,
     # Nearest-neighbor center spacing, in every direction:
     dist = np.linalg.norm(xy[:, None, :] - xy[None, :, :], axis=-1)
     np.fill_diagonal(dist, np.inf)
-    npt.assert_almost_equal(dist.min(), spacing)
-    npt.assert_almost_equal(dist.min(axis=1), spacing)
+    npt.assert_almost_equal(dist.min(), pixel_size)
+    npt.assert_almost_equal(dist.min(axis=1), pixel_size)
     # Row spacing is derived, not independent:
-    npt.assert_almost_equal(prima.row_spacing, spacing * np.sqrt(3) / 2)
+    npt.assert_almost_equal(prima.row_spacing, pixel_size * np.sqrt(3) / 2)
 
     for elec in prima.earray.electrode_objects:
         # Pixel bodies are as wide as the lattice, with no open gap:
-        npt.assert_almost_equal(elec.width, spacing)
-        npt.assert_almost_equal(prima.pixel_width, spacing)
+        npt.assert_almost_equal(elec.width, pixel_size)
+        npt.assert_almost_equal(prima.pixel_width, pixel_size)
+        npt.assert_almost_equal(prima.spacing, pixel_size)
         npt.assert_almost_equal(prima.gap, 0)
         # Active electrode:
         npt.assert_almost_equal(elec.r, elec_radius)
@@ -185,31 +295,43 @@ def test_PRIMA_Ho2019(implant_type, spacing, n_elec, elec_radius, ztype, x, y,
     # Every pixel body sits on the 1 mm substrate, corners included. Flat-top
     # hexagons put a vertex every 60 deg at a circumradius of `width`/sqrt(3):
     corner = np.radians(np.arange(6) * 60 + rot)
-    verts = ((xy - [x, y])[:, np.newaxis, :] + spacing / np.sqrt(3) *
+    verts = ((xy - [x, y])[:, np.newaxis, :] + pixel_size / np.sqrt(3) *
              np.column_stack([np.cos(corner), np.sin(corner)]))
     npt.assert_array_less(np.hypot(verts[..., 0], verts[..., 1]), 500)
 
     with pytest.raises(ValueError):
-        implant_type(0, 0, z=np.ones(16))
+        Ho2019Array(pixel_size, 0, 0, z=np.ones(16))
 
 
-@pytest.mark.parametrize('implant_type', (PRIMA55, PRIMA40))
-def test_PRIMA_Ho2019_units(implant_type):
+@pytest.mark.parametrize('pixel_size', (55, 40))
+def test_Ho2019Array_units(pixel_size):
     """Unitful placement must trim the array exactly like bare microns
 
     The trimming works off the array's coordinates, so it has to normalize
     ``x``/``y`` and read the rotation back off the grid rather than trusting
     whatever the caller spelled them as.
     """
-    bare = implant_type(x=1000, y=-500, z=-100, rot=30)
-    unitful = implant_type(x=1 * mm, y=-0.5 * mm, z=-0.1 * mm, rot=30 * deg)
+    bare = Ho2019Array(pixel_size, x=1000, y=-500, z=-100, rot=30)
+    unitful = Ho2019Array(pixel_size * um, x=1 * mm, y=-0.5 * mm, z=-0.1 * mm,
+                          rot=30 * deg)
     npt.assert_equal(list(unitful.earray.electrodes),
                      list(bare.earray.electrodes))
     npt.assert_allclose(unitful.earray.coordinates(),
                         bare.earray.coordinates(), atol=1e-9)
 
 
-def test_PRIMA55_layout():
+def test_Ho2019Array_pixel_size():
+    """Exactly two variants, and nothing in between"""
+    for pixel_size in (20, 30, 45, 54.9, 75, 100):
+        with pytest.raises(ValueError, match='does not model'):
+            Ho2019Array(pixel_size)
+    with pytest.raises(TypeError):
+        Ho2019Array([40, 55])
+    # A size Huang2021Array does model is still not a Ho2019Array size:
+    npt.assert_equal(Huang2021Array(30).n_electrodes, 1388)
+
+
+def test_Ho2019Array_F55_layout():
     """The 250-pixel F55 mask of [Ho2019]_, in axial hex coordinates
 
     Pins the published outline itself rather than electrode names, which
@@ -220,23 +342,130 @@ def test_PRIMA55_layout():
                 0: (-7, 7), 1: (-8, 7), 2: (-8, 6), 3: (-9, 6), 4: (-9, 5),
                 5: (-9, 4), 6: (-9, 3), 7: (-9, 2), 8: (-9, 1), 9: (-8, -1)}
     npt.assert_equal(sum(hi - lo + 1 for lo, hi in expected.values()), 250)
+    npt.assert_equal(_axial_spans(Ho2019Array(55)),
+                     _normalized_spans(expected))
 
-    prima = PRIMA55()
-    s = prima.spacing
+
+@pytest.mark.parametrize('old_cls, pixel_size', [(PRIMA55, 55), (PRIMA40, 40)])
+def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
+    """The old names still build the Ho et al. (2019) arrays they always did"""
+    with pytest.deprecated_call(match='Ho et al'):
+        old = old_cls(x=-100, y=400, rot=30)
+    new = Ho2019Array(pixel_size, x=-100, y=400, rot=30)
+    npt.assert_equal(list(old.earray.electrodes),
+                     list(new.earray.electrodes))
+    npt.assert_allclose(old.earray.coordinates(), new.earray.coordinates())
+    npt.assert_equal(old.pixel_size, pixel_size)
+    # Still frozen, and still take the rest of the old signature:
+    npt.assert_equal(hasattr(old, '__dict__'), False)
+    with pytest.deprecated_call():
+        old_cls(0, 0, -100, 0, 'LE', False, False)
+
+
+@pytest.mark.parametrize('pixel_size, n_elec, n_total, elec_diam',
+                         HUANG_VARIANTS)
+@pytest.mark.parametrize('ztype', ('float', 'list'))
+def test_Huang2021Array(pixel_size, n_elec, n_total, elec_diam, ztype):
+    """The vertical-junction arrays of Huang et al. (2021)
+
+    ``n_electrodes`` counts the exposed pixels only: the peripheral pixels the
+    common return electrode covers are fabricated but cannot stimulate, so
+    they are not addressable electrodes.
+    """
+    x, y, rot = -100, 400, 30
+    # Height `z` can either be a float or a list, one entry per exposed pixel:
+    z = -100 if ztype == 'float' else -np.ones(n_elec) * 20
+    prima = Huang2021Array(pixel_size, x, y, z=z, rot=rot)
+
+    # Slots:
+    npt.assert_equal(hasattr(prima, '__slots__'), True)
+    npt.assert_equal(hasattr(prima, '__dict__'), False)
+
+    npt.assert_equal(prima.n_electrodes, n_elec)
+    npt.assert_equal(len(prima.earray.electrodes), n_elec)
+    npt.assert_equal(prima.n_total_pixels, n_total)
+
+    # Pixel bodies tile the lattice with no open gap:
+    npt.assert_almost_equal(prima.pixel_size, pixel_size)
+    npt.assert_almost_equal(prima.spacing, pixel_size)
+    npt.assert_almost_equal(prima.pixel_width, pixel_size)
+    npt.assert_almost_equal(prima.gap, 0)
+    npt.assert_almost_equal(prima.row_spacing, pixel_size * np.sqrt(3) / 2)
+    npt.assert_almost_equal(_nn_spacing(prima), pixel_size)
+
+    for elec in prima.earray.electrode_objects:
+        npt.assert_almost_equal(elec.width, pixel_size)
+        # Active electrode is 40% of the pixel size across:
+        npt.assert_almost_equal(2 * elec.r, elec_diam)
+        # Flat-top hex bodies that turn with the lattice:
+        npt.assert_equal(elec.orientation, 'vertical')
+        npt.assert_almost_equal(elec.rot, rot)
+
+    # Every pixel body sits on the 1.5 mm substrate, corners included:
     xy = prima.earray.coordinates()[:, :2]
-    # Flat-top axial coordinates, read back off the pixel centers:
-    q = xy[:, 0] / (s * np.sqrt(3) / 2)
-    r = xy[:, 1] / s - q / 2
-    npt.assert_allclose(q, np.round(q), atol=1e-9)
-    npt.assert_allclose(r, np.round(r), atol=1e-9)
-    q, r = np.round(q).astype(int), np.round(r).astype(int)
+    corner = np.radians(np.arange(6) * 60 + rot)
+    verts = ((xy - [x, y])[:, np.newaxis, :] + pixel_size / np.sqrt(3) *
+             np.column_stack([np.cos(corner), np.sin(corner)]))
+    npt.assert_array_less(np.hypot(verts[..., 0], verts[..., 1]), 750)
 
-    npt.assert_equal(sorted(set(q)), sorted(expected))
-    for col in expected:
-        rows = np.sort(r[q == col])
-        # Every column is a solid run of pixels between its two limits:
-        npt.assert_equal(rows, np.arange(rows[0], rows[-1] + 1))
-        npt.assert_equal((rows[0], rows[-1]), expected[col])
+    # A per-electrode `z` is one entry per exposed pixel, not one per pixel on
+    # the die:
+    with pytest.raises(ValueError):
+        Huang2021Array(pixel_size, z=np.ones(n_total))
+
+
+@pytest.mark.parametrize('pixel_size', (55, 40, 30, 20))
+def test_Huang2021Array_layout(pixel_size):
+    """The reconstructed exposed-pixel masks of [Huang2021]_
+
+    Pins every column of every mask, so that neither a "simplification" back
+    into a circular crop nor a shifted rim can pass unnoticed.
+    """
+    expected = _normalized_spans(_EXPECTED_HUANG_SPANS[pixel_size])
+    n_elec = dict((s, n) for s, n, _, _ in HUANG_VARIANTS)[pixel_size]
+    npt.assert_equal(sum(hi - lo + 1 for lo, hi in expected.values()), n_elec)
+    npt.assert_equal(_axial_spans(Huang2021Array(pixel_size)), expected)
+
+
+def test_Huang2021Array_pixel_size():
+    """Exactly four variants, however the size is spelled"""
+    for pixel_size in (10, 25, 50, 39.9, 75, 100):
+        with pytest.raises(ValueError, match='does not model'):
+            Huang2021Array(pixel_size)
+    with pytest.raises(TypeError):
+        Huang2021Array([20, 30])
+    # A length quantity names the same variant a bare number of microns does:
+    for unitful in (40 * um, 0.04 * mm):
+        npt.assert_equal(Huang2021Array(unitful).n_electrodes, 821)
+
+
+@pytest.mark.parametrize('pixel_size', (55, 20))
+def test_Huang2021Array_placement(pixel_size):
+    """``x``/``y``/``rot`` rigidly transform one and the same mask
+
+    The mask fixes which pixels exist; where the device is put and how it is
+    turned must not change that, and must not depend on how the caller spelled
+    the position.
+    """
+    origin = Huang2021Array(pixel_size)
+    x, y, rot = -100, 400, 37
+    moved = Huang2021Array(pixel_size, x=x, y=y, rot=rot)
+    npt.assert_equal(_axial_spans(moved), _axial_spans(origin))
+
+    th = np.deg2rad(rot)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    xy = origin.earray.coordinates()[:, :2]
+    npt.assert_allclose(moved.earray.coordinates()[:, :2],
+                        (R @ xy.T).T + [x, y], atol=1e-9)
+    # The footprint is centered on the requested position:
+    npt.assert_almost_equal(0.5 * (xy.min(axis=0) + xy.max(axis=0)), (0, 0))
+
+    unitful = Huang2021Array(pixel_size * um, x=-0.1 * mm, y=0.4 * mm,
+                             z=-0.1 * mm, rot=rot * deg)
+    npt.assert_equal(list(unitful.earray.electrodes),
+                     list(moved.earray.electrodes))
+    npt.assert_allclose(unitful.earray.coordinates(),
+                        moved.earray.coordinates(), atol=1e-9)
 
 
 def _substrate(implant, **kwargs):
@@ -254,16 +483,21 @@ def _substrate(implant, **kwargs):
     return ax, patches[0]
 
 
-@pytest.mark.parametrize('implant_type, radius', [
-    (PRIMA75, 500), (PRIMA55, 500), (PRIMA40, 500),
-])
+#: Every round-substrate device, paired with the radius (um) of its die.
+ROUND_DEVICES = ([(PRIMA75, 500), (partial(Ho2019Array, 55), 500),
+                  (partial(Ho2019Array, 40), 500)] +
+                 [(partial(Huang2021Array, s), 750)
+                  for s in (55, 40, 30, 20)])
+
+
+@pytest.mark.parametrize('implant_type, radius', ROUND_DEVICES)
 @pytest.mark.parametrize('rot', (0, 30))
 def test_PRIMA_round_substrate(implant_type, radius, rot):
-    """The round devices sit on a 1 mm circular die centered on (x, y)
+    """The round devices sit on a circular die centered on (x, y)
 
-    PRIMA40 keeps the lattice sites nearest the substrate center rather than
-    a footprint centered on them, so the substrate must come from the
-    requested position and not from where the pixels ended up.
+    ``Ho2019Array(40)`` keeps the lattice sites nearest the substrate center
+    rather than a footprint centered on them, so the substrate must come from
+    the requested position and not from where the pixels ended up.
     """
     x, y = -100, 400
     ax, patch = _substrate(implant_type(x=x, y=y, rot=rot))
@@ -300,8 +534,9 @@ def test_PRIMA_square_substrate(rot):
     npt.assert_array_less(corners[:, 1].max(), ax.get_ylim()[1])
 
 
-@pytest.mark.parametrize('implant_type', (PRIMA, PRIMA75, PRIMA55, PRIMA40))
-def test_PRIMA_substrate_holds_pixels(implant_type):
+@pytest.mark.parametrize('implant_type, radius',
+                         [(PRIMA, None)] + ROUND_DEVICES)
+def test_PRIMA_substrate_holds_pixels(implant_type, radius):
     """No pixel is drawn off the substrate
 
     Every pixel center is on the die, and the drawing is clipped to it, so a
@@ -310,10 +545,10 @@ def test_PRIMA_substrate_holds_pixels(implant_type):
     """
     implant = implant_type()
     xy = implant.earray.coordinates()[:, :2]
-    if implant_type is PRIMA:
+    if radius is None:
         npt.assert_array_less(np.abs(xy), 1000)
     else:
-        npt.assert_array_less(np.hypot(*xy.T), 500)
+        npt.assert_array_less(np.hypot(*xy.T), radius)
 
     ax, substrate = _substrate(implant)
     clipped = ax.collections[0].get_clip_path()
@@ -324,30 +559,36 @@ def test_PRIMA_substrate_holds_pixels(implant_type):
             substrate.get_transform()).get_extents().extents, atol=1e-6)
 
 
-@pytest.mark.parametrize('implant_type, whole_bodies', [
-    (PRIMA, True), (PRIMA75, False), (PRIMA55, True), (PRIMA40, True),
+@pytest.mark.parametrize('implant_type, radius, whole_bodies', [
+    (PRIMA, None, True), (PRIMA75, 500, False),
+    (partial(Ho2019Array, 55), 500, True),
+    (partial(Ho2019Array, 40), 500, True),
+    (partial(Huang2021Array, 40), 750, True),
 ])
-def test_PRIMA_pixel_bodies_vs_substrate(implant_type, whole_bodies):
+def test_PRIMA_pixel_bodies_vs_substrate(implant_type, radius, whole_bodies):
     """Which devices carry only whole pixels, and which have a cut rim
 
     142 whole 70 um hexagons do not fit inside a 1 mm circle at 75 um
-    spacing, so PRIMA75 necessarily has a truncated outer ring; the other
-    three carry only complete pixel bodies.
+    spacing, so PRIMA75 necessarily has a truncated outer ring; the others
+    carry only complete pixel bodies.
     """
     implant = implant_type()
     xy = implant.earray.coordinates()[:, :2]
     th = np.radians(np.arange(6) * 60)
     verts = (xy[:, np.newaxis, :] + implant.pixel_width / np.sqrt(3) *
              np.column_stack([np.cos(th), np.sin(th)])).reshape(-1, 2)
-    outside = (np.abs(verts).max(axis=1) > 1000 if implant_type is PRIMA
-               else np.hypot(*verts.T) > 500)
+    outside = (np.abs(verts).max(axis=1) > 1000 if radius is None
+               else np.hypot(*verts.T) > radius)
     npt.assert_equal(not outside.any(), whole_bodies)
     if not whole_bodies:
         # Seven rim pixels of the 142 are cut by the edge of the chip:
         npt.assert_equal(len(np.unique(np.where(outside)[0] // 6)), 7)
 
 
-@pytest.mark.parametrize('implant_type', (PRIMA, PRIMA75, PRIMA55, PRIMA40))
+@pytest.mark.parametrize('implant_type', [
+    PRIMA, PRIMA75, partial(Ho2019Array, 55), partial(Ho2019Array, 40),
+    partial(Huang2021Array, 55), partial(Huang2021Array, 20),
+])
 def test_PRIMA_plot_passthrough(implant_type):
     """The substrate override keeps the rest of `plot` working"""
     implant = implant_type()
@@ -373,18 +614,20 @@ def test_PRIMA40_reshape_stim():
     # old approach runs out of memory easily. A picture is not a stimulus an
     # implant can deliver, so the sampling is exercised where an encoder
     # reaches it:
-    PRIMA40().reshape_stim(LogoBVL())
-    
+    Ho2019Array(40).reshape_stim(LogoBVL())
+
 
 @pytest.mark.parametrize('implant_type, offset', [
     (PRIMA, (0, 0)),
     (PRIMA75, (0, 0)),
-    # PRIMA55's reconstructed mask is centered on the substrate, since where
-    # it sits on the die is not published. PRIMA40 instead keeps the 502
+    # The reconstructed masks are centered on the substrate, since where they
+    # sit on the die is not published. Ho2019Array(40) instead keeps the 502
     # lattice sites nearest the substrate center, and a discrete lattice
     # leaves that footprint a quarter of a spacing off center:
-    (PRIMA55, (0, 0)),
-    (PRIMA40, (0, -0.25 * 40)),
+    (partial(Ho2019Array, 55), (0, 0)),
+    (partial(Ho2019Array, 40), (0, -0.25 * 40)),
+    (partial(Huang2021Array, 55), (0, 0)),
+    (partial(Huang2021Array, 20), (0, 0)),
 ])
 def test_PRIMA_device_center(implant_type, offset):
     """Where the trimmed device sits relative to the requested (x, y)
