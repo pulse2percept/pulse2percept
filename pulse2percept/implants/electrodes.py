@@ -14,13 +14,21 @@ from abc import ABCMeta, abstractmethod
 # 'collections.abc' is deprecated, and in 3.8 it will stop working:
 from collections.abc import Sequence
 
-from ..units import Quantity, as_value, um
+from ..units import Quantity, as_value, deg, um
 from ..utils import PrettyPrint
 from ..utils.constants import ZORDER
 
 
-#: Orientation of a flat-side-up hexagon, in radians.
-_HEX_ORIENTATION = np.radians(30)
+#: Matplotlib polygon orientation (rad) of a hexagon whose flats face the
+#: nearest-neighbor axis of the lattice, per grid orientation. Matplotlib
+#: measures ``orientation`` from a vertex-up hexagon, so 0 is pointy-top
+#: (flats left/right) and 30 deg is flat-top.
+_HEX_MPL_ORIENTATION = {'horizontal': 0.0, 'vertical': np.radians(30)}
+
+#: Circumradius of a unit-apothem hexagon. Matplotlib sizes a
+#: ``RegularPolygon`` by its circumradius, whereas a hexagonal pixel is
+#: specified by its apothem (half its flat-to-flat width).
+_HEX_CIRCUMRADIUS = 1.0 / np.cos(np.radians(30))
 
 
 def _is_nonscalar(value):
@@ -433,13 +441,29 @@ class HexElectrode(Electrode):
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
     a : double
-        Length (um) of line drawn from the center of the hexagon to the
-        midpoint of one of its sides.
+        Apothem (um) of the hexagon: the distance from its center to the
+        midpoint of one of its sides. The flat-to-flat width of the hexagon is
+        ``2 * a``.
     name : str, optional
         Electrode name
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
         stimuli.
+    orientation : {'horizontal', 'vertical'}, optional
+        Which way the hexagon's flats face, matching the lattice orientation
+        of :py:class:`~pulse2percept.implants.ElectrodeGrid`.
+        'horizontal' gives a pointy-top hexagon (flats left/right, apothem
+        measured along x); 'vertical' gives a flat-top hexagon (flats
+        up/down, apothem measured along y).
+
+        .. versionadded:: 0.11.0
+    rot : double, optional
+        Rotation of the hexagon (deg, positive counter-clockwise), applied on
+        top of ``orientation``. Set by
+        :py:class:`~pulse2percept.implants.ElectrodeGrid` so that the hexagon
+        bodies turn with the lattice.
+
+        .. versionadded:: 0.11.0
 
     Notes
     -----
@@ -448,9 +472,10 @@ class HexElectrode(Electrode):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('a')
+    __slots__ = ('a', 'orientation', 'rot')
 
-    def __init__(self, x, y, z, a, name=None, activated=True):
+    def __init__(self, x, y, z, a, name=None, activated=True,
+                 orientation='horizontal', rot=0):
         super(HexElectrode, self).__init__(x, y, z, name=name,
                                            activated=activated)
         a = as_value(a, um, 'a')
@@ -459,17 +484,36 @@ class HexElectrode(Electrode):
         if a <= 0:
             raise ValueError(f"Apothem of the hexagon must be > 0, not "
                              f"{a}.")
+        if orientation not in _HEX_MPL_ORIENTATION:
+            raise ValueError(f"'orientation' must be one of "
+                             f"{sorted(_HEX_MPL_ORIENTATION)}, not "
+                             f"'{orientation}'.")
         self.a = a
+        self.orientation = orientation
+        self.rot = as_value(rot, deg, 'rot')
         self.plot_patch = RegularPolygon
-        self.plot_kwargs = {'numVertices': 6, 'radius': a, 'alpha': 0.2,
-                            'orientation': _HEX_ORIENTATION,
+        self.plot_kwargs = {**self._hex_patch_kwargs(), 'alpha': 0.2,
                             'ec': (0.3, 0.3, 0.3, 1),
                             'fc': (1, 1, 1, 0.8)}
-        self.plot_deactivated_kwargs = {'numVertices': 6, 'radius': a,
+        self.plot_deactivated_kwargs = {**self._hex_patch_kwargs(),
                                         'alpha': 0.2,
-                                        'orientation': _HEX_ORIENTATION,
                                         'ec': (0.6, 0.6, 0.6, 1),
                                         'fc': (1, 1, 1, 0.6)}
+
+    def _hex_patch_kwargs(self):
+        """Matplotlib ``RegularPolygon`` geometry for this hexagon"""
+        return {'numVertices': 6,
+                'radius': self.a * _HEX_CIRCUMRADIUS,
+                'orientation': (_HEX_MPL_ORIENTATION[self.orientation] +
+                                np.radians(self.rot))}
+
+    @property
+    def width(self):
+        """Flat-to-flat width (um) of the hexagon
+
+        .. versionadded:: 0.11.0
+        """
+        return 2 * self.a
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

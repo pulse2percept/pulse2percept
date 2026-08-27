@@ -10,13 +10,16 @@ import numpy as np
 from collections.abc import Sequence
 
 from .base import ProsthesisSystem
-from .electrodes import HexElectrode, _HEX_ORIENTATION
+from .electrodes import HexElectrode
 from .electrode_arrays import ElectrodeGrid
 from ..units import as_value, um
 
 
 class PhotovoltaicPixel(HexElectrode):
     """Photovoltaic pixel
+
+    A hexagonal pixel body with a circular active electrode at its center, as
+    used by the PRIMA family of subretinal photovoltaic arrays.
 
     .. versionadded:: 0.7
 
@@ -30,13 +33,21 @@ class PhotovoltaicPixel(HexElectrode):
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
     r : double
-        Disk radius (um) in the x,y plane
+        Radius (um) of the circular active electrode in the x,y plane.
     a : double
-        Length (um) of line drawn from the center of the hexagon to the
-        midpoint of one of its sides.
+        Apothem (um) of the hexagonal pixel body: half its flat-to-flat width.
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
         stimuli.
+    orientation : {'horizontal', 'vertical'}, optional
+        Which way the pixel body's flats face; see
+        :py:class:`~pulse2percept.implants.HexElectrode`.
+
+        .. versionadded:: 0.11.0
+    rot : double, optional
+        Rotation of the pixel body (deg, counter-clockwise).
+
+        .. versionadded:: 0.11.0
 
     Notes
     -----
@@ -45,11 +56,14 @@ class PhotovoltaicPixel(HexElectrode):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('r', 'a')
+    __slots__ = ('r',)
 
-    def __init__(self, x, y, z, r, a, name=None, activated=True):
+    def __init__(self, x, y, z, r, a, name=None, activated=True,
+                 orientation='horizontal', rot=0):
         super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name,
-                                                activated=activated)
+                                                activated=activated,
+                                                orientation=orientation,
+                                                rot=rot)
         r = as_value(r, um, 'r')
         if isinstance(r, (Sequence, np.ndarray)):
             raise TypeError("Radius of the active electrode must be a scalar.")
@@ -57,16 +71,15 @@ class PhotovoltaicPixel(HexElectrode):
             raise ValueError("Radius of the active electrode must be > 0, not "
                              "{r}.")
         self.r = r
-        # Plot two objects: hex honeycomb and circular active electrode
+        # Plot two objects: hex pixel body and circular active electrode. The
+        # body reuses HexElectrode's geometry so the two cannot drift apart:
+        hex_kwargs = self._hex_patch_kwargs()
         self.plot_patch = [RegularPolygon, Circle]
-        self.plot_kwargs = [{'radius': a, 'numVertices': 6, 'alpha': 0.2,
-                             'orientation': _HEX_ORIENTATION,
-                             'fc': 'k', 'ec': 'k'},
+        self.plot_kwargs = [{**hex_kwargs, 'alpha': 0.2, 'fc': 'k', 'ec': 'k'},
                             {'radius': r, 'linewidth': 0, 'color': 'k',
                              'alpha': 0.5}]
-        self.plot_deactivated_kwargs = [{'radius': a, 'numVertices': 6,
-                                         'orientation': _HEX_ORIENTATION,
-                                         'fc': 'k', 'ec': 'k', 'alpha': 0.1},
+        self.plot_deactivated_kwargs = [{**hex_kwargs, 'alpha': 0.1,
+                                         'fc': 'k', 'ec': 'k'},
                                         {'radius': r, 'linewidth': 0,
                                          'color': 'k', 'alpha': 0.2}]
 

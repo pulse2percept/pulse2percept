@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 from skimage.transform import SimilarityTransform
 from copy import deepcopy
 
-from .electrodes import Electrode, PointSource, DiskElectrode
+from .electrodes import (Electrode, PointSource, DiskElectrode,
+                         HexElectrode)
 from ..stimuli.names import ElectrodeNames
 from ..units import Quantity, as_value, deg, um
 from ..utils import PrettyPrint, bijective26_name
@@ -416,8 +417,13 @@ class ElectrodeGrid(ElectrodeArray):
     type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
     orientation : {'horizontal', 'vertical'}, optional
-        In a hex grid, 'horizontal' orientation will shift every other row
-        to the right, whereas 'vertical' will shift every other column up.
+        Lattice orientation of a hex grid.
+        'horizontal': one nearest-neighbor axis is horizontal, alternate rows
+        are staggered by half a spacing to the right, and hexagonal electrode
+        bodies are drawn pointy-top (flats left/right).
+        'vertical': one nearest-neighbor axis is vertical, alternate columns
+        are staggered by half a spacing upwards, and hexagonal bodies are
+        drawn flat-top (flats up/down).
     x/y/z : double
         3D location (um) of the center of the grid.
         The coordinate system is centered over the fovea.
@@ -757,6 +763,11 @@ class ElectrodeGrid(ElectrodeArray):
                      for ex, ey, ez, er, nm in zip(x_arr, y_arr, z_arr, r_arr,
                                                    names)]
         else:
+            if issubclass(etype, HexElectrode):
+                # A hexagonal body only tiles the lattice if its flats face
+                # the nearest-neighbor axis and it turns with the grid:
+                kwargs.setdefault('orientation', orientation)
+                kwargs.setdefault('rot', rot)
             # Pass keyword arguments to the electrode constructor:
             elecs = [etype(ex, ey, ez, name=nm, **kwargs)
                      for ex, ey, ez, nm in zip(x_arr, y_arr, z_arr, names)]
