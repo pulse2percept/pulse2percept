@@ -8,6 +8,7 @@ from matplotlib.patches import Circle, RegularPolygon
 from pulse2percept.implants import (PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55,
                                     PRIMA40)
 from pulse2percept.stimuli import LogoBVL
+from pulse2percept.units import deg, mm
 from pulse2percept.models import ScoreboardModel
 
 def test_PhotovoltaicPixel():
@@ -179,12 +180,31 @@ def test_PRIMA_Ho2019(implant_type, spacing, n_elec, elec_radius, ztype, x, y,
         npt.assert_almost_equal(elec.rot, rot)
         npt.assert_equal(elec.orientation, 'vertical')
 
-    # Every pixel body sits on the 1 mm substrate. Measured flat-to-flat:
-    # the outermost F55 corners graze the nominal edge by under 2 um.
-    npt.assert_array_less(np.hypot(*(xy - [x, y]).T) + spacing / 2, 500)
+    # Every pixel body sits on the 1 mm substrate, corners included. Flat-top
+    # hexagons put a vertex every 60 deg at a circumradius of `width`/sqrt(3):
+    corner = np.radians(np.arange(6) * 60 + rot)
+    verts = ((xy - [x, y])[:, np.newaxis, :] + spacing / np.sqrt(3) *
+             np.column_stack([np.cos(corner), np.sin(corner)]))
+    npt.assert_array_less(np.hypot(verts[..., 0], verts[..., 1]), 500)
 
     with pytest.raises(ValueError):
         implant_type(0, 0, z=np.ones(16))
+
+
+@pytest.mark.parametrize('implant_type', (PRIMA55, PRIMA40))
+def test_PRIMA_Ho2019_units(implant_type):
+    """Unitful placement must trim the array exactly like bare microns
+
+    The trimming works off the array's coordinates, so it has to normalize
+    ``x``/``y`` and read the rotation back off the grid rather than trusting
+    whatever the caller spelled them as.
+    """
+    bare = implant_type(x=1000, y=-500, z=-100, rot=30)
+    unitful = implant_type(x=1 * mm, y=-0.5 * mm, z=-0.1 * mm, rot=30 * deg)
+    npt.assert_equal(list(unitful.earray.electrodes),
+                     list(bare.earray.electrodes))
+    npt.assert_allclose(unitful.earray.coordinates(),
+                        bare.earray.coordinates(), atol=1e-9)
 
 
 def test_PRIMA55_layout():
@@ -228,11 +248,12 @@ def test_PRIMA40_reshape_stim():
 @pytest.mark.parametrize('implant_type, offset', [
     (PRIMA, (0, 0)),
     (PRIMA75, (0, 0)),
-    # PRIMA55 and PRIMA40 keep the pixels nearest the center of the substrate,
-    # taking whole antipodal pairs, so their footprints are centered on (x, y)
-    # and symmetric under a half turn:
+    # PRIMA55's reconstructed mask is centered on the substrate, since where
+    # it sits on the die is not published. PRIMA40 instead keeps the 502
+    # lattice sites nearest the substrate center, and a discrete lattice
+    # leaves that footprint a quarter of a spacing off center:
     (PRIMA55, (0, 0)),
-    (PRIMA40, (0, 0)),
+    (PRIMA40, (0, -0.25 * 40)),
 ])
 def test_PRIMA_device_center(implant_type, offset):
     """Where the trimmed device sits relative to the requested (x, y)

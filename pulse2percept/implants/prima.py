@@ -49,42 +49,58 @@ def _axial_mask_shape(spans):
     return max(i for i, _ in ij) + 1, max(spans) - min(spans) + 1
 
 
-def _device_frame(earray, x, y, rot):
-    """Electrode coordinates relative to ``(x, y)``, with ``rot`` undone"""
-    xy = earray.coordinates()[:, :2] - np.array([x, y], dtype=float)
-    c, s = np.cos(np.radians(rot)), np.sin(np.radians(rot))
-    return xy @ np.array([[c, -s], [s, c]])
+def _device_frame(earray, x, y):
+    """Electrode coordinates relative to ``(x, y)``, with the grid's rotation
+    undone
+
+    Takes the rotation from ``earray``, which stores it normalized, and
+    normalizes ``x`` and ``y`` here, so a unitful ``PRIMA55(x=1 * mm,
+    rot=30 * deg)`` trims exactly like the bare-number spelling.
+    """
+    center = np.array([as_value(x, um, 'x'), as_value(y, um, 'y')],
+                      dtype=float)
+    c, s = np.cos(np.radians(earray.rot)), np.sin(np.radians(earray.rot))
+    return (earray.coordinates()[:, :2] - center) @ np.array([[c, -s], [s, c]])
 
 
-def _recenter(earray, x, y, rot):
+def _recenter(earray, x, y):
     """Shift a trimmed array so its footprint is centered on ``(x, y)``
 
+    For a layout whose registration against the substrate is not published:
     :py:class:`~pulse2percept.implants.ElectrodeGrid` centers the untrimmed
-    lattice, and whichever pixels survive a trim generally sit a fraction of
+    lattice, so whichever pixels survive a trim generally sit a fraction of
     the spacing off that center. The correction is computed in the unrotated
     device frame, so a rotated device is the unrotated one turned about
     ``(x, y)`` rather than a differently trimmed array.
+
+    Do not apply this to a layout that is *defined* relative to the substrate
+    center, such as one from :py:func:`_trim_to_disc`: shifting those pixels
+    changes the lattice phase and they are no longer the sites the rule
+    selected.
     """
-    off = -0.5 * (lambda p: p.min(axis=0) + p.max(axis=0))(
-        _device_frame(earray, x, y, rot))
-    c, s = np.cos(np.radians(rot)), np.sin(np.radians(rot))
+    xy = _device_frame(earray, x, y)
+    off = -0.5 * (xy.min(axis=0) + xy.max(axis=0))
+    c, s = np.cos(np.radians(earray.rot)), np.sin(np.radians(earray.rot))
     dx, dy = off[0] * c - off[1] * s, off[0] * s + off[1] * c
     for elec in earray.electrode_objects:
         elec.x += dx
         elec.y += dy
 
 
-def _trim_to_disc(earray, n_pixels, x, y, rot):
-    """Trim a hex grid down to the ``n_pixels`` pixels nearest its center
+def _trim_to_disc(earray, n_pixels, x, y):
+    """Trim a hex grid down to the ``n_pixels`` pixels nearest ``(x, y)``
 
     For a device whose pixel count and substrate diameter are published but
     whose outline is not: the pixels kept are the lattice sites closest to the
     center of the substrate, which is the most circular layout with that
-    count. It is not the fabrication mask. Distances and the tie-breaking
-    angle are measured in the unrotated device frame, so ``rot`` turns the
-    device without changing which pixels it has.
+    count. It is not the fabrication mask. The sites are kept where the
+    lattice puts them; their bounding box can sit up to half a spacing off
+    center, which is what a discrete lattice on a round substrate does.
+
+    Distances and the tie-breaking angle are measured in the unrotated device
+    frame, so ``rot`` turns the device without changing which pixels it has.
     """
-    xy = _device_frame(earray, x, y, rot)
+    xy = _device_frame(earray, x, y)
     # Rounded, so that round-off from the rotation cannot reorder two sites
     # that are the same distance out:
     r = np.round(np.hypot(*xy.T), 6)
@@ -92,17 +108,19 @@ def _trim_to_disc(earray, n_pixels, x, y, rot):
     names = np.asarray(list(earray.electrodes))
     for name in names[np.lexsort((ang, r))[n_pixels:]]:
         earray.remove_electrode(name)
-    _recenter(earray, x, y, rot)
 
 
-def _trim_to_axial_mask(earray, spans, x, y, rot):
+def _trim_to_axial_mask(earray, spans, x, y):
     """Trim a hex grid down to the pixels named by an axial-coordinate mask"""
     cols = max(spans) - min(spans) + 1
     keep = {i * cols + j for i, j in _axial_rows(spans)}
     for idx, name in enumerate(list(earray.electrodes)):
         if idx not in keep:
             earray.remove_electrode(name)
-    _recenter(earray, x, y, rot)
+    # The mask fixes which pixels exist, but not where the reconstructed
+    # outline sits on the substrate; centering it there is the modeling
+    # choice:
+    _recenter(earray, x, y)
 
 
 class PhotovoltaicPixel(HexElectrode):
@@ -428,8 +446,8 @@ class PRIMA55(ProsthesisSystem):
     centers are 55 um apart, on a 1 mm circular substrate: the pixel bodies
     tile the array without an open gap between them. Adjacent rows are
     therefore separated by ``55 * sqrt(3) / 2`` = 48 um. The active electrode
-    at the center of each pixel is a disk 14 um in diameter. The 250 pixels
-    cover 921 x 880 um of the substrate.
+    at the center of each pixel is a disk 14 um in diameter. The modeled
+    pixel footprint is approximately 921 x 880 um.
 
     .. versionadded:: 0.7
 
@@ -513,7 +531,7 @@ class PRIMA55(ProsthesisSystem):
                                     orientation='vertical',
                                     etype=PhotovoltaicPixel, r=elec_radius,
                                     a=self.pixel_width / 2)
-        _trim_to_axial_mask(self.earray, _F55_AXIAL_SPANS, x, y, rot)
+        _trim_to_axial_mask(self.earray, _F55_AXIAL_SPANS, x, y)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -547,8 +565,8 @@ class PRIMA40(ProsthesisSystem):
     centers are 40 um apart, on a 1 mm circular substrate: the pixel bodies
     tile the array without an open gap between them. Adjacent rows are
     therefore separated by ``40 * sqrt(3) / 2`` = 35 um. The active electrode
-    at the center of each pixel is a disk 10 um in diameter. The 502 pixels
-    cover 947 x 960 um of the substrate.
+    at the center of each pixel is a disk 10 um in diameter. The modeled
+    pixel footprint is approximately 947 x 960 um.
 
     .. versionadded:: 0.7
 
@@ -597,7 +615,9 @@ class PRIMA40(ProsthesisSystem):
        the full 40 um wide.
     *  [Ho2019]_ publishes the pixel count and the substrate diameter but not
        the outline, so the 502 pixels are the lattice sites nearest the center
-       of the substrate. That is an approximation, not the fabrication mask.
+       of the substrate, and their bounding box therefore sits a quarter of
+       a spacing below it. That is an approximation, not the fabrication
+       mask.
        Published images of a 40 um array showing a larger hexagonal region
        are of the later 1.5 mm, 821-pixel device, which this class does not
        model.
@@ -636,7 +656,7 @@ class PRIMA40(ProsthesisSystem):
                                     orientation='vertical',
                                     etype=PhotovoltaicPixel, r=elec_radius,
                                     a=self.pixel_width / 2)
-        _trim_to_disc(self.earray, 502, x, y, rot)
+        _trim_to_disc(self.earray, 502, x, y)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
