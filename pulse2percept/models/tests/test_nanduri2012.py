@@ -41,6 +41,14 @@ def test_Nanduri2012Spatial():
         Nanduri2012Spatial(implant=ProsthesisSystem(ElectrodeArray(
             [DiskElectrode(0, 0, 0, 100), PointSource(100, 100, 0)]))).build()
 
+    # The bound implant stays the caller's, so a build-time check alone would
+    # let a swapped array through to a kernel that reads a radius off it:
+    model = Nanduri2012Spatial(implant=ProsthesisSystem(ElectrodeArray(
+        DiskElectrode(0, 0, 0, 100))), step=5).build()
+    model.implant.earray = ElectrodeArray(PointSource(0, 0, 0))
+    with pytest.raises(TypeError):
+        model.predict_percept({0: 1})
+
     # Multiple frames are processed independently:
     model = Nanduri2012Spatial(implant=ArgusI(), atten_a=14000, step=5,
                                xrange=(-20, 20), yrange=(-15, 15))

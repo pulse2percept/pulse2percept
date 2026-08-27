@@ -6,15 +6,18 @@ commit 62d5b4e, and is compared against the same setup written the new way:
 ``model = SomeModel(implant=implant)`` followed by
 ``model.predict_percept(source)``. The API changed; the numbers did not.
 
-Percepts are compared by shape, time axis and three whole-array reductions
-rather than element by element: a change in what any electrode contributes
-moves at least one of them, and pinning three numbers per case keeps the
-references readable.
+Percepts are compared by shape, time axis and a handful of whole-array
+reductions rather than element by element, which keeps the references
+readable. Sum, peak and sum of squares say how much brightness there is;
+they are blind to where it sits, so a permuted electrode map or a shifted
+retinotopy could preserve all three. The brightness moments say where it
+sits: mean and mean-square pixel index along the percept's Y and X axes,
+which no translation or reshuffling of the grid leaves alone.
 
-``percept.data`` is float32, so the reductions carry a few ulps of slack that
-varies with the platform's ``exp`` and the compiler's floating-point
-contraction. ``RTOL`` is loose enough to absorb that and still orders of
-magnitude tighter than any change in the pipeline would be.
+``percept.data`` is float32, so the reductions carry slack that varies with
+the platform's ``exp`` and the compiler's floating-point contraction.
+``RTOL`` is loose enough to absorb that and still orders of magnitude tighter
+than any change in the pipeline would be.
 """
 import warnings
 
@@ -37,43 +40,80 @@ GRID = dict(xrange=(-8, 8), yrange=(-6, 6), step=1)
 AXON = dict(n_axons=200, n_ax_segments=100, ignore_pickle=True)
 
 #: What the pre-refactor pipeline predicted: shape, (t_first, t_last), sum,
-#: max, sum of squares.
+#: max, sum of squares, and the brightness moments (mean_y, mean_sq_y,
+#: mean_x, mean_sq_x) that `moments` below computes.
 REFERENCE = {
     'scoreboard': ((13, 17, 1), None,
-                   106.27331389391497, 29.729562759399414, 1590.841862258684),
+                   106.27331389391497, 29.729562759399414, 1590.841862258684,
+                   (4.855147072796709, 24.43435468223049,
+                    6.805482721437667, 47.70945073251632)),
     'axonmap': ((13, 17, 1), None,
-                111.66620632618813, 23.478652954101562, 1327.6353996210921),
+                111.66620632618813, 23.478652954101562, 1327.6353996210921,
+                (5.185161927644366, 27.987468482922242,
+                 6.827698436941981, 47.849236089244805)),
     'spatiotemporal': ((13, 17, 4), (0.0, 60.0),
                        2.282379476566313, 0.32124122977256775,
-                       0.28389843167895795),
+                       0.28389843167895795,
+                       (4.931046339872862, 24.86797727082938,
+                        6.931046450353491, 48.59216420177322)),
     'encoded_image': ((13, 17, 1), None,
                       4068.7693935632706, 46.307098388671875,
-                      105311.18907585883),
+                      105311.18907585883,
+                      (8.147908231279617, 75.03071679781367,
+                       8.276378690968135, 92.40379187416536)),
     'encoded_video': ((13, 17, 3), (0.0, 100.0),
                       13472.329383134842, 51.660400390625,
-                      337278.64476578706),
+                      337278.64476578706,
+                      (6.0661377111050685, 49.745639543040014,
+                       7.921347896154394, 86.90694497105545)),
     'encoded_video_temporal': ((13, 17, 3), (50.0, 150.0),
                                39.186431967886165, 0.21076203882694244,
-                               3.328352739130871),
+                               3.328352739130871,
+                               (6.528613866884478, 56.270883389329825,
+                                7.894180997742635, 86.76219135133657)),
     'biphasic': ((13, 17, 1), None,
-                 3.807037961360792, 0.5194367010755934, 1.0132546632537747),
+                 3.807037961360792, 0.5194367010755934, 1.0132546632537747,
+                 (5.0853018679140565, 27.047305434768763,
+                  6.941999430159145, 49.25247073610444)),
     'dynaphos': ((7, 7, 6), (0.0, 100.0),
                  3.864256768792984e-06, 1.0946714610327035e-06,
-                 3.800738015684018e-12),
+                 3.800738015684018e-12,
+                 (2.0, 4.0, 1.0, 1.0)),
     'scene_gaze': ((13, 17, 1), None,
-                   1663.1452019751928, 36.72337341308594, 43973.7099062507),
+                   1663.1452019751928, 36.72337341308594, 43973.7099062507,
+                   (6.000000013081055, 40.855445551864825,
+                    8.174004836496247, 71.63952372279992)),
     'scene_scotoma': ((41, 41, 3, 1), None,
-                      2435.118678161456, 1.0, 1652.0926838311032),
+                      2435.118678161456, 1.0, 1652.0926838311032,
+                      (19.9999999996621, 544.5046493203229,
+                       27.224079296239694, 833.4678215082496)),
 }
 
 
-#: Ten times float32 epsilon: the reductions are computed in float64, but from
-#: float32 inputs.
-RTOL = 1e-6
+#: Sized from the spread actually observed across the platforms CI runs on,
+#: not from float32 epsilon: the AxonMap sum differs by 3e-6 between macOS and
+#: Linux for percepts that are otherwise bit-identical within a platform.
+RTOL = 1e-5
+
+
+def moments(data):
+    """Mean and mean-square pixel index of brightness along Y and X
+
+    Raw moments rather than centered ones: a percept driven by a single
+    electrode has essentially no spread, and a variance computed from it is
+    cancellation noise that no tolerance can pin.
+    """
+    total = data.sum()
+    out = []
+    for axis in (0, 1):
+        shape = [-1 if k == axis else 1 for k in range(data.ndim)]
+        idx = np.arange(data.shape[axis], dtype=np.float64).reshape(shape)
+        out += [(data * idx).sum() / total, (data * idx ** 2).sum() / total]
+    return out
 
 
 def assert_matches_reference(name, percept):
-    shape, time, total, peak, sumsq = REFERENCE[name]
+    shape, time, total, peak, sumsq, spatial = REFERENCE[name]
     data = np.asarray(percept.data, dtype=np.float64)
     npt.assert_equal(percept.data.shape, shape)
     if time is None:
@@ -84,6 +124,7 @@ def assert_matches_reference(name, percept):
     npt.assert_allclose(data.sum(), total, rtol=RTOL)
     npt.assert_allclose(data.max(), peak, rtol=RTOL)
     npt.assert_allclose((data ** 2).sum(), sumsq, rtol=RTOL)
+    npt.assert_allclose(moments(data), spatial, rtol=RTOL)
 
 
 def picture():

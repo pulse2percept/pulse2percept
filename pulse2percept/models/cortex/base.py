@@ -226,6 +226,13 @@ class ScoreboardSpatial(CortexSpatial):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
+
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     min_current_spread : float, optional
@@ -383,6 +390,13 @@ class ScoreboardModel(Model):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
+
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     min_current_spread : float, optional

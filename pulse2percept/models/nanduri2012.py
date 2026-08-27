@@ -9,6 +9,13 @@ from ..stimuli import Stimulus
 from ..units import ms
 
 
+def _require_disk_electrodes(electrodes):
+    """The Nanduri model reads a disk radius off every electrode it sees"""
+    if not all(isinstance(e, DiskElectrode) for e in electrodes):
+        raise TypeError("The Nanduri2012 spatial model only supports "
+                        "DiskElectrode arrays.")
+
+
 class Nanduri2012Spatial(SpatialModel):
     """Spatial response model of [Nanduri2012]_
 
@@ -36,6 +43,13 @@ class Nanduri2012Spatial(SpatialModel):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
+
     atten_a : float, optional
         Nominator of the attentuation function
     atten_n : float32, optional
@@ -70,11 +84,15 @@ class Nanduri2012Spatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
+        # Re-checked here and not only at build time: the bound implant stays
+        # the caller's, and swapping its `earray` afterwards would otherwise
+        # reach the kernel below as a missing `.r`.
+        _require_disk_electrodes(earray.electrode_objects)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
         x_el, y_el, z_el = self._electrode_coords(earray, stim)
         # The disk radius is a size rather than a coordinate, so it is read
-        # directly. `_build` has already refused anything but disks:
+        # directly:
         r_el = np.ascontiguousarray([earray[e].r for e in stim.electrodes],
                                     dtype=np.float32)
         return spatial_fast(self._stim_values(stim), x_el, y_el, z_el,
@@ -87,10 +105,7 @@ class Nanduri2012Spatial(SpatialModel):
                             self.n_threads)
 
     def _build(self):
-        if not np.all([isinstance(e, DiskElectrode)
-                       for e in self.implant.electrode_objects]):
-            raise TypeError("The Nanduri2012 spatial model only supports "
-                            "DiskElectrode arrays.")
+        _require_disk_electrodes(self.implant.electrode_objects)
 
 
 class Nanduri2012Temporal(TemporalModel):
@@ -211,6 +226,13 @@ class Nanduri2012Model(Model):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
+
     atten_a : float, optional
         Nominator of the attentuation function (Eq.2 in the paper)
     atten_n : float32, optional

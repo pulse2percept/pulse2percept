@@ -33,8 +33,10 @@ takes the stimulus source directly:
 * A :py:class:`~pulse2percept.vision.Scene` is prediction input like any other
   source: ``model.predict_percept(scene, gaze=...)``.
 
-* Models now build automatically on first prediction and rebuild automatically
-  after model parameters change. ``NotBuiltError`` is gone.
+* Models now build automatically on first prediction, and a parameter change
+  rebuilds only the component it belongs to, so a sweep over a temporal
+  parameter no longer regrows the spatial model. ``model.build()`` still
+  forces a full rebuild. ``NotBuiltError`` is gone.
 
 * :py:class:`~pulse2percept.models.AxonMapModel` no longer takes ``eye``; it
   reads ``implant.eye``. It warns when built against a non-epiretinal implant,
@@ -56,6 +58,10 @@ API changes:
 
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
+
+* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` no longer overrides
+  ``predict_percept``, so it takes ``gaze``, ``vmax`` and ``vmin`` like every
+  other model.
 
 Bug fixes:
 

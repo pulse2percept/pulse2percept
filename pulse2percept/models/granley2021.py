@@ -288,6 +288,13 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
+
     bright_model: callable, optional
         Model used to modulate percept brightness with amplitude, frequency,
         and pulse duration
@@ -707,6 +714,13 @@ class BiphasicAxonMapModel(Model):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
+
     bright_model: callable, optional
         Model used to modulate percept brightness with amplitude, frequency,
         and pulse duration
@@ -823,52 +837,3 @@ class BiphasicAxonMapModel(Model):
     def __init__(self, **params):
         super(BiphasicAxonMapModel, self).__init__(
             spatial=BiphasicAxonMapSpatial(), temporal=None, **params)
-
-    def predict_percept(self, source, t_percept=None):
-        """Predict a percept.
-
-        Overrides base predict percept to keep desired time axes.
-        Builds the model first if it is not built.
-
-        .. important::
-
-            This model works in multiples of perceptual threshold, so give
-            amplitude in :py:data:`~pulse2percept.units.xTh` (``2 * xTh``),
-            or calibrate the electrode with ``threshold_amp`` or
-            :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`
-            and give it in microamps. See
-            :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` for what
-            counts as threshold here.
-
-            The model reads the intended amplitude, frequency and pulse
-            duration off the
-            :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects the
-            stimulus is made of, not off its samples. Editing the data array
-            in place will not change the predicted percept.
-
-        Parameters
-        ----------
-        source : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-            What is presented to the device; see
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`.
-        t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms). This
-            model's numerical contract is fixed to milliseconds.
-            If None, the prepared stimulus' own time points are used.
-            May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
-            see :py:mod:`pulse2percept.units`.
-
-        Returns
-        -------
-        percept: :py:class:`~pulse2percept.models.Percept`
-            A Percept object whose ``data`` container has dimensions Y x X x T.
-            Will return None if ``source`` is None or empty.
-        """
-        if not self.is_built:
-            self.build()
-        stim = self._prepared(source)
-        if stim is None or (not self.has_space and not self.has_time):
-            # Nothing to see here:
-            return None
-        _require_stim_dimension(self, stim)
-        return self.spatial._predict_prepared(stim, t_percept=t_percept)

@@ -51,6 +51,13 @@ class DynaphosModel(BaseModel):
     
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
+
     dt : float, optional
         Sampling time step of the simulation (ms)
     regions : list of str, optional

@@ -30,6 +30,13 @@ class Thompson2003Spatial(SpatialModel):
 
     Parameters
     ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
+
     radius : double, optional
         Disk radius describing phosphene size (microns).
         If None, disk diameter is chosen as the electrode-to-electrode spacing
@@ -125,6 +132,15 @@ class Thompson2003Model(Model):
         Use this class if you want a standalone model.
         Use :py:class:`~pulse2percept.models.Thompson2003Spatial` if you want
         to combine the spatial model with a temporal model.
+
+    Parameters
+    ----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The device this model predicts percepts for. Required: a percept is
+        what a particular implant produces, and ``predict_percept`` takes what
+        is presented to that device.
+
+        .. versionadded:: 0.11.0
 
     radius : double, optional
         Disk radius describing phosphene size (microns).

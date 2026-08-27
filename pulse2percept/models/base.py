@@ -1869,6 +1869,9 @@ class Model(Frozen, PrettyPrint):
         Performs expensive one-time calculations, such as building the spatial
         grid used to predict a percept.
 
+        Rebuilds every component, built or not. ``predict_percept`` builds
+        only the components that need it; call this to force the rest.
+
         Parameters
         ----------
         build_params: additional parameters to set
@@ -1889,11 +1892,24 @@ class Model(Frozen, PrettyPrint):
             self.temporal.build()
         return self
 
+    def _build_stale(self):
+        """Build the components that are not built, and only those
+
+        A component un-builds itself when one of its own parameters changes,
+        so a sweep over ``model.temporal.tau`` leaves the spatial component
+        built and its axon map intact. Rebuilding both here would grow that
+        map again on every iteration.
+        """
+        if self.has_space and not self.spatial.is_built:
+            self.spatial.build()
+        if self.has_time and not self.temporal.is_built:
+            self.temporal.build()
+
     def predict_percept(self, source, t_percept=None, gaze=None, vmax=None,
                         vmin=0):
         """Predict a percept
 
-        Builds the model first if it is not built.
+        Builds whichever components are not built yet.
 
         Given an ordinary stimulus source, this predicts what the bound
         implant delivers for it (see
@@ -1965,8 +1981,7 @@ class Model(Frozen, PrettyPrint):
         """
         # Before the scene is sampled and a whole stimulus encoded from it,
         # so that a build the caller never asked for does not happen twice:
-        if not self.is_built:
-            self.build()
+        self._build_stale()
         if not isinstance(source, Scene):
             for name, value in (('gaze', gaze), ('vmax', vmax)):
                 if value is not None:
@@ -1999,8 +2014,7 @@ class Model(Frozen, PrettyPrint):
 
     def _predict_percept(self, stim, t_percept=None):
         """Predict the percept a prepared stimulus produces"""
-        if not self.is_built:
-            self.build()
+        self._build_stale()
         # The sub-models normalize too; doing it here as well keeps the error
         # message below reading in plain milliseconds:
         t_percept = as_value(t_percept, self.time_unit, 't_percept')

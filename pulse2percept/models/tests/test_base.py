@@ -975,6 +975,45 @@ def test_a_composite_un_builds_the_stage_the_parameter_belongs_to():
     npt.assert_equal(model.is_built, False)
 
 
+def test_predict_percept_rebuilds_only_the_stale_stage():
+    """A sweep over one stage's parameter must not rebuild the other
+
+    The spatial build is the expensive one -- growing an axon map, loading a
+    pickle -- so a loop over a temporal parameter that quietly regrew it would
+    cost far more than the sweep itself.
+    """
+    builds = {'spatial': 0, 'temporal': 0}
+
+    class CountingSpatial(ValidSpatialModel):
+        def _build(self):
+            builds['spatial'] += 1
+
+    class CountingTemporal(FadingTemporal):
+        def _build(self):
+            super()._build()
+            builds['temporal'] += 1
+
+    model = Model(spatial=CountingSpatial(),
+                  temporal=CountingTemporal()).build()
+    npt.assert_equal(builds, {'spatial': 1, 'temporal': 1})
+
+    model.temporal.tau = 50
+    model.predict_percept({'A1': np.ones(10)})
+    npt.assert_equal(builds, {'spatial': 1, 'temporal': 2})
+
+    model.spatial.step = 2
+    model.predict_percept({'A1': np.ones(10)})
+    npt.assert_equal(builds, {'spatial': 2, 'temporal': 2})
+
+    # Nothing is stale, so predicting again builds nothing:
+    model.predict_percept({'A1': np.ones(10)})
+    npt.assert_equal(builds, {'spatial': 2, 'temporal': 2})
+
+    # `build` stays the way to force a full rebuild:
+    model.build()
+    npt.assert_equal(builds, {'spatial': 3, 'temporal': 3})
+
+
 @pytest.mark.parametrize('make_model', [
     lambda: ValidSpatialModel(),
     lambda: Model(spatial=ValidSpatialModel()),

@@ -136,8 +136,8 @@ Electrode-retina distance
 :py:class:`~pulse2percept.models.ScoreboardModel`,
 :py:class:`~pulse2percept.models.AxonMapModel` and
 :py:class:`~pulse2percept.models.Thompson2003Model` read electrode ``x`` and
-``y`` only. Nonzero ``z`` does not change their response at all, and building
-against such an array warns as much.
+``y`` only. Nonzero ``z`` does not change their response at all, and
+predicting against such an array warns as much.
 
 This is a limitation of the models, not a claim about the biology: a larger
 electrode-target distance is expected to raise stimulation threshold and
