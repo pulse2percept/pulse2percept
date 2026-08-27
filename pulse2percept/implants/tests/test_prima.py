@@ -524,8 +524,10 @@ def test_PRIMA_square_substrate(rot):
     npt.assert_almost_equal(np.linalg.norm(edges, axis=1), 2000)
     # Square, and turned by `rot`:
     npt.assert_almost_equal(np.abs(np.sum(edges[0] * edges[1])), 0)
-    npt.assert_almost_equal(
-        np.mod(np.degrees(np.arctan2(edges[0, 1], edges[0, 0])) - rot, 90), 0)
+    # Folded into (-45, 45] rather than [0, 90): a residual of -1e-14 is a
+    # rounding error, not an 89.99999999999997 deg mismatch.
+    off = np.degrees(np.arctan2(edges[0, 1], edges[0, 0])) - rot
+    npt.assert_almost_equal(np.mod(off + 45, 90) - 45, 0)
     npt.assert_array_less(patch.get_zorder(), ZORDER['foreground'])
     # The whole die is in view, including the corner the rotation swings out:
     npt.assert_array_less(ax.get_xlim()[0], corners[:, 0].min())
