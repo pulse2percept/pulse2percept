@@ -83,33 +83,32 @@ The result of ``predict_percept`` is a
 Source, delivered stimulation, percept
 --------------------------------------
 
-Three different objects appear in that one line, and it is worth keeping them
-apart::
+The prediction pipeline distinguishes the source, delivered stimulation, and
+percept::
 
     source → implant → delivered stimulation → model → percept
 
 **Source**
-    What is presented to the device: a
-    :py:class:`~pulse2percept.stimuli.Stimulus` (or a dict or array that
-    becomes one), an :py:class:`~pulse2percept.stimuli.ImageStimulus`, a
-    :py:class:`~pulse2percept.stimuli.VideoStimulus`, or a
+    Input presented to the device: a
+    :py:class:`~pulse2percept.stimuli.Stimulus` (or compatible scalar, array,
+    or dict), :py:class:`~pulse2percept.stimuli.ImageStimulus`,
+    :py:class:`~pulse2percept.stimuli.VideoStimulus`, or
     :py:class:`~pulse2percept.vision.Scene`.
 
 **Delivered stimulation**
-    The current the electrodes actually produce, which the implant derives from
-    the source: ``implant.prepare_stim(source)``. This is where encoding,
-    raster scheduling, threshold calibration and the safety checks happen. A
-    model does it for you; call it yourself when you want to see it.
+    Electrical stimulation after implant preprocessing, encoding, raster
+    scheduling, threshold calibration, and safety checks. Models call
+    ``implant.prepare_stim(source)`` internally; call it directly to inspect
+    the delivered stimulus.
 
 **Percept**
-    What the bound model predicts: ``model.predict_percept(source)``.
+    Model output from ``model.predict_percept(source)``.
 
 Building
 --------
 
-Models perform expensive one-time setup -- constructing a simulation grid,
-growing an axon map -- before they can predict anything. That happens by
-itself:
+Models build automatically on first prediction. Changing a model parameter
+invalidates the affected component, which is rebuilt when needed:
 
 .. code-block:: python
 
@@ -118,35 +117,29 @@ itself:
     # Builds automatically:
     percept = model.predict_percept(stim)
 
-    # Changing a model parameter invalidates the existing build:
+    # Rebuilds the spatial component:
     model.rho = 250
-
-    # Rebuilds automatically:
     percept = model.predict_percept(stim)
 
-Rebinding the implant invalidates the build the same way, since a build
-describes one device's geometry. Call ``model.build()`` yourself when you would
-rather pay the cost at a moment of your choosing, want to inspect the built
-grid or axon map, or want to pass build-time parameters
-(``model.build(rho=250)``).
+Rebinding the implant also invalidates the spatial build because it depends on
+device geometry. ``model.build()`` forces a full rebuild and can be used to
+build eagerly or pass build-time parameters (``model.build(rho=250)``).
 
 Electrode-retina distance
 -------------------------
 
 :py:class:`~pulse2percept.models.ScoreboardModel`,
 :py:class:`~pulse2percept.models.AxonMapModel` and
-:py:class:`~pulse2percept.models.Thompson2003Model` read electrode ``x`` and
-``y`` only. Nonzero ``z`` does not change their response at all, and
-predicting against such an array warns as much.
+:py:class:`~pulse2percept.models.Thompson2003Model` use electrode ``x`` and
+``y`` coordinates only. Nonzero ``z`` values therefore do not affect their
+output and produce a warning.
 
-This is a limitation of the models, not a claim about the biology: a larger
-electrode-target distance is expected to raise stimulation threshold and
-broaden spatial recruitment. pulse2percept does not have the psychophysical
-evidence to parameterize that relationship, so it does not invent one. For the
-first two models, ``rho`` remains an effective *perceptual* spread parameter,
-fitted to what an individual reports seeing, and it is the right place to
-express that a particular subject's phosphenes are large -- whatever the
-reason.
+This is a model limitation. Electrode-target distance is expected to affect
+stimulation threshold and spatial recruitment, but pulse2percept does not
+currently parameterize that relationship because the required psychophysical
+evidence is insufficient. In the Scoreboard and AxonMap models, ``rho`` remains
+an effective perceptual spread parameter fitted to subject reports rather than
+inferred from electrode-retina distance.
 
 .. _topics-models-scene:
 
@@ -171,7 +164,7 @@ what someone is *looking at* instead, give the model a
     model = p2p.models.ScoreboardModel(implant=implant, rho=200)
     percept = model.predict_percept(scene, gaze=(0, 0) * dva)
 
-Four objects divide the problem between them:
+Scene prediction separates four responsibilities:
 
 =========  ==================================================================
 Scene      What is visually present, and where native vision is lost.
@@ -180,8 +173,8 @@ Model      Knows the retinotopy, and so connects Scene to Implant.
 Percept    What the simulated observer sees.
 =========  ==================================================================
 
-The model is the glue because it is the only object that holds a retinotopy
-*and* is handed an implant. Each electrode is followed out along this chain::
+The model maps implant coordinates into the visual field through its
+retinotopic map. Each electrode follows this chain::
 
     retinal coordinate (um)
       -> vfmap.ret_to_dva -> eye-centered visual field (dva)
@@ -194,10 +187,9 @@ neither does an eye-centered
 :py:class:`~pulse2percept.vision.Scotoma`: the scene moves past them. Pass one
 ``(x, y)`` to fixate, or one per video frame to move the eye between frames.
 
-The sampled values go to ``implant.encoder``, so the implant still decides how
-a gray level becomes current and which electrodes may pulse when. A scene is
-trial input like any other source: the model holds none of it, and asking what
-someone sees changes nothing about their device.
+The sampled values are passed to ``implant.encoder``, which maps gray levels
+to current and applies device timing constraints. A scene is per-prediction
+input and is not stored on the model or implant.
 
 An implant's ``preprocess`` -- an edge filter, an inversion, a contrast
 stretch -- is applied to the **prosthetic input branch only**, before the
@@ -211,18 +203,15 @@ operates at the scene source's pixel resolution.
 
     implant.preprocess = lambda stim: stim.filter('sobel')
 
-For a scene, ``preprocess`` must return an
+For scene input, ``preprocess`` must return an
 :py:class:`~pulse2percept.stimuli.ImageStimulus` or
-:py:class:`~pulse2percept.stimuli.VideoStimulus`; a callable that produces
-current directly has nothing left to place in the visual field, and that is
-the encoder's job in any case. Pixel values and channels are free to change --
-RGB to grayscale is fine -- but the spatial shape and the frame clock are not,
-because ``fov`` describes the geometry of the source it was given, and a
-resize or a re-timing would quietly reinterpret it.
+:py:class:`~pulse2percept.stimuli.VideoStimulus`; conversion to electrical
+stimulation belongs to the encoder. Pixel values and channels may change, but
+spatial shape and frame timing must remain unchanged because ``fov`` and the
+frame clock refer to the original scene.
 
-Scene registration is retinal. A model whose ``vfmap`` is a cortical map
-raises rather than pretending cortical registration is solved, and so does an
-implant with no ``encoder``.
+Scene registration currently requires a retinal ``vfmap`` and an implant
+``encoder``. A cortical ``vfmap`` or missing encoder raises ``ValueError``.
 
 Residual vision
 ~~~~~~~~~~~~~~~
@@ -245,9 +234,8 @@ arbitrary units, so which brightness counts as white is a claim about the
 display, not about the model. Holding it fixed across calls is what keeps two
 gazes comparable.
 
-The scotoma describes *native* vision only. What the implant is given to
-encode is sampled from the scene itself, inside the lost region as well as
-outside it: a camera does not go blind where its wearer has.
+The scotoma affects *native* vision only. Prosthetic encoding samples the
+unmasked scene, including locations inside the scotoma.
 
 Percept data layouts
 --------------------

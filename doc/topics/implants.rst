@@ -52,24 +52,21 @@ directly:
 Preparing a stimulus
 --------------------
 
-:py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` is the step
-between a *source* -- what you present to the device -- and the *delivered
-stimulation* its electrodes produce:
+:py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` converts a
+source into stimulation the device can deliver:
 
 .. code-block:: python
 
     delivered = implant.prepare_stim({'A8': 30})
     delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
 
-Along the way it preprocesses the source, encodes an image or video into
-current, resamples it onto the electrodes, applies the device's raster
-schedule, calibrates threshold-relative amplitudes, and runs the safety
-checks. Nothing is stored: the same implant can prepare any number of stimuli,
-and each call returns a fresh
-:py:class:`~pulse2percept.stimuli.Stimulus`.
+Preparation includes preprocessing, image/video encoding, resampling onto the
+electrode array, raster scheduling, threshold calibration, and safety checks.
+The result is returned as a :py:class:`~pulse2percept.stimuli.Stimulus` and is
+not stored on the implant.
 
-A model bound to the implant does this for you, so ``prepare_stim`` is what you
-call when you want to *look* at the stimulation itself:
+Models call ``prepare_stim`` internally. Call it directly when the delivered
+stimulation itself is of interest:
 
 .. code-block:: python
 

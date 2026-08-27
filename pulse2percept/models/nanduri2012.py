@@ -10,7 +10,7 @@ from ..units import ms
 
 
 def _require_disk_electrodes(electrodes):
-    """The Nanduri model reads a disk radius off every electrode it sees"""
+    """Require disk electrodes, whose radius is used by the Nanduri model."""
     if not all(isinstance(e, DiskElectrode) for e in electrodes):
         raise TypeError("The Nanduri2012 spatial model only supports "
                         "DiskElectrode arrays.")
@@ -44,9 +44,8 @@ class Nanduri2012Spatial(SpatialModel):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 
@@ -84,9 +83,8 @@ class Nanduri2012Spatial(SpatialModel):
 
     def _predict_spatial(self, earray, stim):
         """Predicts the brightness at spatial locations"""
-        # Re-checked here and not only at build time: the bound implant stays
-        # the caller's, and swapping its `earray` afterwards would otherwise
-        # reach the kernel below as a missing `.r`.
+        # Re-check because the bound implant's electrode array may change
+        # after the model was built.
         _require_disk_electrodes(earray.electrode_objects)
         # This does the expansion of a compact stimulus and a list of
         # electrodes to activation values at X,Y grid locations:
@@ -227,9 +225,8 @@ class Nanduri2012Model(Model):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 

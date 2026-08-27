@@ -1,23 +1,13 @@
-"""The new prediction API predicts exactly what the old one did
+"""Regression tests for numerical equivalence across the prediction API refactor.
 
-Every reference below was produced by the pre-refactor pipeline --
-``implant.stim = source`` followed by ``model.predict_percept(implant)`` -- at
-commit 62d5b4e, and is compared against the same setup written the new way:
-``model = SomeModel(implant=implant)`` followed by
-``model.predict_percept(source)``. The API changed; the numbers did not.
+Reference values were generated at commit ``62d5b4e`` with the old
+``implant.stim = source; model.predict_percept(implant)`` pipeline. Each case
+compares the new API against those references using shape, time, global
+intensity reductions, and raw spatial moments.
 
-Percepts are compared by shape, time axis and a handful of whole-array
-reductions rather than element by element, which keeps the references
-readable. Sum, peak and sum of squares say how much brightness there is;
-they are blind to where it sits, so a permuted electrode map or a shifted
-retinotopy could preserve all three. The brightness moments say where it
-sits: mean and mean-square pixel index along the percept's Y and X axes,
-which no translation or reshuffling of the grid leaves alone.
-
-``percept.data`` is float32, so the reductions carry slack that varies with
-the platform's ``exp`` and the compiler's floating-point contraction.
-``RTOL`` is loose enough to absorb that and still orders of magnitude tighter
-than any change in the pipeline would be.
+The spatial moments catch translations or permutations that sum, maximum, and
+sum of squares cannot detect. ``RTOL = 1e-5`` covers the measured
+cross-platform floating-point spread (about 3e-6 for the AxonMap sum).
 """
 import warnings
 
@@ -97,11 +87,9 @@ RTOL = 1e-5
 
 
 def moments(data):
-    """Mean and mean-square pixel index of brightness along Y and X
+    """Return raw first and second brightness moments along Y and X.
 
-    Raw moments rather than centered ones: a percept driven by a single
-    electrode has essentially no spread, and a variance computed from it is
-    cancellation noise that no tolerance can pin.
+    Raw moments avoid cancellation in nearly point-like percepts.
     """
     total = data.sum()
     out = []
@@ -187,8 +175,8 @@ def test_encoded_video_prediction_is_unchanged():
 
 
 def test_encoded_video_with_a_temporal_stage_is_unchanged():
-    # The other half of the modulation/pulses distinction: with a temporal
-    # stage the spatial one reads the delivered train instead.
+    # With a temporal stage, the spatial model reads the delivered pulse
+    # train rather than frame-level modulation.
     model = Model(implant=ArgusII(),
                   spatial=ScoreboardSpatial(rho=200, **GRID),
                   temporal=FadingTemporal(tau=100)).build()
@@ -231,19 +219,19 @@ def test_scene_with_scotoma_prediction_is_unchanged():
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, AxonMapModel])
 def test_one_bound_model_predicts_many_stimuli(ModelClass):
-    """A bound model is asked repeatedly, and keeps nothing between calls"""
+    """Check repeated predictions do not store per-trial stimulus state."""
     extra = AXON if ModelClass is AxonMapModel else {}
     model = ModelClass(implant=ArgusII(), rho=200, **GRID, **extra).build()
     sources = [{'C5': 30, 'A1': 10}, {'A1': 20}, picture(),
                {'C5': 30, 'A1': 10}]
     percepts = [model.predict_percept(s) for s in sources]
 
-    # The first and last are the same stimulus, so they are the same percept:
+    # Repeated input must reproduce the same percept:
     npt.assert_array_equal(percepts[0].data, percepts[-1].data)
-    # ... and the ones in between really were different predictions:
+    # Intermediate inputs must produce different percepts:
     npt.assert_equal(np.allclose(percepts[0].data, percepts[1].data), False)
     npt.assert_equal(np.allclose(percepts[0].data, percepts[2].data), False)
-    # Nothing was built a second time, and nothing was stored on the implant:
+    # Repeated predictions neither rebuild nor store stimulus state:
     npt.assert_equal(model.is_built, True)
     npt.assert_equal(hasattr(model.implant, 'stim'), False)
 
@@ -257,7 +245,6 @@ def test_rebinding_the_implant_invalidates_the_build():
     npt.assert_equal(model.is_built, False)
     model.build()
     there = model.predict_percept({'C5': 30})
-    # The same stimulus on a shifted array lands somewhere else, which is what
-    # says the rebind reached the prediction rather than being ignored:
+    # Rebinding the implant must change spatial registration:
     npt.assert_equal(np.allclose(here.data, there.data), False)
     npt.assert_equal(np.argmax(here.data) != np.argmax(there.data), True)

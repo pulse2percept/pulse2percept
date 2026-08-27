@@ -289,9 +289,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 
@@ -558,9 +557,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             self.n_threads)
 
     def _predict_prepared(self, stim, t_percept=None):
-        """ Predicts the spatial response
-        Override the base spatial prediction to have desired timesteps and
-        remove unneccesary computation
+        """Predict the spatial response with model-specific time handling.
+
+        Avoids intermediate computation used by the generic spatial path.
 
         Parameters
         ----------
@@ -715,9 +714,8 @@ class BiphasicAxonMapModel(Model):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 

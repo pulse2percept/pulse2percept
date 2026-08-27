@@ -190,10 +190,10 @@ def _spatial_input(stim):
 
 
 def _delivered(stim):
-    """Return the stimulus as the pulse train the electrodes deliver.
+    """Return the delivered pulse train for a prepared stimulus.
 
-    Strips an encoded stimulus of its frame-level modulation view, so that
-    the spatial stage reads the waveform a temporal stage then integrates.
+    Encoded stimuli carry a frame-level view for spatial-only models. Remove that
+    view before a temporal stage integrates the waveform.
     """
     if stim is None or not stim._has_spatial_view:
         return stim
@@ -241,7 +241,7 @@ def _device_scene(scene, implant):
 
 
 def _scene_stim(model, scene, gaze):
-    """What the scene delivers to the bound implant's electrodes"""
+    """Prepare electrode stimulation sampled from a scene."""
     if not model.has_space:
         raise ValueError("A scene is registered against the retina, which "
                          "needs a spatial model. This model has only a "
@@ -272,10 +272,8 @@ def _scene_stim(model, scene, gaze):
     seen = Stimulus(gray, electrodes=implant.electrode_names,
                     time=device_scene.time,
                     metadata=device_scene.source.metadata)
-    # Preprocessing already ran, on the picture rather than on the values it
-    # samples to; everything else `prepare_stim` does is still wanted, so a
-    # stand-in with that one setting off runs it. A shallow copy, because the
-    # caller's implant is not this prediction's to change:
+    # Preprocessing already ran on the scene source. Use a shallow copy with
+    # preprocessing disabled for the remaining preparation steps:
     device = copy(implant)
     device.preprocess = False
     return device.prepare_stim(seen._inherit_units(device_scene.source))
@@ -321,13 +319,12 @@ def _blend_meridian(resp, grid, meridian, width):
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
-#: Declared parameter names per model class, so that ``__setattr__`` below
-#: does not rebuild the default dict on every assignment.
+#: Parameter names declared by each model class, cached for ``__setattr__``.
 _declared = {}
 
 
 def _declared_params(model):
-    """The names ``get_default_params`` declares, cached per class"""
+    """Return cached parameter names declared by ``get_default_params``."""
     cls = type(model)
     names = _declared.get(cls)
     if names is None:
@@ -336,10 +333,9 @@ def _declared_params(model):
 
 
 def _unchanged(before, after):
-    """Whether re-assigning a parameter left it at the same value
+    """Return whether an assignment preserves the current value.
 
-    Falls back to "changed" for anything that cannot be compared, which costs
-    at most one rebuild.
+    Values that cannot be compared are treated as changed.
     """
     if before is after:
         return True
@@ -350,14 +346,11 @@ def _unchanged(before, after):
 
 
 def _electrode_pitch(model):
-    """The implant's typical nearest-neighbour spacing, in ``space_unit``
+    """Return median nearest-neighbor electrode spacing in ``space_unit``.
 
-    Measured in the dimensions the model actually reads: a model whose visual
-    field map is two-dimensional drops ``z`` when it predicts, so it must drop
-    ``z`` here too, or electrodes it sees as neighbours look far apart.
-
-    Returns None when there is nothing to compare: fewer than two electrodes,
-    or an array whose electrodes coincide in those dimensions.
+    Distances use the dimensions represented by ``vfmap`` so that pitch matches
+    the coordinates used for prediction. Returns ``None`` for fewer than two
+    electrodes or zero spacing.
     """
     coords = model.implant.earray.coordinates(model.space_unit)
     coords = coords[:, :model.vfmap.ndim]
@@ -370,11 +363,7 @@ def _electrode_pitch(model):
 
 
 def _warn_rho_vs_pitch(model):
-    """Warn when current spread is wide compared to electrode spacing
-
-    Describes what the numbers mean and leaves them alone: ``rho`` is a fitted
-    perceptual parameter, and the fit is the user's to defend.
-    """
+    """Warn when ``rho`` exceeds the implant's median electrode spacing."""
     pitch = _electrode_pitch(model)
     if pitch is None or model.rho <= pitch:
         return
@@ -389,11 +378,7 @@ def _warn_rho_vs_pitch(model):
 
 
 def _warn_ignores_z(model, earray):
-    """Warn that this model's kernel reads x and y only
-
-    Not a claim that electrode-retina distance does not matter -- it is
-    expected to -- only that this model does not represent it.
-    """
+    """Warn when a model ignores nonzero electrode ``z`` coordinates."""
     if np.allclose([e.z for e in earray.electrode_objects], 0):
         return
     warnings.warn(
@@ -415,9 +400,8 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
     .. versionchanged:: 0.11.0
 
-        Building is automatic. ``predict_percept`` builds a model that is not
-        built yet, and giving any parameter a new value un-builds it, so
-        ``model.rho = 200`` takes effect on the next prediction.
+        ``predict_percept`` builds automatically. Changing a model parameter
+        invalidates the build, so the new value is used on the next prediction.
 
     .. versionchanged:: 0.10.0
 
@@ -427,13 +411,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     """
 
     def __setattr__(self, name, value):
-        """Giving a declared parameter a new value un-builds the model
+        """Invalidate the build when a declared parameter changes.
 
-        Which parameters a build depends on is not worth enumerating: the
-        expensive ones are the point of building, and re-deriving a grid
-        because ``thresh_percept`` moved is cheaper than being wrong.
-        Assignments that change nothing keep the build, so
-        ``model.rho = model.rho`` is free.
+        Assignments that preserve the current value leave the build intact.
         """
         if _is_constructing(self) or name not in _declared_params(self):
             super().__setattr__(name, value)
@@ -561,10 +541,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def build(self, **build_params):
         """Build the model
 
-        Every model must have a ```build`` method, which is meant to perform
-        all expensive one-time calculations. ``predict_percept`` calls it for
-        you when the model is not built; call it yourself to pay the cost at a
-        moment of your choosing, or to pass build-time parameters.
+        Every model must have a ```build`` method for expensive one-time
+        calculations. ``predict_percept`` calls it automatically when needed;
+        call it explicitly to build eagerly or pass build-time parameters.
 
         .. important::
 
@@ -721,13 +700,12 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             raise TypeError(f"'implant' must be a ProsthesisSystem object, "
                             f"not {type(implant)}.")
         if implant is not getattr(self, '_implant', None):
-            # A build describes one device's geometry, so it does not survive
-            # being pointed at another:
+            # Spatial build state depends on implant geometry:
             self._is_built = False
         self._implant = implant
 
     def _require_implant(self):
-        """Require the implant a spatial prediction is about"""
+        """Raise if no implant is bound to the spatial model."""
         if not isinstance(self.implant, ProsthesisSystem):
             raise ValueError(
                 f"{type(self).__name__} predicts what a particular implant "
@@ -831,8 +809,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
-            # The device whose electrodes this model places in the visual
-            # field. Required before building or predicting:
+            # Implant geometry used by the spatial model:
             'implant': None,
             # We will be simulating a patch of the visual field (xrange/yrange
             # in degrees of visual angle), at a given spatial resolution (step
@@ -1039,13 +1016,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                                       t_percept=t_percept)
 
     def _predict_prepared(self, stim, t_percept=None):
-        """Predict the spatial response to an already-prepared stimulus
+        """Predict the spatial response to an already prepared stimulus.
 
-        The half of :py:meth:`predict_percept` that runs after the implant's
-        input pipeline, so that a composite model can prepare once and hand
-        the same stimulus to both stages. Models that replace the whole
-        spatial prediction rather than customizing ``_predict_spatial``
-        override this.
+        Composite models use this path to prepare stimulation once before running
+        spatial and temporal stages.
         """
         if not self.is_built:
             self.build()
@@ -1056,9 +1030,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         source = _spatial_input(stim)
         _require_stim_dimension(self, source)
         if source.time is None and t_percept is not None:
-            # A single-frame source (an image) modulates the electrodes to one
-            # steady thing, so there are no times to ask about even though the
-            # pulse train delivering it does have a time axis:
+            # Static modulation has no time axis even if its encoded pulse
+            # train does:
             what = ("the modulation behind this stimulus"
                     if source is not stim else "stimulus")
             raise ValueError(f"Cannot calculate spatial response at times "
@@ -1617,9 +1590,8 @@ class Model(Frozen, PrettyPrint):
         return BaseModel.time_unit
 
     def __init__(self, spatial=None, temporal=None, **params):
-        # The implant belongs to the spatial model, which is the only stage
-        # that knows what an electrode is. Held back from `params` so that it
-        # is not offered to a temporal model that has no such parameter:
+        # Only the spatial component depends on implant geometry, so do not
+        # forward `implant` to the temporal component:
         implant = params.pop('implant', None)
         # A sub-model passed as a *class* is constructed from `params` below,
         # and `set_params` then hands the same dict to the resulting instance.
@@ -1869,8 +1841,7 @@ class Model(Frozen, PrettyPrint):
         Performs expensive one-time calculations, such as building the spatial
         grid used to predict a percept.
 
-        Rebuilds every component, built or not. ``predict_percept`` builds
-        only the components that need it; call this to force the rest.
+        Unlike prediction-time auto-building, this rebuilds every component.
 
         Parameters
         ----------
@@ -1893,12 +1864,10 @@ class Model(Frozen, PrettyPrint):
         return self
 
     def _build_stale(self):
-        """Build the components that are not built, and only those
+        """Build only components whose cached state is invalid.
 
-        A component un-builds itself when one of its own parameters changes,
-        so a sweep over ``model.temporal.tau`` leaves the spatial component
-        built and its axon map intact. Rebuilding both here would grow that
-        map again on every iteration.
+        This avoids rebuilding an unchanged spatial stage during temporal parameter
+        sweeps, and vice versa.
         """
         if self.has_space and not self.spatial.is_built:
             self.spatial.build()
@@ -1911,13 +1880,11 @@ class Model(Frozen, PrettyPrint):
 
         Builds whichever components are not built yet.
 
-        Given an ordinary stimulus source, this predicts what the bound
-        implant delivers for it (see
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`).
-        Given a :py:class:`~pulse2percept.vision.Scene`, the model is the
-        glue: it follows each electrode out through its own ``vfmap`` to the
-        place in the scene that electrode sees, hands those values to the
-        implant's ``encoder``, and predicts the percept that results.
+        For an ordinary source, the bound implant prepares the delivered
+        stimulation before prediction. For a
+        :py:class:`~pulse2percept.vision.Scene`, electrode locations are mapped
+        through ``vfmap`` to sample the scene, then encoded by the implant
+        before prediction.
 
         If the scene also has a
         :py:class:`~pulse2percept.vision.Scotoma`, the result is what the
@@ -1979,8 +1946,7 @@ class Model(Frozen, PrettyPrint):
             RGB percept of dimensions Y x X x 3 x T on the scene's pixel grid.
 
         """
-        # Before the scene is sampled and a whole stimulus encoded from it,
-        # so that a build the caller never asked for does not happen twice:
+        # Scene sampling depends on the current spatial build:
         self._build_stale()
         if not isinstance(source, Scene):
             for name, value in (('gaze', gaze), ('vmax', vmax)):
@@ -2002,10 +1968,9 @@ class Model(Frozen, PrettyPrint):
         return source._compose(resp, vmax, vmin=vmin, gaze=gaze)
 
     def _prepared(self, source):
-        """Run a source through the bound implant's input pipeline
+        """Prepare a source for the bound implant.
 
-        A temporal-only model has no implant and no electrodes, so what it is
-        given is already the stimulus it integrates.
+        Temporal-only models have no implant and return the source unchanged.
         """
         if not self.has_space:
             return source
@@ -2032,17 +1997,15 @@ class Model(Frozen, PrettyPrint):
                              f"have a time component.")
 
         if self.has_space and self.has_time:
-            # Need to calculate the spatial response at all stimulus points
-            # (i.e., whenever the stimulus changes). The delivered pulse train
-            # rather than the modulation behind it: integrating those pulses is
-            # what the temporal stage is for.
+            # Run the spatial stage on the delivered pulse train; the temporal
+            # stage integrates those pulses.
             resp = self.spatial._predict_prepared(_delivered(stim),
                                                   t_percept=None)
             if has_time_axis:
                 combine = getattr(self.spatial, '_combine_temporal', None)
                 if resp.time is None and combine is not None:
-                    # A spatial model hands over a percept with no time axis,
-                    # so the spatial model decides what to do with it:
+                    # Allow a spatial model to define custom temporal
+                    # combination for a timeless intermediate percept:
                     resp = combine(resp, self.temporal, stim, t_percept)
                 else:
                     # Then pass that to the temporal model, which will output

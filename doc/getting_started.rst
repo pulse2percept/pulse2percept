@@ -32,14 +32,14 @@ For example:
 
     percept.plot()
 
-The implant describes where stimulation is delivered, the stimulus describes
-what is presented, and the model predicts the resulting response. In short::
+The implant describes the device, the stimulus describes the input, and the
+model predicts the resulting percept::
 
     source → implant → delivered stimulation → model → percept
 
-The middle step is the implant's: it samples, encodes, schedules and calibrates
-whatever it is given into the current its electrodes actually deliver. A model
-does that for you, but you can ask for it directly:
+The implant converts a source into delivered stimulation by preprocessing,
+encoding, scheduling, and threshold calibration. Models call this step
+internally; use ``prepare_stim`` directly to inspect the delivered stimulus:
 
 .. code-block:: python
 
@@ -71,8 +71,8 @@ easiest way is to give the implant an encoder:
 Building
 --------
 
-Models perform expensive one-time setup before they can predict anything.
-That happens by itself:
+Models build automatically on first prediction. Changing a parameter
+invalidates the affected build state, which is rebuilt on the next prediction:
 
 .. code-block:: python
 
@@ -81,15 +81,12 @@ That happens by itself:
     # Builds automatically:
     percept = model.predict_percept(stim)
 
-    # Changing a model parameter invalidates the existing build:
+    # Rebuilds automatically after a parameter change:
     model.rho = 250
-
-    # Rebuilds automatically:
     percept = model.predict_percept(stim)
 
-Call ``model.build()`` yourself when you would rather pay that cost at a moment
-of your choosing -- before a timed loop, say -- or want to inspect the built
-grid or axon map.
+Call ``model.build()`` explicitly to build ahead of a timed loop or inspect
+derived state such as the grid or axon map.
 
 From here, the :ref:`basic concepts <topics-index>` explain each part of the
 pipeline in more detail, and the :ref:`examples <sphx_glr_examples>` show

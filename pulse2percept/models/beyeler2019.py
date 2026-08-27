@@ -97,9 +97,8 @@ class ScoreboardSpatial(SpatialModel):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 
@@ -157,7 +156,7 @@ class ScoreboardSpatial(SpatialModel):
 
     .. important ::
         Changing a model parameter outside the constructor (e.g., by directly
-        setting ``model.xrange = (-10, 10)``) un-builds the model, and the next
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the next
         ``predict_percept`` builds it again.
     """
 
@@ -205,9 +204,8 @@ class ScoreboardModel(Model):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 
@@ -264,7 +262,7 @@ class ScoreboardModel(Model):
 
     .. important ::
         Changing a model parameter outside the constructor (e.g., by directly
-        setting ``model.xrange = (-10, 10)``) un-builds the model, and the next
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the next
         ``predict_percept`` builds it again.
 
     """
@@ -291,9 +289,8 @@ class AxonMapSpatial(SpatialModel):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 
@@ -387,7 +384,7 @@ class AxonMapSpatial(SpatialModel):
 
     .. important ::
         Changing a model parameter outside the constructor (e.g., by directly
-        setting ``model.lam = 100``) un-builds the model, and the next
+        setting ``model.lam = 100``) invalidates the build, and the next
         ``predict_percept`` builds it again.
 
     Notes
@@ -410,25 +407,19 @@ class AxonMapSpatial(SpatialModel):
 
     @property
     def eye(self):
-        """The eye the axon map is grown for, which is the implanted one
+        """Eye used to build the axon map.
+
+        The eye is taken from the bound implant.
 
         .. versionchanged:: 0.11.0
-
-            No longer a parameter of its own. An axon map describes the retina
-            a particular device sits on, so the bound implant is what says
-            which eye, and the two can no longer disagree.
+            ``eye`` is no longer a separate model parameter.
         """
         self._require_implant()
         return self.implant.eye
 
     @property
     def is_built(self):
-        """False again once the bound implant has changed eyes
-
-        The one build-invalidating change the parameter machinery cannot see:
-        ``eye`` is not a parameter, and the implant is the same object it was
-        built with.
-        """
+        """Return whether the axon map is built for the implant's current eye."""
         return super().is_built and self._built_eye == self.implant.eye
 
     def get_default_params(self):
@@ -931,7 +922,7 @@ class AxonMapSpatial(SpatialModel):
 
 
     def _warn_placement(self):
-        """Warn when the implant is not where nerve fiber bundles run"""
+        """Warn when an epiretinal axon-map model is used with another placement."""
         placement = self.implant.placement
         if placement is None or placement == 'epiretinal':
             return
@@ -945,7 +936,7 @@ class AxonMapSpatial(SpatialModel):
             f"starting point.")
 
     def _correct_loc_od(self):
-        """Put the optic disc on the nasal side of whichever eye this is"""
+        """Place the optic disc on the nasal side of the implanted eye."""
         sign = -1 if self.eye == 'LE' else 1
         self.loc_od = (sign * np.abs(self.loc_od[0]), self.loc_od[1])
 
@@ -1180,9 +1171,8 @@ class AxonMapModel(Model):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 
@@ -1276,7 +1266,7 @@ class AxonMapModel(Model):
 
     .. important ::
         Changing a model parameter outside the constructor (e.g., by directly
-        setting ``model.lam = 100``) un-builds the model, and the next
+        setting ``model.lam = 100``) invalidates the build, and the next
         ``predict_percept`` builds it again.
 
     Notes

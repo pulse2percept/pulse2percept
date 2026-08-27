@@ -238,31 +238,26 @@ class EnsembleImplant(ProsthesisSystem):
         self._earray = ElectrodeArray(electrodes)
 
     def prepare_stim(self, source):
-        """Turn what is presented to the ensemble into what it delivers
+        """Prepare stimulation for an ensemble implant.
 
-        Accepts everything
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`
-        does, laid out on the ensemble's combined electrode array, plus one
-        form of its own: a dict keyed by the ensemble's own implant keys, which
-        gives each constituent implant a source of its own. Each is prepared by
-        the implant it belongs to -- with that implant's encoder, raster,
-        thresholds and safety limits -- and the merged result then goes through
-        the ensemble's own pipeline, so an ensemble-level ``preprocess`` or
-        ``safe_mode`` still has the last word.
+        ``source`` may address the combined electrode array directly, or be a dict
+        keyed by constituent implant keys. Per-implant sources are prepared by each
+        constituent implant, merged, then passed through ensemble-level preprocessing
+        and safety checks. Missing implant keys contribute zeros.
 
         .. versionchanged:: 0.11.0
-            Replaces ``merge_stimuli``, which read a stimulus stored on each
-            constituent implant. Per-implant input is now named at the call.
+            Replaces ``merge_stimuli`` and the stimuli previously stored on
+            constituent implants.
 
         Parameters
         ----------
         source : dict or :py:class:`~pulse2percept.stimuli.Stimulus` source type
-            Either one source for the whole ensemble, or ``{implant_key:
-            source}``. A key that is missing contributes zeros.
+            One source for the whole ensemble, or ``{implant_key: source}``.
 
         Returns
         -------
         stim : :py:class:`~pulse2percept.stimuli.Stimulus` or None
+            Merged stimulation for the ensemble.
 
         Examples
         --------
@@ -273,15 +268,13 @@ class EnsembleImplant(ProsthesisSystem):
         >>> ensemble.prepare_stim({0: np.ones(60),
         ...                        1: 2 * np.ones(60)}).data.shape
         (120, 1)
-
         """
         if isinstance(source, dict) and source and \
                 all(key in self._implants for key in source):
             prepared = {key: implant.prepare_stim(source.get(key))
                         for key, implant in self._implants.items()}
-            # Through the ensemble's own pipeline, not around it: merging is
-            # how the per-implant input becomes one stimulus, not a second way
-            # of preparing one. `None` falls through unchanged.
+            # Merge per-implant results before applying ensemble-level
+            # preprocessing and safety checks.
             source = self._merged(prepared)
         return super().prepare_stim(source)
 

@@ -510,55 +510,35 @@ class ProsthesisSystem(PrettyPrint):
         self._earray = earray
 
     def prepare_stim(self, source):
-        """Turn what is presented to the device into what it delivers
+        """Turn a source into stimulation the implant can deliver.
 
-        A stimulus can be created from many source types, such as scalars,
-        NumPy arrays, and dictionaries (see
-        :py:class:`~pulse2percept.stimuli.Stimulus` for a complete list).
+        Preparation applies preprocessing, converts the source to a
+        :py:class:`~pulse2percept.stimuli.Stimulus`, encodes dimensionless visual
+        input when an encoder is present, reshapes it to the electrode array, removes
+        deactivated electrodes, applies threshold calibration, and runs safety checks.
+        The input is not modified and the result is not stored.
 
-        .. note::
-           Unless when using dictionary notation, the number of stimuli must
-           equal the number of electrodes in ``earray``.
-
-        What comes back is always something the implant can deliver; for an
-        electrical prosthesis that means a current (see
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`).
-        An image or a video is not that, so it is run through the implant's
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.encoder` on the way
-        through. Without an encoder there is no principled default mapping from
-        a gray level to an amplitude or a frequency, so one raises a
-        :py:class:`~pulse2percept.units.DimensionMismatchError`: say which you
-        want with an
-        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` or a
-        :py:class:`~pulse2percept.stimuli.FrequencyEncoder`.
-
-        The implant keeps no trial state: ``source`` is not modified, the
-        result is not stored, and every call reads the implant as it stands.
-        Changing
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` or
-        deactivating an electrode therefore affects the *next* call.
+        Images and videos require an encoder unless preprocessing already converts
+        them to the implant's
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`.
 
         .. versionadded:: 0.11.0
-            Replaces the ``stim`` property, which stored the result on the
-            implant.
+            Replaces the stateful ``stim`` property.
 
         Parameters
         ----------
         source : :py:class:`~pulse2percept.stimuli.Stimulus` source type
-            What is presented to the device: an electrical stimulus, or an
-            image or video for the implant's ``encoder`` to turn into one.
+            Any source accepted by :py:class:`~pulse2percept.stimuli.Stimulus`,
+            including electrical stimulation and image or video input for the
+            implant encoder.
 
         Returns
         -------
         stim : :py:class:`~pulse2percept.stimuli.Stimulus` or None
-            The stimulation this implant's electrodes would deliver. None if
-            ``source`` is None or empty.
+            Stimulation delivered by the implant, or None for an empty source.
 
         Examples
         --------
-        Send a biphasic pulse (30uA, 0.45ms phase duration) to an implant made
-        from a single :py:class:`~pulse2percept.implants.DiskElectrode`:
-
         >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
         >>> from pulse2percept.stimuli import BiphasicPulse
         >>> implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
@@ -569,14 +549,13 @@ class ProsthesisSystem(PrettyPrint):
         >>> from pulse2percept.implants import ArgusII
         >>> stim = ArgusII().prepare_stim({'B7': 13})
 
-        Argus II comes with an encoder, so an image can be presented directly:
+        Argus II includes an encoder, so it can prepare an image directly:
 
         >>> from pulse2percept.stimuli import LogoBVL
         >>> ArgusII().prepare_stim(LogoBVL()).unit
         uA
-
         """
-        # An empty source is not stimulation, and there is nothing to prepare:
+        # Empty input produces no stimulation:
         if source is None:
             return None
         if isinstance(source, (list, tuple, dict)) and not source:
@@ -596,13 +575,9 @@ class ProsthesisSystem(PrettyPrint):
             # Use electrode names as stimulus coordinates:
             stim = Stimulus(data, electrodes=self.electrode_names)
 
-        # A picture is not something an implant can deliver, so this is
-        # where it becomes stimulation. Preprocessing goes first and may
-        # have done the job already (a `preprocess` that encodes is exactly
-        # as valid as an `encoder`), in which case there is nothing
-        # dimensionless left to encode. What comes back knows both what
-        # the device delivers and what it was asked for, so there is one
-        # stimulus here and not two (see `Stimulus._spatial_view`).
+        # Encode dimensionless visual input after preprocessing. Preprocessing
+        # may already have converted the source to electrical stimulation.
+        # Encoded stimuli retain frame-level modulation via `_spatial_view`.
         if (self.encoder is not None and
                 stim.unit.dimension.is_dimensionless and
                 stim.unit.dimension != self.stimulus_unit.dimension):
@@ -614,10 +589,7 @@ class ProsthesisSystem(PrettyPrint):
         if len(stim.electrodes) > self.n_electrodes:
             stim = self.reshape_stim(stim)
 
-        # Whatever came in is now a Stimulus laid out on this implant's
-        # electrodes. Whether it is a stimulus the implant can *deliver*
-        # is the next question, and it is asked before anything else looks
-        # at the numbers:
+        # Validate the physical quantity before inspecting stimulus values:
         self._require_deliverable_stim(stim)
 
         # Make sure all electrode names are valid:
@@ -626,19 +598,15 @@ class ProsthesisSystem(PrettyPrint):
             if not self.earray[electrode]:
                 raise ValueError(f'Electrode "{electrode}" not found in '
                                  f'implant.')
-        # Remove deactivated electrodes from the stimulus. Removal
-        # rewrites the stimulus, so it happens on a copy: the caller's
-        # object is theirs, and a stimulus defined by more than its
-        # samples keeps that description only if it says how to drop an
-        # electrode (see `Stimulus._without_electrodes`).
+        # Remove deactivated electrodes without modifying the caller's source.
+        # `_without_electrodes` preserves structured stimulus information.
         off = [name for (name, e) in self.electrodes.items()
                if not e.activated and name in stim.electrodes]
         if off:
             stim = stim._without_electrodes(off)
         # Calibrate a copy; do not mutate the caller's stimulus.
         stim = self._calibrated(deepcopy(stim))
-        # Perform safety checks, etc. These are all questions about what
-        # gets delivered, so they are asked of the calibrated pulse train:
+        # Run safety checks on the calibrated delivered stimulus:
         self.check_stim(stim)
         return stim
 

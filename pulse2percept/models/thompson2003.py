@@ -31,9 +31,8 @@ class Thompson2003Spatial(SpatialModel):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 
@@ -80,7 +79,7 @@ class Thompson2003Spatial(SpatialModel):
     .. important ::
 
         Changing a model parameter outside the constructor (e.g., by directly
-        setting ``model.xrange = (-10, 10)``) un-builds the model, and the
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the
         next ``predict_percept`` builds it again.
     """
 
@@ -136,9 +135,8 @@ class Thompson2003Model(Model):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The device this model predicts percepts for. Required: a percept is
-        what a particular implant produces, and ``predict_percept`` takes what
-        is presented to that device.
+        The implant whose stimulation this model predicts. Required before
+        building or predicting.
 
         .. versionadded:: 0.11.0
 
@@ -185,7 +183,7 @@ class Thompson2003Model(Model):
     .. important ::
 
         Changing a model parameter outside the constructor (e.g., by directly
-        setting ``model.xrange = (-10, 10)``) un-builds the model, and the
+        setting ``model.xrange = (-10, 10)``) invalidates the build, and the
         next ``predict_percept`` builds it again.
 
     """
