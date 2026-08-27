@@ -60,10 +60,10 @@ for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
 # is available in pulse2percept simply as
 # :py:class:`~pulse2percept.implants.PRIMA` [Palanker2020]_.
 #
-# :py:class:`~pulse2percept.implants.PRIMA75` is a newer version of the
-# device, with 142 pixels 70um wide on a 75um center spacing, leaving a 5um
-# open trench between pixel bodies, on a 1 mm substrate [Lorach2015]_. Its
-# 65um row spacing is what [Lorach2015]_ calls the "pixel pitch".
+# :py:class:`~pulse2percept.implants.PRIMA75` is an earlier 75um prototype,
+# with 142 pixels 70um wide on a 75um center spacing, leaving a 5um open
+# trench between pixel bodies, on a 1 mm substrate [Lorach2015]_. Its 65um
+# row spacing is what [Lorach2015]_ calls the "pixel pitch".
 #
 # .. _NCT03392324: https://www.clinicaltrials.gov/ct2/show/NCT03392324
 
