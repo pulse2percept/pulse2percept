@@ -1,4 +1,3 @@
-import warnings
 
 import numpy as np
 import numpy.testing as npt
@@ -11,7 +10,6 @@ from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.models.cortex.base import ScoreboardModel
 from pulse2percept.stimuli import BiphasicPulseTrain, MonophasicPulse
 from pulse2percept.utils.constants import DT
-from pulse2percept.utils.testing import assert_warns_msg
 
 def test_EnsembleImplant():
     # Invalid instantiations:
@@ -290,34 +288,3 @@ def test_EnsembleImplant_from_coords_is_physical():
     with pytest.raises(DimensionMismatchError):
         EnsembleImplant.from_coords(Cortivis, xrange=(-2 * dva, 2 * dva),
                                     yrange=(0, 0), step=1)
-
-
-@pytest.mark.parametrize('factory, kwargs', [
-    ('from_coords', {'xrange': (-10000, 10000), 'yrange': (0, 0)}),
-    ('from_cortical_map', {'xrange': (-2, 2), 'yrange': (0, 0)}),
-])
-def test_EnsembleImplant_deprecated_xystep(factory, kwargs):
-    # `step` was called `xystep` until 0.10.0. Both factories are ordinary
-    # signatures, so the old name is forwarded rather than aliased:
-    args = ((Cortivis,) if factory == 'from_coords'
-            else (Cortivis, Polimeni2006Map()))
-    build = getattr(EnsembleImplant, factory)
-    step = 10000 if factory == 'from_coords' else 2
-
-    msg = f"The 'xystep' parameter of EnsembleImplant.{factory} is deprecated"
-    assert_warns_msg(DeprecationWarning, build, msg, *args,
-                     xystep=step, **kwargs)
-    with pytest.warns(DeprecationWarning):
-        old = build(*args, xystep=step, **kwargs)
-    npt.assert_allclose(old.earray.coordinates(),
-                        build(*args, step=step, **kwargs).earray.coordinates(),
-                        rtol=1e-12)
-
-    # Both names are the same parameter, so supplying both must raise:
-    with pytest.raises(TypeError, match="same parameter"):
-        build(*args, xystep=step, step=step, **kwargs)
-
-    # The new name stays silent:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        build(*args, step=step, **kwargs)

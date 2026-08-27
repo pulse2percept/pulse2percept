@@ -9,49 +9,25 @@ v0.11.0 Residual Vision (unreleased)
 
 Highlights:
 
+* **New backwards-incompatible API**: Models are now bound to the implant
+  they describe, they build automatically, and ``predict_percept`` takes a
+  stimulus directly:
+
+  .. code-block:: python
+
+      implant = p2p.implants.ArgusII()
+      model = p2p.models.AxonMapModel(implant=implant)
+      percept = model.predict_percept(stim)
+
 * New :py:mod:`pulse2percept.vision` introduces
   :py:class:`~pulse2percept.vision.Scene` and
   :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
   residual vision and retinal prostheses (:pull:`854`).
 
-Model/implant API
-~~~~~~~~~~~~~~~~~
-
-Models are now bound to the implant they describe, and ``predict_percept``
-takes the stimulus source directly:
-
-.. code-block:: python
-
-    implant = p2p.implants.ArgusII()
-    model = p2p.models.AxonMapModel(implant=implant)
-    percept = model.predict_percept(stim)
-
-* Implants no longer store mutable stimulus state. Use
-  ``implant.prepare_stim(source)`` to inspect the stimulation delivered by the
-  device.
-
-* A :py:class:`~pulse2percept.vision.Scene` is prediction input like any other
-  source: ``model.predict_percept(scene, gaze=...)``.
-
-* Models now build automatically on first prediction, and a parameter change
-  rebuilds only the component it belongs to, so a sweep over a temporal
-  parameter no longer regrows the spatial model. ``model.build()`` still
-  forces a full rebuild. ``NotBuiltError`` is gone.
-
-* :py:class:`~pulse2percept.models.AxonMapModel` no longer takes ``eye``; it
-  reads ``implant.eye``. It warns when built against a non-epiretinal implant,
-  and both retinal Beyeler models warn when ``rho`` is wider than the electrode
-  pitch.
-
-* ``find_threshold`` has been removed. Threshold searches are
-  experiment-specific optimizations over stimulus parameters and should be
-  implemented at that level.
-
 API changes:
 
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` gains ``placement``,
-  naming where a device sits relative to the tissue it stimulates for the
-  device families where the literature is unambiguous.
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` now has ``placement``
+  to specify where it is implanted.
 
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`)
@@ -59,9 +35,9 @@ API changes:
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` no longer overrides
-  ``predict_percept``, so it takes ``gaze``, ``vmax`` and ``vmin`` like every
-  other model.
+* ``find_threshold`` has been removed. Threshold searches are
+  experiment-specific optimizations over stimulus parameters and should be
+  implemented at that level.
 
 Bug fixes:
 

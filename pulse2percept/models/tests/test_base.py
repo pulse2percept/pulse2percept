@@ -25,7 +25,6 @@ from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
                                  us)
 from pulse2percept.utils import FreezeError, frame_interval
-from pulse2percept.utils.testing import assert_warns_msg
 from pulse2percept.topography import (Curcio1990Map, Grid2D,
                                       Polimeni2006Map, RetinalMap,
                                       Watson2014Map)
@@ -214,161 +213,22 @@ def test_SpatialModel_predict_percept_keeps_metadata():
 
 
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),
-                                          ('scheduler', 'dask')])
+                                          ('scheduler', 'dask'),
+                                          ('xystep', 2)])
 def test_SpatialModel_removed_params(param, value):
     # `engine` chose the Cython vs pure-Python axon-growth path and
-    # `scheduler` drove the joblib/dask backends. Both were deprecated in
-    # 0.9.1 and removed in 0.10.0, so they are now unknown parameters:
+    # `scheduler` drove the joblib/dask backends, both removed in 0.10.0;
+    # `xystep` was renamed to `step` in 0.10.0 and removed in 0.11.0. All
+    # three are now unknown parameters:
     with pytest.raises(AttributeError):
         ValidSpatialModel(**{param: value})
     with pytest.raises(AttributeError):
         ValidSpatialModel().set_params(**{param: value})
 
 
-@pytest.mark.parametrize('composite', [False, True])
-def test_SpatialModel_deprecated_xystep(composite):
-    # `step` was called `xystep` until 0.10.0. The old name still works
-    # everywhere the new one does, but warns:
-    def make(**params):
-        if composite:
-            return Model(spatial=ValidSpatialModel(), **params)
-        return ValidSpatialModel(**params)
-
-    msg = "The 'xystep' parameter of"
-    assert_warns_msg(DeprecationWarning, make, msg, xystep=2)
-    with pytest.warns(DeprecationWarning):
-        model = make(xystep=2)
-    npt.assert_almost_equal(model.step, 2)
-
-    # Setting and getting the attribute:
-    assert_warns_msg(DeprecationWarning, setattr, msg, model, 'xystep', 3)
-    npt.assert_almost_equal(model.step, 3)
-    with pytest.warns(DeprecationWarning):
-        npt.assert_almost_equal(model.xystep, 3)
-
-    # And `set_params` and `build`. `Model.set_params` takes a dict, whereas
-    # `SpatialModel.set_params` takes keyword arguments:
-    if composite:
-        set_params = lambda: model.set_params({'xystep': 4})
-    else:
-        set_params = lambda: model.set_params(xystep=4)
-    assert_warns_msg(DeprecationWarning, set_params, msg)
-    npt.assert_almost_equal(model.step, 4)
-    assert_warns_msg(DeprecationWarning, model.build, msg, xystep=5)
-    npt.assert_almost_equal(model.step, 5)
-    # The grid really was laid out at the value the old name carried:
-    npt.assert_almost_equal(np.unique(np.diff(model.grid.x[0, :]))[0], 5)
-
-    # The old name is still a per-axis step, which is the whole reason it
-    # reads poorly:
-    with pytest.warns(DeprecationWarning):
-        model = make(xystep=(2, 4))
-    npt.assert_almost_equal(model.step, (2, 4))
-
-    # The new name stays silent:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        model = make(step=2)
-        model.step = 3
-        npt.assert_almost_equal(model.step, 3)
-        model.build(step=4)
-        npt.assert_almost_equal(model.step, 4)
-
-
-@pytest.mark.parametrize('old, new', [('xystep', 'step'), ('axlambda', 'lam')])
-def test_Model_renamed_param_warns_once_for_a_class(old, new):
-    """A sub-model passed as a class is still only one use of the old name
-
-    `Model` accepts a class where it documents an instance, and then builds it
-    from the same ``params`` dict that `set_params` receives. Both of those
-    rewrite renamed parameters, so the old name reaches the machinery twice
-    even though the caller wrote it once.
-    """
-    for spatial in (AxonMapSpatial, AxonMapSpatial()):
-        with pytest.warns(DeprecationWarning) as record:
-            model = Model(spatial=spatial, **{old: 400})
-        deprecations = [w for w in record
-                        if issubclass(w.category, DeprecationWarning)]
-        npt.assert_equal(len(deprecations), 1)
-        # The message names the model the caller actually constructed, and
-        # points at the line that named the old parameter:
-        npt.assert_equal(f"The '{old}' parameter of Model is deprecated"
-                         in str(deprecations[0].message), True)
-        npt.assert_equal(deprecations[0].filename, __file__)
-        npt.assert_almost_equal(getattr(model, new), 400)
-
-        # Both names are still the same parameter through this path:
-        with pytest.raises(TypeError, match="same parameter"):
-            Model(spatial=spatial, **{old: 400, new: 500})
-
-        # ...and the new name stays silent:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
-            npt.assert_almost_equal(
-                getattr(Model(spatial=spatial, **{new: 500}), new), 500)
-
-
-@pytest.mark.parametrize('composite', [False, True])
-def test_SpatialModel_xystep_and_step_collide(composite):
-    # `xystep` and `step` are the same parameter, so supplying both must raise
-    # rather than let the order they were passed in decide the value.
-    # `**kwargs` preserves insertion order, so check both spellings:
-    for params in ({'xystep': 2, 'step': 3}, {'step': 3, 'xystep': 2}):
-        with pytest.raises(TypeError, match="same parameter"):
-            if composite:
-                Model(spatial=ValidSpatialModel(), **params)
-            else:
-                ValidSpatialModel(**params)
-        model = (Model(spatial=ValidSpatialModel()) if composite
-                 else ValidSpatialModel())
-        with pytest.raises(TypeError, match="same parameter"):
-            model.build(**params)
-        with pytest.raises(TypeError, match="same parameter"):
-            if composite:
-                model.set_params(params)
-            else:
-                model.set_params(**params)
-
-
-@pytest.mark.parametrize('composite', [False, True])
-def test_SpatialModel_xystep_warning_blames_caller(composite):
-    # A deprecation warning is only actionable if it points at the line that
-    # used the old name. The alias is reached directly on a spatial model, but
-    # through `Model.__getattr__`/`__setattr__` on a composite one:
-    model = (Model(spatial=ValidSpatialModel()) if composite
-             else ValidSpatialModel())
-    with pytest.warns(DeprecationWarning) as record:
-        model.xystep
-    npt.assert_equal(record[0].filename, __file__)
-    with pytest.warns(DeprecationWarning) as record:
-        model.xystep = 2
-    npt.assert_equal(record[0].filename, __file__)
-    # The constructor reaches it through a chain of `super().__init__` calls
-    # instead, whose depth differs between the two classes:
-    with pytest.warns(DeprecationWarning) as record:
-        if composite:
-            Model(spatial=ValidSpatialModel(), xystep=2)
-        else:
-            ValidSpatialModel(xystep=2)
-    npt.assert_equal(record[0].filename, __file__)
-
-
-def test_SpatialModel_xystep_units():
-    # The old name forwards to `step`, so it is normalized the same way:
-    with pytest.warns(DeprecationWarning):
-        model = ValidSpatialModel(xystep=0.5 * dva)
-    npt.assert_almost_equal(model.step, 0.5)
-    npt.assert_equal(isinstance(model.step, Quantity), False)
-    with pytest.warns(DeprecationWarning):
-        model.xystep = 1 * dva
-    npt.assert_almost_equal(model.step, 1)
-    with pytest.raises(DimensionMismatchError):
-        with pytest.warns(DeprecationWarning):
-            ValidSpatialModel(xystep=1 * um)
-
-
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),
-                                          ('scheduler', 'dask')])
+                                          ('scheduler', 'dask'),
+                                          ('xystep', 2)])
 def test_Model_removed_params(param, value):
     # A Model built from instances never reaches BaseModel.__init__, so this
     # path needs checking separately:
@@ -509,8 +369,6 @@ def test_SpatialModel_units():
     # retina is a different grid, not a different spelling of this one.
     with pytest.raises(DimensionMismatchError):
         ScoreboardSpatial(implant=ArgusII(), step=100 * um)
-    with pytest.raises(DimensionMismatchError):
-        ScoreboardSpatial(implant=ArgusII(), xystep=100 * um)
 
 
 def test_SpatialModel_retinal_range():

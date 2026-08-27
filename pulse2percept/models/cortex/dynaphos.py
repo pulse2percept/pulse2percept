@@ -8,7 +8,7 @@ from ...percepts import Percept
 from ...implants import ProsthesisSystem
 from ...stimuli import BiphasicPulseTrain
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
-from ...utils import cart2pol, deprecated_alias
+from ...utils import cart2pol
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
 
@@ -94,12 +94,6 @@ class DynaphosModel(BaseModel):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``xystep``, which suggested that one step size
-            applies to both axes. The old name still works, but is
-            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid.
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -124,12 +118,6 @@ class DynaphosModel(BaseModel):
         setting ``model.xrange = (-10, 10)``) invalidates the build, and the
         next ``predict_percept`` builds it again.
     """
-    #: ``step`` used to be called ``xystep``. The old name still reads and
-    #: writes ``step``, with a ``DeprecationWarning``. Declared here rather
-    #: than inherited: this model derives from ``BaseModel``, not
-    #: ``SpatialModel``, and lays out its own grid.
-    xystep = deprecated_alias('step', deprecated_version='0.10.0',
-                              removed_version='0.11.0')
 
     @property
     def regions(self):

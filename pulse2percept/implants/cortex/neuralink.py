@@ -11,7 +11,7 @@ from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
 from ..base import ProsthesisSystem
 from ...units import as_value, deg, dva, um
-from ...utils import parse_3d_orient, rename_parameter
+from ...utils import parse_3d_orient
 
 
 class EllipsoidElectrode(Electrode):
@@ -261,8 +261,6 @@ class Neuralink(EnsembleImplant):
     placement = 'intracortical'
 
     @classmethod
-    @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
-                      removed_version='0.11.0')
     def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, step=None,
                         rand_insertion_angle=None, region='v1', Thread=LinearEdgeThread):
         """
@@ -285,12 +283,6 @@ class Neuralink(EnsembleImplant):
             Range of x and y coordinates (dva) to create threads at.
         step : float or (x_step, y_step), optional
             Spacing (dva) between threads.
-
-            .. versionchanged:: 0.10.0
-
-                Renamed from ``xystep``, which suggested that one step size
-                applies to both axes. The old name still works as a keyword
-                argument, but is deprecated and will be removed in v0.11.0.
         rand_insertion_angle : float or Quantity, optional
             If not none, insert threads at a random offset from perpendicular,
             with a maximum azimuthal rotation of rand_insertion_angle degrees.
@@ -386,8 +378,6 @@ class Neuralink(EnsembleImplant):
         return cls(threads)
     
     @classmethod
-    @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
-                      removed_version='0.11.0')
     def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None,
                           yrange=None, step=None, region='v1'):
         """
@@ -408,12 +398,6 @@ class Neuralink(EnsembleImplant):
             Range of x and y coordinates to create threads at.
         step : float or (x_step, y_step), optional
             Spacing between threads.
-
-            .. versionchanged:: 0.10.0
-
-                Renamed from ``xystep``, which suggested that one step size
-                applies to both axes. The old name still works as a keyword
-                argument, but is deprecated and will be removed in v0.11.0.
         region : str, optional
             Region of cortex to create implant in.
 

@@ -19,8 +19,7 @@ from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
                      um, uA)
 from ..vision import Scene
 from ..utils import (PrettyPrint, FreezeError, Frozen, Parametrized,
-                     deprecated_alias, warn_deprecated_params,
-                     rename_deprecated_params)
+                     warn_deprecated_params, rename_deprecated_params)
 from ..utils.base import _is_constructing
 from ..utils.constants import ZORDER
 
@@ -666,11 +665,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
     n_jobs = _n_jobs_alias()
-
-    #: ``step`` used to be called ``xystep``. The old name still reads and
-    #: writes ``step``, with a ``DeprecationWarning``:
-    xystep = deprecated_alias('step', deprecated_version='0.10.0',
-                              removed_version='0.11.0')
 
     def __init__(self, **params):
         # `vfmap` first: `xrange`/`yrange` may be given as a retinal extent,

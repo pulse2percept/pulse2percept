@@ -8,7 +8,7 @@ from ..implants import ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
 from ..units import as_value, um, xTh
-from ..utils import FreezeError, rename_parameter
+from ..utils import FreezeError
 from ..utils.base import has_own_attr
 from .base import BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
@@ -151,18 +151,11 @@ class DefaultStreakModel(BaseModel):
     ------------
     lam :  float32
         ``lam`` parameter of BiphasicAxonMapModel (axonal decay rate)
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``axlambda``. The old name still works as a keyword
-            argument, but is deprecated and will be removed in v0.11.0.
     a7, a8, a9: float, optional
         Regression coefficients for streak length vs pulse duration (Eq 6)
         F_streak = -a7*pdur^a8 + a9
     """
 
-    @rename_parameter('axlambda', 'lam', deprecated_version='0.10.0',
-                      removed_version='0.11.0')
     def __init__(self, lam, **params):
         super(DefaultStreakModel, self).__init__(**params)
         self.lam = lam
@@ -310,12 +303,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         --------
         lam: double, optional
             Exponential decay constant along the axon(microns).
-
-            .. versionchanged:: 0.10.0
-
-                Renamed from ``axlambda``, which reads poorly next to ``rho``.
-                The old name still works, but is deprecated and will be
-                removed in v0.11.0.
         rho: double, optional
             Exponential decay constant away from the axon(microns).
         min_current_spread: float, optional
@@ -343,12 +330,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             visual angle). For example, to create a grid with x values [0, 0.5, 1]
             use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
             and y axes different step sizes.
-
-            .. versionchanged:: 0.10.0
-
-                Renamed from ``xystep``, which suggested that one step size
-                applies to both axes. The old name still works, but is
-                deprecated and will be removed in v0.11.0.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
         vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -737,12 +718,6 @@ class BiphasicAxonMapModel(Model):
         ^^^^^^^^
         lam: double, optional
             Exponential decay constant along the axon(microns).
-
-            .. versionchanged:: 0.10.0
-
-                Renamed from ``axlambda``, which reads poorly next to ``rho``.
-                The old name still works, but is deprecated and will be
-                removed in v0.11.0.
         rho: double, optional
             Exponential decay constant away from the axon(microns).
         min_current_spread: float, optional
@@ -773,12 +748,6 @@ class BiphasicAxonMapModel(Model):
             visual angle). For example, to create a grid with x values [0, 0.5, 1]
             use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
             and y axes different step sizes.
-
-            .. versionchanged:: 0.10.0
-
-                Renamed from ``xystep``, which suggested that one step size
-                applies to both axes. The old name still works, but is
-                deprecated and will be removed in v0.11.0.
         grid_type : {'rectangular', 'hexagonal'}
             Whether to simulate points on a rectangular or hexagonal grid
         vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional

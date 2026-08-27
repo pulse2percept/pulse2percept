@@ -6,7 +6,6 @@ from .electrode_arrays import ElectrodeArray
 from ..stimuli._merge import unique_time_points
 from ..stimuli.base import _describe_unit
 from ..units import DimensionMismatchError, as_value, dva, um
-from ..utils import rename_parameter
 
 class EnsembleImplant(ProsthesisSystem):
     
@@ -14,8 +13,6 @@ class EnsembleImplant(ProsthesisSystem):
     __slots__ = ('_implants', '_earray', 'safe_mode', 'preprocess')
 
     @classmethod
-    @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
-                      removed_version='0.11.0')
     def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None, yrange=None, step=None,
                         region='v1'):
         """
@@ -39,12 +36,6 @@ class EnsembleImplant(ProsthesisSystem):
             Range of x and y coordinates (dva) to create implants at.
         step : float or (x_step, y_step), optional
             Spacing (dva) between implant centers.
-
-            .. versionchanged:: 0.10.0
-
-                Renamed from ``xystep``, which suggested that one step size
-                applies to both axes. The old name still works as a keyword
-                argument, but is deprecated and will be removed in v0.11.0.
         region : str, optional
             Region of cortex to create implant in.
 
@@ -96,8 +87,6 @@ class EnsembleImplant(ProsthesisSystem):
 
 
     @classmethod
-    @rename_parameter('xystep', 'step', deprecated_version='0.10.0',
-                      removed_version='0.11.0')
     def from_coords(cls, implant_type, locs=None, xrange=None, yrange=None, step=None):
         """
         Create an ensemble implant using physical (cortical or retinal) coordinates.
@@ -114,12 +103,6 @@ class EnsembleImplant(ProsthesisSystem):
             (together with ``step``) if ``locs`` is not given.
         step : float or (x_step, y_step), optional
             Spacing (um) between implant centers.
-
-            .. versionchanged:: 0.10.0
-
-                Renamed from ``xystep``, which suggested that one step size
-                applies to both axes. The old name still works as a keyword
-                argument, but is deprecated and will be removed in v0.11.0.
 
         Raises
         ------

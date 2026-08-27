@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
 from ..units import deg, dva, um
-from ..utils import deprecated_alias
 from ..utils.constants import UM_PER_MM, ZORDER
 from ..topography import Watson2014Map
 from ..implants import ElectrodeArray
@@ -125,12 +124,6 @@ class ScoreboardSpatial(SpatialModel):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``xystep``, which suggested that one step size
-            applies to both axes. The old name still works, but is
-            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -232,12 +225,6 @@ class ScoreboardModel(Model):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``xystep``, which suggested that one step size
-            applies to both axes. The old name still works, but is
-            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -296,12 +283,6 @@ class AxonMapSpatial(SpatialModel):
 
     lam : double, optional
         Exponential decay constant along the axon(microns).
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``axlambda``, which reads poorly next to ``rho``. The
-            old name still works, but is deprecated and will be removed in
-            v0.11.0.
     rho : double, optional
         Exponential decay constant away from the axon(microns).
     min_current_spread : float, optional
@@ -325,12 +306,6 @@ class AxonMapSpatial(SpatialModel):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``xystep``, which suggested that one step size
-            applies to both axes. The old name still works, but is
-            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
@@ -392,11 +367,6 @@ class AxonMapSpatial(SpatialModel):
     *  The axon map is not very accurate when the upper bound of
        `ax_segments_range` is greater than 90 deg.
     """
-
-    #: ``lam`` used to be called ``axlambda``. The old name still reads and
-    #: writes ``lam``, with a ``DeprecationWarning``:
-    axlambda = deprecated_alias('lam', deprecated_version='0.10.0',
-                                removed_version='0.11.0')
 
     def __init__(self, **params):
         super(AxonMapSpatial, self).__init__(**params)
@@ -962,9 +932,9 @@ class AxonMapSpatial(SpatialModel):
                 # here. Rather than try to read it, grow the bundles again and
                 # overwrite it; the file is derived data, so the only cost is
                 # one slow build. Settle this *before* looking at `params`,
-                # whose keys are versioned too -- an old cache names the grid
-                # step `xystep`, and probing that here would warn the user
-                # about a name they never used:
+                # whose keys are versioned too -- a cache written before
+                # 0.10.0 names the grid step `xystep`, which is no longer a
+                # parameter of this model:
                 if not _is_axon_cache(cached):
                     need_axons = True
                 else:
@@ -1178,12 +1148,6 @@ class AxonMapModel(Model):
 
     lam : double, optional
         Exponential decay constant along the axon(microns).
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``axlambda``, which reads poorly next to ``rho``. The
-            old name still works, but is deprecated and will be removed in
-            v0.11.0.
     rho : double, optional
         Exponential decay constant away from the axon(microns).
     min_current_spread : float, optional
@@ -1207,12 +1171,6 @@ class AxonMapModel(Model):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-
-        .. versionchanged:: 0.10.0
-
-            Renamed from ``xystep``, which suggested that one step size
-            applies to both axes. The old name still works, but is
-            deprecated and will be removed in v0.11.0.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
