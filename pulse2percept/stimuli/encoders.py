@@ -174,11 +174,12 @@ class _EncodedStimulus(Stimulus):
 class Encoder(PrettyPrint, metaclass=ABCMeta):
     """Abstract base class for encoders.
 
-    An encoder turns a picture into the stimulation a device delivers. What
+    An encoder turns a picture into the stimulation that drives a device. What
     kind of stimulation that is depends on the device:
-    :py:class:`~pulse2percept.stimuli.StimulusEncoder` produces electrical
-    pulse trains, :py:class:`~pulse2percept.stimuli.PRIMAEncoder` produces
-    near-infrared irradiance.
+    :py:class:`~pulse2percept.stimuli.StimulusEncoder` produces the electrical
+    pulse trains an implant delivers,
+    :py:class:`~pulse2percept.stimuli.PRIMAEncoder` the near-infrared
+    irradiance a photovoltaic implant is illuminated with.
 
     Subclasses implement :py:meth:`encode`.
 
@@ -201,7 +202,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         Returns
         -------
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The encoded stimulus, in the unit the device delivers.
+            The encoded stimulus, in the unit that drives the device.
         """
         raise NotImplementedError
 
@@ -1338,11 +1339,15 @@ class PRIMAEncoder(Encoder):
     *  Every projector period looks the same: irradiance rises to
        ``irradiance`` for the pixel's ON duration and is zero for the rest of
        the period. Peak irradiance never depends on gray level.
-    *  The projector clock samples the source; it does not re-time it. Every
-       ``1 / freq`` the device looks at whatever frame the source is showing
-       (zero-order hold), so a slow video has frames re-sent and a fast one has
-       frames skipped, and either way the source keeps its own duration. A
-       source with no time axis is held for the standard static presentation.
+    *  The projector clock samples the source; it does not re-time it. Starting
+       at the source's first frame, every ``1 / freq`` the device looks at
+       whatever frame the source is showing (zero-order hold), so a slow video
+       has frames re-sent and a fast one has frames skipped, and either way the
+       source keeps its own timing. A source with no time axis is held for the
+       standard static presentation.
+    *  A pulse that would not finish before the presentation ends is not
+       started, so the last projector period of a source that is not a whole
+       number of periods long may be dark.
     *  ``_spatial_view`` reports normalized time-averaged optical drive:
        ``irradiance * duty_cycle`` divided by the largest documented
        pivotal-device drive (``ref_drive``), so 0 is a dark pixel and 1 a pixel
@@ -1495,13 +1500,14 @@ class PRIMAEncoder(Encoder):
                                                                   implant)
         n_el = len(electrodes)
         static = frame_time.size == 1 and getattr(source, 'time', None) is None
-        # The source keeps its own duration. What the projector clock decides
-        # is when the device looks at it, not how long the content lasts:
+        # The source keeps its own timing. What the projector clock decides is
+        # when the device looks at it, not when the content starts or how long
+        # it lasts: a cropped video keeps the timestamps it was cut from, and
+        # nothing is shown before its first frame is there to show.
+        start = float(frame_time[0])
         total = float(frame_time[-1] + frame_dur)
-        # Enough frames to cover the source; the last one may be cut short by
-        # the end of the source, exactly as it would be on the device.
-        n_periods = max(1, int(np.ceil(total / period - 1e-9)))
-        onset_ms = np.arange(n_periods, dtype=np.float64) * period
+        n_periods = max(1, int(np.ceil((total - start) / period - 1e-9)))
+        onset_ms = start + np.arange(n_periods, dtype=np.float64) * period
         # Zero-order hold: a source frame stays on screen until the next one,
         # so the projector re-sends a slow source's frames and skips a fast
         # source's. Interpolating instead would invent frames the source never
@@ -1517,6 +1523,13 @@ class PRIMAEncoder(Encoder):
         onsets = np.round(onset_ms / DT).astype(np.int64)
         end = int(np.round(total / DT))
         dur_ticks = np.round(dur / DT).astype(np.int64)
+        # A pulse that cannot finish before the presentation ends is not
+        # started, as with the electrical encoder. Truncating it instead would
+        # leave the stimulus lit at the instant it says it is over, and
+        # shortening it would land the projector off its 0.7 ms grid.
+        fits = dur_ticks <= (end - onsets)[np.newaxis, :]
+        dur = np.where(fits, dur, 0.0)
+        dur_ticks = np.where(fits, dur_ticks, 0)
         edges = [np.array([0, end], dtype=np.int64)]
         for j in range(n_periods):
             levels = np.unique(dur_ticks[:, j])

@@ -1604,6 +1604,71 @@ def test_PRIMAEncoder_samples_a_video_without_retiming_it(fps, n_source):
                             decimal=3)
 
 
+@pytest.mark.parametrize('fps', [15, 60])
+def test_PRIMAEncoder_repeats_slow_frames_and_skips_fast_ones(fps):
+    # One second of video whose frames alternate lit and dark, so which source
+    # frame the projector picked is visible in the drive it produced.
+    implant = PRIMAPivotal()
+    gray = np.zeros((8, 8, fps))
+    gray[..., ::2] = 1.0
+    video = VideoStimulus(gray, time=np.arange(fps) * (1000.0 / fps))
+    stim = PRIMAEncoder().encode(video, implant=implant)
+    lit = stim.pulse_dur.max(axis=0) > 0
+    npt.assert_equal(lit.size, 30)
+    if fps == 15:
+        # Half the projector's rate: every source frame is sent twice, so the
+        # pattern comes out in pairs.
+        npt.assert_array_equal(lit.reshape(-1, 2)[:, 0],
+                               lit.reshape(-1, 2)[:, 1])
+    else:
+        # Twice the projector's rate: only the even source frames are sampled,
+        # and those are the lit ones, so the dark frames never appear.
+        npt.assert_equal(lit.all(), True)
+
+
+def test_PRIMAEncoder_starts_where_the_source_does():
+    # A video need not start at t=0: cropping one keeps the timestamps it was
+    # cut from. The projector clock is anchored to the source, so nothing is
+    # projected before the first frame exists.
+    implant = PRIMAPivotal()
+    video = VideoStimulus(np.ones((8, 8, 3)),
+                          time=100 + np.arange(3) * (1000 / 30))
+    stim = PRIMAEncoder().encode(video, implant=implant)
+    npt.assert_almost_equal(stim.duration, 200, decimal=6)
+    npt.assert_equal(stim.pulse_dur.shape[1], 3)
+    npt.assert_almost_equal(stim._spatial_view().time[0], 100, decimal=6)
+    # Dark until the source starts:
+    npt.assert_almost_equal(stim.data[:, stim.time < 100].max(), 0)
+
+    # ... and the same through the operation that produces such a video.
+    # (`bottom`/`right` work around a spatial bounds check in `crop` that
+    # rejects the full frame; the time crop is what matters here.)
+    gray = np.zeros((8, 8, 9))
+    gray[..., 3:6] = 1.0
+    cropped = VideoStimulus(gray, time=np.arange(9) * (1000 / 30)).crop(
+        front=3, back=3, bottom=1, right=1)
+    npt.assert_almost_equal(cropped.time[0], 100, decimal=6)
+    stim = PRIMAEncoder().encode(cropped, implant=implant)
+    npt.assert_almost_equal(stim._spatial_view().time[0], 100, decimal=6)
+    npt.assert_almost_equal(stim.data[:, stim.time < 100].max(), 0)
+
+
+def test_PRIMAEncoder_finishes_every_pulse_it_starts():
+    # The last projector period of a 40 ms source has only 6.7 ms left in it,
+    # which a 9.8 ms pulse does not fit into. Starting it anyway would leave
+    # the stimulus lit at the instant it says it is over.
+    implant = PRIMAPivotal()
+    video = VideoStimulus(np.ones((8, 8, 2)), time=[0.0, 20.0])
+    stim = PRIMAEncoder().encode(video, implant=implant)
+    npt.assert_almost_equal(stim.duration, 40)
+    npt.assert_array_almost_equal(stim.pulse_dur.max(axis=0), [9.8, 0])
+    npt.assert_almost_equal(stim.data[:, -1].max(), 0)
+    # Nonzero durations stay on the hardware grid rather than being shortened
+    # to whatever happened to fit:
+    kept = stim.pulse_dur[stim.pulse_dur > 0]
+    npt.assert_almost_equal(kept / 0.7, np.round(kept / 0.7))
+
+
 def test_PRIMAEncoder_defers_the_waveform():
     implant = PRIMAPivotal()
     stim = PRIMAEncoder().encode(ImageStimulus(np.ones((16, 16))),

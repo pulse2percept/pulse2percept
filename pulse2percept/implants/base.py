@@ -99,7 +99,9 @@ class ProsthesisSystem(PrettyPrint):
     __slots__ = ('_earray', '_eye', 'safe_mode', 'preprocess',
                  '_encoder', '_raster', '_max_current', '_thresholds')
 
-    #: Physical quantity delivered by the implant. Subclasses may override.
+    #: Physical quantity a prepared stimulus is measured in: what drives the
+    #: device. Current for a device driven by a current source, irradiance for
+    #: one that is illuminated. Subclasses may override.
     stimulus_unit = uA
 
     #: Where the device sits relative to the tissue it stimulates, where the
@@ -276,7 +278,7 @@ class ProsthesisSystem(PrettyPrint):
         if stim.unit.dimension == xTh.dimension:
             return
         raise DimensionMismatchError(
-            f"{type(self).__name__} delivers "
+            f"{type(self).__name__} is driven by "
             f"{_describe_unit(self.stimulus_unit)}, but this stimulus is "
             f"measured in {_describe_unit(stim.unit)}. Give the implant an "
             f"'encoder' (a pulse2percept.stimuli.Encoder that produces "

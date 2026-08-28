@@ -115,10 +115,12 @@ is fixed either way. Contrast inversion and edge enhancement are not part of
 the device, so they are ordinary ``ImageStimulus`` operations applied first
 (``image.invert()``, ``image.filter('canny')``).
 
-The projector clock samples a video; it does not re-time it. Every ``1 / freq``
-the device looks at whatever frame the source is showing (zero-order hold), so
-a 15 fps source has its frames re-sent and a 60 fps source has frames skipped,
-and either way the content keeps its own duration.
+The projector clock samples a video; it does not re-time it. Starting at the
+source's first frame, every ``1 / freq`` the device looks at whatever frame the
+source is showing (zero-order hold), so a 15 fps source has its frames re-sent
+and a 60 fps source has frames skipped, and either way the content keeps its
+own timing -- including a nonzero start time, as a cropped video has. A pulse
+that would not finish before the presentation ends is not started.
 
 Converting light into retinal current is the job of a photovoltaic model, which
 pulse2percept does not have yet. Until it does, the encoded stimulus offers
