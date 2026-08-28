@@ -1,132 +1,149 @@
 """
 ===============================================================================
-Simulating PRIMA
+Simulating PRIMA: from image to optical drive
 ===============================================================================
 
-Background
-----------
+:class:`~pulse2percept.implants.PRIMAPivotal` models the 378-pixel
+photovoltaic array used in the PRIMAvera trial [Holz2025]_. Unlike other
+implants, PRIMA is not driven by injected current. A near-infrared projector
+illuminates the array at 880 nm, and image intensity is encoded by how long
+each pixel is illuminated during a projector frame.
 
-:py:class:`~pulse2percept.implants.PRIMAPivotal` is the subretinal photovoltaic
-array used in the PRIMAvera pivotal trial [Holz2026]_ and in the earlier
-first-in-human study [Palanker2020]_. Its 378 pixels sit on a 100 um hexagonal
-grid on a 2 x 2 mm substrate.
+This example follows the path currently implemented in pulse2percept:
 
-PRIMA is not driven by a current source. A goggle-mounted projector paints an
-880 nm near-infrared image onto the implant, and each photovoltaic pixel turns
-the light it receives into local electrical stimulation. The projector runs at
-a fixed frame rate (30 Hz) and a fixed peak irradiance (3.5 mW/mm^2), and
-encodes intensity in *how long* a pixel is lit: 14 levels from 0.7 to 9.8 ms in
-0.7 ms steps, plus off.
+``image -> preprocessing -> implant sampling -> optical drive -> percept``
 
-:py:class:`~pulse2percept.stimuli.PRIMAEncoder` implements that projector, and
-:py:class:`~pulse2percept.implants.PRIMAPivotal` brings one along, so a picture
-can be presented directly:
+The last step uses :class:`~pulse2percept.models.ScoreboardModel` only as a
+visualization of the stimulation pattern. pulse2percept does not yet model
+photodiode transduction or the retinal response to PRIMA.
 """
 # sphinx_gallery_thumbnail_number = 2
 
 import matplotlib.pyplot as plt
 import numpy as np
+from skimage.morphology import binary_dilation, disk
 import pulse2percept as p2p
 
 implant = p2p.implants.PRIMAPivotal()
-image = p2p.stimuli.LogoBVL()
-stim = implant.prepare_stim(image)
-print(stim.unit)
+encoder = implant.encoder
 
 ###############################################################################
-# What comes back is 880 nm optical irradiance versus time at each pixel, not
-# electrical current. Turning light into retinal current depends on photodiode
-# behavior, electrode capacitance, and the surrounding tissue, none of which
-# pulse2percept models yet.
+# From gray level to optical stimulation
+# ---------------------------------------
 #
-# One projector period looks the same at every lit pixel: irradiance rises to
-# 3.5 mW/mm^2 for the pixel's ON duration and is zero for the rest of the
-# 33.3 ms frame.
+# PRIMA uses a fixed peak irradiance and encodes intensity using pulse
+# duration. The default encoder maps normalized image intensity onto the 14
+# nonzero durations supported by the pivotal projector.
 
-lit = np.argmax(stim.pulse_dur[:, 0])
-fig, ax = plt.subplots(figsize=(8, 2.5))
-ax.plot(stim.time, stim.data[lit], lw=1.5)
-ax.set_xlim(0, 100)
+levels = np.array([0.25, 0.5, 1.0], dtype=np.float32)
+probe = p2p.stimuli.ImageStimulus(levels[np.newaxis, :])
+encoded = encoder.encode(probe)
+
+fig, ax = plt.subplots(figsize=(7, 2.5))
+for idx, gray in enumerate(levels):
+    dur = encoded.pulse_dur[idx, 0]
+    ax.plot(encoded.time, encoded.data[idx],
+            label=f'gray={gray:g}  ({dur:g} ms)')
+ax.set_xlim(0, encoder.period)
 ax.set_xlabel('Time (ms)')
-ax.set_ylabel('Irradiance (mW/mm$^2$)')
-ax.set_title(f'Pixel {stim.electrodes[lit]}: '
-             f'{stim.pulse_dur[lit, 0]:.1f} ms on, 33.3 ms period')
+ax.set_ylabel(r'Irradiance (mW/mm$^2$)')
+ax.legend(frameon=False)
 fig.tight_layout()
 
 ###############################################################################
-# Visualizing the stimulation pattern
-# -----------------------------------
+# Peak irradiance is the same for every illuminated pixel. A brighter image
+# pixel stays on longer, so it delivers more optical energy per projector
+# frame. For the spatial visualization below, pulse2percept normalizes the
+# time-averaged optical drive so that 0 is dark and 1 is the largest documented
+# drive of the pivotal system. At the default projector settings, this is simply
+# ``pulse_dur / 9.8 ms``.
 #
-# :py:class:`~pulse2percept.models.ScoreboardModel` places a Gaussian blob at
-# every pixel. For a photovoltaic implant it weights each blob by *normalized
-# optical drive*: the irradiance a pixel delivers averaged over a projector
-# period (peak irradiance times duty cycle), divided by the largest drive the
-# pivotal device is documented to produce. A dark pixel is 0, a pixel at the
-# full documented drive is 1.
-#
-# This is a simple visualization of implant geometry and stimulation pattern.
-# It does not model photodiode transduction, retinal electric fields,
-# bipolar-cell activation, electrode-retina distance, or temporal retinal
-# dynamics.
-
-model = p2p.models.ScoreboardModel(implant=implant, rho=100)
-
-###############################################################################
-# Image processing stays outside the encoder
-# ------------------------------------------
-#
-# The clinical system processes the camera image before projecting it --
-# ambient-light adaptation, contrast enhancement, zoom -- and contrast
-# inversion has been used deliberately in testing.
-# :py:class:`~pulse2percept.stimuli.PRIMAEncoder` models the optical encoding
-# stage that follows. Preprocessing stays explicit here because the clinical
-# pipeline is not specified in enough detail to reproduce, so it is an ordinary
-# :py:class:`~pulse2percept.stimuli.ImageStimulus` operation applied first:
-
-sources = [('As is', image),
-           ('Inverted', image.invert()),
-           ('Canny edges', image.rgb2gray().filter('canny'))]
-
-fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(11, 6))
-for (title, source), top, bottom in zip(sources, axes[0], axes[1]):
-    source.plot(ax=top)
-    top.set_title(title)
-    model.predict_percept(source).plot(ax=bottom)
-fig.tight_layout()
-
-###############################################################################
-# Video keeps its own timing
+# From an image to a percept
 # --------------------------
 #
-# The projector clock samples the source; it does not re-time it. Every 33.3 ms
-# the device looks at whatever frame the video is showing (zero-order hold), so
-# a slow source has frames re-sent and a fast one has frames skipped -- and the
-# content plays at the speed it was recorded at either way:
+# Preprocessing happens before optical encoding. We convert the logo to
+# grayscale before comparing different transforms. For edge extraction, the
+# image is first resized to roughly twice the nominal implant-grid resolution.
+# Thin edges otherwise tend to disappear when sampled onto the 378 PRIMA
+# pixels. A one-pixel dilation makes the edge map a little more robust to that
+# sampling step.
 
-for fps in (15, 30, 60):
-    n = fps  # one second of video
-    clip = p2p.stimuli.VideoStimulus(np.random.rand(16, 16, n),
-                                     time=np.arange(n) * (1000.0 / fps))
-    encoded = implant.prepare_stim(clip)
-    print(f'{fps:>2} fps source -> {encoded.duration:.0f} ms, '
-          f'{encoded.pulse_dur.shape[1]} projector frames')
+image = p2p.stimuli.LogoBVL().rgb2gray()
+edge_shape = tuple(2 * n for n in implant.shape)
+edges = image.resize(edge_shape).filter('canny', sigma=1.0)
+edges = edges.apply(binary_dilation, footprint=disk(1))
+
+sources = [
+    ('Grayscale', image),
+    ('Inverted grayscale', image.invert()),
+    ('Edge-enhanced', edges),
+]
+
+model = p2p.models.ScoreboardModel(
+    implant=implant,
+    rho=100,
+    xrange=(-4, 4),
+    yrange=(-4, 4),
+    step=0.05,
+)
+
+
+def normalized_drive(stim):
+    """Normalized time-averaged optical drive for a static PRIMA image."""
+    return (stim.irradiance * stim.duty_cycle[:, 0]
+            / implant.encoder.ref_drive)
+
+
+xy = implant.earray.coordinates()
+fig, axes = plt.subplots(3, 3, figsize=(10, 9), constrained_layout=True)
+
+for col, (title, source) in enumerate(sources):
+    # Image entering the PRIMA encoder:
+    ax = axes[0, col]
+    ax.imshow(source.data.reshape(source.img_shape), cmap='gray',
+              vmin=0, vmax=1)
+    ax.set_title(title)
+    ax.axis('off')
+
+    # Normalized optical drive on the actual 378-pixel array:
+    stim = implant.prepare_stim(source)
+    drive = normalized_drive(stim)
+    ax = axes[1, col]
+    ax.scatter(xy[:, 0], xy[:, 1], c=drive, cmap='gray',
+               vmin=0, vmax=1, marker='h', s=55, linewidths=0)
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    # Scoreboard visualization of that drive:
+    model.predict_percept(source).plot(ax=axes[2, col], cmap='gray')
+
+axes[0, 0].text(-0.10, 0.5, 'Source', rotation=90,
+                va='center', ha='right', transform=axes[0, 0].transAxes,
+                fontsize=12)
+axes[1, 0].text(-0.10, 0.5, 'Optical drive', rotation=90,
+                va='center', ha='right', transform=axes[1, 0].transAxes,
+                fontsize=12)
+axes[2, 0].text(-0.18, 0.5, 'Scoreboard percept', rotation=90,
+                va='center', ha='right', transform=axes[2, 0].transAxes,
+                fontsize=12)
 
 ###############################################################################
-# Pulse-duration levels
-# ---------------------
+# How optical drive becomes percept brightness
+# --------------------------------------------
 #
-# By default the encoder maps normalized image intensity linearly onto the
-# projector's 14 durations. That linear map is a pulse2percept convention: the
-# clinical camera-gray-level to pulse-duration transfer function is not
-# published. Peak irradiance never varies -- only how long each pixel is lit:
-
-ramp = p2p.stimuli.ImageStimulus(np.tile(np.linspace(0, 1, 64), (64, 1)))
-print(np.unique(np.round(implant.prepare_stim(ramp).pulse_dur, 3)))
-
-###############################################################################
-# ``grayscale=False`` gives a binary approximation instead, in which a pixel is
-# off or lit for the full ``pulse_dur``. The 0.5 threshold is arbitrary, not a
-# clinical setting:
-
-implant.encoder = p2p.stimuli.PRIMAEncoder(grayscale=False, threshold=0.5)
-print(np.unique(np.round(implant.prepare_stim(ramp).pulse_dur, 3)))
+# ``ScoreboardModel`` places a Gaussian at each implant pixel. For PRIMA, the
+# Gaussian is weighted by the normalized optical drive shown in the middle row.
+# A longer optical pulse therefore produces a brighter Gaussian in this
+# visualization. ``rho=100`` controls how broadly neighboring pixels overlap
+# and is approximately one PRIMA pixel pitch.
+#
+# This is not a biological PRIMA brightness model. Real percepts depend on
+# photovoltaic conversion, electrode-retina distance, retinal current spread,
+# neural activation and temporal dynamics. Those steps require a PRIMA-specific
+# retinal model that is not yet implemented.
+#
+# The three preprocessing columns are examples, not a reconstruction of the
+# clinical image-processing pipeline. The clinical system performs its own
+# preprocessing before projection, but it is not specified in enough detail to
+# reproduce here. Keeping preprocessing explicit makes its effect on implant
+# sampling easy to inspect.

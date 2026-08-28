@@ -5,6 +5,7 @@ import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
 from scipy.interpolate import RegularGridInterpolator
+from skimage.color import rgb2gray
 
 from .electrodes import Electrode, DiskElectrode, PointSource
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
@@ -419,21 +420,28 @@ class ProsthesisSystem(PrettyPrint):
 
     def reshape_stim(self, stim):
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
-            # Convert to grayscale:
-            img = stim.rgb2gray()
-
             # Extract electrode coordinates, in the same units the image grid
             # below is laid out in:
             x, y = self.earray.coordinates(um)[:, :2].T
 
-            # Define image coordinate space
+            # Define image coordinate space. The color axis, if there is one,
+            # is left on the data and reduced after sampling: `rgb2gray` is a
+            # fixed linear combination of the channels, so sampling first
+            # gives the same answer without ever building a full-resolution
+            # grayscale copy of the source.
             if isinstance(stim, ImageStimulus):
-                img_h, img_w = img.img_shape
-                data = img.data.reshape(img_h, img_w)  # Ensure 2D format
-            elif isinstance(stim, VideoStimulus):
-                img_h, img_w, n_frames = img.vid_shape
-                data = img.data.reshape(img_h, img_w, n_frames)  # 3D format
-
+                shape = stim.img_shape          # (h, w[, n_channels])
+                colored = len(shape) == 3
+            else:
+                shape = stim.vid_shape          # (h, w[, n_channels], frames)
+                colored = len(shape) == 4
+            img_h, img_w = shape[:2]
+            data = stim.data.reshape(shape)
+            if colored and isinstance(stim, ImageStimulus) and shape[2] == 4:
+                # Blending an alpha channel with black is a product, not a
+                # linear combination, so unlike rgb2gray it cannot be deferred
+                # until after the interpolation:
+                data = np.clip(data[..., :3] * data[..., 3:4], 0.0, 1.0)
 
             x_min, x_max = np.min(x), np.max(x)
             y_min, y_max = np.min(y), np.max(y)
@@ -442,16 +450,23 @@ class ProsthesisSystem(PrettyPrint):
             img_x = np.linspace(x_min, x_max, img_w)
             img_y = np.linspace(y_min, y_max, img_h)
 
-            # One interpolator covers every frame: the grid is the leading two
-            # axes of `data`, and anything past them -- the frame axis of a
-            # video -- is carried along, so a video comes back as
-            # (n_electrodes, n_frames) from a single call. Building one per
-            # frame instead meant re-deriving the same grid for each of them.
+            # One interpolator covers every frame and every color channel: the
+            # grid is the leading two axes of `data`, and anything past them --
+            # the color and frame axes -- is carried along, so a video comes
+            # back as (n_electrodes, [n_channels,] n_frames) from a single
+            # call. Building one per frame instead meant re-deriving the same
+            # grid for each of them.
             interpolator = RegularGridInterpolator(
                 (img_y, img_x), data, method='linear',
                 bounds_error=False, fill_value=0
             )
             pixel_values = interpolator(np.vstack((y, x)).T)
+            if colored:
+                # `rgb2gray` reads the channel axis last, which is already
+                # where an image's is; a video's sits in front of its frames:
+                if pixel_values.ndim == 3:
+                    pixel_values = pixel_values.transpose((0, 2, 1))
+                pixel_values = rgb2gray(pixel_values)
 
             return Stimulus(
                 pixel_values, electrodes=self.electrode_names,
