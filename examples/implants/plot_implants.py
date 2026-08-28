@@ -46,8 +46,8 @@ for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
 # PRIMA Bionic Vision System (Pixium Vision SA)
 # ----------------------------------------------
 #
-# :py:class:`~pulse2percept.implants.PRIMA` is a subretinal device developed
-# at Stanford University and commercialized by Pixium Vision.
+# PRIMA is a subretinal device developed at Stanford University and
+# commercialized by Pixium Vision.
 #
 # There are several versions of the PRIMA device. Each is a hexagonal array
 # of photovoltaic pixels, described here by three numbers: the *pixel width*
@@ -55,25 +55,28 @@ for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
 # between nearest-neighbor pixels, and the *row spacing* between adjacent
 # rows, which follows from the other two as ``spacing * sqrt(3) / 2``.
 #
-# The device used in clinical trial `NCT03392324`_ has 378 pixels 100um wide
-# on a 100um center spacing (86.6um row spacing), on a 2 x 2 mm substrate, and
-# is available in pulse2percept simply as
-# :py:class:`~pulse2percept.implants.PRIMA` [Palanker2020]_.
+# The device used in the pivotal trial `NCT03392324`_ has 378 pixels 100um
+# wide on a 100um center spacing (86.6um row spacing), on a 2 x 2 mm substrate,
+# and is available as :py:class:`~pulse2percept.implants.PRIMAPivotal`
+# [Palanker2020]_. (``PRIMA`` is a deprecated wrapper for it: the name is kept
+# free for the eventual commercial device, whose specifications may differ.)
 #
-# :py:class:`~pulse2percept.implants.PRIMA75` is an earlier 75um prototype,
-# with 142 pixels 70um wide on a 75um center spacing, leaving a 5um open
-# trench between pixel bodies, on a 1 mm substrate [Lorach2015]_. Its 65um
-# row spacing is what [Lorach2015]_ calls the "pixel pitch".
+# :py:class:`~pulse2percept.implants.Lorach2015Array` is an earlier 75um
+# prototype, with 142 pixels 70um wide on a 75um center spacing, leaving a 5um
+# open trench between pixel bodies, on a 1 mm substrate [Lorach2015]_. Its 65um
+# row spacing is what [Lorach2015]_ calls the "pixel pitch". (``PRIMA75`` is a
+# deprecated wrapper for it; that name was pulse2percept shorthand, not an
+# official device name.)
 #
 # .. _NCT03392324: https://www.clinicaltrials.gov/ct2/show/NCT03392324
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
-PRIMA().plot(ax=ax[0])
-ax[0].set_title('PRIMA-100')
+PRIMAPivotal().plot(ax=ax[0])
+ax[0].set_title('PRIMAPivotal')
 
-PRIMA75().plot(ax=ax[1])
-ax[1].set_title('PRIMA-75')
+Lorach2015Array().plot(ax=ax[1])
+ax[1].set_title('Lorach2015Array')
 
 ###############################################################################
 # In addition, the developers are working on miniaturizing the device, in two
@@ -85,9 +88,10 @@ ax[1].set_title('PRIMA-75')
 # the old names are ambiguous. [Ho2019]_ also describes pillar arrays Pil55
 # and Pil40, which pulse2percept does not model.)
 #
-# Unlike PRIMA-75, these arrays have no open trench between pixels: their
-# 1um isolation trenches are covered by the shared return electrode, so the
-# pixel bodies tile the array and the pixel width equals the center spacing,
+# Unlike the Lorach et al. (2015) array, these have no open trench between
+# pixels: their 1um isolation trenches are covered by the shared return
+# electrode, so the pixel bodies tile the array and the pixel width equals the
+# center spacing,
 # 55um and 40um (47.6um and 34.6um row spacing, which [Ho2019]_ calls the
 # "pixel pitch"). Their active electrodes are 14um and 10um in diameter.
 #

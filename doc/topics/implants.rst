@@ -91,8 +91,8 @@ prostheses:
    * - Subretinal
      - :py:class:`~pulse2percept.implants.AlphaIMS`,
        :py:class:`~pulse2percept.implants.AlphaAMS`,
-       :py:class:`~pulse2percept.implants.PRIMA`,
-       :py:class:`~pulse2percept.implants.PRIMA75`,
+       :py:class:`~pulse2percept.implants.PRIMAPivotal`,
+       :py:class:`~pulse2percept.implants.Lorach2015Array`,
        :py:class:`~pulse2percept.implants.Ho2019FlatArray`,
        :py:class:`~pulse2percept.implants.Huang2021Array`
    * - Suprachoroidal
@@ -117,16 +117,25 @@ confuse because two of them contain both a 55 um and a 40 um device:
    * - Family
      - Devices
    * - Clinical/historical PRIMA
-     - :py:class:`~pulse2percept.implants.PRIMA` (100 um),
-       :py:class:`~pulse2percept.implants.PRIMA75`
+     - :py:class:`~pulse2percept.implants.PRIMAPivotal` (100 um),
+       :py:class:`~pulse2percept.implants.Lorach2015Array` (70 um)
    * - Flat experimental arrays, [Ho2019]_, 1 mm die
      - ``Ho2019FlatArray(55)`` (F55), ``Ho2019FlatArray(40)`` (F40)
    * - Vertical-junction arrays, [Huang2021]_, 1.5 mm die
      - ``Huang2021Array(55)``, ``Huang2021Array(40)``,
        ``Huang2021Array(30)``, ``Huang2021Array(20)``
 
-``PRIMA55`` and ``PRIMA40`` are deprecated wrappers for
-``Ho2019FlatArray(55)`` and ``Ho2019FlatArray(40)``.
+``PRIMA``, ``PRIMA75``, ``PRIMA55`` and ``PRIMA40`` are deprecated wrappers
+for ``PRIMAPivotal``, ``Lorach2015Array``, ``Ho2019FlatArray(55)`` and
+``Ho2019FlatArray(40)``. Each canonical name says which published hardware
+configuration the class models: ``PRIMA`` is left free for the eventual
+commercial device, whose specifications may differ from the pivotal-trial
+array, and ``PRIMA75`` was pulse2percept shorthand rather than a device name.
+
+Implants also carry descriptive class attributes: ``placement``,
+``technology`` (e.g. ``'photovoltaic'``) and ``family`` (e.g. ``'PRIMA'``).
+They are metadata only -- nothing in pulse2percept behaves differently
+because of them -- and are ``None`` where they have not been recorded.
 
 [Ho2019]_ also describes pillar arrays (Pil55, Pil40) alongside the flat ones,
 which pulse2percept does not model; hence ``Ho2019FlatArray``.

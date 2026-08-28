@@ -10,8 +10,11 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon, RegularPolygon
 from scipy.spatial import cKDTree
 
-from pulse2percept.implants import (PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55,
-                                    PRIMA40, Ho2019FlatArray, Huang2021Array)
+from pulse2percept.implants import (PhotovoltaicPixel, PRIMAPivotal,
+                                    Lorach2015Array, Ho2019FlatArray,
+                                    Huang2021Array, PointSource,
+                                    ProsthesisSystem, PRIMA, PRIMA75,
+                                    PRIMA55, PRIMA40)
 from pulse2percept.stimuli import LogoBVL
 from pulse2percept.units import deg, mm, um
 from pulse2percept.utils.constants import ZORDER
@@ -40,7 +43,7 @@ def test_PhotovoltaicPixel():
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
-def test_PRIMA(ztype, x, y, rot):
+def test_PRIMAPivotal(ztype, x, y, rot):
     # 85 um pixel with 15 um trenches:
     spacing = 100
     # Roughly a 12x15 grid, but edges are trimmed off:
@@ -49,7 +52,7 @@ def test_PRIMA(ztype, x, y, rot):
     # Height `z` can either be a float or a list
     z = -100 if ztype == 'float' else -np.ones(378) * 20
 
-    prima = PRIMA(x, y, z=z, rot=rot)
+    prima = PRIMAPivotal(x, y, z=z, rot=rot)
 
     # Slots:
     npt.assert_equal(hasattr(prima, '__slots__'), True)
@@ -84,14 +87,14 @@ def test_PRIMA(ztype, x, y, rot):
     npt.assert_almost_equal(distF6E7, spacing)
 
     with pytest.raises(ValueError):
-        PRIMA(0, 0, z=np.ones(16))
+        PRIMAPivotal(0, 0, z=np.ones(16))
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 @pytest.mark.parametrize('x', (-100, 200))
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
-def test_PRIMA75(ztype, x, y, rot):
+def test_Lorach2015Array(ztype, x, y, rot):
     # 70 um pixel with 5 um trenches:
     spacing = 75
     # Roughly a 12x15 grid, but edges are trimmed off:
@@ -100,7 +103,7 @@ def test_PRIMA75(ztype, x, y, rot):
     # Height `z` can either be a float or a list
     z = -100 if ztype == 'float' else -np.ones(142) * 20
 
-    prima = PRIMA75(x, y, z=z, rot=rot)
+    prima = Lorach2015Array(x, y, z=z, rot=rot)
 
     # Slots:
     npt.assert_equal(hasattr(prima, '__slots__'), True)
@@ -135,7 +138,7 @@ def test_PRIMA75(ztype, x, y, rot):
     npt.assert_almost_equal(distF6E7, spacing)
 
     with pytest.raises(ValueError):
-        PRIMA75(0, 0, z=np.ones(16))
+        Lorach2015Array(0, 0, z=np.ones(16))
 
 
 #: pixel size (um), exposed pixels, pixels fabricated on the die, active
@@ -308,6 +311,54 @@ def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
         old_cls(0, 0, -100, 0, 'LE', False, False)
 
 
+@pytest.mark.parametrize('old_cls, new_cls',
+                         [(PRIMA, PRIMAPivotal),
+                          (PRIMA75, Lorach2015Array)])
+def test_PRIMA_PRIMA75_are_deprecated(old_cls, new_cls):
+    """The old names build the same devices under a deprecation warning"""
+    with pytest.deprecated_call():
+        old = old_cls(x=-100, y=400, rot=30)
+    new = new_cls(x=-100, y=400, rot=30)
+    npt.assert_equal(list(old.earray.electrodes), list(new.earray.electrodes))
+    npt.assert_allclose(old.earray.coordinates(), new.earray.coordinates())
+    # Still frozen, and still take the whole old signature:
+    npt.assert_equal(hasattr(old, '__dict__'), False)
+    with pytest.deprecated_call():
+        old_cls(0, 0, -100, 0, 'LE', False, False)
+
+
+def test_implant_metadata():
+    """``placement``/``technology``/``family`` are descriptive class attributes
+
+    They carry no behavior, so what matters is that the photovoltaic arrays
+    agree on what they are and that an implant that has not been classified
+    says so rather than guessing.
+    """
+    for cls in (PRIMAPivotal, Lorach2015Array, Ho2019FlatArray,
+                Huang2021Array):
+        npt.assert_equal(cls.placement, 'subretinal')
+        npt.assert_equal(cls.technology, 'photovoltaic')
+    # Only the clinical device is part of a product family:
+    npt.assert_equal(PRIMAPivotal.family, 'PRIMA')
+    for cls in (Lorach2015Array, Ho2019FlatArray, Huang2021Array):
+        npt.assert_equal(cls.family, None)
+    # Unclassified implants default to None rather than to a guess:
+    generic = ProsthesisSystem(PointSource(0, 0, 0))
+    npt.assert_equal((generic.placement, generic.technology, generic.family),
+                     (None, None, None))
+
+
+def test_prima_public_api():
+    """Both the canonical names and the compatibility aliases are exported"""
+    import pulse2percept.implants as implants
+    canonical = ['PRIMAPivotal', 'Lorach2015Array', 'Ho2019FlatArray',
+                 'Huang2021Array']
+    deprecated = ['PRIMA', 'PRIMA75', 'PRIMA55', 'PRIMA40']
+    for name in canonical + deprecated:
+        npt.assert_equal(name in implants.__all__, True)
+        npt.assert_equal(getattr(implants, name).__name__, name)
+
+
 @pytest.mark.parametrize('pixel_size, n_elec, n_total, elec_diam',
                          HUANG_VARIANTS)
 @pytest.mark.parametrize('ztype', ('float', 'list'))
@@ -447,7 +498,8 @@ def _substrate(implant, **kwargs):
 
 
 #: Every round-substrate device, paired with the radius (um) of its die.
-ROUND_DEVICES = ([(PRIMA75, 500), (partial(Ho2019FlatArray, 55), 500),
+ROUND_DEVICES = ([(Lorach2015Array, 500),
+                  (partial(Ho2019FlatArray, 55), 500),
                   (partial(Ho2019FlatArray, 40), 500)] +
                  [(partial(Huang2021Array, s), 750)
                   for s in (55, 40, 30, 20)])
@@ -478,9 +530,9 @@ def test_PRIMA_round_substrate(implant_type, radius, rot):
 
 @pytest.mark.parametrize('rot', (0, 30, -45))
 def test_PRIMA_square_substrate(rot):
-    """Clinical PRIMA sits on a 2 x 2 mm die that turns with the implant"""
+    """The pivotal-trial PRIMA sits on a 2 x 2 mm die that turns with it"""
     x, y = -100, 400
-    ax, patch = _substrate(PRIMA(x=x, y=y, rot=rot))
+    ax, patch = _substrate(PRIMAPivotal(x=x, y=y, rot=rot))
     corners = patch.get_xy()[:4]
     npt.assert_almost_equal(corners.mean(axis=0), (x, y))
     edges = np.roll(corners, -1, axis=0) - corners
@@ -500,7 +552,7 @@ def test_PRIMA_square_substrate(rot):
 
 
 @pytest.mark.parametrize('implant_type, radius',
-                         [(PRIMA, None)] + ROUND_DEVICES)
+                         [(PRIMAPivotal, None)] + ROUND_DEVICES)
 def test_PRIMA_substrate_holds_pixels(implant_type, radius):
     """No pixel is drawn off the substrate
 
@@ -525,7 +577,7 @@ def test_PRIMA_substrate_holds_pixels(implant_type, radius):
 
 
 @pytest.mark.parametrize('implant_type, radius, whole_bodies', [
-    (PRIMA, None, True), (PRIMA75, 500, False),
+    (PRIMAPivotal, None, True), (Lorach2015Array, 500, False),
     (partial(Ho2019FlatArray, 55), 500, True),
     (partial(Ho2019FlatArray, 40), 500, True),
     (partial(Huang2021Array, 40), 750, True),
@@ -534,7 +586,8 @@ def test_PRIMA_pixel_bodies_vs_substrate(implant_type, radius, whole_bodies):
     """Which devices carry only whole pixels, and which have a cut rim
 
     142 whole 70 um hexagons do not fit inside a 1 mm circle at 75 um
-    spacing, so PRIMA75 necessarily has a truncated outer ring; the others
+    spacing, so Lorach2015Array necessarily has a truncated outer ring; the
+    others
     carry only complete pixel bodies.
     """
     implant = implant_type()
@@ -551,7 +604,8 @@ def test_PRIMA_pixel_bodies_vs_substrate(implant_type, radius, whole_bodies):
 
 
 @pytest.mark.parametrize('implant_type', [
-    PRIMA, PRIMA75, partial(Ho2019FlatArray, 55), partial(Ho2019FlatArray, 40),
+    PRIMAPivotal, Lorach2015Array, partial(Ho2019FlatArray, 55),
+    partial(Ho2019FlatArray, 40),
     partial(Huang2021Array, 55), partial(Huang2021Array, 20),
 ])
 def test_PRIMA_plot_passthrough(implant_type):
@@ -583,8 +637,8 @@ def test_PRIMA40_reshape_stim():
 
 
 @pytest.mark.parametrize('implant_type, offset', [
-    (PRIMA, (0, 0)),
-    (PRIMA75, (0, 0)),
+    (PRIMAPivotal, (0, 0)),
+    (Lorach2015Array, (0, 0)),
     # The reconstructed masks are centered on the substrate, since where they
     # sit on the die is not published. Ho2019FlatArray(40) instead keeps the
     # 502 lattice sites nearest the substrate center, and a discrete lattice

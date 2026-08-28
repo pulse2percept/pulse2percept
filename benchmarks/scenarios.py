@@ -15,7 +15,7 @@ first two correspond to these one-liners::
                             xrange=(-12, 12)).predict_percept(
         as_current(implant, p2p.stimuli.LogoBVL()))
 
-    implant = p2p.implants.PRIMA()
+    implant = p2p.implants.PRIMAPivotal()
     p2p.models.ScoreboardModel(implant=implant, yrange=(-4, 4),
                                xrange=(-4, 4), rho=50,
                                step=0.1).predict_percept(
@@ -182,7 +182,7 @@ SCENARIOS = [
     Scenario(
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
-        implant=p2p.implants.PRIMA,
+        implant=p2p.implants.PRIMAPivotal,
         source=as_current,
         model=lambda **kwargs: p2p.models.ScoreboardModel(xrange=(-4, 4),
                                                           yrange=(-4, 4),

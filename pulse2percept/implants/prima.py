@@ -1,6 +1,6 @@
 """:py:class:`~pulse2percept.implants.PhotovoltaicPixel`,
-   :py:class:`~pulse2percept.implants.PRIMA`,
-   :py:class:`~pulse2percept.implants.PRIMA75`,
+   :py:class:`~pulse2percept.implants.PRIMAPivotal`,
+   :py:class:`~pulse2percept.implants.Lorach2015Array`,
    :py:class:`~pulse2percept.implants.Ho2019FlatArray`,
    :py:class:`~pulse2percept.implants.Huang2021Array`"""
 
@@ -349,14 +349,14 @@ class PhotovoltaicPixel(HexElectrode):
         raise NotImplementedError
 
 
-class PRIMA(ProsthesisSystem):
-    """Create a PRIMA-100 array on the retina
+class PRIMAPivotal(ProsthesisSystem):
+    """Create a PRIMA array as used in the pivotal trial
 
-    This class creates a PRIMA array with 378 photovoltaic pixels as used in
-    the clinical trial [Palanker2020]_, and places it in the subretinal space
-    such that the center of the array is located at 3D location (x,y,z), given
-    in microns, and the array is rotated by rotation angle ``rot``, given in
-    degrees.
+    This class creates the PRIMA array with 378 photovoltaic pixels used in the
+    pivotal clinical trial [Palanker2020]_, and places it in the subretinal
+    space such that the center of the array is located at 3D location (x,y,z),
+    given in microns, and the array is rotated by rotation angle ``rot``, given
+    in degrees.
 
     Each hexagonal pixel is 100 um wide (flat-to-flat), and neighboring pixel
     centers are 100 um apart, on a 2 x 2 mm substrate. Adjacent rows are
@@ -371,6 +371,11 @@ class PRIMA(ProsthesisSystem):
         the clinical PRIMA literature. Earlier versions drew 85 um pixels
         separated by 15 um trenches, an interpretation no primary source
         supports. Pixel centers are unchanged.
+
+    .. versionchanged:: 0.11.0
+        Was called ``PRIMA``. The qualified name identifies this one fixed
+        published hardware configuration, and leaves ``PRIMA`` free for the
+        eventual commercial device, whose specifications may differ.
 
     Parameters
     ----------
@@ -409,6 +414,8 @@ class PRIMA(ProsthesisSystem):
                  '_substrate_center')
 
     placement = 'subretinal'
+    technology = 'photovoltaic'
+    family = 'PRIMA'
 
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
@@ -490,11 +497,11 @@ class PRIMA(ProsthesisSystem):
         return self.spacing * np.sqrt(3) / 2
 
 
-class PRIMA75(ProsthesisSystem):
-    """Create a PRIMA-75 array on the retina
+class Lorach2015Array(ProsthesisSystem):
+    """Create the 70 um photovoltaic array of [Lorach2015]_ on the retina
 
-    This class creates a PRIMA array with 142 photovoltaic pixels as described
-    in [Lorach2015]_, and places it in the subretinal space, such that that the
+    This class creates the array of 142 photovoltaic pixels described in
+    [Lorach2015]_, and places it in the subretinal space, such that that the
     center of the array is located at 3D location (x,y,z), given in microns,
     and the array is rotated by rotation angle ``rot``, given in degrees.
 
@@ -505,6 +512,10 @@ class PRIMA75(ProsthesisSystem):
     pixel is a disk 20 um in diameter.
 
     .. versionadded:: 0.7
+
+    .. versionchanged:: 0.11.0
+        Was called ``PRIMA75``, which was pulse2percept shorthand for the
+        70 um array of [Lorach2015]_ rather than an official device name.
 
     Parameters
     ----------
@@ -548,6 +559,7 @@ class PRIMA75(ProsthesisSystem):
                  '_substrate_center')
 
     placement = 'subretinal'
+    technology = 'photovoltaic'
 
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
@@ -713,6 +725,7 @@ class Ho2019FlatArray(ProsthesisSystem):
                  '_substrate_center')
 
     placement = 'subretinal'
+    technology = 'photovoltaic'
 
     def __init__(self, pixel_size, x=0, y=0, z=-100, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):
@@ -879,6 +892,7 @@ class Huang2021Array(ProsthesisSystem):
                  'pixel_width', 'gap', '_substrate_center')
 
     placement = 'subretinal'
+    technology = 'photovoltaic'
 
     def __init__(self, pixel_size, x=0, y=0, z=-100, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):
@@ -1010,3 +1024,43 @@ class PRIMA40(Ho2019FlatArray):
                  safe_mode=False):
         super().__init__(40, x=x, y=y, z=z, rot=rot, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)
+
+
+@deprecated(alt_func='PRIMAPivotal', deprecated_version='0.11.0',
+            removed_version='0.12.0',
+            extra_msg='``PRIMA`` is reserved for the eventual commercial '
+                      'device, whose specifications may differ from the '
+                      'pivotal-trial configuration this class models.')
+class PRIMA(PRIMAPivotal):
+    """Create a PRIMA-100 array on the retina
+
+    .. deprecated:: 0.11.0
+
+        Use :py:class:`~pulse2percept.implants.PRIMAPivotal` instead. The
+        geometry is unchanged; the qualified name identifies the one published
+        hardware configuration this class models, and leaves ``PRIMA`` free
+        for the eventual commercial device.
+
+    Takes the same arguments as
+    :py:class:`~pulse2percept.implants.PRIMAPivotal`.
+    """
+    __slots__ = ()
+
+
+@deprecated(alt_func='Lorach2015Array', deprecated_version='0.11.0',
+            removed_version='0.12.0',
+            extra_msg='``PRIMA75`` was pulse2percept shorthand, not an '
+                      'official device name.')
+class PRIMA75(Lorach2015Array):
+    """Create a PRIMA-75 array on the retina
+
+    .. deprecated:: 0.11.0
+
+        Use :py:class:`~pulse2percept.implants.Lorach2015Array` instead. The
+        geometry is unchanged; ``PRIMA75`` was pulse2percept shorthand for the
+        70 um array of [Lorach2015]_ rather than an official device name.
+
+    Takes the same arguments as
+    :py:class:`~pulse2percept.implants.Lorach2015Array`.
+    """
+    __slots__ = ()
