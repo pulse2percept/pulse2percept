@@ -439,8 +439,22 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         """Customize the building process by implementing this method"""
         pass
 
+    def _stim_unit(self, stim):
+        """The unit this model reads ``stim`` in.
+
+        ``stimulus_unit`` for a stimulus of that dimension, otherwise the
+        matching entry of ``extra_stimulus_units``. A stimulus of neither
+        dimension has already been refused by ``_require_stim_dimension``.
+        """
+        if stim.unit.dimension == self.stimulus_unit.dimension:
+            return self.stimulus_unit
+        for unit in self.extra_stimulus_units:
+            if stim.unit.dimension == unit.dimension:
+                return unit
+        return self.stimulus_unit
+
     def _stim_values(self, stim):
-        """Return stimulus values in ``stimulus_unit``.
+        """Return stimulus values in the unit this model reads them in.
 
         Stimuli are converted at the model boundary; percept values are passed
         through because brightness is not a physical stimulus quantity.
@@ -448,7 +462,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         if not isinstance(stim, Stimulus):
             return stim.data
         _require_stim_dimension(self, stim)
-        return stim.values(self.stimulus_unit)
+        return stim.values(self._stim_unit(stim))
 
     def _stim_times(self, stim):
         """Return the time axis in ``time_unit``.
@@ -1568,7 +1582,13 @@ class Model(Frozen, PrettyPrint):
         if stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
-        _require_stim_dimension(self, stim)
+        # A spatial-only model reads the stimulus' spatial view, which need not
+        # be measured in the same quantity as the waveform behind it: a
+        # photovoltaic implant delivers irradiance but reports normalized
+        # optical drive. Check what the stages will actually read:
+        _require_stim_dimension(
+            self, _spatial_input(stim) if self.has_space and not self.has_time
+            else stim)
         # `_has_time_axis`, not `stim.time`: whether there is a time axis is a
         # question a stimulus can answer from its structure, and asking it for
         # the axis itself would generate the waveform behind it.

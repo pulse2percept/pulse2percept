@@ -1211,12 +1211,15 @@ def test_model_requires_a_current_stimulus():
         stimulus_unit = dimensionless
 
     implant = Projector(preprocess=False)
-    spatial = ScoreboardSpatial(implant=implant, xrange=(-2, 2),
-                                yrange=(-2, 2), step=1).build()
+    # `ScoreboardSpatial` is the deliberate exception: it also reads the
+    # normalized optical drive a photovoltaic implant reports (see
+    # `PRIMAEncoder`), so a model without such a reading makes the point.
+    spatial = AxonMapSpatial(implant=implant, xrange=(-2, 2),
+                             yrange=(-2, 2), step=1).build()
     temporal = FadingTemporal().build()
     composite = Model(implant=implant,
-                      spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                                step=1),
+                      spatial=AxonMapSpatial(xrange=(-2, 2), yrange=(-2, 2),
+                                             step=1),
                       temporal=FadingTemporal()).build()
     with pytest.raises(DimensionMismatchError):
         ArgusII(preprocess=False, encoder=None).prepare_stim(img)

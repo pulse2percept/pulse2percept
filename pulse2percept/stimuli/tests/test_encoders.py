@@ -7,17 +7,19 @@ import pytest
 from scipy.integrate import trapezoid
 
 from pulse2percept.implants import (ArgusII, CustomRaster, DiskElectrode,
-                                    GridImplant, SequentialRaster)
+                                    GridImplant, PRIMAPivotal,
+                                    SequentialRaster)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
-                                   BiphasicPulseTrain, BostonTrain,
+                                   BiphasicPulseTrain, BostonTrain, Encoder,
                                    FrequencyEncoder, ImageStimulus,
-                                   MonophasicPulse, Stimulus, StimulusEncoder,
-                                   VideoStimulus)
+                                   MonophasicPulse, PRIMAEncoder, Stimulus,
+                                   StimulusEncoder, VideoStimulus)
 from pulse2percept.stimuli import encoders
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
-from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
-                                 dimensionless, kHz, mA, ms, uA, us)
+from pulse2percept.units import (DimensionMismatchError, Hz, Quantity, W,
+                                 dimensionless, kHz, m, mA, mW, mm, ms, uA,
+                                 us)
 from pulse2percept.units import s as sec
 
 
@@ -1366,3 +1368,248 @@ def test_encoded_stimulus_survives_preparation_unrendered():
     stim = ArgusII(encoder=AmplitudeEncoder()).prepare_stim(img)
     npt.assert_equal(_rendered(stim), False)
     npt.assert_equal(stim.data.shape[0], 60)
+
+
+# -----------------------------------------------------------------------------
+# PRIMAEncoder
+# -----------------------------------------------------------------------------
+
+def on_intervals(stim, electrode=0):
+    """Length (ms) of every interval one pixel spends at peak irradiance"""
+    row, time = stim.data[electrode], stim.time
+    lit = row >= 0.99 * row.max() if row.max() > 0 else row > np.inf
+    edges = np.diff(np.concatenate(([0], lit.astype(int), [0])))
+    starts, stops = np.flatnonzero(edges > 0), np.flatnonzero(edges < 0) - 1
+    # The rise and the fall each take one DT outside the flat top:
+    return [time[b] - time[a] + 2 * DT for a, b in zip(starts, stops)]
+
+
+def test_PRIMAEncoder():
+    encoder = PRIMAEncoder()
+    npt.assert_almost_equal(encoder.irradiance, 3.5)
+    npt.assert_almost_equal(encoder.freq, 30)
+    npt.assert_almost_equal(encoder.pulse_dur, 9.8)
+    npt.assert_equal(encoder.grayscale, False)
+    npt.assert_almost_equal(encoder.threshold, 0.5)
+    npt.assert_almost_equal(encoder.period, 1000 / 30)
+    npt.assert_equal(encoder.n_levels, 14)
+    npt.assert_equal(isinstance(encoder, Encoder), True)
+    # Not an electrical encoder, and not schedulable like one:
+    npt.assert_equal(isinstance(encoder, StimulusEncoder), False)
+    npt.assert_equal('PRIMAEncoder' in str(encoder), True)
+
+    # Unitful spellings mean the same thing as the bare numbers:
+    unitful = PRIMAEncoder(irradiance=3500 * W / m ** 2, freq=0.03 * kHz,
+                           pulse_dur=9800 * us)
+    npt.assert_almost_equal(unitful.irradiance, 3.5)
+    npt.assert_almost_equal(unitful.freq, 30)
+    npt.assert_almost_equal(unitful.pulse_dur, 9.8)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'irradiance': 0}, {'irradiance': -1}, {'irradiance': np.inf},
+    {'freq': 0}, {'freq': -30}, {'freq': np.nan},
+    {'pulse_dur': -0.7}, {'pulse_dur': np.inf},
+    {'pulse_dur': 1.0},        # off the 0.7 ms hardware grid
+    {'pulse_dur': 10.5},       # a grid step, but past the documented maximum
+    {'freq': 200},             # a 9.8 ms pulse does not fit a 5 ms period
+    {'threshold': -0.1}, {'threshold': 1.5},
+])
+def test_PRIMAEncoder_rejects(kwargs):
+    with pytest.raises(ValueError):
+        PRIMAEncoder(**kwargs)
+
+
+def test_PRIMAEncoder_takes_a_picture():
+    implant = PRIMAPivotal()
+    with pytest.raises(DimensionMismatchError):
+        PRIMAEncoder().encode(Stimulus([[1, 0]] * uA, time=[0, 10]),
+                              implant=implant)
+    with pytest.raises(TypeError):
+        PRIMAEncoder().encode(np.ones((4, 4)), implant=implant)
+    # RGB becomes gray through the implant's own sampling path:
+    rgb = ImageStimulus(np.ones((8, 8, 3)))
+    npt.assert_equal(PRIMAEncoder().encode(rgb, implant=implant).shape[0], 378)
+
+
+@pytest.mark.parametrize('gray, n_lit', [(1.0, 378), (0.0, 0)])
+def test_PRIMAEncoder_binary_extremes(gray, n_lit):
+    implant = PRIMAPivotal()
+    stim = PRIMAEncoder().encode(ImageStimulus(np.full((16, 16), gray)),
+                                 implant=implant)
+    npt.assert_equal(stim.shape[0], 378)
+    npt.assert_equal(np.count_nonzero(stim.data.max(axis=1)), n_lit)
+    # All 378 pixels may be lit at once: there is no multiplexing to schedule.
+    npt.assert_equal(implant.raster, None)
+
+
+@pytest.mark.parametrize('threshold', [0.25, 0.5, 0.75])
+def test_PRIMAEncoder_threshold(threshold):
+    # A left-to-right ramp: exactly the pixels at or above threshold light up.
+    ramp = np.tile(np.linspace(0, 1, 32), (32, 1))
+    implant = PRIMAPivotal()
+    encoder = PRIMAEncoder(threshold=threshold)
+    gray = implant.reshape_stim(ImageStimulus(ramp)).data.ravel()
+    stim = encoder.encode(ImageStimulus(ramp), implant=implant)
+    dur = stim.metadata['encoder']['optical']['pulse_dur'].ravel()
+    npt.assert_array_equal(dur > 0, gray >= threshold)
+    # Binary means binary: a lit pixel gets the full pulse, whatever its gray
+    # level, and nothing in between exists.
+    npt.assert_array_equal(np.unique(dur), np.array([0.0, 9.8]))
+
+
+def test_PRIMAEncoder_optical_waveform():
+    implant = PRIMAPivotal()
+    stim = PRIMAEncoder().encode(ImageStimulus(np.ones((16, 16))),
+                                 implant=implant)
+    # Irradiance, not current:
+    npt.assert_equal(stim.unit, mW / mm ** 2)
+    npt.assert_equal(stim.unit.dimension, (W / m ** 2).dimension)
+    npt.assert_equal(stim.time_unit, ms)
+    npt.assert_almost_equal(stim.data.max(), 3.5)
+    npt.assert_almost_equal(stim.data.min(), 0)
+    # A picture with no time axis is held for the standard presentation, and
+    # the projector simply repeats over it:
+    npt.assert_almost_equal(stim.duration, 500)
+    intervals = on_intervals(stim)
+    npt.assert_equal(len(intervals), 15)
+    npt.assert_almost_equal(intervals, 9.8, decimal=6)
+    # 30 Hz: the pulses are one projector period apart.
+    onsets = stim.time[np.flatnonzero(np.diff(stim.data[0]) > 0)]
+    npt.assert_almost_equal(np.diff(onsets), 1000 / 30, decimal=3)
+    npt.assert_almost_equal(stim.metadata['encoder']['frame_dur'], 500)
+
+
+def test_PRIMAEncoder_irradiance_is_not_modulated():
+    implant = PRIMAPivotal()
+    ramp = np.tile(np.linspace(0, 1, 32), (32, 1))
+    stim = PRIMAEncoder(grayscale=True, irradiance=2.0).encode(
+        ImageStimulus(ramp), implant=implant)
+    lit = stim.data[stim.data > 0]
+    # Every lit pixel sees the same peak, however long it is lit for:
+    npt.assert_almost_equal(np.unique(np.round(lit, 6)), np.array([2.0]))
+
+
+def test_PRIMAEncoder_grayscale():
+    implant = PRIMAPivotal()
+    ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
+    stim = PRIMAEncoder(grayscale=True).encode(ImageStimulus(ramp),
+                                               implant=implant)
+    dur = stim.metadata['encoder']['optical']['pulse_dur']
+    # Durations fall exactly on the 0.7 ms hardware grid, 0 through 9.8 ms:
+    npt.assert_almost_equal(dur / 0.7, np.round(dur / 0.7))
+    npt.assert_almost_equal(dur.min(), 0)
+    npt.assert_almost_equal(dur.max(), 9.8)
+    npt.assert_equal(np.unique(np.round(dur, 6)).size > 2, True)
+    npt.assert_equal(stim.metadata['encoder']['optical']['grayscale'], True)
+    # The gray level a pixel saw picks its level, one step at a time:
+    gray = implant.reshape_stim(ImageStimulus(ramp)).data
+    npt.assert_almost_equal(dur, np.round(gray * 14) * 0.7, decimal=6)
+
+    # A lower maximum offers only the levels up through that maximum:
+    coarse = PRIMAEncoder(grayscale=True, pulse_dur=2.1).encode(
+        ImageStimulus(ramp), implant=implant)
+    levels = np.unique(coarse.metadata['encoder']['optical']['pulse_dur'])
+    npt.assert_almost_equal(levels, np.array([0.0, 0.7, 1.4, 2.1]))
+
+
+def test_PRIMAEncoder_records_its_settings():
+    stim = PRIMAEncoder(grayscale=True).encode(
+        ImageStimulus(np.ones((8, 8))), implant=PRIMAPivotal())
+    optical = stim.metadata['encoder']['optical']
+    npt.assert_equal(sorted(optical),
+                     ['freq', 'grayscale', 'irradiance', 'pulse_dur',
+                      'wavelength'])
+    npt.assert_almost_equal(optical['wavelength'], 880)
+    npt.assert_almost_equal(optical['irradiance'], 3.5)
+    npt.assert_almost_equal(optical['freq'], 30)
+    npt.assert_equal(optical['pulse_dur'].shape, (378, 1))
+    # ... and the same values are readable off the stimulus itself:
+    npt.assert_almost_equal(stim.wavelength, 880)
+    npt.assert_almost_equal(stim.irradiance, 3.5)
+    npt.assert_almost_equal(stim.freq, 30)
+    npt.assert_almost_equal(stim.duty_cycle.max(), 0.294)
+
+
+def test_PRIMAEncoder_spatial_view():
+    implant = PRIMAPivotal()
+    ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
+    view = PRIMAEncoder(grayscale=True).encode(
+        ImageStimulus(ramp), implant=implant)._spatial_view()
+    # Normalized optical drive: dimensionless, 0 for a dark pixel and 1 for one
+    # at the largest documented drive.
+    npt.assert_equal(view.unit, dimensionless)
+    npt.assert_equal(view.time, None)
+    npt.assert_equal(view.shape, (378, 1))
+    npt.assert_almost_equal(view.data.min(), 0)
+    npt.assert_almost_equal(view.data.max(), 1, decimal=6)
+    # Every pixel's drive follows its own ON duration:
+    dur = PRIMAEncoder(grayscale=True).encode(
+        ImageStimulus(ramp), implant=implant).pulse_dur
+    npt.assert_almost_equal(view.data.ravel(), (dur / 9.8).ravel(), decimal=6)
+
+    # Turn any of the three factors down and the drive goes down with it:
+    half = PRIMAEncoder(irradiance=1.75).encode(
+        ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
+    npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
+    half = PRIMAEncoder(freq=15).encode(
+        ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
+    npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
+    half = PRIMAEncoder(pulse_dur=4.9).encode(
+        ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
+    npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
+
+
+def test_PRIMAEncoder_video():
+    implant = PRIMAPivotal()
+    # Three frames, alternately lit and dark:
+    frames = np.stack([np.ones((8, 8)), np.zeros((8, 8)), np.ones((8, 8))],
+                      axis=-1)
+    video = VideoStimulus(frames, time=np.arange(3) * 40.0)
+    stim = PRIMAEncoder().encode(video, implant=implant)
+    # The projector clock, not the movie's: one source frame per period.
+    npt.assert_almost_equal(stim.duration, 3 * 1000 / 30)
+    npt.assert_almost_equal(stim.metadata['encoder']['frame_dur'], 1000 / 30)
+    npt.assert_equal(stim.metadata['encoder']['optical']['pulse_dur'].shape,
+                     (378, 3))
+    intervals = on_intervals(stim)
+    npt.assert_equal(len(intervals), 2)
+    npt.assert_almost_equal(intervals, 9.8, decimal=6)
+    view = stim._spatial_view()
+    npt.assert_equal(view.shape, (378, 3))
+    npt.assert_almost_equal(view.data.max(axis=0), [1, 0, 1], decimal=6)
+
+
+def test_PRIMAEncoder_defers_the_waveform():
+    implant = PRIMAPivotal()
+    stim = PRIMAEncoder().encode(ImageStimulus(np.ones((16, 16))),
+                                 implant=implant)
+    npt.assert_equal(_rendered(stim), False)
+    # Everything the schedule already settled, without expanding it:
+    npt.assert_almost_equal(stim.duration, 500)
+    npt.assert_equal(stim.unit, mW / mm ** 2)
+    npt.assert_equal(len(stim.electrodes), 378)
+    npt.assert_almost_equal(stim.pulse_dur.max(), 9.8)
+    npt.assert_equal(_rendered(stim._spatial_view()), True)
+    npt.assert_equal(_rendered(stim), False)
+    # Preparing it, and dropping a deactivated pixel, both stay unexpanded:
+    npt.assert_equal(_rendered(implant.prepare_stim(stim)), False)
+    implant.deactivate('A5')
+    prepared = implant.prepare_stim(ImageStimulus(np.ones((16, 16))))
+    npt.assert_equal(_rendered(prepared), False)
+    npt.assert_equal(len(prepared.electrodes), 377)
+    # Only asking for samples builds them:
+    npt.assert_equal(stim.data.shape, (378, stim.time.size))
+    npt.assert_equal(_rendered(stim), True)
+
+
+def test_PRIMAEncoder_scales_the_power():
+    stim = PRIMAEncoder().encode(ImageStimulus(np.ones((8, 8))),
+                                 implant=PRIMAPivotal())
+    # Pulse duration is quantized onto a hardware grid, so a scale factor is
+    # optical power rather than timing:
+    scaled = stim * 0.5
+    npt.assert_equal(_rendered(scaled), False)
+    npt.assert_almost_equal(scaled.irradiance, 1.75)
+    npt.assert_array_almost_equal(scaled.pulse_dur, stim.pulse_dur)
+    npt.assert_almost_equal(scaled.data.max(), 1.75)

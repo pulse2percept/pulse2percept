@@ -9,7 +9,7 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..units import deg, dva, um
+from ..units import deg, dimensionless, dva, um
 from ..utils.constants import UM_PER_MM, ZORDER
 from ..topography import Watson2014Map
 from ..implants import ElectrodeArray
@@ -142,6 +142,12 @@ class ScoreboardSpatial(SpatialModel):
         Number of OpenMP threads.
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
+
+    #: A photovoltaic implant is not driven by a current source. Its encoder
+    #: reports normalized optical drive instead, which this model uses directly
+    #: as the weight of each Gaussian (see
+    #: :py:class:`~pulse2percept.stimuli.PRIMAEncoder`).
+    extra_stimulus_units = (dimensionless,)
 
     def get_default_params(self):
         """Return all settable scoreboard parameters."""

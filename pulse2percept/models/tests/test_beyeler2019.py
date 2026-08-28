@@ -11,15 +11,16 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 
-from pulse2percept.implants import ArgusI, ArgusII
+from pulse2percept.implants import ArgusI, ArgusII, PRIMAPivotal
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import Stimulus
+from pulse2percept.stimuli import ImageStimulus, LogoBVL, Stimulus
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.models.beyeler2019 import _AXON_CACHE_VERSION
 from pulse2percept.models._beyeler2019 import fast_axon_map
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
-from pulse2percept.units import DimensionMismatchError, deg, dva, rad
+from pulse2percept.units import (DimensionMismatchError, deg,
+                                 dimensionless, dva, mW, mm, rad)
 from pulse2percept.utils.testing import assert_warns_msg
 
 # Building an axon map writes a cache to a relative path; keep it in a
@@ -1063,3 +1064,48 @@ def test_electrode_pitch_ignores_a_dimension_the_model_drops(ModelClass):
                        yrange=(-2, 2), **extra)
     said = _user_warnings(model.build)
     npt.assert_equal(any('pitch (100 um)' in w for w in said), True)
+
+
+def test_scoreboard_visualizes_a_photovoltaic_implant():
+    """A picture straight into a PRIMA implant comes out as a percept
+
+    Scoreboard weights each Gaussian by the normalized optical drive the
+    implant's encoder reports. That is a picture of implant geometry and
+    stimulation pattern, not a model of photodiode transduction, retinal
+    electric fields, or temporal dynamics.
+    """
+    implant = PRIMAPivotal()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        model = ScoreboardModel(implant=implant, rho=200, step=0.05,
+                                xrange=(-2, 2), yrange=(-2, 2))
+        percept = model.predict_percept(LogoBVL())
+    npt.assert_equal(isinstance(percept, Percept), True)
+    npt.assert_equal(percept.shape, tuple(model.grid.x.shape) + (1,))
+    npt.assert_equal(np.all(np.isfinite(percept.data)), True)
+    npt.assert_equal(percept.data.max() > 0, True)
+    # The stimulation itself is optical; only the spatial view is normalized:
+    delivered = implant.prepare_stim(LogoBVL())
+    npt.assert_equal(delivered.unit, mW / mm ** 2)
+    npt.assert_equal(delivered._spatial_view().unit, dimensionless)
+    # A dark picture drives nothing:
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        dark = model.predict_percept(ImageStimulus(np.zeros((32, 32))))
+    npt.assert_almost_equal(dark.data.max(), 0)
+
+
+def test_scoreboard_refuses_a_bare_optical_waveform():
+    # Without the normalized spatial view behind it, an optical stimulus is
+    # not something Scoreboard knows how to read: mW/mm^2 is neither a current
+    # nor an arbitrary brightness.
+    implant = PRIMAPivotal()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        model = ScoreboardModel(implant=implant, rho=200, step=0.5,
+                                xrange=(-2, 2), yrange=(-2, 2))
+    bare = Stimulus(implant.prepare_stim(LogoBVL()))
+    npt.assert_equal(bare._has_spatial_view, False)
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        model.predict_percept(bare)
+    npt.assert_equal('irradiance' in str(excinfo.value), True)

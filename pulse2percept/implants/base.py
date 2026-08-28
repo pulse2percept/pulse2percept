@@ -9,8 +9,8 @@ from scipy.interpolate import RegularGridInterpolator
 from .electrodes import Electrode, DiskElectrode, PointSource
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
-from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
-                       StimulusEncoder, VideoStimulus)
+from ..stimuli import (BiphasicPulseTrain, Encoder, Stimulus, ImageStimulus,
+                       VideoStimulus)
 from ..stimuli.base import _describe_unit
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
@@ -52,14 +52,19 @@ class ProsthesisSystem(PrettyPrint):
         If safe mode is enabled, only charge-balanced stimuli are allowed.
         Safety is an electrical property, so this also requires the stimulus
         to be measured in units of current.
-    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         How the device turns a picture into stimulation. If given, preparing an
-        image or a video encodes it first, so that what comes back is always
-        electrical. If None, such a stimulus is refused, since there is no
-        principled default mapping from a gray level to an amplitude or a
-        frequency.
+        image or a video encodes it first, so that what comes back is in the
+        unit the device delivers. If None, such a stimulus is refused, since
+        there is no principled default mapping from a gray level to
+        stimulation.
 
         .. versionadded:: 0.10.0
+
+        .. versionchanged:: 0.11.0
+            Accepts any :py:class:`~pulse2percept.stimuli.Encoder`, not only
+            an electrical
+            :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes that it cannot drive
         at the same time. If None, every electrode may fire at once. Assigning
@@ -148,8 +153,8 @@ class ProsthesisSystem(PrettyPrint):
     @encoder.setter
     def encoder(self, encoder):
         """Encoder setter (called upon ``self.encoder = encoder``)"""
-        if encoder is not None and not isinstance(encoder, StimulusEncoder):
-            raise TypeError(f"'encoder' must be a StimulusEncoder object, not "
+        if encoder is not None and not isinstance(encoder, Encoder):
+            raise TypeError(f"'encoder' must be an Encoder object, not "
                             f"{type(encoder)}.")
         self._encoder = encoder
 

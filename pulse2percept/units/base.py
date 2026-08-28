@@ -28,6 +28,8 @@ _DERIVED_LABELS = {
     (1, 0, 1, 0, 0, 0, 0): 'charge',
     (0, -2, 1, 0, 0, 0, 0): 'current density',
     (1, -2, 1, 0, 0, 0, 0): 'charge density',
+    (0, 0, 1, 1, 0, 0, 0): 'power',
+    (0, -2, 1, 1, 0, 0, 0): 'irradiance',
 }
 
 
@@ -755,6 +757,9 @@ VISUAL_ANGLE = Dimension(visual_angle=1)
 THRESHOLD_RATIO = Dimension(threshold_ratio=1)
 FREQUENCY = TIME ** -1
 CHARGE = CURRENT * TIME
+# Optical power, for photovoltaic implants. Not a new base dimension: power is
+# voltage times current, and irradiance is then ``mW / mm ** 2``.
+POWER = VOLTAGE * CURRENT
 
 #: The unit of a plain number, used for image intensities and other
 #: dimensionless data
@@ -801,6 +806,13 @@ mV = Unit(VOLTAGE, 1e-3, 'mV')
 #: Microvolt
 uV = Unit(VOLTAGE, 1e-6, 'uV')
 
+#: Watt
+W = Unit(POWER, 1, 'W')
+#: Milliwatt
+mW = Unit(POWER, 1e-3, 'mW')
+#: Microwatt
+uW = Unit(POWER, 1e-6, 'uW')
+
 #: Coulomb
 C = Unit(CHARGE, 1, 'C')
 #: Millicoulomb
@@ -840,6 +852,7 @@ _CANONICAL_UNITS = (dimensionless,
                     m, cm, mm, um, nm,
                     A, mA, uA, nA,
                     V, mV, uV,
+                    W, mW, uW,
                     C, mC, uC, nC,
                     rad, deg,
                     dva, xTh)

@@ -20,6 +20,8 @@ from .base import (Dimension, Unit, Quantity, DimensionMismatchError, as_value,
                    A, mA, uA, nA,
                    # voltage
                    V, mV, uV,
+                   # power
+                   W, mW, uW,
                    # charge
                    C, mC, uC, nC,
                    # angle
@@ -41,6 +43,7 @@ __all__ = [
     'm', 'cm', 'mm', 'um', 'nm',
     'A', 'mA', 'uA', 'nA',
     'V', 'mV', 'uV',
+    'W', 'mW', 'uW',
     'C', 'mC', 'uC', 'nC',
     'rad', 'deg',
     'dva',

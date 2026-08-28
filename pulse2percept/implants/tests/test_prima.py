@@ -15,8 +15,9 @@ from pulse2percept.implants import (PhotovoltaicPixel, PRIMAPivotal,
                                     Huang2021Array, PointSource,
                                     ProsthesisSystem, PRIMA, PRIMA75,
                                     PRIMA55, PRIMA40)
-from pulse2percept.stimuli import LogoBVL
-from pulse2percept.units import deg, mm, um
+from pulse2percept.stimuli import (BiphasicPulse, ImageStimulus, LogoBVL,
+                                   PRIMAEncoder, Stimulus)
+from pulse2percept.units import DimensionMismatchError, deg, mW, mm, um
 from pulse2percept.utils.constants import ZORDER
 from pulse2percept.models import ScoreboardModel
 
@@ -600,3 +601,108 @@ def test_PRIMA_device_center(implant_type, offset):
     R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
     rotated = implant_type(x=x, y=y, rot=rot).earray.coordinates()[:, :2]
     npt.assert_almost_equal(rotated, (R @ (xy - [x, y]).T).T + [x, y])
+
+
+class LooseEncoder(PRIMAEncoder):
+    """A projector without PRIMA's own limits, to test the implant's
+
+    The encoder refuses to build a stimulus outside the documented envelope, so
+    a stimulus that has to reach ``safe_mode`` has to come from somewhere that
+    does not check.
+    """
+    __slots__ = ()
+
+    pulse_step = 0.35
+    max_pulse_dur = 21.0
+    max_irradiance = 100.0
+
+
+def test_PRIMAPivotal_is_stimulated_optically():
+    implant = PRIMAPivotal()
+    npt.assert_equal(implant.stimulus_unit, mW / mm ** 2)
+    npt.assert_equal(isinstance(implant.encoder, PRIMAEncoder), True)
+    # Photovoltaic pixels are all illuminated at once; nothing multiplexes them.
+    npt.assert_equal(implant.raster, None)
+    # Each instance gets its own encoder, so tweaking one leaves the next alone:
+    implant.encoder.threshold = 0.9
+    npt.assert_almost_equal(PRIMAPivotal().encoder.threshold, 0.5)
+
+    stim = implant.prepare_stim(LogoBVL())
+    npt.assert_equal(stim.unit, mW / mm ** 2)
+    npt.assert_equal(stim.shape[0], 378)
+    npt.assert_almost_equal(stim.data.max(), 3.5)
+    npt.assert_almost_equal(stim.duration, 500)
+
+    # Explicitly switching the encoder off refuses image input rather than
+    # guessing at a mapping:
+    with pytest.raises(DimensionMismatchError):
+        PRIMAPivotal(encoder=None).prepare_stim(LogoBVL())
+    with pytest.raises(TypeError):
+        PRIMAPivotal(encoder='binary')
+
+
+@pytest.mark.parametrize('implant_type', [Lorach2015Array,
+                                          partial(Ho2019FlatArray, 55),
+                                          partial(Huang2021Array, 55)])
+def test_other_photovoltaic_arrays_have_no_encoder(implant_type):
+    # Their stimulation protocols differ from the pivotal PRIMA system, so
+    # they do not inherit its projector.
+    npt.assert_equal(implant_type().encoder, None)
+
+
+def test_PRIMA_deprecated_alias_keeps_the_encoder():
+    with pytest.deprecated_call():
+        implant = PRIMA()
+    npt.assert_equal(isinstance(implant.encoder, PRIMAEncoder), True)
+    npt.assert_equal(implant.prepare_stim(LogoBVL()).unit, mW / mm ** 2)
+
+
+def test_PRIMAPivotal_safe_mode_accepts_the_full_device():
+    # All 378 pixels lit at once, at the largest documented drive, is legal:
+    implant = PRIMAPivotal(safe_mode=True)
+    stim = implant.prepare_stim(ImageStimulus(np.ones((32, 32))))
+    npt.assert_equal(np.count_nonzero(stim.data.max(axis=1)), 378)
+    npt.assert_almost_equal(stim.duty_cycle.max(), 0.294)
+    # ... and so is every legal duration on the way down:
+    for pulse_dur in np.arange(1, 15) * 0.7:
+        implant.encoder = PRIMAEncoder(pulse_dur=pulse_dur, grayscale=True)
+        implant.prepare_stim(LogoBVL())
+
+
+@pytest.mark.parametrize('encoder, msg', [
+    (LooseEncoder(irradiance=5.0), 'exceeds the 3.5 mW/mm^2'),
+    (LooseEncoder(pulse_dur=14.0), 'longest documented ON duration'),
+    (PRIMAEncoder(freq=60), 'duty cycle'),
+    (LooseEncoder(pulse_dur=1.05), 'whole multiples of 0.7 ms'),
+])
+def test_PRIMAPivotal_safe_mode_rejects(encoder, msg):
+    implant = PRIMAPivotal(safe_mode=True, encoder=encoder)
+    with pytest.raises(ValueError) as excinfo:
+        implant.prepare_stim(LogoBVL())
+    npt.assert_equal(msg in str(excinfo.value), True)
+    # The same stimulus is fine when nobody claims it was checked:
+    npt.assert_equal(
+        PRIMAPivotal(encoder=encoder).prepare_stim(LogoBVL()).unit,
+        mW / mm ** 2)
+
+
+def test_PRIMAPivotal_safe_mode_needs_the_projector_settings():
+    implant = PRIMAPivotal(safe_mode=True)
+    encoded = PRIMAPivotal().prepare_stim(LogoBVL())
+    # A waveform on its own says nothing about the period its pulses sit in,
+    # so its duty cycle cannot be verified and it is refused rather than
+    # reported as safe:
+    handmade = Stimulus(encoded)
+    handmade.metadata = {'user': None}
+    with pytest.raises(ValueError) as excinfo:
+        implant.check_stim(handmade)
+    npt.assert_equal('duty cycle cannot be verified' in str(excinfo.value),
+                     True)
+    # Nor is safety an electrical question here:
+    with pytest.raises(DimensionMismatchError):
+        implant.check_stim(Stimulus({'A5': BiphasicPulse(10, 0.45)}))
+    # A current limit does not describe this device either:
+    implant = PRIMAPivotal()
+    implant.max_current = 100
+    with pytest.raises(DimensionMismatchError):
+        implant.prepare_stim(LogoBVL())

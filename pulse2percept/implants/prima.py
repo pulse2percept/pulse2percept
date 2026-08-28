@@ -13,9 +13,35 @@ from collections.abc import Sequence
 from .base import ProsthesisSystem
 from .electrodes import HexElectrode
 from .electrode_arrays import ElectrodeGrid
-from ..units import as_value, um
+from ..stimuli import PRIMAEncoder
+from ..stimuli.base import _describe_unit
+from ..units import DimensionMismatchError, as_value, mW, mm, um
 from ..utils import deprecated
-from ..utils.constants import ZORDER
+from ..utils.constants import MS_PER_S, ZORDER
+
+# Sentinel for "the device's own default", so that `encoder=None` can mean
+# "no automatic encoding" (see `PRIMAPivotal`):
+_DEVICE_DEFAULT = object()
+
+
+def _optical_params(stim):
+    """Projector settings a stimulus was built from, or None
+
+    ``Stimulus`` files metadata it does not recognize under a ``'user'`` key,
+    so an encoded stimulus that has been wrapped up in another one carries its
+    encoder record one level down.
+    """
+    meta = getattr(stim, 'metadata', None)
+    if not isinstance(meta, dict):
+        return None
+    enc = meta.get('encoder')
+    if not isinstance(enc, dict):
+        user = meta.get('user')
+        enc = user.get('encoder') if isinstance(user, dict) else None
+    if not isinstance(enc, dict):
+        return None
+    optical = enc.get('optical')
+    return optical if isinstance(optical, dict) else None
 
 
 #: F55 layout reconstructed from Fig. 2(a) of [Ho2019]_.
@@ -303,12 +329,33 @@ class PRIMAPivotal(ProsthesisSystem):
         preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
-        If safe mode is enabled, only charge-balanced stimuli are allowed.
-    
+        If safe mode is enabled, only stimuli that stay inside the projector's
+        documented envelope are allowed: at most 3.5 mW/mm^2 of irradiance, ON
+        durations on the 0.7 ms hardware grid and no longer than 9.8 ms, and a
+        duty cycle of at most 0.294. There is no limit on how many pixels may
+        be lit at once; all 378 of them may be. Charge balance is not checked,
+        because PRIMA is not driven by a current source.
+
+        .. versionchanged:: 0.11.0
+            Checks the optical envelope instead of electrical charge balance.
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+        How the device turns a picture into stimulation. Defaults to a fresh
+        :py:class:`~pulse2percept.stimuli.PRIMAEncoder`, i.e. binary 880 nm
+        illumination at 30 Hz. Pass ``encoder=None`` to switch automatic
+        encoding off, so that an image or video input is refused rather than
+        encoded.
+
+        .. versionadded:: 0.11.0
+
     Notes
     -----
     *  The active-electrode diameter was estimated from Fig. 1 of
        [Palanker2020]_.
+    *  The device is stimulated optically, so
+       :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` returns
+       irradiance in ``mW/mm^2``, not electrical current. How much current a
+       pixel injects depends on photodiode and circuit behavior that p2p does
+       not model yet.
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
@@ -318,8 +365,11 @@ class PRIMAPivotal(ProsthesisSystem):
     technology = 'photovoltaic'
     family = 'PRIMA'
 
+    #: The device is illuminated, not driven by a current source.
+    stimulus_unit = mW / mm ** 2
+
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
-                 safe_mode=False):
+                 safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.spacing = 100  # um, nearest-neighbor center-to-center
         self.pixel_width = 100  # um, flat-to-flat
         self.gap = self.spacing - self.pixel_width  # um, open inter-pixel gap
@@ -329,6 +379,10 @@ class PRIMAPivotal(ProsthesisSystem):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+        # Built per instance rather than shared between them: an encoder is a
+        # mutable object the caller may go on to tweak.
+        self.encoder = (PRIMAEncoder() if encoder is _DEVICE_DEFAULT
+                        else encoder)
 
         # Normalized here rather than in ElectrodeGrid, because a
         # per-electrode list of heights never reaches the grid at all -- it is
@@ -365,6 +419,72 @@ class PRIMAPivotal(ProsthesisSystem):
                                  f"{z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
+
+    def _require_within_optical_envelope(self, stim):
+        """Require a stimulus the PRIMA projector could actually produce."""
+        if stim.unit.dimension != self.stimulus_unit.dimension:
+            raise DimensionMismatchError(
+                f"Safety check 'safe_mode' needs an optical stimulus to "
+                f"check, and this one is measured in "
+                f"{_describe_unit(stim.unit)}. Give the implant a "
+                f"PRIMAEncoder so that image or video input is encoded into "
+                f"irradiance first.")
+        optical = _optical_params(stim)
+        if optical is None:
+            # Peak irradiance can be read off any waveform, but duty cycle
+            # cannot: it needs the projector period the pulses belong to.
+            # Calling a stimulus safe on half a check would be worse than
+            # refusing it:
+            raise ValueError(
+                "Safety check: this stimulus does not record the projector "
+                "settings behind it (irradiance, frame rate, per-pixel ON "
+                "durations), so its duty cycle cannot be verified. Build it "
+                "with a PRIMAEncoder, or set safe_mode=False and check the "
+                "device envelope yourself.")
+        irradiance = float(optical['irradiance'])
+        freq = float(optical['freq'])
+        dur = np.asarray(optical['pulse_dur'], dtype=np.float64)
+        step = PRIMAEncoder.pulse_step
+        if irradiance > PRIMAEncoder.max_irradiance + 1e-9:
+            raise ValueError(
+                f"Safety check: stimulus projects {irradiance:.3f} mW/mm^2, "
+                f"which exceeds the {PRIMAEncoder.max_irradiance} mW/mm^2 the "
+                f"device delivers.")
+        longest = float(dur.max(initial=0.0))
+        if longest > PRIMAEncoder.max_pulse_dur + 1e-9:
+            raise ValueError(
+                f"Safety check: stimulus lights a pixel for {longest:.3f} ms, "
+                f"which exceeds the longest documented ON duration of "
+                f"{PRIMAEncoder.max_pulse_dur} ms.")
+        # Nonzero durations sit on the 0.7 ms grid, whatever produced them:
+        steps = dur[dur > 0] / step
+        if steps.size and np.any(np.abs(steps - np.round(steps)) > 1e-6):
+            raise ValueError(
+                f"Safety check: ON durations must be whole multiples of "
+                f"{step} ms, the step the projector modulates in.")
+        duty = freq * longest / MS_PER_S
+        if duty > PRIMAEncoder.max_duty_cycle + 1e-9:
+            raise ValueError(
+                f"Safety check: stimulus asks for a duty cycle of "
+                f"{duty:.3f} ({freq:g} Hz x {longest:.3f} ms), which exceeds "
+                f"the {PRIMAEncoder.max_duty_cycle:.3f} the device delivers. "
+                f"Lower 'freq' or shorten 'pulse_dur'.")
+
+    def check_stim(self, stim):
+        """Quality-check the stimulus
+
+        PRIMA is stimulated optically, so ``safe_mode`` checks the projector's
+        documented envelope (see the class docstring) rather than electrical
+        charge balance.
+
+        .. versionadded:: 0.11.0
+        """
+        if self.safe_mode:
+            self._require_within_optical_envelope(stim)
+        if self.max_current is not None:
+            # A current limit does not describe this device, and the inherited
+            # check says so rather than reading irradiance as microamps:
+            self._require_within_current_limit(stim)
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
