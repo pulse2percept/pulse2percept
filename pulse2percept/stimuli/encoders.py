@@ -1317,8 +1317,8 @@ class PRIMAEncoder(Encoder):
         Peak irradiance (mW/mm^2) while a pixel is on. Not modulated by gray
         level.
     freq : float or Quantity, optional
-        Projector frame rate (Hz). One source frame is shown per projector
-        period.
+        Projector sampling rate (Hz). The source is sampled once per projector
+        period; source frames may therefore be repeated or skipped.
     pulse_dur : float or Quantity, optional
         Longest ON duration (ms) per projector period, and the duration a lit
         pixel receives in binary mode. Must be a whole multiple of
