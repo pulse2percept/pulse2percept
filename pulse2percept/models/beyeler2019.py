@@ -67,7 +67,7 @@ def _flatten_bundles(bundles):
 
 
 class ScoreboardSpatial(SpatialModel):
-    """Scoreboard model of [Beyeler2019]_ (spatial module only).
+    r"""Scoreboard model of [Beyeler2019]_ (spatial module only).
 
     Models each electrode's percept as a circular Gaussian. Use
     :py:class:`~pulse2percept.models.ScoreboardModel` for a standalone model.
@@ -171,7 +171,7 @@ class ScoreboardSpatial(SpatialModel):
 
 
 class ScoreboardModel(Model):
-    """Scoreboard model of [Beyeler2019]_.
+    r"""Scoreboard model of [Beyeler2019]_.
 
     Models each electrode's percept as a circular Gaussian. Use
     :py:class:`~pulse2percept.models.ScoreboardSpatial` to combine this spatial
@@ -255,7 +255,7 @@ class ScoreboardModel(Model):
 
 
 class AxonMapSpatial(SpatialModel):
-    """Axon map model of [Beyeler2019]_ (spatial module only).
+    r"""Axon map model of [Beyeler2019]_ (spatial module only).
 
     Models percepts as activation spread along retinal nerve fiber bundle
     trajectories. Use :py:class:`~pulse2percept.models.AxonMapModel` for a
@@ -976,7 +976,7 @@ class AxonMapSpatial(SpatialModel):
 
 
 class AxonMapModel(Model):
-    """Axon map model of [Beyeler2019]_.
+    r"""Axon map model of [Beyeler2019]_.
 
     Models percepts as activation spread along retinal nerve fiber bundle
     trajectories. Use :py:class:`~pulse2percept.models.AxonMapSpatial` to

@@ -208,7 +208,7 @@ check locally:
 
 .. code-block:: bash
 
-    flake8 pulse2percept --ignore N802,N806,W504 --select W503 \
+    flake8 pulse2percept --ignore N802,N806,W504 --select W503,W605 \
         --count --show-source --statistics
 
 Avoid reformatting code that is unrelated to the contribution.

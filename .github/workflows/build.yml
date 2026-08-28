@@ -62,7 +62,7 @@ jobs:
       - name: Lint with flake8
         run: |
           python -m pip install flake8
-          flake8 pulse2percept --ignore N802,N806,W504 --select W503 --count --show-source --statistics
+          flake8 pulse2percept --ignore N802,N806,W504 --select W503,W605 --count --show-source --statistics
 
       # ---- Install package (editable) with dev extras ----
       # Use --no-build-isolation so Cython uses the preinstalled NumPy headers.
