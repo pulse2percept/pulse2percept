@@ -135,62 +135,51 @@ For a hexagonal array, the row spacing is
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 12 22 13 13 15
+   :widths: 30 12 38 20
 
    * - Object
      - Pixels
-     - Pixel width / spacing
-     - Active electrode
+     - Pixel geometry
      - Substrate
-     - Reference
-   * - :py:class:`~pulse2percept.implants.PRIMAPivotal` ``()``
+   * - ``PRIMAPivotal()``
      - 378
-     - 100 / 100 um
-     - 28 um
+     - 100 um wide, 100 um spacing, 28 um active
      - 2 x 2 mm
-     - [Holz2026]_, [Palanker2020]_
-   * - :py:class:`~pulse2percept.implants.Lorach2015Array` ``()``
+   * - ``Lorach2015Array()``
      - 142
-     - 70 / 75 um
-     - 20 um
+     - 70 um wide, 75 um spacing, 20 um active
      - 1 mm
-     - [Lorach2015]_
    * - ``Ho2019FlatArray(55)``
      - 250
-     - 55 / 55 um
-     - 14 um
+     - 55 um wide/spacing, 14 um active
      - 1 mm
-     - [Ho2019]_
    * - ``Ho2019FlatArray(40)``
      - 502
-     - 40 / 40 um
-     - 10 um
+     - 40 um wide/spacing, 10 um active
      - 1 mm
-     - [Ho2019]_
    * - ``Huang2021Array(55)``
      - 421 (526 total)
-     - 55 / 55 um
-     - 22 um
+     - 55 um wide/spacing, 22 um active
      - 1.5 mm
-     - [Huang2021]_
    * - ``Huang2021Array(40)``
      - 821 (1027 total)
-     - 40 / 40 um
-     - 16 um
+     - 40 um wide/spacing, 16 um active
      - 1.5 mm
-     - [Huang2021]_
    * - ``Huang2021Array(30)``
      - 1388 (1735 total)
-     - 30 / 30 um
-     - 12 um
+     - 30 um wide/spacing, 12 um active
      - 1.5 mm
-     - [Huang2021]_
    * - ``Huang2021Array(20)``
      - 2806 (3508 total)
-     - 20 / 20 um
-     - 8 um
+     - 20 um wide/spacing, 8 um active
      - 1.5 mm
-     - [Huang2021]_
+
+:py:class:`~pulse2percept.implants.PRIMAPivotal` is based on the pivotal
+PRIMAvera device [Holz2026]_, also used in the earlier first-in-human study
+[Palanker2020]_. :py:class:`~pulse2percept.implants.Lorach2015Array`,
+:py:class:`~pulse2percept.implants.Ho2019FlatArray`, and
+:py:class:`~pulse2percept.implants.Huang2021Array` model the research arrays
+described in [Lorach2015]_, [Ho2019]_, and [Huang2021]_, respectively.
 
 For :py:class:`~pulse2percept.implants.Huang2021Array`, ``n_electrodes`` is
 the number of exposed, stimulating pixels. ``n_total_pixels`` includes the
