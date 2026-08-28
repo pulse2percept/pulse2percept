@@ -31,7 +31,7 @@ bench: install
 	$(PYTEST) benchmarks --benchmark-only
 
 flake:
-	$(FLAKE) --ignore N802,N806,W504 --select W503 `find . -name \*.py | grep -v setup.py | grep -v __init__.py | grep -v /doc/`
+	$(FLAKE) --ignore N802,N806,W504 --select W503,W605 `find . -name \*.py | grep -v setup.py | grep -v __init__.py | grep -v /doc/`
 
 help:
 	@ echo 

@@ -1019,10 +1019,10 @@ def test_axon_map_eye_follows_the_implant():
 
 
 def test_axon_map_warns_when_the_implant_is_not_epiretinal():
-    from pulse2percept.implants import GridImplant, PRIMA75
+    from pulse2percept.implants import GridImplant, Lorach2015Array
     grid = dict(step=1, xrange=(-2, 2), yrange=(-2, 2), n_axons=50,
                 n_ax_segments=30)
-    said = _user_warnings(AxonMapModel(implant=PRIMA75(), **grid).build)
+    said = _user_warnings(AxonMapModel(implant=Lorach2015Array(), **grid).build)
     npt.assert_equal(any('subretinal' in w for w in said), True)
     npt.assert_equal(any('scoreboard model' in w for w in said), True)
     # An implant whose placement nobody wrote down says nothing either way.

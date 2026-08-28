@@ -143,6 +143,62 @@ def test_HexElectrode():
     npt.assert_equal(isinstance(ax.patches[0], RegularPolygon), True)
 
 
+def _hex_extent(electrode, deactivated=False):
+    """Return the (x, y) bounding-box size of a hexagon's plotted body"""
+    kwargs = (electrode.plot_deactivated_kwargs if deactivated
+              else electrode.plot_kwargs)
+    patch = RegularPolygon((electrode.x, electrode.y), **kwargs)
+    verts = patch.get_path().transformed(patch.get_patch_transform()).vertices
+    return verts.max(axis=0) - verts.min(axis=0)
+
+
+def test_HexElectrode_geometry():
+    """``a`` is the apothem, so the flat-to-flat width is ``2 * a``"""
+    a = 50
+    # 'horizontal': flats face left/right, so the apothem is measured along x
+    # and the hexagon is pointy-top:
+    hexe = HexElectrode(0, 0, 0, a, orientation='horizontal')
+    npt.assert_almost_equal(hexe.width, 2 * a)
+    # Matplotlib sizes a RegularPolygon by its circumradius:
+    npt.assert_almost_equal(hexe.plot_kwargs['radius'],
+                            a / np.cos(np.radians(30)))
+    npt.assert_almost_equal(hexe.plot_kwargs['orientation'], 0)
+    npt.assert_almost_equal(_hex_extent(hexe),
+                            [2 * a, 2 * a / np.cos(np.radians(30))])
+    # 'vertical': flats face up/down, so the apothem is measured along y and
+    # the hexagon is flat-top:
+    vert = HexElectrode(0, 0, 0, a, orientation='vertical')
+    npt.assert_almost_equal(vert.plot_kwargs['orientation'], np.radians(30))
+    npt.assert_almost_equal(_hex_extent(vert),
+                            [2 * a / np.cos(np.radians(30)), 2 * a])
+    # Deactivated bodies have the same geometry, only a different color:
+    npt.assert_almost_equal(_hex_extent(vert, deactivated=True),
+                            _hex_extent(vert))
+    # A standalone hexagon defaults to flat-top, which is how HexElectrode
+    # has always been drawn; only a grid overrides it:
+    npt.assert_equal(HexElectrode(0, 0, 0, a).orientation, 'vertical')
+    with pytest.raises(ValueError):
+        HexElectrode(0, 0, 0, a, orientation='diagonal')
+
+
+@pytest.mark.parametrize('orientation', ('horizontal', 'vertical'))
+def test_HexElectrode_rot(orientation):
+    """``rot`` turns the hexagon body, not just the lattice"""
+    a = 50
+    unrot = HexElectrode(0, 0, 0, a, orientation=orientation)
+    # A hexagon has 60 deg symmetry, so a 60 deg turn is a no-op:
+    same = HexElectrode(0, 0, 0, a, orientation=orientation, rot=60)
+    npt.assert_almost_equal(_hex_extent(same), _hex_extent(unrot))
+    # ...and a 30 deg turn swaps pointy-top for flat-top:
+    flipped = HexElectrode(0, 0, 0, a, orientation=orientation, rot=30)
+    npt.assert_almost_equal(_hex_extent(flipped), _hex_extent(unrot)[::-1])
+    # Positive `rot` is counter-clockwise, matching ElectrodeGrid:
+    turned = HexElectrode(0, 0, 0, a, orientation=orientation, rot=15)
+    npt.assert_almost_equal(turned.plot_kwargs['orientation'],
+                            unrot.plot_kwargs['orientation'] +
+                            np.radians(15))
+
+
 def test_Electrode_units():
     """Equivalent spellings of a position must give the same electrode"""
     bare = DiskElectrode(1000, 0, 100, 200)

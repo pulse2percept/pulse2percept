@@ -33,7 +33,9 @@ from .rasters import (Raster, SequentialRaster, CheckerboardRaster,
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
 from .bvt import BVT24, BVT44
-from .prima import PhotovoltaicPixel, PRIMA, PRIMA75, PRIMA55, PRIMA40
+from .prima import (PhotovoltaicPixel, PRIMAPivotal, Lorach2015Array,
+                    Ho2019FlatArray, Huang2021Array, PRIMA, PRIMA75,
+                    PRIMA55, PRIMA40)
 from .imie import IMIE
 from .ensemble import EnsembleImplant
 from . import cortex
@@ -55,8 +57,13 @@ __all__ = [
     'EnsembleImplant',
     'GridImplant',
     'HexElectrode',
+    'Ho2019FlatArray',
+    'Huang2021Array',
+    'Lorach2015Array',
     'PhotovoltaicPixel',
     'PointSource',
+    'PRIMAPivotal',
+    # Deprecated in 0.11.0, removed in 0.12.0:
     'PRIMA',
     'PRIMA75',
     'PRIMA55',

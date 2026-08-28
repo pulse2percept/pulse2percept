@@ -18,7 +18,7 @@ _PEAK_SEARCH_DOUBLINGS = 4
 
 
 class DefaultBrightModel(BaseModel):
-    """Brightness scaling from [Granley2021]_.
+    r"""Brightness scaling from [Granley2021]_.
 
     Implements the amplitude- and frequency-dependent factor in Eq. 4, using the
     phase-duration threshold correction from Eq. 3. Coefficients were fit to
@@ -80,7 +80,7 @@ class DefaultBrightModel(BaseModel):
 
 
 class DefaultSizeModel(BaseModel):
-    """Phosphene-size scaling from [Granley2021]_.
+    r"""Phosphene-size scaling from [Granley2021]_.
 
     Implements the size scaling of [Granley2021]_, using p2p's Argus II
     phase-duration threshold refit (i.e., different from Eq. 5 in the published
@@ -168,7 +168,7 @@ class DefaultSizeModel(BaseModel):
 
 
 class DefaultStreakModel(BaseModel):
-    """Phosphene-streak scaling from [Granley2021]_.
+    r"""Phosphene-streak scaling from [Granley2021]_.
 
     Implements the pulse-duration-dependent factor in Eq. 6. Coefficients were
     fit to [Weitz2015]_.
@@ -285,7 +285,7 @@ _EFFECT_MODELS = ('bright_model', 'size_model', 'streak_model')
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
-    """Biphasic axon-map model of [Granley2021]_ (spatial module only).
+    r"""Biphasic axon-map model of [Granley2021]_ (spatial module only).
 
     Extends :py:class:`~pulse2percept.models.AxonMapSpatial` with the
     stimulus-dependent brightness, size, and streak-length scaling of
@@ -641,7 +641,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
 
 class BiphasicAxonMapModel(Model):
-    """Biphasic axon-map model of [Granley2021]_.
+    r"""Biphasic axon-map model of [Granley2021]_.
 
     Extends :py:class:`~pulse2percept.models.AxonMapModel` with the
     stimulus-dependent brightness, size, and streak-length scaling of

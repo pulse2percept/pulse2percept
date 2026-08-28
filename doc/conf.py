@@ -43,6 +43,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.doctest",
     "matplotlib.sphinxext.plot_directive",
+    "sphinx_copybutton",
 ]
 
 autosummary_generate = True
@@ -100,3 +101,7 @@ extlinks = {
 
 # MathJax (older URL that loads reliably on RTD)
 mathjax_path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_SVG"
+
+# Matplotlib plot directive
+plot_html_show_source_link = False
+plot_html_show_formats = False

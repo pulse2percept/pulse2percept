@@ -6,8 +6,8 @@ Simulating PRIMA in age-related macular degeneration
 
 Someone with geographic atrophy has lost vision in the center of their visual
 field but still sees normally around it. A subretinal implant such as
-:py:class:`~pulse2percept.implants.PRIMA` sits inside that blind spot and
-gives back a coarse, grayscale percept there.
+:py:class:`~pulse2percept.implants.PRIMAPivotal` sits inside that blind
+spot and gives back a coarse, grayscale percept there.
 
 Four objects say everything there is to say about that situation:
 
@@ -26,7 +26,7 @@ None of the coordinate bookkeeping between them is yours to do.
 
 import matplotlib.pyplot as plt
 
-from pulse2percept.implants import PRIMA
+from pulse2percept.implants import PRIMAPivotal
 from pulse2percept.models import ScoreboardModel
 from pulse2percept.stimuli import AmplitudeEncoder, LogoBVL
 from pulse2percept.units import dva
@@ -43,7 +43,7 @@ plt.title('Native vision alone')
 
 ###############################################################################
 
-implant = PRIMA()
+implant = PRIMAPivotal()
 implant.encoder = AmplitudeEncoder(amp_range=(0, 40), freq=20)
 
 ###############################################################################

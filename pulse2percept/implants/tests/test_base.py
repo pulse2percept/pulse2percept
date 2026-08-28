@@ -464,10 +464,14 @@ def test_implant_geometry_units():
          {'x': 200, 'z': -100}),
         (implants.AlphaAMS, {'x': 0.2 * mm, 'z': -0.1 * mm},
          {'x': 200, 'z': -100}),
-        (implants.PRIMA, {'z': -0.1 * mm}, {'z': -100}),
-        (implants.PRIMA75, {'z': -0.1 * mm}, {'z': -100}),
-        (implants.PRIMA55, {'z': -0.1 * mm}, {'z': -100}),
-        (implants.PRIMA40, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.PRIMAPivotal, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.Lorach2015Array, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.Ho2019FlatArray, {'pixel_size': 55 * um, 'z': -0.1 * mm},
+         {'pixel_size': 55, 'z': -100}),
+        (implants.Ho2019FlatArray, {'pixel_size': 40 * um, 'z': -0.1 * mm},
+         {'pixel_size': 40, 'z': -100}),
+        (implants.Huang2021Array, {'pixel_size': 0.03 * mm, 'z': -0.1 * mm},
+         {'pixel_size': 30, 'z': -100}),
         (implants.BVT24, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 50 * um},
          {'x': 1000, 'y': -500, 'z': 50}),
         (implants.BVT44, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 50 * um},
@@ -506,7 +510,8 @@ def test_implant_rot_units():
 
 def test_implant_per_electrode_z_units():
     """A per-electrode list of heights never reaches ElectrodeGrid"""
-    for cls, n in [(implants.PRIMA, 378), (implants.PRIMA75, 142),
+    for cls, n in [(implants.PRIMAPivotal, 378),
+                   (implants.Lorach2015Array, 142),
                    (implants.AlphaIMS, 1500)]:
         heights = np.linspace(-150, -50, n)
         unitful = cls(z=[h * um for h in heights])
@@ -518,7 +523,7 @@ def test_implant_per_electrode_z_units():
 
 
 def test_implant_dimension_errors():
-    for cls in (implants.ArgusII, implants.PRIMA, implants.BVT24,
+    for cls in (implants.ArgusII, implants.PRIMAPivotal, implants.BVT24,
                 cortex.Orion, cortex.Cortivis, cortex.ICVP):
         with pytest.raises(DimensionMismatchError):
             cls(x=5 * ms)
@@ -1069,7 +1074,7 @@ def test_ProsthesisSystem_partial_calibration_of_xTh_is_refused():
     (implants.ArgusII, 'epiretinal'),
     (implants.IMIE, 'epiretinal'),
     (implants.AlphaAMS, 'subretinal'),
-    (implants.PRIMA75, 'subretinal'),
+    (implants.Lorach2015Array, 'subretinal'),
     (implants.BVT24, 'suprachoroidal'),
     (cortex.Orion, 'epicortical'),
     (cortex.Cortivis, 'intracortical'),

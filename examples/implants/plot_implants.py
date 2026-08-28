@@ -43,55 +43,59 @@ for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
     axis.set_title(title)
 
 ###############################################################################
-# PRIMA Bionic Vision System (Pixium Vision SA)
-# ----------------------------------------------
+# PRIMA photovoltaic implants
+# ---------------------------
 #
-# :py:class:`~pulse2percept.implants.PRIMA` is a subretinal device developed
-# at Stanford University and commercialized by Pixium Vision.
+# PRIMA is a subretinal photovoltaic prosthesis developed at Stanford.
+# Pixium Vision developed the clinical system; `Science Corporation`_ acquired
+# Pixium's PRIMA assets and IP in 2024.
 #
-# There are several versions of the PRIMA device.
-# The device used in clinical trial `NCT03392324`_ consists of 378 85um-wide
-# pixels separated by 15um trenches (i.e., 100um pixel pitch), arranged in a
-# 2-mm wide hexagonal pattern, and is available in pulse2percept simply as
-# :py:class:`~pulse2percept.implants.PRIMA` [Palanker2020]_.
+# :py:class:`~pulse2percept.implants.PRIMAPivotal` models the 378-pixel,
+# 100um array used in the pivotal PRIMAvera trial `NCT04676854`_ [Holz2026]_.
+# The same configuration was used in the earlier US feasibility study
+# `NCT03392324`_ [Palanker2020]_.
 #
-# :py:class:`~pulse2percept.implants.PRIMA75` is a newer version of the device,
-# consisting of 142 70um-wide pixels separated by 5um trenches (i.e., 75um
-# pixel pitch), arranged in a 1-mm wide hexagonal pattern [Lorach2015]_.
+# :py:class:`~pulse2percept.implants.Lorach2015Array` models the earlier
+# 142-pixel, 70um research array of [Lorach2015]_.
 #
-# .. _NCT03392324: https://www.clinicaltrials.gov/ct2/show/NCT03392324
+# .. _Science Corporation: https://science.xyz/news/pixium-vision-acquisition/
+# .. _NCT04676854: https://clinicaltrials.gov/study/NCT04676854
+# .. _NCT03392324: https://clinicaltrials.gov/study/NCT03392324
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
-PRIMA().plot(ax=ax[0])
-ax[0].set_title('PRIMA-100')
+PRIMAPivotal().plot(ax=ax[0])
+ax[0].set_title('PRIMA (pivotal)')
 
-PRIMA75().plot(ax=ax[1])
-ax[1].set_title('PRIMA-75')
+Lorach2015Array().plot(ax=ax[1])
+ax[1].set_title('Lorach et al. (2015)')
 
 ###############################################################################
-# In addition, the developers are working on miniaturizing the device. At least
-# two other prototypes are currently in development:
-#
-# :py:class:`~pulse2percept.implants.PRIMA55` consists of 50um-wide pixels
-# separated by 5um trenches (i.e., 55um pixel pitch), whereas
-# :py:class:`~pulse2percept.implants.PRIMA40` consists of 35um-wide pixels
-# separated by 5um trenches (i.e., 40um pixel pitch).
-#
-# The exact geometric arrangement of these two prototypes have not been
-# published yet. The devices available in pulse2percept assume that the arrays
-# fit on a circular 1mm-diameter substrate, which yields 273 electrodes for
-# PRIMA-55 and 532 electrodes for PRIMA-40.
-# These prototypes will be updated once more information about them is
-# available.
+# :py:class:`~pulse2percept.implants.Ho2019FlatArray` models the flat F55 and
+# F40 research arrays of [Ho2019]_, with 250 and 502 pixels on a 1 mm
+# substrate. The F55 outline is reconstructed from Fig. 2(a); the F40 outline
+# was not published and is approximated by the 502 lattice sites nearest the
+# substrate center.
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
-PRIMA55().plot(ax=ax[0])
-ax[0].set_title('PRIMA-55')
+Ho2019FlatArray(55).plot(ax=ax[0])
+ax[0].set_title('Ho et al. F55')
 
-PRIMA40().plot(ax=ax[1])
-ax[1].set_title('PRIMA-40')
+Ho2019FlatArray(40).plot(ax=ax[1])
+ax[1].set_title('Ho et al. F40')
+
+###############################################################################
+# :py:class:`~pulse2percept.implants.Huang2021Array` models the 1.5 mm
+# vertical-junction arrays of [Huang2021]_. Only exposed pixels are modeled as
+# electrodes; ``n_total_pixels`` gives the total number fabricated on the die.
+
+fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 10))
+
+for axis, pixel_size in zip(ax.ravel(), [55, 40, 30, 20]):
+    implant = Huang2021Array(pixel_size)
+    implant.plot(ax=axis)
+    axis.set_title(f'{pixel_size} um ({implant.n_electrodes} exposed)')
 
 ###############################################################################
 # BVT Bionic Eye System (Bionic Vision Technologies)

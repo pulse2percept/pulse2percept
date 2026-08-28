@@ -26,11 +26,22 @@ Highlights:
 
 API changes:
 
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` now has ``placement``
-  to specify where it is implanted.
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` adds descriptive
+  ``placement``, ``technology`` and ``family`` class attributes (:pull:`865`).
 
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`)
+
+* New :py:class:`~pulse2percept.implants.Ho2019FlatArray` models the 55
+  and 40 um flat arrays of [Ho2019]_; new
+  :py:class:`~pulse2percept.implants.Huang2021Array` models the 55, 40, 30 and
+  20 um vertical-junction arrays of [Huang2021]_ (:pull:`865`).
+
+* ``PRIMA`` is renamed
+  :py:class:`~pulse2percept.implants.PRIMAPivotal`, ``PRIMA75`` becomes
+  :py:class:`~pulse2percept.implants.Lorach2015Array`, and ``PRIMA55``/
+  ``PRIMA40`` become ``Ho2019FlatArray(55)``/``Ho2019FlatArray(40)``.
+  The old names are deprecated until 0.12.0 (:pull:`865`).
 
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
@@ -39,12 +50,38 @@ API changes:
   experiment-specific optimizations over stimulus parameters and should be
   implemented at that level.
 
+* The PRIMA implants replace ``trench`` with ``pixel_width`` (flat-to-flat
+  width of the hexagonal pixel body) and ``gap`` (open gap between pixel
+  bodies), plus a derived ``row_spacing``. ``spacing`` keeps its meaning:
+  nearest-neighbor center-to-center distance (:pull:`865`).
+
+* :py:class:`~pulse2percept.implants.HexElectrode` takes ``orientation`` and
+  ``rot``, so hexagonal bodies face the nearest-neighbor axis of the lattice
+  they sit on and turn with it (:pull:`865`).
+
+* PRIMA photovoltaic arrays now plot their substrate and clip rim pixels
+  to the substrate boundary (:pull:`865`).
+
 Bug fixes:
 
 * A hexagonal :py:class:`~pulse2percept.implants.ElectrodeGrid` with a single
   row (or, in vertical orientation, a single column) is now centered on
   ``(x, y)`` rather than offset by a quarter of the electrode spacing
   (:pull:`859`)
+
+* :py:class:`~pulse2percept.implants.HexElectrode` sized its hexagon by
+  passing the apothem ``a`` to Matplotlib as a circumradius, drawing every
+  hexagonal pixel 13% too small (:pull:`865`)
+
+* :py:class:`~pulse2percept.implants.PRIMAPivotal` pixels are corrected
+  from 85 to 100 um wide; pixel centers are unchanged (:pull:`865`).
+
+* ``PRIMA55`` and ``PRIMA40`` (now
+  :py:class:`~pulse2percept.implants.Ho2019FlatArray`) model the F55 and F40
+  arrays of [Ho2019]_: 250 and 502 pixels (was 273 and 532), as wide as their
+  center spacing with no open gap, and 14 um and 10 um active electrodes (was
+  16 um). Correcting the layouts changes which electrode names these two
+  devices have (:pull:`865`)
 
 v0.10.0 Encoders (2026-08-23)
 -----------------------------

@@ -100,6 +100,14 @@ class ProsthesisSystem(PrettyPrint):
     #: class describes a family rather than a device.
     placement = None
 
+    #: Stimulation technology, e.g. ``'photovoltaic'``.
+    #: .. versionadded:: 0.11.0
+    technology = None
+
+    #: Named device family, if applicable, e.g. ``'PRIMA'``.
+    #: .. versionadded:: 0.11.0
+    family = None
+
     def __init__(self, earray, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None):
         self.earray = earray

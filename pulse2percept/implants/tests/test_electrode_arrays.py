@@ -3,8 +3,9 @@ import pytest
 import numpy.testing as npt
 from collections import OrderedDict
 
-from pulse2percept.implants import (DiskElectrode, PointSource,
-                                    ElectrodeArray, ElectrodeGrid)
+from pulse2percept.implants import (DiskElectrode, HexElectrode,
+                                    PointSource, ElectrodeArray,
+                                    ElectrodeGrid)
 from pulse2percept.implants import ArgusII
 from pulse2percept.stimuli import ElectrodeNames, Stimulus
 from pulse2percept.units import (DimensionMismatchError, Quantity, cm, deg,
@@ -433,6 +434,35 @@ def test_ElectrodeGrid_hex_is_a_triangular_lattice(orientation, shape):
     if min(shape) >= 3:
         n_neighbors = np.isclose(dist, spacing).sum(axis=1)
         npt.assert_equal(n_neighbors.max(), 6)
+
+
+@pytest.mark.parametrize('orientation', ('horizontal', 'vertical'))
+@pytest.mark.parametrize('rot', (0, 17))
+def test_ElectrodeGrid_hex_bodies_tile_the_lattice(orientation, rot):
+    """Hexagonal bodies face their nearest neighbors and turn with the grid
+
+    A hexagon of apothem ``spacing / 2`` tiles the lattice only if its flats
+    are perpendicular to the nearest-neighbor axes; otherwise the drawn
+    pixels overlap their neighbors while leaving gaps elsewhere.
+    """
+    spacing = 100
+    grid = ElectrodeGrid((3, 4), spacing, type='hex', rot=rot,
+                         orientation=orientation, etype=HexElectrode,
+                         a=spacing / 2)
+    elec = grid['B2']
+    npt.assert_equal(elec.orientation, orientation)
+    npt.assert_almost_equal(elec.rot, rot)
+    npt.assert_almost_equal(elec.width, spacing)
+    # The direction a flat faces, as an angle from +x:
+    flat = np.radians(rot) + (0 if orientation == 'horizontal'
+                              else np.radians(90))
+    coords = grid.coordinates()[:, :2]
+    offsets = coords - coords[list(grid.electrodes).index('B2')]
+    offsets = offsets[np.isclose(np.linalg.norm(offsets, axis=1), spacing)]
+    # Every nearest neighbor sits on a flat, i.e. its bearing differs from
+    # the flat direction by a multiple of 60 deg:
+    bearing = np.arctan2(offsets[:, 1], offsets[:, 0]) - flat
+    npt.assert_almost_equal(np.sin(3 * bearing), 0)
 
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))

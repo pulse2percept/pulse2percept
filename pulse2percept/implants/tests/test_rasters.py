@@ -7,8 +7,9 @@ from scipy.spatial import cKDTree
 
 from pulse2percept.implants import (AlphaIMS, ArgusII, BVT24,
                                     CheckerboardRaster, CustomRaster,
-                                    ElectrodeGrid, PRIMA, ProsthesisSystem,
-                                    Raster, SequentialRaster)
+                                    ElectrodeGrid, PRIMAPivotal,
+                                    ProsthesisSystem, Raster,
+                                    SequentialRaster)
 from pulse2percept.implants import rasters
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
                                  mm, uA, us)
@@ -177,7 +178,7 @@ def test_CheckerboardRaster_grids():
 
     # Grids with electrodes trimmed off still work. PRIMA's 378 electrodes do
     # not divide by four, so the groups come out as even as 378 allows:
-    prima = PRIMA()
+    prima = PRIMAPivotal()
     raster = CheckerboardRaster(4).bind(prima)
     count = np.bincount(raster.groups(prima.electrode_names))
     npt.assert_equal(count.sum(), 378)
@@ -265,7 +266,7 @@ def test_CheckerboardRaster_is_reproducible(monkeypatch):
             return dist, idx
 
     hexgrid = ProsthesisSystem(ElectrodeGrid((10, 10), 400, type='hex'))
-    for implant in [ArgusII(), hexgrid, PRIMA()]:
+    for implant in [ArgusII(), hexgrid, PRIMAPivotal()]:
         names = implant.electrode_names
         expected = CheckerboardRaster(5).bind(implant).groups(names)
         for seed in range(4):
@@ -366,7 +367,8 @@ def test_Raster_plot():
 
     # Any raster can be plotted on any implant it covers, grid or not:
     for r, imp in [(SequentialRaster(3), BVT24()),
-                   (CheckerboardRaster(7).bind(PRIMA()), PRIMA()),
+                   (CheckerboardRaster(7).bind(PRIMAPivotal()),
+                    PRIMAPivotal()),
                    (CustomRaster({n: 0 for n in ArgusII().electrode_names}),
                     ArgusII())]:
         npt.assert_equal(len(r.plot(imp).collections[0].get_paths()),

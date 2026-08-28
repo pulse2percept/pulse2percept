@@ -8,7 +8,7 @@ state-of-the-art retinal prostheses, such as
 :py:class:`~pulse2percept.implants.ArgusI` and
 :py:class:`~pulse2percept.implants.ArgusII` (epiretinal),
 :py:class:`~pulse2percept.implants.Alpha-IMS` and
-:py:class:`~pulse2percept.implants.PRIMA` (subretinal),
+:py:class:`~pulse2percept.implants.PRIMAPivotal` (subretinal),
 as well as :py:class:`~pulse2percept.implants.BVT24` (suprachoroidal).
 
 Other implants can be added by creating a new 
