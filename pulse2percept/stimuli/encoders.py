@@ -1272,18 +1272,36 @@ class _OpticalStimulus(Stimulus):
     def _render(self):
         """Expand the schedule into rectangular pulses."""
         ticks = np.asarray(self._ticks)
-        # Which projector frame each time point falls in, and how far into it:
+        n_frames = self._onsets.size
+        # Which projector frame each time point falls in:
         at = np.searchsorted(self._onsets, ticks, side='right') - 1
-        np.clip(at, 0, self._onsets.size - 1, out=at)
-        since = ticks - self._onsets[at]
-        # The ON duration each pixel has in that frame, in ticks:
-        dur = np.round(self._dur / DT).astype(np.int64)[:, at]
-        # Rising and falling edges each take one DT, as elsewhere in p2p:
-        lit = (since[np.newaxis, :] >= 1) & (since <= dur - 1)
-        data = np.where(lit, np.float32(self._irradiance), np.float32(0))
+        np.clip(at, 0, n_frames - 1, out=at)
+        # The ON duration each pixel has in each frame, in ticks. Kept at
+        # n_frames columns rather than expanded to one per time point: the
+        # expanded form is int64 at the size of the output and dominates peak
+        # memory, and the frame-by-frame fill below does not need it.
+        dur = np.round(self._dur / DT).astype(np.int64)
+        data = np.zeros((dur.shape[0], ticks.size), dtype=np.float32)
+        # `ticks` and `_onsets` are both sorted, so `at` is nondecreasing and
+        # every frame owns a contiguous span of columns. Filling those spans in
+        # place keeps the output C-contiguous, which is the layout a stimulus
+        # installs without copying it again.
+        bounds = np.searchsorted(at, np.arange(n_frames + 1))
+        irradiance = np.float32(self._irradiance)
+        for j in range(n_frames):
+            lo, hi = bounds[j], bounds[j + 1]
+            if hi <= lo:
+                continue
+            # How far into frame `j` each of its time points is. Points before
+            # the first onset clip to frame 0 with a negative offset, which the
+            # rising-edge test below leaves dark:
+            since = ticks[lo:hi] - self._onsets[j]
+            # Rising and falling edges each take one DT, as elsewhere in p2p:
+            np.copyto(data[:, lo:hi], irradiance,
+                      where=(since >= 1) & (since <= dur[:, j, None] - 1))
         # The newly allocated array can be adopted without another copy:
-        return {'data': _adoptable(data.astype(np.float32, copy=False)),
-                'electrodes': self.electrodes, 'time': self.time}
+        return {'data': _adoptable(data), 'electrodes': self.electrodes,
+                'time': self.time}
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
