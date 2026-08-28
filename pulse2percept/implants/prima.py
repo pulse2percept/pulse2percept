@@ -968,8 +968,10 @@ class PRIMA55(Ho2019FlatArray):
     .. deprecated:: 0.11.0
 
         Use :py:class:`~pulse2percept.implants.Ho2019FlatArray` with
-        ``pixel_size=55`` instead. The geometry is unchanged; only the name
-        is, because [Huang2021]_ describes a different 55 um array.
+        ``pixel_size=55`` instead: the name is ambiguous, because
+        [Huang2021]_ describes a different 55 um array. This wrapper builds
+        the corrected [Ho2019]_ geometry, which already differs from the
+        pre-0.11 ``PRIMA55``; see the v0.11.0 release notes.
 
     Takes the same arguments as
     :py:class:`~pulse2percept.implants.Ho2019FlatArray`, minus ``pixel_size``.
@@ -994,8 +996,10 @@ class PRIMA40(Ho2019FlatArray):
     .. deprecated:: 0.11.0
 
         Use :py:class:`~pulse2percept.implants.Ho2019FlatArray` with
-        ``pixel_size=40`` instead. The geometry is unchanged; only the name
-        is, because [Huang2021]_ describes a different 40 um array.
+        ``pixel_size=40`` instead: the name is ambiguous, because
+        [Huang2021]_ describes a different 40 um array. This wrapper builds
+        the corrected [Ho2019]_ geometry, which already differs from the
+        pre-0.11 ``PRIMA40``; see the v0.11.0 release notes.
 
     Takes the same arguments as
     :py:class:`~pulse2percept.implants.Ho2019FlatArray`, minus ``pixel_size``.

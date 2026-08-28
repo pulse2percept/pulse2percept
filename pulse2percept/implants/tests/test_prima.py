@@ -1,5 +1,6 @@
 import matplotlib
 matplotlib.use('Agg')
+import hashlib
 from functools import partial
 
 import numpy as np
@@ -137,105 +138,35 @@ def test_PRIMA75(ztype, x, y, rot):
         PRIMA75(0, 0, z=np.ones(16))
 
 
-#: The Huang et al. (2021) exposed-pixel masks, spelled out here so that a
-#: "simplification" of the module constant back into a circular crop, or any
-#: other silent change of layout, fails loudly. Pinned as normalized axial
-#: spans (see `_axial_spans`), independently of the module's own constant.
-_EXPECTED_HUANG_SPANS = {
-    55: {
-        -12: (3, 9), -11: (1, 10), -10: (-1, 11), -9: (-3, 12), -8: (-4, 12),
-        -7: (-5, 12), -6: (-6, 12), -5: (-7, 12), -4: (-8, 12), -3: (-8, 12),
-        -2: (-9, 11), -1: (-10, 11), 0: (-10, 10), 1: (-11, 10), 2: (-11, 9),
-        3: (-11, 8), 4: (-12, 8), 5: (-12, 7), 6: (-12, 6), 7: (-12, 5),
-        8: (-11, 4), 9: (-11, 2), 10: (-10, 1), 11: (-9, -1), 12: (-7, -5),
-    },
-    40: {
-        -17: (6, 11), -16: (3, 13), -15: (0, 14), -14: (-1, 15), -13: (-3, 16),
-        -12: (-4, 17), -11: (-5, 17), -10: (-6, 17), -9: (-7, 17),
-        -8: (-8, 17), -7: (-9, 17), -6: (-10, 17), -5: (-11, 17),
-        -4: (-11, 16), -3: (-12, 16), -2: (-12, 15), -1: (-13, 15),
-        0: (-13, 14), 1: (-14, 14), 2: (-14, 13), 3: (-15, 13), 4: (-15, 12),
-        5: (-16, 12), 6: (-16, 11), 7: (-16, 10), 8: (-17, 9), 9: (-17, 8),
-        10: (-17, 7), 11: (-17, 6), 12: (-17, 5), 13: (-16, 4), 14: (-16, 3),
-        15: (-15, 1), 16: (-14, -1), 17: (-13, -3),
-    },
-    30: {
-        -23: (8, 13), -22: (4, 16), -21: (1, 18), -20: (-1, 19), -19: (-3, 20),
-        -18: (-4, 20), -17: (-6, 21), -16: (-7, 21), -15: (-8, 21),
-        -14: (-9, 21), -13: (-10, 21), -12: (-11, 21), -11: (-12, 21),
-        -10: (-13, 21), -9: (-14, 21), -8: (-15, 21), -7: (-16, 21),
-        -6: (-17, 21), -5: (-17, 20), -4: (-18, 20), -3: (-18, 19),
-        -2: (-19, 19), -1: (-20, 19), 0: (-20, 18), 1: (-20, 18), 2: (-21, 17),
-        3: (-21, 16), 4: (-22, 16), 5: (-22, 15), 6: (-22, 14), 7: (-22, 13),
-        8: (-23, 13), 9: (-23, 12), 10: (-23, 11), 11: (-23, 10), 12: (-23, 9),
-        13: (-23, 8), 14: (-22, 6), 15: (-22, 5), 16: (-22, 4), 17: (-21, 2),
-        18: (-20, 0), 19: (-19, -1), 20: (-18, -4), 21: (-16, -7),
-    },
-    20: {
-        -34: (11, 21), -33: (8, 24), -32: (5, 26), -31: (3, 27), -30: (1, 28),
-        -29: (-1, 29), -28: (-3, 30), -27: (-5, 30), -26: (-6, 31),
-        -25: (-8, 31), -24: (-9, 31), -23: (-10, 32), -22: (-11, 32),
-        -21: (-13, 32), -20: (-14, 32), -19: (-15, 32), -18: (-16, 32),
-        -17: (-17, 32), -16: (-17, 32), -15: (-18, 32), -14: (-19, 32),
-        -13: (-20, 32), -12: (-21, 31), -11: (-22, 31), -10: (-22, 31),
-        -9: (-23, 30), -8: (-23, 30), -7: (-24, 30), -6: (-24, 29),
-        -5: (-25, 29), -4: (-25, 29), -3: (-26, 28), -2: (-26, 28),
-        -1: (-27, 27), 0: (-28, 27), 1: (-28, 26), 2: (-29, 25), 3: (-29, 25),
-        4: (-29, 24), 5: (-30, 23), 6: (-30, 23), 7: (-30, 22), 8: (-31, 21),
-        9: (-31, 20), 10: (-31, 19), 11: (-31, 19), 12: (-31, 18),
-        13: (-31, 17), 14: (-31, 16), 15: (-31, 15), 16: (-31, 14),
-        17: (-31, 12), 18: (-31, 11), 19: (-30, 10), 20: (-30, 9),
-        21: (-30, 7), 22: (-29, 6), 23: (-29, 4), 24: (-28, 3), 25: (-27, 1),
-        26: (-26, -1), 27: (-25, -4), 28: (-23, -6), 29: (-20, -10),
-    },
-}
-
 #: pixel size (um), exposed pixels, pixels fabricated on the die, active
 #: electrode diameter (um), for the four arrays of [Huang2021]_.
 HUANG_VARIANTS = [(55, 421, 526, 22), (40, 821, 1027, 16),
                   (30, 1388, 1735, 12), (20, 2806, 3508, 8)]
 
 
-def _normalized_spans(spans):
-    """Axial spans with their lowest column and row shifted to zero
+def _column_profile(implant):
+    """Number of pixels in each lattice column, left to right
 
-    A mask read back off pixel coordinates only recovers the lattice up to a
-    translation, so both sides of a comparison are anchored the same way.
+    Columns sit at exact multiples of ``spacing * sqrt(3) / 2``, so grouping
+    on the rounded x coordinate recovers them without reconstructing the
+    lattice. Only meaningful for an unrotated implant.
     """
-    q0 = min(spans)
-    r0 = min(lo for lo, _ in spans.values())
-    return {q - q0: (lo - r0, hi - r0) for q, (lo, hi) in spans.items()}
+    x = np.round(implant.earray.coordinates()[:, 0], 6)
+    return [int(n) for n in np.unique(x, return_counts=True)[1]]
 
 
-def _axial_spans(implant):
-    """Read an implant's pixel layout back off its electrode coordinates
+def _mask_fingerprint(implant):
+    """Short digest of which pixels an implant has
 
-    Returns normalized ``{q: (r_min, r_max)}`` in flat-top axial hex
-    coordinates, asserting on the way that the pixels sit on one triangular
-    lattice and that every column is a solid run.
+    Pixel centers in units of the spacing, relative to the footprint's own
+    bounding box, so the digest depends on the layout rather than on where the
+    device was placed. Only meaningful for an unrotated implant.
     """
-    s = implant.spacing
-    # In the unrotated device frame: axial coordinates are read off the
-    # lattice axes, which turn with the implant.
-    th = np.radians(implant.earray.rot)
-    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
-    xy = implant.earray.coordinates()[:, :2] @ R
-    q = xy[:, 0] / (s * np.sqrt(3) / 2)
-    r = xy[:, 1] / s - q / 2
-    # Anchored on the lowest site rather than on the origin: recentering the
-    # reconstructed mask on the substrate can offset the lattice by a
-    # fraction of a spacing, but never breaks its integer structure.
-    q, r = q - q.min(), r - r.min()
-    npt.assert_allclose(q, np.round(q), atol=1e-9)
-    npt.assert_allclose(r, np.round(r), atol=1e-9)
-    q, r = np.round(q).astype(int), np.round(r).astype(int)
-
-    spans = {}
-    for col in np.unique(q):
-        rows = np.sort(r[q == col])
-        npt.assert_equal(rows, np.arange(rows[0], rows[-1] + 1))
-        spans[int(col)] = (int(rows[0]), int(rows[-1]))
-    return spans
+    xy = implant.earray.coordinates()[:, :2]
+    xy = np.round((xy - 0.5 * (xy.min(axis=0) + xy.max(axis=0))) /
+                  implant.spacing, 3)
+    xy = xy[np.lexsort((xy[:, 1], xy[:, 0]))]
+    return hashlib.sha256(xy.tobytes()).hexdigest()[:16]
 
 
 def _nn_spacing(implant):
@@ -342,8 +273,23 @@ def test_Ho2019FlatArray_F55_layout():
                 0: (-7, 7), 1: (-8, 7), 2: (-8, 6), 3: (-9, 6), 4: (-9, 5),
                 5: (-9, 4), 6: (-9, 3), 7: (-9, 2), 8: (-9, 1), 9: (-8, -1)}
     npt.assert_equal(sum(hi - lo + 1 for lo, hi in expected.values()), 250)
-    npt.assert_equal(_axial_spans(Ho2019FlatArray(55)),
-                     _normalized_spans(expected))
+
+    prima = Ho2019FlatArray(55)
+    s = prima.spacing
+    xy = prima.earray.coordinates()[:, :2]
+    # Flat-top axial coordinates, read back off the pixel centers:
+    q = xy[:, 0] / (s * np.sqrt(3) / 2)
+    r = xy[:, 1] / s - q / 2
+    npt.assert_allclose(q, np.round(q), atol=1e-9)
+    npt.assert_allclose(r, np.round(r), atol=1e-9)
+    q, r = np.round(q).astype(int), np.round(r).astype(int)
+
+    npt.assert_equal(sorted(set(q)), sorted(expected))
+    for col in expected:
+        rows = np.sort(r[q == col])
+        # Every column is a solid run of pixels between its two limits:
+        npt.assert_equal(rows, np.arange(rows[0], rows[-1] + 1))
+        npt.assert_equal((rows[0], rows[-1]), expected[col])
 
 
 @pytest.mark.parametrize('old_cls, pixel_size', [(PRIMA55, 55), (PRIMA40, 40)])
@@ -414,17 +360,33 @@ def test_Huang2021Array(pixel_size, n_elec, n_total, elec_diam, ztype):
         Huang2021Array(pixel_size, z=np.ones(n_total))
 
 
-@pytest.mark.parametrize('pixel_size', (55, 40, 30, 20))
-def test_Huang2021Array_layout(pixel_size):
+#: pixel size (um), smallest hex grid the mask is cut from, pixels in the
+#: leftmost and rightmost lattice columns, and a digest of the whole exposed
+#: -pixel set (see `_mask_fingerprint`).
+HUANG_MASKS = [(55, (22, 25), (7, 3), '9470661f9f60eb1c'),
+               (40, (29, 35), (6, 11), 'f4411b9506ef49f2'),
+               (30, (40, 45), (6, 10), 'ab65d1cbf16bed60'),
+               (20, (56, 64), (11, 11), '0a9c5ea6bf82d21a')]
+
+
+@pytest.mark.parametrize('pixel_size, shape, edge_columns, digest',
+                         HUANG_MASKS)
+def test_Huang2021Array_layout(pixel_size, shape, edge_columns, digest):
     """The reconstructed exposed-pixel masks of [Huang2021]_
 
-    Pins every column of every mask, so that neither a "simplification" back
-    into a circular crop nor a shifted rim can pass unnoticed.
+    The masks are hard-coded reconstructions, so transcribing them here again
+    would not validate anything. This pins their overall shape plus one digest
+    of the pixel set, which is what a quiet "simplification" back into a
+    circular crop of the die would break.
     """
-    expected = _normalized_spans(_EXPECTED_HUANG_SPANS[pixel_size])
-    n_elec = dict((s, n) for s, n, _, _ in HUANG_VARIANTS)[pixel_size]
-    npt.assert_equal(sum(hi - lo + 1 for lo, hi in expected.values()), n_elec)
-    npt.assert_equal(_axial_spans(Huang2021Array(pixel_size)), expected)
+    implant = Huang2021Array(pixel_size)
+    npt.assert_equal(implant.shape, shape)
+    profile = _column_profile(implant)
+    npt.assert_equal(len(profile), shape[1])
+    npt.assert_equal(sum(profile), implant.n_electrodes)
+    # The rim of the exposed region, where a crop would show first:
+    npt.assert_equal((profile[0], profile[-1]), edge_columns)
+    npt.assert_equal(_mask_fingerprint(implant), digest)
 
 
 def test_Huang2021Array_pixel_size():
@@ -450,7 +412,8 @@ def test_Huang2021Array_placement(pixel_size):
     origin = Huang2021Array(pixel_size)
     x, y, rot = -100, 400, 37
     moved = Huang2021Array(pixel_size, x=x, y=y, rot=rot)
-    npt.assert_equal(_axial_spans(moved), _axial_spans(origin))
+    npt.assert_equal(_mask_fingerprint(Huang2021Array(pixel_size, x=x, y=y)),
+                     _mask_fingerprint(origin))
 
     th = np.deg2rad(rot)
     R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])

@@ -520,7 +520,10 @@ class HexElectrode(Electrode):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'a': self.a})
+        # `orientation` and `rot` are geometry, not decoration: two hexagons
+        # with the same apothem and different facing are different cells.
+        params.update({'a': self.a, 'orientation': self.orientation,
+                       'rot': self.rot})
         return params
 
     def electric_potential(self, x, y, z, v0):
