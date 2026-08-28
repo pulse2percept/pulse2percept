@@ -97,6 +97,7 @@ PRIMA assets and intellectual property in 2024.
 :py:class:`~pulse2percept.implants.PRIMAPivotal` models the 378-pixel device
 used in the pivotal PRIMAvera trial [Holz2026]_. The same 100 um configuration
 was used in the earlier first-in-human study [Palanker2020]_.
+For a hexagonal array, the row spacing is ``spacing * sqrt(3) / 2``.
 
 pulse2percept also includes several photovoltaic research arrays described in
 the literature. The plots below use the same physical scale:
@@ -130,8 +131,12 @@ the literature. The plots below use the same physical scale:
 
     fig.tight_layout()
 
-For a hexagonal array, the row spacing is
-``spacing * sqrt(3) / 2``.
+:py:class:`~pulse2percept.implants.PRIMAPivotal` is based on the pivotal
+PRIMAvera device [Holz2026]_, also used in the earlier first-in-human study
+[Palanker2020]_. :py:class:`~pulse2percept.implants.Lorach2015Array`,
+:py:class:`~pulse2percept.implants.Ho2019FlatArray`, and
+:py:class:`~pulse2percept.implants.Huang2021Array` model the research arrays
+described in [Lorach2015]_, [Ho2019]_, and [Huang2021]_, respectively.
 
 .. list-table::
    :header-rows: 1
@@ -158,37 +163,35 @@ For a hexagonal array, the row spacing is
      - 40 um wide/spacing, 10 um active
      - 1 mm
    * - ``Huang2021Array(55)``
-     - 421 (526 total)
+     - 421
      - 55 um wide/spacing, 22 um active
      - 1.5 mm
    * - ``Huang2021Array(40)``
-     - 821 (1027 total)
+     - 821
      - 40 um wide/spacing, 16 um active
      - 1.5 mm
    * - ``Huang2021Array(30)``
-     - 1388 (1735 total)
+     - 1388
      - 30 um wide/spacing, 12 um active
      - 1.5 mm
    * - ``Huang2021Array(20)``
-     - 2806 (3508 total)
+     - 2806
      - 20 um wide/spacing, 8 um active
      - 1.5 mm
-
-:py:class:`~pulse2percept.implants.PRIMAPivotal` is based on the pivotal
-PRIMAvera device [Holz2026]_, also used in the earlier first-in-human study
-[Palanker2020]_. :py:class:`~pulse2percept.implants.Lorach2015Array`,
-:py:class:`~pulse2percept.implants.Ho2019FlatArray`, and
-:py:class:`~pulse2percept.implants.Huang2021Array` model the research arrays
-described in [Lorach2015]_, [Ho2019]_, and [Huang2021]_, respectively.
-
-For :py:class:`~pulse2percept.implants.Huang2021Array`, ``n_electrodes`` is
-the number of exposed, stimulating pixels. ``n_total_pixels`` includes the
-peripheral pixels covered by the common return electrode.
 
 The F55 layout of :py:class:`~pulse2percept.implants.Ho2019FlatArray` is
 reconstructed from Fig. 2(a) of [Ho2019]_. The F40 outline was not published,
 so ``Ho2019FlatArray(40)`` uses the 502 lattice sites nearest the substrate
 center.
+
+For :py:class:`~pulse2percept.implants.Huang2021Array`, the photovoltaic
+cell ("pixel") count includes only exposed, stimulating pixels.
+The fabricated arrays included more cells than were exposed for
+stimulation, which were used for the common return electrode.
+The total number of fabricated cells was therefore 526 for F55,
+1027 for F40, 1735 for F30, and 3508 for F20.
+However, these peripheral cells covered by the common return are not
+independently stimulating and are therefore not exposed in pulse2percept.
 
 ``PRIMA``, ``PRIMA75``, ``PRIMA55`` and ``PRIMA40`` are deprecated aliases;
 see the v0.11 release notes for the corresponding canonical names.
@@ -201,9 +204,26 @@ Argus
 prostheses. Argus I has 16 electrodes in a 4 x 4 array; Argus II has 60
 electrodes in a 6 x 10 array.
 
-Argus II also defines its device-specific image encoder and sequential raster,
-so image and video stimuli can be passed directly to
-:py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`.
+Argus II includes device-specific defaults for converting visual input to
+stimulation. Images and videos are encoded with an
+:py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz, and stimulation is
+rastered one row at a time using a
+:py:class:`~pulse2percept.implants.SequentialRaster` with six groups separated
+by 2 ms. Thus visual stimuli can be passed directly to
+:py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`:
+
+.. code-block:: python
+
+    implant = p2p.implants.ArgusII()
+    stim = implant.prepare_stim(image)
+
+Both defaults can be overridden. Passing ``encoder=None`` disables automatic
+image/video encoding; passing ``raster=None`` drives electrodes without the
+default sequential raster:
+
+.. code-block:: python
+
+    implant = p2p.implants.ArgusII(encoder=None, raster=None)
 
 Alpha IMS and AMS
 ^^^^^^^^^^^^^^^^^
