@@ -255,8 +255,9 @@ def _scene_stim(model, scene, gaze):
     if implant.encoder is None:
         raise ValueError(
             "A scene is a picture, and there is no principled default for "
-            "turning a gray level into current. Give the implant an "
-            "'encoder' (e.g. an AmplitudeEncoder) to say how.")
+            "turning a gray level into stimulation. Give the implant an "
+            "'encoder' (e.g. an AmplitudeEncoder, or a PRIMAEncoder for a "
+            "photovoltaic device) to say how.")
     device_scene = _device_scene(scene, implant)
     xy = implant.earray.coordinates(vfmap.tissue_unit)[:, :2].T
     x_vf, y_vf = vfmap.ret_to_dva(*xy)

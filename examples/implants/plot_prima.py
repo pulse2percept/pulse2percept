@@ -58,9 +58,10 @@ fig.tight_layout()
 #
 # :py:class:`~pulse2percept.models.ScoreboardModel` places a Gaussian blob at
 # every pixel. For a photovoltaic implant it weights each blob by *normalized
-# optical drive*: irradiance times ON duration times frame rate, divided by the
-# largest drive the pivotal device is documented to produce. A dark pixel is 0,
-# a pixel at the full documented drive is 1.
+# optical drive*: the irradiance a pixel delivers averaged over a projector
+# period (peak irradiance times duty cycle), divided by the largest drive the
+# pivotal device is documented to produce. A dark pixel is 0, a pixel at the
+# full documented drive is 1.
 #
 # This is a simple visualization of implant geometry and stimulation pattern.
 # It does not model photodiode transduction, retinal electric fields,
@@ -89,6 +90,23 @@ for (title, source), top, bottom in zip(sources, axes[0], axes[1]):
     top.set_title(title)
     model.predict_percept(source).plot(ax=bottom)
 fig.tight_layout()
+
+###############################################################################
+# Video keeps its own timing
+# --------------------------
+#
+# The projector clock samples the source; it does not re-time it. Every 33.3 ms
+# the device looks at whatever frame the video is showing (zero-order hold), so
+# a slow source has frames re-sent and a fast one has frames skipped -- and the
+# content plays at the speed it was recorded at either way:
+
+for fps in (15, 30, 60):
+    n = fps  # one second of video
+    clip = p2p.stimuli.VideoStimulus(np.random.rand(16, 16, n),
+                                     time=np.arange(n) * (1000.0 / fps))
+    encoded = implant.prepare_stim(clip)
+    print(f'{fps:>2} fps source -> {encoded.duration:.0f} ms, '
+          f'{encoded.pulse_dur.shape[1]} projector frames')
 
 ###############################################################################
 # Grayscale mode

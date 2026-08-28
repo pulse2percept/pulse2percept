@@ -34,7 +34,8 @@ API changes:
 
 * New :py:class:`~pulse2percept.stimuli.PRIMAEncoder` models the PRIMA
   projector: 880 nm illumination at 30 Hz, 3.5 mW/mm^2, intensity set by pulse
-  duration on a 0.7 ms grid. It returns irradiance (``mW/mm^2``), not current;
+  duration on a 0.7 ms grid. It samples a source at the projector clock rather
+  than re-timing it, and returns irradiance (``mW/mm^2``), not current;
   :py:class:`~pulse2percept.implants.PRIMAPivotal` brings one along and its
   ``safe_mode`` now checks the projector envelope rather than charge balance.
 

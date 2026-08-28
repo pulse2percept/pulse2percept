@@ -1451,7 +1451,11 @@ def test_PRIMAEncoder_threshold(threshold):
     encoder = PRIMAEncoder(threshold=threshold)
     gray = implant.reshape_stim(ImageStimulus(ramp)).data.ravel()
     stim = encoder.encode(ImageStimulus(ramp), implant=implant)
-    dur = stim.metadata['encoder']['optical']['pulse_dur'].ravel()
+    dur = stim.pulse_dur
+    # A still picture shows the same frame in every projector period:
+    npt.assert_equal(dur.shape, (378, 15))
+    npt.assert_equal(np.all(dur == dur[:, :1]), True)
+    dur = dur[:, 0]
     npt.assert_array_equal(dur > 0, gray >= threshold)
     # Binary means binary: a lit pixel gets the full pulse, whatever its gray
     # level, and nothing in between exists.
@@ -1495,13 +1499,13 @@ def test_PRIMAEncoder_grayscale():
     ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
     stim = PRIMAEncoder(grayscale=True).encode(ImageStimulus(ramp),
                                                implant=implant)
-    dur = stim.metadata['encoder']['optical']['pulse_dur']
+    dur = stim.pulse_dur[:, :1]
     # Durations fall exactly on the 0.7 ms hardware grid, 0 through 9.8 ms:
     npt.assert_almost_equal(dur / 0.7, np.round(dur / 0.7))
     npt.assert_almost_equal(dur.min(), 0)
     npt.assert_almost_equal(dur.max(), 9.8)
     npt.assert_equal(np.unique(np.round(dur, 6)).size > 2, True)
-    npt.assert_equal(stim.metadata['encoder']['optical']['grayscale'], True)
+    npt.assert_equal(stim.grayscale, True)
     # The gray level a pixel saw picks its level, one step at a time:
     gray = implant.reshape_stim(ImageStimulus(ramp)).data
     npt.assert_almost_equal(dur, np.round(gray * 14) * 0.7, decimal=6)
@@ -1509,26 +1513,26 @@ def test_PRIMAEncoder_grayscale():
     # A lower maximum offers only the levels up through that maximum:
     coarse = PRIMAEncoder(grayscale=True, pulse_dur=2.1).encode(
         ImageStimulus(ramp), implant=implant)
-    levels = np.unique(coarse.metadata['encoder']['optical']['pulse_dur'])
+    levels = np.unique(coarse.pulse_dur)
     npt.assert_almost_equal(levels, np.array([0.0, 0.7, 1.4, 2.1]))
 
 
 def test_PRIMAEncoder_records_its_settings():
     stim = PRIMAEncoder(grayscale=True).encode(
         ImageStimulus(np.ones((8, 8))), implant=PRIMAPivotal())
-    optical = stim.metadata['encoder']['optical']
-    npt.assert_equal(sorted(optical),
-                     ['freq', 'grayscale', 'irradiance', 'pulse_dur',
-                      'wavelength'])
-    npt.assert_almost_equal(optical['wavelength'], 880)
-    npt.assert_almost_equal(optical['irradiance'], 3.5)
-    npt.assert_almost_equal(optical['freq'], 30)
-    npt.assert_equal(optical['pulse_dur'].shape, (378, 1))
-    # ... and the same values are readable off the stimulus itself:
+    # The projector settings are the stimulus' own state, readable without
+    # rendering a waveform:
     npt.assert_almost_equal(stim.wavelength, 880)
     npt.assert_almost_equal(stim.irradiance, 3.5)
     npt.assert_almost_equal(stim.freq, 30)
+    npt.assert_almost_equal(stim.pulse_dur.max(), 9.8)
     npt.assert_almost_equal(stim.duty_cycle.max(), 0.294)
+    npt.assert_equal(stim.grayscale, True)
+    # They are deliberately *not* mirrored into metadata, which is an ordinary
+    # mutable dict that arithmetic may copy onto a waveform it no longer
+    # describes. Only the frame clock lives there:
+    npt.assert_equal(sorted(stim.metadata['encoder']),
+                     ['frame_dur', 'frame_time'])
 
 
 def test_PRIMAEncoder_spatial_view():
@@ -1545,8 +1549,8 @@ def test_PRIMAEncoder_spatial_view():
     npt.assert_almost_equal(view.data.max(), 1, decimal=6)
     # Every pixel's drive follows its own ON duration:
     dur = PRIMAEncoder(grayscale=True).encode(
-        ImageStimulus(ramp), implant=implant).pulse_dur
-    npt.assert_almost_equal(view.data.ravel(), (dur / 9.8).ravel(), decimal=6)
+        ImageStimulus(ramp), implant=implant).pulse_dur[:, 0]
+    npt.assert_almost_equal(view.data.ravel(), dur / 9.8, decimal=6)
 
     # Turn any of the three factors down and the drive goes down with it:
     half = PRIMAEncoder(irradiance=1.75).encode(
@@ -1562,22 +1566,42 @@ def test_PRIMAEncoder_spatial_view():
 
 def test_PRIMAEncoder_video():
     implant = PRIMAPivotal()
-    # Three frames, alternately lit and dark:
+    # Three 40 ms frames, alternately lit and dark:
     frames = np.stack([np.ones((8, 8)), np.zeros((8, 8)), np.ones((8, 8))],
                       axis=-1)
     video = VideoStimulus(frames, time=np.arange(3) * 40.0)
     stim = PRIMAEncoder().encode(video, implant=implant)
-    # The projector clock, not the movie's: one source frame per period.
-    npt.assert_almost_equal(stim.duration, 3 * 1000 / 30)
+    # The source keeps its own 120 ms; the projector clock only decides when
+    # the device looks at it, which here is four times.
+    npt.assert_almost_equal(stim.duration, 120)
     npt.assert_almost_equal(stim.metadata['encoder']['frame_dur'], 1000 / 30)
-    npt.assert_equal(stim.metadata['encoder']['optical']['pulse_dur'].shape,
-                     (378, 3))
-    intervals = on_intervals(stim)
-    npt.assert_equal(len(intervals), 2)
-    npt.assert_almost_equal(intervals, 9.8, decimal=6)
+    npt.assert_equal(stim.pulse_dur.shape, (378, 4))
+    # Projector frames at 0, 33.3, 66.7 and 100 ms sample source frames 0, 0,
+    # 1 and 2: zero-order hold, so the lit frame is re-sent and nothing is
+    # invented in between.
+    npt.assert_array_almost_equal(stim.pulse_dur.max(axis=0),
+                                  [9.8, 9.8, 0, 9.8])
     view = stim._spatial_view()
-    npt.assert_equal(view.shape, (378, 3))
-    npt.assert_almost_equal(view.data.max(axis=0), [1, 0, 1], decimal=6)
+    npt.assert_equal(view.shape, (378, 4))
+    npt.assert_almost_equal(view.data.max(axis=0), [1, 1, 0, 1], decimal=6)
+    npt.assert_almost_equal(view.time, np.arange(4) * (1000 / 30), decimal=3)
+
+
+@pytest.mark.parametrize('fps, n_source', [(15, 15), (30, 30), (60, 60)])
+def test_PRIMAEncoder_samples_a_video_without_retiming_it(fps, n_source):
+    # One second of video at three frame rates. The projector runs at 30 Hz
+    # whatever the source does, so a slow source has frames re-sent and a fast
+    # one has frames skipped -- but the content keeps its own duration.
+    implant = PRIMAPivotal()
+    gray = np.zeros((8, 8, n_source))
+    gray[..., ::max(1, n_source // 5)] = 1.0
+    video = VideoStimulus(gray, time=np.arange(n_source) * (1000.0 / fps))
+    stim = PRIMAEncoder().encode(video, implant=implant)
+    npt.assert_almost_equal(stim.duration, 1000)
+    npt.assert_equal(stim.pulse_dur.shape[1], 30)
+    # Projector frames stay one 33.3 ms period apart, whatever the source rate:
+    npt.assert_almost_equal(np.diff(stim._spatial_view().time), 1000 / 30,
+                            decimal=3)
 
 
 def test_PRIMAEncoder_defers_the_waveform():

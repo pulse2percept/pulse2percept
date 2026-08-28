@@ -83,9 +83,18 @@ class ScoreboardSpatial(SpatialModel):
             -\frac{(x-x_e)^2 + (y-y_e)^2}{2\rho^2}
         \right),
 
-    where :math:`a_e` is the amplitude delivered by electrode :math:`e`, and
-    :math:`\rho` controls the spatial spread of activation. Larger values of
+    where :math:`a_e` is the drive at site :math:`e`, and :math:`\rho`
+    controls the spatial spread of activation. Larger values of
     :math:`\rho` produce broader phosphenes.
+
+    For an electrically driven implant, :math:`a_e` is the current
+    amplitude delivered by electrode :math:`e`. For a photovoltaic
+    implant it is the normalized optical drive its encoder reports
+    (see :py:class:`~pulse2percept.stimuli.PRIMAEncoder`), which makes
+    the percept a visualization of implant geometry and stimulation
+    pattern rather than a model of photodiode transduction, retinal
+    electric fields, bipolar-cell activation, electrode-retina
+    distance, or temporal retinal dynamics.
 
     Parameters
     ----------
@@ -194,9 +203,18 @@ class ScoreboardModel(Model):
                 -\frac{(x-x_e)^2 + (y-y_e)^2}{2\rho^2}
             \right),
     
-        where :math:`a_e` is the amplitude delivered by electrode :math:`e`, and
-        :math:`\rho` controls the spatial spread of activation. Larger values of
+        where :math:`a_e` is the drive at site :math:`e`, and :math:`\rho`
+        controls the spatial spread of activation. Larger values of
         :math:`\rho` produce broader phosphenes.
+
+        For an electrically driven implant, :math:`a_e` is the current
+        amplitude delivered by electrode :math:`e`. For a photovoltaic
+        implant it is the normalized optical drive its encoder reports
+        (see :py:class:`~pulse2percept.stimuli.PRIMAEncoder`), which makes
+        the percept a visualization of implant geometry and stimulation
+        pattern rather than a model of photodiode transduction, retinal
+        electric fields, bipolar-cell activation, electrode-retina
+        distance, or temporal retinal dynamics.
 
     Parameters
     ----------

@@ -45,7 +45,7 @@ def test_PhotovoltaicPixel():
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
 def test_PRIMAPivotal(ztype, x, y, rot):
-    # 85 um pixel with 15 um trenches:
+    # 100 um pixel on a 100 um grid, so no open gap between pixel bodies:
     spacing = 100
     # Roughly a 12x15 grid, but edges are trimmed off:
     n_elec = 378
@@ -672,8 +672,12 @@ def test_PRIMAPivotal_safe_mode_accepts_the_full_device():
 @pytest.mark.parametrize('encoder, msg', [
     (LooseEncoder(irradiance=5.0), 'exceeds the 3.5 mW/mm^2'),
     (LooseEncoder(pulse_dur=14.0), 'longest documented ON duration'),
-    (PRIMAEncoder(freq=60), 'duty cycle'),
     (LooseEncoder(pulse_dur=1.05), 'whole multiples of 0.7 ms'),
+    # A fast clock and a long pulse is a problem with the combination, and the
+    # duty cycle is what says so:
+    (PRIMAEncoder(freq=60), 'duty cycle'),
+    # ... but a legal duty cycle does not make an illegal clock legal:
+    (PRIMAEncoder(freq=60, pulse_dur=4.9), 'runs the projector at 60 Hz'),
 ])
 def test_PRIMAPivotal_safe_mode_rejects(encoder, msg):
     implant = PRIMAPivotal(safe_mode=True, encoder=encoder)
@@ -684,6 +688,50 @@ def test_PRIMAPivotal_safe_mode_rejects(encoder, msg):
     npt.assert_equal(
         PRIMAPivotal(encoder=encoder).prepare_stim(LogoBVL()).unit,
         mW / mm ** 2)
+
+
+def test_PRIMAPivotal_safe_mode_reads_the_schedule_not_the_metadata():
+    # Metadata is an ordinary mutable dict, and generic stimulus operations
+    # copy it onto results it no longer describes. The envelope check must not
+    # be talked into approving a stimulus by editing it.
+    implant = PRIMAPivotal(safe_mode=True)
+    stim = PRIMAPivotal(encoder=PRIMAEncoder(freq=60)).prepare_stim(LogoBVL())
+    stim.metadata['encoder'] = {'frame_time': np.zeros(1), 'frame_dur': 500.0,
+                                'optical': {'wavelength': 880.0,
+                                            'irradiance': 3.5, 'freq': 30.0,
+                                            'pulse_dur': np.zeros((378, 1)),
+                                            'grayscale': False}}
+    with pytest.raises(ValueError) as excinfo:
+        implant.check_stim(stim)
+    npt.assert_equal('duty cycle' in str(excinfo.value), True)
+
+
+def test_PRIMAPivotal_refuses_light_that_is_not_light():
+    # Not an envelope question, so it holds whatever `safe_mode` says: a
+    # negative or undefined power density is not dim light.
+    stim = PRIMAPivotal().prepare_stim(LogoBVL())
+    # A negative factor never reaches a waveform: the schedule refuses it.
+    with pytest.raises(ValueError):
+        stim * -1
+    # Zero is fine: it simply turns the projector off.
+    npt.assert_almost_equal((stim * 0).irradiance, 0)
+    PRIMAPivotal().check_stim(stim * 0)
+    # A non-finite factor is dropped by generic stimulus arithmetic before the
+    # schedule sees it, so what arrives is a degraded waveform. The implant
+    # still refuses it, on its samples:
+    for factor in (np.nan, np.inf):
+        with pytest.raises(ValueError) as excinfo:
+            PRIMAPivotal().check_stim(stim * factor)
+        npt.assert_equal('non-finite irradiance' in str(excinfo.value), True)
+    # ... and likewise a hand-built waveform of negative irradiance:
+    negative = Stimulus(stim)
+    negative.metadata = {'user': None}
+    negative._stim = {'data': -np.abs(negative.data),
+                      'electrodes': negative.electrodes,
+                      'time': negative.time}
+    with pytest.raises(ValueError) as excinfo:
+        PRIMAPivotal().check_stim(negative)
+    npt.assert_equal('cannot be negative' in str(excinfo.value), True)
 
 
 def test_PRIMAPivotal_safe_mode_needs_the_projector_settings():
@@ -698,6 +746,8 @@ def test_PRIMAPivotal_safe_mode_needs_the_projector_settings():
         implant.check_stim(handmade)
     npt.assert_equal('duty cycle cannot be verified' in str(excinfo.value),
                      True)
+    # Without safe_mode it goes through: nobody claimed it was checked.
+    PRIMAPivotal().check_stim(handmade)
     # Nor is safety an electrical question here:
     with pytest.raises(DimensionMismatchError):
         implant.check_stim(Stimulus({'A5': BiphasicPulse(10, 0.45)}))

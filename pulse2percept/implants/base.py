@@ -50,8 +50,10 @@ class ProsthesisSystem(PrettyPrint):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-        Safety is an electrical property, so this also requires the stimulus
-        to be measured in units of current.
+        Charge balance is an electrical property, so this also requires the
+        stimulus to be measured in units of current. A device that is not
+        driven by a current source overrides the check with one that fits it;
+        see :py:class:`~pulse2percept.implants.PRIMAPivotal`.
     encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         How the device turns a picture into stimulation. If given, preparing an
         image or a video encodes it first, so that what comes back is in the
@@ -277,10 +279,10 @@ class ProsthesisSystem(PrettyPrint):
             f"{type(self).__name__} delivers "
             f"{_describe_unit(self.stimulus_unit)}, but this stimulus is "
             f"measured in {_describe_unit(stim.unit)}. Give the implant an "
-            f"'encoder' (pulse2percept.stimuli.AmplitudeEncoder or "
-            f"FrequencyEncoder) so that image or video input is encoded during "
-            f"'prepare_stim', encode it yourself first, or give the implant a "
-            f"'preprocess' function that does.")
+            f"'encoder' (a pulse2percept.stimuli.Encoder that produces "
+            f"{_describe_unit(self.stimulus_unit)}) so that image or video "
+            f"input is encoded during 'prepare_stim', encode it yourself "
+            f"first, or give the implant a 'preprocess' function that does.")
 
     @staticmethod
     def _require_current_stim(stim, check):
@@ -530,6 +532,12 @@ class ProsthesisSystem(PrettyPrint):
         input when an encoder is present, reshapes it to the electrode array, removes
         deactivated electrodes, applies threshold calibration, and runs safety checks.
         The input is not modified and the result is not stored.
+
+        What comes back is measured in the implant's
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`, which
+        is electrical current for most devices but not for all: a photovoltaic
+        implant such as :py:class:`~pulse2percept.implants.PRIMAPivotal` is
+        illuminated, and prepares optical irradiance.
 
         Images and videos require an encoder unless preprocessing already converts
         them to the implant's

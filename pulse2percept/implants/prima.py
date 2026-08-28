@@ -15,6 +15,7 @@ from .electrodes import HexElectrode
 from .electrode_arrays import ElectrodeGrid
 from ..stimuli import PRIMAEncoder
 from ..stimuli.base import _describe_unit
+from ..stimuli.encoders import _OpticalStimulus
 from ..units import DimensionMismatchError, as_value, mW, mm, um
 from ..utils import deprecated
 from ..utils.constants import MS_PER_S, ZORDER
@@ -24,24 +25,16 @@ from ..utils.constants import MS_PER_S, ZORDER
 _DEVICE_DEFAULT = object()
 
 
-def _optical_params(stim):
-    """Projector settings a stimulus was built from, or None
+def _projector(stim):
+    """The stimulus itself if it still describes a projector, else None
 
-    ``Stimulus`` files metadata it does not recognize under a ``'user'`` key,
-    so an encoded stimulus that has been wrapped up in another one carries its
-    encoder record one level down.
+    Only a stimulus that carries its own schedule can be checked against the
+    device envelope. Anything that has been reduced to samples -- by arithmetic
+    that invalidates a schedule, or by being built out of raw numbers -- says
+    nothing about the period its pulses sit in, whatever metadata was copied
+    along with it.
     """
-    meta = getattr(stim, 'metadata', None)
-    if not isinstance(meta, dict):
-        return None
-    enc = meta.get('encoder')
-    if not isinstance(enc, dict):
-        user = meta.get('user')
-        enc = user.get('encoder') if isinstance(user, dict) else None
-    if not isinstance(enc, dict):
-        return None
-    optical = enc.get('optical')
-    return optical if isinstance(optical, dict) else None
+    return stim if isinstance(stim, _OpticalStimulus) else None
 
 
 #: F55 layout reconstructed from Fig. 2(a) of [Ho2019]_.
@@ -330,11 +323,19 @@ class PRIMAPivotal(ProsthesisSystem):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only stimuli that stay inside the projector's
-        documented envelope are allowed: at most 3.5 mW/mm^2 of irradiance, ON
-        durations on the 0.7 ms hardware grid and no longer than 9.8 ms, and a
-        duty cycle of at most 0.294. There is no limit on how many pixels may
-        be lit at once; all 378 of them may be. Charge balance is not checked,
-        because PRIMA is not driven by a current source.
+        documented envelope are allowed: at most 3.5 mW/mm^2 of irradiance, a
+        frame rate of at most 30 Hz, ON durations on the 0.7 ms hardware grid
+        and no longer than 9.8 ms, and a duty cycle of at most 0.294. There is
+        no limit on how many pixels may be lit at once; all 378 of them may be.
+        Charge balance is not checked, because PRIMA is not driven by a current
+        source.
+
+        This validates the *device envelope*, not biological safety. 3.5
+        mW/mm^2 is what the pivotal projector emits, not what the retina
+        tolerates; published thermal modeling puts the near-infrared ceiling
+        higher. A stimulus that no longer carries its projector schedule
+        cannot be verified and is refused; set ``safe_mode=False`` to check
+        the envelope yourself.
 
         .. versionchanged:: 0.11.0
             Checks the optical envelope instead of electrical charge balance.
@@ -420,8 +421,39 @@ class PRIMAPivotal(ProsthesisSystem):
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
 
+    def _require_physical_light(self, stim):
+        """Require irradiance that could be light at all.
+
+        Unlike the envelope below, this is not about the pivotal projector: a
+        negative or undefined power density is not dim light, it is not light,
+        so it is refused whatever ``safe_mode`` says.
+        """
+        if stim.unit.dimension != self.stimulus_unit.dimension:
+            return
+        projector = _projector(stim)
+        if projector is not None:
+            # A schedule validates its own irradiance when it is built, and
+            # reading it costs nothing:
+            values = np.array([projector.irradiance], dtype=np.float64)
+        else:
+            values = np.asarray(stim.data, dtype=np.float64)
+        if values.size == 0:
+            return
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Optical stimulus has non-finite irradiance.")
+        if values.min() < 0:
+            raise ValueError(
+                f"Optical stimulus asks for {values.min():.3f} mW/mm^2. "
+                f"Irradiance is a power density and cannot be negative; "
+                f"a dark pixel is zero.")
+
     def _require_within_optical_envelope(self, stim):
-        """Require a stimulus the PRIMA projector could actually produce."""
+        """Require a stimulus the PRIMA projector could actually produce.
+
+        Read off the schedule the stimulus carries, never off its metadata:
+        metadata is an ordinary dict that arithmetic may copy onto a waveform
+        it no longer describes.
+        """
         if stim.unit.dimension != self.stimulus_unit.dimension:
             raise DimensionMismatchError(
                 f"Safety check 'safe_mode' needs an optical stimulus to "
@@ -429,21 +461,20 @@ class PRIMAPivotal(ProsthesisSystem):
                 f"{_describe_unit(stim.unit)}. Give the implant a "
                 f"PRIMAEncoder so that image or video input is encoded into "
                 f"irradiance first.")
-        optical = _optical_params(stim)
-        if optical is None:
+        projector = _projector(stim)
+        if projector is None:
             # Peak irradiance can be read off any waveform, but duty cycle
             # cannot: it needs the projector period the pulses belong to.
             # Calling a stimulus safe on half a check would be worse than
             # refusing it:
             raise ValueError(
-                "Safety check: this stimulus does not record the projector "
-                "settings behind it (irradiance, frame rate, per-pixel ON "
-                "durations), so its duty cycle cannot be verified. Build it "
-                "with a PRIMAEncoder, or set safe_mode=False and check the "
+                "Safety check: this stimulus no longer describes a projector "
+                "(irradiance, frame rate, per-pixel ON durations), so its "
+                "duty cycle cannot be verified. Build it with a PRIMAEncoder "
+                "and keep it intact, or set safe_mode=False and check the "
                 "device envelope yourself.")
-        irradiance = float(optical['irradiance'])
-        freq = float(optical['freq'])
-        dur = np.asarray(optical['pulse_dur'], dtype=np.float64)
+        irradiance, freq = projector.irradiance, projector.freq
+        dur = np.asarray(projector.pulse_dur, dtype=np.float64)
         step = PRIMAEncoder.pulse_step
         if irradiance > PRIMAEncoder.max_irradiance + 1e-9:
             raise ValueError(
@@ -462,6 +493,9 @@ class PRIMAPivotal(ProsthesisSystem):
             raise ValueError(
                 f"Safety check: ON durations must be whole multiples of "
                 f"{step} ms, the step the projector modulates in.")
+        # Before the frame rate on its own: a fast clock and a long pulse is a
+        # problem with the combination, and saying so is more use than naming
+        # whichever half is checked first.
         duty = freq * longest / MS_PER_S
         if duty > PRIMAEncoder.max_duty_cycle + 1e-9:
             raise ValueError(
@@ -469,16 +503,24 @@ class PRIMAPivotal(ProsthesisSystem):
                 f"{duty:.3f} ({freq:g} Hz x {longest:.3f} ms), which exceeds "
                 f"the {PRIMAEncoder.max_duty_cycle:.3f} the device delivers. "
                 f"Lower 'freq' or shorten 'pulse_dur'.")
+        if freq > PRIMAEncoder.max_freq + 1e-9:
+            raise ValueError(
+                f"Safety check: stimulus runs the projector at {freq:g} Hz, "
+                f"and the pivotal device runs at "
+                f"{PRIMAEncoder.max_freq:g} Hz. Set safe_mode=False to "
+                f"explore other frame rates.")
 
     def check_stim(self, stim):
         """Quality-check the stimulus
 
         PRIMA is stimulated optically, so ``safe_mode`` checks the projector's
         documented envelope (see the class docstring) rather than electrical
-        charge balance.
+        charge balance. Irradiance that could not be light at all is refused
+        either way.
 
         .. versionadded:: 0.11.0
         """
+        self._require_physical_light(stim)
         if self.safe_mode:
             self._require_within_optical_envelope(stim)
         if self.max_current is not None:

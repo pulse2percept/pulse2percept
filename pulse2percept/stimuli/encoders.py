@@ -4,6 +4,7 @@
    :py:class:`~pulse2percept.stimuli.FrequencyEncoder`,
    :py:class:`~pulse2percept.stimuli.PRIMAEncoder`"""
 from abc import ABCMeta, abstractmethod
+import math
 import numpy as np
 from copy import deepcopy
 
@@ -1111,8 +1112,13 @@ class _OpticalStimulus(Stimulus):
 
     Every pixel sees the same rectangular pulse at the same projector clock and
     the same peak irradiance; only how long it stays on differs. The waveform
-    is therefore fully described by one ON duration per pixel per frame, which
-    is what this holds on to until somebody asks for samples.
+    is therefore fully described by one ON duration per pixel per projector
+    frame, which is what this holds on to until somebody asks for samples.
+
+    Those durations, together with ``irradiance`` and ``freq``, are the
+    authoritative description of what the projector does. They are deliberately
+    not mirrored into ``metadata``, which is an ordinary mutable dict that any
+    operation may copy onto a stimulus whose waveform no longer matches it.
     """
     #: described by its schedule rather than by its samples
     _is_parametric = True
@@ -1121,24 +1127,31 @@ class _OpticalStimulus(Stimulus):
     _has_spatial_view = True
 
     __slots__ = ('_dur', '_ticks', '_onsets', '_irradiance', '_freq',
-                 '_wavelength', '_grayscale', '_reps', '_total', '_ref_drive',
-                 '_frame_time', '_frame_dur', '_time')
+                 '_wavelength', '_grayscale', '_total', '_ref_drive',
+                 '_static', '_frame_time', '_frame_dur', '_time')
 
     def __init__(self, electrodes, dur, ticks, onsets, irradiance, freq,
-                 wavelength, grayscale, reps, total, frame_time, frame_dur,
+                 wavelength, grayscale, total, static, frame_time, frame_dur,
                  ref_drive):
-        # ON duration (ms) per pixel and source frame:
+        irradiance = float(irradiance)
+        # Light has a nonnegative power density. Checked here rather than only
+        # in the encoder, because this is also what a scaled or rebuilt
+        # schedule goes through:
+        if not math.isfinite(irradiance) or irradiance < 0:
+            raise ValueError(f"'irradiance' must be a finite, nonnegative "
+                             f"power density, not {irradiance}.")
+        # ON duration (ms) per pixel and projector frame:
         self._dur = self._own(dur, np.float64)
         self._ticks = self._own(ticks, np.int64)
-        # Onset (ticks) of every projector period, frame by source frame:
+        # Onset (ticks) of every projector frame:
         self._onsets = self._own(onsets, np.int64)
-        self._irradiance = float(irradiance)
+        self._irradiance = irradiance
         self._freq = float(freq)
         self._wavelength = float(wavelength)
         self._grayscale = bool(grayscale)
-        # Projector periods per source frame:
-        self._reps = int(reps)
         self._total = float(total)
+        # Whether the source had a time axis of its own:
+        self._static = bool(static)
         # The time-averaged irradiance `_spatial_view` calls 1.0:
         self._ref_drive = float(ref_drive)
         self._frame_time = self._own(frame_time, np.float64)
@@ -1146,11 +1159,10 @@ class _OpticalStimulus(Stimulus):
         # Built lazily without rendering the waveform:
         self._time = None
         self._defer(electrodes, unit=_IRRADIANCE)
-        self.metadata['encoder'] = {
-            'frame_time': self._frame_time, 'frame_dur': self._frame_dur,
-            'optical': {'wavelength': self._wavelength,
-                        'irradiance': self._irradiance, 'freq': self._freq,
-                        'pulse_dur': self._dur, 'grayscale': self._grayscale}}
+        # Only the frame clock, which is not scientific state: it says when the
+        # frames are, and the durations above say what is in them.
+        self.metadata['encoder'] = {'frame_time': self._frame_time,
+                                    'frame_dur': self._frame_dur}
 
     @property
     def wavelength(self):
@@ -1169,7 +1181,7 @@ class _OpticalStimulus(Stimulus):
 
     @property
     def pulse_dur(self):
-        """ON duration (ms) of every pixel, one column per source frame"""
+        """ON duration (ms) of every pixel, one column per projector frame"""
         return self._dur
 
     @property
@@ -1197,22 +1209,23 @@ class _OpticalStimulus(Stimulus):
         return self._time
 
     def _spatial_view(self):
-        """Normalized time-averaged optical drive, one column per source frame
+        """Normalized time-averaged optical drive, one column per frame
 
         Deliberately neither a current nor a brightness: it is the irradiance a
         pixel delivers averaged over a projector period, divided by the largest
         drive the pivotal device is documented to produce. A spatial-only model
         can use it as a per-pixel weight without integrating pulse edges.
         """
-        drive = self._irradiance * self._dur * self._freq / self._ref_drive
-        drive = drive.astype(np.float32)
-        # A source with a single frame has no time axis of its own
-        if self._frame_time.size > 1:
+        drive = (self._irradiance * self.duty_cycle / self._ref_drive).astype(
+            np.float32)
+        if self._static:
+            # Every projector frame repeats the one frame the source had, and
+            # a source with no time axis has no time axis here either:
+            stim = _NormalizedStimulus(drive[:, 0].ravel(),
+                                       electrodes=self.electrodes)
+        else:
             stim = _NormalizedStimulus(drive, electrodes=self.electrodes,
                                        time=self._frame_time)
-        else:
-            stim = _NormalizedStimulus(drive.ravel(),
-                                       electrodes=self.electrodes)
         stim.metadata['encoder'] = {'frame_time': self._frame_time,
                                     'frame_dur': self._frame_dur}
         return stim
@@ -1221,7 +1234,7 @@ class _OpticalStimulus(Stimulus):
         """This schedule, driving different pixels or at a different power"""
         rebuilt = _OpticalStimulus(
             electrodes, dur, self._ticks, self._onsets, irradiance, self._freq,
-            self._wavelength, self._grayscale, self._reps, self._total,
+            self._wavelength, self._grayscale, self._total, self._static,
             self._frame_time, self._frame_dur, self._ref_drive)
         rebuilt.metadata['user'] = deepcopy(self.metadata.get('user'))
         return rebuilt
@@ -1231,11 +1244,20 @@ class _OpticalStimulus(Stimulus):
 
         Pulse duration is what the projector modulates, and it is quantized
         onto a hardware grid, so a scale factor changes optical power instead.
+        Zero simply turns the projector off; a negative factor has no optical
+        meaning, so it is refused rather than expanded into a waveform of
+        negative irradiance.
         """
         if not np.isscalar(factor):
             return None
+        factor = float(factor)
+        if not math.isfinite(factor) or factor < 0:
+            raise ValueError(f"Scaling an optical stimulus by {factor} would "
+                             f"ask the projector for a negative or undefined "
+                             f"irradiance. Only nonnegative, finite factors "
+                             f"describe light.")
         return self._rebuilt(self.electrodes, self._dur,
-                             self._irradiance * float(factor))
+                             self._irradiance * factor)
 
     def _without_electrodes(self, electrodes):
         """This schedule, no longer illuminating ``electrodes``"""
@@ -1246,12 +1268,12 @@ class _OpticalStimulus(Stimulus):
     def _render(self):
         """Expand the schedule into rectangular pulses."""
         ticks = np.asarray(self._ticks)
-        # Which projector period each time point falls in, and how far into it:
+        # Which projector frame each time point falls in, and how far into it:
         at = np.searchsorted(self._onsets, ticks, side='right') - 1
         np.clip(at, 0, self._onsets.size - 1, out=at)
         since = ticks - self._onsets[at]
-        # The ON duration each pixel has in that period, in ticks:
-        dur = np.round(self._dur / DT).astype(np.int64)[:, at // self._reps]
+        # The ON duration each pixel has in that frame, in ticks:
+        dur = np.round(self._dur / DT).astype(np.int64)[:, at]
         # Rising and falling edges each take one DT, as elsewhere in p2p:
         lit = (since[np.newaxis, :] >= 1) & (since <= dur - 1)
         data = np.where(lit, np.float32(self._irradiance), np.float32(0))
@@ -1316,15 +1338,16 @@ class PRIMAEncoder(Encoder):
     *  Every projector period looks the same: irradiance rises to
        ``irradiance`` for the pixel's ON duration and is zero for the rest of
        the period. Peak irradiance never depends on gray level.
-    *  Timing is the projector's, not the source's. Each frame of a video
-       becomes one projector period, so a video is replayed on the device
-       clock; a source with no time axis is held for the standard static
-       presentation and simply repeats.
-    *  ``_spatial_view`` reports normalized time-averaged optical drive,
-       ``irradiance * pulse_dur * freq`` divided by the largest documented
-       pivotal-device drive, so 0 is a dark pixel and 1 a pixel at the full
-       documented drive. It is a physically interpretable optical scalar, not
-       retinal current and not perceived brightness.
+    *  The projector clock samples the source; it does not re-time it. Every
+       ``1 / freq`` the device looks at whatever frame the source is showing
+       (zero-order hold), so a slow video has frames re-sent and a fast one has
+       frames skipped, and either way the source keeps its own duration. A
+       source with no time axis is held for the standard static presentation.
+    *  ``_spatial_view`` reports normalized time-averaged optical drive:
+       ``irradiance * duty_cycle`` divided by the largest documented
+       pivotal-device drive (``ref_drive``), so 0 is a dark pixel and 1 a pixel
+       at the full documented drive. It is a physically interpretable optical
+       scalar, not retinal current and not perceived brightness.
     *  Contrast inversion and edge enhancement are not part of PRIMA. Apply
        them to the source first (e.g. ``image.invert()``,
        ``image.filter('canny')``).
@@ -1358,8 +1381,8 @@ class PRIMAEncoder(Encoder):
     #: Largest documented duty cycle, ``max_freq * max_pulse_dur``
     max_duty_cycle = max_freq * max_pulse_dur / MS_PER_S
 
-    #: Time-averaged irradiance the normalized spatial view calls 1.0
-    ref_drive = max_irradiance * max_pulse_dur * max_freq
+    #: Time-averaged irradiance (mW/mm^2) the normalized spatial view calls 1.0
+    ref_drive = max_irradiance * max_duty_cycle
 
     __slots__ = ('irradiance', 'freq', 'pulse_dur', 'grayscale', 'threshold')
 
@@ -1468,41 +1491,42 @@ class PRIMAEncoder(Encoder):
 
         """
         period = self.period
-        # The encoder clock is the projector clock: one source frame per
-        # projector period. A source with no time axis of its own is held for
-        # the standard static presentation instead, and simply repeats.
-        static = getattr(source, 'time', None) is None
-        gray, electrodes, frame_time, frame_dur = self._as_frames(
-            source, implant, None if static else period)
-        reps = max(1, int(round(frame_dur / period)))
-        n_el, n_frames = len(electrodes), gray.shape[1]
-        dur = self._durations(gray).astype(np.float64)
+        gray, electrodes, frame_time, frame_dur = self._as_frames(source,
+                                                                  implant)
+        n_el = len(electrodes)
+        static = frame_time.size == 1 and getattr(source, 'time', None) is None
+        # The source keeps its own duration. What the projector clock decides
+        # is when the device looks at it, not how long the content lasts:
+        total = float(frame_time[-1] + frame_dur)
+        # Enough frames to cover the source; the last one may be cut short by
+        # the end of the source, exactly as it would be on the device.
+        n_periods = max(1, int(np.ceil(total / period - 1e-9)))
+        onset_ms = np.arange(n_periods, dtype=np.float64) * period
+        # Zero-order hold: a source frame stays on screen until the next one,
+        # so the projector re-sends a slow source's frames and skips a fast
+        # source's. Interpolating instead would invent frames the source never
+        # contained.
+        at = np.searchsorted(frame_time, onset_ms, side='right') - 1
+        np.clip(at, 0, frame_time.size - 1, out=at)
+        dur = self._durations(gray[:, at])
 
         # Onsets are rounded onto the DT grid one at a time rather than stepped
         # by an already-rounded period: 30 Hz is 33333.33 ticks, and
-        # accumulating that error would walk the projector off its own frames
-        # over the course of a video.
-        n_periods = n_frames * reps
-        onsets = np.round(np.arange(n_periods, dtype=np.float64) * period /
-                          DT).astype(np.int64)
-        # Re-derive the frame clock from the periods that actually fit, so that
-        # frame boundaries and projector periods cannot drift apart:
-        end = int(np.round(n_periods * period / DT))
-        total = end * DT
-        frame_dur = total / n_frames
-        frame_time = np.arange(n_frames, dtype=np.float64) * frame_dur
+        # accumulating that error would walk the projector off the source over
+        # the course of a video.
+        onsets = np.round(onset_ms / DT).astype(np.int64)
+        end = int(np.round(total / DT))
         dur_ticks = np.round(dur / DT).astype(np.int64)
         edges = [np.array([0, end], dtype=np.int64)]
-        for j in range(n_frames):
+        for j in range(n_periods):
             levels = np.unique(dur_ticks[:, j])
             levels = levels[levels > 0]
             if levels.size == 0:
                 # A dark frame has no edges of its own to place:
                 continue
-            on = onsets[j * reps:(j + 1) * reps]
-            edges += [on, on + 1]
-            for level in levels:
-                edges += [on + level - 1, on + level]
+            on = onsets[j]
+            edges.append(np.concatenate(([on, on + 1],
+                                         levels + (on - 1), levels + on)))
         ticks = np.unique(np.concatenate(edges))
         ticks = ticks[(ticks >= 0) & (ticks <= end)]
 
@@ -1522,8 +1546,10 @@ class PRIMAEncoder(Encoder):
 
         # The schedule is settled. Expanding it into an n_el x n_time matrix is
         # the expensive half, and the half nothing needs until somebody asks
-        # for samples:
+        # for samples. A static source keeps its single frame; a video's frame
+        # clock is the projector's, since that is when the pixels change.
         return _OpticalStimulus(
             electrodes, dur, ticks, onsets, self.irradiance, self.freq,
-            self.wavelength, self.grayscale, reps, total, frame_time,
-            frame_dur, self.ref_drive)
+            self.wavelength, self.grayscale, total, static,
+            np.zeros(1) if static else onset_ms,
+            total if static else period, self.ref_drive)

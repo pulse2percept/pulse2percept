@@ -115,11 +115,16 @@ is fixed either way. Contrast inversion and edge enhancement are not part of
 the device, so they are ordinary ``ImageStimulus`` operations applied first
 (``image.invert()``, ``image.filter('canny')``).
 
+The projector clock samples a video; it does not re-time it. Every ``1 / freq``
+the device looks at whatever frame the source is showing (zero-order hold), so
+a 15 fps source has its frames re-sent and a 60 fps source has frames skipped,
+and either way the content keeps its own duration.
+
 Converting light into retinal current is the job of a photovoltaic model, which
 pulse2percept does not have yet. Until it does, the encoded stimulus offers
-spatial-only models a *normalized optical drive* -- irradiance times ON
-duration times frame rate, divided by the largest drive the pivotal device is
-documented to produce -- and
+spatial-only models a *normalized optical drive* -- peak irradiance times duty
+cycle, divided by the largest drive the pivotal device is documented to
+produce -- and
 :py:class:`~pulse2percept.models.ScoreboardModel` reads it:
 
 .. code-block:: python
@@ -137,8 +142,11 @@ Device constraints
 An implant's :py:class:`~pulse2percept.implants.Raster` determines which
 electrodes may pulse together; see :ref:`topics-rasters`. PRIMA has none: all
 378 photovoltaic pixels may be illuminated at once. With ``safe_mode=True`` it
-instead checks the projector envelope -- at most 3.5 mW/mm^2, ON durations on
-the 0.7 ms grid and no longer than 9.8 ms, and a duty cycle of at most 0.294.
+instead checks the projector envelope -- at most 3.5 mW/mm^2, at most 30 Hz,
+ON durations on the 0.7 ms grid and no longer than 9.8 ms, and a duty cycle of
+at most 0.294. That is the *device* envelope, not a biological safety limit,
+and it is read off the stimulus' own schedule: a stimulus that has been reduced
+to samples cannot be verified and is refused.
 
 Encoders can also quantize timing with ``clock`` and gray levels with
 ``n_levels``. These constraints are conservative: quantization may lower a
