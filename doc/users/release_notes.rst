@@ -26,35 +26,22 @@ Highlights:
 
 API changes:
 
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` now has ``placement``
-  to specify where it is implanted, plus ``technology`` (e.g.
-  ``'photovoltaic'``) and ``family`` (e.g. ``'PRIMA'``). All three are
-  descriptive class attributes with no effect on behavior, and default to
-  ``None`` where they have not been recorded (:pull:`865`).
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` adds descriptive
+  ``placement``, ``technology`` and ``family`` class attributes (:pull:`865`).
 
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`)
 
-* New :py:class:`~pulse2percept.implants.Ho2019FlatArray` and
-  :py:class:`~pulse2percept.implants.Huang2021Array` take the pixel size as
-  their first argument: ``Ho2019FlatArray(55)`` and ``Ho2019FlatArray(40)`` for
-  the flat 1 mm arrays of [Ho2019]_, and ``Huang2021Array(55)``,
-  ``Huang2021Array(40)``, ``Huang2021Array(30)`` and ``Huang2021Array(20)`` for
-  the 1.5 mm vertical-junction arrays of [Huang2021]_, with 421, 821, 1388 and
-  2806 exposed pixels (:pull:`865`)
+* New :py:class:`~pulse2percept.implants.Ho2019FlatArray` models the 55
+  and 40 um flat arrays of [Ho2019]_; new
+  :py:class:`~pulse2percept.implants.Huang2021Array` models the 55, 40, 30 and
+  20 um vertical-junction arrays of [Huang2021]_ (:pull:`865`).
 
-* The PRIMA implants are renamed so that each canonical name says which
-  published hardware configuration it models. ``PRIMA`` becomes
-  :py:class:`~pulse2percept.implants.PRIMAPivotal`, leaving ``PRIMA`` free for
-  the eventual commercial device, whose specifications may differ from the
-  pivotal-trial array; ``PRIMA75`` becomes
-  :py:class:`~pulse2percept.implants.Lorach2015Array`, since it was
-  pulse2percept shorthand rather than a device name; and ``PRIMA55``/``PRIMA40``
-  become ``Ho2019FlatArray(55)``/``Ho2019FlatArray(40)``, since [Ho2019]_ and
-  [Huang2021]_ each describe a 55 um and a 40 um array. The renames themselves
-  introduce no additional geometry changes; the geometry corrections are
-  described below. All four old names remain as deprecated wrappers until
-  0.12.0 (:pull:`865`)
+* ``PRIMA`` is renamed
+  :py:class:`~pulse2percept.implants.PRIMAPivotal`, ``PRIMA75`` becomes
+  :py:class:`~pulse2percept.implants.Lorach2015Array`, and ``PRIMA55``/
+  ``PRIMA40`` become ``Ho2019FlatArray(55)``/``Ho2019FlatArray(40)``.
+  The old names are deprecated until 0.12.0 (:pull:`865`).
 
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
@@ -72,11 +59,8 @@ API changes:
   ``rot``, so hexagonal bodies face the nearest-neighbor axis of the lattice
   they sit on and turn with it (:pull:`865`).
 
-* The PRIMA implants plot their substrate: 2 x 2 mm for
-  :py:class:`~pulse2percept.implants.PRIMAPivotal`, 1.5 mm circular for
-  :py:class:`~pulse2percept.implants.Huang2021Array`, 1 mm circular for the
-  others. Pixels are clipped to it, so the rim pixels the diced edge cuts
-  through are no longer drawn as whole hexagons (:pull:`865`).
+* PRIMA photovoltaic arrays now plot their substrate and clip rim pixels
+  to the substrate boundary (:pull:`865`).
 
 Bug fixes:
 
@@ -89,9 +73,8 @@ Bug fixes:
   passing the apothem ``a`` to Matplotlib as a circumradius, drawing every
   hexagonal pixel 13% too small (:pull:`865`)
 
-* :py:class:`~pulse2percept.implants.PRIMAPivotal` pixels are 100 um wide, not
-  85 um wide with 15 um trenches, an interpretation no primary source supports.
-  Pixel centers are unchanged (:pull:`865`)
+* :py:class:`~pulse2percept.implants.PRIMAPivotal` pixels are corrected
+  from 85 to 100 um wide; pixel centers are unchanged (:pull:`865`).
 
 * ``PRIMA55`` and ``PRIMA40`` (now
   :py:class:`~pulse2percept.implants.Ho2019FlatArray`) model the F55 and F40

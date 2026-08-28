@@ -417,13 +417,9 @@ class ElectrodeGrid(ElectrodeArray):
     type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
     orientation : {'horizontal', 'vertical'}, optional
-        Lattice orientation of a hex grid.
-        'horizontal': one nearest-neighbor axis is horizontal, alternate rows
-        are staggered by half a spacing to the right, and hexagonal electrode
-        bodies are drawn pointy-top (flats left/right).
-        'vertical': one nearest-neighbor axis is vertical, alternate columns
-        are staggered by half a spacing upwards, and hexagonal bodies are
-        drawn flat-top (flats up/down).
+        Hex-grid orientation. ``'horizontal'`` staggers alternate rows;
+        ``'vertical'`` staggers alternate columns. Hexagonal electrode bodies
+        follow the grid orientation.
     x/y/z : double
         3D location (um) of the center of the grid.
         The coordinate system is centered over the fovea.
@@ -764,8 +760,7 @@ class ElectrodeGrid(ElectrodeArray):
                                                    names)]
         else:
             if issubclass(etype, HexElectrode):
-                # A hexagonal body only tiles the lattice if its flats face
-                # the nearest-neighbor axis and it turns with the grid:
+                # Match the hexagonal body to the grid:
                 kwargs.setdefault('orientation', orientation)
                 kwargs.setdefault('rot', rot)
             # Pass keyword arguments to the electrode constructor:

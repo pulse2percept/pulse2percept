@@ -18,9 +18,7 @@ from ..utils import deprecated
 from ..utils.constants import ZORDER
 
 
-#: Layout of the F55 array of [Ho2019]_ in axial hex coordinates: for each
-#: column ``q``, the inclusive range of rows ``r`` that carries a pixel.
-#: Recovered from Fig. 2(a) of [Ho2019]_; exactly 250 pixels.
+#: F55 layout reconstructed from Fig. 2(a) of [Ho2019]_.
 _HO2019_F55_AXIAL_SPANS = {
     -9: (3, 8), -8: (1, 9), -7: (-1, 9), -6: (-3, 9), -5: (-4, 9),
     -4: (-5, 9), -3: (-6, 9), -2: (-6, 8), -1: (-7, 8), 0: (-7, 7),
@@ -28,13 +26,7 @@ _HO2019_F55_AXIAL_SPANS = {
     6: (-9, 3), 7: (-9, 2), 8: (-9, 1), 9: (-8, -1),
 }
 
-#: Exposed (stimulating) pixels of the vertical-junction arrays of
-#: [Huang2021]_ in axial hex coordinates: for each pixel size (um) and column
-#: ``q``, the inclusive range of rows ``r`` that carries an exposed pixel.
-#: Reconstructed from Fig. 7 of [Huang2021]_, registered to the triangular
-#: lattice, and constrained to the published exposed-pixel counts.
-#: The peripheral pixels covered by the common return electrode are not in
-#: here; see ``_HUANG2021_TOTAL_PIXELS`` for the fabricated totals.
+#: Exposed-pixel layouts reconstructed from Fig. 7 of [Huang2021]_.
 _HUANG2021_AXIAL_SPANS = {
     55: {
         -12: (3, 9), -11: (1, 10), -10: (-1, 11), -9: (-3, 12), -8: (-4, 12),
@@ -65,13 +57,8 @@ _HUANG2021_AXIAL_SPANS = {
         13: (-23, 8), 14: (-22, 6), 15: (-22, 5), 16: (-22, 4), 17: (-21, 2),
         18: (-20, 0), 19: (-19, -1), 20: (-18, -4), 21: (-16, -7),
     },
-    # Three of the 2806 exposed pixels -- (11, 19), (24, 3) and (0, 27) -- lie
-    # outside the quadrant Fig. 7 of [Huang2021]_ shows for this variant and
-    # are inferred: they are the sites the published total requires, at the
-    # nearest admissible rim positions. Only (0, 27) is meaningfully ambiguous;
-    # (-9, 31) is an almost exact geometric tie, and (0, 27) wins by sitting
-    # fractionally closer to the fitted center of the active region. Full-
-    # device imagery or CAD would settle that one site.
+    # Three rim pixels are inferred to match the published count; (0, 27)
+    # is ambiguous with (-9, 31).
     20: {
         -34: (11, 21), -33: (8, 24), -32: (5, 26), -31: (3, 27), -30: (1, 28),
         -29: (-1, 29), -28: (-3, 30), -27: (-5, 30), -26: (-6, 31),
@@ -91,23 +78,12 @@ _HUANG2021_AXIAL_SPANS = {
     },
 }
 
-#: Pixels fabricated on each [Huang2021]_ die, keyed by pixel size (um). Larger
-#: than the exposed counts in ``_HUANG2021_AXIAL_SPANS``: the peripheral common
-#: return electrode covers roughly 20% of the pixels, which are therefore not
-#: exposed as independently stimulating pixels and are not modeled as
-#: electrodes.
+#: Total fabricated pixels in each [Huang2021]_ array.
 _HUANG2021_TOTAL_PIXELS = {55: 526, 40: 1027, 30: 1735, 20: 3508}
 
 
 def _axial_rows(spans):
-    """Grid row index of every ``(q, r)`` in an axial-coordinate mask
-
-    On an ``orientation='vertical'`` hex grid, axial column ``q`` is grid
-    column ``j = q - min(spans)``, and axial row ``r`` is grid row
-    ``r + (j + 1) // 2``, offset so the lowest one is row 0. The ``(j + 1)
-    // 2`` term undoes the half-spacing stagger the grid applies to its
-    even-numbered columns.
-    """
+    """Convert axial-coordinate spans to grid row/column indices."""
     q0 = min(spans)
     ij = [(r + ((q - q0) + 1) // 2, q - q0)
           for q, (r_lo, r_hi) in spans.items()
@@ -117,15 +93,12 @@ def _axial_rows(spans):
 
 
 def _axial_mask_shape(spans):
-    """Smallest ``(rows, cols)`` hex grid holding an axial-coordinate mask"""
+    """Return the smallest grid that contains an axial mask."""
     ij = _axial_rows(spans)
     return max(i for i, _ in ij) + 1, max(spans) - min(spans) + 1
 
 
-#: The flat arrays of [Ho2019]_, keyed by pixel size (um): the radius (um) of
-#: the active electrode, the hex grid the layout is cut from, and how the
-#: layout is defined -- an image-derived axial mask for F55, the ``n_pixels``
-#: sites nearest the substrate center for F40, whose outline is unpublished.
+#: Flat-array parameters from [Ho2019]_.
 _HO2019_VARIANTS = {
     55: {'elec_radius': 7, 'n_pixels': 250,
          'shape': _axial_mask_shape(_HO2019_F55_AXIAL_SPANS),
@@ -137,20 +110,13 @@ _HO2019_VARIANTS = {
 
 
 def _pixel_size_um(pixel_size, supported, cls_name):
-    """Validated pixel size (um), keyed into a variant table
-
-    Takes a bare number of microns or a length quantity, and requires one of
-    the ``supported`` sizes: each layout is a per-device reconstruction, not a
-    formula that could be evaluated at an arbitrary size.
-    """
+    """Validate and normalize a supported pixel size."""
     value = as_value(pixel_size, um, 'pixel_size')
     if isinstance(value, (Sequence, np.ndarray)):
         raise TypeError(f"'pixel_size' must be a scalar, not "
                         f"{type(pixel_size)}.")
     for size in supported:
-        # Loose enough to absorb the round-off a unit conversion leaves behind
-        # (0.055 * mm is 55.00000000000001 um), far tighter than the gap
-        # between two variants:
+        # Allow round-off from unit conversion:
         if abs(value - size) < 1e-6:
             return size
     sizes = ', '.join(str(s) for s in sorted(supported))
@@ -159,33 +125,14 @@ def _pixel_size_um(pixel_size, supported, cls_name):
 
 
 def _device_frame(earray, center):
-    """Electrode coordinates relative to ``center``, with the grid's rotation
-    undone
-
-    ``center`` is in microns and the rotation comes from ``earray``, which
-    stores it normalized, so a unitful ``PRIMA55(x=1 * mm, rot=30 * deg)``
-    trims exactly like the bare-number spelling.
-    """
+    """Return coordinates in the unrotated device frame."""
     c, s = np.cos(np.radians(earray.rot)), np.sin(np.radians(earray.rot))
     return ((earray.coordinates()[:, :2] - np.asarray(center, dtype=float))
             @ np.array([[c, -s], [s, c]]))
 
 
 def _recenter(earray, center):
-    """Shift a trimmed array so its footprint is centered on ``center``
-
-    For a layout whose registration against the substrate is not published:
-    :py:class:`~pulse2percept.implants.ElectrodeGrid` centers the untrimmed
-    lattice, so whichever pixels survive a trim generally sit a fraction of
-    the spacing off that center. The correction is computed in the unrotated
-    device frame, so a rotated device is the unrotated one turned about
-    ``center`` rather than a differently trimmed array.
-
-    Do not apply this to a layout that is *defined* relative to the substrate
-    center, such as one from :py:func:`_trim_to_disc`: shifting those pixels
-    changes the lattice phase and they are no longer the sites the rule
-    selected.
-    """
+    """Center a trimmed array on ``center``."""
     xy = _device_frame(earray, center)
     off = -0.5 * (xy.min(axis=0) + xy.max(axis=0))
     c, s = np.cos(np.radians(earray.rot)), np.sin(np.radians(earray.rot))
@@ -196,21 +143,9 @@ def _recenter(earray, center):
 
 
 def _trim_to_disc(earray, n_pixels, center):
-    """Trim a hex grid down to the ``n_pixels`` pixels nearest ``center``
-
-    For a device whose pixel count and substrate diameter are published but
-    whose outline is not: the pixels kept are the lattice sites closest to the
-    center of the substrate, which is the most circular layout with that
-    count. It is not the fabrication mask. The sites are kept where the
-    lattice puts them; their bounding box can sit up to half a spacing off
-    center, which is what a discrete lattice on a round substrate does.
-
-    Distances and the tie-breaking angle are measured in the unrotated device
-    frame, so ``rot`` turns the device without changing which pixels it has.
-    """
+    """Keep the ``n_pixels`` lattice sites nearest ``center``."""
     xy = _device_frame(earray, center)
-    # Rounded, so that round-off from the rotation cannot reorder two sites
-    # that are the same distance out:
+    # Round to keep ties stable under rotation:
     r = np.round(np.hypot(*xy.T), 6)
     ang = np.round(np.arctan2(xy[:, 1], xy[:, 0]), 6)
     names = np.asarray(list(earray.electrodes))
@@ -219,31 +154,20 @@ def _trim_to_disc(earray, n_pixels, center):
 
 
 def _trim_to_axial_mask(earray, spans, center):
-    """Trim a hex grid down to the pixels named by an axial-coordinate mask"""
+    """Trim a grid to an axial-coordinate mask."""
     cols = max(spans) - min(spans) + 1
     keep = {i * cols + j for i, j in _axial_rows(spans)}
     for idx, name in enumerate(list(earray.electrodes)):
         if idx not in keep:
             earray.remove_electrode(name)
-    # The mask fixes which pixels exist, but not where the reconstructed
-    # outline sits on the substrate; centering it there is the modeling
-    # choice:
+    # Center reconstructed masks on the substrate:
     _recenter(earray, center)
 
 
 def _plot_substrate(ax, center, rot, radius=None, side=None):
-    """Draw a PRIMA substrate outline and return ``(ax, patch)``
-
-    The silicon die, not the pixel array: give either a ``radius`` for a round
-    substrate or a ``side`` for a square one. The patch goes in at background
-    z-order so the pixels stay on top however the caller layers its own
-    drawing, and it enters the data limits, so ``autoscale`` sees the chip and
-    not just the pixels.
-    """
+    """Draw the implant substrate."""
     if ax is None:
         ax = plt.gca()
-    # Deliberately low-contrast: the substrate says where the chip ends, and
-    # should not compete with the pixels drawn on it.
     style = {'fc': (0.92, 0.92, 0.92, 1), 'ec': (0.6, 0.6, 0.6, 1),
              'lw': 1, 'zorder': ZORDER['background']}
     if radius is not None:
@@ -259,13 +183,7 @@ def _plot_substrate(ax, center, rot, radius=None, side=None):
 
 
 def _clip_pixels(ax, substrate, drawn_before):
-    """Clip the pixels an implant just drew to its substrate outline
-
-    A pixel at the rim of a round die is diced through: the lattice site and
-    its stimulation are unaffected, but the silicon of the hexagon is cut off
-    at the edge of the chip. p2p draws every pixel as a whole hexagon, so the
-    truncation is applied here, to the drawing.
-    """
+    """Clip plotted pixels to the substrate."""
     for coll in ax.collections:
         if coll not in drawn_before:
             coll.set_clip_path(substrate)
@@ -273,12 +191,11 @@ def _clip_pixels(ax, substrate, drawn_before):
 
 class PhotovoltaicPixel(HexElectrode):
     """Photovoltaic pixel
-
-    A hexagonal pixel body with a circular active electrode at its center, as
-    used by the subretinal photovoltaic arrays modeled in this module.
-
+    
+    A hexagonal pixel body with a circular active electrode at its center.
+    
     .. versionadded:: 0.7
-
+    
     Parameters
     ----------
     x/y/z : double
@@ -289,27 +206,25 @@ class PhotovoltaicPixel(HexElectrode):
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
     r : double
-        Radius (um) of the circular active electrode in the x,y plane.
+        Radius (um) of the active electrode.
     a : double
-        Apothem (um) of the hexagonal pixel body: half its flat-to-flat width.
+        Apothem (um) of the hexagonal pixel body.
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
         stimuli.
     orientation : {'horizontal', 'vertical'}, optional
-        Which way the pixel body's flats face; see
-        :py:class:`~pulse2percept.implants.HexElectrode`.
-
+        Pixel orientation.
+    
         .. versionadded:: 0.11.0
     rot : double, optional
-        Rotation of the pixel body (deg, counter-clockwise).
-
+        Rotation angle (deg, positive counter-clockwise).
+    
         .. versionadded:: 0.11.0
-
+    
     Notes
     -----
-    *  Lengths may be given as plain numbers of microns or as unitful
-       quantities (e.g. ``14 * um``). See :py:mod:`pulse2percept.units`.
-
+    *  Lengths may be given as plain numbers of microns or as unitful quantities.
+       See :py:mod:`pulse2percept.units`.
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('r',)
@@ -327,8 +242,7 @@ class PhotovoltaicPixel(HexElectrode):
             raise ValueError("Radius of the active electrode must be > 0, not "
                              "{r}.")
         self.r = r
-        # Plot two objects: hex pixel body and circular active electrode. The
-        # body reuses HexElectrode's geometry so the two cannot drift apart:
+        # Plot the pixel body and active electrode:
         hex_kwargs = self._hex_patch_kwargs()
         self.plot_patch = [RegularPolygon, Circle]
         self.plot_kwargs = [{**hex_kwargs, 'alpha': 0.2, 'fc': 'k', 'ec': 'k'},
@@ -350,34 +264,22 @@ class PhotovoltaicPixel(HexElectrode):
 
 
 class PRIMAPivotal(ProsthesisSystem):
-    """Create a PRIMA array as used in the pivotal trial
-
-    This class creates the PRIMA array with 378 photovoltaic pixels used in the
-    pivotal PRIMAvera clinical trial [Holz2026]_, and places it in the
-    subretinal space such that the center of the array is located at 3D
-    location (x,y,z), given in microns, and the array is rotated by rotation
-    angle ``rot``, given in degrees. The same 378-pixel, 100 um configuration
-    was described earlier in the first-in-human study [Palanker2020]_.
-
-    Each hexagonal pixel is 100 um wide (flat-to-flat), and neighboring pixel
-    centers are 100 um apart, on a 2 x 2 mm substrate. Adjacent rows are
-    therefore separated by ``100 * sqrt(3) / 2`` = 86.6 um, which sets the
-    sampling limit of the hexagonal array. The active electrode at the center
-    of each pixel is a disk 28 um in diameter.
-
+    """Create the PRIMA array used in the pivotal PRIMAvera trial
+    
+    The implant has 378 photovoltaic pixels, each 100 um wide on a 100 um
+    hexagonal grid, with a 28 um active electrode, on a 2 x 2 mm substrate
+    [Holz2026]_. The same configuration was used in the earlier first-in-human
+    study [Palanker2020]_.
+    
     .. versionadded:: 0.7
-
+    
     .. versionchanged:: 0.11.0
-        Pixels are 100 um wide, matching the pixel size reported throughout
-        the clinical PRIMA literature. Earlier versions drew 85 um pixels
-        separated by 15 um trenches, an interpretation no primary source
-        supports. Pixel centers are unchanged.
-
+        Pixel width corrected from 85 to 100 um; pixel centers are unchanged.
+    
     .. versionchanged:: 0.11.0
-        Was called ``PRIMA``. The qualified name identifies this one fixed
-        published hardware configuration, and leaves ``PRIMA`` free for the
-        eventual commercial device, whose specifications may differ.
-
+        Renamed from ``PRIMA`` to distinguish this pivotal-trial configuration
+        from future commercial hardware.
+    
     Parameters
     ----------
     x/y/z : double
@@ -393,8 +295,7 @@ class PRIMAPivotal(ProsthesisSystem):
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
+        counter-clock-wise (CCW) rotations in the retinal coordinate system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -403,12 +304,11 @@ class PRIMAPivotal(ProsthesisSystem):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-
+    
     Notes
     -----
-    *  The diameter of the active electrode was estimated from Fig. 1 in
+    *  The active-electrode diameter was estimated from Fig. 1 of
        [Palanker2020]_.
-
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
@@ -434,12 +334,10 @@ class PRIMAPivotal(ProsthesisSystem):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
-        # The substrate is centered on the requested position, which is not
-        # the same point as the center of the pixels that survive trimming:
+        # Center the substrate at the requested position:
         self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
 
-        # A per-electrode `z` is one entry per surviving pixel, not one per
-        # site of the untrimmed grid, so it is written on after trimming:
+        # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
@@ -470,13 +368,8 @@ class PRIMAPivotal(ProsthesisSystem):
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
-        """Plot the implant on its 2 x 2 mm substrate
-
-        Takes the same arguments as
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
-        the substrate behind the pixels. Pixels at the rim are clipped to
-        the substrate outline, since the die cuts through them.
-
+        """Plot the implant and its 2 x 2 mm substrate.
+        
         .. versionadded:: 0.11.0
         """
         ax, substrate = _plot_substrate(ax, self._substrate_center,
@@ -489,35 +382,21 @@ class PRIMAPivotal(ProsthesisSystem):
 
     @property
     def row_spacing(self):
-        """Distance (um) between adjacent rows of pixels
-
-        Derived geometry: ``spacing * sqrt(3) / 2``. Papers on this device
-        family call this the "pixel pitch"; it is not the nearest-neighbor
-        center spacing.
-        """
+        """Distance (um) between adjacent pixel rows."""
         return self.spacing * np.sqrt(3) / 2
 
 
 class Lorach2015Array(ProsthesisSystem):
-    """Create the 70 um photovoltaic array of [Lorach2015]_ on the retina
-
-    This class creates the array of 142 photovoltaic pixels described in
-    [Lorach2015]_, and places it in the subretinal space, such that that the
-    center of the array is located at 3D location (x,y,z), given in microns,
-    and the array is rotated by rotation angle ``rot``, given in degrees.
-
-    Each hexagonal pixel is 70 um wide (flat-to-flat) and neighboring pixel
-    centers are 75 um apart, leaving a 5 um open trench between pixel bodies,
-    on a nominally 1 mm substrate. Adjacent rows are therefore separated by
-    ``75 * sqrt(3) / 2`` = 65 um. The active electrode at the center of each
-    pixel is a disk 20 um in diameter.
-
+    """Create the 70 um photovoltaic array of [Lorach2015]_
+    
+    The array has 142 pixels, each 70 um wide on a 75 um hexagonal grid, with a
+    20 um active electrode, on a nominal 1 mm substrate.
+    
     .. versionadded:: 0.7
-
+    
     .. versionchanged:: 0.11.0
-        Was called ``PRIMA75``, which was pulse2percept shorthand for the
-        70 um array of [Lorach2015]_ rather than an official device name.
-
+        Renamed from ``PRIMA75``; that name was pulse2percept shorthand.
+    
     Parameters
     ----------
     x/y/z : double
@@ -533,8 +412,7 @@ class Lorach2015Array(ProsthesisSystem):
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
+        counter-clock-wise (CCW) rotations in the retinal coordinate system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -543,17 +421,12 @@ class Lorach2015Array(ProsthesisSystem):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-
+    
     Notes
     -----
-    *  [Lorach2015]_ calls the 65 um row spacing the "pixel pitch". The
-       nearest-neighbor center spacing, which is what ``spacing`` means here,
-       is 75 um.
-    *  142 whole 70 um hexagons do not fit inside a 1 mm circle at this
-       spacing, so the peripheral pixels of the real device are cut through
-       by the diced edge of the chip. Every pixel center is on the substrate;
-       :py:meth:`plot` clips the seven rim pixels whose bodies cross it.
-
+    *  [Lorach2015]_ reports the 65 um row spacing as the "pixel pitch".
+    *  Seven rim pixels extend beyond the nominal 1 mm substrate and are clipped
+       when plotted.
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
@@ -578,12 +451,10 @@ class Lorach2015Array(ProsthesisSystem):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
-        # The substrate is centered on the requested position, which is not
-        # the same point as the center of the pixels that survive trimming:
+        # Center the substrate at the requested position:
         self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
 
-        # A per-electrode `z` is one entry per surviving pixel, not one per
-        # site of the untrimmed grid, so it is written on after trimming:
+        # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
@@ -617,13 +488,8 @@ class Lorach2015Array(ProsthesisSystem):
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
-        """Plot the implant on its 1 mm substrate
-
-        Takes the same arguments as
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
-        the substrate behind the pixels. Pixels at the rim are clipped to
-        the substrate outline, since the die cuts through them.
-
+        """Plot the implant and its 1 mm substrate.
+        
         .. versionadded:: 0.11.0
         """
         ax, substrate = _plot_substrate(ax, self._substrate_center,
@@ -636,44 +502,28 @@ class Lorach2015Array(ProsthesisSystem):
 
     @property
     def row_spacing(self):
-        """Distance (um) between adjacent rows of pixels
-
-        Derived geometry: ``spacing * sqrt(3) / 2``. Papers on this device
-        family call this the "pixel pitch"; it is not the nearest-neighbor
-        center spacing.
-        """
+        """Distance (um) between adjacent pixel rows."""
         return self.spacing * np.sqrt(3) / 2
 
 
 class Ho2019FlatArray(ProsthesisSystem):
-    """Create a flat photovoltaic array of [Ho2019]_ on the retina
-
-    The experimental flat subretinal arrays of [Ho2019]_, placed in the
-    subretinal space such that the center of the array is located at 3D
-    location (x,y,z), given in microns, and rotated by rotation angle
-    ``rot``, given in degrees.
-
-    Two variants are available, both on a 1 mm circular substrate:
-
+    """Create a flat photovoltaic array of [Ho2019]_
+    
+    Supports the F55 and F40 arrays on a 1 mm substrate:
+    
     ===================  ======  ===========  ================
     ``pixel_size`` (um)  pixels  row spacing  active electrode
     ===================  ======  ===========  ================
     55 (F55)             250     47.6 um      14 um diameter
     40 (F40)             502     34.6 um      10 um diameter
     ===================  ======  ===========  ================
-
-    Pixel bodies tile the lattice without an open gap, so the flat-to-flat
-    pixel width equals the nearest-neighbor center spacing. The modeled pixel
-    footprint is approximately 921 x 880 um (F55) and 947 x 960 um (F40).
-
+    
     .. versionadded:: 0.11.0
-
+    
     Parameters
     ----------
     pixel_size : {55, 40}
-        Flat-to-flat width (um) of the hexagonal pixel body, which also selects
-        the device variant. May be given as a unitful quantity (e.g.
-        ``55 * um``); see :py:mod:`pulse2percept.units`.
+        Pixel width (um), which selects the device variant.
     x/y/z : double
         3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
@@ -681,14 +531,11 @@ class Ho2019FlatArray(ProsthesisSystem):
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with one entry per pixel (250 for F55, 502
-        for F40) or a scalar that is applied to all electrodes.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        ``z`` may be a scalar or one value per pixel.
+        May be given as unitful quantities; see :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
+        counter-clock-wise (CCW) rotations in the retinal coordinate system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -697,29 +544,16 @@ class Ho2019FlatArray(ProsthesisSystem):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-
+    
     Notes
     -----
-    *  These are experimental arrays, not clinical PRIMA implants. [Ho2019]_
-       describes four devices: the flat F55/F40 modeled here and the pillar
-       arrays Pil55/Pil40, which pulse2percept does not model.
-    *  The later 1.5 mm vertical-junction devices, which also come in 55 um
-       and 40 um pixel sizes, are a different family; see
-       :py:class:`~pulse2percept.implants.Huang2021Array`.
-    *  [Ho2019]_ calls the row spacing the "pixel pitch". The nearest-neighbor
-       center spacing, which is what ``spacing`` means here, is the pixel size.
-    *  The 1 um isolation trenches between pixels are covered by the shared
-       return electrode and are not open gaps, so the pixel bodies are drawn
-       the full pixel width.
-    *  The F55 outline is reconstructed from Fig. 2(a) of [Ho2019]_ and stored
-       as ``_HO2019_F55_AXIAL_SPANS``: the range of rows carrying a pixel in
-       each of the 19 columns. Where that outline sits on the die is not
-       published, so it is centered on the requested position.
-    *  [Ho2019]_ publishes the F40 pixel count and substrate diameter but not
-       its outline, so the 502 pixels are the lattice sites nearest the center
-       of the substrate, and their bounding box therefore sits a quarter of a
-       spacing below it. That is an approximation, not the fabrication mask.
-
+    *  [Ho2019]_ also describes pillar arrays Pil55 and Pil40, which are not
+       modeled here.
+    *  The F55 layout is reconstructed from Fig. 2(a). The F40 outline is not
+       published; its 502 pixels are taken as the nearest lattice sites to the
+       substrate center.
+    *  The 1 um isolation trenches are covered by the shared return electrode, so
+       ``gap`` is 0.
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('pixel_size', 'shape', 'spacing', 'pixel_width', 'gap',
@@ -745,12 +579,10 @@ class Ho2019FlatArray(ProsthesisSystem):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
-        # The substrate is centered on the requested position, which is not
-        # the same point as the center of the pixels that survive trimming:
+        # Center the substrate at the requested position:
         self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
 
-        # A per-electrode `z` is one entry per surviving pixel, not one per
-        # site of the untrimmed grid, so it is written on after trimming:
+        # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
@@ -778,13 +610,8 @@ class Ho2019FlatArray(ProsthesisSystem):
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
-        """Plot the implant on its 1 mm substrate
-
-        Takes the same arguments as
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
-        the substrate behind the pixels. Pixels at the rim are clipped to
-        the substrate outline, since the die cuts through them.
-
+        """Plot the implant and its 1 mm substrate.
+        
         .. versionadded:: 0.11.0
         """
         ax, substrate = _plot_substrate(ax, self._substrate_center,
@@ -797,26 +624,16 @@ class Ho2019FlatArray(ProsthesisSystem):
 
     @property
     def row_spacing(self):
-        """Distance (um) between adjacent rows of pixels
-
-        Derived geometry: ``spacing * sqrt(3) / 2``. Papers on this device
-        family call this the "pixel pitch"; it is not the nearest-neighbor
-        center spacing.
-        """
+        """Distance (um) between adjacent pixel rows."""
         return self.spacing * np.sqrt(3) / 2
 
 
 class Huang2021Array(ProsthesisSystem):
     """Create a vertical-junction photovoltaic array of [Huang2021]_
-
-    The 1.5 mm subretinal arrays of [Huang2021]_, placed in the subretinal
-    space such that the center of the array is located at 3D location (x,y,z),
-    given in microns, and rotated by rotation angle ``rot``, given in degrees.
-
-    Four variants are available, all on a 1.5 mm circular substrate. Only the
-    exposed (stimulating) pixels are modeled as electrodes; the peripheral
-    pixels covered by the common return electrode are not:
-
+    
+    Supports four arrays on a 1.5 mm substrate. Only exposed pixels are modeled
+    as electrodes:
+    
     ===================  ================  =================  ================
     ``pixel_size`` (um)  ``n_electrodes``  fabricated pixels  active electrode
     ===================  ================  =================  ================
@@ -825,19 +642,13 @@ class Huang2021Array(ProsthesisSystem):
     30                   1388              1735               12 um diameter
     20                   2806              3508               8 um diameter
     ===================  ================  =================  ================
-
-    Pixel bodies tile the lattice without an open gap, so the flat-to-flat
-    pixel width equals the nearest-neighbor center spacing. The active
-    electrode at the center of each pixel is 40% of the pixel size across.
-
+    
     .. versionadded:: 0.11.0
-
+    
     Parameters
     ----------
     pixel_size : {55, 40, 30, 20}
-        Flat-to-flat width (um) of the hexagonal pixel body, which also selects
-        the device variant. May be given as a unitful quantity (e.g.
-        ``40 * um``); see :py:mod:`pulse2percept.units`.
+        Pixel width (um), which selects the device variant.
     x/y/z : double
         3D location (um) of the center of the electrode array.
         The coordinate system is centered over the fovea.
@@ -845,15 +656,11 @@ class Huang2021Array(ProsthesisSystem):
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with one entry per exposed pixel (see
-        ``n_electrodes``, not ``n_total_pixels``) or a scalar that is applied
-        to all electrodes.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        ``z`` may be a scalar or one value per exposed pixel.
+        May be given as unitful quantities; see :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
+        counter-clock-wise (CCW) rotations in the retinal coordinate system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -862,31 +669,16 @@ class Huang2021Array(ProsthesisSystem):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-
+    
     Notes
     -----
-    *  These are the later 1.5 mm vertical-junction devices. The 55 um and
-       40 um flat arrays of [Ho2019]_ are a different family, on a 1 mm
-       substrate; see :py:class:`~pulse2percept.implants.Ho2019FlatArray`.
-    *  ``n_electrodes`` counts the exposed pixels, the ones that stimulate.
-       ``n_total_pixels`` counts every pixel fabricated on the die. The
-       difference is the peripheral ring covered by the common return
-       electrode: those pixels are not exposed as independently stimulating
-       pixels, so they are not individually addressable electrodes here.
-    *  The fabrication and isolation trenches between pixels are not open
-       gaps, so ``gap`` is 0 and the pixel bodies are drawn the full pixel
-       width.
-    *  The exposed-pixel outlines are reconstructed from Fig. 7 of
-       [Huang2021]_, registered to the triangular lattice, and constrained to
-       reproduce the published exposed-pixel counts. Where an outline sits on
-       the die is determined far less reliably than which pixels it contains,
-       so each mask is centered on the requested position.
-    *  Three of the 2806 exposed pixels of the 20 um variant fall outside the
-       published quadrant and are inferred; only one of the three is
-       meaningfully ambiguous. See ``_HUANG2021_AXIAL_SPANS``.
-    *  The small flat/notch visible on some photographed dies is not modeled:
-       a nominal 1.5 mm disc is used for the substrate.
-
+    *  ``n_total_pixels`` gives the fabricated pixel count; peripheral pixels
+       covered by the common return are not modeled as electrodes.
+    *  Exposed-pixel layouts are reconstructed from Fig. 7 of [Huang2021]_.
+       Three rim pixels of the 20 um array are inferred; one is ambiguous.
+    *  Isolation trenches are covered by the shared return electrode, so
+       ``gap`` is 0.
+    *  The substrate is modeled as a 1.5 mm circle; the small die notch is omitted.
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('pixel_size', 'n_total_pixels', 'shape', 'spacing',
@@ -904,9 +696,8 @@ class Huang2021Array(ProsthesisSystem):
         self.spacing = self.pixel_size  # um, nearest-neighbor center-to-center
         self.pixel_width = self.pixel_size  # um, flat-to-flat
         self.gap = self.spacing - self.pixel_width  # um, open inter-pixel gap
-        # 40% of the pixel size across, hence a fifth of it as a radius:
+        # Active-electrode diameter is 40% of the pixel size:
         elec_radius = self.pixel_size * 0.2
-        # Just large enough to hold the reconstructed exposed-pixel mask:
         self.shape = _axial_mask_shape(spans)
         self.eye = eye
         self.preprocess = preprocess
@@ -916,12 +707,10 @@ class Huang2021Array(ProsthesisSystem):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
-        # The substrate is centered on the requested position, which is not
-        # the same point as the center of the pixels that survive trimming:
+        # Center the substrate at the requested position:
         self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
 
-        # A per-electrode `z` is one entry per surviving pixel, not one per
-        # site of the untrimmed grid, so it is written on after trimming:
+        # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
@@ -943,13 +732,8 @@ class Huang2021Array(ProsthesisSystem):
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
-        """Plot the implant on its 1.5 mm substrate
-
-        Takes the same arguments as
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.plot`, and draws
-        the substrate behind the pixels. Pixels at the rim are clipped to
-        the substrate outline, since the die cuts through them.
-
+        """Plot the implant and its 1.5 mm substrate.
+        
         .. versionadded:: 0.11.0
         """
         ax, substrate = _plot_substrate(ax, self._substrate_center,
@@ -962,12 +746,7 @@ class Huang2021Array(ProsthesisSystem):
 
     @property
     def row_spacing(self):
-        """Distance (um) between adjacent rows of pixels
-
-        Derived geometry: ``spacing * sqrt(3) / 2``. Papers on this device
-        family call this the "pixel pitch"; it is not the nearest-neighbor
-        center spacing.
-        """
+        """Distance (um) between adjacent pixel rows."""
         return self.spacing * np.sqrt(3) / 2
 
 
@@ -978,18 +757,10 @@ class Huang2021Array(ProsthesisSystem):
                       'Ho et al. (2019); the 1.5 mm vertical-junction array '
                       'of Huang et al. (2021) is ``Huang2021Array(55)``.')
 class PRIMA55(Ho2019FlatArray):
-    """Create a PRIMA-55 array on the retina
-
+    """Deprecated name for the F55 array of [Ho2019]_.
+    
     .. deprecated:: 0.11.0
-
-        Use :py:class:`~pulse2percept.implants.Ho2019FlatArray` with
-        ``pixel_size=55`` instead: the name is ambiguous, because
-        [Huang2021]_ describes a different 55 um array. This wrapper builds
-        the corrected [Ho2019]_ geometry, which already differs from the
-        pre-0.11 ``PRIMA55``; see the v0.11.0 release notes.
-
-    Takes the same arguments as
-    :py:class:`~pulse2percept.implants.Ho2019FlatArray`, minus ``pixel_size``.
+        Use ``Ho2019FlatArray(55)`` instead.
     """
     __slots__ = ()
 
@@ -1006,18 +777,10 @@ class PRIMA55(Ho2019FlatArray):
                       'Ho et al. (2019); the 1.5 mm vertical-junction array '
                       'of Huang et al. (2021) is ``Huang2021Array(40)``.')
 class PRIMA40(Ho2019FlatArray):
-    """Create a PRIMA-40 array on the retina
-
+    """Deprecated name for the F40 array of [Ho2019]_.
+    
     .. deprecated:: 0.11.0
-
-        Use :py:class:`~pulse2percept.implants.Ho2019FlatArray` with
-        ``pixel_size=40`` instead: the name is ambiguous, because
-        [Huang2021]_ describes a different 40 um array. This wrapper builds
-        the corrected [Ho2019]_ geometry, which already differs from the
-        pre-0.11 ``PRIMA40``; see the v0.11.0 release notes.
-
-    Takes the same arguments as
-    :py:class:`~pulse2percept.implants.Ho2019FlatArray`, minus ``pixel_size``.
+        Use ``Ho2019FlatArray(40)`` instead.
     """
     __slots__ = ()
 
@@ -1033,17 +796,10 @@ class PRIMA40(Ho2019FlatArray):
                       'device, whose specifications may differ from the '
                       'pivotal-trial configuration this class models.')
 class PRIMA(PRIMAPivotal):
-    """Create a PRIMA-100 array on the retina
-
+    """Deprecated name for the pivotal-trial PRIMA array.
+    
     .. deprecated:: 0.11.0
-
-        Use :py:class:`~pulse2percept.implants.PRIMAPivotal` instead. The
-        geometry is unchanged; the qualified name identifies the one published
-        hardware configuration this class models, and leaves ``PRIMA`` free
-        for the eventual commercial device.
-
-    Takes the same arguments as
-    :py:class:`~pulse2percept.implants.PRIMAPivotal`.
+        Use :py:class:`~pulse2percept.implants.PRIMAPivotal` instead.
     """
     __slots__ = ()
 
@@ -1053,15 +809,9 @@ class PRIMA(PRIMAPivotal):
             extra_msg='``PRIMA75`` was pulse2percept shorthand, not an '
                       'official device name.')
 class PRIMA75(Lorach2015Array):
-    """Create a PRIMA-75 array on the retina
-
+    """Deprecated name for the 70 um array of [Lorach2015]_.
+    
     .. deprecated:: 0.11.0
-
-        Use :py:class:`~pulse2percept.implants.Lorach2015Array` instead. The
-        geometry is unchanged; ``PRIMA75`` was pulse2percept shorthand for the
-        70 um array of [Lorach2015]_ rather than an official device name.
-
-    Takes the same arguments as
-    :py:class:`~pulse2percept.implants.Lorach2015Array`.
+        Use :py:class:`~pulse2percept.implants.Lorach2015Array` instead.
     """
     __slots__ = ()

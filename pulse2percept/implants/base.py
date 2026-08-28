@@ -100,16 +100,11 @@ class ProsthesisSystem(PrettyPrint):
     #: class describes a family rather than a device.
     placement = None
 
-    #: How the device generates stimulation, e.g. ``'photovoltaic'``.
-    #: Descriptive only; None where it has not been recorded.
-    #:
+    #: Stimulation technology, e.g. ``'photovoltaic'``.
     #: .. versionadded:: 0.11.0
     technology = None
 
-    #: Product family the device belongs to, e.g. ``'PRIMA'``. Descriptive
-    #: only; None for a research device that is not part of one, or where it
-    #: has not been recorded.
-    #:
+    #: Named device family, if applicable, e.g. ``'PRIMA'``.
     #: .. versionadded:: 0.11.0
     family = None
 

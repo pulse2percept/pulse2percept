@@ -148,23 +148,13 @@ HUANG_VARIANTS = [(55, 421, 526, 22), (40, 821, 1027, 16),
 
 
 def _column_profile(implant):
-    """Number of pixels in each lattice column, left to right
-
-    Columns sit at exact multiples of ``spacing * sqrt(3) / 2``, so grouping
-    on the rounded x coordinate recovers them without reconstructing the
-    lattice. Only meaningful for an unrotated implant.
-    """
+    """Return the number of pixels in each lattice column."""
     x = np.round(implant.earray.coordinates()[:, 0], 6)
     return [int(n) for n in np.unique(x, return_counts=True)[1]]
 
 
 def _mask_fingerprint(implant):
-    """Short digest of which pixels an implant has
-
-    Pixel centers in units of the spacing, relative to the footprint's own
-    bounding box, so the digest depends on the layout rather than on where the
-    device was placed. Only meaningful for an unrotated implant.
-    """
+    """Return a placement-invariant digest of the pixel layout."""
     xy = implant.earray.coordinates()[:, :2]
     xy = np.round((xy - 0.5 * (xy.min(axis=0) + xy.max(axis=0))) /
                   implant.spacing, 3)
@@ -173,7 +163,7 @@ def _mask_fingerprint(implant):
 
 
 def _nn_spacing(implant):
-    """Distance (um) from each pixel to its nearest neighbor"""
+    """Return each pixel's nearest-neighbor distance."""
     xy = implant.earray.coordinates()[:, :2]
     return cKDTree(xy).query(xy, k=2)[0][:, 1]
 
@@ -187,12 +177,7 @@ def _nn_spacing(implant):
 @pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
 def test_Ho2019FlatArray(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
-    """The F55/F40 arrays of Ho et al. (2019)
-
-    Pixel bodies tile the lattice with no open gap, so pixel width equals the
-    nearest-neighbor center spacing, and the published pixel count fits on the
-    1 mm circular substrate.
-    """
+    """Check the published Ho et al. array geometry."""
     # Height `z` can either be a float or a list:
     z = -100 if ztype == 'float' else -np.ones(n_elec) * 20
     prima = Ho2019FlatArray(pixel_size, x, y, z=z, rot=rot)
@@ -239,12 +224,7 @@ def test_Ho2019FlatArray(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
 
 @pytest.mark.parametrize('pixel_size', (55, 40))
 def test_Ho2019FlatArray_units(pixel_size):
-    """Unitful placement must trim the array exactly like bare microns
-
-    The trimming works off the array's coordinates, so it has to normalize
-    ``x``/``y`` and read the rotation back off the grid rather than trusting
-    whatever the caller spelled them as.
-    """
+    """Unitful and bare coordinates produce the same array."""
     bare = Ho2019FlatArray(pixel_size, x=1000, y=-500, z=-100, rot=30)
     unitful = Ho2019FlatArray(pixel_size * um, x=1 * mm, y=-0.5 * mm,
                               z=-0.1 * mm, rot=30 * deg)
@@ -255,7 +235,7 @@ def test_Ho2019FlatArray_units(pixel_size):
 
 
 def test_Ho2019FlatArray_pixel_size():
-    """Exactly two variants, and nothing in between"""
+    """Only the published Ho et al. variants are accepted."""
     for pixel_size in (20, 30, 45, 54.9, 75, 100):
         with pytest.raises(ValueError, match='does not model'):
             Ho2019FlatArray(pixel_size)
@@ -266,11 +246,7 @@ def test_Ho2019FlatArray_pixel_size():
 
 
 def test_Ho2019FlatArray_F55_layout():
-    """The 250-pixel F55 mask of [Ho2019]_, in axial hex coordinates
-
-    Pins the published outline itself rather than electrode names, which
-    depend on the size of the grid the mask is cut from.
-    """
+    """Check the F55 layout reconstructed from Fig. 2(a)."""
     expected = {-9: (3, 8), -8: (1, 9), -7: (-1, 9), -6: (-3, 9), -5: (-4, 9),
                 -4: (-5, 9), -3: (-6, 9), -2: (-6, 8), -1: (-7, 8),
                 0: (-7, 7), 1: (-8, 7), 2: (-8, 6), 3: (-9, 6), 4: (-9, 5),
@@ -297,7 +273,7 @@ def test_Ho2019FlatArray_F55_layout():
 
 @pytest.mark.parametrize('old_cls, pixel_size', [(PRIMA55, 55), (PRIMA40, 40)])
 def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
-    """The old names still build the Ho et al. (2019) arrays they always did"""
+    """Deprecated names map to the Ho et al. arrays."""
     with pytest.deprecated_call(match='Ho et al'):
         old = old_cls(x=-100, y=400, rot=30)
     new = Ho2019FlatArray(pixel_size, x=-100, y=400, rot=30)
@@ -315,7 +291,7 @@ def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
                          [(PRIMA, PRIMAPivotal),
                           (PRIMA75, Lorach2015Array)])
 def test_PRIMA_PRIMA75_are_deprecated(old_cls, new_cls):
-    """The old names build the same devices under a deprecation warning"""
+    """Deprecated names map to the canonical arrays."""
     with pytest.deprecated_call():
         old = old_cls(x=-100, y=400, rot=30)
     new = new_cls(x=-100, y=400, rot=30)
@@ -328,12 +304,7 @@ def test_PRIMA_PRIMA75_are_deprecated(old_cls, new_cls):
 
 
 def test_implant_metadata():
-    """``placement``/``technology``/``family`` are descriptive class attributes
-
-    They carry no behavior, so what matters is that the photovoltaic arrays
-    agree on what they are and that an implant that has not been classified
-    says so rather than guessing.
-    """
+    """Check photovoltaic implant metadata."""
     for cls in (PRIMAPivotal, Lorach2015Array, Ho2019FlatArray,
                 Huang2021Array):
         npt.assert_equal(cls.placement, 'subretinal')
@@ -349,7 +320,7 @@ def test_implant_metadata():
 
 
 def test_prima_public_api():
-    """Both the canonical names and the compatibility aliases are exported"""
+    """Check canonical and deprecated public names."""
     import pulse2percept.implants as implants
     canonical = ['PRIMAPivotal', 'Lorach2015Array', 'Ho2019FlatArray',
                  'Huang2021Array']
@@ -363,12 +334,7 @@ def test_prima_public_api():
                          HUANG_VARIANTS)
 @pytest.mark.parametrize('ztype', ('float', 'list'))
 def test_Huang2021Array(pixel_size, n_elec, n_total, elec_diam, ztype):
-    """The vertical-junction arrays of Huang et al. (2021)
-
-    ``n_electrodes`` counts the exposed pixels only: the peripheral pixels the
-    common return electrode covers are fabricated but cannot stimulate, so
-    they are not addressable electrodes.
-    """
+    """Check the published Huang et al. array geometry."""
     x, y, rot = -100, 400, 30
     # Height `z` can either be a float or a list, one entry per exposed pixel:
     z = -100 if ztype == 'float' else -np.ones(n_elec) * 20
@@ -423,13 +389,7 @@ HUANG_MASKS = [(55, (22, 25), (7, 3), '9470661f9f60eb1c'),
 @pytest.mark.parametrize('pixel_size, shape, edge_columns, digest',
                          HUANG_MASKS)
 def test_Huang2021Array_layout(pixel_size, shape, edge_columns, digest):
-    """The reconstructed exposed-pixel masks of [Huang2021]_
-
-    The masks are hard-coded reconstructions, so transcribing them here again
-    would not validate anything. This pins their overall shape plus one digest
-    of the pixel set, which is what a quiet "simplification" back into a
-    circular crop of the die would break.
-    """
+    """Check the reconstructed Huang et al. layouts."""
     implant = Huang2021Array(pixel_size)
     npt.assert_equal(implant.shape, shape)
     profile = _column_profile(implant)
@@ -441,7 +401,7 @@ def test_Huang2021Array_layout(pixel_size, shape, edge_columns, digest):
 
 
 def test_Huang2021Array_pixel_size():
-    """Exactly four variants, however the size is spelled"""
+    """Only the published Huang et al. variants are accepted."""
     for pixel_size in (10, 25, 50, 39.9, 75, 100):
         with pytest.raises(ValueError, match='does not model'):
             Huang2021Array(pixel_size)
@@ -454,12 +414,7 @@ def test_Huang2021Array_pixel_size():
 
 @pytest.mark.parametrize('pixel_size', (55, 20))
 def test_Huang2021Array_placement(pixel_size):
-    """``x``/``y``/``rot`` rigidly transform one and the same mask
-
-    The mask fixes which pixels exist; where the device is put and how it is
-    turned must not change that, and must not depend on how the caller spelled
-    the position.
-    """
+    """Placement and rotation preserve the pixel layout."""
     origin = Huang2021Array(pixel_size)
     x, y, rot = -100, 400, 37
     moved = Huang2021Array(pixel_size, x=x, y=y, rot=rot)
@@ -483,12 +438,7 @@ def test_Huang2021Array_placement(pixel_size):
 
 
 def _substrate(implant, **kwargs):
-    """Plot an implant on a fresh axis and return its substrate patch
-
-    Closes the figure before returning: the axes stays readable, and a stray
-    open figure would otherwise become the `plt.gca()` that the next test
-    draws onto.
-    """
+    """Plot an implant and return its substrate patch."""
     fig, ax = plt.subplots()
     implant.plot(ax=ax, **kwargs)
     patches = [p for p in ax.patches if isinstance(p, (Circle, Polygon))]
@@ -508,12 +458,7 @@ ROUND_DEVICES = ([(Lorach2015Array, 500),
 @pytest.mark.parametrize('implant_type, radius', ROUND_DEVICES)
 @pytest.mark.parametrize('rot', (0, 30))
 def test_PRIMA_round_substrate(implant_type, radius, rot):
-    """The round devices sit on a circular die centered on (x, y)
-
-    ``Ho2019FlatArray(40)`` keeps the lattice sites nearest the substrate
-    center rather than a footprint centered on them, so the substrate must
-    come from the requested position, not from where the pixels ended up.
-    """
+    """Check circular substrate size and position."""
     x, y = -100, 400
     ax, patch = _substrate(implant_type(x=x, y=y, rot=rot))
     npt.assert_almost_equal(patch.center, (x, y))
@@ -530,7 +475,7 @@ def test_PRIMA_round_substrate(implant_type, radius, rot):
 
 @pytest.mark.parametrize('rot', (0, 30, -45))
 def test_PRIMA_square_substrate(rot):
-    """The pivotal-trial PRIMA sits on a 2 x 2 mm die that turns with it"""
+    """Check pivotal PRIMA substrate size and rotation."""
     x, y = -100, 400
     ax, patch = _substrate(PRIMAPivotal(x=x, y=y, rot=rot))
     corners = patch.get_xy()[:4]
@@ -554,12 +499,7 @@ def test_PRIMA_square_substrate(rot):
 @pytest.mark.parametrize('implant_type, radius',
                          [(PRIMAPivotal, None)] + ROUND_DEVICES)
 def test_PRIMA_substrate_holds_pixels(implant_type, radius):
-    """No pixel is drawn off the substrate
-
-    Every pixel center is on the die, and the drawing is clipped to it, so a
-    rim pixel the diced edge cuts through renders as the truncated cell the
-    device actually has rather than as a whole hexagon hanging over the edge.
-    """
+    """Check that pixel centers lie on the substrate."""
     implant = implant_type()
     xy = implant.earray.coordinates()[:, :2]
     if radius is None:
@@ -583,13 +523,7 @@ def test_PRIMA_substrate_holds_pixels(implant_type, radius):
     (partial(Huang2021Array, 40), 750, True),
 ])
 def test_PRIMA_pixel_bodies_vs_substrate(implant_type, radius, whole_bodies):
-    """Which devices carry only whole pixels, and which have a cut rim
-
-    142 whole 70 um hexagons do not fit inside a 1 mm circle at 75 um
-    spacing, so Lorach2015Array necessarily has a truncated outer ring; the
-    others
-    carry only complete pixel bodies.
-    """
+    """Check which arrays contain clipped rim pixels."""
     implant = implant_type()
     xy = implant.earray.coordinates()[:, :2]
     th = np.radians(np.arange(6) * 60)
@@ -609,7 +543,7 @@ def test_PRIMA_pixel_bodies_vs_substrate(implant_type, radius, whole_bodies):
     partial(Huang2021Array, 55), partial(Huang2021Array, 20),
 ])
 def test_PRIMA_plot_passthrough(implant_type):
-    """The substrate override keeps the rest of `plot` working"""
+    """Check the implant plot override."""
     implant = implant_type()
     fig, ax = plt.subplots()
     # `stim_cmap` is not exercised here: colouring a PhotovoltaicPixel is
