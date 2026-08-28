@@ -155,7 +155,8 @@ class ScoreboardSpatial(SpatialModel):
     #: A photovoltaic implant is not driven by a current source. Its encoder
     #: reports normalized optical drive instead, which this model uses directly
     #: as the weight of each Gaussian (see
-    #: :py:class:`~pulse2percept.stimuli.PRIMAEncoder`).
+    #: :py:class:`~pulse2percept.stimuli.PRIMAEncoder`). Only an encoded drive
+    #: is accepted, not a picture that happens to be dimensionless too.
     extra_stimulus_units = (dimensionless,)
 
     def get_default_params(self):

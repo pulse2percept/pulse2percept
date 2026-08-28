@@ -258,6 +258,12 @@ class Stimulus(PrettyPrint):
     #: Whether this stimulus provides a separate spatial-only view
     _has_spatial_view = False
 
+    #: Whether dimensionless values are a normalized drive rather than raw
+    #: gray levels. A picture is dimensionless too, and no model reads gray
+    #: levels as stimulation, so a model that accepts a dimensionless stimulus
+    #: accepts only one that says it is already an encoded drive.
+    _is_normalized_drive = False
+
     #: whether the canonical state is a set of stim params
     _is_parametric = False
 

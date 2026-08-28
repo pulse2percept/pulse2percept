@@ -10,14 +10,15 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon, RegularPolygon
 from scipy.spatial import cKDTree
 
-from pulse2percept.implants import (PhotovoltaicPixel, PRIMAPivotal,
+from pulse2percept.implants import (ArgusII, PhotovoltaicPixel, PRIMAPivotal,
                                     Lorach2015Array, Ho2019FlatArray,
                                     Huang2021Array, PointSource,
                                     ProsthesisSystem, PRIMA, PRIMA75,
                                     PRIMA55, PRIMA40)
-from pulse2percept.stimuli import (BiphasicPulse, ImageStimulus, LogoBVL,
-                                   PRIMAEncoder, Stimulus)
-from pulse2percept.units import DimensionMismatchError, deg, mW, mm, um
+from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
+                                   ImageStimulus, LogoBVL, PRIMAEncoder,
+                                   Stimulus)
+from pulse2percept.units import DimensionMismatchError, deg, mW, mm, um, xTh
 from pulse2percept.utils.constants import ZORDER
 from pulse2percept.models import ScoreboardModel
 
@@ -639,6 +640,18 @@ def test_PRIMAPivotal_is_stimulated_optically():
         PRIMAPivotal(encoder=None).prepare_stim(LogoBVL())
     with pytest.raises(TypeError):
         PRIMAPivotal(encoder='binary')
+
+
+def test_PRIMAPivotal_rejects_threshold_relative_stimuli():
+    # A multiple of threshold is a current that has not been named yet. The
+    # implant is illuminated, so there is nothing for it to be a multiple of:
+    train = Stimulus({'A5': BiphasicPulseTrain(20, 2 * xTh, 0.45,
+                                               stim_dur=50)})
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        PRIMAPivotal().prepare_stim(train)
+    npt.assert_equal('irradiance' in str(excinfo.value), True)
+    # An electrically driven implant still takes one, before calibration:
+    npt.assert_equal(ArgusII(encoder=None).prepare_stim(train).unit, xTh)
 
 
 @pytest.mark.parametrize('implant_type', [Lorach2015Array,

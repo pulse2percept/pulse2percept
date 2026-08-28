@@ -15,14 +15,17 @@ first two correspond to these one-liners::
                             xrange=(-12, 12)).predict_percept(
         as_current(implant, p2p.stimuli.LogoBVL()))
 
-    implant = p2p.implants.PRIMAPivotal()
-    p2p.models.ScoreboardModel(implant=implant, yrange=(-4, 4),
-                               xrange=(-4, 4), rho=50,
+    p2p.models.ScoreboardModel(implant=p2p.implants.PRIMAPivotal(),
+                               yrange=(-4, 4), xrange=(-4, 4), rho=50,
                                step=0.1).predict_percept(
-        as_current(implant, p2p.stimuli.LogoBVL().invert()))
+        p2p.stimuli.LogoBVL().invert())
 
-The :func:`as_current` wrapper is a benchmark-only detail; see its docstring
-for why these workloads do not go through an encoder the way user code should.
+The PRIMA scenario needs no wrapper: the device is illuminated rather than
+driven by a current source, and what its encoder hands a spatial model is one
+normalized-drive frame -- the same shape of workload the electrical scenarios
+measure. The :func:`as_current` wrapper is a benchmark-only detail for those;
+see its docstring for why they do not go through an encoder the way user code
+should.
 
 Between them the scenarios reach every compiled kernel a percept prediction can
 go through -- ``_beyeler2019``, ``_granley2021``, ``_nanduri2012``,
@@ -180,10 +183,13 @@ SCENARIOS = [
         caches_axons=True,
     ),
     Scenario(
+        # The one scenario that runs an encoder: PRIMA is illuminated, so its
+        # implant refuses microamps outright, and the optical stimulus its
+        # encoder builds stays a schedule until a model asks for samples --
+        # which a spatial model never does.
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
         implant=p2p.implants.PRIMAPivotal,
-        source=as_current,
         model=lambda **kwargs: p2p.models.ScoreboardModel(xrange=(-4, 4),
                                                           yrange=(-4, 4),
                                                           rho=50, step=0.1,

@@ -1389,7 +1389,9 @@ def test_PRIMAEncoder():
     npt.assert_almost_equal(encoder.irradiance, 3.5)
     npt.assert_almost_equal(encoder.freq, 30)
     npt.assert_almost_equal(encoder.pulse_dur, 9.8)
-    npt.assert_equal(encoder.grayscale, False)
+    # The projector's own 14-level pulse-width modulation is the default; the
+    # 0.5 threshold only applies to the binary mode users opt into.
+    npt.assert_equal(encoder.grayscale, True)
     npt.assert_almost_equal(encoder.threshold, 0.5)
     npt.assert_almost_equal(encoder.period, 1000 / 30)
     npt.assert_equal(encoder.n_levels, 14)
@@ -1432,11 +1434,13 @@ def test_PRIMAEncoder_takes_a_picture():
     npt.assert_equal(PRIMAEncoder().encode(rgb, implant=implant).shape[0], 378)
 
 
+@pytest.mark.parametrize('grayscale', [True, False])
 @pytest.mark.parametrize('gray, n_lit', [(1.0, 378), (0.0, 0)])
-def test_PRIMAEncoder_binary_extremes(gray, n_lit):
+def test_PRIMAEncoder_extremes(gray, n_lit, grayscale):
+    # Black is off and white is the brightest level, in either mode:
     implant = PRIMAPivotal()
-    stim = PRIMAEncoder().encode(ImageStimulus(np.full((16, 16), gray)),
-                                 implant=implant)
+    stim = PRIMAEncoder(grayscale=grayscale).encode(
+        ImageStimulus(np.full((16, 16), gray)), implant=implant)
     npt.assert_equal(stim.shape[0], 378)
     npt.assert_equal(np.count_nonzero(stim.data.max(axis=1)), n_lit)
     # All 378 pixels may be lit at once: there is no multiplexing to schedule.
@@ -1448,7 +1452,7 @@ def test_PRIMAEncoder_threshold(threshold):
     # A left-to-right ramp: exactly the pixels at or above threshold light up.
     ramp = np.tile(np.linspace(0, 1, 32), (32, 1))
     implant = PRIMAPivotal()
-    encoder = PRIMAEncoder(threshold=threshold)
+    encoder = PRIMAEncoder(grayscale=False, threshold=threshold)
     gray = implant.reshape_stim(ImageStimulus(ramp)).data.ravel()
     stim = encoder.encode(ImageStimulus(ramp), implant=implant)
     dur = stim.pulse_dur

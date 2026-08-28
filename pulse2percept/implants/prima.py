@@ -323,28 +323,28 @@ class PRIMAPivotal(ProsthesisSystem):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only stimuli that stay inside the projector's
-        documented envelope are allowed: at most 3.5 mW/mm^2 of irradiance, a
-        frame rate of at most 30 Hz, ON durations on the 0.7 ms hardware grid
-        and no longer than 9.8 ms, and a duty cycle of at most 0.294. There is
-        no limit on how many pixels may be lit at once; all 378 of them may be.
-        Charge balance is not checked, because PRIMA is not driven by a current
-        source.
+        documented envelope are allowed: at most 3.5 mW/mm^2 of irradiance, ON
+        durations on the 0.7 ms hardware grid and no longer than 9.8 ms, a duty
+        cycle of at most 0.294, and the 30 Hz the pivotal system is reported to
+        run at. There is no limit on how many pixels may be lit at once; all
+        378 of them may be. Charge balance is not checked, because PRIMA is not
+        driven by a current source.
 
-        This validates the *device envelope*, not biological safety. 3.5
-        mW/mm^2 is what the pivotal projector emits, not what the retina
-        tolerates; published thermal modeling puts the near-infrared ceiling
-        higher. A stimulus that no longer carries its projector schedule
-        cannot be verified and is refused; set ``safe_mode=False`` to check
-        the envelope yourself.
+        This validates the *documented operating envelope*, not biological
+        safety and not a demonstrated hardware maximum. 3.5 mW/mm^2 is what the
+        pivotal projector emits, not what the retina tolerates; published
+        thermal modeling puts the near-infrared ceiling higher. A stimulus that
+        no longer carries its projector schedule cannot be verified and is
+        refused; set ``safe_mode=False`` to explore beyond the envelope.
 
         .. versionchanged:: 0.11.0
             Checks the optical envelope instead of electrical charge balance.
     encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         How the device turns a picture into stimulation. Defaults to a fresh
-        :py:class:`~pulse2percept.stimuli.PRIMAEncoder`, i.e. binary 880 nm
-        illumination at 30 Hz. Pass ``encoder=None`` to switch automatic
-        encoding off, so that an image or video input is refused rather than
-        encoded.
+        :py:class:`~pulse2percept.stimuli.PRIMAEncoder`, i.e. 880 nm
+        illumination at 30 Hz on the projector's 14 pulse-duration levels.
+        Pass ``encoder=None`` to switch automatic encoding off, so that an
+        image or video input is refused rather than encoded.
 
         .. versionadded:: 0.11.0
 
@@ -506,7 +506,7 @@ class PRIMAPivotal(ProsthesisSystem):
         if freq > PRIMAEncoder.max_freq + 1e-9:
             raise ValueError(
                 f"Safety check: stimulus runs the projector at {freq:g} Hz, "
-                f"and the pivotal device runs at "
+                f"and the pivotal system is reported to run at "
                 f"{PRIMAEncoder.max_freq:g} Hz. Set safe_mode=False to "
                 f"explore other frame rates.")
 

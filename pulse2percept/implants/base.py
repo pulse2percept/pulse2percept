@@ -273,9 +273,12 @@ class ProsthesisSystem(PrettyPrint):
         """Require a stimulus with a physical dimension this implant can deliver."""
         if stim.unit.dimension == self.stimulus_unit.dimension:
             return
-        # Threshold-relative pulse trains may be assigned before
-        # calibration.
-        if stim.unit.dimension == xTh.dimension:
+        # Threshold-relative pulse trains may be assigned before calibration.
+        # A multiple of threshold is a current that has not been named yet, so
+        # this exemption belongs to devices that are driven by current: there
+        # is no such thing as threshold-relative irradiance.
+        if (self.stimulus_unit.dimension == uA.dimension and
+                stim.unit.dimension == xTh.dimension):
             return
         raise DimensionMismatchError(
             f"{type(self).__name__} is driven by "

@@ -169,9 +169,19 @@ def _require_stim_dimension(model, stim):
     if not isinstance(stim, Stimulus):
         return
     accepted = (model.stimulus_unit,) + tuple(model.extra_stimulus_units)
-    if stim.unit.dimension in {unit.dimension for unit in accepted}:
-        return
     expected = ' or '.join(_describe_unit(unit) for unit in accepted)
+    if stim.unit.dimension in {unit.dimension for unit in accepted}:
+        if (stim.unit.dimension.is_dimensionless and
+                not stim._is_normalized_drive):
+            # A picture is dimensionless too. A model that reads a
+            # dimensionless stimulus reads an encoded drive (see
+            # `pulse2percept.stimuli.PRIMAEncoder`), never gray levels:
+            raise DimensionMismatchError(
+                f"{type(model).__name__} expects {expected}, and this "
+                f"stimulus is dimensionless but is not a normalized drive: "
+                f"gray levels are not stimulation. Encode the picture first, "
+                f"or hand the implant the picture and let its encoder do it.")
+        return
     raise DimensionMismatchError(
         f"{type(model).__name__} expects {expected}, got "
         f"{_describe_unit(stim.unit)}.")

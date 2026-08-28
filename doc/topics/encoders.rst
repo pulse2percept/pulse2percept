@@ -108,12 +108,20 @@ pixel is lit rather than by how brightly, so
     stim = implant.prepare_stim(p2p.stimuli.LogoBVL())
     stim.unit  # mW/mm^2
 
-Encoding is binary by default (a pixel is off, or on for ``pulse_dur``), which
-matches current clinical operation; ``grayscale=True`` pulse-width modulates
-gray levels onto the projector's 0.7 ms duration grid instead. Peak irradiance
-is fixed either way. Contrast inversion and edge enhancement are not part of
-the device, so they are ordinary ``ImageStimulus`` operations applied first
-(``image.invert()``, ``image.filter('canny')``).
+The projector offers 14 discrete ON durations, 0.7 to 9.8 ms in 0.7 ms steps,
+plus off. By default the encoder maps normalized image intensity linearly onto
+those levels; that linear map is a pulse2percept convention, since the clinical
+camera-gray-level to pulse-duration transfer function is not published. Pass
+``grayscale=False`` for a binary approximation, in which a pixel is off or on
+for ``pulse_dur``. Peak irradiance is fixed either way.
+
+The clinical system processes the camera image before projecting it, including
+ambient-light adaptation, contrast enhancement and zoom, and contrast inversion
+has been used deliberately in testing. ``PRIMAEncoder`` models the optical
+encoding stage that follows; preprocessing stays explicit in pulse2percept
+because the clinical pipeline is not specified in enough detail to reproduce,
+so it is applied to the source first (``image.invert()``,
+``image.filter('canny')``).
 
 The projector clock samples a video; it does not re-time it. Starting at the
 source's first frame, every ``1 / freq`` the device looks at whatever frame the
@@ -144,11 +152,12 @@ Device constraints
 An implant's :py:class:`~pulse2percept.implants.Raster` determines which
 electrodes may pulse together; see :ref:`topics-rasters`. PRIMA has none: all
 378 photovoltaic pixels may be illuminated at once. With ``safe_mode=True`` it
-instead checks the projector envelope -- at most 3.5 mW/mm^2, at most 30 Hz,
-ON durations on the 0.7 ms grid and no longer than 9.8 ms, and a duty cycle of
-at most 0.294. That is the *device* envelope, not a biological safety limit,
-and it is read off the stimulus' own schedule: a stimulus that has been reduced
-to samples cannot be verified and is refused.
+instead checks the documented operating envelope -- at most 3.5 mW/mm^2, ON
+durations on the 0.7 ms grid and no longer than 9.8 ms, a duty cycle of at most
+0.294, and the 30 Hz the pivotal system is reported to run at. That is what the
+device is documented to do, not a biological safety limit and not a
+demonstrated hardware maximum, and it is read off the stimulus' own schedule: a
+stimulus that has been reduced to samples cannot be verified and is refused.
 
 Encoders can also quantize timing with ``clock`` and gray levels with
 ``n_levels``. These constraints are conservative: quantization may lower a

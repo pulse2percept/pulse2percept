@@ -1102,8 +1102,11 @@ _IRRADIANCE = mW / mm ** 2
 
 
 class _NormalizedStimulus(Stimulus):
-    """A stimulus whose values are normalized rather than physical"""
+    """A stimulus whose values are a normalized drive rather than physical"""
     _default_unit = dimensionless
+
+    #: Dimensionless, but not a picture (see `Stimulus._is_normalized_drive`)
+    _is_normalized_drive = True
 
     __slots__ = ()
 
@@ -1320,25 +1323,29 @@ class PRIMAEncoder(Encoder):
         Projector sampling rate (Hz). The source is sampled once per projector
         period; source frames may therefore be repeated or skipped.
     pulse_dur : float or Quantity, optional
-        Longest ON duration (ms) per projector period, and the duration a lit
-        pixel receives in binary mode. Must be a whole multiple of
-        ``pulse_step`` and no longer than ``max_pulse_dur``. The default spans
-        the full documented hardware range; it is not a claim about the setting
-        used in any particular patient.
+        Longest ON duration (ms) per projector period: the brightest level in
+        grayscale mode, and the duration a lit pixel receives in binary mode.
+        Must be a whole multiple of ``pulse_step`` and no longer than
+        ``max_pulse_dur``. The default is the longest documented duration, so
+        all 14 hardware levels are available.
     grayscale : bool, optional
-        If True, gray levels are pulse-width modulated onto the projector's
-        duration grid. If False (default, matching current clinical operation),
-        a pixel is either off or on for ``pulse_dur``.
+        If True (default), gray levels are pulse-width modulated onto the
+        projector's duration grid, which is how the device sets brightness. If
+        False, a pixel is either off or on for ``pulse_dur``.
     threshold : float, optional
-        Gray level at or above which a pixel is lit in binary mode. This is a
-        p2p approximation: the thresholding the clinical system performs is not
-        published.
+        Gray level at or above which a pixel is lit. Applies only when
+        ``grayscale`` is False, and 0.5 is an arbitrary p2p convention rather
+        than a clinical setting.
 
     Notes
     -----
     *  Every projector period looks the same: irradiance rises to
        ``irradiance`` for the pixel's ON duration and is zero for the rest of
        the period. Peak irradiance never depends on gray level.
+    *  The projector offers 14 discrete ON durations, 0.7 to 9.8 ms in 0.7 ms
+       steps, plus off. Grayscale mode maps normalized image intensity linearly
+       onto those levels. That linear map is a p2p convention: the clinical
+       camera-gray-level to pulse-duration transfer function is not published.
     *  The projector clock samples the source; it does not re-time it. Starting
        at the source's first frame, every ``1 / freq`` the device looks at
        whatever frame the source is showing (zero-order hold), so a slow video
@@ -1353,9 +1360,13 @@ class PRIMAEncoder(Encoder):
        pivotal-device drive (``ref_drive``), so 0 is a dark pixel and 1 a pixel
        at the full documented drive. It is a physically interpretable optical
        scalar, not retinal current and not perceived brightness.
-    *  Contrast inversion and edge enhancement are not part of PRIMA. Apply
-       them to the source first (e.g. ``image.invert()``,
-       ``image.filter('canny')``).
+    *  The clinical PRIMA system processes the camera image before projecting
+       it, including ambient-light adaptation, contrast enhancement and zoom
+       [Palanker2020]_, and contrast inversion has been used deliberately in
+       testing. This encoder models the optical encoding stage that follows.
+       Preprocessing stays explicit in p2p because the clinical pipeline is not
+       specified in enough detail to reproduce: apply it to the source first
+       (e.g. ``image.invert()``, ``image.filter('canny')``).
     *  Plain numbers use the units documented above; unitful values are
        converted automatically. See :mod:`pulse2percept.units`.
 
@@ -1392,7 +1403,7 @@ class PRIMAEncoder(Encoder):
     __slots__ = ('irradiance', 'freq', 'pulse_dur', 'grayscale', 'threshold')
 
     def __init__(self, irradiance=3.5 * mW / mm ** 2, freq=30 * Hz,
-                 pulse_dur=9.8 * ms, grayscale=False, threshold=0.5):
+                 pulse_dur=9.8 * ms, grayscale=True, threshold=0.5):
         irradiance = as_value(irradiance, _IRRADIANCE, 'irradiance')
         freq = as_value(freq, Hz, 'freq')
         pulse_dur = as_value(pulse_dur, ms, 'pulse_dur')

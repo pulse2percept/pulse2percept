@@ -15,8 +15,8 @@ PRIMA is not driven by a current source. A goggle-mounted projector paints an
 880 nm near-infrared image onto the implant, and each photovoltaic pixel turns
 the light it receives into local electrical stimulation. The projector runs at
 a fixed frame rate (30 Hz) and a fixed peak irradiance (3.5 mW/mm^2), and
-encodes intensity in *how long* a pixel is lit -- 0.7 to 9.8 ms per frame --
-rather than in how brightly.
+encodes intensity in *how long* a pixel is lit: 14 levels from 0.7 to 9.8 ms in
+0.7 ms steps, plus off.
 
 :py:class:`~pulse2percept.stimuli.PRIMAEncoder` implements that projector, and
 :py:class:`~pulse2percept.implants.PRIMAPivotal` brings one along, so a picture
@@ -43,13 +43,14 @@ print(stim.unit)
 # 3.5 mW/mm^2 for the pixel's ON duration and is zero for the rest of the
 # 33.3 ms frame.
 
-lit = np.flatnonzero(stim.data.max(axis=1) > 0)[0]
+lit = np.argmax(stim.pulse_dur[:, 0])
 fig, ax = plt.subplots(figsize=(8, 2.5))
 ax.plot(stim.time, stim.data[lit], lw=1.5)
 ax.set_xlim(0, 100)
 ax.set_xlabel('Time (ms)')
 ax.set_ylabel('Irradiance (mW/mm$^2$)')
-ax.set_title(f'Pixel {stim.electrodes[lit]}: 9.8 ms on, 33.3 ms period')
+ax.set_title(f'Pixel {stim.electrodes[lit]}: '
+             f'{stim.pulse_dur[lit, 0]:.1f} ms on, 33.3 ms period')
 fig.tight_layout()
 
 ###############################################################################
@@ -71,14 +72,16 @@ fig.tight_layout()
 model = p2p.models.ScoreboardModel(implant=implant, rho=100)
 
 ###############################################################################
-# Image processing is not PRIMA-specific
-# --------------------------------------
+# Image processing stays outside the encoder
+# ------------------------------------------
 #
-# The encoder binarizes at ``threshold=0.5`` by default, which is
-# pulse2percept's approximation of an unpublished clinical algorithm. Contrast
-# inversion and edge enhancement are *not* intrinsic to the device, so they are
-# ordinary :py:class:`~pulse2percept.stimuli.ImageStimulus` operations applied
-# before encoding:
+# The clinical system processes the camera image before projecting it --
+# ambient-light adaptation, contrast enhancement, zoom -- and contrast
+# inversion has been used deliberately in testing.
+# :py:class:`~pulse2percept.stimuli.PRIMAEncoder` models the optical encoding
+# stage that follows. Preprocessing stays explicit here because the clinical
+# pipeline is not specified in enough detail to reproduce, so it is an ordinary
+# :py:class:`~pulse2percept.stimuli.ImageStimulus` operation applied first:
 
 sources = [('As is', image),
            ('Inverted', image.invert()),
@@ -109,14 +112,21 @@ for fps in (15, 30, 60):
           f'{encoded.pulse_dur.shape[1]} projector frames')
 
 ###############################################################################
-# Grayscale mode
-# --------------
+# Pulse-duration levels
+# ---------------------
 #
-# Current clinical operation is effectively binary, which is why that is the
-# default. The projector hardware does support several pulse durations, though,
-# and ``grayscale=True`` pulse-width modulates gray levels onto that 0.7 ms
-# grid. Peak irradiance stays fixed either way:
+# By default the encoder maps normalized image intensity linearly onto the
+# projector's 14 durations. That linear map is a pulse2percept convention: the
+# clinical camera-gray-level to pulse-duration transfer function is not
+# published. Peak irradiance never varies -- only how long each pixel is lit:
 
-implant.encoder = p2p.stimuli.PRIMAEncoder(grayscale=True)
-gray = implant.prepare_stim(image)
-print(np.unique(np.round(gray.pulse_dur, 3)))
+ramp = p2p.stimuli.ImageStimulus(np.tile(np.linspace(0, 1, 64), (64, 1)))
+print(np.unique(np.round(implant.prepare_stim(ramp).pulse_dur, 3)))
+
+###############################################################################
+# ``grayscale=False`` gives a binary approximation instead, in which a pixel is
+# off or lit for the full ``pulse_dur``. The 0.5 threshold is arbitrary, not a
+# clinical setting:
+
+implant.encoder = p2p.stimuli.PRIMAEncoder(grayscale=False, threshold=0.5)
+print(np.unique(np.round(implant.prepare_stim(ramp).pulse_dur, 3)))
