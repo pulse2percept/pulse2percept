@@ -55,19 +55,22 @@ for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
 # between nearest-neighbor pixels, and the *row spacing* between adjacent
 # rows, which follows from the other two as ``spacing * sqrt(3) / 2``.
 #
-# The device used in the pivotal trial `NCT03392324`_ has 378 pixels 100um
-# wide on a 100um center spacing (86.6um row spacing), on a 2 x 2 mm substrate,
-# and is available as :py:class:`~pulse2percept.implants.PRIMAPivotal`
+# The device used in the pivotal PRIMAvera trial `NCT04676854`_ [Holz2026]_
+# has 378 pixels 100um wide on a 100um center spacing (86.6um row spacing), on
+# a 2 x 2 mm substrate, and is available as
+# :py:class:`~pulse2percept.implants.PRIMAPivotal`. The same configuration was
+# described earlier in the US feasibility study `NCT03392324`_
 # [Palanker2020]_. (``PRIMA`` is a deprecated wrapper for it: the name is kept
 # free for the eventual commercial device, whose specifications may differ.)
 #
-# :py:class:`~pulse2percept.implants.Lorach2015Array` is an earlier 75um
-# prototype, with 142 pixels 70um wide on a 75um center spacing, leaving a 5um
-# open trench between pixel bodies, on a 1 mm substrate [Lorach2015]_. Its 65um
-# row spacing is what [Lorach2015]_ calls the "pixel pitch". (``PRIMA75`` is a
-# deprecated wrapper for it; that name was pulse2percept shorthand, not an
+# :py:class:`~pulse2percept.implants.Lorach2015Array` is an earlier 70um
+# research array, with 142 pixels 70um wide on a 75um center spacing, leaving a
+# 5um open trench between pixel bodies, on a 1 mm substrate [Lorach2015]_. Its
+# 65um row spacing is what [Lorach2015]_ calls the "pixel pitch". (``PRIMA75``
+# is a deprecated wrapper for it; that name was pulse2percept shorthand, not an
 # official device name.)
 #
+# .. _NCT04676854: https://www.clinicaltrials.gov/ct2/show/NCT04676854
 # .. _NCT03392324: https://www.clinicaltrials.gov/ct2/show/NCT03392324
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))

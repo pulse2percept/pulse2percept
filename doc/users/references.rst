@@ -68,6 +68,11 @@ Studies referenced throughout the Documentation:
             with subretinal flat and pillar electrode arrays. *Journal of
             Neural Engineering* 16(6):066027, doi:`10.1088/1741-2552/ab34b3
             <https://doi.org/10.1088/1741-2552/ab34b3>`_.
+.. [Holz2026] FG Holz et al. (2026). Subretinal photovoltaic implant to
+              restore vision in geographic atrophy due to AMD. *New England
+              Journal of Medicine* 394(3):232-242,
+              doi:`10.1056/NEJMoa2501396
+              <https://doi.org/10.1056/NEJMoa2501396>`_.
 .. [Horsager2009] A Horsager, SH Greenwald, JD Weiland, MS Humayun, RJ
                   Greenberg, MJ McMahon, GM Boynton, I Fine (2009). Predicting
                   visual sensitivity in retinal prosthesis patients.

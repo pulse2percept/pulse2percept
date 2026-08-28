@@ -51,8 +51,9 @@ API changes:
   :py:class:`~pulse2percept.implants.Lorach2015Array`, since it was
   pulse2percept shorthand rather than a device name; and ``PRIMA55``/``PRIMA40``
   become ``Ho2019FlatArray(55)``/``Ho2019FlatArray(40)``, since [Ho2019]_ and
-  [Huang2021]_ each describe a 55 um and a 40 um array. No geometry changes
-  with the rename. All four old names remain as deprecated wrappers until
+  [Huang2021]_ each describe a 55 um and a 40 um array. The renames themselves
+  introduce no additional geometry changes; the geometry corrections are
+  described below. All four old names remain as deprecated wrappers until
   0.12.0 (:pull:`865`)
 
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted

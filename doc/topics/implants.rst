@@ -108,20 +108,21 @@ These classes are research-software representations based on published device
 descriptions, not manufacturer-validated simulators. See each class's API
 documentation for geometry-specific assumptions.
 
-The subretinal photovoltaic arrays come in three groups, which are easy to
-confuse because two of them contain both a 55 um and a 40 um device:
+The subretinal photovoltaic arrays come in four groups, two of which are easy
+to confuse because both contain a 55 um and a 40 um device:
 
 .. list-table::
    :header-rows: 1
 
-   * - Family
+   * - Array group
      - Devices
-   * - Clinical/historical PRIMA
-     - :py:class:`~pulse2percept.implants.PRIMAPivotal` (100 um),
-       :py:class:`~pulse2percept.implants.Lorach2015Array` (70 um)
-   * - Flat experimental arrays, [Ho2019]_, 1 mm die
+   * - Pivotal-trial PRIMA, [Holz2026]_, 2 x 2 mm die
+     - :py:class:`~pulse2percept.implants.PRIMAPivotal` (100 um)
+   * - Research array, [Lorach2015]_, 1 mm die
+     - :py:class:`~pulse2percept.implants.Lorach2015Array` (70 um)
+   * - Flat research arrays, [Ho2019]_, 1 mm die
      - ``Ho2019FlatArray(55)`` (F55), ``Ho2019FlatArray(40)`` (F40)
-   * - Vertical-junction arrays, [Huang2021]_, 1.5 mm die
+   * - Vertical-junction research arrays, [Huang2021]_, 1.5 mm die
      - ``Huang2021Array(55)``, ``Huang2021Array(40)``,
        ``Huang2021Array(30)``, ``Huang2021Array(20)``
 

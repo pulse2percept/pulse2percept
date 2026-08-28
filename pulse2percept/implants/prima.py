@@ -275,7 +275,7 @@ class PhotovoltaicPixel(HexElectrode):
     """Photovoltaic pixel
 
     A hexagonal pixel body with a circular active electrode at its center, as
-    used by the PRIMA family of subretinal photovoltaic arrays.
+    used by the subretinal photovoltaic arrays modeled in this module.
 
     .. versionadded:: 0.7
 
@@ -353,10 +353,11 @@ class PRIMAPivotal(ProsthesisSystem):
     """Create a PRIMA array as used in the pivotal trial
 
     This class creates the PRIMA array with 378 photovoltaic pixels used in the
-    pivotal clinical trial [Palanker2020]_, and places it in the subretinal
-    space such that the center of the array is located at 3D location (x,y,z),
-    given in microns, and the array is rotated by rotation angle ``rot``, given
-    in degrees.
+    pivotal PRIMAvera clinical trial [Holz2026]_, and places it in the
+    subretinal space such that the center of the array is located at 3D
+    location (x,y,z), given in microns, and the array is rotated by rotation
+    angle ``rot``, given in degrees. The same 378-pixel, 100 um configuration
+    was described earlier in the first-in-human study [Palanker2020]_.
 
     Each hexagonal pixel is 100 um wide (flat-to-flat), and neighboring pixel
     centers are 100 um apart, on a 2 x 2 mm substrate. Adjacent rows are
