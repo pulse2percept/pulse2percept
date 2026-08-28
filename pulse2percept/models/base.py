@@ -930,7 +930,12 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 # np.asarray: indexing a single-electrode stimulus returns a
                 # scalar, which has no `reshape`:
                 at = self._to_stim_time(t_percept, stim)
-                stim = Stimulus(
+                # Resampling in time changes nothing about what the values
+                # *are*, so the rebuilt stimulus has to keep saying it: a
+                # normalized drive that came back as a plain dimensionless
+                # `Stimulus` would be read as gray levels and refused.
+                rebuild = type(stim) if stim._is_normalized_drive else Stimulus
+                stim = rebuild(
                     np.asarray(stim[:, at]).reshape((-1, n_time)),
                     electrodes=stim.electrodes, time=at
                 )._inherit_units(stim)._inherit_metadata(stim)
@@ -951,7 +956,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                     uniq_time = None
                 # `_predict_spatial` only ever sees this de-duplicated
                 # copy, so the stimulus' metadata has to come along:
-                stim_unique = Stimulus(
+                stim_unique = rebuild(
                     stim[:, stim.time[t_unique]], electrodes=stim.electrodes,
                     time=uniq_time
                 )._inherit_units(stim)._inherit_metadata(stim)

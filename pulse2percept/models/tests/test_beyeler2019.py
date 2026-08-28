@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.implants import ArgusI, ArgusII, PRIMAPivotal
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import ImageStimulus, LogoBVL, Stimulus
+from pulse2percept.stimuli import (ImageStimulus, LogoBVL, Stimulus,
+                                   VideoStimulus)
 from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.models.beyeler2019 import _AXON_CACHE_VERSION
@@ -1093,6 +1094,35 @@ def test_scoreboard_visualizes_a_photovoltaic_implant():
         warnings.simplefilter('ignore', UserWarning)
         dark = model.predict_percept(ImageStimulus(np.zeros((32, 32))))
     npt.assert_almost_equal(dark.data.max(), 0)
+
+
+def test_scoreboard_visualizes_a_photovoltaic_video():
+    """A PRIMA video survives the time resampling `_predict_prepared` does
+
+    The normalized drive is dimensionless, and a dimensionless stimulus is only
+    stimulation if it says it is one. Rebuilding it at `t_percept` as a plain
+    `Stimulus` would drop that and have the model read gray levels.
+    """
+    implant = PRIMAPivotal()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        model = ScoreboardModel(implant=implant, rho=200, step=0.5,
+                                xrange=(-2, 2), yrange=(-2, 2))
+        # Only the middle frame is lit, so the percept has to follow the
+        # source frame by frame rather than smear it:
+        frames = np.zeros((8, 8, 3))
+        frames[..., 1] = 1.0
+        video = VideoStimulus(frames, time=[0.0, 40.0, 80.0])
+        percept = model.predict_percept(video)
+    npt.assert_equal(percept.shape[:2], tuple(model.grid.x.shape))
+    npt.assert_equal(np.all(np.isfinite(percept.data)), True)
+    npt.assert_equal(percept.data.max() > 0, True)
+    # One percept frame per projector frame, and only the lit source frame
+    # drives anything:
+    npt.assert_equal(percept.shape[-1], percept.time.size)
+    npt.assert_almost_equal(np.diff(percept.time), 1000 / 30, decimal=3)
+    lit = percept.data.max(axis=(0, 1)) > 0
+    npt.assert_equal(lit.any() and not lit.all(), True)
 
 
 def test_scoreboard_refuses_a_bare_optical_waveform():

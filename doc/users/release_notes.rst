@@ -47,9 +47,10 @@ API changes:
 * New ``W``, ``mW`` and ``uW`` units, from which irradiance follows as
   ``mW / mm ** 2``.
 
-* :py:class:`~pulse2percept.models.ScoreboardSpatial` also accepts a
-  dimensionless stimulus, so it can visualize the normalized optical drive of a
-  photovoltaic implant.
+* :py:class:`~pulse2percept.models.ScoreboardSpatial` can also read the
+  normalized dimensionless drive produced by photovoltaic encoders such as
+  :py:class:`~pulse2percept.stimuli.PRIMAEncoder`; arbitrary dimensionless
+  stimuli such as image gray levels remain invalid.
 
 * New :py:class:`~pulse2percept.implants.Ho2019FlatArray` models the 55
   and 40 um flat arrays of [Ho2019]_; new
