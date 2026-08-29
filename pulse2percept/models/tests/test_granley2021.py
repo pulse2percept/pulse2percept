@@ -9,8 +9,9 @@ from pulse2percept.implants import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulseTrain,
-                                   BiphasicPulseTrain, ImageStimulus,
-                                   MonophasicPulse, Stimulus)
+                                   BiphasicPulse, BiphasicPulseTrain,
+                                   ImageStimulus, LogoBVL, MonophasicPulse,
+                                   Stimulus, VideoStimulus)
 from pulse2percept.models import (AlphaTemporal, AxonMapSpatial,
                                   BiphasicAxonMapModel,
                                   BiphasicAxonMapSpatial, FadingTemporal,
@@ -18,7 +19,7 @@ from pulse2percept.models import (AlphaTemporal, AxonMapSpatial,
                                   Nanduri2012Temporal)
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
-from pulse2percept.units import (DimensionMismatchError, Quantity,
+from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
                                  dimensionless, mm, ms, s, uA, um,
                                  xTh)
 from pulse2percept.utils.base import FreezeError
@@ -778,22 +779,96 @@ def test_BiphasicAxonMap_zero_amplitude_is_inactive(model_cls):
     npt.assert_array_almost_equal(mixed, only)
 
 
+_GRID = dict(xrange=(-3, 3), yrange=(-2, 2), step=1, n_ax_segments=30)
+
+
+def _granley(implant, model_cls=BiphasicAxonMapModel):
+    return model_cls(implant=implant, **_GRID).build()
+
+
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
-def test_BiphasicAxonMap_rejects_an_encoded_stimulus(model_cls):
-    # An encoder's output is a schedule, not a pulse train: its amplitude and
-    # frequency may differ from frame to frame, so there is no one `freq` for
-    # this model to read. It stays refused, and refusing it does not expand
-    # the schedule into a waveform either.
-    model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2), step=1,
-                      n_ax_segments=30).build()
-    implant = ArgusII()
-    encoded = AmplitudeEncoder().encode(
-        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
-    npt.assert_equal(encoded._structured_sources(), None)
-    source = encoded
-    with pytest.raises(TypeError):
-        model.predict_percept(source)
+def test_BiphasicAxonMap_reads_an_encoded_image(model_cls):
+    # The workflow this model exists for: a picture, a device that encodes it,
+    # and a participant's measured threshold.
+    model = _granley(ArgusII(thresholds=80 * uA), model_cls)
+    with _no_pulse_train_rendering():
+        percept = model.predict_percept(LogoBVL())
+    npt.assert_equal(np.any(percept.data), True)
+    # A threshold-relative encoder needs no measured threshold, because it
+    # asks for xTh in the first place. 0-50 uA against an 80 uA threshold is
+    # the same request as 0-0.625 xTh:
+    relative = _granley(
+        ArgusII(encoder=AmplitudeEncoder(amp_range=(0 * xTh, 0.625 * xTh),
+                                         freq=6 * Hz)), model_cls)
+    with _no_pulse_train_rendering():
+        npt.assert_array_almost_equal(relative.predict_percept(LogoBVL()).data,
+                                      percept.data)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_BiphasicAxonMap_ignores_the_raster(model_cls):
+    # A raster decides when each electrode pulses, not what it delivers. The
+    # rendered waveforms differ; the representative percept does not.
+    with _no_pulse_train_rendering():
+        rastered = _granley(ArgusII(thresholds=80),
+                            model_cls).predict_percept(LogoBVL())
+        at_once = _granley(ArgusII(thresholds=80, raster=None),
+                           model_cls).predict_percept(LogoBVL())
+    npt.assert_array_equal(rastered.data, at_once.data)
+
+
+@pytest.mark.parametrize('param, value', [('amp_range', (0, 100)),
+                                          ('freq', 20 * Hz),
+                                          ('phase_dur', 0.2 * ms)])
+def test_BiphasicAxonMap_reads_the_encoder_parameters(param, value):
+    # Whatever is on `implant.encoder` is the requested encoding, so changing
+    # any of the three quantities this model is a function of changes it:
+    default = _granley(ArgusII(thresholds=80))
+    tweaked = _granley(ArgusII(thresholds=80,
+                               encoder=AmplitudeEncoder(**{param: value})))
+    with _no_pulse_train_rendering():
+        base = default.predict_percept(LogoBVL()).data
+        other = tweaked.predict_percept(LogoBVL()).data
+    npt.assert_equal(np.allclose(base, other), False)
+
+
+def test_BiphasicAxonMap_encoded_current_still_needs_a_threshold():
+    # Argus II encodes 0-50 uA by default, and there is no threshold to read
+    # that as a multiple of. No threshold is invented:
+    model = _granley(ArgusII())
+    with pytest.raises(ValueError) as err:
+        model.predict_percept(LogoBVL())
+    npt.assert_equal('threshold' in str(err.value), True)
+
+
+def test_BiphasicAxonMap_rejects_an_encoded_video():
+    # A video asks each electrode for a different amplitude on every frame,
+    # and there is no principled single one to hand the model:
+    model = _granley(ArgusII(thresholds=80))
+    video = VideoStimulus(np.random.rand(4, 4, 3), time=[0, 200, 400])
+    with pytest.raises(NotImplementedError) as err:
+        model.predict_percept(video)
+    npt.assert_equal('frames' in str(err.value), True)
+
+
+def test_BiphasicAxonMap_rejects_a_custom_encoder_pulse():
+    # A caller-supplied pulse shape carries no biphasic phase duration, and
+    # this model does not reverse-engineer one from the waveform:
+    encoder = AmplitudeEncoder(pulse=BiphasicPulse(1, 0.2), amp_range=(0, 50))
+    model = _granley(ArgusII(thresholds=80, encoder=encoder))
+    with pytest.raises(TypeError) as err:
+        model.predict_percept(LogoBVL())
+    npt.assert_equal('pulse' in str(err.value), True)
+
+
+def test_BiphasicAxonMap_encoded_extraction_is_lazy():
+    # Reading the schedule's parameters must not expand it into samples:
+    implant = ArgusII(thresholds=80)
+    stim = implant.prepare_stim(LogoBVL())
+    _granley(implant).predict_percept(stim)
+    npt.assert_equal(stim._Stimulus__stim['data'] is None, True)
 
 
 # The temporal models a Granley composite is expected to work with. Their
@@ -1116,3 +1191,17 @@ def test_BiphasicAxonMap_noise(model_cls):
     # Salt and pepper are the brightest and darkest values in the frame, so
     # noising every pixel leaves exactly those two values:
     npt.assert_equal(np.unique(frame).size, 2)
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicAxonMapSpatial_composite_reads_an_encoded_image(temporal_cls):
+    # `_envelope_dur` reads stim_dur through the same helper, so a composite
+    # has to understand an encoded schedule too:
+    implant = ArgusII(thresholds=80)
+    composite = Model(spatial=BiphasicAxonMapSpatial(implant=implant, **_GRID),
+                      temporal=temporal_cls()).build()
+    with _no_pulse_train_rendering():
+        percept = composite.predict_percept(LogoBVL())
+    npt.assert_equal(percept.data.shape[-1] > 1, True)
+    npt.assert_equal(np.all(np.isfinite(percept.data)), True)
+    npt.assert_equal(np.any(percept.data), True)

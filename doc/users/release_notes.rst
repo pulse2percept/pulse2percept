@@ -70,6 +70,12 @@ API changes:
   stimulus stays in ``xTh`` until the implant calibrates it against its
   ``thresholds``. Bare numbers still mean uA.
 
+* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` predicts from a still
+  image encoded with the standard biphasic encoder pulse, not only from
+  retained :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects. It
+  reads the requested amplitude, frequency and phase duration, so a
+  :py:class:`~pulse2percept.implants.Raster` does not change the percept.
+
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
 

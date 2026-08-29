@@ -69,12 +69,12 @@ class _EncodedStimulus(Stimulus):
     _has_spatial_view = True
 
     __slots__ = ('_amp', '_ticks', '_sched', '_onsets', '_frames',
-                 '_pulse_ticks', '_pulse_vals', '_total', '_firing',
-                 '_frame_time', '_frame_dur', '_time')
+                 '_pulse_ticks', '_pulse_vals', '_total', '_freq',
+                 '_frame_time', '_frame_dur', '_time', '_phase_dur')
 
     def __init__(self, electrodes, amp, ticks, sched, onsets, frames,
-                 pulse_ticks, pulse_vals, total, firing, frame_time,
-                 frame_dur, cycle, amp_unit=uA):
+                 pulse_ticks, pulse_vals, total, freq, frame_time,
+                 frame_dur, cycle, amp_unit=uA, phase_dur=None):
         self._amp = self._own(amp, amp.dtype)
         self._ticks = self._own(ticks, ticks.dtype)
         self._sched = self._own(sched, sched.dtype)
@@ -83,10 +83,14 @@ class _EncodedStimulus(Stimulus):
         self._pulse_ticks = self._own(pulse_ticks, pulse_ticks.dtype)
         self._pulse_vals = self._own(pulse_vals, pulse_vals.dtype)
         self._total = float(total)
-        # Electrode-frames with a nonzero requested rate:
-        self._firing = self._own(firing, bool)
+        # Rate (Hz) of every electrode-frame, as the device timing actually
+        # realizes it: a clock or a raster can round a requested period up.
+        self._freq = self._own(freq, np.float64)
         self._frame_time = self._own(frame_time, frame_time.dtype)
         self._frame_dur = float(frame_dur)
+        # Phase duration (ms) of the built-in biphasic pulse, or None when the
+        # caller supplied a pulse shape of their own.
+        self._phase_dur = None if phase_dur is None else float(phase_dur)
         # Built lazily without rendering the waveform:
         self._time = None
         # ``_amp`` stays a plain array; the unit it is measured in (uA, or xTh
@@ -95,6 +99,11 @@ class _EncodedStimulus(Stimulus):
         self.metadata['encoder'] = {'frame_time': self._frame_time,
                                     'frame_dur': self._frame_dur,
                                     'cycle': cycle}
+
+    @property
+    def _firing(self):
+        """Electrode-frames whose pulse clock is running"""
+        return self._freq > 0
 
     def _spatial_view(self):
         """One column per frame of the source and one row per electrode"""
@@ -110,7 +119,7 @@ class _EncodedStimulus(Stimulus):
                                     'frame_dur': self._frame_dur}
         return stim._inherit_units(self)
 
-    def _rebuilt(self, electrodes, amp, sched, firing, amp_unit=None):
+    def _rebuilt(self, electrodes, amp, sched, freq, amp_unit=None):
         """This schedule, driving different electrodes or amplitudes
 
         ``amp_unit`` defaults to the unit this schedule already uses; only
@@ -118,12 +127,38 @@ class _EncodedStimulus(Stimulus):
         """
         rebuilt = _EncodedStimulus(
             electrodes, amp, self._ticks, sched, self._onsets, self._frames,
-            self._pulse_ticks, self._pulse_vals, self._total, firing,
+            self._pulse_ticks, self._pulse_vals, self._total, freq,
             self._frame_time, self._frame_dur,
             self.metadata['encoder']['cycle'],
-            amp_unit=self.unit if amp_unit is None else amp_unit)
+            amp_unit=self.unit if amp_unit is None else amp_unit,
+            phase_dur=self._phase_dur)
         rebuilt.metadata['user'] = deepcopy(self.metadata.get('user'))
         return rebuilt
+
+    def _biphasic_params(self):
+        """``(electrode, freq, amp, phase_dur, stim_dur)`` per driven electrode
+
+        The pulse-physiology half of the schedule, with no waveform rendered
+        and no pulse-onset timing in it: amplitudes are in :py:attr:`unit`,
+        frequencies (Hz) are the ones the device timing realizes, and
+        ``stim_dur`` (ms) is the whole schedule. Electrodes that deliver
+        nothing are omitted.
+
+        Returns None if the schedule was built from a caller-supplied pulse
+        shape, which has no biphasic phase duration to report.
+        """
+        if self._phase_dur is None:
+            return None
+        if self._amp.shape[1] != 1:
+            raise NotImplementedError(
+                f"A schedule of {self._amp.shape[1]} frames describes a "
+                f"different pulse train on each frame, so it has no single "
+                f"(freq, amp, phase_dur) per electrode. Encode a still image, "
+                f"or drive the electrodes with BiphasicPulseTrain objects.")
+        return [(name, float(f), float(a), self._phase_dur, self._total)
+                for name, a, f in zip(self.electrodes, self._amp[:, 0],
+                                      self._freq[:, 0])
+                if a != 0 and f > 0]
 
     def _with_thresholds(self, thresholds):
         """This schedule in uA, calibrated against per-electrode thresholds
@@ -151,18 +186,18 @@ class _EncodedStimulus(Stimulus):
         scale = np.array([thresholds.get(n, 1.0) for n in self.electrodes],
                          dtype=np.float32)[:, np.newaxis]
         return self._rebuilt(self.electrodes, self._amp * scale, self._sched,
-                             self._firing, amp_unit=uA)
+                             self._freq, amp_unit=uA)
 
     def _scaled(self, factor):
         """This schedule, delivering amplitudes scaled by ``factor``"""
         return self._rebuilt(self.electrodes, self._amp * factor, self._sched,
-                             self._firing)
+                             self._freq)
 
     def _without_electrodes(self, electrodes):
         """This schedule, no longer driving ``electrodes``"""
         keep = self._keep_mask(electrodes)
         return self._rebuilt(self.electrodes[keep], self._amp[keep],
-                             self._sched[keep], self._firing[keep])
+                             self._sched[keep], self._freq[keep])
 
     @property
     def duration(self):
@@ -807,10 +842,16 @@ class StimulusEncoder(Encoder):
         # The schedule is settled. Expanding it into an n_el x n_time matrix
         # is the expensive half, and the half nothing needs until somebody
         # asks for samples:
+        # Report the rate the device actually runs at, not the one that was
+        # asked for: a clock or a raster can have rounded the period up above.
+        realized = np.zeros(shape, dtype=np.float64)
+        realized[firing] = MS_PER_S / (period[firing] * DT)
         return _EncodedStimulus(
             electrodes, amp, ticks, sched, onsets, frames, pulse_ticks,
-            pulse_vals, total, freq > 0, frame_time, frame_dur,
-            None if cycle is None else cycle * DT, amp_unit=self.amp_unit)
+            pulse_vals, total, realized, frame_time, frame_dur,
+            None if cycle is None else cycle * DT, amp_unit=self.amp_unit,
+            # A caller-supplied pulse shape has no biphasic phase duration.
+            phase_dur=None if self.pulse is not None else self.phase_dur)
 
     def _modulation(self, source, implant=None):
         """What the source asks each electrode for, frame by frame

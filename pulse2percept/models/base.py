@@ -1602,12 +1602,15 @@ class Model(Frozen, PrettyPrint):
                              f"have a time component.")
 
         if self.has_space and self.has_time:
-            # Run the spatial stage on the delivered pulse train; the temporal
-            # stage integrates those pulses.
-            resp = self.spatial._predict_prepared(_delivered(stim),
-                                                  t_percept=None)
+            # A spatial stage that defines `_combine_temporal` summarizes the
+            # stimulus rather than integrating its samples, so it is handed the
+            # stimulus as it stands. The generic path gets the delivered pulse
+            # train, which the temporal stage integrates.
+            combine = getattr(self.spatial, '_combine_temporal', None)
+            resp = self.spatial._predict_prepared(
+                stim if combine is not None else _delivered(stim),
+                t_percept=None)
             if has_time_axis:
-                combine = getattr(self.spatial, '_combine_temporal', None)
                 if resp.time is None and combine is not None:
                     # Allow a spatial model to define custom temporal
                     # combination for a timeless intermediate percept:
