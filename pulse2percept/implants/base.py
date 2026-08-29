@@ -424,8 +424,10 @@ class ProsthesisSystem(PrettyPrint):
             img_h, img_w = shape[:2]
             data = stim.data.reshape(shape)
             if colored and isinstance(stim, ImageStimulus) and shape[2] == 4:
-                # RGBA alpha blending is nonlinear; apply it before interpolation.
-                data = np.clip(data[..., :3] * data[..., 3:4], 0.0, 1.0)
+                # RGBA alpha blending is nonlinear; apply it before
+                # interpolation (avoids second full-size copy)
+                data = np.multiply(data[..., :3], data[..., 3:4])
+                np.clip(data, 0.0, 1.0, out=data)
 
             x_min, x_max = np.min(x), np.max(x)
             y_min, y_max = np.min(y), np.max(y)
