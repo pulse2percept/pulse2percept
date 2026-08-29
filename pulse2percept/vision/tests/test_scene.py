@@ -357,16 +357,18 @@ def test_inpainting_a_constant_surround_gives_back_the_constant():
     npt.assert_almost_equal(scene._native_rgb()[..., 0], 0.6, decimal=6)
 
 
-def test_the_inpainted_fill_knows_nothing_of_what_it_covers():
-    """Only the visible surround may reach the filled region"""
+@pytest.mark.parametrize('blend', [0, 2])
+def test_the_inpainted_fill_knows_nothing_of_what_it_covers(blend):
+    """Only the visible surround may reach what is drawn, blurred or not"""
     scotoma = Scotoma.circle(6)
-    lost = ramp_scene(scotoma=scotoma)._rendered_loss_at((0, 0)) > 0
+    lost = ramp_scene(scotoma=scotoma)._loss_at((0, 0)) > 0
     base = np.tile(np.linspace(0, 1, SCENE_PX), (SCENE_PX, 1))
     rng = np.random.default_rng(0)
     sources = [np.where(lost, hidden, base)
                for hidden in (np.zeros_like(base), rng.random(base.shape))]
     views = [Scene(ImageStimulus(src), fov=(SCENE_PX, SCENE_PX),
-                   scotoma=scotoma, scotoma_fill='inpaint')._native_rgb()
+                   scotoma=scotoma, scotoma_fill='inpaint',
+                   scotoma_blend=blend)._native_rgb()
              for src in sources]
     npt.assert_equal(np.allclose(*sources), False)
     npt.assert_array_equal(*views)
@@ -384,21 +386,6 @@ def test_inpainting_works_in_color_and_stays_a_display_intensity():
     npt.assert_equal(np.all(np.isfinite(native)), True)
     npt.assert_equal(native.min() >= 0 and native.max() <= 1, True)
     npt.assert_almost_equal(native[..., 2, 0], 0.5, decimal=6)
-
-
-def test_blending_does_not_move_the_inpainting_boundary():
-    """`scotoma_blend` softens the edge; it does not widen the hole"""
-    flat = np.full((41, 41), 0.5)
-    # A bright patch a blend-widened mask would swallow and lose as a source:
-    flat[18:23, 26:31] = 1.0
-    scotoma = Scotoma.circle(5)
-    fills = []
-    for blend in (0, 3):
-        scene = Scene(ImageStimulus(flat), fov=(41, 41), scotoma=scotoma,
-                      scotoma_fill='inpaint', scotoma_blend=blend)
-        fills.append(scene._fill_rgb(scene._rgb_frames()[..., 0],
-                                     scene._loss_maps_at((0, 0))[0]))
-    npt.assert_array_equal(*fills)
 
 
 def test_a_zero_percept_composes_to_plain_inpainted_native_vision():
@@ -457,19 +444,27 @@ def test_blending_softens_the_boundary_and_only_the_boundary():
     """One degree per pixel here, so a sigma of 2 px is 2 dva"""
     scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_blend=2)
     loss = scene._rendered_loss_at((0, 0))
-    npt.assert_equal(loss[HALF, HALF] > 0.98, True)
+    # Lost out to the scotoma's own 6 dva edge; the feather is outside it:
+    npt.assert_almost_equal(loss[HALF, HALF], 1.0, decimal=12)
+    npt.assert_almost_equal(loss[HALF, HALF + 6], 1.0, decimal=12)
     npt.assert_almost_equal(loss[HALF, HALF + 15], 0.0, decimal=12)
-    npt.assert_equal(0.05 < loss[HALF, HALF + 6] < 0.95, True)
+    npt.assert_equal(0.05 < loss[HALF, HALF + 8] < 0.95, True)
     profile = loss[HALF, HALF:HALF + 16]
     npt.assert_array_less(np.diff(profile), 1e-12)
 
 
 def test_blending_reads_the_loss_field_past_the_frame_edge():
-    """A scotoma that covers no pixel can still blur onto the frame"""
-    scene = ramp_scene(scotoma=Scotoma.circle(4, center=(-HALF - 5, 0)),
-                       scotoma_blend=2)
-    npt.assert_array_equal(scene._loss_at((0, 0)), 0)
-    npt.assert_equal(scene._rendered_loss_at((0, 0))[HALF, 0] > 0.05, True)
+    """A scotoma that covers no pixel can still darken the frame"""
+    def edge(blend):
+        flat = np.full((SCENE_PX, SCENE_PX), 0.8)
+        scene = Scene(ImageStimulus(flat), fov=(SCENE_PX, SCENE_PX),
+                      scotoma=Scotoma.circle(4, center=(-HALF - 5, 0)),
+                      scotoma_fill=0.0, scotoma_blend=blend)
+        return scene._native_rgb()[HALF, 0, 0, 0]
+    # Entirely off the left of the frame, so unblended it takes nothing;
+    # blurred, its edge is a pixel away and reaches in:
+    npt.assert_almost_equal(edge(0), 0.8, decimal=6)
+    npt.assert_equal(edge(2) < 0.75, True)
 
 
 def test_a_softened_boundary_shows_in_the_composed_percept():
@@ -480,7 +475,7 @@ def test_a_softened_boundary_shows_in_the_composed_percept():
     seen = scene._compose(bright, vmax=1).data[..., 0]
     npt.assert_equal(seen[HALF, HALF, 0] > 0.98, True)
     npt.assert_almost_equal(seen[HALF, HALF + 15, 0], ramp_at(15), decimal=6)
-    npt.assert_equal(ramp_at(6) < seen[HALF, HALF + 6, 0] < 1.0, True)
+    npt.assert_equal(ramp_at(8) < seen[HALF, HALF + 8, 0] < 1.0, True)
 
 
 def test_blending_is_rendering_only():

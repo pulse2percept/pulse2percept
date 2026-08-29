@@ -45,8 +45,8 @@ scotoma = Scotoma.ellipse(7 * dva, 5 * dva, center=(1, -1) * dva)
 # It is quite possible that the brain fills in the missing information.
 # To mimic that, ``'inpaint'`` fills the scotoma from the vision around it
 # by biharmonic inpainting (:py:func:`skimage.restoration.inpaint_biharmonic`).
-# Note that this is a static, boundary-driven approximation to perceptual
-# filling-in, not a neural or generative model of it.
+# Note that this is a frame-local, boundary-driven approximation to
+# perceptual filling-in, not a neural or generative model of it.
 #
 # Also, ``scotoma_blend`` softens the drawn boundary around the scotoma.
 
