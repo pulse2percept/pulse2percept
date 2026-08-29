@@ -14,6 +14,7 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus, _adoptable
+from .images import ImageStimulus
 from ..units import as_value, deg, dimensionless, ms
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
@@ -149,7 +150,7 @@ class VideoStimulus(Stimulus):
         .. versionadded:: 0.10.0
 
     """
-    __slots__ = ('vid_shape', '_next_frame')
+    __slots__ = ('vid_shape',)
 
     #: Pixel intensities are gray levels in [0, 1], not currents; see
     #: :py:class:`~pulse2percept.stimuli.ImageStimulus`.
@@ -233,7 +234,6 @@ class VideoStimulus(Stimulus):
                                             metadata=metadata,
                                             compress=compress)
         self.metadata = metadata
-        self.rewind()
 
     def compress(self):
         """Compress the source data
@@ -330,10 +330,9 @@ class VideoStimulus(Stimulus):
         """
         # `func` gets a frame of its own: several of the scikit-image
         # transforms this exists to reach cannot take a read-only one.
-        shape = self.vid_shape[:-1]
-        vid = np.array([func(_as_writable(frame.reshape(shape)),
-                             *args, **kwargs)
-                        for frame in self])
+        frames = self._frames()
+        vid = np.array([func(_as_writable(frames[..., idx]), *args, **kwargs)
+                        for idx in range(frames.shape[-1])])
         # Move first axis (frames) to last:
         vid = np.moveaxis(vid, 0, -1)
         return VideoStimulus(vid, electrodes=self._names_for(vid, electrodes),
@@ -771,21 +770,29 @@ class VideoStimulus(Stimulus):
                                 **kwargs).encode(self, implant=implant)
 
     def __iter__(self):
-        """Iterate over all frames in self.data"""
-        self.rewind()
-        return self
+        """Iterate over the video, one frame at a time
 
-    def __next__(self):
-        """Returns the next frame when iterating over all frames"""
-        this_frame = self._next_frame
-        if this_frame >= self.data.shape[-1]:
-            raise StopIteration
-        self._next_frame += 1
-        return self.data[..., this_frame]
+        .. versionchanged:: 0.10.0
 
-    def rewind(self):
-        """Rewind the iterator"""
-        self._next_frame = 0
+            Each frame is handed out as a standalone
+            :py:class:`~pulse2percept.stimuli.ImageStimulus` that carries the
+            electrode names and metadata of the video, but no time axis
+
+        Yields
+        ------
+        frame : :py:class:`~pulse2percept.stimuli.ImageStimulus`
+            The frames of the video, in order.
+
+        Raises
+        ------
+        ValueError
+            If the video was compressed in space, in which case its frames
+            cannot be reconstructed (see ``compress``).
+        """
+        frames = self._frames()
+        for idx in range(frames.shape[-1]):
+            yield ImageStimulus(frames[..., idx], electrodes=self.electrodes,
+                                metadata=self.metadata)
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
              fmt='jpg'):
@@ -832,27 +839,22 @@ class VideoStimulus(Stimulus):
             roughly two orders of magnitude faster than Matplotlib's
             ``to_jshtml`` and produces much smaller notebooks and doc pages.
         """
-        def update(data):
+        if self.time is None:
+            raise ValueError("Cannot animate a percept with time=None.")
+        frames = self._frames()
+
+        # Only the inherited Matplotlib machinery (``save``,
+        # ``to_html5_video``) runs these; the HTML player draws ``frames``
+        # itself. Frames are handed out by index so that the title can be
+        # looked up without tracking iterator state:
+        def update(idx):
             if annotate_time:
-                mat.axes.set_title(f't = {self.time[self._next_frame - 1]:.2f} ms')
-            mat.set_data(data.reshape(self.vid_shape[:-1]))
+                mat.axes.set_title(f't = {self.time[idx]:.2f} ms')
+            mat.set_data(frames[..., idx])
             return mat
 
         def data_gen():
-            try:
-                self.rewind()
-                # Advance to the next frame:
-                while True:
-                    yield next(self)
-            except StopIteration:
-                # End of the sequence, exit:
-                pass
-
-        if self.time is None:
-            raise ValueError("Cannot animate a percept with time=None.")
-        # Raises if the video was compressed in space, in which case there is
-        # no dense frame left to display:
-        frames = self._frames()
+            return iter(range(frames.shape[-1]))
 
         # There are several options to animate a percept in Jupyter/IPython
         # (see https://stackoverflow.com/a/46878531). Displaying the animation
@@ -863,8 +865,7 @@ class VideoStimulus(Stimulus):
             fig, ax = plt.subplots(figsize=(8, 5))
         else:
             fig = ax.figure
-        # Rewind the percept and show an empty frame:
-        self.rewind()
+        # Start from an empty frame:
         mat = ax.imshow(np.zeros(self.vid_shape[:-1]), cmap='gray',
                         vmin=0, vmax=self.data.max())
         plt.close(fig)
