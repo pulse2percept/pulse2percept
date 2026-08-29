@@ -355,6 +355,51 @@ def test_scotoma_and_fill_are_validated():
     for fill in (-0.1, 1.5, np.nan):
         with pytest.raises(ValueError):
             Scene(source, fov=8, scotoma_fill=fill)
+    for blend in (-1, -0.1, np.nan, np.inf):
+        with pytest.raises(ValueError):
+            Scene(source, fov=8, scotoma_blend=blend)
+
+
+def test_no_blend_leaves_the_boundary_as_sharp_as_the_scotoma_is():
+    scotoma = Scotoma.circle(6)
+    default = ramp_scene(scotoma=scotoma, scotoma_fill=0.3)
+    explicit = ramp_scene(scotoma=scotoma, scotoma_fill=0.3, scotoma_blend=0)
+    npt.assert_equal(default.scotoma_blend, 0.0)
+    npt.assert_array_equal(explicit._native_rgb(), default._native_rgb())
+    npt.assert_array_equal(np.unique(explicit._rendered_loss_at((0, 0))),
+                           [0.0, 1.0])
+
+
+def test_blending_softens_the_boundary_and_only_the_boundary():
+    """One degree per pixel here, so a sigma of 2 px is 2 dva"""
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_blend=2)
+    loss = scene._rendered_loss_at((0, 0))
+    npt.assert_equal(loss[HALF, HALF] > 0.98, True)
+    npt.assert_almost_equal(loss[HALF, HALF + 15], 0.0, decimal=12)
+    npt.assert_equal(0.05 < loss[HALF, HALF + 6] < 0.95, True)
+    profile = loss[HALF, HALF:HALF + 16]
+    npt.assert_array_less(np.diff(profile), 1e-12)
+
+
+def test_blending_reads_the_loss_field_past_the_frame_edge():
+    """A scotoma that covers no pixel can still blur onto the frame"""
+    scene = ramp_scene(scotoma=Scotoma.circle(4, center=(-HALF - 5, 0)),
+                       scotoma_blend=2)
+    npt.assert_array_equal(scene._loss_at((0, 0)), 0)
+    npt.assert_equal(scene._rendered_loss_at((0, 0))[HALF, 0] > 0.05, True)
+
+
+def test_blending_is_rendering_only():
+    x = np.array([-15.0, -6.0, 0.0, 4.0, 12.0])
+    y = np.array([0.0, 3.0, 0.0, -5.0, 7.0])
+    scotoma = Scotoma.circle(6)
+    sharp = ramp_scene(scotoma=scotoma, scotoma_blend=0)
+    soft = ramp_scene(scotoma=scotoma, scotoma_blend=3)
+    npt.assert_array_equal(soft._sample_at(x, y), sharp._sample_at(x, y))
+    npt.assert_array_equal(soft._device_input(x, y), sharp._device_input(x, y))
+    npt.assert_array_equal(soft.scotoma(x, y), sharp.scotoma(x, y))
+    npt.assert_equal(np.allclose(soft._native_rgb(), sharp._native_rgb()),
+                     False)
 
 
 def test_plot_draws_native_vision_where_the_eye_is_pointing():

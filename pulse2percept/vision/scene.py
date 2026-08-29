@@ -1,6 +1,7 @@
 """:py:class:`~pulse2percept.vision.Scene`"""
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import gaussian_filter
 
 from skimage.color import rgb2gray
 
@@ -10,6 +11,9 @@ from ..stimuli import ImageStimulus, VideoStimulus
 from ..topography import Grid2D
 from ..units import Quantity, as_value, dimensionless, dva
 from ..utils import PrettyPrint
+
+# How many sigmas of the blur kernel are kept:
+_TRUNCATE = 4.0
 
 
 def _resolve_fov(fov, n_rows, n_cols):
@@ -150,6 +154,10 @@ class Scene(PrettyPrint):
         What complete loss looks like, as a display intensity in [0, 1].
         Defaults to black. What is lost has to look like *something*; this is
         the choice, and it belongs to the scene rather than to a model run.
+    scotoma_blend : float, optional
+        Standard deviation, in scene pixels, of a Gaussian applied to the
+        rasterized loss map before it is drawn. Rendering only: the scotoma's
+        geometry is unchanged.
 
     Examples
     --------
@@ -164,7 +172,8 @@ class Scene(PrettyPrint):
 
     """
 
-    def __init__(self, source, fov, scotoma=None, scotoma_fill=0):
+    def __init__(self, source, fov, scotoma=None, scotoma_fill=0,
+                 scotoma_blend=0):
         if not isinstance(source, (ImageStimulus, VideoStimulus)):
             # A picture is the common case, and asking for the wrapper adds
             # nothing; a video has to be built by the caller because only they
@@ -178,9 +187,16 @@ class Scene(PrettyPrint):
         if not np.isfinite(fill) or fill < 0 or fill > 1:
             raise ValueError(f"'scotoma_fill' is a display intensity and must "
                              f"lie in [0, 1], not {scotoma_fill}.")
+        blend = float(as_value(scotoma_blend, dimensionless,
+                               'scotoma_blend'))
+        if not np.isfinite(blend) or blend < 0:
+            raise ValueError(f"'scotoma_blend' is a Gaussian sigma in scene "
+                             f"pixels and must be finite and non-negative, "
+                             f"not {scotoma_blend}.")
         self._source = source
         self._scotoma = scotoma
         self._scotoma_fill = fill
+        self._scotoma_blend = blend
         n_rows, n_cols = self._frame_shape
         self._fov = _resolve_fov(fov, n_rows, n_cols)
         self._cached_frames = None
@@ -189,7 +205,8 @@ class Scene(PrettyPrint):
         """Return a dict of class attributes to pretty-print"""
         return {'source': type(self.source).__name__, 'fov': self.fov,
                 'shape': self.shape, 'scotoma': self.scotoma,
-                'scotoma_fill': self.scotoma_fill}
+                'scotoma_fill': self.scotoma_fill,
+                'scotoma_blend': self.scotoma_blend}
 
     @property
     def source(self):
@@ -205,6 +222,11 @@ class Scene(PrettyPrint):
     def scotoma_fill(self):
         """The display intensity complete loss shows as"""
         return self._scotoma_fill
+
+    @property
+    def scotoma_blend(self):
+        """Gaussian sigma, in scene pixels, softening the drawn scotoma"""
+        return self._scotoma_blend
 
     @property
     def _frame_shape(self):
@@ -360,16 +382,26 @@ class Scene(PrettyPrint):
             frames = np.repeat(frames, 3, axis=2)
         return frames
 
-    def _loss_at(self, gaze_xy):
-        """How much native vision is lost at each scene pixel, in [0, 1]"""
+    def _loss_at(self, gaze_xy, pad=0):
+        """Geometric loss at each scene pixel, in [0, 1]"""
         n_rows, n_cols = self._frame_shape
         if self.scotoma is None:
-            return np.zeros((n_rows, n_cols))
-        # `scene = visual field + gaze`, run backwards: where each scene pixel
-        # falls relative to the fovea, which is where the scotoma is.
+            return np.zeros((n_rows + 2 * pad, n_cols + 2 * pad))
         gx, gy = gaze_xy
-        x_scene, y_scene = self._pixel_centers()
+        x_scene, y_scene = self._pixel_centers(pad=pad)
         return self.scotoma(x_scene - gx, y_scene - gy)
+
+    def _rendered_loss_at(self, gaze_xy):
+        """The loss map as drawn: `_loss_at` softened by `scotoma_blend`"""
+        sigma = self._scotoma_blend
+        if self.scotoma is None or sigma == 0:
+            return self._loss_at(gaze_xy)
+        # Blur the loss field, not a frame-sized crop of it:
+        pad = int(np.ceil(_TRUNCATE * sigma)) + 1
+        loss = self._loss_at(gaze_xy, pad=pad)
+        blurred = gaussian_filter(loss, sigma, mode='nearest',
+                                  truncate=_TRUNCATE)
+        return np.clip(blurred[pad:-pad, pad:-pad], 0, 1)
 
     def _native_rgb(self, gaze=None):
         """What is left of native vision, as ``(rows, cols, 3, n_frames)``"""
@@ -379,17 +411,21 @@ class Scene(PrettyPrint):
         n_frames = frames.shape[-1]
         gaze = _gaze_points(gaze, n_frames)
         fill = self.scotoma_fill
+        static = len(gaze) == 1
+        if static:
+            loss = self._rendered_loss_at(gaze[0])[..., np.newaxis]
         out = np.empty(frames.shape, dtype=np.float32)
         for f in range(n_frames):
-            loss = self._loss_at(gaze[0] if len(gaze) == 1
-                                 else gaze[f])[..., np.newaxis]
+            if not static:
+                loss = self._rendered_loss_at(gaze[f])[..., np.newaxis]
             out[..., f] = (1 - loss) * frames[..., f] + loss * fill
         return out
 
-    def _pixel_centers(self):
+    def _pixel_centers(self, pad=0):
         """Scene coordinates of every pixel center, as ``(x, y)`` meshes"""
         n_rows, n_cols = self._frame_shape
-        cols, rows = np.meshgrid(np.arange(n_cols), np.arange(n_rows))
+        cols, rows = np.meshgrid(np.arange(-pad, n_cols + pad),
+                                 np.arange(-pad, n_rows + pad))
         return self.pixel_to_dva(cols, rows)
 
     def _compose(self, prosthetic, vmax, vmin=0, gaze=None):
@@ -403,9 +439,6 @@ class Scene(PrettyPrint):
                              "and composing it is what turns that into "
                              "display intensity.")
         if not prosthetic._has_space:
-            # Without a `space`, `xdva`/`ydva` are the pixel indices `Data`
-            # fills an omitted axis with. Reading those as degrees would place
-            # the percept somewhere plausible-looking and wrong:
             raise ValueError("'prosthetic' has no visual-field coordinates, "
                              "so there is nowhere in the scene to put it. "
                              "Predict it on a model grid, or pass 'space' "
@@ -421,29 +454,24 @@ class Scene(PrettyPrint):
         x_scene, y_scene = self._pixel_centers()
         static = len(gaze) == 1
         if static:
-            # One gaze looks at the same place in every frame, so the scotoma
-            # is evaluated once and every frame's brightness comes back from a
-            # single call.
             gx, gy = gaze[0]
             points = np.column_stack(((y_scene - gy).ravel(),
                                       (x_scene - gx).ravel()))
             brightness = _percept_sampler(prosthetic, pframes)(points)
             brightness = brightness.reshape((n_rows, n_cols, n_out))
-            loss = self._loss_at(gaze[0])[..., np.newaxis]
+            loss = self._rendered_loss_at(gaze[0])[..., np.newaxis]
 
         out = np.empty((n_rows, n_cols, 3, n_out), dtype=np.float32)
         for f in range(n_out):
             if static:
                 frame = brightness[..., f]
             else:
-                # A gaze per frame: the eye was somewhere else when this frame
-                # came up, so the scotoma and the percept land elsewhere too.
                 gx, gy = gaze[f]
                 points = np.column_stack(((y_scene - gy).ravel(),
                                           (x_scene - gx).ravel()))
                 sample = _percept_sampler(prosthetic, pframes[..., f:f + 1])
                 frame = sample(points).reshape((n_rows, n_cols))
-                loss = self._loss_at(gaze[f])[..., np.newaxis]
+                loss = self._rendered_loss_at(gaze[f])[..., np.newaxis]
             phosphene = np.clip((frame - vmin) / (vmax - vmin), 0, 1)
             lost = np.maximum(fill, phosphene)[..., np.newaxis]
             native = scene_rgb[..., 0 if scene_rgb.shape[-1] == 1 else f]
@@ -458,17 +486,10 @@ class Scene(PrettyPrint):
         n_out = self.n_frames
         n_pros = prosthetic.data.shape[-1]
         if n_pros == 1 and prosthetic.time is None:
-            # A percept with no clock happened at no particular time, so it
-            # stands behind every frame of the video. One frame that *does*
-            # carry a time happened then and not otherwise, and falls through.
             return (np.repeat(prosthetic.data, n_out, axis=-1), self.time,
                     self.time_unit)
         if n_pros == n_out:
-            # One modeled response per video frame: they are responses *to*
             return prosthetic.data, prosthetic.time, prosthetic.time_unit
-        # Percept interpolation holds the nearest endpoint outside the modeled
-        # interval, so a video that runs past it would be shown a phosphene
-        # that was never predicted:
         unit = prosthetic.time_unit
         asked = np.asarray(self.source.times(unit), dtype=float)
         lo, hi = float(prosthetic.time[0]), float(prosthetic.time[-1])
@@ -481,8 +502,6 @@ class Scene(PrettyPrint):
                 f"frame there would show a phosphene that was never "
                 f"simulated. Predict the percept over the whole video, or "
                 f"trim the video to the percept.")
-        # `Percept.__getitem__` owns time interpolation; the quantity is what
-        # carries the video's clock across to the percept's own time unit:
         frames = prosthetic[..., Quantity(np.asarray(self.time),
                                           self.time_unit)]
         return frames, self.time, self.time_unit
