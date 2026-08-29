@@ -73,8 +73,10 @@ API changes:
 * :py:class:`~pulse2percept.models.BiphasicAxonMapModel` predicts from a still
   image encoded with the standard biphasic encoder pulse, not only from
   retained :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects. It
-  reads the requested amplitude, frequency and phase duration, so a
-  :py:class:`~pulse2percept.implants.Raster` does not change the percept.
+  reads amplitude, phase duration and the realized frequency, ignoring
+  pulse-onset timing, so a :py:class:`~pulse2percept.implants.Raster` leaves
+  amplitude encoding unchanged while a period the device lengthens is
+  respected.
 
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
