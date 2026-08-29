@@ -1,5 +1,5 @@
-from pulse2percept.stimuli import (AmplitudeEncoder, VideoStimulus,
-                                   BostonTrain, GirlPool)
+from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus,
+                                   VideoStimulus, BostonTrain, GirlPool)
 from pulse2percept.stimuli.videos import _frame_index
 from pulse2percept.units import (DimensionMismatchError, Hz, kHz, deg, dva,
                                  ms, rad, s, uA)
@@ -580,6 +580,80 @@ def test_VideoStimulus_apply(tmp_path):
     # Dropping the color channels changes the pixel count too:
     rgb = VideoStimulus(np.random.rand(6, 8, 3, 4).astype(np.float32))
     npt.assert_equal(rgb.apply(rgb2gray).vid_shape, (6, 8, 4))
+
+    # 'apply' is a low-level array operation that doesn't go through the
+    # public iterator
+    def check(frame):
+        npt.assert_equal(isinstance(frame, np.ndarray), True)
+        npt.assert_equal(frame.flags.writeable, True)
+        return frame
+
+    npt.assert_almost_equal(stim.apply(check).data, stim.data)
+
+
+def test_VideoStimulus_iter():
+    # Iterating a video yields one standalone ImageStimulus per frame
+    ndarray = np.arange(2 * 3 * 4, dtype=np.float32).reshape((2, 3, 4)) / 23
+    video = VideoStimulus(ndarray, time=np.arange(4), metadata={'foo': 'bar'})
+
+    frames = list(video)
+    npt.assert_equal(len(frames), 4)
+    for idx, frame in enumerate(frames):
+        npt.assert_equal(isinstance(frame, ImageStimulus), True)
+        npt.assert_equal(frame.img_shape, video.vid_shape[:-1])
+        npt.assert_almost_equal(frame.data.reshape(frame.img_shape),
+                                ndarray[..., idx])
+        # A still image has no place on the video's time axis:
+        npt.assert_equal(frame.time, None)
+        npt.assert_equal(np.asarray(frame.electrodes),
+                         np.asarray(video.electrodes))
+        npt.assert_equal(frame.metadata['foo'], 'bar')
+
+
+def test_VideoStimulus_iter_rgb():
+    # The color axis is not the frame axis:
+    ndarray = np.arange(2 * 3 * 3 * 5, dtype=np.float32) / 89
+    ndarray = ndarray.reshape((2, 3, 3, 5))
+    video = VideoStimulus(ndarray)
+
+    frames = list(video)
+    npt.assert_equal(len(frames), 5)
+    for idx, frame in enumerate(frames):
+        npt.assert_equal(isinstance(frame, ImageStimulus), True)
+        npt.assert_equal(frame.img_shape, (2, 3, 3))
+        npt.assert_almost_equal(frame.data.reshape((2, 3, 3)),
+                                ndarray[..., idx])
+    npt.assert_equal(list(frames[0].electrodes[:4]),
+                     ['A1_R', 'A1_G', 'A1_B', 'A2_R'])
+
+
+def test_VideoStimulus_iter_is_stateless():
+    video = VideoStimulus(np.random.rand(2, 3, 4).astype(np.float32))
+
+    first, second = list(video), list(video)
+    npt.assert_equal(len(first), 4)
+    for one, two in zip(first, second):
+        npt.assert_almost_equal(one.data, two.data)
+
+    a, b = iter(video), iter(video)
+    npt.assert_almost_equal(next(a).data, first[0].data)
+    npt.assert_almost_equal(next(a).data, first[1].data)
+    npt.assert_almost_equal(next(b).data, first[0].data)
+
+
+def test_VideoStimulus_iter_compressed():
+    frame = np.random.rand(4, 5) * 0.5 + 0.5
+    other = np.random.rand(4, 5) * 0.5 + 0.5
+    video = VideoStimulus(np.stack([frame] * 4 + [other] * 4, axis=-1),
+                          time=np.arange(8), compress=True)
+    frames = list(video)
+    npt.assert_equal(len(frames), 4)
+    npt.assert_almost_equal(frames[0].data.reshape((4, 5)), frame, decimal=6)
+    sparse = np.zeros((4, 5, 6))
+    sparse[1, 1, :] = np.linspace(0, 1, 6)
+    compressed = VideoStimulus(sparse, time=np.arange(6), compress=True)
+    with pytest.raises(ValueError):
+        list(compressed)
 
 
 @pytest.mark.parametrize('n_frames', (1, 2, 3, 10, 14))

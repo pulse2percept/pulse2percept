@@ -132,6 +132,21 @@ electrode sees the part of it that electrode actually looks at -- wrap it in a
 :py:class:`~pulse2percept.vision.Scene` and give that to a model; see
 :ref:`topics-models-scene`.
 
+A video can also be processed one frame at a time. Iterating over a
+:py:class:`~pulse2percept.stimuli.VideoStimulus` yields each frame as an
+:py:class:`~pulse2percept.stimuli.ImageStimulus`:
+
+.. code-block:: python
+
+    video = p2p.stimuli.BostonTrain()
+
+    for frame in video:
+        percept = model.predict_percept(frame)
+
+Each call treats the frame as an independent still image. Pass the complete
+video to ``predict_percept`` instead when temporal dynamics across frames
+matter.
+
 Plotting and time operations
 ----------------------------
 
