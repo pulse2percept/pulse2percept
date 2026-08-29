@@ -239,7 +239,10 @@ def test_the_whole_rejection_matrix():
 
     # dimensionless -> model: gray levels are not small currents. The implant
     # above is the outer boundary; this is the one behind it, so it is reached
-    # through an implant that claims to deliver something else.
+    # through an implant that claims to deliver something else. Scoreboard does
+    # read one dimensionless quantity -- the normalized optical drive of a
+    # photovoltaic implant (see `PRIMAEncoder`) -- and still refuses a picture,
+    # because a picture does not claim to be an encoded drive.
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 

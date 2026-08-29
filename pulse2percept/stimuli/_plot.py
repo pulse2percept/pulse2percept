@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 
-from ..units import uA
+from ..units import mW, mm, uA
 from ..utils.constants import DT
 
 
@@ -63,6 +63,9 @@ def _value_label(stim):
     if stim.unit == uA:
         # Spelled the way Matplotlib renders it:
         return r'Amplitude ($\mu$A)'
+    if stim.unit.dimension == (mW / mm ** 2).dimension:
+        # Optical stimuli use irradiance rather than current amplitude.
+        return f'Irradiance ({stim.unit})'
     return f'Amplitude ({stim.unit})'
 
 

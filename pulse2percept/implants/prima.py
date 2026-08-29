@@ -13,9 +13,20 @@ from collections.abc import Sequence
 from .base import ProsthesisSystem
 from .electrodes import HexElectrode
 from .electrode_arrays import ElectrodeGrid
-from ..units import as_value, um
+from ..stimuli import PRIMAEncoder
+from ..stimuli.base import _describe_unit
+from ..stimuli.encoders import _OpticalStimulus
+from ..units import DimensionMismatchError, as_value, mW, mm, um
 from ..utils import deprecated
-from ..utils.constants import ZORDER
+from ..utils.constants import MS_PER_S, ZORDER
+
+# Distinguish the default PRIMAEncoder from ``encoder=None``.
+_DEVICE_DEFAULT = object()
+
+
+def _projector(stim):
+    """Return ``stim`` if it retains a PRIMA projector schedule."""
+    return stim if isinstance(stim, _OpticalStimulus) else None
 
 
 #: F55 layout reconstructed from Fig. 2(a) of [Ho2019]_.
@@ -303,12 +314,28 @@ class PRIMAPivotal(ProsthesisSystem):
         preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
-        If safe mode is enabled, only charge-balanced stimuli are allowed.
-    
+        Enforces the documented projector operating envelope: irradiance
+        <= 3.5 mW/mm^2, ON durations on the 0.7 ms grid and <= 9.8 ms,
+        duty cycle <= 0.294, and frame rate <= 30 Hz. All 378 pixels may be
+        illuminated simultaneously. This is not a biological safety limit or a
+        demonstrated hardware maximum.
+
+        .. versionchanged:: 0.11.0
+            Checks the optical envelope instead of electrical charge balance.
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+        Image/video encoder. Defaults to
+        :py:class:`~pulse2percept.stimuli.PRIMAEncoder`. Pass ``None`` to
+        disable automatic encoding.
+
+        .. versionadded:: 0.11.0
+
     Notes
     -----
     *  The active-electrode diameter was estimated from Fig. 1 of
        [Palanker2020]_.
+    *  :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`
+       returns optical irradiance (``mW/mm^2``). Photovoltaic conversion is not
+       modeled.
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
@@ -318,8 +345,11 @@ class PRIMAPivotal(ProsthesisSystem):
     technology = 'photovoltaic'
     family = 'PRIMA'
 
+    #: The device is illuminated, not driven by a current source.
+    stimulus_unit = mW / mm ** 2
+
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
-                 safe_mode=False):
+                 safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.spacing = 100  # um, nearest-neighbor center-to-center
         self.pixel_width = 100  # um, flat-to-flat
         self.gap = self.spacing - self.pixel_width  # um, open inter-pixel gap
@@ -329,6 +359,9 @@ class PRIMAPivotal(ProsthesisSystem):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+        # Do not share mutable encoder state between implant instances.
+        self.encoder = (PRIMAEncoder() if encoder is _DEVICE_DEFAULT
+                        else encoder)
 
         # Normalized here rather than in ElectrodeGrid, because a
         # per-electrode list of heights never reaches the grid at all -- it is
@@ -365,6 +398,91 @@ class PRIMAPivotal(ProsthesisSystem):
                                  f"{z_arr.size}.")
             for elec, z_elec in zip(self.earray.electrode_objects, z):
                 elec.z = z_elec
+
+    def _require_physical_light(self, stim):
+        """Reject negative or nonfinite irradiance."""
+        if stim.unit.dimension != self.stimulus_unit.dimension:
+            return
+        projector = _projector(stim)
+        if projector is not None:
+            # Read peak irradiance directly from the projector schedule.
+            values = np.array([projector.irradiance], dtype=np.float64)
+        else:
+            values = np.asarray(stim.data, dtype=np.float64)
+        if values.size == 0:
+            return
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Optical stimulus has non-finite irradiance.")
+        if values.min() < 0:
+            raise ValueError(
+                f"Optical stimulus asks for {values.min():.3f} mW/mm^2. "
+                f"Irradiance is a power density and cannot be negative; "
+                f"a dark pixel is zero.")
+
+    def _require_within_optical_envelope(self, stim):
+        """Check the documented PRIMA projector operating envelope."""
+        if stim.unit.dimension != self.stimulus_unit.dimension:
+            raise DimensionMismatchError(
+                f"Safety check 'safe_mode' needs an optical stimulus to "
+                f"check, and this one is measured in "
+                f"{_describe_unit(stim.unit)}. Give the implant a "
+                f"PRIMAEncoder so that image or video input is encoded into "
+                f"irradiance first.")
+        projector = _projector(stim)
+        if projector is None:
+            # Duty cycle requires the projector schedule, not waveform samples.
+            raise ValueError(
+                "Safety check: this stimulus no longer describes a projector "
+                "(irradiance, frame rate, per-pixel ON durations), so its "
+                "duty cycle cannot be verified. Build it with a PRIMAEncoder "
+                "and keep it intact, or set safe_mode=False and check the "
+                "device envelope yourself.")
+        irradiance, freq = projector.irradiance, projector.freq
+        dur = np.asarray(projector.pulse_dur, dtype=np.float64)
+        step = PRIMAEncoder.pulse_step
+        if irradiance > PRIMAEncoder.max_irradiance + 1e-9:
+            raise ValueError(
+                f"Safety check: stimulus projects {irradiance:.3f} mW/mm^2, "
+                f"which exceeds the {PRIMAEncoder.max_irradiance} mW/mm^2 the "
+                f"device delivers.")
+        longest = float(dur.max(initial=0.0))
+        if longest > PRIMAEncoder.max_pulse_dur + 1e-9:
+            raise ValueError(
+                f"Safety check: stimulus lights a pixel for {longest:.3f} ms, "
+                f"which exceeds the longest documented ON duration of "
+                f"{PRIMAEncoder.max_pulse_dur} ms.")
+        # Require 0.7 ms ON-duration steps.
+        steps = dur[dur > 0] / step
+        if steps.size and np.any(np.abs(steps - np.round(steps)) > 1e-6):
+            raise ValueError(
+                f"Safety check: ON durations must be whole multiples of "
+                f"{step} ms, the step the projector modulates in.")
+        # Check duty cycle before frame rate to catch combined violations.
+        duty = freq * longest / MS_PER_S
+        if duty > PRIMAEncoder.max_duty_cycle + 1e-9:
+            raise ValueError(
+                f"Safety check: stimulus asks for a duty cycle of "
+                f"{duty:.3f} ({freq:g} Hz x {longest:.3f} ms), which exceeds "
+                f"the {PRIMAEncoder.max_duty_cycle:.3f} the device delivers. "
+                f"Lower 'freq' or shorten 'pulse_dur'.")
+        if freq > PRIMAEncoder.max_freq + 1e-9:
+            raise ValueError(
+                f"Safety check: stimulus runs the projector at {freq:g} Hz, "
+                f"and the pivotal system is reported to run at "
+                f"{PRIMAEncoder.max_freq:g} Hz. Set safe_mode=False to "
+                f"explore other frame rates.")
+
+    def check_stim(self, stim):
+        """Validate optical stimulation and, in safe mode, projector limits.
+
+        .. versionadded:: 0.11.0
+        """
+        self._require_physical_light(stim)
+        if self.safe_mode:
+            self._require_within_optical_envelope(stim)
+        if self.max_current is not None:
+            # The inherited current-limit check rejects optical units.
+            self._require_within_current_limit(stim)
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):

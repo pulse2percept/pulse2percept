@@ -258,6 +258,9 @@ class Stimulus(PrettyPrint):
     #: Whether this stimulus provides a separate spatial-only view
     _has_spatial_view = False
 
+    #: Whether dimensionless values represent encoded normalized drive.
+    _is_normalized_drive = False
+
     #: whether the canonical state is a set of stim params
     _is_parametric = False
 

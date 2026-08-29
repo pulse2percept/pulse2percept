@@ -5,12 +5,13 @@ import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
 from scipy.interpolate import RegularGridInterpolator
+from skimage.color import rgb2gray
 
 from .electrodes import Electrode, DiskElectrode, PointSource
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
-from ..stimuli import (BiphasicPulseTrain, Stimulus, ImageStimulus,
-                       StimulusEncoder, VideoStimulus)
+from ..stimuli import (BiphasicPulseTrain, Encoder, Stimulus, ImageStimulus,
+                       VideoStimulus)
 from ..stimuli.base import _describe_unit
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
@@ -50,16 +51,18 @@ class ProsthesisSystem(PrettyPrint):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-        Safety is an electrical property, so this also requires the stimulus
-        to be measured in units of current.
-    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
-        How the device turns a picture into stimulation. If given, preparing an
-        image or a video encodes it first, so that what comes back is always
-        electrical. If None, such a stimulus is refused, since there is no
-        principled default mapping from a gray level to an amplitude or a
-        frequency.
+        Charge balance is an electrical property and requires current units.
+        Non-current-driven devices may override this check.
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+        Maps image or video gray levels to device stimulation. If None,
+        dimensionless visual input is rejected.
 
         .. versionadded:: 0.10.0
+
+        .. versionchanged:: 0.11.0
+            Accepts any :py:class:`~pulse2percept.stimuli.Encoder`, not only
+            an electrical
+            :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes that it cannot drive
         at the same time. If None, every electrode may fire at once. Assigning
@@ -92,7 +95,7 @@ class ProsthesisSystem(PrettyPrint):
     __slots__ = ('_earray', '_eye', 'safe_mode', 'preprocess',
                  '_encoder', '_raster', '_max_current', '_thresholds')
 
-    #: Physical quantity delivered by the implant. Subclasses may override.
+    #: Unit used by prepared stimuli. Defaults to electrical current.
     stimulus_unit = uA
 
     #: Where the device sits relative to the tissue it stimulates, where the
@@ -148,8 +151,8 @@ class ProsthesisSystem(PrettyPrint):
     @encoder.setter
     def encoder(self, encoder):
         """Encoder setter (called upon ``self.encoder = encoder``)"""
-        if encoder is not None and not isinstance(encoder, StimulusEncoder):
-            raise TypeError(f"'encoder' must be a StimulusEncoder object, not "
+        if encoder is not None and not isinstance(encoder, Encoder):
+            raise TypeError(f"'encoder' must be an Encoder object, not "
                             f"{type(encoder)}.")
         self._encoder = encoder
 
@@ -264,18 +267,18 @@ class ProsthesisSystem(PrettyPrint):
         """Require a stimulus with a physical dimension this implant can deliver."""
         if stim.unit.dimension == self.stimulus_unit.dimension:
             return
-        # Threshold-relative pulse trains may be assigned before
-        # calibration.
-        if stim.unit.dimension == xTh.dimension:
+        # xTh is valid only for current-driven implants before calibration.
+        if (self.stimulus_unit.dimension == uA.dimension and
+                stim.unit.dimension == xTh.dimension):
             return
         raise DimensionMismatchError(
-            f"{type(self).__name__} delivers "
+            f"{type(self).__name__} is driven by "
             f"{_describe_unit(self.stimulus_unit)}, but this stimulus is "
             f"measured in {_describe_unit(stim.unit)}. Give the implant an "
-            f"'encoder' (pulse2percept.stimuli.AmplitudeEncoder or "
-            f"FrequencyEncoder) so that image or video input is encoded during "
-            f"'prepare_stim', encode it yourself first, or give the implant a "
-            f"'preprocess' function that does.")
+            f"'encoder' (a pulse2percept.stimuli.Encoder that produces "
+            f"{_describe_unit(self.stimulus_unit)}) so that image or video "
+            f"input is encoded during 'prepare_stim', encode it yourself "
+            f"first, or give the implant a 'preprocess' function that does.")
 
     @staticmethod
     def _require_current_stim(stim, check):
@@ -407,21 +410,24 @@ class ProsthesisSystem(PrettyPrint):
 
     def reshape_stim(self, stim):
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
-            # Convert to grayscale:
-            img = stim.rgb2gray()
-
-            # Extract electrode coordinates, in the same units the image grid
-            # below is laid out in:
+            # Electrode coordinates define the image sampling grid.
             x, y = self.earray.coordinates(um)[:, :2].T
 
-            # Define image coordinate space
+            # Sample color channels before grayscale conversion to avoid a
+            # full-resolution grayscale copy.
             if isinstance(stim, ImageStimulus):
-                img_h, img_w = img.img_shape
-                data = img.data.reshape(img_h, img_w)  # Ensure 2D format
-            elif isinstance(stim, VideoStimulus):
-                img_h, img_w, n_frames = img.vid_shape
-                data = img.data.reshape(img_h, img_w, n_frames)  # 3D format
-
+                shape = stim.img_shape          # (h, w[, n_channels])
+                colored = len(shape) == 3
+            else:
+                shape = stim.vid_shape          # (h, w[, n_channels], frames)
+                colored = len(shape) == 4
+            img_h, img_w = shape[:2]
+            data = stim.data.reshape(shape)
+            if colored and isinstance(stim, ImageStimulus) and shape[2] == 4:
+                # RGBA alpha blending is nonlinear; apply it before
+                # interpolation (avoids second full-size copy)
+                data = np.multiply(data[..., :3], data[..., 3:4])
+                np.clip(data, 0.0, 1.0, out=data)
 
             x_min, x_max = np.min(x), np.max(x)
             y_min, y_max = np.min(y), np.max(y)
@@ -430,16 +436,17 @@ class ProsthesisSystem(PrettyPrint):
             img_x = np.linspace(x_min, x_max, img_w)
             img_y = np.linspace(y_min, y_max, img_h)
 
-            # One interpolator covers every frame: the grid is the leading two
-            # axes of `data`, and anything past them -- the frame axis of a
-            # video -- is carried along, so a video comes back as
-            # (n_electrodes, n_frames) from a single call. Building one per
-            # frame instead meant re-deriving the same grid for each of them.
+            # RegularGridInterpolator carries color and frame axes in one call.
             interpolator = RegularGridInterpolator(
                 (img_y, img_x), data, method='linear',
                 bounds_error=False, fill_value=0
             )
             pixel_values = interpolator(np.vstack((y, x)).T)
+            if colored:
+                # rgb2gray expects the channel axis last.
+                if pixel_values.ndim == 3:
+                    pixel_values = pixel_values.transpose((0, 2, 1))
+                pixel_values = rgb2gray(pixel_values)
 
             return Stimulus(
                 pixel_values, electrodes=self.electrode_names,
@@ -525,6 +532,10 @@ class ProsthesisSystem(PrettyPrint):
         input when an encoder is present, reshapes it to the electrode array, removes
         deactivated electrodes, applies threshold calibration, and runs safety checks.
         The input is not modified and the result is not stored.
+
+        Prepared stimuli use the implant's
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`
+        (electrical current for most devices; irradiance for PRIMA).
 
         Images and videos require an encoder unless preprocessing already converts
         them to the implant's

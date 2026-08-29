@@ -6,9 +6,11 @@ Stimulus Encoders
 
 .. versionadded:: 0.10.0
 
-A visual source contains gray levels; an implant delivers electrical pulses. A
-:py:class:`~pulse2percept.stimuli.StimulusEncoder` defines the mapping between
-the two.
+A visual source contains gray levels; an implant delivers stimulation. An
+:py:class:`~pulse2percept.stimuli.Encoder` defines the mapping between the two.
+:py:class:`~pulse2percept.stimuli.StimulusEncoder` covers devices driven by a
+current source; :py:class:`~pulse2percept.stimuli.PRIMAEncoder` covers the
+photovoltaic PRIMA system, which is driven by light.
 
 Basic usage
 -----------
@@ -88,11 +90,52 @@ whether encoding happened explicitly or inside ``prepare_stim``.
 Waveform samples are generated lazily, so encoding a large image or video does
 not allocate the full electrical waveform until something needs it.
 
+Optical encoding
+----------------
+
+.. versionadded:: 0.11.0
+
+:py:class:`~pulse2percept.implants.PRIMAPivotal` is illuminated by an
+880 nm projector. :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps image
+intensity to pulse duration and returns irradiance in ``mW/mm^2``:
+
+.. code-block:: python
+
+    implant = p2p.implants.PRIMAPivotal()
+    stim = implant.prepare_stim(p2p.stimuli.LogoBVL())
+    stim.unit  # mW/mm^2
+
+At the default settings, the projector runs at 30 Hz and 3.5 mW/mm^2. It has
+14 nonzero ON durations from 0.7 to 9.8 ms. The default linear mapping from
+image intensity to these levels is a pulse2percept convention; the clinical
+camera-to-pulse-duration transfer function is not published. Set
+``grayscale=False`` for binary encoding.
+
+The clinical system also applies ambient-light adaptation, contrast
+enhancement, zoom, and, in some tests, contrast inversion. These operations
+remain explicit preprocessing steps in pulse2percept.
+
+For videos, source frames are sampled on the projector clock using zero-order
+hold. Spatial-only models can read the resulting *normalized optical drive*.
+For example:
+
+.. code-block:: python
+
+    model = p2p.models.ScoreboardModel(implant=implant)
+    percept = model.predict_percept(p2p.stimuli.LogoBVL())
+
+Here ``ScoreboardModel`` visualizes implant geometry and optical drive. It does
+not model photovoltaic transduction or retinal activation.
+
 Device constraints
 ------------------
 
 An implant's :py:class:`~pulse2percept.implants.Raster` determines which
-electrodes may pulse together; see :ref:`topics-rasters`.
+electrodes may pulse together; see :ref:`topics-rasters`. PRIMA uses no raster;
+all 378 pixels may be illuminated at once. With ``safe_mode=True``,
+:py:class:`~pulse2percept.implants.PRIMAPivotal` checks the documented projector
+settings (3.5 mW/mm^2, 30 Hz, 0.7--9.8 ms ON durations, and duty cycle <= 0.294).
+This is not a biological safety check or a demonstrated hardware maximum.
 
 Encoders can also quantize timing with ``clock`` and gray levels with
 ``n_levels``. These constraints are conservative: quantization may lower a

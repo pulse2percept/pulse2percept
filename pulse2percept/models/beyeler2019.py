@@ -9,7 +9,7 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..units import deg, dva, um
+from ..units import deg, dimensionless, dva, um
 from ..utils.constants import UM_PER_MM, ZORDER
 from ..topography import Watson2014Map
 from ..implants import ElectrodeArray
@@ -83,9 +83,14 @@ class ScoreboardSpatial(SpatialModel):
             -\frac{(x-x_e)^2 + (y-y_e)^2}{2\rho^2}
         \right),
 
-    where :math:`a_e` is the amplitude delivered by electrode :math:`e`, and
-    :math:`\rho` controls the spatial spread of activation. Larger values of
+    where :math:`a_e` is the drive at site :math:`e`, and :math:`\rho`
+    controls the spatial spread of activation. Larger values of
     :math:`\rho` produce broader phosphenes.
+
+    For current-driven implants, :math:`a_e` is current amplitude.
+    :py:class:`~pulse2percept.stimuli.PRIMAEncoder` instead provides normalized
+    optical drive. In that case, Scoreboard visualizes the stimulation pattern;
+    it does not model the retinal response.
 
     Parameters
     ----------
@@ -143,6 +148,9 @@ class ScoreboardSpatial(SpatialModel):
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
 
+    #: Also accepts encoded normalized optical drive from PRIMAEncoder.
+    extra_stimulus_units = (dimensionless,)
+
     def get_default_params(self):
         """Return all settable scoreboard parameters."""
         base_params = super(ScoreboardSpatial, self).get_default_params()
@@ -188,9 +196,14 @@ class ScoreboardModel(Model):
                 -\frac{(x-x_e)^2 + (y-y_e)^2}{2\rho^2}
             \right),
     
-        where :math:`a_e` is the amplitude delivered by electrode :math:`e`, and
-        :math:`\rho` controls the spatial spread of activation. Larger values of
+        where :math:`a_e` is the drive at site :math:`e`, and :math:`\rho`
+        controls the spatial spread of activation. Larger values of
         :math:`\rho` produce broader phosphenes.
+
+        For current-driven implants, :math:`a_e` is current amplitude.
+        :py:class:`~pulse2percept.stimuli.PRIMAEncoder` instead provides
+        normalized optical drive. In that case, Scoreboard visualizes the
+        stimulation pattern; it does not model the retinal response.
 
     Parameters
     ----------

@@ -10,7 +10,8 @@ from pulse2percept.units import (Dimension, Unit, Quantity,
                                  DimensionMismatchError, as_value,
                                  dimensionless,
                                  s, ms, us, ns, Hz, kHz, m, cm, mm, um, nm,
-                                 A, mA, uA, nA, V, mV, uV, C, mC, uC, nC, deg,
+                                 A, mA, uA, nA, V, mV, uV, W, mW, uW,
+                                 C, mC, uC, nC, deg,
                                  rad, dva, xTh)
 from pulse2percept.units.base import (TIME, _CANONICAL_SYMBOLS,
                                       _CANONICAL_UNITS)
@@ -160,6 +161,8 @@ def test_unit_vocabulary():
                              (nA, 1e-9, 'electric current'),
                              (V, 1, 'voltage'), (mV, 1e-3, 'voltage'),
                              (uV, 1e-6, 'voltage'),
+                             (W, 1, 'power'), (mW, 1e-3, 'power'),
+                             (uW, 1e-6, 'power'),
                              (C, 1, 'charge'), (mC, 1e-3, 'charge'),
                              (uC, 1e-6, 'charge'), (nC, 1e-9, 'charge'),
                              (rad, 1, 'angle'), (deg, np.pi / 180, 'angle'),
@@ -326,6 +329,22 @@ def test_dimensionless_compound_units():
     # Quantity-to-quantity comparison already converted, and still does:
     npt.assert_equal(duty == 0.0225 * dimensionless, True)
     npt.assert_equal(ratio == 1000 * dimensionless, True)
+
+
+def test_power_and_irradiance():
+    # Power is not a new base dimension: it is voltage times current, so the
+    # unit algebra already knows what a watt is.
+    npt.assert_equal((V * A).dimension, W.dimension)
+    npt.assert_equal((1 * V * A).to_value(W), 1)
+    npt.assert_equal((1 * W).to_value(mW), 1000)
+    # Irradiance is then just power per area, whichever way it is spelled:
+    npt.assert_equal(3500 * W / m ** 2 == 3.5 * mW / mm ** 2, True)
+    npt.assert_almost_equal((3.5 * mW / mm ** 2).to_value(W / m ** 2), 3500)
+    npt.assert_equal((mW / mm ** 2).dimension.name, 'irradiance')
+    npt.assert_equal(str(mW / mm ** 2), 'mW/mm^2')
+    # ... and it is not a current density, however similar the two look:
+    with pytest.raises(DimensionMismatchError):
+        (3.5 * mW / mm ** 2).to_value(uA / mm ** 2)
 
 
 def test_Quantity_arrays():

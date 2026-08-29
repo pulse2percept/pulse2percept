@@ -32,6 +32,24 @@ API changes:
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`)
 
+* New :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps images and videos
+  to 880 nm irradiance for :py:class:`~pulse2percept.implants.PRIMAPivotal`,
+  using the pivotal system's 30 Hz projector and 14 pulse-duration levels
+  (0.7--9.8 ms). ``PRIMAPivotal`` uses this encoder by default, and its
+  ``safe_mode`` checks the documented projector operating envelope.
+
+* New :py:class:`~pulse2percept.stimuli.Encoder` base class, so that
+  ``implant.encoder`` accepts non-electrical encoders.
+  :py:class:`~pulse2percept.stimuli.StimulusEncoder` inherits from it.
+
+* New ``W``, ``mW`` and ``uW`` units, from which irradiance follows as
+  ``mW / mm ** 2``.
+
+* :py:class:`~pulse2percept.models.ScoreboardSpatial` can also read the
+  normalized dimensionless drive produced by photovoltaic encoders such as
+  :py:class:`~pulse2percept.stimuli.PRIMAEncoder`; arbitrary dimensionless
+  stimuli such as image gray levels remain invalid.
+
 * New :py:class:`~pulse2percept.implants.Ho2019FlatArray` models the 55
   and 40 um flat arrays of [Ho2019]_; new
   :py:class:`~pulse2percept.implants.Huang2021Array` models the 55, 40, 30 and

@@ -169,9 +169,17 @@ def _require_stim_dimension(model, stim):
     if not isinstance(stim, Stimulus):
         return
     accepted = (model.stimulus_unit,) + tuple(model.extra_stimulus_units)
-    if stim.unit.dimension in {unit.dimension for unit in accepted}:
-        return
     expected = ' or '.join(_describe_unit(unit) for unit in accepted)
+    if stim.unit.dimension in {unit.dimension for unit in accepted}:
+        if (stim.unit.dimension.is_dimensionless and
+                not stim._is_normalized_drive):
+            # Dimensionless model input must be encoded drive, not gray levels.
+            raise DimensionMismatchError(
+                f"{type(model).__name__} expects {expected}, and this "
+                f"stimulus is dimensionless but is not a normalized drive: "
+                f"gray levels are not stimulation. Encode the picture first, "
+                f"or hand the implant the picture and let its encoder do it.")
+        return
     raise DimensionMismatchError(
         f"{type(model).__name__} expects {expected}, got "
         f"{_describe_unit(stim.unit)}.")
@@ -255,8 +263,9 @@ def _scene_stim(model, scene, gaze):
     if implant.encoder is None:
         raise ValueError(
             "A scene is a picture, and there is no principled default for "
-            "turning a gray level into current. Give the implant an "
-            "'encoder' (e.g. an AmplitudeEncoder) to say how.")
+            "turning a gray level into stimulation. Give the implant an "
+            "'encoder' (e.g. an AmplitudeEncoder, or a PRIMAEncoder for a "
+            "photovoltaic device) to say how.")
     device_scene = _device_scene(scene, implant)
     xy = implant.earray.coordinates(vfmap.tissue_unit)[:, :2].T
     x_vf, y_vf = vfmap.ret_to_dva(*xy)
@@ -439,8 +448,17 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         """Customize the building process by implementing this method"""
         pass
 
+    def _stim_unit(self, stim):
+        """Return the model unit matching ``stim``."""
+        if stim.unit.dimension == self.stimulus_unit.dimension:
+            return self.stimulus_unit
+        for unit in self.extra_stimulus_units:
+            if stim.unit.dimension == unit.dimension:
+                return unit
+        return self.stimulus_unit
+
     def _stim_values(self, stim):
-        """Return stimulus values in ``stimulus_unit``.
+        """Return stimulus values in the unit this model reads them in.
 
         Stimuli are converted at the model boundary; percept values are passed
         through because brightness is not a physical stimulus quantity.
@@ -448,7 +466,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         if not isinstance(stim, Stimulus):
             return stim.data
         _require_stim_dimension(self, stim)
-        return stim.values(self.stimulus_unit)
+        return stim.values(self._stim_unit(stim))
 
     def _stim_times(self, stim):
         """Return the time axis in ``time_unit``.
@@ -905,7 +923,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 # np.asarray: indexing a single-electrode stimulus returns a
                 # scalar, which has no `reshape`:
                 at = self._to_stim_time(t_percept, stim)
-                stim = Stimulus(
+                # Preserve the normalized-drive marker through resampling.
+                rebuild = type(stim) if stim._is_normalized_drive else Stimulus
+                stim = rebuild(
                     np.asarray(stim[:, at]).reshape((-1, n_time)),
                     electrodes=stim.electrodes, time=at
                 )._inherit_units(stim)._inherit_metadata(stim)
@@ -926,7 +946,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                     uniq_time = None
                 # `_predict_spatial` only ever sees this de-duplicated
                 # copy, so the stimulus' metadata has to come along:
-                stim_unique = Stimulus(
+                stim_unique = rebuild(
                     stim[:, stim.time[t_unique]], electrodes=stim.electrodes,
                     time=uniq_time
                 )._inherit_units(stim)._inherit_metadata(stim)
@@ -1568,7 +1588,10 @@ class Model(Frozen, PrettyPrint):
         if stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
-        _require_stim_dimension(self, stim)
+        # Spatial-only models validate the spatial view, not the waveform.
+        _require_stim_dimension(
+            self, _spatial_input(stim) if self.has_space and not self.has_time
+            else stim)
         # `_has_time_axis`, not `stim.time`: whether there is a time axis is a
         # question a stimulus can answer from its structure, and asking it for
         # the axis itself would generate the waveform behind it.

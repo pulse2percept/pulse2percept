@@ -15,14 +15,13 @@ first two correspond to these one-liners::
                             xrange=(-12, 12)).predict_percept(
         as_current(implant, p2p.stimuli.LogoBVL()))
 
-    implant = p2p.implants.PRIMAPivotal()
-    p2p.models.ScoreboardModel(implant=implant, yrange=(-4, 4),
-                               xrange=(-4, 4), rho=50,
+    p2p.models.ScoreboardModel(implant=p2p.implants.PRIMAPivotal(),
+                               yrange=(-4, 4), xrange=(-4, 4), rho=50,
                                step=0.1).predict_percept(
-        as_current(implant, p2p.stimuli.LogoBVL().invert()))
+        p2p.stimuli.LogoBVL().invert())
 
-The :func:`as_current` wrapper is a benchmark-only detail; see its docstring
-for why these workloads do not go through an encoder the way user code should.
+The PRIMA scenario runs its optical encoder directly. Electrical scenarios
+use :func:`as_current` to preserve their historical benchmark workload.
 
 Between them the scenarios reach every compiled kernel a percept prediction can
 go through -- ``_beyeler2019``, ``_granley2021``, ``_nanduri2012``,
@@ -180,10 +179,10 @@ SCENARIOS = [
         caches_axons=True,
     ),
     Scenario(
+        # Benchmark the image-to-optical encoding path for PRIMA.
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
         implant=p2p.implants.PRIMAPivotal,
-        source=as_current,
         model=lambda **kwargs: p2p.models.ScoreboardModel(xrange=(-4, 4),
                                                           yrange=(-4, 4),
                                                           rho=50, step=0.1,
