@@ -4,6 +4,7 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
 
 from skimage.color import rgb2gray
+from skimage.restoration import inpaint_biharmonic
 
 from .scotoma import Scotoma
 from ..percepts import Percept
@@ -14,6 +15,9 @@ from ..utils import PrettyPrint
 
 # How many sigmas of the blur kernel are kept:
 _TRUNCATE = 4.0
+
+# The only non-numeric `scotoma_fill`; see `_inpaint_rgb` for what it does.
+INPAINT = 'inpaint'
 
 
 def _resolve_fov(fov, n_rows, n_cols):
@@ -88,6 +92,35 @@ def _percept_sampler(prosthetic, frames):
                                    bounds_error=False, fill_value=0)
 
 
+def _resolve_fill(scotoma_fill):
+    """Normalize ``scotoma_fill`` to a display intensity or ``INPAINT``"""
+    if isinstance(scotoma_fill, str):
+        if scotoma_fill != INPAINT:
+            raise ValueError(f"'scotoma_fill' is either a display intensity "
+                             f"in [0, 1] or {INPAINT!r}, not "
+                             f"{scotoma_fill!r}.")
+        return INPAINT
+    fill = float(as_value(scotoma_fill, dimensionless, 'scotoma_fill'))
+    if not np.isfinite(fill) or fill < 0 or fill > 1:
+        raise ValueError(f"'scotoma_fill' is a display intensity and must "
+                         f"lie in [0, 1], not {scotoma_fill}.")
+    return fill
+
+
+def _inpaint_rgb(image, mask):
+    """Fill ``image`` where ``mask`` is True from the pixels where it is not"""
+    if mask.all():
+        raise ValueError("scotoma_fill='inpaint' fills a scotoma in from the "
+                         "vision around it, and here there is none: every "
+                         "pixel of the frame is at least partly lost. Use a "
+                         "numeric fill, or a smaller scotoma.")
+    if not mask.any():
+        return np.asarray(image, dtype=np.float32)
+    holed = np.where(mask[..., np.newaxis], 0.0, image)
+    filled = inpaint_biharmonic(holed, mask, channel_axis=-1)
+    return np.clip(filled, 0, 1).astype(np.float32)
+
+
 def _check_range(vmin, vmax):
     """Reject a brightness-to-display mapping that cannot be drawn"""
     if vmax is None:
@@ -150,10 +183,10 @@ class Scene(PrettyPrint):
     scotoma : :py:class:`~pulse2percept.vision.Scotoma`, optional
         Where native vision is lost. If None, native vision is intact
         everywhere and the scene is simply what is out there.
-    scotoma_fill : float, optional
-        What complete loss looks like, as a display intensity in [0, 1].
-        Defaults to black. What is lost has to look like *something*; this is
-        the choice, and it belongs to the scene rather than to a model run.
+    scotoma_fill : float or 'inpaint', optional
+        What gray level to fill the scotoma with (in [0, 1]). Default (0) is
+        black. ``'inpaint'`` instead fills the scotoma in from the vision
+        around it using :py:func:`skimage.restoration.inpaint_biharmonic`.
     scotoma_blend : float, optional
         Standard deviation, in scene pixels, of a Gaussian applied to the
         rasterized loss map before it is drawn. Rendering only: the scotoma's
@@ -182,11 +215,7 @@ class Scene(PrettyPrint):
         if scotoma is not None and not isinstance(scotoma, Scotoma):
             raise TypeError(f"'scotoma' must be a Scotoma object, not "
                             f"{type(scotoma)}.")
-        fill = float(as_value(scotoma_fill, dimensionless,
-                              'scotoma_fill'))
-        if not np.isfinite(fill) or fill < 0 or fill > 1:
-            raise ValueError(f"'scotoma_fill' is a display intensity and must "
-                             f"lie in [0, 1], not {scotoma_fill}.")
+        fill = _resolve_fill(scotoma_fill)
         blend = float(as_value(scotoma_blend, dimensionless,
                                'scotoma_blend'))
         if not np.isfinite(blend) or blend < 0:
@@ -220,7 +249,7 @@ class Scene(PrettyPrint):
 
     @property
     def scotoma_fill(self):
-        """The display intensity complete loss shows as"""
+        """The display intensity complete loss shows as, or ``'inpaint'``"""
         return self._scotoma_fill
 
     @property
@@ -387,6 +416,7 @@ class Scene(PrettyPrint):
         n_rows, n_cols = self._frame_shape
         if self.scotoma is None:
             return np.zeros((n_rows + 2 * pad, n_cols + 2 * pad))
+        # scene = visual field + gaze:
         gx, gy = gaze_xy
         x_scene, y_scene = self._pixel_centers(pad=pad)
         return self.scotoma(x_scene - gx, y_scene - gy)
@@ -403,6 +433,12 @@ class Scene(PrettyPrint):
                                   truncate=_TRUNCATE)
         return np.clip(blurred[pad:-pad, pad:-pad], 0, 1)
 
+    def _fill_rgb(self, frame_rgb, loss):
+        """What complete loss shows for one ``(rows, cols, 3)`` frame"""
+        if self._scotoma_fill != INPAINT:
+            return self._scotoma_fill
+        return _inpaint_rgb(frame_rgb, loss > 0)
+
     def _native_rgb(self, gaze=None):
         """What is left of native vision, as ``(rows, cols, 3, n_frames)``"""
         frames = self._rgb_frames()
@@ -413,12 +449,15 @@ class Scene(PrettyPrint):
         fill = self.scotoma_fill
         static = len(gaze) == 1
         if static:
-            loss = self._rendered_loss_at(gaze[0])[..., np.newaxis]
+            loss = self._rendered_loss_at(gaze[0])
         out = np.empty(frames.shape, dtype=np.float32)
         for f in range(n_frames):
             if not static:
-                loss = self._rendered_loss_at(gaze[f])[..., np.newaxis]
-            out[..., f] = (1 - loss) * frames[..., f] + loss * fill
+                loss = self._rendered_loss_at(gaze[f])
+            frame = frames[..., f]
+            fill = self._fill_rgb(frame, loss)
+            alpha = loss[..., np.newaxis]
+            out[..., f] = (1 - alpha) * frame + alpha * fill
         return out
 
     def _pixel_centers(self, pad=0):
@@ -449,7 +488,6 @@ class Scene(PrettyPrint):
         n_out = pframes.shape[-1]
         gaze = _gaze_points(gaze, n_out)
         n_rows, n_cols = self._frame_shape
-        fill = self.scotoma_fill
 
         x_scene, y_scene = self._pixel_centers()
         static = len(gaze) == 1
@@ -459,7 +497,7 @@ class Scene(PrettyPrint):
                                       (x_scene - gx).ravel()))
             brightness = _percept_sampler(prosthetic, pframes)(points)
             brightness = brightness.reshape((n_rows, n_cols, n_out))
-            loss = self._rendered_loss_at(gaze[0])[..., np.newaxis]
+            loss = self._rendered_loss_at(gaze[0])
 
         out = np.empty((n_rows, n_cols, 3, n_out), dtype=np.float32)
         for f in range(n_out):
@@ -471,11 +509,13 @@ class Scene(PrettyPrint):
                                           (x_scene - gx).ravel()))
                 sample = _percept_sampler(prosthetic, pframes[..., f:f + 1])
                 frame = sample(points).reshape((n_rows, n_cols))
-                loss = self._rendered_loss_at(gaze[f])[..., np.newaxis]
+                loss = self._rendered_loss_at(gaze[f])
             phosphene = np.clip((frame - vmin) / (vmax - vmin), 0, 1)
-            lost = np.maximum(fill, phosphene)[..., np.newaxis]
             native = scene_rgb[..., 0 if scene_rgb.shape[-1] == 1 else f]
-            out[..., f] = (1 - loss) * native + loss * lost
+            fill = self._fill_rgb(native, loss)
+            lost = np.maximum(fill, phosphene[..., np.newaxis])
+            alpha = loss[..., np.newaxis]
+            out[..., f] = (1 - alpha) * native + alpha * lost
         return Percept(out, space=self._grid(), time=out_time,
                        time_unit=out_unit)
 

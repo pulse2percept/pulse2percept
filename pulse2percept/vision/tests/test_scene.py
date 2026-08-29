@@ -10,6 +10,7 @@ import numpy.testing as npt
 import pytest
 import matplotlib.pyplot as plt
 
+from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import ImageStimulus, LogoBVL, VideoStimulus
 from pulse2percept.units import dva, ms, s
 from pulse2percept.vision import Scene, Scotoma
@@ -348,6 +349,53 @@ def test_scotoma_does_not_change_what_the_device_sees():
                      False)
 
 
+def test_inpainting_a_constant_surround_gives_back_the_constant():
+    """Nothing to extrapolate from a flat field but the flat field"""
+    flat = np.full((31, 31), 0.6)
+    scene = Scene(ImageStimulus(flat), fov=(31, 31),
+                  scotoma=Scotoma.circle(5), scotoma_fill='inpaint')
+    npt.assert_almost_equal(scene._native_rgb()[..., 0], 0.6, decimal=6)
+
+
+def test_the_inpainted_fill_knows_nothing_of_what_it_covers():
+    """Only the visible surround may reach the filled region"""
+    scotoma = Scotoma.circle(6)
+    lost = ramp_scene(scotoma=scotoma)._rendered_loss_at((0, 0)) > 0
+    base = np.tile(np.linspace(0, 1, SCENE_PX), (SCENE_PX, 1))
+    rng = np.random.default_rng(0)
+    sources = [np.where(lost, hidden, base)
+               for hidden in (np.zeros_like(base), rng.random(base.shape))]
+    views = [Scene(ImageStimulus(src), fov=(SCENE_PX, SCENE_PX),
+                   scotoma=scotoma, scotoma_fill='inpaint')._native_rgb()
+             for src in sources]
+    npt.assert_equal(np.allclose(*sources), False)
+    npt.assert_array_equal(*views)
+
+
+def test_inpainting_works_in_color_and_stays_a_display_intensity():
+    rgb = np.stack([np.tile(np.linspace(0, 1, 31), (31, 1)),
+                    np.tile(np.linspace(1, 0, 31), (31, 1)).T,
+                    np.full((31, 31), 0.5)], axis=-1)
+    scene = Scene(ImageStimulus(rgb), fov=(31, 31),
+                  scotoma=Scotoma.circle(4), scotoma_fill='inpaint',
+                  scotoma_blend=1.5)
+    native = scene._native_rgb()
+    npt.assert_equal(native.shape, (31, 31, 3, 1))
+    npt.assert_equal(np.all(np.isfinite(native)), True)
+    npt.assert_equal(native.min() >= 0 and native.max() <= 1, True)
+    npt.assert_almost_equal(native[..., 2, 0], 0.5, decimal=6)
+
+
+def test_inpainting_does_not_change_what_the_device_sees():
+    x = np.array([-15.0, -2.0, 0.0, 3.0, 18.0])
+    y = np.array([0.0, 6.0, 0.0, 2.0, 5.0])
+    plain = ramp_scene()
+    blind = ramp_scene(scotoma=Scotoma.circle(10), scotoma_fill='inpaint')
+    npt.assert_array_equal(blind._sample_at(x, y), plain._sample_at(x, y))
+    npt.assert_array_equal(blind._device_input(x, y),
+                           plain._device_input(x, y))
+
+
 def test_scotoma_and_fill_are_validated():
     source = ImageStimulus(np.zeros((8, 8)))
     with pytest.raises(TypeError):
@@ -358,6 +406,13 @@ def test_scotoma_and_fill_are_validated():
     for blend in (-1, -0.1, np.nan, np.inf):
         with pytest.raises(ValueError):
             Scene(source, fov=8, scotoma_blend=blend)
+    for fill in ('blur', 'INPAINT', 'inpainting'):
+        with pytest.raises(ValueError):
+            Scene(source, fov=8, scotoma_fill=fill)
+    blind = Scene(source, fov=8, scotoma=Scotoma.circle(100),
+                  scotoma_fill='inpaint')
+    with pytest.raises(ValueError):
+        blind._native_rgb()
 
 
 def test_no_blend_leaves_the_boundary_as_sharp_as_the_scotoma_is():
@@ -387,6 +442,17 @@ def test_blending_reads_the_loss_field_past_the_frame_edge():
                        scotoma_blend=2)
     npt.assert_array_equal(scene._loss_at((0, 0)), 0)
     npt.assert_equal(scene._rendered_loss_at((0, 0))[HALF, 0] > 0.05, True)
+
+
+def test_a_softened_boundary_shows_in_the_composed_percept():
+    """The blur reaches the prosthetic path, not just native vision"""
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0,
+                       scotoma_blend=2)
+    bright = Percept(np.ones((SCENE_PX, SCENE_PX, 1)), space=scene._grid())
+    seen = scene._compose(bright, vmax=1).data[..., 0]
+    npt.assert_equal(seen[HALF, HALF, 0] > 0.98, True)
+    npt.assert_almost_equal(seen[HALF, HALF + 15, 0], ramp_at(15), decimal=6)
+    npt.assert_equal(ramp_at(6) < seen[HALF, HALF + 6, 0] < 1.0, True)
 
 
 def test_blending_is_rendering_only():
