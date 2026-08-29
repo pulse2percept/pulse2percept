@@ -19,7 +19,7 @@ from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 from pulse2percept.units import (DimensionMismatchError, Hz, Quantity, W,
                                  dimensionless, kHz, m, mA, mW, mm, ms, uA,
-                                 us)
+                                 us, xTh)
 from pulse2percept.units import s as sec
 
 
@@ -1684,3 +1684,133 @@ def test_PRIMAEncoder_scales_the_power():
     npt.assert_almost_equal(scaled.irradiance, 1.75)
     npt.assert_array_almost_equal(scaled.pulse_dur, stim.pulse_dur)
     npt.assert_almost_equal(scaled.data.max(), 1.75)
+
+
+def test_AmplitudeEncoder_amp_range_unit():
+    # Bare numbers and current quantities both mean uA:
+    for amp_range in ((0, 50), (0, 50 * uA), (0 * uA, 0.05 * mA)):
+        encoder = AmplitudeEncoder(amp_range=amp_range)
+        npt.assert_equal(encoder.amp_unit, uA)
+        npt.assert_almost_equal(np.asarray(encoder.amp_range), [0, 50])
+    # Threshold multiples are kept as such:
+    encoder = AmplitudeEncoder(amp_range=(0 * xTh, 3 * xTh))
+    npt.assert_equal(encoder.amp_unit, xTh)
+    npt.assert_almost_equal(np.asarray(encoder.amp_range), [0, 3])
+    npt.assert_equal(isinstance(encoder.amp_range[1], Quantity), False)
+    # A whole-array spelling works too:
+    npt.assert_equal(
+        AmplitudeEncoder(amp_range=np.array([0, 3]) * xTh).amp_unit, xTh)
+
+
+@pytest.mark.parametrize('amp_range', [(0, 3 * xTh), (0 * xTh, 3),
+                                       (0 * uA, 3 * xTh), (0 * xTh, 50 * uA)])
+def test_AmplitudeEncoder_amp_range_rejects_mixed_units(amp_range):
+    # A bare number means uA, so half-spelled ranges are ambiguous:
+    with pytest.raises(DimensionMismatchError):
+        AmplitudeEncoder(amp_range=amp_range)
+
+
+@pytest.mark.parametrize('amp_range', [(0 * ms, 3 * ms), (0 * mW, 3 * mW)])
+def test_AmplitudeEncoder_amp_range_rejects_wrong_dimension(amp_range):
+    with pytest.raises(DimensionMismatchError):
+        AmplitudeEncoder(amp_range=amp_range)
+
+
+@pytest.mark.parametrize('bad', [(-1 * xTh, 3 * xTh),
+                                 (0 * xTh, np.inf * xTh),
+                                 (0 * xTh, np.nan * xTh)])
+def test_AmplitudeEncoder_amp_range_xTh_is_validated(bad):
+    with pytest.raises(ValueError):
+        AmplitudeEncoder(amp_range=bad)
+
+
+def test_AmplitudeEncoder_encodes_threshold_multiples():
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    stim = AmplitudeEncoder(amp_range=(0 * xTh, 3 * xTh)).encode(img)
+    npt.assert_equal(stim.unit, xTh)
+    npt.assert_equal(stim.time_unit, ms)
+    # Gray 0 -> 0 xTh and gray 1 -> 3 xTh, as for a current range:
+    npt.assert_almost_equal(np.abs(stim.data).max(axis=1).min(), 0, decimal=4)
+    npt.assert_almost_equal(np.abs(stim.data).max(axis=1).max(), 3, decimal=4)
+    # Rendering does not quietly turn the samples into current:
+    npt.assert_equal(stim.unit, xTh)
+    # An otherwise identical current encoding differs only by the unit:
+    current = AmplitudeEncoder(amp_range=(0, 3)).encode(img)
+    npt.assert_equal(current.unit, uA)
+    npt.assert_array_equal(current.data, stim.data)
+
+
+def test_AmplitudeEncoder_xTh_survives_the_schedule_operations():
+    stim = AmplitudeEncoder(amp_range=(0 * xTh, 3 * xTh)).encode(
+        ImageStimulus(np.ones((4, 4))), implant=None)
+    npt.assert_equal(stim._spatial_view().unit, xTh)
+    npt.assert_almost_equal(stim._spatial_view().data.max(), 3)
+    npt.assert_equal(stim._scaled(2).unit, xTh)
+    npt.assert_almost_equal(stim._scaled(2)._spatial_view().data.max(), 6)
+    npt.assert_equal(stim._without_electrodes([stim.electrodes[0]]).unit, xTh)
+    # None of that rendered a waveform:
+    npt.assert_equal(_rendered(stim), False)
+
+
+def test_AmplitudeEncoder_xTh_is_calibrated_by_the_implant():
+    img = ImageStimulus(np.ones((16, 16)))
+    encoder = lambda: AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh))
+    # Without thresholds the schedule stays threshold-relative:
+    plain = ArgusII(encoder=encoder()).prepare_stim(img)
+    npt.assert_equal(plain.unit, xTh)
+    npt.assert_almost_equal(plain._spatial_view().data.max(), 2)
+    # With them it is current, and calibration renders nothing:
+    calibrated = ArgusII(thresholds=80, encoder=encoder()).prepare_stim(img)
+    npt.assert_equal(calibrated.unit, uA)
+    npt.assert_equal(_rendered(calibrated), False)
+    npt.assert_almost_equal(calibrated._spatial_view().data.max(), 160)
+    # Per-electrode thresholds drive the same gray level differently:
+    implant = ArgusII(thresholds={'A1': 40, 'A2': 80}, encoder=encoder())
+    implant.thresholds = {**implant.thresholds,
+                          **{name: 60 for name in implant.electrode_names
+                             if name not in ('A1', 'A2')}}
+    view = implant.prepare_stim(img)._spatial_view()
+    amps = dict(zip(view.electrodes, np.abs(view.data).max(axis=1)))
+    npt.assert_almost_equal(amps['A1'], 80)
+    npt.assert_almost_equal(amps['A2'], 160)
+
+
+def test_AmplitudeEncoder_xTh_partial_calibration_raises():
+    # An all-white image drives every electrode, so every one needs a
+    # threshold; calibrating some would mix xTh with uA:
+    implant = ArgusII(thresholds={'A1': 80},
+                      encoder=AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh)))
+    with pytest.raises(DimensionMismatchError) as err:
+        implant.prepare_stim(ImageStimulus(np.ones((16, 16))))
+    npt.assert_equal('threshold multiples' in str(err.value), True)
+
+
+def test_AmplitudeEncoder_xTh_zero_amplitude_needs_no_threshold():
+    # A black image drives nothing, so no threshold is missing. It also has
+    # nothing to calibrate, so it stays in xTh:
+    implant = ArgusII(thresholds={'A1': 80},
+                      encoder=AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh)))
+    stim = implant.prepare_stim(ImageStimulus(np.zeros((16, 16))))
+    npt.assert_equal(stim.unit, xTh)
+    npt.assert_almost_equal(np.abs(stim.data).max(), 0)
+    # Only 'A1' is lit, and only 'A1' has a threshold:
+    img = np.zeros((6, 10))
+    img[0, 0] = 1
+    stim = implant.prepare_stim(ImageStimulus(img))
+    npt.assert_equal(stim.unit, uA)
+    npt.assert_almost_equal(np.abs(stim.data).max(), 160)
+
+
+def test_AmplitudeEncoder_xTh_fails_the_electrical_safety_checks():
+    # Charge balance and current limits are electrical properties, so they
+    # still require actual current:
+    encoder = AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh))
+    img = ImageStimulus(np.ones((16, 16)))
+    limited = ArgusII(encoder=encoder)
+    limited.max_current = 1000
+    for implant in (ArgusII(encoder=encoder, safe_mode=True), limited):
+        with pytest.raises(DimensionMismatchError):
+            implant.prepare_stim(img)
+    # Calibrating first satisfies them:
+    implant = ArgusII(encoder=encoder, thresholds=80, safe_mode=True)
+    npt.assert_equal(implant.prepare_stim(img).unit, uA)

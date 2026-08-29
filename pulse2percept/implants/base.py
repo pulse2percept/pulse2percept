@@ -13,6 +13,7 @@ from .rasters import Raster
 from ..stimuli import (BiphasicPulseTrain, Encoder, Stimulus, ImageStimulus,
                        VideoStimulus)
 from ..stimuli.base import _describe_unit
+from ..stimuli.encoders import _EncodedStimulus
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
 from ..utils import PrettyPrint, deprecated
@@ -241,11 +242,15 @@ class ProsthesisSystem(PrettyPrint):
         return normalized
 
     def _calibrated(self, stim):
-        """Apply implant thresholds to retained ``BiphasicPulseTrain`` sources.
+        """Apply implant thresholds to retained threshold-relative sources.
 
         Return ``stim`` unchanged if no source needs recalibration.
         """
         thresholds = getattr(self, '_thresholds', None) or {}
+        if isinstance(stim, _EncodedStimulus):
+            # An encoded schedule covers every electrode at once, so it
+            # calibrates itself rather than being taken apart source by source.
+            return stim._with_thresholds(thresholds)
         sources = stim._structured_sources()
         if sources is None:
             return stim

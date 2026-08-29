@@ -65,6 +65,11 @@ API changes:
   :py:class:`~pulse2percept.implants.ArgusII` take ``thresholds`` at
   construction, e.g. ``ArgusII(thresholds=80 * uA)``.
 
+* :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` accepts an ``amp_range``
+  in threshold multiples, e.g. ``amp_range=(0 * xTh, 3 * xTh)``. The encoded
+  stimulus stays in ``xTh`` until the implant calibrates it against its
+  ``thresholds``. Bare numbers still mean uA.
+
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
 
