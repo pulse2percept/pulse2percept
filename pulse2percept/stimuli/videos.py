@@ -772,7 +772,7 @@ class VideoStimulus(Stimulus):
     def __iter__(self):
         """Iterate over the video, one frame at a time
 
-        .. versionchanged:: 0.10.0
+        .. versionchanged:: 0.11.0
 
             Each frame is handed out as a standalone
             :py:class:`~pulse2percept.stimuli.ImageStimulus` that carries the
