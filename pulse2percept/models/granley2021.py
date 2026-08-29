@@ -254,29 +254,7 @@ def _amp_factor(electrode, amp, unit, thresholds):
 
 
 def _pulse_train_params(stim, thresholds=None):
-    """Return Granley stimulus parameters for each active electrode.
-
-    Parameters are read from retained
-    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or from an
-    encoded schedule, without rendering their waveforms. Amplitude is returned
-    in multiples of threshold; zero-amplitude electrodes are omitted.
-
-    ``thresholds`` calibrates current-valued amplitudes that carry no
-    threshold of their own, and is what
-    :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` supplies.
-
-    Raises
-    ------
-    TypeError
-        If an active electrode is not an undelayed ``BiphasicPulseTrain`` or
-        an encoded schedule of standard biphasic pulses.
-    ValueError
-        If a current-valued amplitude has no threshold calibration.
-    NotImplementedError
-        If an encoded schedule has more than one frame."""
-    # An encoded schedule describes every electrode at once, in the terms the
-    # device resolved: the realized frequency, but not the pulse onsets, which
-    # this model has no representation for.
+    """Return Granley pulse parameters for each active electrode."""
     described = getattr(stim, '_biphasic_params', None)
     if described is not None:
         encoded = described()
@@ -334,16 +312,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     (:py:data:`~pulse2percept.units.xTh`) or as current when a threshold
     calibration is available.
 
-    An encoded schedule supplies amplitude, phase duration, and the frequency
-    the device timing realizes; the pulse onsets a
-    :py:class:`~pulse2percept.implants.Raster` assigns are ignored, this model
-    having no representation for them. So a raster leaves the usual
-    fixed-frequency amplitude encoding unchanged, while a device constraint
-    that lengthens a pulse period -- a stimulator ``clock``, or a raster
-    quantizing the mixed periods of a
-    :py:class:`~pulse2percept.stimuli.FrequencyEncoder` -- is respected. A
-    video is refused: its amplitude changes from frame to frame, and there is
-    no single representative one.
+    Encoded still images use the device-resolved amplitude, phase duration, and
+    frequency; exact pulse-onset timing is ignored. Videos are not supported.
 
     Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
     Their arguments are frequency, amplitude in multiples of threshold, and phase
@@ -709,16 +679,8 @@ class BiphasicAxonMapModel(Model):
     phase duration [Granley2021]_; the model applies its own phase-duration
     correction.
 
-    An encoded schedule supplies amplitude, phase duration, and the frequency
-    the device timing realizes; the pulse onsets a
-    :py:class:`~pulse2percept.implants.Raster` assigns are ignored, this model
-    having no representation for them. So a raster leaves the usual
-    fixed-frequency amplitude encoding unchanged, while a device constraint
-    that lengthens a pulse period -- a stimulator ``clock``, or a raster
-    quantizing the mixed periods of a
-    :py:class:`~pulse2percept.stimuli.FrequencyEncoder` -- is respected. A
-    video is refused: its amplitude changes from frame to frame, and there is
-    no single representative one.
+    Encoded still images use the device-resolved amplitude, phase duration, and
+    frequency; exact pulse-onset timing is ignored. Videos are not supported.
 
     Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
     Their arguments are frequency, amplitude in multiples of threshold, and phase

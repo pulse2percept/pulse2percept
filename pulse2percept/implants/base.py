@@ -129,8 +129,7 @@ class ProsthesisSystem(PrettyPrint):
         self.encoder = encoder
         self.raster = raster
         self.max_current = max_current
-        # Normalizing per-electrode thresholds needs the electrode names, so
-        # the array must already be in place:
+        # Threshold normalization needs electrode names:
         self.thresholds = thresholds
 
     def _pprint_params(self):
@@ -248,8 +247,6 @@ class ProsthesisSystem(PrettyPrint):
         """
         thresholds = getattr(self, '_thresholds', None) or {}
         if isinstance(stim, _EncodedStimulus):
-            # An encoded schedule covers every electrode at once, so it
-            # calibrates itself rather than being taken apart source by source.
             return stim._with_thresholds(thresholds)
         sources = stim._structured_sources()
         if sources is None:

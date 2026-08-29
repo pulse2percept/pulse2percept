@@ -316,8 +316,7 @@ class ArgusII(ProsthesisSystem):
             # Assign the new ordered dict to earray:
             self.earray._electrodes = electrodes
 
-        # Set last: per-electrode thresholds are keyed by the final electrode
-        # names, which the left-eye branch above rewrites.
+        # Set after left-eye electrode renaming:
         self.thresholds = thresholds
 
     def _pprint_params(self):

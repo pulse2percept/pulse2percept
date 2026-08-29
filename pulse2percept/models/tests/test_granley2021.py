@@ -177,9 +177,6 @@ def test_effects_models():
 
 
 def test_effects_models_units():
-    # `rho` and `lam` are constructor arguments rather than entries in
-    # `get_default_params`, but they are still lengths, and are still
-    # normalized before being stored:
     size = DefaultSizeModel(0.2 * mm, min_rho=20 * um)
     npt.assert_almost_equal(size.rho, 200)
     npt.assert_almost_equal(size.min_rho, 20)
@@ -242,8 +239,6 @@ def test_biphasicAxonMapSpatial():
     model.streak_model = streak_model
     model.build()
     axon_map = AxonMapSpatial(implant=ArgusII(), step=2).build()
-    # The axon map reads current and this model reads threshold multiples, so
-    # a 1 uA threshold is what makes the two numbers the same one:
     source = Stimulus({'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                       threshold_amp=1 * uA)})
     percept = model.predict_percept(source)
@@ -345,13 +340,11 @@ def test_biphasicAxonMapModel():
     class TestInitClassGood():
         def __init__(self):
             self.model = BiphasicAxonMapModel(implant=ArgusII())
-            # This shouldnt raise an error
             self.model.a0
 
     class TestInitClassBad():
         def __init__(self):
             self.model = BiphasicAxonMapModel(implant=ArgusII())
-            # This should
             self.model.a10 = 999
     # If this fails, something is wrong with getattr / setattr logic
     TestInitClassGood()
@@ -396,12 +389,8 @@ def test_DefaultStreakModel_removed_axlambda():
 
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
-# Scaling the train itself, and scaling the stimulus the implant made of it;
-# the second is what a user reaches for:
 @pytest.mark.parametrize('compose', [False, True])
 def test_scaled_pulse_train_changes_percept(model_cls, compose):
-    # Scaling has to give what building the train at that amplitude in the
-    # first place gives:
     model = model_cls(implant=ArgusII(), xrange=(-12, 12), yrange=(-8, 8),
                       step=1, n_ax_segments=30).build()
     source = model.implant.prepare_stim(
@@ -425,9 +414,6 @@ def test_scaled_pulse_train_changes_percept(model_cls, compose):
 @pytest.mark.parametrize('modify', [lambda s: s + 5, lambda s: s * np.inf,
                                     lambda s: s.append(s >> 1)])
 def test_modified_pulse_train_rejected(model_cls, modify):
-    # A DC offset, a non-finite factor and an appended second train all leave
-    # something other than a biphasic pulse train. The model must say so rather
-    # than predict from pulse parameters that no longer describe the stimulus:
     model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2),
                       step=1, n_ax_segments=30).build()
     source = model.implant.prepare_stim(
@@ -439,8 +425,6 @@ def test_modified_pulse_train_rejected(model_cls, modify):
 
 
 def test_pulse_train_amp_sign_does_not_change_percept():
-    # `BiphasicPulse` takes the magnitude of `amp`, so these two trains have
-    # the very same waveform, and must therefore predict the same percept:
     model = BiphasicAxonMapModel(implant=ArgusII(), xrange=(-12, 12),
                                  yrange=(-8, 8), step=1,
                                  n_ax_segments=30).build()
@@ -454,12 +438,6 @@ def test_pulse_train_amp_sign_does_not_change_percept():
 
 
 def test_BiphasicAxonMapModel_min_current_spread():
-    """The current-spread cutoff must reach this model's kernel too.
-
-    ``min_current_spread`` lives on ``SpatialModel``, so
-    ``BiphasicAxonMapSpatial`` inherits it; this pins that the biphasic
-    kernel actually honours it rather than accepting it and ignoring it.
-    """
     stim = {e: BiphasicPulseTrain(20, 30 * xTh, 0.45)
             for e in ('A2', 'C5', 'F8')}
     source = stim
@@ -470,14 +448,10 @@ def test_BiphasicAxonMapModel_min_current_spread():
         min_current_spread=0, **kwargs).build().predict_percept(source).data
     default = BiphasicAxonMapModel(implant=ArgusII(), 
         **kwargs).build().predict_percept(source).data
-    # For three electrodes the default cutoff is not worth thinking about;
-    # see `test_BiphasicAxonMapModel_min_current_spread_error_bound` for the
-    # case where it is:
     npt.assert_allclose(default, exact, rtol=1e-5,
                         atol=1e-6 * np.abs(exact).max())
 
-    # A coarse cutoff does change the result, which is how we know it is
-    # wired through rather than silently dropped:
+    # A coarse cutoff does change the result:
     coarse = BiphasicAxonMapModel(implant=ArgusII(), 
         min_current_spread=0.5, **kwargs).build().predict_percept(source).data
     assert np.abs(coarse - exact).max() > 1e-3
@@ -485,14 +459,6 @@ def test_BiphasicAxonMapModel_min_current_spread():
 
 @pytest.mark.parametrize('amp', (2.0, 50.0))
 def test_BiphasicAxonMapModel_min_current_spread_error_bound(amp):
-    """The cutoff is an approximation here too, with a bound to match.
-
-    The biphasic kernel tests ``r2`` against the cutoff before scaling the
-    exponential by ``F_bright``, so what it drops at a segment is
-    ``sum_i F_bright_i * exp(...)``. The error is therefore bounded by
-    ``min_current_spread * sum(F_bright)``, which grows with the array size
-    and with however hard the brightness model scales -- not by 1e-8 outright.
-    """
     min_spread = 1e-8
     freq, pdur = 20, 0.45
     source = {e: BiphasicPulseTrain(freq, amp * xTh, pdur)
@@ -515,12 +481,6 @@ def test_BiphasicAxonMapModel_min_current_spread_error_bound(amp):
 
 @pytest.mark.parametrize('attr', ('size_model', 'streak_model'))
 def test_BiphasicAxonMapModel_rejects_nonpositive_effects(attr):
-    """A scaling factor of zero would surface as NaN, so it is rejected.
-
-    Both factors enter the kernel through an exponent, so neither may be
-    zero or negative. The default models cannot produce that, but a custom
-    one could.
-    """
     model = BiphasicAxonMapModel(implant=ArgusII(), xrange=(-4, 4), yrange=(-4, 4), step=1,
                                  verbose=False).build()
     setattr(model.spatial, attr, lambda freq, amp, pdur: np.zeros_like(amp))
@@ -537,17 +497,7 @@ def test_BiphasicAxonMapModel_rejects_nonpositive_effects(attr):
                                   'streak_model'))
 @pytest.mark.parametrize('bad', (np.nan, np.inf, -np.inf))
 def test_BiphasicAxonMapModel_rejects_nonfinite_effects(attr, bad):
-    """A non-finite scaling factor is rejected before it reaches the kernel.
-
-    ``nan <= 0`` is false, so the positivity check above does not catch NaN.
-    Left alone it would flow into the kernel's exponent, and then
-    ``abs(nan) > abs(px_bright)`` is false too -- so the affected segments
-    would drop out of the max and the percept would come back quietly wrong
-    instead of raising. Infinities are no better: they turn the sum into
-    ``inf`` or ``nan`` depending on the signs involved. This covers
-    ``bright_model`` as well, which the positivity check deliberately does
-    not (a zero or negative brightness factor is legitimate).
-    """
+    # A non-finite scaling factor is rejected before it reaches the kernel
     model = BiphasicAxonMapModel(implant=ArgusII(), xrange=(-4, 4), yrange=(-4, 4), step=1,
                                  verbose=False).build()
     setattr(model.spatial, attr,
@@ -559,16 +509,7 @@ def test_BiphasicAxonMapModel_rejects_nonfinite_effects(attr, bad):
 
 
 def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
-    """With every effect factor at 1, this model *is* the axon map model.
-
-    The biphasic kernel computes
-    ``F_bright * exp(-r^2 / (2 rho^2 F_size)) * sens ** (1 / F_streak)``
-    as a single exponential of summed exponents. Setting all three factors to
-    1 collapses that to ``exp(-r^2 / (2 rho^2)) * sens``, which is exactly
-    what ``AxonMapModel`` computes for a unit-amplitude stimulus -- an
-    independently written kernel, so this pins the fused arithmetic against
-    something that does not share its code.
-    """
+    # With every effect factor at 1, this model *is* the axon map model
     from pulse2percept.models import AxonMapModel
 
     kwargs = {'xrange': (-8, 8), 'yrange': (-8, 8), 'step': 0.5,
@@ -595,7 +536,7 @@ def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
 
 
 def test_BiphasicAxonMap_t_percept_units():
-    """This model overrides `predict_percept`, so it normalizes for itself"""
+    # This model overrides `predict_percept`, so it normalizes for itself
     source = {'A1': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=100)}
     for model in (BiphasicAxonMapSpatial(implant=ArgusII(), step=2).build(),
@@ -613,17 +554,8 @@ def test_BiphasicAxonMap_t_percept_units():
 
 
 def test_BiphasicAxonMap_dimension_before_waveform():
-    """A picture is not an unsuitable pulse train, it is not a current at all
-
-    The dimensional contract is the outermost one, so a dimensionless stimulus
-    reports that rather than the model's own "must be BiphasicPulseTrains"
-    complaint, which is about a stimulus it never had.
-    """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
 
-    # An ordinary implant refuses the picture outright (see
-    # `ProsthesisSystem.stimulus_unit`); one that delivers something else is
-    # what carries it as far as the model:
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 
@@ -632,7 +564,6 @@ def test_BiphasicAxonMap_dimension_before_waveform():
                   BiphasicAxonMapModel(implant=projector, step=2).build()):
         with pytest.raises(DimensionMismatchError) as excinfo:
             model.predict_percept(img)
-        # Both dimensions this model reads are named, not just the one:
         for accepted in ('electric current', 'threshold ratio'):
             npt.assert_equal(accepted in str(excinfo.value), True)
         npt.assert_equal('dimensionless' in str(excinfo.value), True)
@@ -647,10 +578,6 @@ def test_BiphasicAxonMap_dimension_before_waveform():
 @pytest.mark.parametrize('ModelClass', [BiphasicAxonMapSpatial,
                                         BiphasicAxonMapModel])
 def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
-    # This model replaces `predict_percept` instead of customizing
-    # `_predict_spatial`, so it has to call the postprocessing hook itself --
-    # otherwise `meridian_blend`, inherited from `AxonMapSpatial`, would be
-    # accepted and then quietly ignored.
     def make(**params):
         return ModelClass(implant=ArgusII(), xrange=(-6, 6), yrange=(-6, 6), step=0.25, rho=200,
                           lam=400, n_axons=250, n_ax_segments=200,
@@ -661,8 +588,7 @@ def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
     plain = make(meridian_blend=0)
     unblended = plain.predict_percept(source).data
 
-    # Exercises the width inherited from `AxonMapSpatial` rather than one of
-    # its own -- the point of the test is that the hook runs at all here:
+    # Exercises the width inherited from `AxonMapSpatial`
     width = 1
     blended_model = make()
     npt.assert_equal(blended_model.meridian_blend, width)
@@ -670,7 +596,6 @@ def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
     npt.assert_equal(blended.shape, unblended.shape)
     npt.assert_equal(blended.dtype, unblended.dtype)
     npt.assert_equal(np.array_equal(blended, unblended), False)
-    # It is the horizontal meridian here, so the change is a band around y=0:
     y = plain.grid.y[:, 0]
     delta = np.abs(blended - unblended)
     rows = delta.max(axis=(1, 2)) > delta.max() * 1e-3
@@ -679,11 +604,7 @@ def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
 
 @contextmanager
 def _no_pulse_train_rendering():
-    """Make generating a pulse train's waveform an error
-
-    The only way to state "this model never asks for samples" as a test: if
-    anything on the prediction path reaches for one, it fails loudly.
-    """
+    # Make generating a pulse train's waveform an error
     original = BiphasicPulseTrain._render
 
     def refuse(self):
@@ -706,9 +627,6 @@ def _no_pulse_train_rendering():
                                                stim_dur=100)}) * 2,
 ])
 def test_BiphasicAxonMap_predicts_without_a_waveform(model_cls, build_stim):
-    # This model is a function of frequency, amplitude and phase duration, and
-    # it now takes them from the pulse trains themselves. None of them needs
-    # the train sampled, so predicting must not sample one.
     model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
     source = build_stim()
@@ -745,10 +663,7 @@ def test_BiphasicAxonMap_ignores_user_metadata(model_cls):
     lambda: {'C5': Stimulus([[0, 1, 1, 0]], time=[0, 1, 99, 100])},
 ])
 def test_BiphasicAxonMap_rejects_what_it_cannot_read(model_cls, build_stim):
-    # A sequence of two trains has no single frequency, an asymmetric train is
-    # not this model's protocol, a delayed one is outside what it was fit on,
-    # and a raw waveform has no parameters at all. Each is refused rather than
-    # predicted from whatever numbers happen to be lying around:
+    # A sequence of two trains has no single frequency
     model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
     source = build_stim()
@@ -759,8 +674,6 @@ def test_BiphasicAxonMap_rejects_what_it_cannot_read(model_cls, build_stim):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_zero_amplitude_is_inactive(model_cls):
-    # A train at zero amplitude drives nothing, which is a zero percept rather
-    # than an error -- and is read off `amp`, not off the waveform:
     model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
     source = {'C5': BiphasicPulseTrain(20, 0 * xTh, 0.45,
@@ -789,15 +702,10 @@ def _granley(implant, model_cls=BiphasicAxonMapModel):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_reads_an_encoded_image(model_cls):
-    # The workflow this model exists for: a picture, a device that encodes it,
-    # and a participant's measured threshold.
     model = _granley(ArgusII(thresholds=80 * uA), model_cls)
     with _no_pulse_train_rendering():
         percept = model.predict_percept(LogoBVL())
     npt.assert_equal(np.any(percept.data), True)
-    # A threshold-relative encoder needs no measured threshold, because it
-    # asks for xTh in the first place. 0-50 uA against an 80 uA threshold is
-    # the same request as 0-0.625 xTh:
     relative = _granley(
         ArgusII(encoder=AmplitudeEncoder(amp_range=(0 * xTh, 0.625 * xTh),
                                          freq=6 * Hz)), model_cls)
@@ -809,8 +717,6 @@ def test_BiphasicAxonMap_reads_an_encoded_image(model_cls):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_ignores_the_raster(model_cls):
-    # A raster decides when each electrode pulses, not what it delivers. The
-    # rendered waveforms differ; the representative percept does not.
     with _no_pulse_train_rendering():
         rastered = _granley(ArgusII(thresholds=80),
                             model_cls).predict_percept(LogoBVL())
@@ -823,8 +729,6 @@ def test_BiphasicAxonMap_ignores_the_raster(model_cls):
                                           ('freq', 20 * Hz),
                                           ('phase_dur', 0.2 * ms)])
 def test_BiphasicAxonMap_reads_the_encoder_parameters(param, value):
-    # Whatever is on `implant.encoder` is the requested encoding, so changing
-    # any of the three quantities this model is a function of changes it:
     default = _granley(ArgusII(thresholds=80))
     tweaked = _granley(ArgusII(thresholds=80,
                                encoder=AmplitudeEncoder(**{param: value})))
@@ -835,8 +739,6 @@ def test_BiphasicAxonMap_reads_the_encoder_parameters(param, value):
 
 
 def test_BiphasicAxonMap_encoded_current_still_needs_a_threshold():
-    # Argus II encodes 0-50 uA by default, and there is no threshold to read
-    # that as a multiple of. No threshold is invented:
     model = _granley(ArgusII())
     with pytest.raises(ValueError) as err:
         model.predict_percept(LogoBVL())
@@ -844,8 +746,6 @@ def test_BiphasicAxonMap_encoded_current_still_needs_a_threshold():
 
 
 def test_BiphasicAxonMap_rejects_an_encoded_video():
-    # A video asks each electrode for a different amplitude on every frame,
-    # and there is no principled single one to hand the model:
     model = _granley(ArgusII(thresholds=80))
     video = VideoStimulus(np.random.rand(4, 4, 3), time=[0, 200, 400])
     with pytest.raises(NotImplementedError) as err:
@@ -854,8 +754,6 @@ def test_BiphasicAxonMap_rejects_an_encoded_video():
 
 
 def test_BiphasicAxonMap_rejects_a_custom_encoder_pulse():
-    # A caller-supplied pulse shape carries no biphasic phase duration, and
-    # this model does not reverse-engineer one from the waveform:
     encoder = AmplitudeEncoder(pulse=BiphasicPulse(1, 0.2), amp_range=(0, 50))
     model = _granley(ArgusII(thresholds=80, encoder=encoder))
     with pytest.raises(TypeError) as err:
@@ -871,19 +769,16 @@ def test_BiphasicAxonMap_encoded_extraction_is_lazy():
     npt.assert_equal(stim._Stimulus__stim['data'] is None, True)
 
 
-# The temporal models a Granley composite is expected to work with. Their
-# responses to one canonical drive peak at quite different moments, which is
-# what most of these tests are about.
+# The temporal models a Granley composite is expected to work with:
 _TEMPORALS = [FadingTemporal, Nanduri2012Temporal, Horsager2009Temporal]
 
-# Stimulation lasts this long, and the whole episode -- including the tail in
-# which a lagging cascade can still be rising -- fits in this window (ms):
+# Stimulation lasts this long:
 _STIM_DUR = 50
 _EPISODE = 200
 
 
 def _composite(temporal):
-    """A Granley spatial model paired with ``temporal``, and Granley alone"""
+    # A Granley spatial model paired with ``temporal``, and Granley alone
     grid = dict(xrange=(-3, 3), yrange=(-2, 2), step=1, n_ax_segments=30)
     composite = Model(spatial=BiphasicAxonMapSpatial(implant=ArgusII(), **grid),
                       temporal=temporal)
@@ -895,10 +790,7 @@ def _composite_source(stim_dur=_STIM_DUR):
 
 
 def _every_dt(temporal, until=_EPISODE):
-    """Every instant ``temporal`` integrates, up to ``until`` (ms)
-
-    Anything coarser reports the peak of the samples rather than the peak.
-    """
+    # Every instant ``temporal`` integrates, up to ``until`` (ms)
     return np.arange(int(round(until / temporal.dt)) + 1) * temporal.dt
 
 
@@ -907,14 +799,12 @@ def test_BiphasicAxonMapSpatial_with_temporal_model_runs(temporal_cls):
     # Issue #565: the spatial model collapses time, so the percept it hands
     # over has no time axis for a temporal model to integrate.
     composite, _ = _composite(temporal_cls())
-    # The drive is built from the retained pulse-train parameters, so pairing
-    # the two still asks for no waveform:
     with _no_pulse_train_rendering():
         percept = composite.predict_percept(_composite_source())
     npt.assert_equal(percept.data.ndim, 3)
     npt.assert_equal(percept.data.shape[-1] > 1, True)
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
-    # Temporal composition must not change what ``metadata['stim']`` holds:
+    # Composition preserves the metadata contract:
     npt.assert_equal(isinstance(percept.metadata['stim'], Stimulus), True)
 
 
@@ -951,11 +841,8 @@ def test_BiphasicAxonMapSpatial_composite_peak_ignores_requested_sampling(
     composite, granley = _composite(temporal_cls())
     source = _composite_source()
     granley_max = granley.predict_percept(source).data.max()
-    # Asked only for instants that fall well before the peak, the percept must
-    # stay below the Granley maximum rather than renormalizing onto it:
     early = composite.predict_percept(source, t_percept=[10, 20])
     npt.assert_equal(early.data.max() < 0.9 * granley_max, True)
-    # And those samples are the ones a longer run reports at the same times:
     longer = composite.predict_percept(source, t_percept=[10, 20, 40, 80])
     npt.assert_array_almost_equal(early.data, longer.data[..., :2])
 
@@ -995,9 +882,6 @@ def test_BiphasicAxonMapSpatial_composite_temporal_params_only_move_time(
 @pytest.mark.parametrize('temporal_cls', _TEMPORALS)
 def test_BiphasicAxonMapSpatial_composite_ignores_temporal_thresh_percept(
         temporal_cls):
-    # The envelope is normalized, so a floor in the temporal model's own
-    # brightness units would apply to the wrong quantity. Brightness is
-    # Granley's to set, and the caller's own model is left alone:
     temporal = temporal_cls(thresh_percept=0.1)
     composite, _ = _composite(temporal)
     plain, _ = _composite(temporal_cls())
@@ -1009,8 +893,6 @@ def test_BiphasicAxonMapSpatial_composite_ignores_temporal_thresh_percept(
 
 
 def test_BiphasicAxonMapSpatial_composite_ignores_inactive_stim_dur():
-    # A train at zero amplitude is inactive everywhere, so it must not stretch
-    # the envelope the active one rides on either:
     composite, _ = _composite(FadingTemporal())
     short = {'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45, stim_dur=100)}
     padded = {'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45, stim_dur=100),
@@ -1024,8 +906,6 @@ def test_BiphasicAxonMapSpatial_composite_ignores_inactive_stim_dur():
 @pytest.mark.parametrize('temporal_cls', _TEMPORALS)
 def test_BiphasicAxonMapSpatial_composite_rejects_unequal_stim_dur(
         temporal_cls):
-    # One separable envelope cannot have one electrode's contribution stop at
-    # 100 ms and another's at 1000 ms:
     composite, _ = _composite(temporal_cls())
     source = {'A5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
                                                      stim_dur=100),
@@ -1036,11 +916,7 @@ def test_BiphasicAxonMapSpatial_composite_rejects_unequal_stim_dur(
 
 
 def test_BiphasicAxonMapSpatial_composite_rides_an_alpha_envelope():
-    """`AlphaTemporal` gives the Granley percept a rise, not just a fade.
-
-    Sampled at every `dt`, so the peak the model normalizes by is one of the
-    samples rather than something between two of them.
-    """
+    # `AlphaTemporal` gives the Granley percept a rise, not just a fade
     temporal = AlphaTemporal(tau=20)
     composite, granley = _composite(temporal)
     source = _composite_source()
@@ -1054,9 +930,6 @@ def test_BiphasicAxonMapSpatial_composite_rides_an_alpha_envelope():
 
     trace = percept.data[np.unravel_index(np.argmax(granley_frame),
                                           granley_frame.shape)]
-    # An alpha envelope, not an exponential fade: it starts at zero and peaks
-    # well after onset, where `FadingTemporal` is already at its brightest one
-    # step in.
     npt.assert_equal(trace[0], 0)
     peak = int(np.argmax(trace))
     npt.assert_equal(0 < peak < len(trace) - 1, True)
@@ -1070,9 +943,7 @@ def test_BiphasicAxonMapSpatial_composite_rides_an_alpha_envelope():
 
 
 def test_BiphasicAxonMapSpatial_composite_normalizes_a_delayed_peak():
-    # This one peaks ~226 ms after a 50 ms drive, several windows past the
-    # first one searched. Normalizing by a value found before the peak would
-    # let the percept outshine the Granley frame it is supposed to peak at:
+    # This one peaks ~226 ms after a 50 ms drive
     temporal = Horsager2009Temporal(tau3=100)
     composite, granley = _composite(temporal)
     source = _composite_source()
@@ -1084,15 +955,15 @@ def test_BiphasicAxonMapSpatial_composite_normalizes_a_delayed_peak():
 
 
 def test_BiphasicAxonMapSpatial_composite_rejects_an_unlocatable_peak():
-    # Still rising where the search gives up (~624 ms for a 50 ms drive):
-    # saying so beats normalizing by a value known not to be the peak.
+    # Still rising where the search gives up (~624 ms for a 50 ms drive)
     composite, _ = _composite(Horsager2009Temporal(tau3=300))
     with pytest.raises(ValueError):
         composite.predict_percept(_composite_source())
 
 
 def _threshold_model():
-    return BiphasicAxonMapModel(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2), step=1,
+    return BiphasicAxonMapModel(implant=ArgusII(), xrange=(-3, 3), 
+                                yrange=(-2, 2), step=1,
                                 n_ax_segments=30).build()
 
 
@@ -1144,7 +1015,6 @@ def test_BiphasicAxonMap_uncalibrated_current_raises(model_cls):
         model.predict_percept(source)
     for remedy in ('2 * xTh', 'threshold_amp', 'implant.thresholds'):
         npt.assert_equal(remedy in str(err.value), True)
-    # Any one of the three fixes it:
     model.implant.thresholds = 80 * uA
     npt.assert_equal(np.any(model.predict_percept(source).data), True)
 
@@ -1152,7 +1022,6 @@ def test_BiphasicAxonMap_uncalibrated_current_raises(model_cls):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_zero_current_needs_no_threshold(model_cls):
-    # Zero-current electrodes need no threshold.
     model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2), step=1,
                       n_ax_segments=30).build()
     source = {'A2': BiphasicPulseTrain(20, 0 * uA, 0.45,
@@ -1165,13 +1034,12 @@ def test_BiphasicAxonMap_zero_current_needs_no_threshold(model_cls):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_n_gray(model_cls):
-    # n_gray must reach the Percept, as in the generic spatial path:
     source = {'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)}
     model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2),
                       step=1, n_ax_segments=30).build()
     full = model.predict_percept(source)
     npt.assert_equal(np.unique(full.data).size > 2, True)
-    # The metadata should carry the stimulus itself, not just its metadata:
+    # Metadata stores the prepared Stimulus:
     npt.assert_equal(isinstance(full.metadata['stim'], Stimulus), True)
 
     model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2),
@@ -1183,13 +1051,11 @@ def test_BiphasicAxonMap_n_gray(model_cls):
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
                                        BiphasicAxonMapSpatial])
 def test_BiphasicAxonMap_noise(model_cls):
-    # noise must reach the Percept, as in the generic spatial path:
     source = {'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)}
     model = model_cls(implant=ArgusII(), xrange=(-4, 4), yrange=(-4, 4),
                       step=1, n_ax_segments=30, noise=1.0).build()
     frame = model.predict_percept(source).data[..., 0]
-    # Salt and pepper are the brightest and darkest values in the frame, so
-    # noising every pixel leaves exactly those two values:
+    # noise=1 leaves only salt and pepper values
     npt.assert_equal(np.unique(frame).size, 2)
 
 

@@ -493,11 +493,7 @@ class BiphasicPulseTrain(Stimulus):
                 'time': self._train.time}
 
     def _rebuilt(self, amp, threshold_amp, cathodic_first=None):
-        """This train, with a different amplitude and/or threshold
-
-        ``threshold_amp`` is only what ``amp`` is resolved against; the
-        caller's threshold and any implant calibration carry across unchanged.
-        """
+        """Rebuild this schedule with new electrodes, amplitudes, or frequency."""
         if cathodic_first is None:
             cathodic_first = self.cathodic_first
         train = BiphasicPulseTrain(
@@ -513,11 +509,7 @@ class BiphasicPulseTrain(Stimulus):
         return train
 
     def _with_threshold(self, override):
-        """Return this train with an implant threshold override.
-
-        Threshold-relative trains preserve ``amp_factor``; current-valued
-        trains preserve ``amp``.
-        """
+        """Calibrate a threshold-relative schedule to uA without rendering."""
         if override == self._threshold_override:
             return self
         amp = self.amp_factor * xTh if self._amp_relative else self.amp

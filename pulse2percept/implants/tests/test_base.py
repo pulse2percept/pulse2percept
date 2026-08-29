@@ -879,7 +879,6 @@ def test_ProsthesisSystem_thresholds():
 
 
 def test_ProsthesisSystem_thresholds_at_construction():
-    # Thresholds are implant state, so the constructor takes them:
     npt.assert_equal(ArgusII().thresholds, {})
     for scalar in (80, 80 * uA, 0.08 * mA):
         implant = ArgusII(thresholds=scalar)
@@ -888,12 +887,10 @@ def test_ProsthesisSystem_thresholds_at_construction():
     implant = ArgusII(thresholds={'A1': 80, 'A2': 107 * uA})
     npt.assert_equal(sorted(implant.thresholds), ['A1', 'A2'])
     npt.assert_almost_equal(implant.thresholds['A2'], 107)
-    # Normalization needs the electrode names, which a left-eye array only
-    # settles at the end of construction:
+    # Threshold keys use the final left-eye electrode names:
     implant = ArgusII(eye='LE', thresholds={'A10': 80})
     npt.assert_equal(sorted(implant.thresholds), ['A10'])
     npt.assert_almost_equal(implant.thresholds['A10'], 80)
-    # And calibration works without a second statement:
     stim = ArgusII(thresholds=80).prepare_stim(
         {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
     npt.assert_almost_equal(np.abs(stim.data).max(), 160)
@@ -910,7 +907,6 @@ def test_ProsthesisSystem_thresholds_at_construction_are_validated():
         ArgusII(thresholds={'ZZ9': 80 * uA})
     with pytest.raises(DimensionMismatchError):
         ArgusII(thresholds=5 * ms)
-    # The base class takes them too:
     implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100), thresholds=80)
     npt.assert_almost_equal(implant.thresholds[0], 80)
 
