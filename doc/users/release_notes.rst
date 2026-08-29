@@ -26,6 +26,11 @@ Highlights:
 
 API changes:
 
+* :py:class:`~pulse2percept.vision.Scene` gains ``scotoma_blend`` to soften
+  the drawn scotoma boundary, and ``scotoma_fill='inpaint'`` to fill the
+  scotoma from the surrounding image by biharmonic inpainting rather than a
+  flat gray level (:pull:`871`).
+
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` adds descriptive
   ``placement``, ``technology`` and ``family`` class attributes (:pull:`865`).
 

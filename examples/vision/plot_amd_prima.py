@@ -1,26 +1,24 @@
 # -*- coding: utf-8 -*-
 """
 ============================================================================
-Simulating PRIMA in age-related macular degeneration
+Simulating PRIMA in age-related macular degeneration (AMD)
 ============================================================================
 
 Someone with geographic atrophy has lost vision in the center of their visual
 field but still sees normally around it. A subretinal implant such as
-:py:class:`~pulse2percept.implants.PRIMAPivotal` sits inside that blind
+:py:class:`~pulse2percept.implants.PRIMAPivotal` sits inside the blind
 spot and gives back a coarse, grayscale percept there.
 
-Four objects say everything there is to say about that situation:
+Four objects capture that situation:
 
-*  :py:class:`~pulse2percept.vision.Scene` -- what is visually present, and
+*  :py:class:`~pulse2percept.vision.Scene`: what is visually present, and
    where native vision is lost.
-*  :py:class:`~pulse2percept.implants.ProsthesisSystem` -- the device: where
-   its electrodes are, and how it turns gray levels into stimulation.
-*  :py:class:`~pulse2percept.models.Model` -- the retinotopy, which is what
+*  :py:class:`~pulse2percept.implants.ProsthesisSystem`: where the implant's
+   electrodes are, and how it turns gray levels into stimulation.
+*  :py:class:`~pulse2percept.models.Model`: the retinotopy, which is what
    connects the two.
-*  :py:class:`~pulse2percept.percepts.Percept` -- what the simulated observer
+*  :py:class:`~pulse2percept.percepts.Percept`: what the simulated observer
    sees.
-
-None of the coordinate bookkeeping between them is yours to do.
 """
 # sphinx_gallery_thumbnail_number = 2
 
@@ -33,10 +31,27 @@ from pulse2percept.units import dva
 from pulse2percept.vision import Scene, Scotoma
 
 ###############################################################################
+# Geographic atrophy is rarely a circle centered on the fovea:
 
-scotoma = Scotoma.circle(6 * dva)
+scotoma = Scotoma.ellipse(7 * dva, 5 * dva, center=(1, -1) * dva)
 
-scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma)
+###############################################################################
+# ``scotoma_fill`` determines what a user inside the scotoma sees.
+# Biologically, no information from within the scotoma is supposed to reach
+# the visual cortex. So researchers often set it to gray (or black). 
+# 
+# But people with AMD rarely report seeing a black spot in their vision.
+# Often they're not even aware that they have a "blind spot".
+# It is quite possible that the brain fills in the missing information.
+# To mimic that, ``'inpaint'`` fills the scotoma from the vision around it
+# by harmonic inpainting (:py:func:`skimage.restoration.inpaint_biharmonic`).
+# Note that this is a static, boundary-driven approximation to perceptual
+# filling-in, not a neural or generative model of it.
+# 
+# Also, ``scotoma_blend`` softens the drawn boundary around the scotoma.
+
+scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma,
+              scotoma_fill='inpaint', scotoma_blend=2)
 
 scene.plot(gaze=(0, 0) * dva)
 plt.title('Native vision alone')
