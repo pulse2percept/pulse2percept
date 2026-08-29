@@ -82,6 +82,10 @@ API changes:
 
 Bug fixes:
 
+* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` ignored ``n_gray``
+  and ``noise``, and stored only the stimulus metadata (not the stimulus) under
+  ``percept.metadata['stim']`` (:issue:`864`).
+
 * A hexagonal :py:class:`~pulse2percept.implants.ElectrodeGrid` with a single
   row (or, in vertical orientation, a single column) is now centered on
   ``(x, y)`` rather than offset by a quarter of the electrode spacing

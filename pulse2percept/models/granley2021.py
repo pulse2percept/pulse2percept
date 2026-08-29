@@ -574,8 +574,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         # Apply the same spatial postprocessing as the generic path.
         resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
-                       time_unit=self.time_unit,
-                       metadata={'stim': stim.metadata})
+                       time_unit=self.time_unit, metadata={'stim': stim},
+                       n_gray=self.n_gray, noise=self.noise)
 
     def _combine_temporal(self, percept, temporal, stim, t_percept):
         """Apply a normalized temporal response to the spatial percept."""
@@ -592,8 +592,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         fade = resp.data.reshape(-1) / peak
         return Percept(percept.data[..., 0][..., np.newaxis] * fade,
                        space=self.grid, time=resp.time,
-                       time_unit=probe.time_unit,
-                       metadata={'stim': stim.metadata})
+                       time_unit=probe.time_unit, metadata={'stim': stim})
 
     @staticmethod
     def _envelope_peak(temporal, envelope):

@@ -1083,3 +1083,36 @@ def test_BiphasicAxonMap_zero_current_needs_no_threshold(model_cls):
     with _no_pulse_train_rendering():
         percept = model.predict_percept(source)
     npt.assert_almost_equal(percept.data, 0)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_BiphasicAxonMap_n_gray(model_cls):
+    # n_gray must reach the Percept, as in the generic spatial path:
+    source = {'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)}
+    model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2),
+                      step=1, n_ax_segments=30).build()
+    full = model.predict_percept(source)
+    npt.assert_equal(np.unique(full.data).size > 2, True)
+    # The metadata should carry the stimulus itself, not just its metadata:
+    npt.assert_equal(isinstance(full.metadata['stim'], Stimulus), True)
+
+    model = model_cls(implant=ArgusII(), xrange=(-3, 3), yrange=(-2, 2),
+                      step=1, n_ax_segments=30, n_gray=2).build()
+    quantized = model.predict_percept(source)
+    npt.assert_equal(np.unique(quantized.data).size, 2)
+
+
+@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
+                                       BiphasicAxonMapSpatial])
+def test_BiphasicAxonMap_noise(model_cls):
+    # noise must reach the Percept, as in the generic spatial path:
+    source = {'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)}
+    model = model_cls(implant=ArgusII(), xrange=(-4, 4), yrange=(-4, 4),
+                      step=1, n_ax_segments=30, noise=0.5).build()
+    frame = model.predict_percept(source).data[..., 0]
+    # Salt and pepper are the brightest and darkest values in the frame, and
+    # a fraction ``noise`` of the pixels are set to one or the other:
+    n_extreme = (np.sum(np.isclose(frame, frame.max())) +
+                 np.sum(np.isclose(frame, frame.min())))
+    npt.assert_equal(n_extreme >= int(0.5 * frame.size), True)
