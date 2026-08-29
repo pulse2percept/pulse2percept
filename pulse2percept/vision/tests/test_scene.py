@@ -386,6 +386,34 @@ def test_inpainting_works_in_color_and_stays_a_display_intensity():
     npt.assert_almost_equal(native[..., 2, 0], 0.5, decimal=6)
 
 
+def test_blending_does_not_move_the_inpainting_boundary():
+    """`scotoma_blend` softens the edge; it does not widen the hole"""
+    flat = np.full((41, 41), 0.5)
+    # A bright patch a blend-widened mask would swallow and lose as a source:
+    flat[18:23, 26:31] = 1.0
+    scotoma = Scotoma.circle(5)
+    fills = []
+    for blend in (0, 3):
+        scene = Scene(ImageStimulus(flat), fov=(41, 41), scotoma=scotoma,
+                      scotoma_fill='inpaint', scotoma_blend=blend)
+        fills.append(scene._fill_rgb(scene._rgb_frames()[..., 0],
+                                     scene._loss_maps_at((0, 0))[0]))
+    npt.assert_array_equal(*fills)
+
+
+def test_a_zero_percept_composes_to_plain_inpainted_native_vision():
+    """`_compose` and `_native_rgb` fill the scotoma the same way"""
+    rgb = np.stack([np.tile(np.linspace(0.1, 0.9, 31), (31, 1)),
+                    np.tile(np.linspace(0.9, 0.2, 31), (31, 1)).T,
+                    np.full((31, 31), 0.4)], axis=-1)
+    scene = Scene(ImageStimulus(rgb), fov=(31, 31), scotoma=Scotoma.circle(4),
+                  scotoma_fill='inpaint', scotoma_blend=1.5)
+    # No phosphene anywhere, so the lost region is the fill and nothing else:
+    dark = Percept(np.zeros((31, 31, 1)), space=scene._grid())
+    npt.assert_almost_equal(scene._compose(dark, vmax=1).data,
+                            scene._native_rgb(), decimal=6)
+
+
 def test_inpainting_does_not_change_what_the_device_sees():
     x = np.array([-15.0, -2.0, 0.0, 3.0, 18.0])
     y = np.array([0.0, 6.0, 0.0, 2.0, 5.0])

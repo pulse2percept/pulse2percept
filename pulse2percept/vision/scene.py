@@ -190,7 +190,8 @@ class Scene(PrettyPrint):
     scotoma_blend : float, optional
         Standard deviation, in scene pixels, of a Gaussian applied to the
         rasterized loss map before it is drawn. Rendering only: the scotoma's
-        geometry is unchanged.
+        geometry is unchanged, and so are the pixels an ``'inpaint'`` fill
+        reads.
 
     Examples
     --------
@@ -433,6 +434,13 @@ class Scene(PrettyPrint):
                                   truncate=_TRUNCATE)
         return np.clip(blurred[pad:-pad, pad:-pad], 0, 1)
 
+    def _loss_maps_at(self, gaze_xy):
+        """The geometric loss and the loss as drawn, for one gaze"""
+        raw = self._loss_at(gaze_xy)
+        if self.scotoma is None or self._scotoma_blend == 0:
+            return raw, raw
+        return raw, self._rendered_loss_at(gaze_xy)
+
     def _fill_rgb(self, frame_rgb, loss):
         """What complete loss shows for one ``(rows, cols, 3)`` frame"""
         if self._scotoma_fill != INPAINT:
@@ -446,16 +454,16 @@ class Scene(PrettyPrint):
             return frames
         n_frames = frames.shape[-1]
         gaze = _gaze_points(gaze, n_frames)
-        fill = self.scotoma_fill
         static = len(gaze) == 1
         if static:
-            loss = self._rendered_loss_at(gaze[0])
+            raw, loss = self._loss_maps_at(gaze[0])
         out = np.empty(frames.shape, dtype=np.float32)
         for f in range(n_frames):
             if not static:
-                loss = self._rendered_loss_at(gaze[f])
+                raw, loss = self._loss_maps_at(gaze[f])
             frame = frames[..., f]
-            fill = self._fill_rgb(frame, loss)
+            # An inpainted fill reads this frame, so it is per-frame work:
+            fill = self._fill_rgb(frame, raw)
             alpha = loss[..., np.newaxis]
             out[..., f] = (1 - alpha) * frame + alpha * fill
         return out
@@ -497,7 +505,7 @@ class Scene(PrettyPrint):
                                       (x_scene - gx).ravel()))
             brightness = _percept_sampler(prosthetic, pframes)(points)
             brightness = brightness.reshape((n_rows, n_cols, n_out))
-            loss = self._rendered_loss_at(gaze[0])
+            raw, loss = self._loss_maps_at(gaze[0])
 
         out = np.empty((n_rows, n_cols, 3, n_out), dtype=np.float32)
         for f in range(n_out):
@@ -509,10 +517,10 @@ class Scene(PrettyPrint):
                                           (x_scene - gx).ravel()))
                 sample = _percept_sampler(prosthetic, pframes[..., f:f + 1])
                 frame = sample(points).reshape((n_rows, n_cols))
-                loss = self._rendered_loss_at(gaze[f])
+                raw, loss = self._loss_maps_at(gaze[f])
             phosphene = np.clip((frame - vmin) / (vmax - vmin), 0, 1)
             native = scene_rgb[..., 0 if scene_rgb.shape[-1] == 1 else f]
-            fill = self._fill_rgb(native, loss)
+            fill = self._fill_rgb(native, raw)
             lost = np.maximum(fill, phosphene[..., np.newaxis])
             alpha = loss[..., np.newaxis]
             out[..., f] = (1 - alpha) * native + alpha * lost
