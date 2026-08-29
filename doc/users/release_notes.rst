@@ -32,13 +32,11 @@ API changes:
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`)
 
-* New :py:class:`~pulse2percept.stimuli.PRIMAEncoder` models the PRIMA
-  projector: 880 nm illumination at 30 Hz and 3.5 mW/mm^2, with intensity set
-  by the projector's 14 pulse durations (0.7 to 9.8 ms). It samples a source at
-  the projector clock rather than re-timing it, and returns irradiance
-  (``mW/mm^2``), not current;
-  :py:class:`~pulse2percept.implants.PRIMAPivotal` brings one along and its
-  ``safe_mode`` now checks the projector envelope rather than charge balance.
+* New :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps images and videos
+  to 880 nm irradiance for :py:class:`~pulse2percept.implants.PRIMAPivotal`,
+  using the pivotal system's 30 Hz projector and 14 pulse-duration levels
+  (0.7--9.8 ms). ``PRIMAPivotal`` uses this encoder by default, and its
+  ``safe_mode`` checks the documented projector operating envelope.
 
 * New :py:class:`~pulse2percept.stimuli.Encoder` base class, so that
   ``implant.encoder`` accepts non-electrical encoders.

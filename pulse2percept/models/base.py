@@ -173,9 +173,7 @@ def _require_stim_dimension(model, stim):
     if stim.unit.dimension in {unit.dimension for unit in accepted}:
         if (stim.unit.dimension.is_dimensionless and
                 not stim._is_normalized_drive):
-            # A picture is dimensionless too. A model that reads a
-            # dimensionless stimulus reads an encoded drive (see
-            # `pulse2percept.stimuli.PRIMAEncoder`), never gray levels:
+            # Dimensionless model input must be encoded drive, not gray levels.
             raise DimensionMismatchError(
                 f"{type(model).__name__} expects {expected}, and this "
                 f"stimulus is dimensionless but is not a normalized drive: "
@@ -451,12 +449,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         pass
 
     def _stim_unit(self, stim):
-        """The unit this model reads ``stim`` in.
-
-        ``stimulus_unit`` for a stimulus of that dimension, otherwise the
-        matching entry of ``extra_stimulus_units``. A stimulus of neither
-        dimension has already been refused by ``_require_stim_dimension``.
-        """
+        """Return the model unit matching ``stim``."""
         if stim.unit.dimension == self.stimulus_unit.dimension:
             return self.stimulus_unit
         for unit in self.extra_stimulus_units:
@@ -930,10 +923,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 # np.asarray: indexing a single-electrode stimulus returns a
                 # scalar, which has no `reshape`:
                 at = self._to_stim_time(t_percept, stim)
-                # Resampling in time changes nothing about what the values
-                # *are*, so the rebuilt stimulus has to keep saying it: a
-                # normalized drive that came back as a plain dimensionless
-                # `Stimulus` would be read as gray levels and refused.
+                # Preserve the normalized-drive marker through resampling.
                 rebuild = type(stim) if stim._is_normalized_drive else Stimulus
                 stim = rebuild(
                     np.asarray(stim[:, at]).reshape((-1, n_time)),
@@ -1598,10 +1588,7 @@ class Model(Frozen, PrettyPrint):
         if stim is None or (not self.has_space and not self.has_time):
             # Nothing to see here:
             return None
-        # A spatial-only model reads the stimulus' spatial view, which need not
-        # be measured in the same quantity as the waveform behind it: a
-        # photovoltaic implant delivers irradiance but reports normalized
-        # optical drive. Check what the stages will actually read:
+        # Spatial-only models validate the spatial view, not the waveform.
         _require_stim_dimension(
             self, _spatial_input(stim) if self.has_space and not self.has_time
             else stim)

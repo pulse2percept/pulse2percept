@@ -64,8 +64,7 @@ def _value_label(stim):
         # Spelled the way Matplotlib renders it:
         return r'Amplitude ($\mu$A)'
     if stim.unit.dimension == (mW / mm ** 2).dimension:
-        # A photovoltaic implant is illuminated, not driven: calling its
-        # optical power an amplitude would name the wrong quantity.
+        # Optical stimuli use irradiance rather than current amplitude.
         return f'Irradiance ({stim.unit})'
     return f'Amplitude ({stim.unit})'
 

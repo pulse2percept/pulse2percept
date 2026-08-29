@@ -95,12 +95,9 @@ Optical encoding
 
 .. versionadded:: 0.11.0
 
-:py:class:`~pulse2percept.implants.PRIMAPivotal` is photovoltaic: a projector
-paints an 880 nm image onto the implant, and each pixel turns the light it
-receives into local electrical stimulation. Intensity is set by *how long* a
-pixel is lit rather than by how brightly, so
-:py:class:`~pulse2percept.stimuli.PRIMAEncoder` returns absolute irradiance in
-``mW/mm^2``, not microamps:
+:py:class:`~pulse2percept.implants.PRIMAPivotal` is illuminated by an
+880 nm projector. :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps image
+intensity to pulse duration and returns irradiance in ``mW/mm^2``:
 
 .. code-block:: python
 
@@ -108,56 +105,37 @@ pixel is lit rather than by how brightly, so
     stim = implant.prepare_stim(p2p.stimuli.LogoBVL())
     stim.unit  # mW/mm^2
 
-The projector offers 14 discrete ON durations, 0.7 to 9.8 ms in 0.7 ms steps,
-plus off. By default the encoder maps normalized image intensity linearly onto
-those levels; that linear map is a pulse2percept convention, since the clinical
-camera-gray-level to pulse-duration transfer function is not published. Pass
-``grayscale=False`` for a binary approximation, in which a pixel is off or on
-for ``pulse_dur``. Peak irradiance is fixed either way.
+At the default settings, the projector runs at 30 Hz and 3.5 mW/mm^2. It has
+14 nonzero ON durations from 0.7 to 9.8 ms. The default linear mapping from
+image intensity to these levels is a pulse2percept convention; the clinical
+camera-to-pulse-duration transfer function is not published. Set
+``grayscale=False`` for binary encoding.
 
-The clinical system processes the camera image before projecting it, including
-ambient-light adaptation, contrast enhancement and zoom, and contrast inversion
-has been used deliberately in testing. ``PRIMAEncoder`` models the optical
-encoding stage that follows; preprocessing stays explicit in pulse2percept
-because the clinical pipeline is not specified in enough detail to reproduce,
-so it is applied to the source first (``image.invert()``,
-``image.filter('canny')``).
+The clinical system also applies ambient-light adaptation, contrast
+enhancement, zoom, and, in some tests, contrast inversion. These operations
+remain explicit preprocessing steps in pulse2percept.
 
-The projector clock samples a video; it does not re-time it. Starting at the
-source's first frame, every ``1 / freq`` the device looks at whatever frame the
-source is showing (zero-order hold), so a 15 fps source has its frames re-sent
-and a 60 fps source has frames skipped, and either way the content keeps its
-own timing -- including a nonzero start time, as a cropped video has. A pulse
-that would not finish before the presentation ends is not started.
-
-Converting light into retinal current is the job of a photovoltaic model, which
-pulse2percept does not have yet. Until it does, the encoded stimulus offers
-spatial-only models a *normalized optical drive* -- peak irradiance times duty
-cycle, divided by the largest drive the pivotal device is documented to
-produce -- and
-:py:class:`~pulse2percept.models.ScoreboardModel` reads it:
+For videos, source frames are sampled on the projector clock using zero-order
+hold. Spatial-only models can read the resulting *normalized optical drive*.
+For example:
 
 .. code-block:: python
 
     model = p2p.models.ScoreboardModel(implant=implant)
     percept = model.predict_percept(p2p.stimuli.LogoBVL())
 
-That is a visualization of implant geometry and stimulation pattern. It does
-not model photodiode transduction, retinal electric fields, bipolar-cell
-activation, electrode-retina distance, or temporal retinal dynamics.
+Here ``ScoreboardModel`` visualizes implant geometry and optical drive. It does
+not model photovoltaic transduction or retinal activation.
 
 Device constraints
 ------------------
 
 An implant's :py:class:`~pulse2percept.implants.Raster` determines which
-electrodes may pulse together; see :ref:`topics-rasters`. PRIMA has none: all
-378 photovoltaic pixels may be illuminated at once. With ``safe_mode=True`` it
-instead checks the documented operating envelope -- at most 3.5 mW/mm^2, ON
-durations on the 0.7 ms grid and no longer than 9.8 ms, a duty cycle of at most
-0.294, and the 30 Hz the pivotal system is reported to run at. That is what the
-device is documented to do, not a biological safety limit and not a
-demonstrated hardware maximum, and it is read off the stimulus' own schedule: a
-stimulus that has been reduced to samples cannot be verified and is refused.
+electrodes may pulse together; see :ref:`topics-rasters`. PRIMA uses no raster;
+all 378 pixels may be illuminated at once. With ``safe_mode=True``,
+:py:class:`~pulse2percept.implants.PRIMAPivotal` checks the documented projector
+settings (3.5 mW/mm^2, 30 Hz, 0.7--9.8 ms ON durations, and duty cycle <= 0.294).
+This is not a biological safety check or a demonstrated hardware maximum.
 
 Encoders can also quantize timing with ``clock`` and gray levels with
 ``n_levels``. These constraints are conservative: quantization may lower a

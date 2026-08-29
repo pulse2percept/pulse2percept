@@ -20,12 +20,8 @@ first two correspond to these one-liners::
                                step=0.1).predict_percept(
         p2p.stimuli.LogoBVL().invert())
 
-The PRIMA scenario needs no wrapper: the device is illuminated rather than
-driven by a current source, and what its encoder hands a spatial model is one
-normalized-drive frame -- the same shape of workload the electrical scenarios
-measure. The :func:`as_current` wrapper is a benchmark-only detail for those;
-see its docstring for why they do not go through an encoder the way user code
-should.
+The PRIMA scenario runs its optical encoder directly. Electrical scenarios
+use :func:`as_current` to preserve their historical benchmark workload.
 
 Between them the scenarios reach every compiled kernel a percept prediction can
 go through -- ``_beyeler2019``, ``_granley2021``, ``_nanduri2012``,
@@ -183,10 +179,7 @@ SCENARIOS = [
         caches_axons=True,
     ),
     Scenario(
-        # The one scenario that runs an encoder: PRIMA is illuminated, so its
-        # implant refuses microamps outright, and the optical stimulus its
-        # encoder builds stays a schedule until a model asks for samples --
-        # which a spatial model never does.
+        # Benchmark the image-to-optical encoding path for PRIMA.
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
         implant=p2p.implants.PRIMAPivotal,

@@ -51,16 +51,11 @@ class ProsthesisSystem(PrettyPrint):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-        Charge balance is an electrical property, so this also requires the
-        stimulus to be measured in units of current. A device that is not
-        driven by a current source overrides the check with one that fits it;
-        see :py:class:`~pulse2percept.implants.PRIMAPivotal`.
+        Charge balance is an electrical property and requires current units.
+        Non-current-driven devices may override this check.
     encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
-        How the device turns a picture into stimulation. If given, preparing an
-        image or a video encodes it first, so that what comes back is in the
-        unit the device delivers. If None, such a stimulus is refused, since
-        there is no principled default mapping from a gray level to
-        stimulation.
+        Maps image or video gray levels to device stimulation. If None,
+        dimensionless visual input is rejected.
 
         .. versionadded:: 0.10.0
 
@@ -100,9 +95,7 @@ class ProsthesisSystem(PrettyPrint):
     __slots__ = ('_earray', '_eye', 'safe_mode', 'preprocess',
                  '_encoder', '_raster', '_max_current', '_thresholds')
 
-    #: Physical quantity a prepared stimulus is measured in: what drives the
-    #: device. Current for a device driven by a current source, irradiance for
-    #: one that is illuminated. Subclasses may override.
+    #: Unit used by prepared stimuli. Defaults to electrical current.
     stimulus_unit = uA
 
     #: Where the device sits relative to the tissue it stimulates, where the
@@ -274,10 +267,7 @@ class ProsthesisSystem(PrettyPrint):
         """Require a stimulus with a physical dimension this implant can deliver."""
         if stim.unit.dimension == self.stimulus_unit.dimension:
             return
-        # Threshold-relative pulse trains may be assigned before calibration.
-        # A multiple of threshold is a current that has not been named yet, so
-        # this exemption belongs to devices that are driven by current: there
-        # is no such thing as threshold-relative irradiance.
+        # xTh is valid only for current-driven implants before calibration.
         if (self.stimulus_unit.dimension == uA.dimension and
                 stim.unit.dimension == xTh.dimension):
             return
@@ -420,15 +410,11 @@ class ProsthesisSystem(PrettyPrint):
 
     def reshape_stim(self, stim):
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
-            # Extract electrode coordinates, in the same units the image grid
-            # below is laid out in:
+            # Electrode coordinates define the image sampling grid.
             x, y = self.earray.coordinates(um)[:, :2].T
 
-            # Define image coordinate space. The color axis, if there is one,
-            # is left on the data and reduced after sampling: `rgb2gray` is a
-            # fixed linear combination of the channels, so sampling first
-            # gives the same answer without ever building a full-resolution
-            # grayscale copy of the source.
+            # Sample color channels before grayscale conversion to avoid a
+            # full-resolution grayscale copy.
             if isinstance(stim, ImageStimulus):
                 shape = stim.img_shape          # (h, w[, n_channels])
                 colored = len(shape) == 3
@@ -438,9 +424,7 @@ class ProsthesisSystem(PrettyPrint):
             img_h, img_w = shape[:2]
             data = stim.data.reshape(shape)
             if colored and isinstance(stim, ImageStimulus) and shape[2] == 4:
-                # Blending an alpha channel with black is a product, not a
-                # linear combination, so unlike rgb2gray it cannot be deferred
-                # until after the interpolation:
+                # RGBA alpha blending is nonlinear; apply it before interpolation.
                 data = np.clip(data[..., :3] * data[..., 3:4], 0.0, 1.0)
 
             x_min, x_max = np.min(x), np.max(x)
@@ -450,20 +434,14 @@ class ProsthesisSystem(PrettyPrint):
             img_x = np.linspace(x_min, x_max, img_w)
             img_y = np.linspace(y_min, y_max, img_h)
 
-            # One interpolator covers every frame and every color channel: the
-            # grid is the leading two axes of `data`, and anything past them --
-            # the color and frame axes -- is carried along, so a video comes
-            # back as (n_electrodes, [n_channels,] n_frames) from a single
-            # call. Building one per frame instead meant re-deriving the same
-            # grid for each of them.
+            # RegularGridInterpolator carries color and frame axes in one call.
             interpolator = RegularGridInterpolator(
                 (img_y, img_x), data, method='linear',
                 bounds_error=False, fill_value=0
             )
             pixel_values = interpolator(np.vstack((y, x)).T)
             if colored:
-                # `rgb2gray` reads the channel axis last, which is already
-                # where an image's is; a video's sits in front of its frames:
+                # rgb2gray expects the channel axis last.
                 if pixel_values.ndim == 3:
                     pixel_values = pixel_values.transpose((0, 2, 1))
                 pixel_values = rgb2gray(pixel_values)
@@ -553,11 +531,9 @@ class ProsthesisSystem(PrettyPrint):
         deactivated electrodes, applies threshold calibration, and runs safety checks.
         The input is not modified and the result is not stored.
 
-        What comes back is measured in the implant's
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`, which
-        is electrical current for most devices but not for all: a photovoltaic
-        implant such as :py:class:`~pulse2percept.implants.PRIMAPivotal` is
-        illuminated, and prepares optical irradiance.
+        Prepared stimuli use the implant's
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`
+        (electrical current for most devices; irradiance for PRIMA).
 
         Images and videos require an encoder unless preprocessing already converts
         them to the implant's

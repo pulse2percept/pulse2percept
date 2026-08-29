@@ -87,14 +87,10 @@ class ScoreboardSpatial(SpatialModel):
     controls the spatial spread of activation. Larger values of
     :math:`\rho` produce broader phosphenes.
 
-    For an electrically driven implant, :math:`a_e` is the current
-    amplitude delivered by electrode :math:`e`. For a photovoltaic
-    implant it is the normalized optical drive its encoder reports
-    (see :py:class:`~pulse2percept.stimuli.PRIMAEncoder`), which makes
-    the percept a visualization of implant geometry and stimulation
-    pattern rather than a model of photodiode transduction, retinal
-    electric fields, bipolar-cell activation, electrode-retina
-    distance, or temporal retinal dynamics.
+    For current-driven implants, :math:`a_e` is current amplitude.
+    :py:class:`~pulse2percept.stimuli.PRIMAEncoder` instead provides normalized
+    optical drive. In that case, Scoreboard visualizes the stimulation pattern;
+    it does not model the retinal response.
 
     Parameters
     ----------
@@ -152,11 +148,7 @@ class ScoreboardSpatial(SpatialModel):
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
 
-    #: A photovoltaic implant is not driven by a current source. Its encoder
-    #: reports normalized optical drive instead, which this model uses directly
-    #: as the weight of each Gaussian (see
-    #: :py:class:`~pulse2percept.stimuli.PRIMAEncoder`). Only an encoded drive
-    #: is accepted, not a picture that happens to be dimensionless too.
+    #: Also accepts encoded normalized optical drive from PRIMAEncoder.
     extra_stimulus_units = (dimensionless,)
 
     def get_default_params(self):
@@ -208,14 +200,10 @@ class ScoreboardModel(Model):
         controls the spatial spread of activation. Larger values of
         :math:`\rho` produce broader phosphenes.
 
-        For an electrically driven implant, :math:`a_e` is the current
-        amplitude delivered by electrode :math:`e`. For a photovoltaic
-        implant it is the normalized optical drive its encoder reports
-        (see :py:class:`~pulse2percept.stimuli.PRIMAEncoder`), which makes
-        the percept a visualization of implant geometry and stimulation
-        pattern rather than a model of photodiode transduction, retinal
-        electric fields, bipolar-cell activation, electrode-retina
-        distance, or temporal retinal dynamics.
+        For current-driven implants, :math:`a_e` is current amplitude.
+        :py:class:`~pulse2percept.stimuli.PRIMAEncoder` instead provides
+        normalized optical drive. In that case, Scoreboard visualizes the
+        stimulation pattern; it does not model the retinal response.
 
     Parameters
     ----------

@@ -1068,13 +1068,7 @@ def test_electrode_pitch_ignores_a_dimension_the_model_drops(ModelClass):
 
 
 def test_scoreboard_visualizes_a_photovoltaic_implant():
-    """A picture straight into a PRIMA implant comes out as a percept
-
-    Scoreboard weights each Gaussian by the normalized optical drive the
-    implant's encoder reports. That is a picture of implant geometry and
-    stimulation pattern, not a model of photodiode transduction, retinal
-    electric fields, or temporal dynamics.
-    """
+    """Scoreboard accepts normalized optical drive from PRIMA."""
     implant = PRIMAPivotal()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
@@ -1085,11 +1079,11 @@ def test_scoreboard_visualizes_a_photovoltaic_implant():
     npt.assert_equal(percept.shape, tuple(model.grid.x.shape) + (1,))
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
     npt.assert_equal(percept.data.max() > 0, True)
-    # The stimulation itself is optical; only the spatial view is normalized:
+    # Delivered stimulation is optical; the spatial view is normalized.
     delivered = implant.prepare_stim(LogoBVL())
     npt.assert_equal(delivered.unit, mW / mm ** 2)
     npt.assert_equal(delivered._spatial_view().unit, dimensionless)
-    # A dark picture drives nothing:
+    # Dark input produces zero drive.
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
         dark = model.predict_percept(ImageStimulus(np.zeros((32, 32))))
@@ -1097,19 +1091,13 @@ def test_scoreboard_visualizes_a_photovoltaic_implant():
 
 
 def test_scoreboard_visualizes_a_photovoltaic_video():
-    """A PRIMA video survives the time resampling `_predict_prepared` does
-
-    The normalized drive is dimensionless, and a dimensionless stimulus is only
-    stimulation if it says it is one. Rebuilding it at `t_percept` as a plain
-    `Stimulus` would drop that and have the model read gray levels.
-    """
+    """Normalized-drive semantics survive video resampling."""
     implant = PRIMAPivotal()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
         model = ScoreboardModel(implant=implant, rho=200, step=0.5,
                                 xrange=(-2, 2), yrange=(-2, 2))
-        # Only the middle frame is lit, so the percept has to follow the
-        # source frame by frame rather than smear it:
+        # Only the middle source frame is lit.
         frames = np.zeros((8, 8, 3))
         frames[..., 1] = 1.0
         video = VideoStimulus(frames, time=[0.0, 40.0, 80.0])
@@ -1117,8 +1105,7 @@ def test_scoreboard_visualizes_a_photovoltaic_video():
     npt.assert_equal(percept.shape[:2], tuple(model.grid.x.shape))
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
     npt.assert_equal(percept.data.max() > 0, True)
-    # One percept frame per projector frame, and only the lit source frame
-    # drives anything:
+    # One percept frame per projector frame.
     npt.assert_equal(percept.shape[-1], percept.time.size)
     npt.assert_almost_equal(np.diff(percept.time), 1000 / 30, decimal=3)
     lit = percept.data.max(axis=(0, 1)) > 0
@@ -1126,9 +1113,7 @@ def test_scoreboard_visualizes_a_photovoltaic_video():
 
 
 def test_scoreboard_refuses_a_bare_optical_waveform():
-    # Without the normalized spatial view behind it, an optical stimulus is
-    # not something Scoreboard knows how to read: mW/mm^2 is neither a current
-    # nor an arbitrary brightness.
+    # Bare irradiance is not a valid Scoreboard input.
     implant = PRIMAPivotal()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
