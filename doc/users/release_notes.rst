@@ -61,6 +61,23 @@ API changes:
   ``PRIMA40`` become ``Ho2019FlatArray(55)``/``Ho2019FlatArray(40)``.
   The old names are deprecated until 0.12.0 (:pull:`865`).
 
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` and
+  :py:class:`~pulse2percept.implants.ArgusII` take ``thresholds`` at
+  construction, e.g. ``ArgusII(thresholds=80 * uA)``.
+
+* :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` accepts an ``amp_range``
+  in threshold multiples, e.g. ``amp_range=(0 * xTh, 3 * xTh)``. The encoded
+  stimulus stays in ``xTh`` until the implant calibrates it against its
+  ``thresholds``. Bare numbers still mean uA.
+
+* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` predicts from a still
+  image encoded with the standard biphasic encoder pulse, not only from
+  retained :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects. It
+  reads amplitude, phase duration and the realized frequency, ignoring
+  pulse-onset timing, so a :py:class:`~pulse2percept.implants.Raster` leaves
+  amplitude encoding unchanged while a period the device lengthens is
+  respected.
+
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
 
@@ -81,6 +98,10 @@ API changes:
   to the substrate boundary (:pull:`865`).
 
 Bug fixes:
+
+* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` ignored ``n_gray``
+  and ``noise``, and stored only the stimulus metadata (not the stimulus) under
+  ``percept.metadata['stim']`` (:pull:`869`).
 
 * A hexagonal :py:class:`~pulse2percept.implants.ElectrodeGrid` with a single
   row (or, in vertical orientation, a single column) is now centered on

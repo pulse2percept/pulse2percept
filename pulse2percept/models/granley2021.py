@@ -242,20 +242,31 @@ _NO_THRESHOLD_MSG = (
 )
 
 
-def _pulse_train_params(stim):
-    """Return Granley stimulus parameters for each active electrode.
+def _amp_factor(electrode, amp, unit, thresholds):
+    """Amplitude in multiples of threshold, calibrating current if need be"""
+    if unit.dimension == xTh.dimension:
+        return amp
+    threshold = (thresholds or {}).get(electrode)
+    if threshold is None:
+        raise ValueError(_NO_THRESHOLD_MSG.format(electrode=electrode,
+                                                  amp=amp))
+    return amp / threshold
 
-    Parameters are read from retained
-    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects without
-    rendering their waveforms. Amplitude is returned in multiples of threshold;
-    zero-amplitude electrodes are omitted.
 
-    Raises
-    ------
-    TypeError
-        If an active electrode is not an undelayed ``BiphasicPulseTrain``.
-    ValueError
-        If a current-valued amplitude has no threshold calibration."""
+def _pulse_train_params(stim, thresholds=None):
+    """Return Granley pulse parameters for each active electrode."""
+    described = getattr(stim, '_biphasic_params', None)
+    if described is not None:
+        encoded = described()
+        if encoded is None:
+            raise TypeError(
+                "All stimuli must be BiphasicPulseTrains with no delay dur. "
+                "This one was encoded with a 'pulse' shape of its own, whose "
+                "phase duration this model cannot read off.")
+        return [(electrode, freq,
+                 _amp_factor(electrode, amp, stim.unit, thresholds),
+                 phase_dur, stim_dur)
+                for electrode, freq, amp, phase_dur, stim_dur in encoded]
     sources = stim._structured_sources()
     if sources is None:
         # Preserve the historical zero-stimulus result; this is the only case
@@ -292,10 +303,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     [Granley2021]_. The model returns one representative spatial percept for the
     full biphasic pulse train.
 
-    Stimuli must retain :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
-    structure. Amplitude may be given in multiples of perceptual threshold
-    (:py:data:`~pulse2percept.units.xTh`) or as current when a threshold calibration
-    is available.
+    Stimuli must describe the pulse train they deliver, rather than only its
+    samples: either retained
+    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
+    image encoded with the standard biphasic encoder pulse (see
+    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Amplitude may be
+    given in multiples of perceptual threshold
+    (:py:data:`~pulse2percept.units.xTh`) or as current when a threshold
+    calibration is available.
+
+    Encoded still images use the device-resolved amplitude, phase duration, and
+    frequency; exact pulse-onset timing is ignored. Videos are not supported.
 
     Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
     Their arguments are frequency, amplitude in multiples of threshold, and phase
@@ -504,7 +522,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if not isinstance(stim, Stimulus):
             raise TypeError(
                 "Stim must be of type Stimulus but it is " + str(type(stim)))
-        params = _pulse_train_params(stim)
+        params = _pulse_train_params(stim, self.implant.thresholds)
         active = [p[0] for p in params]
         elec_params = np.array([p[1:4] for p in params],
                                dtype=np.float32).reshape((-1, 3))
@@ -560,7 +578,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         if stim is None:
             return None
         _require_stim_dimension(self, stim)
-        params = _pulse_train_params(stim)
+        params = _pulse_train_params(stim, self.implant.thresholds)
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         n_time = 1 if t_percept is None else np.array([t_percept]).size
         if not params:
@@ -574,8 +592,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         # Apply the same spatial postprocessing as the generic path.
         resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
-                       time_unit=self.time_unit,
-                       metadata={'stim': stim.metadata})
+                       time_unit=self.time_unit, metadata={'stim': stim},
+                       n_gray=self.n_gray, noise=self.noise)
 
     def _combine_temporal(self, percept, temporal, stim, t_percept):
         """Apply a normalized temporal response to the spatial percept."""
@@ -592,8 +610,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         fade = resp.data.reshape(-1) / peak
         return Percept(percept.data[..., 0][..., np.newaxis] * fade,
                        space=self.grid, time=resp.time,
-                       time_unit=probe.time_unit,
-                       metadata={'stim': stim.metadata})
+                       time_unit=probe.time_unit, metadata={'stim': stim})
 
     @staticmethod
     def _envelope_peak(temporal, envelope):
@@ -624,7 +641,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def _envelope_dur(self, stim):
         """Return the common duration of the active pulse trains."""
-        durs = {p[4] for p in _pulse_train_params(stim)}
+        durs = {p[4] for p in _pulse_train_params(stim,
+                                                  self.implant.thresholds)}
         if len(durs) > 1:
             raise NotImplementedError(
                 f"{type(self).__name__} requires active electrodes to share "
@@ -634,6 +652,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             return float(durs.pop())
 
         # No active electrodes; duration only determines the output time axis.
+        if getattr(stim, '_biphasic_params', None) is not None:
+            return float(stim.duration)
         sources = stim._structured_sources()
         if sources:
             return float(max(src.stim_dur for _, src in sources))
@@ -648,12 +668,19 @@ class BiphasicAxonMapModel(Model):
     [Granley2021]_. The model returns one representative percept for the full
     biphasic pulse train.
 
-    Stimuli must retain :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
-    structure. Give amplitude in multiples of perceptual threshold
-    (:py:data:`~pulse2percept.units.xTh`) or provide a threshold calibration for
-    current-valued amplitudes. Threshold is the 50%-detection current for a train
-    at the same frequency and 0.45 ms phase duration [Granley2021]_; the model
-    applies its own phase-duration correction.
+    Stimuli must describe the pulse train they deliver, rather than only its
+    samples: either retained
+    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
+    image encoded with the standard biphasic encoder pulse (see
+    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Give amplitude in
+    multiples of perceptual threshold (:py:data:`~pulse2percept.units.xTh`) or
+    provide a threshold calibration for current-valued amplitudes. Threshold is
+    the 50%-detection current for a train at the same frequency and 0.45 ms
+    phase duration [Granley2021]_; the model applies its own phase-duration
+    correction.
+
+    Encoded still images use the device-resolved amplitude, phase duration, and
+    frequency; exact pulse-onset timing is ignored. Videos are not supported.
 
     Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
     Their arguments are frequency, amplitude in multiples of threshold, and phase
@@ -776,7 +803,32 @@ class BiphasicAxonMapModel(Model):
     Notes
     -----
     ``ax_segments_range`` values above 90 are outside the range for which this
-    axon-map construction is considered reliable."""
+    axon-map construction is considered reliable.
+
+    Examples
+    --------
+    A picture, a device that encodes it, and a participant's measured
+    threshold:
+
+    .. code-block:: python
+
+        import pulse2percept as p2p
+
+        implant = p2p.implants.ArgusII(thresholds=80 * p2p.units.uA)
+        model = p2p.models.BiphasicAxonMapModel(implant=implant)
+        percept = model.predict_percept(p2p.stimuli.LogoBVL())
+
+    An encoder that asks for threshold multiples in the first place needs no
+    measured threshold:
+
+    .. code-block:: python
+
+        encoder = p2p.stimuli.AmplitudeEncoder(
+            amp_range=(0 * p2p.units.xTh, 3 * p2p.units.xTh))
+        implant = p2p.implants.ArgusII(encoder=encoder)
+        model = p2p.models.BiphasicAxonMapModel(implant=implant)
+        percept = model.predict_percept(p2p.stimuli.LogoBVL())
+    """
 
     def __init__(self, **params):
         super(BiphasicAxonMapModel, self).__init__(

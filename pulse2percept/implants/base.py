@@ -13,6 +13,7 @@ from .rasters import Raster
 from ..stimuli import (BiphasicPulseTrain, Encoder, Stimulus, ImageStimulus,
                        VideoStimulus)
 from ..stimuli.base import _describe_unit
+from ..stimuli.encoders import _EncodedStimulus
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
 from ..utils import PrettyPrint, deprecated
@@ -80,6 +81,13 @@ class ProsthesisSystem(PrettyPrint):
         (e.g. ``0.1 * mA``); see :py:mod:`pulse2percept.units`.
 
         .. versionadded:: 0.10.0
+    thresholds : float, Quantity, or dict, optional
+        Perceptual threshold current (uA) used to calibrate threshold-relative
+        (``xTh``) stimuli. A scalar applies to every electrode; a dict
+        calibrates the named electrodes only. See
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`.
+
+        .. versionadded:: 0.11.0
 
     Examples
     --------
@@ -112,7 +120,8 @@ class ProsthesisSystem(PrettyPrint):
     family = None
 
     def __init__(self, earray, eye='RE', preprocess=False,
-                 safe_mode=False, encoder=None, raster=None, max_current=None):
+                 safe_mode=False, encoder=None, raster=None, max_current=None,
+                 thresholds=None):
         self.earray = earray
         self.eye = eye
         self.safe_mode = safe_mode
@@ -120,6 +129,8 @@ class ProsthesisSystem(PrettyPrint):
         self.encoder = encoder
         self.raster = raster
         self.max_current = max_current
+        # Threshold normalization needs electrode names:
+        self.thresholds = thresholds
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -230,11 +241,13 @@ class ProsthesisSystem(PrettyPrint):
         return normalized
 
     def _calibrated(self, stim):
-        """Apply implant thresholds to retained ``BiphasicPulseTrain`` sources.
+        """Apply implant thresholds to retained threshold-relative sources.
 
         Return ``stim`` unchanged if no source needs recalibration.
         """
         thresholds = getattr(self, '_thresholds', None) or {}
+        if isinstance(stim, _EncodedStimulus):
+            return stim._with_thresholds(thresholds)
         sources = stim._structured_sources()
         if sources is None:
             return stim

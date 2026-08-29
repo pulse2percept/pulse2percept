@@ -13,7 +13,7 @@ from .images import ImageStimulus
 from .pulses import BiphasicPulse
 from .videos import VideoStimulus
 from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, mW,
-                     mm, ms, uA)
+                     mm, ms, uA, xTh)
 from ..utils import PrettyPrint, frame_interval
 # Point encoder warnings at the caller.
 from ..utils.deprecation import _warn_external
@@ -69,12 +69,12 @@ class _EncodedStimulus(Stimulus):
     _has_spatial_view = True
 
     __slots__ = ('_amp', '_ticks', '_sched', '_onsets', '_frames',
-                 '_pulse_ticks', '_pulse_vals', '_total', '_firing',
-                 '_frame_time', '_frame_dur', '_time')
+                 '_pulse_ticks', '_pulse_vals', '_total', '_freq',
+                 '_frame_time', '_frame_dur', '_time', '_phase_dur')
 
     def __init__(self, electrodes, amp, ticks, sched, onsets, frames,
-                 pulse_ticks, pulse_vals, total, firing, frame_time,
-                 frame_dur, cycle):
+                 pulse_ticks, pulse_vals, total, freq, frame_time,
+                 frame_dur, cycle, amp_unit=uA, phase_dur=None):
         self._amp = self._own(amp, amp.dtype)
         self._ticks = self._own(ticks, ticks.dtype)
         self._sched = self._own(sched, sched.dtype)
@@ -83,16 +83,22 @@ class _EncodedStimulus(Stimulus):
         self._pulse_ticks = self._own(pulse_ticks, pulse_ticks.dtype)
         self._pulse_vals = self._own(pulse_vals, pulse_vals.dtype)
         self._total = float(total)
-        # Electrode-frames with a nonzero requested rate:
-        self._firing = self._own(firing, bool)
+        # Realized Hz after clock/raster quantization:
+        self._freq = self._own(freq, np.float64)
         self._frame_time = self._own(frame_time, frame_time.dtype)
         self._frame_dur = float(frame_dur)
+        self._phase_dur = None if phase_dur is None else float(phase_dur)
         # Built lazily without rendering the waveform:
         self._time = None
-        self._defer(electrodes)
+        self._defer(electrodes, unit=amp_unit)
         self.metadata['encoder'] = {'frame_time': self._frame_time,
                                     'frame_dur': self._frame_dur,
                                     'cycle': cycle}
+
+    @property
+    def _firing(self):
+        """Electrode-frames whose pulse clock is running"""
+        return self._freq > 0
 
     def _spatial_view(self):
         """One column per frame of the source and one row per electrode"""
@@ -106,28 +112,73 @@ class _EncodedStimulus(Stimulus):
             stim = Stimulus(data.ravel(), electrodes=self.electrodes)
         stim.metadata['encoder'] = {'frame_time': self._frame_time,
                                     'frame_dur': self._frame_dur}
-        return stim
+        return stim._inherit_units(self)
 
-    def _rebuilt(self, electrodes, amp, sched, firing):
-        """This schedule, driving different electrodes or amplitudes"""
+    def _rebuilt(self, electrodes, amp, sched, freq, amp_unit=None):
+        """This schedule, driving different electrodes or amplitudes
+
+        ``amp_unit`` defaults to the unit this schedule already uses; only
+        threshold calibration changes it.
+        """
         rebuilt = _EncodedStimulus(
             electrodes, amp, self._ticks, sched, self._onsets, self._frames,
-            self._pulse_ticks, self._pulse_vals, self._total, firing,
+            self._pulse_ticks, self._pulse_vals, self._total, freq,
             self._frame_time, self._frame_dur,
-            self.metadata['encoder']['cycle'])
+            self.metadata['encoder']['cycle'],
+            amp_unit=self.unit if amp_unit is None else amp_unit,
+            phase_dur=self._phase_dur)
         rebuilt.metadata['user'] = deepcopy(self.metadata.get('user'))
         return rebuilt
+
+    def _biphasic_params(self):
+        """Return one realized biphasic condition per driven electrode.
+        
+        Returns None for custom pulses and rejects multi-frame schedules.
+        """
+        if self._phase_dur is None:
+            return None
+        if self._amp.shape[1] != 1:
+            raise NotImplementedError(
+                f"A schedule of {self._amp.shape[1]} frames describes a "
+                f"different pulse train on each frame, so it has no single "
+                f"(freq, amp, phase_dur) per electrode. Encode a still image, "
+                f"or drive the electrodes with BiphasicPulseTrain objects.")
+        return [(name, float(f), float(a), self._phase_dur, self._total)
+                for name, a, f in zip(self.electrodes, self._amp[:, 0],
+                                      self._freq[:, 0])
+                if a != 0 and f > 0]
+
+    def _with_thresholds(self, thresholds):
+        """Calibrate a threshold-relative schedule to uA without rendering."""
+        if self.unit != xTh:
+            return self
+        driven = np.any(self._firing & (self._amp != 0), axis=1)
+        names = [n for n, d in zip(self.electrodes, driven) if d]
+        missing = sorted(n for n in names if n not in thresholds)
+        if len(missing) == len(names):
+            return self
+        if missing:
+            raise DimensionMismatchError(
+                f"Calibrating only some electrodes would leave "
+                f"{', '.join(missing)} measured in threshold multiples and "
+                f"the rest in uA. Give every driven electrode a threshold, or "
+                f"none of them.")
+        # Undriven electrodes need no threshold:
+        scale = np.array([thresholds.get(n, 1.0) for n in self.electrodes],
+                         dtype=np.float32)[:, np.newaxis]
+        return self._rebuilt(self.electrodes, self._amp * scale, self._sched,
+                             self._freq, amp_unit=uA)
 
     def _scaled(self, factor):
         """This schedule, delivering amplitudes scaled by ``factor``"""
         return self._rebuilt(self.electrodes, self._amp * factor, self._sched,
-                             self._firing)
+                             self._freq)
 
     def _without_electrodes(self, electrodes):
         """This schedule, no longer driving ``electrodes``"""
         keep = self._keep_mask(electrodes)
         return self._rebuilt(self.electrodes[keep], self._amp[keep],
-                             self._sched[keep], self._firing[keep])
+                             self._sched[keep], self._freq[keep])
 
     @property
     def duration(self):
@@ -297,6 +348,9 @@ class StimulusEncoder(Encoder):
     __slots__ = ('phase_dur', 'interphase_dur', 'cathodic_first', 'pulse',
                  'clock', 'n_levels', 'frame_dur', 'stretch')
 
+    #: Unit of amplitudes returned by _modulate
+    amp_unit = uA
+
     def __init__(self, phase_dur=0.46, interphase_dur=0,
                  cathodic_first=True, pulse=None, clock=None, n_levels=None,
                  frame_dur=None, stretch=False):
@@ -367,8 +421,8 @@ class StimulusEncoder(Encoder):
         Returns
         -------
         amp : array
-            Nonnegative pulse amplitudes (uA), broadcastable to
-            ``gray.shape``.
+            Nonnegative pulse amplitudes, measured in
+            :py:attr:`amp_unit`, broadcastable to ``gray.shape``.
         freq : array
             Pulse frequencies (Hz), broadcastable to ``gray.shape``.
         """
@@ -768,10 +822,13 @@ class StimulusEncoder(Encoder):
         # The schedule is settled. Expanding it into an n_el x n_time matrix
         # is the expensive half, and the half nothing needs until somebody
         # asks for samples:
+        realized = np.zeros(shape, dtype=np.float64)
+        realized[firing] = MS_PER_S / (period[firing] * DT)
         return _EncodedStimulus(
             electrodes, amp, ticks, sched, onsets, frames, pulse_ticks,
-            pulse_vals, total, freq > 0, frame_time, frame_dur,
-            None if cycle is None else cycle * DT)
+            pulse_vals, total, realized, frame_time, frame_dur,
+            None if cycle is None else cycle * DT, amp_unit=self.amp_unit,
+            phase_dur=None if self.pulse is not None else self.phase_dur)
 
     def _modulation(self, source, implant=None):
         """What the source asks each electrode for, frame by frame
@@ -831,9 +888,10 @@ class StimulusEncoder(Encoder):
         Returns
         -------
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The encoded stimulus, ready for the implant to deliver.
-            Its amplitudes are in microamps and its time axis in
-            milliseconds, whatever units the encoder's own parameters were
+            The encoded stimulus, ready for the implant to deliver. Its
+            amplitudes are in microamps, or in threshold multiples (``xTh``)
+            if the encoder's amplitude parameters were, and its time axis is
+            in milliseconds, whatever units the encoder's own parameters were
             given in.
 
         Raises
@@ -866,8 +924,20 @@ class AmplitudeEncoder(StimulusEncoder):
     Parameters
     ----------
     amp_range : (min_amp, max_amp), optional
-        Range of pulse amplitudes (uA). A gray level of 0 maps onto
-        ``min_amp`` and a gray level of 1 onto ``max_amp``.
+        Range of pulse amplitudes, in uA or in multiples of perceptual
+        threshold (``xTh``). A gray level of 0 maps onto ``min_amp`` and a
+        gray level of 1 onto ``max_amp``.
+
+        Bare numbers mean uA. Both endpoints must carry the same dimension, so
+        a threshold-relative range is spelled ``(0 * xTh, 3 * xTh)``; the half
+        spelling ``(0, 3 * xTh)`` is rejected rather than guessed at. A
+        threshold-relative range encodes to a ``xTh`` stimulus, which an
+        implant converts to current when it has
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` for
+        every driven electrode.
+
+        .. versionchanged:: 0.11.0
+            Accepts ``xTh`` as well as current.
     freq : float, optional
         Pulse train frequency (Hz), the same for every electrode. The pulse
         clock runs independently of the video, so the frame rate has no say in
@@ -907,13 +977,14 @@ class AmplitudeEncoder(StimulusEncoder):
     >>> stim = encoder.encode(p2p.stimuli.BostonTrain(), implant=implant)
 
     """
-    __slots__ = ('amp_range', 'freq')
+    __slots__ = ('amp_range', 'freq', 'amp_unit')
 
     def __init__(self, amp_range=(0, 50), freq=20, **kwargs):
         super().__init__(**kwargs)
+        amp_unit = self._amp_range_unit(amp_range)
         # See `StimulusEncoder.__init__`. `amp_range` is converted element by
         # element, so its two endpoints may be given in different units:
-        amp_range = as_value(amp_range, uA, 'amp_range')
+        amp_range = as_value(amp_range, amp_unit, 'amp_range')
         freq = as_value(freq, Hz, 'freq')
         if np.size(amp_range) != 2:
             raise ValueError(f"'amp_range' must be a (min_amp, max_amp) "
@@ -927,12 +998,36 @@ class AmplitudeEncoder(StimulusEncoder):
         if freq < 0:
             raise ValueError("'freq' cannot be negative.")
         self.amp_range = amp_range
+        self.amp_unit = amp_unit
         self.freq = freq
+
+    @staticmethod
+    def _amp_range_unit(amp_range):
+        """Return the uA or xTh unit of amp_range, rejecting mixtures."""
+        dim = getattr(amp_range, 'dimension', None)
+        if dim is not None:
+            dims = [dim]
+        else:
+            try:
+                dims = [getattr(a, 'dimension', uA.dimension)
+                        for a in amp_range]
+            except TypeError:
+                # Not a pair at all; the shape check reports that.
+                return uA
+        if all(d == xTh.dimension for d in dims):
+            return xTh
+        if any(d == xTh.dimension for d in dims):
+            raise DimensionMismatchError(
+                f"'amp_range' mixes threshold multiples with current. Give "
+                f"both endpoints in xTh, as in (0 * xTh, 3 * xTh), or both in "
+                f"current. Got {amp_range}.")
+        return uA
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         params = super()._pprint_params()
-        params.update({'amp_range': self.amp_range, 'freq': self.freq})
+        params.update({'amp_range': self.amp_range, 'amp_unit': self.amp_unit,
+                       'freq': self.freq})
         return params
 
     def _modulate(self, gray):

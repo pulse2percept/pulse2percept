@@ -878,6 +878,39 @@ def test_ProsthesisSystem_thresholds():
     npt.assert_equal(implant.thresholds, {})
 
 
+def test_ProsthesisSystem_thresholds_at_construction():
+    npt.assert_equal(ArgusII().thresholds, {})
+    for scalar in (80, 80 * uA, 0.08 * mA):
+        implant = ArgusII(thresholds=scalar)
+        npt.assert_equal(len(implant.thresholds), implant.n_electrodes)
+        npt.assert_almost_equal(implant.thresholds['A1'], 80)
+    implant = ArgusII(thresholds={'A1': 80, 'A2': 107 * uA})
+    npt.assert_equal(sorted(implant.thresholds), ['A1', 'A2'])
+    npt.assert_almost_equal(implant.thresholds['A2'], 107)
+    # Threshold keys use the final left-eye electrode names:
+    implant = ArgusII(eye='LE', thresholds={'A10': 80})
+    npt.assert_equal(sorted(implant.thresholds), ['A10'])
+    npt.assert_almost_equal(implant.thresholds['A10'], 80)
+    stim = ArgusII(thresholds=80).prepare_stim(
+        {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
+    npt.assert_almost_equal(np.abs(stim.data).max(), 160)
+    npt.assert_equal(stim.unit, uA)
+
+
+def test_ProsthesisSystem_thresholds_at_construction_are_validated():
+    for bad in (0, -5, np.nan, np.inf):
+        with pytest.raises(ValueError):
+            ArgusII(thresholds=bad)
+        with pytest.raises(ValueError):
+            ArgusII(thresholds={'A1': bad})
+    with pytest.raises(ValueError):
+        ArgusII(thresholds={'ZZ9': 80 * uA})
+    with pytest.raises(DimensionMismatchError):
+        ArgusII(thresholds=5 * ms)
+    implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100), thresholds=80)
+    npt.assert_almost_equal(implant.thresholds[0], 80)
+
+
 def test_ProsthesisSystem_thresholds_are_validated():
     implant = ArgusII()
     with pytest.raises(ValueError):

@@ -19,7 +19,7 @@ from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 from pulse2percept.units import (DimensionMismatchError, Hz, Quantity, W,
                                  dimensionless, kHz, m, mA, mW, mm, ms, uA,
-                                 us)
+                                 us, xTh)
 from pulse2percept.units import s as sec
 
 
@@ -1528,7 +1528,6 @@ def test_PRIMAEncoder_records_its_settings():
     npt.assert_almost_equal(stim.pulse_dur.max(), 9.8)
     npt.assert_almost_equal(stim.duty_cycle.max(), 0.294)
     npt.assert_equal(stim.grayscale, True)
-    # Optical settings are schedule state; metadata stores only frame timing.
     npt.assert_equal(sorted(stim.metadata['encoder']),
                      ['frame_dur', 'frame_time'])
 
@@ -1572,7 +1571,6 @@ def test_PRIMAEncoder_video():
     npt.assert_almost_equal(stim.duration, 120)
     npt.assert_almost_equal(stim.metadata['encoder']['frame_dur'], 1000 / 30)
     npt.assert_equal(stim.pulse_dur.shape, (378, 4))
-    # Zero-order hold samples source frames 0, 0, 1, and 2.
     npt.assert_array_almost_equal(stim.pulse_dur.max(axis=0),
                                   [9.8, 9.8, 0, 9.8])
     view = stim._spatial_view()
@@ -1591,14 +1589,12 @@ def test_PRIMAEncoder_samples_a_video_without_retiming_it(fps, n_source):
     stim = PRIMAEncoder().encode(video, implant=implant)
     npt.assert_almost_equal(stim.duration, 1000)
     npt.assert_equal(stim.pulse_dur.shape[1], 30)
-    # Projector frames remain 33.3 ms apart.
     npt.assert_almost_equal(np.diff(stim._spatial_view().time), 1000 / 30,
                             decimal=3)
 
 
 @pytest.mark.parametrize('fps', [15, 60])
 def test_PRIMAEncoder_repeats_slow_frames_and_skips_fast_ones(fps):
-    # Alternating source frames expose repeat/skip behavior.
     implant = PRIMAPivotal()
     gray = np.zeros((8, 8, fps))
     gray[..., ::2] = 1.0
@@ -1611,12 +1607,10 @@ def test_PRIMAEncoder_repeats_slow_frames_and_skips_fast_ones(fps):
         npt.assert_array_equal(lit.reshape(-1, 2)[:, 0],
                                lit.reshape(-1, 2)[:, 1])
     else:
-        # At 60 fps, only even source frames are sampled.
         npt.assert_equal(lit.all(), True)
 
 
 def test_PRIMAEncoder_starts_where_the_source_does():
-    # Preserve nonzero source start times.
     implant = PRIMAPivotal()
     video = VideoStimulus(np.ones((8, 8, 3)),
                           time=100 + np.arange(3) * (1000 / 30))
@@ -1627,8 +1621,6 @@ def test_PRIMAEncoder_starts_where_the_source_does():
     # Dark until the source starts:
     npt.assert_almost_equal(stim.data[:, stim.time < 100].max(), 0)
 
-    # Cropping also preserves the nonzero start time.
-    # bottom/right avoid an unrelated spatial bounds check in VideoStimulus.crop.
     gray = np.zeros((8, 8, 9))
     gray[..., 3:6] = 1.0
     cropped = VideoStimulus(gray, time=np.arange(9) * (1000 / 30)).crop(
@@ -1647,7 +1639,6 @@ def test_PRIMAEncoder_finishes_every_pulse_it_starts():
     npt.assert_almost_equal(stim.duration, 40)
     npt.assert_array_almost_equal(stim.pulse_dur.max(axis=0), [9.8, 0])
     npt.assert_almost_equal(stim.data[:, -1].max(), 0)
-    # Final pulses are dropped rather than shortened off-grid.
     kept = stim.pulse_dur[stim.pulse_dur > 0]
     npt.assert_almost_equal(kept / 0.7, np.round(kept / 0.7))
 
@@ -1657,20 +1648,17 @@ def test_PRIMAEncoder_defers_the_waveform():
     stim = PRIMAEncoder().encode(ImageStimulus(np.ones((16, 16))),
                                  implant=implant)
     npt.assert_equal(_rendered(stim), False)
-    # Schedule properties do not require waveform rendering.
     npt.assert_almost_equal(stim.duration, 500)
     npt.assert_equal(stim.unit, mW / mm ** 2)
     npt.assert_equal(len(stim.electrodes), 378)
     npt.assert_almost_equal(stim.pulse_dur.max(), 9.8)
     npt.assert_equal(_rendered(stim._spatial_view()), True)
     npt.assert_equal(_rendered(stim), False)
-    # Preparation and electrode removal preserve laziness.
     npt.assert_equal(_rendered(implant.prepare_stim(stim)), False)
     implant.deactivate('A5')
     prepared = implant.prepare_stim(ImageStimulus(np.ones((16, 16))))
     npt.assert_equal(_rendered(prepared), False)
     npt.assert_equal(len(prepared.electrodes), 377)
-    # Accessing samples renders the waveform.
     npt.assert_equal(stim.data.shape, (378, stim.time.size))
     npt.assert_equal(_rendered(stim), True)
 
@@ -1678,9 +1666,119 @@ def test_PRIMAEncoder_defers_the_waveform():
 def test_PRIMAEncoder_scales_the_power():
     stim = PRIMAEncoder().encode(ImageStimulus(np.ones((8, 8))),
                                  implant=PRIMAPivotal())
-    # Scaling changes irradiance, not quantized pulse duration.
     scaled = stim * 0.5
     npt.assert_equal(_rendered(scaled), False)
     npt.assert_almost_equal(scaled.irradiance, 1.75)
     npt.assert_array_almost_equal(scaled.pulse_dur, stim.pulse_dur)
     npt.assert_almost_equal(scaled.data.max(), 1.75)
+
+
+def test_AmplitudeEncoder_amp_range_unit():
+    for amp_range in ((0, 50), (0, 50 * uA), (0 * uA, 0.05 * mA)):
+        encoder = AmplitudeEncoder(amp_range=amp_range)
+        npt.assert_equal(encoder.amp_unit, uA)
+        npt.assert_almost_equal(np.asarray(encoder.amp_range), [0, 50])
+    encoder = AmplitudeEncoder(amp_range=(0 * xTh, 3 * xTh))
+    npt.assert_equal(encoder.amp_unit, xTh)
+    npt.assert_almost_equal(np.asarray(encoder.amp_range), [0, 3])
+    npt.assert_equal(isinstance(encoder.amp_range[1], Quantity), False)
+    npt.assert_equal(
+        AmplitudeEncoder(amp_range=np.array([0, 3]) * xTh).amp_unit, xTh)
+
+
+@pytest.mark.parametrize('amp_range', [(0, 3 * xTh), (0 * xTh, 3),
+                                       (0 * uA, 3 * xTh), (0 * xTh, 50 * uA)])
+def test_AmplitudeEncoder_amp_range_rejects_mixed_units(amp_range):
+    with pytest.raises(DimensionMismatchError):
+        AmplitudeEncoder(amp_range=amp_range)
+
+
+@pytest.mark.parametrize('amp_range', [(0 * ms, 3 * ms), (0 * mW, 3 * mW)])
+def test_AmplitudeEncoder_amp_range_rejects_wrong_dimension(amp_range):
+    with pytest.raises(DimensionMismatchError):
+        AmplitudeEncoder(amp_range=amp_range)
+
+
+@pytest.mark.parametrize('bad', [(-1 * xTh, 3 * xTh),
+                                 (0 * xTh, np.inf * xTh),
+                                 (0 * xTh, np.nan * xTh)])
+def test_AmplitudeEncoder_amp_range_xTh_is_validated(bad):
+    with pytest.raises(ValueError):
+        AmplitudeEncoder(amp_range=bad)
+
+
+def test_AmplitudeEncoder_encodes_threshold_multiples():
+    img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
+    stim = AmplitudeEncoder(amp_range=(0 * xTh, 3 * xTh)).encode(img)
+    npt.assert_equal(stim.unit, xTh)
+    npt.assert_equal(stim.time_unit, ms)
+    npt.assert_almost_equal(np.abs(stim.data).max(axis=1).min(), 0, decimal=4)
+    npt.assert_almost_equal(np.abs(stim.data).max(axis=1).max(), 3, decimal=4)
+    npt.assert_equal(stim.unit, xTh)
+    current = AmplitudeEncoder(amp_range=(0, 3)).encode(img)
+    npt.assert_equal(current.unit, uA)
+    npt.assert_array_equal(current.data, stim.data)
+
+
+def test_AmplitudeEncoder_xTh_survives_the_schedule_operations():
+    stim = AmplitudeEncoder(amp_range=(0 * xTh, 3 * xTh)).encode(
+        ImageStimulus(np.ones((4, 4))), implant=None)
+    npt.assert_equal(stim._spatial_view().unit, xTh)
+    npt.assert_almost_equal(stim._spatial_view().data.max(), 3)
+    npt.assert_equal(stim._scaled(2).unit, xTh)
+    npt.assert_almost_equal(stim._scaled(2)._spatial_view().data.max(), 6)
+    npt.assert_equal(stim._without_electrodes([stim.electrodes[0]]).unit, xTh)
+    npt.assert_equal(_rendered(stim), False)
+
+
+def test_AmplitudeEncoder_xTh_is_calibrated_by_the_implant():
+    img = ImageStimulus(np.ones((16, 16)))
+    encoder = lambda: AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh))
+    plain = ArgusII(encoder=encoder()).prepare_stim(img)
+    npt.assert_equal(plain.unit, xTh)
+    npt.assert_almost_equal(plain._spatial_view().data.max(), 2)
+    calibrated = ArgusII(thresholds=80, encoder=encoder()).prepare_stim(img)
+    npt.assert_equal(calibrated.unit, uA)
+    npt.assert_equal(_rendered(calibrated), False)
+    npt.assert_almost_equal(calibrated._spatial_view().data.max(), 160)
+    implant = ArgusII(thresholds={'A1': 40, 'A2': 80}, encoder=encoder())
+    implant.thresholds = {**implant.thresholds,
+                          **{name: 60 for name in implant.electrode_names
+                             if name not in ('A1', 'A2')}}
+    view = implant.prepare_stim(img)._spatial_view()
+    amps = dict(zip(view.electrodes, np.abs(view.data).max(axis=1)))
+    npt.assert_almost_equal(amps['A1'], 80)
+    npt.assert_almost_equal(amps['A2'], 160)
+
+
+def test_AmplitudeEncoder_xTh_partial_calibration_raises():
+    implant = ArgusII(thresholds={'A1': 80},
+                      encoder=AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh)))
+    with pytest.raises(DimensionMismatchError) as err:
+        implant.prepare_stim(ImageStimulus(np.ones((16, 16))))
+    npt.assert_equal('threshold multiples' in str(err.value), True)
+
+
+def test_AmplitudeEncoder_xTh_zero_amplitude_needs_no_threshold():
+    implant = ArgusII(thresholds={'A1': 80},
+                      encoder=AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh)))
+    stim = implant.prepare_stim(ImageStimulus(np.zeros((16, 16))))
+    npt.assert_equal(stim.unit, xTh)
+    npt.assert_almost_equal(np.abs(stim.data).max(), 0)
+    img = np.zeros((6, 10))
+    img[0, 0] = 1
+    stim = implant.prepare_stim(ImageStimulus(img))
+    npt.assert_equal(stim.unit, uA)
+    npt.assert_almost_equal(np.abs(stim.data).max(), 160)
+
+
+def test_AmplitudeEncoder_xTh_fails_the_electrical_safety_checks():
+    encoder = AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh))
+    img = ImageStimulus(np.ones((16, 16)))
+    limited = ArgusII(encoder=encoder)
+    limited.max_current = 1000
+    for implant in (ArgusII(encoder=encoder, safe_mode=True), limited):
+        with pytest.raises(DimensionMismatchError):
+            implant.prepare_stim(img)
+    implant = ArgusII(encoder=encoder, thresholds=80, safe_mode=True)
+    npt.assert_equal(implant.prepare_stim(img).unit, uA)

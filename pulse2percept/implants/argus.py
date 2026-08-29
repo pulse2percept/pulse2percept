@@ -230,6 +230,14 @@ class ArgusII(ProsthesisSystem):
         ``raster=None`` to drive every electrode at once.
 
         .. versionadded:: 0.10.0
+    thresholds : float, Quantity, or dict, optional
+        Perceptual threshold current (uA) of the participant this device is
+        modeling, used to calibrate threshold-relative (``xTh``) stimuli. A
+        scalar applies to every electrode; a dict calibrates the named
+        electrodes only. See
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`.
+
+        .. versionadded:: 0.11.0
 
     Examples
     --------
@@ -267,7 +275,7 @@ class ArgusII(ProsthesisSystem):
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True,
                  safe_mode=False, encoder=_DEVICE_DEFAULT,
-                 raster=_DEVICE_DEFAULT):
+                 raster=_DEVICE_DEFAULT, thresholds=None):
         self.safe_mode = safe_mode
         self.preprocess = preprocess
         self.shape = (6, 10)
@@ -307,6 +315,9 @@ class ArgusII(ProsthesisSystem):
                 electrodes.update({name: obj})
             # Assign the new ordered dict to earray:
             self.earray._electrodes = electrodes
+
+        # Set after left-eye electrode renaming:
+        self.thresholds = thresholds
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
