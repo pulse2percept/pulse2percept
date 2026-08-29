@@ -839,6 +839,8 @@ def test_BiphasicAxonMapSpatial_with_temporal_model_runs(temporal_cls):
     npt.assert_equal(percept.data.ndim, 3)
     npt.assert_equal(percept.data.shape[-1] > 1, True)
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
+    # Temporal composition must not change what ``metadata['stim']`` holds:
+    npt.assert_equal(isinstance(percept.metadata['stim'], Stimulus), True)
 
 
 @pytest.mark.parametrize('temporal_cls', _TEMPORALS)
@@ -1109,10 +1111,8 @@ def test_BiphasicAxonMap_noise(model_cls):
     # noise must reach the Percept, as in the generic spatial path:
     source = {'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)}
     model = model_cls(implant=ArgusII(), xrange=(-4, 4), yrange=(-4, 4),
-                      step=1, n_ax_segments=30, noise=0.5).build()
+                      step=1, n_ax_segments=30, noise=1.0).build()
     frame = model.predict_percept(source).data[..., 0]
-    # Salt and pepper are the brightest and darkest values in the frame, and
-    # a fraction ``noise`` of the pixels are set to one or the other:
-    n_extreme = (np.sum(np.isclose(frame, frame.max())) +
-                 np.sum(np.isclose(frame, frame.min())))
-    npt.assert_equal(n_extreme >= int(0.5 * frame.size), True)
+    # Salt and pepper are the brightest and darkest values in the frame, so
+    # noising every pixel leaves exactly those two values:
+    npt.assert_equal(np.unique(frame).size, 2)

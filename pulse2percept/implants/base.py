@@ -80,6 +80,13 @@ class ProsthesisSystem(PrettyPrint):
         (e.g. ``0.1 * mA``); see :py:mod:`pulse2percept.units`.
 
         .. versionadded:: 0.10.0
+    thresholds : float, Quantity, or dict, optional
+        Perceptual threshold current (uA) used to calibrate threshold-relative
+        (``xTh``) stimuli. A scalar applies to every electrode; a dict
+        calibrates the named electrodes only. See
+        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`.
+
+        .. versionadded:: 0.11.0
 
     Examples
     --------
@@ -112,7 +119,8 @@ class ProsthesisSystem(PrettyPrint):
     family = None
 
     def __init__(self, earray, eye='RE', preprocess=False,
-                 safe_mode=False, encoder=None, raster=None, max_current=None):
+                 safe_mode=False, encoder=None, raster=None, max_current=None,
+                 thresholds=None):
         self.earray = earray
         self.eye = eye
         self.safe_mode = safe_mode
@@ -120,6 +128,9 @@ class ProsthesisSystem(PrettyPrint):
         self.encoder = encoder
         self.raster = raster
         self.max_current = max_current
+        # Normalizing per-electrode thresholds needs the electrode names, so
+        # the array must already be in place:
+        self.thresholds = thresholds
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

@@ -61,6 +61,10 @@ API changes:
   ``PRIMA40`` become ``Ho2019FlatArray(55)``/``Ho2019FlatArray(40)``.
   The old names are deprecated until 0.12.0 (:pull:`865`).
 
+* :py:class:`~pulse2percept.implants.ProsthesisSystem` and
+  :py:class:`~pulse2percept.implants.ArgusII` take ``thresholds`` at
+  construction, e.g. ``ArgusII(thresholds=80 * uA)``.
+
 * New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
   wherever p2p already took an angle in degrees.
 
