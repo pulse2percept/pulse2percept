@@ -3,9 +3,10 @@
 Fast, dependency-free HTML/JavaScript animations.
 
 :py:class:`HTMLAnimation` renders the static parts of the figure exactly once
-and packs all frames into a single, color-mapped sprite sheet that is blitted
-into a ``<canvas>`` by a small vanilla-JavaScript player. This is typically two
-orders of magnitude faster and produces much smaller notebooks and doc pages.
+and packs all frames into a single, color-mapped sprite sheet per animated
+image, which a small vanilla-JavaScript player blits into a ``<canvas>``. This
+is typically two orders of magnitude faster and produces much smaller notebooks
+and doc pages.
 
 The sheet is encoded as JPEG by default, which roughly halves it again; pass
 ``fmt='png'`` if you need the frames to be pixel-exact.
@@ -363,20 +364,22 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt, bg_color=(255, 255, 255)):
             'sw': stride_w, 'sh': stride_h}
 
 
-def _background(fig, im):
-    """Render everything but the animated image itself
+def _background(fig, images):
+    """Render everything but the animated images themselves
 
     Returns the PNG bytes of the static figure along with its pixel size.
     """
-    visible = im.get_visible()
-    im.set_visible(False)
+    visible = [im.get_visible() for im in images]
+    for im in images:
+        im.set_visible(False)
     buf = BytesIO()
     try:
         # ``bbox_inches`` and ``dpi`` must be pinned: the geometry below is in
         # figure pixels, and 'tight' would crop the canvas:
         fig.savefig(buf, format='png', dpi=fig.dpi, bbox_inches=None)
     finally:
-        im.set_visible(visible)
+        for im, was_visible in zip(images, visible):
+            im.set_visible(was_visible)
     width, height = Image.open(buf).size
     return buf.getvalue(), width, height
 
@@ -438,6 +441,46 @@ def _title_geometry(title, width, height, dpi):
     }
 
 
+#: One animated image: the artist (``image``), its frames as an (Y, X[, C], T)
+#: array (``data``), and which of those frames each display frame shows
+#: (``index``, or None to advance one frame per display frame).
+_Layer = namedtuple('_Layer', ['image', 'data', 'index'])
+
+
+def _as_layers(image, frame_data, frame_index):
+    """Pair the animated images up with the frames they display
+
+    Returns one ``_Layer`` per image artist, or None if the caller did not hand
+    over what the fast player needs.
+    """
+    if image is None or frame_data is None:
+        return None
+    if isinstance(image, (list, tuple, np.ndarray)):
+        images, data = list(image), list(frame_data)
+    else:
+        images, data = [image], [frame_data]
+    if frame_index is None:
+        index = [None] * len(images)
+    else:
+        index = [None if idx is None else np.asarray(idx, dtype=np.intp)
+                 for idx in frame_index]
+    if not len(images) == len(data) == len(index):
+        raise ValueError(f"'image', 'frame_data', and 'frame_index' must "
+                         f"describe the same number of animated images, not "
+                         f"{len(images)}, {len(data)}, and {len(index)}.")
+    return [_Layer(*layer) for layer in zip(images, data, index)]
+
+
+def _n_display_frames(layers):
+    """The number of frames the animation shows, on which all layers agree"""
+    counts = {int(np.size(layer.index)) if layer.index is not None
+              else int(np.shape(layer.data)[-1]) for layer in layers}
+    if len(counts) > 1:
+        raise ValueError(f"Every animated image must supply the same number "
+                         f"of display frames, not {sorted(counts)}.")
+    return counts.pop()
+
+
 _PLAYER = Template("""
 <div class="p2p-anim" id="$uid">
   <div class="p2p-stage">
@@ -495,17 +538,31 @@ _PLAYER = Template("""
   var mode = root.querySelector(".p2p-mode");
   var toggle = root.querySelector(".p2p-toggle");
   var frame = 0, dir = 1, timer = null, playing = false, due = 0;
-  var sheet = new Image();
+  // One sprite sheet per animated image, drawn back to front:
+  var sheets = cfg.layers.map(function (layer) {
+    var img = new Image();
+    img.onload = draw;
+    img.src = layer.src;
+    return img;
+  });
 
   function draw() {
-    if (!sheet.complete || !sheet.naturalWidth) { return; }
-    var col = frame % cfg.ncols, row = (frame - col) / cfg.ncols;
-    ctx.imageSmoothingEnabled = cfg.smooth;
-    // Frames with an alpha channel are composited onto the static background,
-    // so the previous frame has to go first or they stack up:
-    ctx.clearRect(cfg.rect[0], cfg.rect[1], cfg.rect[2], cfg.rect[3]);
-    ctx.drawImage(sheet, col * cfg.sw, row * cfg.sh, cfg.fw, cfg.fh,
-                  cfg.rect[0], cfg.rect[1], cfg.rect[2], cfg.rect[3]);
+    cfg.layers.forEach(function (layer, k) {
+      var sheet = sheets[k];
+      if (!sheet.complete || !sheet.naturalWidth) { return; }
+      // A layer that does not advance one frame per display frame (a still
+      // image, a source sampled at another rate) says which one it shows:
+      var f = layer.map ? layer.map[frame] : frame;
+      var col = f % layer.ncols, row = (f - col) / layer.ncols;
+      ctx.imageSmoothingEnabled = layer.smooth;
+      // Frames with an alpha channel are composited onto the static
+      // background, so the previous frame has to go first or they stack up:
+      ctx.clearRect(layer.rect[0], layer.rect[1], layer.rect[2],
+                    layer.rect[3]);
+      ctx.drawImage(sheet, col * layer.sw, row * layer.sh, layer.fw, layer.fh,
+                    layer.rect[0], layer.rect[1], layer.rect[2],
+                    layer.rect[3]);
+    });
     if (cfg.title) {
       ctx.clearRect(cfg.title.rect[0], cfg.title.rect[1],
                     cfg.title.rect[2], cfg.title.rect[3]);
@@ -593,8 +650,6 @@ _PLAYER = Template("""
     show(parseInt(slider.value, 10));
   });
   mode.value = cfg.mode;
-  sheet.onload = draw;
-  sheet.src = "data:$sheet_mime;base64,$sheet";
   show(0);
 })();
 </script>
@@ -617,14 +672,27 @@ class HTMLAnimation(FuncAnimation):
     ----------
     fig, func, frames, *args, **kwargs :
         Passed to :py:class:`~matplotlib.animation.FuncAnimation`
-    image : matplotlib.image.AxesImage
-        The image artist that is updated by ``func``. Its position, colormap,
-        and normalization determine how the frames are drawn
-    frame_data : ndarray
-        Either (Y, X, T) scalar data, (Y, X, 3, T) RGB data, or (Y, X, 4, T)
-        RGBA data, matching what ``func`` displays in ``image``
+    image : matplotlib.image.AxesImage or list thereof
+        The image artist(s) updated by ``func``. Their position, colormap, and
+        normalization determine how the frames are drawn
+    frame_data : ndarray or list thereof
+        One array per image: either (Y, X, T) scalar data, (Y, X, 3, T) RGB
+        data, or (Y, X, 4, T) RGBA data, matching what ``func`` displays
+    frame_index : list of (array_like or None), optional
+        One entry per image, giving the frame of ``frame_data`` that each
+        display frame shows. None (the default, or per image) advances that
+        image one frame at a time. This is what lets a still image or a source
+        sampled at another rate share a clock with the rest of the figure.
+
+        .. versionadded:: 0.11
     labels : list of str or None
         Per-frame titles. If None, the title is left alone
+    title : matplotlib.text.Text, optional
+        The artist that ``labels`` are drawn into. Defaults to the title of the
+        first image's Axes; pass ``fig.suptitle('')`` to label a figure with
+        more than one animated panel.
+
+        .. versionadded:: 0.11
     fmt : {'jpg', 'png'}, optional
         Whether to encode the frames as JPEG or PNG. JPEG is typically an
         order of magnitude smaller, PNG is lossless
@@ -641,20 +709,24 @@ class HTMLAnimation(FuncAnimation):
        which they are displayed, exactly like Matplotlib would rasterize them.
     *  The per-frame title is drawn by the browser, so it uses DejaVu Sans if
        available and falls back to the default sans-serif font otherwise.
+
+    .. versionchanged:: 0.11
+        A figure may animate more than one image.
     """
 
     def __init__(self, fig, func, frames=None, *args, image=None,
-                 frame_data=None, labels=None, fmt='jpg', intervals=None,
-                 **kwargs):
-        self._image = image
-        self._frame_data = frame_data
+                 frame_data=None, frame_index=None, labels=None, title=None,
+                 fmt='jpg', intervals=None, **kwargs):
+        self._layers = _as_layers(image, frame_data, frame_index)
+        self._n_frames = (None if self._layers is None
+                          else _n_display_frames(self._layers))
         self._labels = labels
+        self._title = title
         self._fmt = _check_fmt(fmt)
         self._html = None
         if intervals is not None:
             intervals = np.array(intervals, dtype=np.float64).ravel()
-            n_frames = (None if frame_data is None
-                        else np.shape(frame_data)[-1])
+            n_frames = self._n_frames
             if n_frames is not None and intervals.size != n_frames:
                 raise ValueError(f"'intervals' must have one value per "
                                  f"frame ({n_frames}), not "
@@ -679,39 +751,18 @@ class HTMLAnimation(FuncAnimation):
             return self._intervals
         return np.full(n_frames, float(self._interval))
 
-    def _build_html(self, intervals, default_mode):
-        """Assemble the self-contained HTML player"""
-        fig = self._fig
-        im = self._image
-        if im.norm.vmin is None or im.norm.vmax is None:
-            # The image is hidden while the background is rendered, so it will
-            # never get a chance to autoscale itself:
-            im.norm.autoscale_None(np.asarray(self._frame_data))
-        title_artist = im.axes.title
-        old_title = title_artist.get_text()
-        try:
-            if self._labels is not None:
-                # The player draws the title itself, on a canvas that sits on
-                # top of the static background:
-                title_artist.set_text('')
-            bg, width, height = _background(fig, im)
-            # ``get_window_extent`` is only meaningful once the figure has been
-            # drawn, which ``_background`` just did:
-            bbox = im.get_window_extent()
-            title = None
-            if self._labels is not None:
-                title = _title_geometry(title_artist, width, height, fig.dpi)
-        finally:
-            title_artist.set_text(old_title)
+    def _layer_config(self, layer, bbox, height):
+        """Where one animated image sits, and how its frames are packed"""
         left, right = int(np.floor(bbox.x0)), int(np.ceil(bbox.x1))
         top, bottom = int(np.floor(height - bbox.y1)), \
             int(np.ceil(height - bbox.y0))
         rect = [left, top, max(1, right - left), max(1, bottom - top)]
-        sheet = _sprite_sheet(self._frame_data, im.norm, im.cmap,
-                              (rect[3], rect[2]), self._fmt,
-                              bg_color=_bg_color(im.axes))
-        config = {
-            'n': int(np.shape(self._frame_data)[-1]),
+        im = layer.image
+        sheet = _sprite_sheet(layer.data, im.norm, im.cmap, (rect[3], rect[2]),
+                              self._fmt, bg_color=_bg_color(im.axes))
+        return {
+            'src': (f'data:{sheet["mime"]};base64,'
+                    f'{base64.b64encode(sheet["data"]).decode("ascii")}'),
             'ncols': sheet['ncols'],
             'fw': sheet['fw'],
             'fh': sheet['fh'],
@@ -722,6 +773,41 @@ class HTMLAnimation(FuncAnimation):
             # to nearest-neighbor once the image is strongly magnified:
             'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw'] and
                        rect[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
+            'map': (None if layer.index is None
+                    else [int(i) for i in layer.index]),
+        }
+
+    def _build_html(self, intervals, default_mode):
+        """Assemble the self-contained HTML player"""
+        fig = self._fig
+        images = [layer.image for layer in self._layers]
+        for layer in self._layers:
+            if layer.image.norm.vmin is None or layer.image.norm.vmax is None:
+                # The image is hidden while the background is rendered, so it
+                # will never get a chance to autoscale itself:
+                layer.image.norm.autoscale_None(np.asarray(layer.data))
+        title_artist = self._title
+        if title_artist is None:
+            title_artist = images[0].axes.title
+        old_title = title_artist.get_text()
+        try:
+            if self._labels is not None:
+                # The player draws the title itself, on a canvas that sits on
+                # top of the static background:
+                title_artist.set_text('')
+            bg, width, height = _background(fig, images)
+            # ``get_window_extent`` is only meaningful once the figure has been
+            # drawn, which ``_background`` just did:
+            boxes = [im.get_window_extent() for im in images]
+            title = None
+            if self._labels is not None:
+                title = _title_geometry(title_artist, width, height, fig.dpi)
+        finally:
+            title_artist.set_text(old_title)
+        config = {
+            'n': self._n_frames,
+            'layers': [self._layer_config(layer, bbox, height)
+                       for layer, bbox in zip(self._layers, boxes)],
             # The player advances frame by frame, so it needs every delay;
             # the scalar is kept for whoever reads the config:
             'interval': float(np.mean(intervals)),
@@ -733,9 +819,7 @@ class HTMLAnimation(FuncAnimation):
         return _PLAYER.safe_substitute(
             uid=f'p2p-anim-{uuid4().hex}', width=width, height=height,
             n_frames=config['n'], last=config['n'] - 1, config=dumps(config),
-            bg=base64.b64encode(bg).decode('ascii'),
-            sheet_mime=sheet['mime'],
-            sheet=base64.b64encode(sheet['data']).decode('ascii'))
+            bg=base64.b64encode(bg).decode('ascii'))
 
     def to_jshtml(self, fps=None, embed_frames=True, default_mode=None):
         """Generate an HTML representation of the animation
@@ -756,14 +840,13 @@ class HTMLAnimation(FuncAnimation):
         # Before the fallback below: Matplotlib takes a plain number of hertz,
         # so a quantity has to be converted whichever player renders it.
         fps = as_value(fps, Hz, 'fps')
-        if self._image is None or self._frame_data is None:
+        if self._layers is None:
             # Nothing to accelerate, fall back on Matplotlib:
             return super().to_jshtml(fps=fps, embed_frames=embed_frames,
                                      default_mode=default_mode)
         if default_mode is None:
             default_mode = 'loop' if self._repeat else 'once'
-        intervals = self._display_intervals(
-            fps, int(np.shape(self._frame_data)[-1]))
+        intervals = self._display_intervals(fps, self._n_frames)
         # Rendering the sprite sheet is the expensive part, so only do it once:
         key = (tuple(intervals), default_mode)
         if self._html is None or self._html[0] != key:

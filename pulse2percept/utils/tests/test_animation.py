@@ -43,7 +43,9 @@ def parse(html):
     imgs = [Image.open(BytesIO(base64.b64decode(b64)))
             for b64 in re.findall(r'data:image/\w+;base64,([A-Za-z0-9+/=]+)',
                                   html)]
-    return cfg, imgs[0], imgs[1]
+    # These animations have a single animated image; read its geometry as the
+    # config's own, the way the player did before it could stack layers:
+    return {**cfg, **cfg['layers'][0]}, imgs[0], imgs[1]
 
 
 def tile(cfg, sheet, i):
@@ -269,7 +271,7 @@ def test_HTMLAnimation_rect_covers_image(shape):
     """
     ani = make_ani(np.random.rand(*shape, 3))
     cfg, bg, _ = parse(ani.to_jshtml())
-    bbox = ani._image.get_window_extent()
+    bbox = ani._layers[0].image.get_window_extent()
     height = bg.size[1]
     x, y, w, h = cfg['rect']
     npt.assert_equal(x <= bbox.x0 and x + w >= bbox.x1, True)
@@ -426,14 +428,14 @@ def test_HTMLAnimation_title_not_in_background():
     reference = np.asarray(parse(ani.to_jshtml())[1])
     for stale in ('t = 999.00 ms', 'A title'):
         ani = make_ani(data, labels=labels)
-        ani._image.axes.set_title(stale)
+        ani._layers[0].image.axes.set_title(stale)
         npt.assert_equal(np.asarray(parse(ani.to_jshtml())[1]), reference)
         # The caller's title is left the way it was found:
-        npt.assert_equal(ani._image.axes.get_title(), stale)
+        npt.assert_equal(ani._layers[0].image.axes.get_title(), stale)
     # Without labels the player leaves the title alone, so a title on the axes
     # belongs in the background:
     ani = make_ani(data)
-    ani._image.axes.set_title('A title')
+    ani._layers[0].image.axes.set_title('A title')
     npt.assert_equal(np.any(np.asarray(parse(ani.to_jshtml())[1]) != reference),
                      True)
 
@@ -537,7 +539,7 @@ def test_HTMLAnimation_matplotlib_compat():
     # Without frame data there is nothing to accelerate, so Matplotlib's own
     # (slow) player is used:
     ani = make_ani(data)
-    ani._frame_data = None
+    ani._layers = None
     html = ani.to_jshtml()
     npt.assert_equal('<script' in html, True)
     npt.assert_equal('p2p-anim' in html, False)

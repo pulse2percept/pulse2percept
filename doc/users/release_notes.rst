@@ -98,6 +98,18 @@ Percepts and residual vision
   :py:meth:`~pulse2percept.vision.Scene.play` (:pull:`871`).
 
 
+Visualization
+~~~~~~~~~~~~~
+
+* New :py:func:`~pulse2percept.viz.plot_stimulus_percept` and
+  :py:func:`~pulse2percept.viz.play_stimulus_percept` show a stimulus next to
+  the percept it produced. The animated pair runs both panels off the percept's
+  clock, holding each source frame for as long as it is up (:pull:`872`).
+
+* :py:class:`~pulse2percept.utils.HTMLAnimation` animates more than one image
+  per figure, each with its own sprite sheet and frame order (:pull:`872`).
+
+
 Bug fixes
 ---------
 
