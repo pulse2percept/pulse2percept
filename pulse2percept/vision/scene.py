@@ -1,6 +1,6 @@
 """:py:class:`~pulse2percept.vision.Scene`"""
 import numpy as np
-from matplotlib.patches import Circle
+import matplotlib.pyplot as plt
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
 
@@ -17,6 +17,9 @@ from ..utils import PrettyPrint
 # How many sigmas of the blur kernel are kept; also how far off-frame the loss
 # map is rasterized, so the cropped result is free of edge effects:
 _TRUNCATE = 4.0
+
+# Eccentricity spacing, in dva, that `rings=True` asks for
+_RING_STEP = 5.0
 
 # The only non-numeric `scotoma_fill`; see `_inpaint_rgb` for what it does.
 _INPAINT = 'inpaint'
@@ -124,16 +127,49 @@ def _resolve_background(background):
     return bg
 
 
-def _ring_radii(fov, step):
-    """Eccentricities, in dva, of the rings that fit inside ``fov``"""
-    step = float(as_value(step, dva, 'ring_step'))
-    if not np.isfinite(step) or step <= 0:
-        raise ValueError(f"'ring_step' must be a finite positive number of "
-                         f"degrees, not {step}.")
-    # The largest circle wholly inside a rectangular FOV is set by its shorter
-    # half-axis; 1e-9 keeps a ring that lands exactly on it:
-    n_rings = int(min(fov) / 2 / step + 1e-9)
-    return step * np.arange(1, n_rings + 1)
+def _ring_radii(rings, fov):
+    """Eccentricities, in dva, that a ``rings`` argument asks for
+
+    True is ``_RING_STEP``-degree spacing, a number is that spacing, and a
+    sequence is the eccentricities themselves. False or None is none.
+    """
+    if rings is None or rings is False:
+        return np.zeros(0)
+    if rings is True:
+        rings = _RING_STEP
+    rings = np.asarray(as_value(rings, dva, 'rings'), dtype=float)
+    if rings.ndim == 0:
+        step = float(rings)
+        if not np.isfinite(step) or step <= 0:
+            raise ValueError(f"'rings' is a spacing in degrees and must be "
+                             f"finite and positive, not {step}.")
+        # The largest ring wholly inside a rectangular FOV is set by its
+        # shorter half-axis; 1e-9 keeps one that lands exactly on it:
+        return step * np.arange(1, int(min(fov) / 2 / step + 1e-9) + 1)
+    radii = np.sort(rings.ravel())
+    if radii.size == 0 or not np.all(np.isfinite(radii)) or radii.min() <= 0:
+        raise ValueError(f"'rings' must be finite positive eccentricities in "
+                         f"degrees, not {rings.tolist()}.")
+    return radii
+
+
+def _identity(x, y):
+    """Axes already in degrees need no conversion"""
+    return x, y
+
+
+def _draw_rings(ax, radii, center, to_axes=_identity):
+    """Thin dashed eccentricity rings about ``center``, labelled at the top"""
+    cx, cy = center
+    theta = np.linspace(0, 2 * np.pi, 181)
+    for radius in radii:
+        # maps scene degrees onto whatever the axes are drawn in
+        ax.plot(*to_axes(cx + radius * np.cos(theta),
+                         cy + radius * np.sin(theta)),
+                color='0.5', linestyle='--', linewidth=0.7, alpha=0.7)
+        # `va='bottom'` keeps the label above the ring on screen either way:
+        ax.text(*to_axes(cx, cy + radius), f'{radius:g}\N{DEGREE SIGN} ecc',
+                color='0.5', fontsize=7, alpha=0.8, ha='center', va='bottom')
 
 
 def _inpaint_rgb(image, mask):
@@ -601,8 +637,7 @@ class Scene(PrettyPrint):
         return Percept(self._native_rgb(gaze=gaze), space=self._grid(),
                        time=self.time, time_unit=self.time_unit)
 
-    def plot(self, gaze=None, frame=0, ax=None, eccentricity_rings=False,
-             ring_step=5, **kwargs):
+    def plot(self, gaze=None, frame=0, ax=None, rings=False, **kwargs):
         """Plot what is left of native vision
 
         The scene unchanged where vision is intact, and ``scotoma_fill`` where
@@ -618,13 +653,12 @@ class Scene(PrettyPrint):
             Which frame of a video scene to draw. Ignored for a still scene.
         ax : matplotlib.axes.Axes, optional
             The axes to draw on. If None, uses the current axes.
-        eccentricity_rings : bool, optional
-            Draw thin rings at whole multiples of ``ring_step`` degrees of
-            eccentricity, centered on the fovea. 
-            Decoration only: it does not touch the scene data.
-        ring_step : float, optional
-            Spacing of those rings, in degrees of visual angle. Rings are
-            drawn out to the largest one that fits inside the FOV.
+        rings : bool, float, or sequence, optional
+            Eccentricity rings about the fovea, which ``gaze`` places in the
+            scene. True draws them every 5 degrees out to the edge of the
+            field, a number is that spacing instead, and a sequence is the
+            eccentricities themselves. Decoration only: the scene data is
+            untouched.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.percepts.Percept.plot`.
 
@@ -638,15 +672,15 @@ class Scene(PrettyPrint):
             raise ValueError(f"'frame' must be in 0..{rgb.shape[-1] - 1}, not "
                              f"{frame}.")
         still = Percept(rgb[..., frame:frame + 1], space=self._grid())
+        radii = _ring_radii(rings, self.fov)
         ax = still.plot(ax=ax, **kwargs)
-        if eccentricity_rings:
-            cx, cy = _gaze_points(gaze, rgb.shape[-1])[0]
-            for radius in _ring_radii(self.fov, ring_step):
-                ax.add_patch(Circle((cx, cy), radius, fill=False,
-                                    edgecolor='r', linewidth=0.8, alpha=0.7))
+        if radii.size:
+            # The fovea sits wherever gaze points, which is where the scotoma
+            # is drawn too; at the default gaze that is the scene's center.
+            _draw_rings(ax, radii, _gaze_points(gaze, rgb.shape[-1])[0])
         return ax
 
-    def play(self, gaze=None, **kwargs):
+    def play(self, gaze=None, rings=False, ax=None, **kwargs):
         """Animate a video scene as it is natively seen
 
         Parameters
@@ -654,6 +688,12 @@ class Scene(PrettyPrint):
         gaze : (x, y) or (n_frames, 2), optional
             Where the eye is pointing, in dva. One pair fixates throughout;
             one pair per frame moves the eye between frames.
+        rings : bool, float, or sequence, optional
+            Eccentricity rings, as in
+            :py:meth:`~pulse2percept.vision.Scene.plot`. The player draws its
+            static artists once, so this needs a gaze that holds still.
+        ax : matplotlib.axes.Axes, optional
+            Axes to animate on. If None, the player makes its own.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.percepts.Percept.play`.
 
@@ -664,4 +704,17 @@ class Scene(PrettyPrint):
         """
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
-        return self._native_percept(gaze=gaze).play(**kwargs)
+        radii = _ring_radii(rings, self.fov)
+        if radii.size:
+            points = _gaze_points(gaze, self.n_frames)
+            if len(points) > 1:
+                raise ValueError(
+                    "Rings mark eccentricity from the fovea, so a gaze that "
+                    "moves between frames would have to move them too, and "
+                    "the player draws its static artists once. Pass a single "
+                    "gaze, or rings=False.")
+            if ax is None:
+                ax = plt.subplots(figsize=(8, 5))[1]
+            # The player draws frames as raw pixels, not on degree axes:
+            _draw_rings(ax, radii, points[0], self.dva_to_pixel)
+        return self._native_percept(gaze=gaze).play(ax=ax, **kwargs)

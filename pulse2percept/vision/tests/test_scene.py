@@ -465,23 +465,58 @@ def test_a_bad_background_is_refused(background):
 
 
 def drawn_on_fresh_axes(scene, **kwargs):
-    """Plot onto axes of its own, so patches cannot accumulate across calls"""
+    """Plot onto axes of its own, so artists cannot accumulate across calls"""
     return scene.plot(ax=plt.subplots()[1], **kwargs)
 
 
-def test_eccentricity_rings_are_drawn_only_when_asked():
+def ring_radii(ax, center=(0, 0)):
+    """Read the eccentricities back off the drawn rings"""
+    offsets = [np.asarray(line.get_data()) - np.reshape(center, (2, 1))
+               for line in ax.get_lines()]
+    return sorted(np.hypot(*offset).mean() for offset in offsets)
+
+
+def video_scene(**kwargs):
+    """Two frames of the ramp, one second apart"""
+    ramp = np.tile(np.linspace(0, 1, SCENE_PX), (SCENE_PX, 1))
+    frames = np.stack([ramp, ramp[::-1]], axis=-1)
+    return Scene(VideoStimulus(frames, time=[0, 1000]),
+                 fov=(SCENE_PX, SCENE_PX), **kwargs)
+
+
+def test_rings_are_drawn_only_when_asked():
     scene = ramp_scene()
-    npt.assert_equal(len(drawn_on_fresh_axes(scene).patches), 0)
+    for rings in (False, None):
+        npt.assert_equal(len(drawn_on_fresh_axes(scene, rings=rings).lines), 0)
     # A 41-degree field holds four 5-degree rings:
-    ax = drawn_on_fresh_axes(scene, eccentricity_rings=True)
-    npt.assert_almost_equal(sorted(c.radius for c in ax.patches),
-                            [5, 10, 15, 20])
-    npt.assert_almost_equal(ax.patches[0].center, (0, 0))
-    # They mark eccentricity, so they follow the fovea rather than the frame:
-    ax = drawn_on_fresh_axes(scene, gaze=(3, -2) * dva,
-                             eccentricity_rings=True)
-    npt.assert_almost_equal(ax.patches[0].center, (3, -2))
-    # ... and drawing them leaves the scene itself alone:
+    ax = drawn_on_fresh_axes(scene, rings=True)
+    npt.assert_almost_equal(ring_radii(ax), [5, 10, 15, 20], decimal=6)
+    npt.assert_equal([t.get_text() for t in ax.texts],
+                     ['5\N{DEGREE SIGN} ecc', '10\N{DEGREE SIGN} ecc',
+                      '15\N{DEGREE SIGN} ecc', '20\N{DEGREE SIGN} ecc'])
+    # Understated by default, so they read as a reference grid:
+    line = ax.get_lines()[0]
+    npt.assert_equal(line.get_linestyle(), '--')
+    npt.assert_equal(line.get_linewidth() < 1, True)
+    plt.close('all')
+
+
+def test_rings_takes_a_spacing_or_the_eccentricities_themselves():
+    scene = ramp_scene()
+    npt.assert_almost_equal(ring_radii(drawn_on_fresh_axes(scene, rings=10)),
+                            [10, 20], decimal=6)
+    ax = drawn_on_fresh_axes(scene, rings=[15, 5, 25])
+    # Explicit eccentricities are drawn as asked, in order, even the one that
+    # falls outside the field:
+    npt.assert_almost_equal(ring_radii(ax), [5, 15, 25], decimal=6)
+    plt.close('all')
+
+
+def test_rings_mark_eccentricity_so_they_follow_the_fovea():
+    scene = ramp_scene()
+    ax = drawn_on_fresh_axes(scene, gaze=(3, -2) * dva, rings=True)
+    npt.assert_almost_equal(ring_radii(ax, center=(3, -2)),
+                            [5, 10, 15, 20], decimal=6)
     npt.assert_array_equal(ax.images[-1].get_array(),
                            scene._native_rgb(gaze=(3, -2))[..., 0])
     plt.close('all')
@@ -489,15 +524,44 @@ def test_eccentricity_rings_are_drawn_only_when_asked():
 
 def test_rings_fit_the_shorter_half_of_the_field():
     tall = Scene(ImageStimulus(np.zeros((40, 20))), fov=(20, 40))
-    ax = drawn_on_fresh_axes(tall, eccentricity_rings=True, ring_step=4)
-    npt.assert_almost_equal(sorted(c.radius for c in ax.patches), [4, 8])
+    npt.assert_almost_equal(ring_radii(drawn_on_fresh_axes(tall, rings=4)),
+                            [4, 8], decimal=6)
     # Nothing fits inside a field smaller than one step:
     small = Scene(ImageStimulus(np.zeros((8, 8))), fov=8)
-    npt.assert_equal(len(drawn_on_fresh_axes(
-        small, eccentricity_rings=True).patches), 0)
-    for step in (0, -5, np.nan):
-        with pytest.raises(ValueError):
-            drawn_on_fresh_axes(tall, eccentricity_rings=True, ring_step=step)
+    npt.assert_equal(len(drawn_on_fresh_axes(small, rings=True).lines), 0)
+    plt.close('all')
+
+
+@pytest.mark.parametrize('rings', [0, -5, np.nan, [], [5, 0], [5, np.inf]])
+def test_bad_rings_are_refused(rings):
+    with pytest.raises(ValueError):
+        drawn_on_fresh_axes(ramp_scene(), rings=rings)
+    plt.close('all')
+
+
+def test_play_draws_the_same_rings_on_the_players_pixel_axes():
+    scene = video_scene()
+    ax = plt.subplots()[1]
+    scene.play(rings=True, ax=ax)
+    # The player animates raw pixels, so the rings are placed in pixels: the
+    # fovea is the center pixel and a degree is a pixel wide here.
+    npt.assert_almost_equal(ring_radii(ax, center=(HALF, HALF)),
+                            [5, 10, 15, 20], decimal=6)
+    plt.close('all')
+    # Without them the player is untouched:
+    ax = plt.subplots()[1]
+    scene.play(ax=ax)
+    npt.assert_equal(len(ax.lines), 0)
+    plt.close('all')
+
+
+def test_play_refuses_rings_on_a_gaze_that_moves():
+    """The player draws its static artists once, so they cannot follow"""
+    scene = video_scene()
+    with pytest.raises(ValueError):
+        scene.play(gaze=[(0, 0), (5, 5)], rings=True)
+    # The same moving gaze is fine without them:
+    scene.play(gaze=[(0, 0), (5, 5)])
     plt.close('all')
 
 

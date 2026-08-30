@@ -33,7 +33,7 @@ from pulse2percept.vision import Scene, Scotoma
 ###############################################################################
 # Geographic atrophy is rarely a circle centered on the fovea:
 
-scotoma = Scotoma.ellipse(7 * dva, 5 * dva, center=(1, -1) * dva)
+scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=(6, -2) * dva)
 
 ###############################################################################
 # ``scotoma_fill`` determines what a user inside the scotoma sees.
@@ -50,13 +50,13 @@ scotoma = Scotoma.ellipse(7 * dva, 5 * dva, center=(1, -1) * dva)
 #
 # The logo is a transparent PNG, and what shows through belongs to the scene
 # rather than to the picture, so ``background=1`` puts it on white instead of
-# the default black. ``eccentricity_rings`` adds 5-degree rings about the
+# the default black. ``rings=True`` adds 5-degree rings about the
 # fovea; they are drawn on top and change nothing about the scene.
 
 scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma,
               scotoma_fill='inpaint', background=1)
 
-scene.plot(gaze=(0, 0) * dva, eccentricity_rings=True)
+scene.plot(gaze=(0, 0) * dva, rings=True)
 plt.title('Native vision alone')
 
 ###############################################################################

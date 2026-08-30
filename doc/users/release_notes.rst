@@ -93,8 +93,9 @@ Percepts and residual vision
 
 * :py:class:`~pulse2percept.vision.Scene` adds softened scotoma boundaries via
   ``scotoma_blend``, biharmonic fill-in via ``scotoma_fill='inpaint'``,
-  configurable backgrounds for transparent images, and eccentricity rings in
-  :py:meth:`~pulse2percept.vision.Scene.plot` (:pull:`871`).
+  configurable backgrounds for transparent images, and ``rings`` eccentricity
+  annotation in :py:meth:`~pulse2percept.vision.Scene.plot` and
+  :py:meth:`~pulse2percept.vision.Scene.play` (:pull:`871`).
 
 
 Bug fixes
