@@ -26,6 +26,18 @@ def ramp_scene(**kwargs):
     return Scene(ImageStimulus(data), fov=(SCENE_PX, SCENE_PX), **kwargs)
 
 
+def rgba_source():
+    """An opaque red square on a transparent surround that is also red
+
+    The surround's color is what a background must override, so that reading
+    it back says the alpha was honored rather than merely copied.
+    """
+    img = np.zeros((8, 8, 4))
+    img[..., 0] = 1.0
+    img[2:6, 2:6, 3] = 1.0
+    return ImageStimulus(img)
+
+
 def ramp_at(x_dva):
     """What `ramp_scene` shows at a scene x"""
     return (x_dva + HALF) / (2 * HALF)
@@ -419,6 +431,74 @@ def test_inpainting_does_not_change_what_the_device_sees():
     npt.assert_array_equal(blind._sample_at(x, y), plain._sample_at(x, y))
     npt.assert_array_equal(blind._device_input(x, y),
                            plain._device_input(x, y))
+
+
+@pytest.mark.parametrize('background, surround', [
+    (0, (0, 0, 0)),
+    (1, (1, 1, 1)),
+    (0.5, (0.5, 0.5, 0.5)),
+    ((1, 1, 1), (1, 1, 1)),
+    ((0.2, 0.4, 0.6), (0.2, 0.4, 0.6)),
+])
+def test_a_transparent_source_shows_the_scenes_background(background,
+                                                          surround):
+    scene = Scene(rgba_source(), fov=8, background=background)
+    frames = scene._frames()[..., 0]
+    npt.assert_almost_equal(frames[0, 0], surround, decimal=6)
+    npt.assert_almost_equal(frames[4, 4], (1, 0, 0), decimal=6)
+
+
+def test_background_does_nothing_without_transparency():
+    gray = np.linspace(0, 1, 64).reshape((8, 8))
+    rgb = np.stack([gray, gray[::-1], np.full((8, 8), 0.3)], axis=-1)
+    for source in (gray, rgb):
+        plain = Scene(ImageStimulus(source), fov=8)
+        white = Scene(ImageStimulus(source), fov=8, background=1)
+        npt.assert_array_equal(plain._frames(), white._frames())
+
+
+@pytest.mark.parametrize('background', [-0.1, 1.5, np.nan, (0, 0),
+                                        (0, 0, 0, 0)])
+def test_a_bad_background_is_refused(background):
+    with pytest.raises(ValueError):
+        Scene(ImageStimulus(np.zeros((8, 8))), fov=8, background=background)
+
+
+def drawn_on_fresh_axes(scene, **kwargs):
+    """Plot onto axes of its own, so patches cannot accumulate across calls"""
+    return scene.plot(ax=plt.subplots()[1], **kwargs)
+
+
+def test_eccentricity_rings_are_drawn_only_when_asked():
+    scene = ramp_scene()
+    npt.assert_equal(len(drawn_on_fresh_axes(scene).patches), 0)
+    # A 41-degree field holds four 5-degree rings:
+    ax = drawn_on_fresh_axes(scene, eccentricity_rings=True)
+    npt.assert_almost_equal(sorted(c.radius for c in ax.patches),
+                            [5, 10, 15, 20])
+    npt.assert_almost_equal(ax.patches[0].center, (0, 0))
+    # They mark eccentricity, so they follow the fovea rather than the frame:
+    ax = drawn_on_fresh_axes(scene, gaze=(3, -2) * dva,
+                             eccentricity_rings=True)
+    npt.assert_almost_equal(ax.patches[0].center, (3, -2))
+    # ... and drawing them leaves the scene itself alone:
+    npt.assert_array_equal(ax.images[-1].get_array(),
+                           scene._native_rgb(gaze=(3, -2))[..., 0])
+    plt.close('all')
+
+
+def test_rings_fit_the_shorter_half_of_the_field():
+    tall = Scene(ImageStimulus(np.zeros((40, 20))), fov=(20, 40))
+    ax = drawn_on_fresh_axes(tall, eccentricity_rings=True, ring_step=4)
+    npt.assert_almost_equal(sorted(c.radius for c in ax.patches), [4, 8])
+    # Nothing fits inside a field smaller than one step:
+    small = Scene(ImageStimulus(np.zeros((8, 8))), fov=8)
+    npt.assert_equal(len(drawn_on_fresh_axes(
+        small, eccentricity_rings=True).patches), 0)
+    for step in (0, -5, np.nan):
+        with pytest.raises(ValueError):
+            drawn_on_fresh_axes(tall, eccentricity_rings=True, ring_step=step)
+    plt.close('all')
 
 
 def test_scotoma_and_fill_are_validated():

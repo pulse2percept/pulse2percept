@@ -5,13 +5,14 @@ Release Notes
 =============
 
 v0.11.0 Residual Vision (unreleased)
-------------------------------------
+====================================
 
-Highlights:
+Highlights
+----------
 
-* **New backwards-incompatible API**: Models are now bound to the implant
-  they describe, they build automatically, and ``predict_percept`` takes a
-  stimulus directly:
+* **New backwards-incompatible model API:** models are now bound to their
+  implant and built automatically; ``predict_percept`` takes a stimulus
+  directly (:pull:`862`):
 
   .. code-block:: python
 
@@ -19,116 +20,101 @@ Highlights:
       model = p2p.models.AxonMapModel(implant=implant)
       percept = model.predict_percept(stim)
 
-* New :py:mod:`pulse2percept.vision` introduces
+* New :py:mod:`pulse2percept.vision` module with
   :py:class:`~pulse2percept.vision.Scene` and
   :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
-  residual vision and retinal prostheses (:pull:`854`).
+  residual vision and retinal prostheses (:pull:`854`, :pull:`871`).
 
-API changes:
+* New photovoltaic stimulation pipeline for
+  :py:class:`~pulse2percept.implants.PRIMAPivotal`, from image encoding to
+  irradiance-based model input (:pull:`868`).
 
-* :py:class:`~pulse2percept.vision.Scene` gains ``scotoma_blend`` (default
-  2) to soften the drawn boundary of a numeric scotoma fill, and
-  ``scotoma_fill='inpaint'`` to fill the scotoma from the surrounding image by
-  biharmonic inpainting (:pull:`871`).
+
+API changes and improvements
+----------------------------
+
+Stimuli and encoding
+~~~~~~~~~~~~~~~~~~~~
+
+* New :py:class:`~pulse2percept.stimuli.Encoder` base class supports electrical
+  and non-electrical encoders. New
+  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps images and videos to the
+  irradiance and pulse durations used by
+  :py:class:`~pulse2percept.implants.PRIMAPivotal` (:pull:`868`).
+
+* :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` accepts ``amp_range`` in
+  threshold multiples such as ``(0 * xTh, 3 * xTh)`` (:pull:`869`). New
+  ``W``, ``mW``, and ``uW`` units support optical stimulation (:pull:`868`);
+  ``deg`` and ``rad`` are now proper geometric-angle units (:pull:`855`).
+
+
+Implants
+~~~~~~~~
+
+* ``PRIMA`` is renamed :py:class:`~pulse2percept.implants.PRIMAPivotal`,
+  ``PRIMA75`` becomes :py:class:`~pulse2percept.implants.Lorach2015Array`, and
+  ``PRIMA55``/``PRIMA40`` become ``Ho2019FlatArray(55)``/
+  ``Ho2019FlatArray(40)``. The old names are deprecated until 0.12.0
+  (:pull:`865`).
+
+* New :py:class:`~pulse2percept.implants.Ho2019FlatArray` and
+  :py:class:`~pulse2percept.implants.Huang2021Array` model published
+  photovoltaic array designs. PRIMA-family geometry, pixel sizes, substrate
+  rendering, and hexagonal pixel orientation were corrected to match the
+  corresponding devices (:pull:`865`).
 
 * :py:class:`~pulse2percept.implants.ProsthesisSystem` adds descriptive
-  ``placement``, ``technology`` and ``family`` class attributes (:pull:`865`).
+  ``placement``, ``technology``, and ``family`` attributes (:pull:`865`) and
+  accepts ``thresholds`` at construction; :py:class:`~pulse2percept.implants.ArgusII`
+  likewise accepts ``thresholds`` (:pull:`869`).
 
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
-  of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`)
+  of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`).
 
-* New :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps images and videos
-  to 880 nm irradiance for :py:class:`~pulse2percept.implants.PRIMAPivotal`,
-  using the pivotal system's 30 Hz projector and 14 pulse-duration levels
-  (0.7--9.8 ms). ``PRIMAPivotal`` uses this encoder by default, and its
-  ``safe_mode`` checks the documented projector operating envelope.
 
-* New :py:class:`~pulse2percept.stimuli.Encoder` base class, so that
-  ``implant.encoder`` accepts non-electrical encoders.
-  :py:class:`~pulse2percept.stimuli.StimulusEncoder` inherits from it.
+Models
+~~~~~~
 
-* New ``W``, ``mW`` and ``uW`` units, from which irradiance follows as
-  ``mW / mm ** 2``.
+* :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
+  photovoltaic drive produced by encoders such as
+  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` (:pull:`868`).
 
-* :py:class:`~pulse2percept.models.ScoreboardSpatial` can also read the
-  normalized dimensionless drive produced by photovoltaic encoders such as
-  :py:class:`~pulse2percept.stimuli.PRIMAEncoder`; arbitrary dimensionless
-  stimuli such as image gray levels remain invalid.
-
-* New :py:class:`~pulse2percept.implants.Ho2019FlatArray` models the 55
-  and 40 um flat arrays of [Ho2019]_; new
-  :py:class:`~pulse2percept.implants.Huang2021Array` models the 55, 40, 30 and
-  20 um vertical-junction arrays of [Huang2021]_ (:pull:`865`).
-
-* ``PRIMA`` is renamed
-  :py:class:`~pulse2percept.implants.PRIMAPivotal`, ``PRIMA75`` becomes
-  :py:class:`~pulse2percept.implants.Lorach2015Array`, and ``PRIMA55``/
-  ``PRIMA40`` become ``Ho2019FlatArray(55)``/``Ho2019FlatArray(40)``.
-  The old names are deprecated until 0.12.0 (:pull:`865`).
-
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` and
-  :py:class:`~pulse2percept.implants.ArgusII` take ``thresholds`` at
-  construction, e.g. ``ArgusII(thresholds=80 * uA)``.
-
-* :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` accepts an ``amp_range``
-  in threshold multiples, e.g. ``amp_range=(0 * xTh, 3 * xTh)``. The encoded
-  stimulus stays in ``xTh`` until the implant calibrates it against its
-  ``thresholds``. Bare numbers still mean uA.
-
-* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` predicts from a still
-  image encoded with the standard biphasic encoder pulse, not only from
-  retained :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects. It
-  reads amplitude, phase duration and the realized frequency, ignoring
-  pulse-onset timing, so a :py:class:`~pulse2percept.implants.Raster` leaves
-  amplitude encoding unchanged while a period the device lengthens is
-  respected.
-
-* New ``deg`` and ``rad`` units for ordinary geometric angle, accepted
-  wherever p2p already took an angle in degrees.
+* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` can predict directly
+  from still images encoded with the standard biphasic encoder, using
+  amplitude, phase duration, and realized frequency (:pull:`869`).
 
 * ``find_threshold`` has been removed. Threshold searches are
   experiment-specific optimizations over stimulus parameters and should be
-  implemented at that level.
+  implemented at that level (:pull:`862`).
 
-* The PRIMA implants replace ``trench`` with ``pixel_width`` (flat-to-flat
-  width of the hexagonal pixel body) and ``gap`` (open gap between pixel
-  bodies), plus a derived ``row_spacing``. ``spacing`` keeps its meaning:
-  nearest-neighbor center-to-center distance (:pull:`865`).
 
-* :py:class:`~pulse2percept.implants.HexElectrode` takes ``orientation`` and
-  ``rot``, so hexagonal bodies face the nearest-neighbor axis of the lattice
-  they sit on and turn with it (:pull:`865`).
+Percepts and residual vision
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* PRIMA photovoltaic arrays now plot their substrate and clip rim pixels
-  to the substrate boundary (:pull:`865`).
+* :py:class:`~pulse2percept.vision.Scene` adds softened scotoma boundaries via
+  ``scotoma_blend``, biharmonic fill-in via ``scotoma_fill='inpaint'``,
+  configurable backgrounds for transparent images, and eccentricity rings in
+  :py:meth:`~pulse2percept.vision.Scene.plot` (:pull:`871`).
 
-Bug fixes:
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` ignored ``n_gray``
-  and ``noise``, and stored only the stimulus metadata (not the stimulus) under
+Bug fixes
+---------
+
+* Single-row and single-column hexagonal
+  :py:class:`~pulse2percept.implants.ElectrodeGrid` instances are now correctly
+  centered (:pull:`859`).
+
+* Corrected PRIMA-family pixel dimensions and layouts, including the F55/F40
+  arrays and :py:class:`~pulse2percept.implants.PRIMAPivotal` pixel width
+  (:pull:`865`).
+
+* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` now respects
+  ``n_gray`` and ``noise`` and stores the full stimulus in
   ``percept.metadata['stim']`` (:pull:`869`).
 
-* A hexagonal :py:class:`~pulse2percept.implants.ElectrodeGrid` with a single
-  row (or, in vertical orientation, a single column) is now centered on
-  ``(x, y)`` rather than offset by a quarter of the electrode spacing
-  (:pull:`859`)
-
-* :py:class:`~pulse2percept.implants.HexElectrode` sized its hexagon by
-  passing the apothem ``a`` to Matplotlib as a circumradius, drawing every
-  hexagonal pixel 13% too small (:pull:`865`)
-
-* :py:class:`~pulse2percept.implants.PRIMAPivotal` pixels are corrected
-  from 85 to 100 um wide; pixel centers are unchanged (:pull:`865`).
-
-* ``PRIMA55`` and ``PRIMA40`` (now
-  :py:class:`~pulse2percept.implants.Ho2019FlatArray`) model the F55 and F40
-  arrays of [Ho2019]_: 250 and 502 pixels (was 273 and 532), as wide as their
-  center spacing with no open gap, and 14 um and 10 um active electrodes (was
-  16 um). Correcting the layouts changes which electrode names these two
-  devices have (:pull:`865`)
 
 v0.10.0 Encoders (2026-08-23)
------------------------------
+=============================
 
 Highlights:
 
@@ -217,7 +203,7 @@ Bug fixes:
 * Various smaller correctness fixes (:pull:`814`)
 
 v0.9.1 (2026-08-06)
--------------------
+===================
 
 Highlights:
 
@@ -242,7 +228,7 @@ Highlights:
 *  Various bug fixes (:pull:`682`, :pull:`700`, :pull:`732`, :pull:`776`)
 
 v0.9.0 Cortex (2025-02-17)
---------------------------
+==========================
 
 Highlights:
 
@@ -268,7 +254,7 @@ Highlights:
 *  Various bug fixes
 
 v0.8.0 Retina (2022-05-05)
---------------------------
+==========================
 
 Highlights:
 
@@ -288,7 +274,7 @@ Highlights:
 *  Various bug fixes
 
 v0.7.1 (2021-06-21)
--------------------
+===================
 
 Highlights:
 
@@ -298,7 +284,7 @@ Highlights:
 *  Improve documentation and usability of various :py:class:`~pulse2percept.models.AxonMapModel` methods (:pull:`370`)
 
 v0.7.0 Implants (2021-04-04)
-----------------------------
+============================
 
 Highlights:
 
@@ -324,7 +310,7 @@ Highlights:
 *  Various bug fixes
 
 v0.6.0 API (2020-05-05)
------------------------
+=======================
 
 Highlights:
 
@@ -347,14 +333,14 @@ Highlights:
 *   Various bug fixes
 
 v0.5.2 (2020-02-25)
--------------------
+===================
 
 Bug fix:
 
 *   ``pulse2percept.retina.Nanduri2012``: improved Cython implementation
 
 v0.5.1 (2020-02-05)
--------------------
+===================
 
 Bug fixes:
 
@@ -363,7 +349,7 @@ Bug fixes:
 *   ``pulse2percept.utils.center_vector``: "cannot determine Numba type"
 
 v0.5.0 Community (2019-11-29)
------------------------------
+=============================
 
 *   New :py:mod:`pulse2percept.viz` module (:pull:`84`)
 *   Support for the :py:class:`~pulse2percept.implants.AlphaIMS` implant
@@ -376,7 +362,7 @@ v0.5.0 Community (2019-11-29)
     `pulse2percept.readthedocs.io <https://pulse2percept.readthedocs.io>`_.
 
 v0.4.3 Cython (2018-05-21)
---------------------------
+==========================
 
 Highlights:
 
@@ -391,7 +377,7 @@ Highlights:
 
 
 v0.3.0 Baby Steps (2018-02-20)
-------------------------------
+==============================
 
 *   New, faster axon map calculation
 *   Better plotting

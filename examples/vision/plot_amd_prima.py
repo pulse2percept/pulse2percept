@@ -47,11 +47,16 @@ scotoma = Scotoma.ellipse(7 * dva, 5 * dva, center=(1, -1) * dva)
 # by biharmonic inpainting (:py:func:`skimage.restoration.inpaint_biharmonic`).
 # Note that this is a frame-local, boundary-driven approximation to
 # perceptual filling-in, not a neural or generative model of it.
+#
+# The logo is a transparent PNG, and what shows through belongs to the scene
+# rather than to the picture, so ``background=1`` puts it on white instead of
+# the default black. ``eccentricity_rings`` adds 5-degree rings about the
+# fovea; they are drawn on top and change nothing about the scene.
 
 scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma,
-              scotoma_fill='inpaint')
+              scotoma_fill='inpaint', background=1)
 
-scene.plot(gaze=(0, 0) * dva)
+scene.plot(gaze=(0, 0) * dva, eccentricity_rings=True)
 plt.title('Native vision alone')
 
 ###############################################################################
