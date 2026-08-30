@@ -1,26 +1,24 @@
 # -*- coding: utf-8 -*-
 """
 ============================================================================
-Simulating PRIMA in age-related macular degeneration
+Simulating PRIMA in age-related macular degeneration (AMD)
 ============================================================================
 
 Someone with geographic atrophy has lost vision in the center of their visual
 field but still sees normally around it. A subretinal implant such as
-:py:class:`~pulse2percept.implants.PRIMAPivotal` sits inside that blind
+:py:class:`~pulse2percept.implants.PRIMAPivotal` sits inside the blind
 spot and gives back a coarse, grayscale percept there.
 
-Four objects say everything there is to say about that situation:
+Four objects capture that situation:
 
-*  :py:class:`~pulse2percept.vision.Scene` -- what is visually present, and
+*  :py:class:`~pulse2percept.vision.Scene`: what is visually present, and
    where native vision is lost.
-*  :py:class:`~pulse2percept.implants.ProsthesisSystem` -- the device: where
-   its electrodes are, and how it turns gray levels into stimulation.
-*  :py:class:`~pulse2percept.models.Model` -- the retinotopy, which is what
+*  :py:class:`~pulse2percept.implants.ProsthesisSystem`: where the implant's
+   electrodes are, and how it turns gray levels into stimulation.
+*  :py:class:`~pulse2percept.models.Model`: the retinotopy, which is what
    connects the two.
-*  :py:class:`~pulse2percept.percepts.Percept` -- what the simulated observer
+*  :py:class:`~pulse2percept.percepts.Percept`: what the simulated observer
    sees.
-
-None of the coordinate bookkeeping between them is yours to do.
 """
 # sphinx_gallery_thumbnail_number = 2
 
@@ -28,23 +26,45 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.implants import PRIMAPivotal
 from pulse2percept.models import ScoreboardModel
-from pulse2percept.stimuli import AmplitudeEncoder, LogoBVL
+from pulse2percept.stimuli import LogoBVL
 from pulse2percept.units import dva
 from pulse2percept.vision import Scene, Scotoma
 
 ###############################################################################
+# Geographic atrophy is rarely a circle centered on the fovea:
 
-scotoma = Scotoma.circle(6 * dva)
+scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=(6, -2) * dva)
 
-scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma)
+###############################################################################
+# ``scotoma_fill`` determines what a user inside the scotoma sees.
+# Biologically, no information from within the scotoma is supposed to reach
+# the visual cortex. So researchers often set it to gray (or black).
+#
+# But people with AMD rarely report seeing a black spot in their vision.
+# Often they're not even aware that they have a "blind spot".
+# It is quite possible that the brain fills in the missing information.
+# To mimic that, ``'inpaint'`` fills the scotoma from the vision around it
+# by biharmonic inpainting (:py:func:`skimage.restoration.inpaint_biharmonic`).
+# Note that this is a frame-local, boundary-driven approximation to
+# perceptual filling-in, not a neural or generative model of it.
+#
+# The logo is a transparent PNG, and what shows through belongs to the scene
+# rather than to the picture, so ``background=1`` puts it on white instead of
+# the default black. ``rings=True`` adds 5-degree rings about the
+# fovea; they are drawn on top and change nothing about the scene.
 
-scene.plot(gaze=(0, 0) * dva)
+scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma,
+              scotoma_fill='inpaint', background=1)
+
+scene.plot(gaze=(0, 0) * dva, rings=True)
 plt.title('Native vision alone')
 
 ###############################################################################
 
+# PRIMA is driven by 880 nm light, not injected current, so the implant
+# encodes gray levels as projector pulse durations by default:
+
 implant = PRIMAPivotal()
-implant.encoder = AmplitudeEncoder(amp_range=(0, 40), freq=20)
 
 ###############################################################################
 
@@ -54,14 +74,14 @@ model = ScoreboardModel(implant=implant, rho=50, xrange=(-6, 6),
 ###############################################################################
 # The scene is trial input, like any other stimulus:
 
-percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=40)
+percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=2)
 
 percept.plot()
 plt.title('Native vision with a PRIMA percept in the scotoma')
 
 ###############################################################################
 
-percept = model.predict_percept(scene, gaze=(8, -4) * dva, vmax=40)
+percept = model.predict_percept(scene, gaze=(8, -4) * dva, vmax=2)
 
 percept.plot()
 plt.title('Looking 8 degrees right and 4 degrees down')
@@ -70,7 +90,9 @@ plt.title('Looking 8 degrees right and 4 degrees down')
 
 implant.preprocess = lambda stim: stim.filter('sobel')
 
-percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=40)
+# Edges drive far fewer pixels, so white sits much lower:
+
+percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=0.3)
 
 percept.plot()
 plt.title('Edge-filtered device input, intact vision around it')

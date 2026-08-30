@@ -1,8 +1,12 @@
 """:py:class:`~pulse2percept.vision.Scene`"""
 import numpy as np
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 from scipy.interpolate import RegularGridInterpolator
+from scipy.ndimage import gaussian_filter
 
 from skimage.color import rgb2gray
+from skimage.restoration import inpaint_biharmonic
 
 from .scotoma import Scotoma
 from ..percepts import Percept
@@ -10,6 +14,20 @@ from ..stimuli import ImageStimulus, VideoStimulus
 from ..topography import Grid2D
 from ..units import Quantity, as_value, dimensionless, dva
 from ..utils import PrettyPrint
+
+# How many sigmas of the blur kernel are kept; also how far off-frame the loss
+# map is rasterized, so the cropped result is free of edge effects:
+_TRUNCATE = 4.0
+
+# Eccentricity spacing, in dva, that `rings=True` asks for
+_RING_STEP = 5.0
+
+# Ring color: dark enough to read on a light scene, gray enough to stay
+# annotation rather than content
+_RING_COLOR = '0.3'
+
+# The only non-numeric `scotoma_fill`; see `_inpaint_rgb` for what it does.
+_INPAINT = 'inpaint'
 
 
 def _resolve_fov(fov, n_rows, n_cols):
@@ -84,6 +102,127 @@ def _percept_sampler(prosthetic, frames):
                                    bounds_error=False, fill_value=0)
 
 
+def _resolve_fill(scotoma_fill):
+    """Normalize ``scotoma_fill`` to a display intensity or ``_INPAINT``"""
+    if isinstance(scotoma_fill, str):
+        if scotoma_fill != _INPAINT:
+            raise ValueError(f"'scotoma_fill' is either a display intensity "
+                             f"in [0, 1] or {_INPAINT!r}, not "
+                             f"{scotoma_fill!r}.")
+        return _INPAINT
+    fill = float(as_value(scotoma_fill, dimensionless, 'scotoma_fill'))
+    if not np.isfinite(fill) or fill < 0 or fill > 1:
+        raise ValueError(f"'scotoma_fill' is a display intensity and must "
+                         f"lie in [0, 1], not {scotoma_fill}.")
+    return fill
+
+
+def _resolve_background(background):
+    """Normalize ``background`` to an ``(r, g, b)`` triple in [0, 1]"""
+    bg = np.asarray(as_value(background, dimensionless, 'background'),
+                    dtype=float)
+    if bg.ndim == 0:
+        bg = np.repeat(bg, 3)
+    if bg.shape != (3,):
+        raise ValueError(f"'background' must be a gray level or an (r, g, b) "
+                         f"triple, not {background!r}.")
+    if not np.all(np.isfinite(bg)) or bg.min() < 0 or bg.max() > 1:
+        raise ValueError(f"'background' is a display intensity and must lie "
+                         f"in [0, 1], not {background!r}.")
+    return bg
+
+
+def _ring_radii(rings, fov):
+    """Eccentricities, in dva, that a ``rings`` argument asks for
+
+    True is ``_RING_STEP``-degree spacing, a number is that spacing, and a
+    sequence is the eccentricities themselves. False or None is none.
+    """
+    if rings is None or rings is False:
+        return np.zeros(0)
+    if rings is True:
+        rings = _RING_STEP
+    rings = np.asarray(as_value(rings, dva, 'rings'), dtype=float)
+    if rings.ndim == 0:
+        step = float(rings)
+        if not np.isfinite(step) or step <= 0:
+            raise ValueError(f"'rings' is a spacing in degrees and must be "
+                             f"finite and positive, not {step}.")
+        # The largest ring wholly inside a rectangular FOV is set by its
+        # shorter half-axis; 1e-9 keeps one that lands exactly on it:
+        return step * np.arange(1, int(min(fov) / 2 / step + 1e-9) + 1)
+    radii = np.sort(rings.ravel())
+    if radii.size == 0 or not np.all(np.isfinite(radii)) or radii.min() <= 0:
+        raise ValueError(f"'rings' must be finite positive eccentricities in "
+                         f"degrees, not {rings.tolist()}.")
+    return radii
+
+
+def _identity(x, y):
+    """Axes already in degrees need no conversion"""
+    return x, y
+
+
+def _draw_rings(ax, radii, center, to_axes=_identity,
+                color=_RING_COLOR):
+    """Thin dashed eccentricity rings about ``center``, labelled at the top"""
+    cx, cy = center
+    theta = np.linspace(0, 2 * np.pi, 181)
+    for radius in radii:
+        # maps scene degrees onto whatever the axes are drawn in
+        ax.plot(*to_axes(cx + radius * np.cos(theta),
+                         cy + radius * np.sin(theta)),
+                color=color, linestyle='--', linewidth=0.8, alpha=0.9)
+        # `va='bottom'` keeps the label above the ring on screen either way:
+        ax.text(*to_axes(cx, cy + radius), f'{radius:g}\N{DEGREE SIGN} ecc',
+                color=color, fontsize=8, alpha=0.95, ha='center',
+                va='bottom')
+
+
+def _rings_overlay(shape, radii, center, to_pixel, color=_RING_COLOR):
+    """The same rings, rasterized into a transparent ``(rows, cols, 4)`` RGBA
+
+    The HTML player lays its frame canvas over the figure, so an annotation
+    left as a Matplotlib artist would be covered. Drawing it offscreen through
+    `_draw_rings` keeps one definition of the style.
+    """
+    n_rows, n_cols = shape
+    dpi = 100.0
+    fig = Figure(figsize=(n_cols / dpi, n_rows / dpi), dpi=dpi)
+    FigureCanvasAgg(fig)
+    fig.patch.set_alpha(0)
+    ax = fig.add_axes((0, 0, 1, 1))
+    ax.patch.set_alpha(0)
+    ax.set_axis_off()
+    # One axes unit per pixel, y running down, as `imshow` draws a frame:
+    ax.set_xlim(-0.5, n_cols - 0.5)
+    ax.set_ylim(n_rows - 0.5, -0.5)
+    _draw_rings(ax, radii, center, to_pixel, color=color)
+    fig.canvas.draw()
+    return np.asarray(fig.canvas.buffer_rgba(), dtype=np.float32) / 255.0
+
+
+def _over(frames, overlay):
+    """Alpha-composite an RGBA ``overlay`` onto every RGB frame"""
+    alpha = overlay[..., 3][..., np.newaxis, np.newaxis]
+    color = overlay[..., :3][..., np.newaxis]
+    return np.clip(frames * (1 - alpha) + color * alpha, 0, 1)
+
+
+def _inpaint_rgb(image, mask):
+    """Fill ``image`` where ``mask`` is True from the pixels where it is not"""
+    if mask.all():
+        raise ValueError("scotoma_fill='inpaint' fills a scotoma in from the "
+                         "vision around it, and here there is none: every "
+                         "pixel of the frame is lost. Use a numeric fill, or "
+                         "a smaller scotoma.")
+    if not mask.any():
+        return np.asarray(image, dtype=np.float32)
+    holed = np.where(mask[..., np.newaxis], 0.0, image)
+    filled = inpaint_biharmonic(holed, mask, channel_axis=-1)
+    return np.clip(filled, 0, 1).astype(np.float32)
+
+
 def _check_range(vmin, vmax):
     """Reject a brightness-to-display mapping that cannot be drawn"""
     if vmax is None:
@@ -135,21 +274,30 @@ class Scene(PrettyPrint):
     Parameters
     ----------
     source : ImageStimulus, VideoStimulus, or image
-        The picture itself. Anything that is not already a
+        The background scene itself. Anything that is not already a
         :py:class:`~pulse2percept.stimuli.ImageStimulus` or a
-        :py:class:`~pulse2percept.stimuli.VideoStimulus` (a file name, a NumPy
-        array) is handed to ``ImageStimulus``.
+        :py:class:`~pulse2percept.stimuli.VideoStimulus`, such as a file name
+        or a NumPy array, is handed to ``ImageStimulus``.
     fov : float or (width, height)
         How much of the visual field the source covers, in degrees of visual
         angle (e.g. ``40 * dva``). A scalar is the horizontal extent, and the
         vertical one follows from the frame's aspect ratio.
     scotoma : :py:class:`~pulse2percept.vision.Scotoma`, optional
-        Where native vision is lost. If None, native vision is intact
-        everywhere and the scene is simply what is out there.
-    scotoma_fill : float, optional
-        What complete loss looks like, as a display intensity in [0, 1].
-        Defaults to black. What is lost has to look like *something*; this is
-        the choice, and it belongs to the scene rather than to a model run.
+        The region where native vision is lost. If None, native vision is
+        intact everywhere and the scene is simply what is out there.
+    scotoma_fill : float or 'inpaint', optional
+        Gray level to fill the scotoma with (in [0, 1]). Default (0)  black.
+        ``'inpaint'`` instead fills the scotoma in from the vision around it
+        using :py:func:`skimage.restoration.inpaint_biharmonic` (ignoring
+        ``scotoma_blend``).
+    background : float or (r, g, b), optional
+        Gray level or RGB value to use for transparent pixels. Defaults to
+        black.
+    scotoma_blend : float, optional
+        Standard deviation, in scene pixels, of a Gaussian blur applied to the
+        rasterized loss map before it is drawn, softening the boundary from
+        both sides. Defaults to 2. Rendering only: the scotoma's geometry is
+        unchanged.
 
     Examples
     --------
@@ -164,23 +312,26 @@ class Scene(PrettyPrint):
 
     """
 
-    def __init__(self, source, fov, scotoma=None, scotoma_fill=0):
+    def __init__(self, source, fov, scotoma=None, scotoma_fill=0,
+                 scotoma_blend=2, background=0):
         if not isinstance(source, (ImageStimulus, VideoStimulus)):
-            # A picture is the common case, and asking for the wrapper adds
-            # nothing; a video has to be built by the caller because only they
-            # know its frame times.
+            # A picture is the common case:
             source = ImageStimulus(source)
         if scotoma is not None and not isinstance(scotoma, Scotoma):
             raise TypeError(f"'scotoma' must be a Scotoma object, not "
                             f"{type(scotoma)}.")
-        fill = float(as_value(scotoma_fill, dimensionless,
-                              'scotoma_fill'))
-        if not np.isfinite(fill) or fill < 0 or fill > 1:
-            raise ValueError(f"'scotoma_fill' is a display intensity and must "
-                             f"lie in [0, 1], not {scotoma_fill}.")
+        fill = _resolve_fill(scotoma_fill)
+        blend = float(as_value(scotoma_blend, dimensionless,
+                               'scotoma_blend'))
+        if not np.isfinite(blend) or blend < 0:
+            raise ValueError(f"'scotoma_blend' is a Gaussian sigma in scene "
+                             f"pixels and must be finite and non-negative, "
+                             f"not {scotoma_blend}.")
         self._source = source
+        self._background = _resolve_background(background)
         self._scotoma = scotoma
         self._scotoma_fill = fill
+        self._scotoma_blend = blend
         n_rows, n_cols = self._frame_shape
         self._fov = _resolve_fov(fov, n_rows, n_cols)
         self._cached_frames = None
@@ -189,7 +340,9 @@ class Scene(PrettyPrint):
         """Return a dict of class attributes to pretty-print"""
         return {'source': type(self.source).__name__, 'fov': self.fov,
                 'shape': self.shape, 'scotoma': self.scotoma,
-                'scotoma_fill': self.scotoma_fill}
+                'background': self.background,
+                'scotoma_fill': self.scotoma_fill,
+                'scotoma_blend': self.scotoma_blend}
 
     @property
     def source(self):
@@ -202,9 +355,19 @@ class Scene(PrettyPrint):
         return self._scotoma
 
     @property
+    def background(self):
+        """What shows through a transparent source, as ``(r, g, b)``"""
+        return tuple(self._background)
+
+    @property
     def scotoma_fill(self):
-        """The display intensity complete loss shows as"""
+        """The display intensity complete loss shows as, or ``'inpaint'``"""
         return self._scotoma_fill
+
+    @property
+    def scotoma_blend(self):
+        """Gaussian sigma, in scene pixels, softening the drawn scotoma"""
+        return self._scotoma_blend
 
     @property
     def _frame_shape(self):
@@ -301,8 +464,10 @@ class Scene(PrettyPrint):
         if frames.ndim == 3:
             # Grayscale: give it the channel axis the color path already has
             frames = frames[:, :, np.newaxis, :]
-        if frames.shape[2] == 4:
-            frames = np.clip(frames[:, :, :3] * frames[:, :, 3:4], 0, 1)
+        if frames.shape[2] == 4:  # includes alpha channel
+            rgb, alpha = frames[:, :, :3], frames[:, :, 3:4]
+            bg = self._background.reshape((1, 1, 3, 1))
+            frames = np.clip(rgb * alpha + bg * (1 - alpha), 0, 1)
         elif frames.shape[2] not in (1, 3):
             raise ValueError(f"A scene must be grayscale, RGB or RGBA, not "
                              f"{frames.shape[2]}-channel.")
@@ -330,8 +495,6 @@ class Scene(PrettyPrint):
         grid = (np.arange(frames.shape[0], dtype=float),
                 np.arange(frames.shape[1], dtype=float))
         sampled = []
-        # One gaze samples every frame at once; a gaze per frame samples each
-        # frame where the eye was pointing when it came up.
         for f, (gx, gy) in enumerate(gaze):
             col, row = self.dva_to_pixel(x + gx, y + gy)
             points, inside = _clip_to_frame(np.column_stack((row, col)),
@@ -349,8 +512,7 @@ class Scene(PrettyPrint):
         values = self._sample_at(x, y, gaze=gaze)
         if values.ndim == 2:
             return values
-        # `rgb2gray` wants the channels last; the positions and the frames are
-        # both just pixels to it:
+        # `rgb2gray` wants the channels last:
         return rgb2gray(values.transpose((0, 2, 1)))
 
     def _rgb_frames(self):
@@ -360,16 +522,35 @@ class Scene(PrettyPrint):
             frames = np.repeat(frames, 3, axis=2)
         return frames
 
-    def _loss_at(self, gaze_xy):
-        """How much native vision is lost at each scene pixel, in [0, 1]"""
+    def _loss_at(self, gaze_xy, pad=0):
+        """Geometric loss at each scene pixel, in [0, 1]"""
         n_rows, n_cols = self._frame_shape
         if self.scotoma is None:
-            return np.zeros((n_rows, n_cols))
-        # `scene = visual field + gaze`, run backwards: where each scene pixel
-        # falls relative to the fovea, which is where the scotoma is.
+            return np.zeros((n_rows + 2 * pad, n_cols + 2 * pad))
+        # scene = visual field + gaze:
         gx, gy = gaze_xy
-        x_scene, y_scene = self._pixel_centers()
+        x_scene, y_scene = self._pixel_centers(pad=pad)
         return self.scotoma(x_scene - gx, y_scene - gy)
+
+    def _rendered_loss_at(self, gaze_xy):
+        """The loss map as drawn: `_loss_at` softened by `scotoma_blend`"""
+        sigma = self._scotoma_blend
+        # An inpainted fill ignores the hard boundary:
+        hard = self.scotoma is None or self._scotoma_fill == _INPAINT
+        if hard or sigma == 0:
+            return self._loss_at(gaze_xy)
+        # Blur the loss field, not a frame-sized crop of it:
+        pad = int(np.ceil(_TRUNCATE * sigma)) + 1
+        loss = self._loss_at(gaze_xy, pad=pad)
+        blurred = gaussian_filter(loss, sigma, mode='nearest',
+                                  truncate=_TRUNCATE)
+        return np.clip(blurred[pad:-pad, pad:-pad], 0, 1)
+
+    def _fill_rgb(self, frame_rgb, loss):
+        """What complete loss shows for one ``(rows, cols, 3)`` frame"""
+        if self._scotoma_fill != _INPAINT:
+            return self._scotoma_fill
+        return _inpaint_rgb(frame_rgb, loss > 0)
 
     def _native_rgb(self, gaze=None):
         """What is left of native vision, as ``(rows, cols, 3, n_frames)``"""
@@ -378,18 +559,25 @@ class Scene(PrettyPrint):
             return frames
         n_frames = frames.shape[-1]
         gaze = _gaze_points(gaze, n_frames)
-        fill = self.scotoma_fill
+        static = len(gaze) == 1
+        if static:
+            loss = self._rendered_loss_at(gaze[0])
         out = np.empty(frames.shape, dtype=np.float32)
         for f in range(n_frames):
-            loss = self._loss_at(gaze[0] if len(gaze) == 1
-                                 else gaze[f])[..., np.newaxis]
-            out[..., f] = (1 - loss) * frames[..., f] + loss * fill
+            if not static:
+                loss = self._rendered_loss_at(gaze[f])
+            frame = frames[..., f]
+            # An inpainted fill reads this frame, so it is per-frame work:
+            fill = self._fill_rgb(frame, loss)
+            alpha = loss[..., np.newaxis]
+            out[..., f] = (1 - alpha) * frame + alpha * fill
         return out
 
-    def _pixel_centers(self):
+    def _pixel_centers(self, pad=0):
         """Scene coordinates of every pixel center, as ``(x, y)`` meshes"""
         n_rows, n_cols = self._frame_shape
-        cols, rows = np.meshgrid(np.arange(n_cols), np.arange(n_rows))
+        cols, rows = np.meshgrid(np.arange(-pad, n_cols + pad),
+                                 np.arange(-pad, n_rows + pad))
         return self.pixel_to_dva(cols, rows)
 
     def _compose(self, prosthetic, vmax, vmin=0, gaze=None):
@@ -403,9 +591,6 @@ class Scene(PrettyPrint):
                              "and composing it is what turns that into "
                              "display intensity.")
         if not prosthetic._has_space:
-            # Without a `space`, `xdva`/`ydva` are the pixel indices `Data`
-            # fills an omitted axis with. Reading those as degrees would place
-            # the percept somewhere plausible-looking and wrong:
             raise ValueError("'prosthetic' has no visual-field coordinates, "
                              "so there is nowhere in the scene to put it. "
                              "Predict it on a model grid, or pass 'space' "
@@ -416,38 +601,34 @@ class Scene(PrettyPrint):
         n_out = pframes.shape[-1]
         gaze = _gaze_points(gaze, n_out)
         n_rows, n_cols = self._frame_shape
-        fill = self.scotoma_fill
 
         x_scene, y_scene = self._pixel_centers()
         static = len(gaze) == 1
         if static:
-            # One gaze looks at the same place in every frame, so the scotoma
-            # is evaluated once and every frame's brightness comes back from a
-            # single call.
             gx, gy = gaze[0]
             points = np.column_stack(((y_scene - gy).ravel(),
                                       (x_scene - gx).ravel()))
             brightness = _percept_sampler(prosthetic, pframes)(points)
             brightness = brightness.reshape((n_rows, n_cols, n_out))
-            loss = self._loss_at(gaze[0])[..., np.newaxis]
+            loss = self._rendered_loss_at(gaze[0])
 
         out = np.empty((n_rows, n_cols, 3, n_out), dtype=np.float32)
         for f in range(n_out):
             if static:
                 frame = brightness[..., f]
             else:
-                # A gaze per frame: the eye was somewhere else when this frame
-                # came up, so the scotoma and the percept land elsewhere too.
                 gx, gy = gaze[f]
                 points = np.column_stack(((y_scene - gy).ravel(),
                                           (x_scene - gx).ravel()))
                 sample = _percept_sampler(prosthetic, pframes[..., f:f + 1])
                 frame = sample(points).reshape((n_rows, n_cols))
-                loss = self._loss_at(gaze[f])[..., np.newaxis]
+                loss = self._rendered_loss_at(gaze[f])
             phosphene = np.clip((frame - vmin) / (vmax - vmin), 0, 1)
-            lost = np.maximum(fill, phosphene)[..., np.newaxis]
             native = scene_rgb[..., 0 if scene_rgb.shape[-1] == 1 else f]
-            out[..., f] = (1 - loss) * native + loss * lost
+            fill = self._fill_rgb(native, loss)
+            lost = np.maximum(fill, phosphene[..., np.newaxis])
+            alpha = loss[..., np.newaxis]
+            out[..., f] = (1 - alpha) * native + alpha * lost
         return Percept(out, space=self._grid(), time=out_time,
                        time_unit=out_unit)
 
@@ -458,17 +639,10 @@ class Scene(PrettyPrint):
         n_out = self.n_frames
         n_pros = prosthetic.data.shape[-1]
         if n_pros == 1 and prosthetic.time is None:
-            # A percept with no clock happened at no particular time, so it
-            # stands behind every frame of the video. One frame that *does*
-            # carry a time happened then and not otherwise, and falls through.
             return (np.repeat(prosthetic.data, n_out, axis=-1), self.time,
                     self.time_unit)
         if n_pros == n_out:
-            # One modeled response per video frame: they are responses *to*
             return prosthetic.data, prosthetic.time, prosthetic.time_unit
-        # Percept interpolation holds the nearest endpoint outside the modeled
-        # interval, so a video that runs past it would be shown a phosphene
-        # that was never predicted:
         unit = prosthetic.time_unit
         asked = np.asarray(self.source.times(unit), dtype=float)
         lo, hi = float(prosthetic.time[0]), float(prosthetic.time[-1])
@@ -481,8 +655,6 @@ class Scene(PrettyPrint):
                 f"frame there would show a phosphene that was never "
                 f"simulated. Predict the percept over the whole video, or "
                 f"trim the video to the percept.")
-        # `Percept.__getitem__` owns time interpolation; the quantity is what
-        # carries the video's clock across to the percept's own time unit:
         frames = prosthetic[..., Quantity(np.asarray(self.time),
                                           self.time_unit)]
         return frames, self.time, self.time_unit
@@ -502,7 +674,8 @@ class Scene(PrettyPrint):
         return Percept(self._native_rgb(gaze=gaze), space=self._grid(),
                        time=self.time, time_unit=self.time_unit)
 
-    def plot(self, gaze=None, frame=0, ax=None, **kwargs):
+    def plot(self, gaze=None, frame=0, ax=None, rings=False,
+             ring_color=_RING_COLOR, **kwargs):
         """Plot what is left of native vision
 
         The scene unchanged where vision is intact, and ``scotoma_fill`` where
@@ -518,6 +691,15 @@ class Scene(PrettyPrint):
             Which frame of a video scene to draw. Ignored for a still scene.
         ax : matplotlib.axes.Axes, optional
             The axes to draw on. If None, uses the current axes.
+        rings : bool, float, or sequence, optional
+            Eccentricity rings about the fovea, which ``gaze`` places in the
+            scene. True draws them every 5 degrees out to the edge of the
+            field, a number is that spacing instead, and a sequence is the
+            eccentricities themselves. Decoration only: the scene data is
+            untouched.
+        ring_color : color, optional
+            Any Matplotlib color for those rings and their labels. Defaults to
+            a mid-gray that reads on a light scene.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.percepts.Percept.plot`.
 
@@ -531,9 +713,17 @@ class Scene(PrettyPrint):
             raise ValueError(f"'frame' must be in 0..{rgb.shape[-1] - 1}, not "
                              f"{frame}.")
         still = Percept(rgb[..., frame:frame + 1], space=self._grid())
-        return still.plot(ax=ax, **kwargs)
+        radii = _ring_radii(rings, self.fov)
+        ax = still.plot(ax=ax, **kwargs)
+        if radii.size:
+            # The fovea sits wherever gaze points, which is where the scotoma
+            # is drawn too; at the default gaze that is the scene's center.
+            _draw_rings(ax, radii, _gaze_points(gaze, rgb.shape[-1])[0],
+                        color=ring_color)
+        return ax
 
-    def play(self, gaze=None, **kwargs):
+    def play(self, gaze=None, rings=False, ring_color=_RING_COLOR, ax=None,
+             **kwargs):
         """Animate a video scene as it is natively seen
 
         Parameters
@@ -541,6 +731,15 @@ class Scene(PrettyPrint):
         gaze : (x, y) or (n_frames, 2), optional
             Where the eye is pointing, in dva. One pair fixates throughout;
             one pair per frame moves the eye between frames.
+        rings : bool, float, or sequence, optional
+            Eccentricity rings, as in
+            :py:meth:`~pulse2percept.vision.Scene.plot`, painted into the
+            displayed frames. Drawn once, so this needs a gaze that holds
+            still; the scene's own data is not touched.
+        ring_color : color, optional
+            Any Matplotlib color for those rings and their labels.
+        ax : matplotlib.axes.Axes, optional
+            Axes to animate on. If None, the player makes its own.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.percepts.Percept.play`.
 
@@ -551,4 +750,21 @@ class Scene(PrettyPrint):
         """
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
-        return self._native_percept(gaze=gaze).play(**kwargs)
+        radii = _ring_radii(rings, self.fov)
+        if not radii.size:
+            return self._native_percept(gaze=gaze).play(ax=ax, **kwargs)
+        points = _gaze_points(gaze, self.n_frames)
+        if len(points) > 1:
+            raise ValueError(
+                "Rings mark eccentricity from the fovea, so a gaze that moves "
+                "between frames would have to move them too, and the player "
+                "draws them once into the frames. Pass a single gaze, or "
+                "rings=False.")
+        # Painted into the displayed frames rather than left as an artist
+        # behind the player's canvas, which would hide them:
+        frames = self._native_rgb(gaze=gaze)
+        overlay = _rings_overlay(self._frame_shape, radii, points[0],
+                                 self.dva_to_pixel, color=ring_color)
+        decorated = Percept(_over(frames, overlay), space=self._grid(),
+                            time=self.time, time_unit=self.time_unit)
+        return decorated.play(ax=ax, **kwargs)

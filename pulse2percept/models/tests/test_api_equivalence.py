@@ -212,7 +212,8 @@ def test_scene_with_gaze_prediction_is_unchanged():
 
 def test_scene_with_scotoma_prediction_is_unchanged():
     model = ScoreboardModel(implant=encoding_grid(), rho=200, **GRID).build()
-    scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0,
+                     scotoma_blend=0)
     assert_matches_reference('scene_scotoma',
                              model.predict_percept(scene, vmax=50))
 

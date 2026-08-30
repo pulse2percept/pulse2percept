@@ -60,6 +60,7 @@ def ramp_at(x_dva):
 
 
 def scene_of(source=None, **kwargs):
+    kwargs.setdefault('scotoma_blend', 0)
     return Scene(ramp_source() if source is None else source,
                  fov=(SCENE_PX, SCENE_PX), **kwargs)
 
