@@ -1,6 +1,7 @@
 """:py:class:`~pulse2percept.vision.Scene`"""
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
 
@@ -166,10 +167,40 @@ def _draw_rings(ax, radii, center, to_axes=_identity):
         # maps scene degrees onto whatever the axes are drawn in
         ax.plot(*to_axes(cx + radius * np.cos(theta),
                          cy + radius * np.sin(theta)),
-                color='0.5', linestyle='--', linewidth=0.7, alpha=0.7)
+                color='0.6', linestyle='--', linewidth=0.7, alpha=0.7)
         # `va='bottom'` keeps the label above the ring on screen either way:
         ax.text(*to_axes(cx, cy + radius), f'{radius:g}\N{DEGREE SIGN} ecc',
-                color='0.5', fontsize=7, alpha=0.8, ha='center', va='bottom')
+                color='0.6', fontsize=7, alpha=0.8, ha='center', va='bottom')
+
+
+def _rings_overlay(shape, radii, center, to_pixel):
+    """The same rings, rasterized into a transparent ``(rows, cols, 4)`` RGBA
+
+    The HTML player lays its frame canvas over the figure, so an annotation
+    left as a Matplotlib artist would be covered. Drawing it offscreen through
+    `_draw_rings` keeps one definition of the style.
+    """
+    n_rows, n_cols = shape
+    dpi = 100.0
+    fig = Figure(figsize=(n_cols / dpi, n_rows / dpi), dpi=dpi)
+    FigureCanvasAgg(fig)
+    fig.patch.set_alpha(0)
+    ax = fig.add_axes((0, 0, 1, 1))
+    ax.patch.set_alpha(0)
+    ax.set_axis_off()
+    # One axes unit per pixel, y running down, as `imshow` draws a frame:
+    ax.set_xlim(-0.5, n_cols - 0.5)
+    ax.set_ylim(n_rows - 0.5, -0.5)
+    _draw_rings(ax, radii, center, to_pixel)
+    fig.canvas.draw()
+    return np.asarray(fig.canvas.buffer_rgba(), dtype=np.float32) / 255.0
+
+
+def _over(frames, overlay):
+    """Alpha-composite an RGBA ``overlay`` onto every RGB frame"""
+    alpha = overlay[..., 3][..., np.newaxis, np.newaxis]
+    color = overlay[..., :3][..., np.newaxis]
+    return np.clip(frames * (1 - alpha) + color * alpha, 0, 1)
 
 
 def _inpaint_rgb(image, mask):
@@ -690,8 +721,9 @@ class Scene(PrettyPrint):
             one pair per frame moves the eye between frames.
         rings : bool, float, or sequence, optional
             Eccentricity rings, as in
-            :py:meth:`~pulse2percept.vision.Scene.plot`. The player draws its
-            static artists once, so this needs a gaze that holds still.
+            :py:meth:`~pulse2percept.vision.Scene.plot`, painted into the
+            displayed frames. Drawn once, so this needs a gaze that holds
+            still; the scene's own data is not touched.
         ax : matplotlib.axes.Axes, optional
             Axes to animate on. If None, the player makes its own.
         **kwargs :
@@ -705,16 +737,20 @@ class Scene(PrettyPrint):
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
         radii = _ring_radii(rings, self.fov)
-        if radii.size:
-            points = _gaze_points(gaze, self.n_frames)
-            if len(points) > 1:
-                raise ValueError(
-                    "Rings mark eccentricity from the fovea, so a gaze that "
-                    "moves between frames would have to move them too, and "
-                    "the player draws its static artists once. Pass a single "
-                    "gaze, or rings=False.")
-            if ax is None:
-                ax = plt.subplots(figsize=(8, 5))[1]
-            # The player draws frames as raw pixels, not on degree axes:
-            _draw_rings(ax, radii, points[0], self.dva_to_pixel)
-        return self._native_percept(gaze=gaze).play(ax=ax, **kwargs)
+        if not radii.size:
+            return self._native_percept(gaze=gaze).play(ax=ax, **kwargs)
+        points = _gaze_points(gaze, self.n_frames)
+        if len(points) > 1:
+            raise ValueError(
+                "Rings mark eccentricity from the fovea, so a gaze that moves "
+                "between frames would have to move them too, and the player "
+                "draws them once into the frames. Pass a single gaze, or "
+                "rings=False.")
+        # Painted into the displayed frames rather than left as an artist
+        # behind the player's canvas, which would hide them:
+        frames = self._native_rgb(gaze=gaze)
+        overlay = _rings_overlay(self._frame_shape, radii, points[0],
+                                 self.dva_to_pixel)
+        decorated = Percept(_over(frames, overlay), space=self._grid(),
+                            time=self.time, time_unit=self.time_unit)
+        return decorated.play(ax=ax, **kwargs)

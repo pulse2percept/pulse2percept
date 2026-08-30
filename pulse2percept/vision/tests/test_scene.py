@@ -539,19 +539,22 @@ def test_bad_rings_are_refused(rings):
     plt.close('all')
 
 
-def test_play_draws_the_same_rings_on_the_players_pixel_axes():
+def test_play_draws_the_rings_into_the_frames_the_player_shows():
+    """The player's canvas covers the figure, so rings must be in the frames"""
     scene = video_scene()
-    ax = plt.subplots()[1]
-    scene.play(rings=True, ax=ax)
-    # The player animates raw pixels, so the rings are placed in pixels: the
-    # fovea is the center pixel and a degree is a pixel wide here.
-    npt.assert_almost_equal(ring_radii(ax, center=(HALF, HALF)),
-                            [5, 10, 15, 20], decimal=6)
-    plt.close('all')
-    # Without them the player is untouched:
-    ax = plt.subplots()[1]
-    scene.play(ax=ax)
-    npt.assert_equal(len(ax.lines), 0)
+    plain = scene.play()._frame_data
+    ringed = scene.play(rings=[10])._frame_data
+    npt.assert_equal(plain.shape, ringed.shape)
+    # Without rings the player shows native vision verbatim ...
+    npt.assert_array_equal(plain, scene._native_rgb())
+    changed = np.abs(plain - ringed).max(axis=(2, 3)) > 0.01
+    npt.assert_equal(changed.any(), True)
+    # ... and with them, only out where the 10-degree ring and its label are:
+    rows, cols = np.nonzero(changed)
+    npt.assert_equal(np.hypot(cols - HALF, rows - HALF).min() > 5, True)
+    npt.assert_equal(changed[0, 0], False)
+    # The scene itself is untouched either way:
+    npt.assert_array_equal(scene._native_rgb(), plain)
     plt.close('all')
 
 
