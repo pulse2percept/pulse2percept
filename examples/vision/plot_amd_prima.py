@@ -47,11 +47,9 @@ scotoma = Scotoma.ellipse(7 * dva, 5 * dva, center=(1, -1) * dva)
 # by biharmonic inpainting (:py:func:`skimage.restoration.inpaint_biharmonic`).
 # Note that this is a frame-local, boundary-driven approximation to
 # perceptual filling-in, not a neural or generative model of it.
-#
-# Also, ``scotoma_blend`` softens the drawn boundary around the scotoma.
 
 scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma,
-              scotoma_fill='inpaint', scotoma_blend=2)
+              scotoma_fill='inpaint')
 
 scene.plot(gaze=(0, 0) * dva)
 plt.title('Native vision alone')

@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.vision.Scene`"""
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import gaussian_filter
 
 from skimage.color import rgb2gray
 from skimage.restoration import inpaint_biharmonic
@@ -13,7 +13,7 @@ from ..topography import Grid2D
 from ..units import Quantity, as_value, dimensionless, dva
 from ..utils import PrettyPrint
 
-# How many sigmas of the feather are kept; also how far off-frame the loss
+# How many sigmas of the blur kernel are kept; also how far off-frame the loss
 # map is rasterized, so the cropped result is free of edge effects:
 _TRUNCATE = 4.0
 
@@ -113,9 +113,8 @@ def _inpaint_rgb(image, mask):
     if mask.all():
         raise ValueError("scotoma_fill='inpaint' fills a scotoma in from the "
                          "vision around it, and here there is none: every "
-                         "pixel of the frame is lost, or inside the "
-                         "'scotoma_blend' feather around it. Use a numeric "
-                         "fill, a smaller scotoma, or less blending.")
+                         "pixel of the frame is lost. Use a numeric fill, or "
+                         "a smaller scotoma.")
     if not mask.any():
         return np.asarray(image, dtype=np.float32)
     holed = np.where(mask[..., np.newaxis], 0.0, image)
@@ -189,10 +188,13 @@ class Scene(PrettyPrint):
         What gray level to fill the scotoma with (in [0, 1]). Default (0) is
         black. ``'inpaint'`` instead fills the scotoma in from the vision
         around it using :py:func:`skimage.restoration.inpaint_biharmonic`.
+        It ignores ``scotoma_blend``, since a softened boundary would blend
+        the covered pixels back into the fill.
     scotoma_blend : float, optional
-        Standard deviation, in scene pixels, of a Gaussian feather grown
-        outward from the scotoma's boundary before it is drawn. A lost pixel
-        stays lost; only the intact surround picks up partial loss.
+        Standard deviation, in scene pixels, of a Gaussian blur applied to the
+        rasterized loss map before it is drawn, softening the boundary from
+        both sides. Defaults to 2. Rendering only: the scotoma's geometry is
+        unchanged, and so is what an implant samples.
 
     Examples
     --------
@@ -208,7 +210,7 @@ class Scene(PrettyPrint):
     """
 
     def __init__(self, source, fov, scotoma=None, scotoma_fill=0,
-                 scotoma_blend=0):
+                 scotoma_blend=2):
         if not isinstance(source, (ImageStimulus, VideoStimulus)):
             # A picture is the common case, and asking for the wrapper adds
             # nothing; a video has to be built by the caller because only they
@@ -424,25 +426,18 @@ class Scene(PrettyPrint):
         return self.scotoma(x_scene - gx, y_scene - gy)
 
     def _rendered_loss_at(self, gaze_xy):
-        """The loss map as drawn: `_loss_at` feathered by `scotoma_blend`"""
+        """The loss map as drawn: `_loss_at` softened by `scotoma_blend`"""
         sigma = self._scotoma_blend
-        if self.scotoma is None or sigma == 0:
+        # An inpainted fill ignores the hard boundary:
+        hard = self.scotoma is None or self._scotoma_fill == _INPAINT
+        if hard or sigma == 0:
             return self._loss_at(gaze_xy)
-        # Rasterize past the frame edge, not a crop of it:
+        # Blur the loss field, not a frame-sized crop of it:
         pad = int(np.ceil(_TRUNCATE * sigma)) + 1
         loss = self._loss_at(gaze_xy, pad=pad)
-        inner = (slice(pad, -pad), slice(pad, -pad))
-        lost = loss > 0
-        if not lost.any():
-            return loss[inner]
-        # A Gaussian *of distance from the boundary*:
-        dist, (rows, cols) = distance_transform_edt(~lost,
-                                                    return_indices=True)
-        dist = np.maximum(dist - 0.5, 0.0)
-        feather = np.exp(-0.5 * (dist / sigma) ** 2)
-        feather[dist > _TRUNCATE * sigma] = 0.0
-        feather *= loss[rows, cols]
-        return np.clip(np.where(lost, loss, feather)[inner], 0, 1)
+        blurred = gaussian_filter(loss, sigma, mode='nearest',
+                                  truncate=_TRUNCATE)
+        return np.clip(blurred[pad:-pad, pad:-pad], 0, 1)
 
     def _fill_rgb(self, frame_rgb, loss):
         """What complete loss shows for one ``(rows, cols, 3)`` frame"""
