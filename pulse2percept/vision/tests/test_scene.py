@@ -444,13 +444,26 @@ def test_blending_softens_the_boundary_and_only_the_boundary():
     """One degree per pixel here, so a sigma of 2 px is 2 dva"""
     scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_blend=2)
     loss = scene._rendered_loss_at((0, 0))
-    # Lost out to the scotoma's own 6 dva edge; the feather is outside it:
+    # Lost out to the scotoma's own 6 dva edge; the feather is outside it,
+    # and starts near 1 rather than at the 0.5 a blurred mask would give:
     npt.assert_almost_equal(loss[HALF, HALF], 1.0, decimal=12)
     npt.assert_almost_equal(loss[HALF, HALF + 6], 1.0, decimal=12)
     npt.assert_almost_equal(loss[HALF, HALF + 15], 0.0, decimal=12)
+    npt.assert_equal(loss[HALF, HALF + 7] > 0.95, True)
     npt.assert_equal(0.05 < loss[HALF, HALF + 8] < 0.95, True)
     profile = loss[HALF, HALF:HALF + 16]
     npt.assert_array_less(np.diff(profile), 1e-12)
+
+
+def test_a_wide_feather_leaves_no_contour_at_the_scotoma_edge():
+    """A wider feather must fade the boundary, not just move the step"""
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_blend=12)
+    profile = scene._rendered_loss_at((0, 0))[HALF, HALF:HALF + 16]
+    npt.assert_array_less(np.diff(profile), 1e-12)
+    # Pixel 6 is the last lost one and 7 the first intact one. Convolving the
+    # mask would drop it to about 0.5 and draw the ellipse right back on:
+    npt.assert_almost_equal(profile[6], 1.0, decimal=12)
+    npt.assert_equal(profile[6] - profile[7] < 0.01, True)
 
 
 def test_blending_reads_the_loss_field_past_the_frame_edge():
