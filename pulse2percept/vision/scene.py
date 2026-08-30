@@ -167,10 +167,10 @@ def _draw_rings(ax, radii, center, to_axes=_identity):
         # maps scene degrees onto whatever the axes are drawn in
         ax.plot(*to_axes(cx + radius * np.cos(theta),
                          cy + radius * np.sin(theta)),
-                color='0.6', linestyle='--', linewidth=0.7, alpha=0.7)
+                color='0.3', linestyle='--', linewidth=0.8, alpha=0.9)
         # `va='bottom'` keeps the label above the ring on screen either way:
         ax.text(*to_axes(cx, cy + radius), f'{radius:g}\N{DEGREE SIGN} ecc',
-                color='0.6', fontsize=7, alpha=0.8, ha='center', va='bottom')
+                color='0.3', fontsize=8, alpha=0.95, ha='center', va='bottom')
 
 
 def _rings_overlay(shape, radii, center, to_pixel):

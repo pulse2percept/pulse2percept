@@ -539,22 +539,27 @@ def test_bad_rings_are_refused(rings):
     plt.close('all')
 
 
-def test_play_draws_the_rings_into_the_frames_the_player_shows():
-    """The player's canvas covers the figure, so rings must be in the frames"""
-    scene = video_scene()
+def test_play_paints_readable_rings_into_the_frames_the_player_shows():
+    """The player's canvas covers the figure, so rings must be in the frames
+
+    White scene, 3 pixels per degree, so a 10-degree ring is 30 pixels out.
+    """
+    white = np.full((120, 120), 1.0)
+    scene = Scene(VideoStimulus(np.stack([white, white], axis=-1),
+                                time=[0, 1000]), fov=(40, 40))
     plain = scene.play()._frame_data
     ringed = scene.play(rings=[10])._frame_data
-    npt.assert_equal(plain.shape, ringed.shape)
-    # Without rings the player shows native vision verbatim ...
     npt.assert_array_equal(plain, scene._native_rgb())
-    changed = np.abs(plain - ringed).max(axis=(2, 3)) > 0.01
-    npt.assert_equal(changed.any(), True)
-    # ... and with them, only out where the 10-degree ring and its label are:
-    rows, cols = np.nonzero(changed)
-    npt.assert_equal(np.hypot(cols - HALF, rows - HALF).min() > 5, True)
-    npt.assert_equal(changed[0, 0], False)
-    # The scene itself is untouched either way:
-    npt.assert_array_equal(scene._native_rgb(), plain)
+    contrast = (plain - ringed).max(axis=(2, 3))
+    # The ring has to read against what it is drawn on, not merely differ:
+    npt.assert_equal(contrast.max() > 0.4, True)
+    npt.assert_equal(np.count_nonzero(contrast > 0.2) > 50, True)
+    rows, cols = np.nonzero(contrast > 0.2)
+    radius = np.hypot(cols - 60, rows - 60)
+    npt.assert_equal(20 < radius.min() < 32, True)
+    # The label sits above the top of the ring, and the corners stay clean:
+    npt.assert_equal((contrast[:30] > 0.2).any(), True)
+    npt.assert_almost_equal(contrast[0, 0], 0.0, decimal=6)
     plt.close('all')
 
 
