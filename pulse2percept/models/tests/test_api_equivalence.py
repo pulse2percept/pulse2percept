@@ -65,10 +65,11 @@ REFERENCE = {
                  3.807037961360792, 0.5194367010755934, 1.0132546632537747,
                  (5.0853018679140565, 27.047305434768763,
                   6.941999430159145, 49.25247073610444)),
-    'dynaphos': ((7, 7, 6), (0.0, 100.0),
-                 3.864256768792984e-06, 1.0946714610327035e-06,
-                 3.800738015684018e-12,
-                 (2.0, 4.0, 1.0, 1.0)),
+    'dynaphos': ((121, 121, 6), (0.0, 100.0),
+                 7.886836596880443, 0.8272089958190918,
+                 3.4563948838340095,
+                 (40.9433498104171, 1676.7244805318699,
+                  26.316482385133106, 692.9332594630685)),
     'scene_gaze': ((13, 17, 1), None,
                    1663.1452019751928, 36.72337341308594, 43973.7099062507,
                    (6.000000013081055, 40.855445551864825,
@@ -197,8 +198,12 @@ def test_biphasic_axon_map_prediction_is_unchanged():
 
 
 def test_dynaphos_prediction_is_unchanged():
+    # step is finer than the other entries here on purpose: a Dynaphos
+    # phosphene at this eccentricity is far smaller than one pixel at step=1,
+    # so the reference would pin the far tail of the Gaussian (peak 1e-24)
+    # rather than the prediction.
     model = DynaphosModel(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3),
-                          step=1, dt=20).build()
+                          step=0.05, dt=20).build()
     percept = model.predict_percept(
         {'11': BiphasicPulseTrain(300, 100, 0.17, stim_dur=100)})
     assert_matches_reference('dynaphos', percept)
