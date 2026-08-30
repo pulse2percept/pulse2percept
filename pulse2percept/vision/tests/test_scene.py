@@ -512,6 +512,20 @@ def test_rings_takes_a_spacing_or_the_eccentricities_themselves():
     plt.close('all')
 
 
+def test_rings_take_a_color():
+    scene = ramp_scene()
+    ax = drawn_on_fresh_axes(scene, rings=True, ring_color='white')
+    for artist in ax.get_lines() + list(ax.texts):
+        npt.assert_equal(artist.get_color(), 'white')
+    plt.close('all')
+    # It reaches the rasterized overlay the player is handed, too:
+    video = video_scene()
+    black = video.play(rings=[10], ring_color='black')._frame_data
+    white = video.play(rings=[10], ring_color='white')._frame_data
+    npt.assert_equal(np.allclose(black, white), False)
+    plt.close('all')
+
+
 def test_rings_mark_eccentricity_so_they_follow_the_fovea():
     scene = ramp_scene()
     ax = drawn_on_fresh_axes(scene, gaze=(3, -2) * dva, rings=True)

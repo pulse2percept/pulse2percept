@@ -22,6 +22,10 @@ _TRUNCATE = 4.0
 # Eccentricity spacing, in dva, that `rings=True` asks for
 _RING_STEP = 5.0
 
+# Ring color: dark enough to read on a light scene, gray enough to stay
+# annotation rather than content
+_RING_COLOR = '0.3'
+
 # The only non-numeric `scotoma_fill`; see `_inpaint_rgb` for what it does.
 _INPAINT = 'inpaint'
 
@@ -159,7 +163,8 @@ def _identity(x, y):
     return x, y
 
 
-def _draw_rings(ax, radii, center, to_axes=_identity):
+def _draw_rings(ax, radii, center, to_axes=_identity,
+                color=_RING_COLOR):
     """Thin dashed eccentricity rings about ``center``, labelled at the top"""
     cx, cy = center
     theta = np.linspace(0, 2 * np.pi, 181)
@@ -167,13 +172,14 @@ def _draw_rings(ax, radii, center, to_axes=_identity):
         # maps scene degrees onto whatever the axes are drawn in
         ax.plot(*to_axes(cx + radius * np.cos(theta),
                          cy + radius * np.sin(theta)),
-                color='0.3', linestyle='--', linewidth=0.8, alpha=0.9)
+                color=color, linestyle='--', linewidth=0.8, alpha=0.9)
         # `va='bottom'` keeps the label above the ring on screen either way:
         ax.text(*to_axes(cx, cy + radius), f'{radius:g}\N{DEGREE SIGN} ecc',
-                color='0.3', fontsize=8, alpha=0.95, ha='center', va='bottom')
+                color=color, fontsize=8, alpha=0.95, ha='center',
+                va='bottom')
 
 
-def _rings_overlay(shape, radii, center, to_pixel):
+def _rings_overlay(shape, radii, center, to_pixel, color=_RING_COLOR):
     """The same rings, rasterized into a transparent ``(rows, cols, 4)`` RGBA
 
     The HTML player lays its frame canvas over the figure, so an annotation
@@ -191,7 +197,7 @@ def _rings_overlay(shape, radii, center, to_pixel):
     # One axes unit per pixel, y running down, as `imshow` draws a frame:
     ax.set_xlim(-0.5, n_cols - 0.5)
     ax.set_ylim(n_rows - 0.5, -0.5)
-    _draw_rings(ax, radii, center, to_pixel)
+    _draw_rings(ax, radii, center, to_pixel, color=color)
     fig.canvas.draw()
     return np.asarray(fig.canvas.buffer_rgba(), dtype=np.float32) / 255.0
 
@@ -668,7 +674,8 @@ class Scene(PrettyPrint):
         return Percept(self._native_rgb(gaze=gaze), space=self._grid(),
                        time=self.time, time_unit=self.time_unit)
 
-    def plot(self, gaze=None, frame=0, ax=None, rings=False, **kwargs):
+    def plot(self, gaze=None, frame=0, ax=None, rings=False,
+             ring_color=_RING_COLOR, **kwargs):
         """Plot what is left of native vision
 
         The scene unchanged where vision is intact, and ``scotoma_fill`` where
@@ -690,6 +697,9 @@ class Scene(PrettyPrint):
             field, a number is that spacing instead, and a sequence is the
             eccentricities themselves. Decoration only: the scene data is
             untouched.
+        ring_color : color, optional
+            Any Matplotlib color for those rings and their labels. Defaults to
+            a mid-gray that reads on a light scene.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.percepts.Percept.plot`.
 
@@ -708,10 +718,12 @@ class Scene(PrettyPrint):
         if radii.size:
             # The fovea sits wherever gaze points, which is where the scotoma
             # is drawn too; at the default gaze that is the scene's center.
-            _draw_rings(ax, radii, _gaze_points(gaze, rgb.shape[-1])[0])
+            _draw_rings(ax, radii, _gaze_points(gaze, rgb.shape[-1])[0],
+                        color=ring_color)
         return ax
 
-    def play(self, gaze=None, rings=False, ax=None, **kwargs):
+    def play(self, gaze=None, rings=False, ring_color=_RING_COLOR, ax=None,
+             **kwargs):
         """Animate a video scene as it is natively seen
 
         Parameters
@@ -724,6 +736,8 @@ class Scene(PrettyPrint):
             :py:meth:`~pulse2percept.vision.Scene.plot`, painted into the
             displayed frames. Drawn once, so this needs a gaze that holds
             still; the scene's own data is not touched.
+        ring_color : color, optional
+            Any Matplotlib color for those rings and their labels.
         ax : matplotlib.axes.Axes, optional
             Axes to animate on. If None, the player makes its own.
         **kwargs :
@@ -750,7 +764,7 @@ class Scene(PrettyPrint):
         # behind the player's canvas, which would hide them:
         frames = self._native_rgb(gaze=gaze)
         overlay = _rings_overlay(self._frame_shape, radii, points[0],
-                                 self.dva_to_pixel)
+                                 self.dva_to_pixel, color=ring_color)
         decorated = Percept(_over(frames, overlay), space=self._grid(),
                             time=self.time, time_unit=self.time_unit)
         return decorated.play(ax=ax, **kwargs)
