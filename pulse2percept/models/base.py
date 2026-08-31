@@ -2,7 +2,6 @@
    :py:class:`~pulse2percept.models.Model`,
    :py:class:`~pulse2percept.models.SpatialModel`,
    :py:class:`~pulse2percept.models.TemporalModel`"""
-import inspect
 import warnings
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
@@ -211,6 +210,15 @@ def _check_implant(implant):
     if not isinstance(implant, ProsthesisSystem):
         raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
                         f"{type(implant)}.")
+
+
+def _reject_implant_param(params):
+    """Raise if `implant` appears where a Model forwards parameters."""
+    if 'implant' in params:
+        raise AttributeError(
+            "'implant' is not a Model parameter. Bind the implant when "
+            "constructing the spatial model, or assign 'model.implant' to "
+            "rebind it.")
 
 
 def _device_scene(scene, implant):
@@ -1296,6 +1304,7 @@ class Model(Frozen, PrettyPrint):
         return BaseModel.time_unit
 
     def __init__(self, spatial=None, temporal=None, **params):
+        _reject_implant_param(params)
         # Normalize renamed parameters once before class construction and
         # subsequent `set_params`, avoiding duplicate warnings.
         for model in (spatial, temporal):
@@ -1399,12 +1408,8 @@ class Model(Frozen, PrettyPrint):
         temporal = attributes.pop('temporal', None)
         # A subclass builds its own spatial component and so requires the
         # implant, which lives on that component and not in `__dict__`.
-        # `Model` itself declares it optional and takes the copy back below.
-        implant_param = inspect.signature(
-            self.__class__.__init__).parameters.get('implant')
-        implant_required = getattr(implant_param, 'default',
-                                   None) is inspect.Parameter.empty
-        if spatial is not None and implant_required:
+        # `Model` itself is handed the copy back below instead.
+        if spatial is not None and type(self) is not Model:
             attributes['implant'] = spatial.implant
         result = self.__class__(**attributes)
         # Restore copied sub-models after construction; their parameters do not
@@ -1452,6 +1457,7 @@ class Model(Frozen, PrettyPrint):
         params : dict
             Parameter values to set.
         """
+        _reject_implant_param(params)
         # Instance-based composites bypass `BaseModel.__init__`; collect
         # deprecations from both components and warn once.
         specs = {}

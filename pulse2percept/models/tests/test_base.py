@@ -910,7 +910,7 @@ def test_a_standalone_spatial_model_needs_an_implant(ModelClass, ImplantType):
 def test_a_temporal_only_model_takes_no_implant():
     """`Horsager2009Model` has no electrodes to place"""
     npt.assert_equal(Horsager2009Model().has_space, False)
-    with pytest.raises(AttributeError, match='not a valid parameter'):
+    with pytest.raises(AttributeError, match='not a Model parameter'):
         Horsager2009Model(implant=ArgusII())
 
 
@@ -918,6 +918,16 @@ def test_Model_takes_a_bound_spatial_instance():
     """`Model` composes spatial components; it does not construct them"""
     with pytest.raises(TypeError, match='not the class itself'):
         Model(spatial=ValidSpatialModel, temporal=ValidTemporalModel())
+    # `implant` is constructor context for the spatial model, not a parameter
+    # the composite forwards, so neither spelling reaches it:
+    with pytest.raises(AttributeError, match='not a Model parameter'):
+        Model(spatial=ValidSpatialModel(ArgusI()), implant=ArgusII())
+    model = Model(spatial=ValidSpatialModel(ArgusI()))
+    with pytest.raises(AttributeError, match='not a Model parameter'):
+        model.set_params({'implant': ArgusII()})
+    # Rebinding is an explicit mutation, and stays allowed:
+    model.implant = ArgusII()
+    npt.assert_equal(isinstance(model.implant, ArgusII), True)
 
 
 def test_Model_predict_percept():
