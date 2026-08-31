@@ -348,9 +348,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry and eye are modeled. Required before
-        building or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry and eye are modeled.
 
         .. versionadded:: 0.11.0
 
@@ -442,8 +441,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     axon-map construction is considered reliable."""
     extra_stimulus_units = (xTh,)
 
-    def __init__(self, **params):
-        super(BiphasicAxonMapSpatial, self).__init__(**params)
+    def __init__(self, implant, **params):
+        super(BiphasicAxonMapSpatial, self).__init__(implant, **params)
         if self.bright_model is None:
             self.bright_model = DefaultBrightModel()
         if self.size_model is None:
@@ -712,9 +711,8 @@ class BiphasicAxonMapModel(Model):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry and eye are modeled. Required before
-        building or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry and eye are modeled.
 
         .. versionadded:: 0.11.0
 
@@ -830,6 +828,6 @@ class BiphasicAxonMapModel(Model):
         percept = model.predict_percept(p2p.stimuli.LogoBVL())
     """
 
-    def __init__(self, **params):
+    def __init__(self, implant, **params):
         super(BiphasicAxonMapModel, self).__init__(
-            spatial=BiphasicAxonMapSpatial(), temporal=None, **params)
+            spatial=BiphasicAxonMapSpatial(implant), temporal=None, **params)

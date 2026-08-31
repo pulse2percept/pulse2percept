@@ -81,12 +81,13 @@ plt.show()
 # .. code-block:: python
 #
 #     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
-#     model = p2p.models.cortex.ScoreboardModel(
-#         rho=500, xrange=(-6, 0), yrange=(-5, 5), step=.25, vfmap=nmap
-#     ).build()
+#     xrange, yrange = (-6, 0), (-5, 5)
 #     nlink = Neuralink.from_neuropythy(
-#         nmap, xrange=model.xrange, yrange=model.yrange, step=2, rand_insertion_angle=0
+#         nmap, xrange=xrange, yrange=yrange, step=2, rand_insertion_angle=0
 #     )
+#     model = p2p.models.cortex.ScoreboardModel(
+#         nlink, rho=500, xrange=xrange, yrange=yrange, step=.25, vfmap=nmap
+#     ).build()
 #     print(len(nlink.implants), " total threads")
 #     fig = plt.figure(figsize=(10, 4))
 #     ax1 = fig.add_subplot(121, projection='3d')

@@ -170,7 +170,8 @@ def check_model_builds() -> list[str]:
         # This runs against released versions too, and 0.10.0 renamed the
         # grid spacing parameter `xystep` -> `step`. Ask the installed model
         # which spelling it takes rather than assuming the current one.
-        spacing = "step" if hasattr(ScoreboardModel(), "step") else "xystep"
+        probe = ScoreboardModel(implant=ArgusII())
+        spacing = "step" if hasattr(probe, "step") else "xystep"
         model = ScoreboardModel(implant=ArgusII(), xrange=(-4, 4),
                                 yrange=(-4, 4), **{spacing: 1})
         percept = model.predict_percept({e: 1 for e in ("A1", "F10")})

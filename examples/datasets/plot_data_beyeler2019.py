@@ -128,7 +128,7 @@ plot_argus_phosphenes(data, argus)
 # from the fovea:
 
 from pulse2percept.models import AxonMapModel
-model = AxonMapModel(loc_od=(16.2, 1.38))
+model = AxonMapModel(argus, loc_od=(16.2, 1.38))
 plot_argus_phosphenes(data, argus, axon_map=model)
 
 ###############################################################################

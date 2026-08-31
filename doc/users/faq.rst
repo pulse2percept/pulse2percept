@@ -232,17 +232,18 @@ Model parameters can usually be passed when the model is created:
 
 .. code-block:: python
 
+    from pulse2percept.implants import ArgusII
     from pulse2percept.models import AxonMapModel
     from pulse2percept.units import um
 
-    model = AxonMapModel(rho=250 * um, lam=700 * um)
+    model = AxonMapModel(ArgusII(), rho=250 * um, lam=700 * um)
     model.build()
 
 Bare numbers also work and retain their documented units:
 
 .. code-block:: python
 
-    model = AxonMapModel(rho=250, lam=700)
+    model = AxonMapModel(ArgusII(), rho=250, lam=700)
 
 Many models perform expensive precomputations in ``build()``. If you change a
 parameter that affects those computations after the model has been built, call
@@ -270,9 +271,11 @@ For example:
 
 .. code-block:: python
 
+    from pulse2percept.implants import ArgusII
     from pulse2percept.models import AxonMapModel
 
     model = AxonMapModel(
+        ArgusII(),
         xrange=(-15, 15),
         yrange=(-10, 10),
         step=0.25,
@@ -390,10 +393,11 @@ For example:
 
 .. code-block:: python
 
+    from pulse2percept.implants import ArgusII
     from pulse2percept.models import Model, ScoreboardSpatial, FadingTemporal
 
     model = Model(
-        spatial=ScoreboardSpatial(),
+        spatial=ScoreboardSpatial(ArgusII()),
         temporal=FadingTemporal(),
     )
     model.build()

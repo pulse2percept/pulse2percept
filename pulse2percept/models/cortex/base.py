@@ -22,6 +22,11 @@ class CortexSpatial(SpatialModel):
 
     Parameters:
     -----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts.
+
+        .. versionadded:: 0.11.0
+
     regions : list of str, optional
         The regions to simulate. Options are any combination of 'v1', 'v2', 'v3'. 
         Default: ['v1']. 
@@ -87,9 +92,9 @@ class CortexSpatial(SpatialModel):
             regions = [regions]
         self._regions = regions
 
-    def __init__(self, **params):
+    def __init__(self, implant, **params):
         self._regions = None
-        super(CortexSpatial, self).__init__(**params)
+        super(CortexSpatial, self).__init__(implant, **params)
 
         # Use [Polemeni2006]_ visual field map by default
         if 'vfmap' not in params.keys():
@@ -221,8 +226,7 @@ class ScoreboardSpatial(CortexSpatial):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The implant whose stimulation this model predicts. Required before
-        building or predicting.
+        The implant whose stimulation this model predicts.
 
         .. versionadded:: 0.11.0
 
@@ -286,8 +290,8 @@ class ScoreboardSpatial(CortexSpatial):
         next ``predict_percept`` builds it again.
 
     """
-    def __init__(self, **params):
-        super(ScoreboardSpatial, self).__init__(**params)
+    def __init__(self, implant, **params):
+        super(ScoreboardSpatial, self).__init__(implant, **params)
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
@@ -378,8 +382,7 @@ class ScoreboardModel(Model):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The implant whose stimulation this model predicts. Required before
-        building or predicting.
+        The implant whose stimulation this model predicts.
 
         .. versionadded:: 0.11.0
 
@@ -443,6 +446,7 @@ class ScoreboardModel(Model):
 
     """
 
-    def __init__(self, **params):
+    def __init__(self, implant, **params):
         super(ScoreboardModel, self).__init__(
-            spatial=ScoreboardSpatial(**params), temporal=None, **params)
+            spatial=ScoreboardSpatial(implant, **params), temporal=None,
+            **params)

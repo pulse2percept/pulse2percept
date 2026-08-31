@@ -240,8 +240,8 @@ SCENARIOS = [
         id='argus2_scoreboard_fading_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
         implant=p2p.implants.ArgusII,
-        model=lambda **kwargs: p2p.models.Model(
-            spatial=p2p.models.ScoreboardSpatial(xrange=(-4, 4),
+        model=lambda implant, **kwargs: p2p.models.Model(
+            spatial=p2p.models.ScoreboardSpatial(implant, xrange=(-4, 4),
                                                  yrange=(-4, 4), step=0.5),
             temporal=p2p.models.FadingTemporal(), **kwargs),
     ),

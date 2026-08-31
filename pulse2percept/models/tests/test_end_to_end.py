@@ -319,9 +319,8 @@ def test_endtoend_slow_train_stays_lit_for_the_whole_video():
     onset = delivered.time[np.any(delivered.data < 0, axis=0)]
     npt.assert_almost_equal(onset.max(), 3010.5, decimal=1)
 
-    model = Model(implant=implant,
-                  spatial=ScoreboardSpatial(xrange=(-12, 12), yrange=(-8, 8),
-                                            step=1),
+    model = Model(spatial=ScoreboardSpatial(implant, xrange=(-12, 12),
+                                            yrange=(-8, 8), step=1),
                   temporal=FadingTemporal(tau=100)).build()
     with pytest.warns(UserWarning, match='deliver no pulse'):
         percept = model.predict_percept(BostonTrain())

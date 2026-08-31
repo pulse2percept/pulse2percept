@@ -3,9 +3,8 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import BaseModel, _require_stim_dimension
+from ..base import BaseModel, _check_implant, _require_stim_dimension
 from ...percepts import Percept
-from ...implants import ProsthesisSystem
 from ...stimuli import BiphasicPulseTrain
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
 from ...utils import cart2pol
@@ -52,8 +51,7 @@ class DynaphosModel(BaseModel):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
-        The implant whose stimulation this model predicts. Required before
-        building or predicting.
+        The implant whose stimulation this model predicts.
 
         .. versionadded:: 0.11.0
 
@@ -130,7 +128,9 @@ class DynaphosModel(BaseModel):
             regions = [regions]
         self._regions = regions
 
-    def __init__(self, **params):
+    def __init__(self, implant, **params):
+            _check_implant(implant)
+            self._implant = implant
             self._regions = None
             super().__init__(**params)
 
@@ -147,15 +147,13 @@ class DynaphosModel(BaseModel):
 
         .. versionadded:: 0.11.0
         """
-        return getattr(self, '_implant', None)
+        return self._implant
 
     @implant.setter
     def implant(self, implant):
         """Implant setter (called upon ``self.implant = implant``)"""
-        if implant is not None and not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
-                            f"not {type(implant)}.")
-        if implant is not getattr(self, '_implant', None):
+        _check_implant(implant)
+        if implant is not self._implant:
             self._is_built = False
         self._implant = implant
 
@@ -163,9 +161,6 @@ class DynaphosModel(BaseModel):
     def get_default_params(self):
             """Returns all settable parameters of the Dynaphos model"""
             params = {
-                # The device whose electrodes this model places in the visual
-                # field. Required before building or predicting:
-                'implant': None,
                 'xrange': (-5, 5),  # dva
                 'yrange': (-5, 5),  # dva
                 'step': 0.25,  # dva
@@ -256,12 +251,6 @@ class DynaphosModel(BaseModel):
         from ...topography import Grid2D
         # See `BaseModel.build`:
         self.set_params(**build_params)
-        if not isinstance(self.implant, ProsthesisSystem):
-            raise ValueError(
-                f"{type(self).__name__} predicts what a particular implant "
-                f"produces, so it needs one: "
-                f"{type(self).__name__}(implant=Cortivis()). The stimulus is "
-                f"what 'predict_percept' takes.")
         # check that freq/pdur fit. `freq` counts cycles per second, and every
         # duration in this model is in milliseconds:
         window_dur = MS_PER_S / self.freq

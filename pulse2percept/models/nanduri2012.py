@@ -63,9 +63,8 @@ class Nanduri2012Spatial(SpatialModel):
 
         Parameters
         ----------
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-            Implant whose electrode geometry is modeled. Required before building
-            or predicting.
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+            Implant whose electrode geometry is modeled.
 
             .. versionadded:: 0.11.0
 
@@ -297,9 +296,8 @@ class Nanduri2012Model(Model):
 
         Parameters
         ----------
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-            Implant whose electrode geometry is modeled. Required before building
-            or predicting.
+        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+            Implant whose electrode geometry is modeled.
 
             .. versionadded:: 0.11.0
 
@@ -370,7 +368,7 @@ class Nanduri2012Model(Model):
             Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
         """
 
-    def __init__(self, **params):
-        super(Nanduri2012Model, self).__init__(spatial=Nanduri2012Spatial(),
-                                               temporal=Nanduri2012Temporal(),
-                                               **params)
+    def __init__(self, implant, **params):
+        super(Nanduri2012Model, self).__init__(
+            spatial=Nanduri2012Spatial(implant),
+            temporal=Nanduri2012Temporal(), **params)

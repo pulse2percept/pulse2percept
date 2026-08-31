@@ -205,6 +205,22 @@ def _delivered(stim):
     return Stimulus(stim)
 
 
+def _check_implant(implant):
+    """Raise unless ``implant`` is a ProsthesisSystem"""
+    if not isinstance(implant, ProsthesisSystem):
+        raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
+                        f"{type(implant)}.")
+
+
+def _reject_implant_param(params):
+    """Raise if `implant` appears where a Model forwards parameters."""
+    if 'implant' in params:
+        raise AttributeError(
+            "'implant' is not a Model parameter. Bind the implant when "
+            "constructing the spatial model, or assign 'model.implant' to "
+            "rebind it.")
+
+
 def _device_scene(scene, implant):
     """The visual scene the implant's own input pipeline sees"""
     source = implant._preprocess(scene.source)
@@ -251,7 +267,6 @@ def _scene_stim(model, scene, gaze):
         raise ValueError("A scene is registered against the retina, which "
                          "needs a spatial model. This model has only a "
                          "temporal one.")
-    model.spatial._require_implant()
     implant = model.implant
     vfmap = getattr(model.spatial, 'vfmap', None)
     if not isinstance(vfmap, RetinalMap):
@@ -565,9 +580,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry is modeled. Required before building
-        or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
 
@@ -624,7 +638,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
     n_jobs = _n_jobs_alias()
 
-    def __init__(self, **params):
+    def __init__(self, implant, **params):
+        _check_implant(implant)
+        self._implant = implant
         # `vfmap` first: `xrange`/`yrange` may be given as a retinal extent,
         # which is resolved through the map as it is assigned. See
         # `_vfmap_first`.
@@ -639,7 +655,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. versionadded:: 0.11.0
         """
-        return getattr(self, '_implant', None)
+        return self._implant
 
     @implant.setter
     def implant(self, implant):
@@ -649,22 +665,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. versionadded:: 0.11.0
         """
-        if implant is not None and not isinstance(implant, ProsthesisSystem):
-            raise TypeError(f"'implant' must be a ProsthesisSystem object, "
-                            f"not {type(implant)}.")
-        if implant is not getattr(self, '_implant', None):
+        _check_implant(implant)
+        if implant is not self._implant:
             # Spatial build state depends on implant geometry:
             self._is_built = False
         self._implant = implant
-
-    def _require_implant(self):
-        """Raise if no implant is bound to the spatial model."""
-        if not isinstance(self.implant, ProsthesisSystem):
-            raise ValueError(
-                f"{type(self).__name__} predicts what a particular implant "
-                f"produces, so it needs one: "
-                f"{type(self).__name__}(implant=ArgusII()). The stimulus is "
-                f"what 'predict_percept' takes.")
 
     def set_params(self, **params):
         """Set the parameters of this model
@@ -738,7 +743,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
-            'implant': None,
             'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
             'step': 0.25,  # dva
@@ -815,7 +819,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         # See `BaseModel.build`:
         self.set_params(**build_params)
-        self._require_implant()
         if self.vfmap.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
                              f"visual field map has {self.vfmap.ndim} dimensions.")
@@ -1236,19 +1239,15 @@ class Model(Frozen, PrettyPrint):
 
     .. code-block:: python
 
-        model = Model(spatial=ScoreboardSpatial(),
+        model = Model(spatial=ScoreboardSpatial(ArgusII()),
                       temporal=Nanduri2012Temporal())
 
     Parameters
     ----------
-    spatial : :py:class:`~pulse2percept.models.SpatialModel` or type, optional
-        Spatial model instance or class.
+    spatial : :py:class:`~pulse2percept.models.SpatialModel`, optional
+        Spatial model instance, already bound to its implant.
     temporal : :py:class:`~pulse2percept.models.TemporalModel` or type, optional
         Temporal model instance or class.
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant used by the spatial component.
-
-        .. versionadded:: 0.11.0
     **params : keyword arguments
         Parameters forwarded to the spatial and temporal components. A name
         present on both components is applied to both.
@@ -1305,9 +1304,7 @@ class Model(Frozen, PrettyPrint):
         return BaseModel.time_unit
 
     def __init__(self, spatial=None, temporal=None, **params):
-        # Only the spatial component depends on implant geometry, so do not
-        # forward `implant` to the temporal component:
-        implant = params.pop('implant', None)
+        _reject_implant_param(params)
         # Normalize renamed parameters once before class construction and
         # subsequent `set_params`, avoiding duplicate warnings.
         for model in (spatial, temporal):
@@ -1317,17 +1314,16 @@ class Model(Frozen, PrettyPrint):
                     getattr(model, '_renamed_params', {}))
         # Set the spatial model:
         if spatial is not None and not isinstance(spatial, SpatialModel):
-            if issubclass(spatial, SpatialModel):
-                # User should have passed an instance, not a class:
-                spatial = spatial(**params)
-            else:
+            if isinstance(spatial, type) and issubclass(spatial, SpatialModel):
                 raise TypeError(f"'spatial' must be a SpatialModel instance, "
-                                f"not {type(spatial)}.")
+                                f"not the class itself: "
+                                f"{spatial.__name__}(implant).")
+            raise TypeError(f"'spatial' must be a SpatialModel instance, "
+                            f"not {type(spatial)}.")
         self.spatial = spatial
         # Set the temporal model:
         if temporal is not None and not isinstance(temporal, TemporalModel):
             if issubclass(temporal, TemporalModel):
-                # User should have passed an instance, not a class:
                 temporal = temporal(**params)
             else:
                 raise TypeError(f"'temporal' must be a TemporalModel instance, "
@@ -1335,21 +1331,6 @@ class Model(Frozen, PrettyPrint):
         self.temporal = temporal
         # Use user-specified parameter values instead of defaults:
         self.set_params(params)
-        if implant is not None:
-            if not self.has_space:
-                raise ValueError(
-                    "An implant is where a spatial model puts its electrodes, "
-                    "and this model has only a temporal component. A temporal "
-                    "model is given the stimulus and nothing else.")
-            bound = self.spatial.implant
-            if bound is not None and bound is not implant:
-                raise ValueError(
-                    f"This model was given two different implants: "
-                    f"'implant' is {type(implant).__name__} and the spatial "
-                    f"model is already bound to "
-                    f"{type(bound).__name__}. A model describes one device, "
-                    f"so name it once - either here or on the spatial model.")
-            self.spatial.implant = implant
 
     def __getattr__(self, attr):
         """Forward missing attributes to model components.
@@ -1425,6 +1406,11 @@ class Model(Frozen, PrettyPrint):
         # the constructor, so those cannot be passed in as parameters:
         spatial = attributes.pop('spatial', None)
         temporal = attributes.pop('temporal', None)
+        # A subclass builds its own spatial component and so requires the
+        # implant, which lives on that component and not in `__dict__`.
+        # `Model` itself is handed the copy back below instead.
+        if spatial is not None and type(self) is not Model:
+            attributes['implant'] = spatial.implant
         result = self.__class__(**attributes)
         # Restore copied sub-models after construction; their parameters do not
         # live in the composite `__dict__`. Bypass forwarding `__setattr__`.
@@ -1471,6 +1457,7 @@ class Model(Frozen, PrettyPrint):
         params : dict
             Parameter values to set.
         """
+        _reject_implant_param(params)
         # Instance-based composites bypass `BaseModel.__init__`; collect
         # deprecations from both components and warn once.
         specs = {}
@@ -1576,7 +1563,6 @@ class Model(Frozen, PrettyPrint):
         """
         if not self.has_space:
             return source
-        self.spatial._require_implant()
         return self.implant.prepare_stim(source)
 
     def _predict_percept(self, stim, t_percept=None):
