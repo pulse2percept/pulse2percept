@@ -76,46 +76,29 @@ To install the `stable release`_ of p2p, run:
 
     pip install pulse2percept
 
+To install the `current development version`_ directly from GitHub:
+
+.. code-block:: bash
+
+    pip install git+https://github.com/pulse2percept/pulse2percept
+
 ``pip`` installs NumPy and the other dependencies for you, and will only select
 a release that supports the Python version you are running (see
 `Compatibility and Building from Source
 <https://pulse2percept.readthedocs.io/en/stable/install.html#install-compatibility>`__).
 
-We publish prebuilt wheels on PyPI for 64-bit Linux (``manylinux``, x86-64),
-macOS 11 and later (both Apple silicon and Intel), and 64-bit Windows. These
-wheels are not tied to a particular distribution or OS release beyond those
-minimums.
-
 .. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
+.. _current development version: https://pulse2percept.readthedocs.io/en/latest/index.html
 
 .. quickstart-end
 
 You can find the full documentation
 `here <https://pulse2percept.readthedocs.io/en/stable>`_.
 
-Compatibility and Building from Source
---------------------------------------
+Compatibility
+-------------
 
 .. compat-begin
-
-We do not publish wheels for 32-bit platforms or for musl-based distributions
-such as Alpine Linux. While other platforms are not explicitly supported, you
-may still be able to run p2p with minimal modifications: if ``pip`` does not
-find a prebuilt wheel for your system, it will attempt to install from source.
-
-.. note::
-
-   You do **not** need to install NumPy or Cython yourself in order to build
-   from source. They are declared as build requirements, so ``pip`` installs
-   them into an isolated build environment automatically. What you do need is
-   a C compiler: one is already present on most Linux and macOS systems, but
-   on Windows you must install `Visual Studio Build Tools`_ and select
-   "Desktop development with C++".
-
-   The exception is ``pip install --no-build-isolation``, which deliberately
-   skips that step; there you must install NumPy and Cython yourself first.
-
-Supported Python versions:
 
 +---------------------------+------+------+------+------+------+-----+-----+-----+
 |           Python          | 3.14 | 3.13 | 3.12 | 3.11 | 3.10 | 3.9 | 3.8 | 3.7 |
@@ -131,12 +114,14 @@ Supported Python versions:
 | p2p 0.8 Retina            |      |      |      |      | Yes  | Yes | Yes | Yes |
 +---------------------------+------+------+------+------+------+-----+-----+-----+
 
-Our `GitHub Action Runners`_ build and test p2p on the ``ubuntu-latest``,
-``windows-latest``, and ``macos-latest`` images, on every Python version listed
-for the current release above. Those labels track whatever image GitHub
-currently ships, so the exact OS releases we test against change over time.
+Prebuilt wheels are available for 64-bit Linux, macOS 11 and later
+(Apple silicon and Intel), and 64-bit Windows. On other platforms, ``pip`` may
+build pulse2percept from source, which requires a C compiler. NumPy, Cython,
+and other build dependencies are installed automatically.
 
-.. _Visual Studio Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+Our `GitHub Action Runners`_ test the current release on Linux, macOS, and
+Windows for every supported Python version listed above.
+
 .. _GitHub Action Runners: https://github.com/pulse2percept/pulse2percept/actions
 
 .. compat-end
@@ -160,34 +145,17 @@ To uninstall:
 
 .. upgrade-end
 
-Installing the Bleeding-Edge Version
-------------------------------------
-
-If you want to install the `latest development version`_ from source, make sure
-you have a C compiler available (see the note above), then run:
-
-.. code-block:: bash
-
-    pip install git+https://github.com/pulse2percept/pulse2percept
-
-For more details, see our `Installation Guide`_.
-
-If you encounter issues, check our `Issue Tracker`_ on GitHub for solutions
-or contribute fixes for unsupported platforms.
-
-.. _latest development version: https://pulse2percept.readthedocs.io/en/latest/index.html
-.. _Installation Guide: https://pulse2percept.readthedocs.io/en/stable/install.html
-.. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
-
 Where to go from here
 =====================
 
-*  Have a look at some code examples from our `Example Gallery`_.
-*  Familiarize yourself with `visual implants`_, `electrical stimuli`_,
+*  Start with the `Getting Started`_ guide.
+*  Explore the `Example Gallery`_ for complete simulations and use cases.
+*  Learn about `visual implants`_, `electrical stimuli`_,
    and our `computational models`_.
-*  Check the `FAQ`_ to see if your question has already been answered.
-*  Request features or report bugs on our `Issue Tracker`_ on GitHub.
+*  Check the `FAQ`_ for common questions.
+*  Request features or report bugs on the `Issue Tracker`_.
 
+.. _Getting Started: https://pulse2percept.readthedocs.io/en/latest/getting_started.html
 .. _Example Gallery: https://pulse2percept.readthedocs.io/en/latest/examples/index.html
 .. _visual implants: https://pulse2percept.readthedocs.io/en/latest/topics/implants.html
 .. _electrical stimuli: https://pulse2percept.readthedocs.io/en/latest/topics/stimuli.html
