@@ -29,6 +29,11 @@ from pulse2percept.utils.base import FreezeError
 pytestmark = pytest.mark.usefixtures('axon_cache_in_tmp')
 
 
+def _spatial(model):
+    """The spatial model itself, or the one a composite wraps."""
+    return getattr(model, 'spatial', model)
+
+
 def test_deepcopy_DefaultBrightModel():
     original = DefaultBrightModel()
     copied = copy.deepcopy(original)
@@ -225,7 +230,8 @@ def test_biphasicAxonMapSpatial():
     source = np.zeros(60)
     percept = model.predict_percept(source)
     npt.assert_equal(isinstance(percept, Percept), True)
-    npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
+    npt.assert_equal(percept.shape,
+                     list(_spatial(model).grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
     npt.assert_equal(percept.time, None)
 
@@ -291,8 +297,8 @@ def test_biphasicAxonMapModel():
 
     # We can set and get effects model params
     for atr in ['a' + str(i) for i in range(0, 10)]:
-        npt.assert_equal(hasattr(model, atr), True)
-    model.a0 = 5
+        npt.assert_equal(hasattr(model.spatial, atr), True)
+    model.spatial.a0 = 5
     # Should propogate to size and bright model
     # But should not be a member of streak or spatial
     npt.assert_equal(model.spatial.size_model.a0, 5)
@@ -302,27 +308,27 @@ def test_biphasicAxonMapModel():
         model.spatial.__getattribute__('a0')
     # If the spatial model and an effects model have a parameter with the
     # Same name, both need to be changed
-    model.rho = 350
-    model.lam = 450
+    model.spatial.rho = 350
+    model.spatial.lam = 450
     npt.assert_equal(model.spatial.size_model.rho, 350)
     npt.assert_equal(model.spatial.streak_model.lam, 450)
-    npt.assert_equal(model.rho, 350)
-    npt.assert_equal(model.lam, 450)
+    npt.assert_equal(model.spatial.rho, 350)
+    npt.assert_equal(model.spatial.lam, 450)
 
     # Effect model parameters are not model constructor arguments; they are
     # assigned afterwards, or configured on a custom effect model
     with pytest.raises(TypeError):
         BiphasicAxonMapModel(implant=ArgusII(), a0=5)
     model = BiphasicAxonMapModel(implant=ArgusII(), rho=432)
-    model.a0 = 5
-    npt.assert_equal(model.a0, 5)
+    model.spatial.a0 = 5
+    npt.assert_equal(model.spatial.a0, 5)
     npt.assert_equal(model.spatial.bright_model.a0, 5)
-    npt.assert_equal(model.rho, 432)
+    npt.assert_equal(model.spatial.rho, 432)
     npt.assert_equal(model.spatial.size_model.rho, 432)
 
     # If parameter is not an effects model param, it cant be set
     with pytest.raises(FreezeError):
-        model.invalid_param = 5
+        model.spatial.invalid_param = 5
 
     # Custom parameters also propogate to effects models
     model = BiphasicAxonMapModel(implant=ArgusII())
@@ -333,8 +339,8 @@ def test_biphasicAxonMapModel():
 
         def __call__(self, freq, amp, pdur):
             return 1
-    model.size_model = TestSizeModel()
-    model.test_param = 10
+    model.spatial.size_model = TestSizeModel()
+    model.spatial.test_param = 10
     npt.assert_equal(model.spatial.size_model.test_param, 10)
     with pytest.raises(AttributeError):
         model.spatial.__getattribute__('test_param')
@@ -344,12 +350,12 @@ def test_biphasicAxonMapModel():
     class TestInitClassGood():
         def __init__(self):
             self.model = BiphasicAxonMapModel(implant=ArgusII())
-            self.model.a0
+            self.model.spatial.a0
 
     class TestInitClassBad():
         def __init__(self):
             self.model = BiphasicAxonMapModel(implant=ArgusII())
-            self.model.a10 = 999
+            self.model.spatial.a10 = 999
     # If this fails, something is wrong with getattr / setattr logic
     TestInitClassGood()
     with pytest.raises(FreezeError):
@@ -361,7 +367,7 @@ def test_biphasicAxonMapModel():
         setattr(model.spatial, key, value)
         npt.assert_equal(getattr(model.spatial, key), value)
     model = BiphasicAxonMapModel(implant=ArgusII(), **set_params)
-    model.build(**set_params)
+    model.spatial.build(**set_params)
     for key, value in set_params.items():
         npt.assert_equal(getattr(model.spatial, key), value)
 
@@ -373,7 +379,8 @@ def test_biphasicAxonMapModel():
 
     # The eye is the implanted one, and is not settable on its own:
     npt.assert_equal(
-        BiphasicAxonMapModel(implant=ArgusII(eye='LE'), step=5).eye, 'LE')
+        BiphasicAxonMapModel(implant=ArgusII(eye='LE'), step=5).spatial.eye,
+        'LE')
     with pytest.raises(TypeError):
         BiphasicAxonMapModel(implant=ArgusII(), eye='LE')
 
@@ -595,12 +602,12 @@ def test_BiphasicAxonMapSpatial_meridian_blend(ModelClass):
     # Exercises the width inherited from `AxonMapSpatial`
     width = 1
     blended_model = make()
-    npt.assert_equal(blended_model.meridian_blend, width)
+    npt.assert_equal(_spatial(blended_model).meridian_blend, width)
     blended = blended_model.predict_percept(source).data
     npt.assert_equal(blended.shape, unblended.shape)
     npt.assert_equal(blended.dtype, unblended.dtype)
     npt.assert_equal(np.array_equal(blended, unblended), False)
-    y = plain.grid.y[:, 0]
+    y = _spatial(plain).grid.y[:, 0]
     delta = np.abs(blended - unblended)
     rows = delta.max(axis=(1, 2)) > delta.max() * 1e-3
     npt.assert_array_less(np.abs(y[rows]).max(), 4 * width)

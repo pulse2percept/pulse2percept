@@ -13,6 +13,11 @@ from pulse2percept.percepts import Percept
 from pulse2percept.topography import Watson2014Map
 
 
+def _spatial(model):
+    """The spatial model itself, or the one a composite wraps."""
+    return getattr(model, 'spatial', model)
+
+
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 @pytest.mark.parametrize('jitter_boundary', [True, False])
 @pytest.mark.parametrize('regions', 
@@ -21,14 +26,15 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # ScoreboardSpatial automatically sets `regions`
     vfmap = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
     model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1, vfmap=vfmap).build()
-    npt.assert_equal(model.regions, regions)
-    npt.assert_equal(model.vfmap.regions, regions)
+    spatial = _spatial(model)
+    npt.assert_equal(spatial.regions, regions)
+    npt.assert_equal(spatial.vfmap.regions, regions)
 
     # User can set `rho`:
-    model.rho = 123
-    npt.assert_equal(model.rho, 123)
-    model.build(rho=987)
-    npt.assert_equal(model.rho, 987)
+    spatial.rho = 123
+    npt.assert_equal(spatial.rho, 123)
+    spatial.build(rho=987)
+    npt.assert_equal(spatial.rho, 987)
 
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)
@@ -36,28 +42,41 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # Converting ret <=> dva
     vfmap = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
     model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=1, vfmap=vfmap).build()
-    npt.assert_equal(isinstance(model.vfmap, Polimeni2006Map), True)
+    spatial = _spatial(model)
+    npt.assert_equal(isinstance(spatial.vfmap, Polimeni2006Map), True)
     if jitter_boundary:
-        npt.assert_equal(np.isnan(model.vfmap.dva_to_v1([0], [0])), False)
+        npt.assert_equal(np.isnan(spatial.vfmap.dva_to_v1([0], [0])), False)
         if 'v1' in regions:
-            npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 49)
+            npt.assert_equal(
+                spatial.grid.v1.x[~np.isnan(spatial.grid.v1.x)].size,
+                49)
         if 'v2' in regions:
-            npt.assert_equal(model.grid.v2.x[~np.isnan(model.grid.v2.x)].size, 49)
+            npt.assert_equal(
+                spatial.grid.v2.x[~np.isnan(spatial.grid.v2.x)].size,
+                49)
         if 'v3' in regions:
-            npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 49)
+            npt.assert_equal(
+                spatial.grid.v3.x[~np.isnan(spatial.grid.v3.x)].size,
+                49)
     else:
-        npt.assert_equal(np.isnan(model.vfmap.dva_to_v1([0], [0])), True)
+        npt.assert_equal(np.isnan(spatial.vfmap.dva_to_v1([0], [0])), True)
         if 'v1' in regions:
-            npt.assert_equal(model.grid.v1.x[~np.isnan(model.grid.v1.x)].size, 42)
+            npt.assert_equal(
+                spatial.grid.v1.x[~np.isnan(spatial.grid.v1.x)].size,
+                42)
         if 'v2' in regions:
-            npt.assert_equal(model.grid.v2.x[~np.isnan(model.grid.v2.x)].size, 36)
+            npt.assert_equal(
+                spatial.grid.v2.x[~np.isnan(spatial.grid.v2.x)].size,
+                36)
         if 'v3' in regions:
-            npt.assert_equal(model.grid.v3.x[~np.isnan(model.grid.v3.x)].size, 36)
+            npt.assert_equal(
+                spatial.grid.v3.x[~np.isnan(spatial.grid.v3.x)].size,
+                36)
 
     # Zero in = zero out:
     percept = model.predict_percept(np.zeros(96))
     npt.assert_equal(isinstance(percept, Percept), True)
-    npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
+    npt.assert_equal(percept.shape, list(spatial.grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
 
 
@@ -80,7 +99,7 @@ def test_predict_spatial(ModelClass, regions):
                        yrange=(-3, 3), step=0.1, rho=400, vfmap=vfmap).build()
     elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
     percept = model.predict_percept({str(i): [1, 0] for i in elecs})
-    npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
+    npt.assert_equal(percept.shape, list(_spatial(model).grid.x.shape) + [2])
     npt.assert_equal(np.all(percept.data[:, :, 1] == 0), True)
     pmax = percept.data.max()
     npt.assert_almost_equal(percept.data[33, 18, 0], pmax)
@@ -97,7 +116,7 @@ def test_predict_spatial(ModelClass, regions):
                            xrange=(-5, 0), yrange=(-3, 3), step=0.1, rho=400,
                            vfmap=vfmap).build()
         percept = model.predict_percept({'40': 1, '94': 5})
-        half = model.grid.shape[0] // 2
+        half = _spatial(model).grid.shape[0] // 2
         npt.assert_equal(np.sum(percept.data[:half, :, :]) >  np.sum(percept.data[half:, :, :]), True)
 
 
@@ -171,7 +190,7 @@ def test_deepcopy_Scoreboard(ModelClass):
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 def test_plot(ModelClass):
     # make sure that plotting works before and after building
-    m = ModelClass(implant=Cortivis())
+    m = _spatial(ModelClass(implant=Cortivis()))
     m.plot()
     plt.close()
     m.build()
@@ -184,8 +203,8 @@ def test_poli_nlink():
     # since this is an odd combo of 2d map and 3d implant
     implant = LinearEdgeThread(x=20000)
     model = ScoreboardModel(implant=implant, rho=800, step=.5).build()
-    npt.assert_equal(model.grid.v1.z is None, True)
-    npt.assert_equal(model.grid.v1.x is None, False)
+    npt.assert_equal(_spatial(model).grid.v1.z is None, True)
+    npt.assert_equal(_spatial(model).grid.v1.x is None, False)
     percept = model.predict_percept({e: 1 for e in implant.electrode_names})
     npt.assert_almost_equal(np.sum(percept.data), 32.494125, decimal=3)
     npt.assert_equal(np.sum(percept.data > .05), 4)
@@ -214,7 +233,7 @@ def test_CortexSpatial_meridian_blend(ModelClass):
     npt.assert_array_less(0, unblended.max())
 
     default_model = make(implant=implant)
-    npt.assert_equal(default_model.meridian_blend, 0.1)
+    npt.assert_equal(_spatial(default_model).meridian_blend, 0.1)
     default_data = default_model.predict_percept(source).data
     npt.assert_equal(np.array_equal(default_data, unblended), False)
 
@@ -224,7 +243,7 @@ def test_CortexSpatial_meridian_blend(ModelClass):
     npt.assert_equal(blended.shape, unblended.shape)
     npt.assert_equal(blended.dtype, unblended.dtype)
 
-    x = plain.grid.x[0, :]
+    x = _spatial(plain).grid.x[0, :]
     seam = _straddling_pair(x)
 
     def jump(data):

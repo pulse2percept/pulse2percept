@@ -18,8 +18,7 @@ from ..topography import Curcio1990Map, Grid2D, RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
                      um, uA)
 from ..vision import Scene
-from ..utils import (PrettyPrint, FreezeError, Frozen, Parametrized,
-                     warn_deprecated_params, rename_deprecated_params)
+from ..utils import PrettyPrint, Frozen, Parametrized
 from ..utils.base import _is_constructing
 from ..utils.constants import ZORDER
 
@@ -223,13 +222,19 @@ def _check_implant(implant):
                         f"{type(implant)}.")
 
 
-def _reject_implant_param(params):
-    """Raise if `implant` appears where a Model forwards parameters."""
-    if 'implant' in params:
-        raise AttributeError(
-            "'implant' is not a Model parameter. Bind the implant when "
-            "constructing the spatial model, or assign 'model.implant' to "
-            "rebind it.")
+def _check_component(name, model, kind, example):
+    """Raise unless ``model`` is a ``kind`` instance or None.
+
+    ``example`` is what the class would have to be called with, quoted back in
+    the error message.
+    """
+    if model is None or isinstance(model, kind):
+        return
+    if isinstance(model, type) and issubclass(model, kind):
+        raise TypeError(f"'{name}' must be a {kind.__name__} instance, not "
+                        f"the class itself: {model.__name__}({example}).")
+    raise TypeError(f"'{name}' must be a {kind.__name__} instance, not "
+                    f"{type(model)}.")
 
 
 def _device_scene(scene, implant):
@@ -1246,28 +1251,33 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 class Model(Frozen, PrettyPrint):
     """Composite computational model.
 
-    Combines an optional spatial model with an optional temporal model.
+    Combines a spatial model with a temporal model. Both are given as already
+    constructed instances, and at least one is required.
 
     .. code-block:: python
 
-        model = Model(spatial=ScoreboardSpatial(ArgusII()),
-                      temporal=Nanduri2012Temporal())
+        model = Model(ScoreboardSpatial(ArgusII()), Nanduri2012Temporal())
+
+    The composite has no parameter namespace of its own: component parameters
+    are read and written where they live, as ``model.spatial.rho`` and
+    ``model.temporal.tau``.
 
     Parameters
     ----------
     spatial : :py:class:`~pulse2percept.models.SpatialModel`, optional
         Spatial model instance, already bound to its implant.
-    temporal : :py:class:`~pulse2percept.models.TemporalModel` or type, optional
-        Temporal model instance or class.
-    **params : keyword arguments
-        Parameters forwarded to the spatial and temporal components. A name
-        present on both components is applied to both.
+    temporal : :py:class:`~pulse2percept.models.TemporalModel`, optional
+        Temporal model instance.
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.11.0
+        Takes component instances only, requires at least one of them, and no
+        longer forwards component parameters.
     """
 
     # Composite units come from the component that consumes or emits the
-    # quantity. Define them explicitly because `__getattr__` may return both.
+    # quantity, and at least one component always exists.
 
     @property
     def stimulus_unit(self):
@@ -1278,18 +1288,14 @@ class Model(Frozen, PrettyPrint):
         """
         if self.has_space:
             return self.spatial.stimulus_unit
-        if self.has_time:
-            return self.temporal.stimulus_unit
-        return BaseModel.stimulus_unit
+        return self.temporal.stimulus_unit
 
     @property
     def extra_stimulus_units(self):
         """Additional stimulus units accepted by the active component"""
         if self.has_space:
             return self.spatial.extra_stimulus_units
-        if self.has_time:
-            return self.temporal.extra_stimulus_units
-        return BaseModel.extra_stimulus_units
+        return self.temporal.extra_stimulus_units
 
     @property
     def space_unit(self):
@@ -1310,129 +1316,54 @@ class Model(Frozen, PrettyPrint):
         """
         if self.has_time:
             return self.temporal.time_unit
-        if self.has_space:
-            return self.spatial.time_unit
-        return BaseModel.time_unit
+        return self.spatial.time_unit
 
-    def __init__(self, spatial=None, temporal=None, **params):
-        _reject_implant_param(params)
-        # Normalize renamed parameters once before class construction and
-        # subsequent `set_params`, avoiding duplicate warnings.
-        for model in (spatial, temporal):
-            if isinstance(model, type):
-                params = rename_deprecated_params(
-                    type(self).__name__, params,
-                    getattr(model, '_renamed_params', {}))
-        # Set the spatial model:
-        if spatial is not None and not isinstance(spatial, SpatialModel):
-            if isinstance(spatial, type) and issubclass(spatial, SpatialModel):
-                raise TypeError(f"'spatial' must be a SpatialModel instance, "
-                                f"not the class itself: "
-                                f"{spatial.__name__}(implant).")
-            raise TypeError(f"'spatial' must be a SpatialModel instance, "
-                            f"not {type(spatial)}.")
+    def __init__(self, spatial=None, temporal=None):
+        _check_component('spatial', spatial, SpatialModel, 'implant')
+        _check_component('temporal', temporal, TemporalModel, '')
+        if spatial is None and temporal is None:
+            raise TypeError("A Model needs a spatial model, a temporal model, "
+                            "or both.")
         self.spatial = spatial
-        # Set the temporal model:
-        if temporal is not None and not isinstance(temporal, TemporalModel):
-            if issubclass(temporal, TemporalModel):
-                temporal = temporal(**params)
-            else:
-                raise TypeError(f"'temporal' must be a TemporalModel instance, "
-                                f"not {type(temporal)}.")
         self.temporal = temporal
-        # Use user-specified parameter values instead of defaults:
-        self.set_params(params)
 
-    def __getattr__(self, attr):
-        """Forward missing attributes to model components.
+    @property
+    def implant(self):
+        """The implant the spatial model is bound to.
 
-        If both components define the attribute, return a dictionary with
-        ``'spatial'`` and ``'temporal'`` entries.
+        A temporal-only model has no electrodes to place, and returns ``None``.
+        Rebinding delegates to ``model.spatial.implant``, and invalidates the
+        spatial build as that assignment does.
+
+        .. versionadded:: 0.11.0
         """
-        # Check the spatial/temporal model:
-        try:
-            spatial = getattr(self.spatial, attr)
-            spatial_valid = True
-        except AttributeError:
-            spatial_valid = False
-        try:
-            temporal = getattr(self.temporal, attr)
-            temporal_valid = True
-        except AttributeError:
-            temporal_valid = False
-        if not spatial_valid and not temporal_valid:
-            # If we are in the constructor, this will be caught later and
-            # a new variable will be constructed
-            raise AttributeError(f"{self.__class__.__name__} has no attribute '{attr}'.")
-        if not spatial_valid:
-            return temporal
-        if not temporal_valid:
-            return spatial
-        return {'spatial': spatial, 'temporal': temporal}
+        if not self.has_space:
+            return None
+        return self.spatial.implant
 
-    def __setattr__(self, name, value):
-        """Set a composite attribute or forward a model parameter.
-
-        Attributes created during construction stay on the composite. Later
-        assignments are forwarded to the spatial and/or temporal component.
-        """
-        if _is_constructing(self):
-            # Constructor-owned attributes stay on the composite; user parameters
-            # are forwarded explicitly by `set_params`.
-            super().__setattr__(name, value)
-            return
-        self._set_component_param(name, value)
-
-    def _set_component_param(self, name, value):
-        """Forward an assignment to the spatial and/or temporal model
-
-        Raises a ``FreezeError`` if neither sub-model knows the name; outside
-        the constructor there is nowhere else for it to go.
-        """
-        found = False
-        try:
-            self.spatial.__setattr__(name, value)
-            found = True
-        except (AttributeError, FreezeError):
-            pass
-        try:
-            self.temporal.__setattr__(name, value)
-            found = True
-        except (AttributeError, FreezeError):
-            pass
-        if not found:
-            err_str = (f"'{name}' not found. You cannot add attributes to "
-                       f"{self.__class__.__name__} outside the constructor.")
-            raise FreezeError(err_str)
+    @implant.setter
+    def implant(self, implant):
+        if not self.has_space:
+            raise AttributeError("A temporal-only model has no implant: there "
+                                 "are no electrodes to place.")
+        self.spatial.implant = implant
 
     def __deepcopy__(self, memodict=None):
         """Return a deep copy of the model.
+
+        The components define their own copy semantics, including sharing the
+        implant across copies and rebuilding what was built.
         """
         if memodict is None:
             memodict = {}
         if id(self) in memodict:
             return memodict[id(self)]
-        attributes = deepcopy(self.__dict__, memodict)
-        # Most Model subclasses create their spatial and temporal models in
-        # the constructor, so those cannot be passed in as parameters:
-        spatial = attributes.pop('spatial', None)
-        temporal = attributes.pop('temporal', None)
-        # A subclass builds its own spatial component and so requires the
-        # implant, which lives on that component and not in `__dict__`.
-        # `Model` itself is handed the copy back below instead.
-        if spatial is not None and type(self) is not Model:
-            attributes['implant'] = spatial.implant
-        result = self.__class__(**attributes)
-        # Restore copied sub-models after construction; their parameters do not
-        # live in the composite `__dict__`. Bypass forwarding `__setattr__`.
-        if spatial is not None:
-            object.__setattr__(result, 'spatial', spatial)
-        if temporal is not None:
-            object.__setattr__(result, 'temporal', temporal)
-        if self.is_built:
-            result.build()
-        memodict[id(self)] = result
-        return result
+        copied = copy(self)
+        # Register before recursing, so a reference cycle terminates:
+        memodict[id(self)] = copied
+        copied.spatial = deepcopy(self.spatial, memodict)
+        copied.temporal = deepcopy(self.temporal, memodict)
+        return copied
 
     def __eq__(self, other):
         """Return whether two models have equal spatial and temporal components.
@@ -1448,56 +1379,24 @@ class Model(Frozen, PrettyPrint):
         return id(self) // 16
 
     def _pprint_params(self):
-        """Return a dictionary of parameters to pretty - print"""
-        params = {'spatial': self.spatial, 'temporal': self.temporal}
-        # Also display the parameters from the spatial/temporal model:
-        if self.has_space:
-            params.update(self.spatial._pprint_params())
-        if self.has_time:
-            params.update(self.temporal._pprint_params())
-        return params
+        """Return a dictionary of parameters to pretty - print
 
-    def set_params(self, params):
-        """Set component model parameters.
-
-        A parameter present on both spatial and temporal components is applied to
-        both.
-
-        Parameters
-        ----------
-        params : dict
-            Parameter values to set.
+        The composition, not a flattened bag of component parameters: each
+        component pretty-prints its own.
         """
-        _reject_implant_param(params)
-        # Instance-based composites bypass `BaseModel.__init__`; collect
-        # deprecations from both components and warn once.
-        specs = {}
-        renamed = {}
-        for model in (self.spatial, self.temporal):
-            specs.update(getattr(model, '_deprecated_params', {}))
-            renamed.update(getattr(model, '_renamed_params', {}))
-        warn_deprecated_params(type(self).__name__, params, specs)
-        params = rename_deprecated_params(type(self).__name__, params, renamed)
-        # Apply `vfmap` first, then forward directly to components. During
-        # construction, assigning on `self` would create composite attributes.
-        for key, val in _vfmap_first(params).items():
-            self._set_component_param(key, val)
+        return {'spatial': self.spatial, 'temporal': self.temporal}
 
-    def build(self, **build_params):
+    def build(self):
         """Build all model components.
 
         Unlike prediction-time auto-building, this rebuilds every component.
-
-        Parameters
-        ----------
-        **build_params : keyword arguments
-            Component parameters to set before building.
+        Set a component parameter where it lives (``model.spatial.rho = 250``,
+        or ``model.spatial.build(rho=250)``) rather than through the composite.
 
         Returns
         -------
         self
         """
-        self.set_params(build_params)
         if self.has_space:
             self.spatial.build()
         if self.has_time:
@@ -1582,7 +1481,7 @@ class Model(Frozen, PrettyPrint):
         # The sub-models normalize too; doing it here as well keeps the error
         # message below reading in plain milliseconds:
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
-        if stim is None or (not self.has_space and not self.has_time):
+        if stim is None:
             # Nothing to see here:
             return None
         # Spatial-only models validate the spatial view, not the waveform.
@@ -1616,7 +1515,7 @@ class Model(Frozen, PrettyPrint):
                                                          t_percept=t_percept)
         elif self.has_space:
             resp = self.spatial._predict_prepared(stim, t_percept=t_percept)
-        elif self.has_time:
+        else:
             resp = self.temporal.predict_percept(stim, t_percept=t_percept)
         return resp
 

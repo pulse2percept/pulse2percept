@@ -88,7 +88,7 @@ def test_eq_Nanduri2012Spatial():
 
     # Assert differing objects aren't equal
     differing_model = Nanduri2012Model(implant=ArgusI())
-    differing_model.xrange = (-10, 10)
+    differing_model.spatial.xrange = (-10, 10)
     npt.assert_equal(nanduri_spatial == differing_model, False)
 
 
@@ -190,25 +190,24 @@ def test_Nanduri2012Model():
 
     # User can set `dt`:
     model.temporal.dt = 1e-5
-    npt.assert_almost_equal(model.dt, 1e-5)
     npt.assert_almost_equal(model.temporal.dt, 1e-5)
-    model.build(dt=3e-4)
-    npt.assert_almost_equal(model.dt, 3e-4)
+    model.temporal.build(dt=3e-4)
     npt.assert_almost_equal(model.temporal.dt, 3e-4)
 
     # User cannot add more model parameters:
     with pytest.raises(FreezeError):
-        model.rho = 100
+        model.temporal.rho = 100
 
-    # Some parameters exist in both spatial and temporal model. We can set them
-    # both at once:
+    # `thresh_percept` is declared by both components, and the constructor
+    # applies it to both:
     th = 0.512
-    model.set_params({'thresh_percept': th})
-    npt.assert_almost_equal(model.spatial.thresh_percept, th)
-    npt.assert_almost_equal(model.temporal.thresh_percept, th)
-    # or individually:
-    model.temporal.thresh_percept = 2 * th
-    npt.assert_almost_equal(model.temporal.thresh_percept, 2 * th)
+    both = Nanduri2012Model(implant=ArgusI(), thresh_percept=th)
+    npt.assert_almost_equal(both.spatial.thresh_percept, th)
+    npt.assert_almost_equal(both.temporal.thresh_percept, th)
+    # Afterwards each component owns its own:
+    both.temporal.thresh_percept = 2 * th
+    npt.assert_almost_equal(both.spatial.thresh_percept, th)
+    npt.assert_almost_equal(both.temporal.thresh_percept, 2 * th)
 
 
 def test_deepcopy_Nanduri2012Model():
@@ -219,10 +218,10 @@ def test_deepcopy_Nanduri2012Model():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__, copied.__dict__)
+    npt.assert_equal(original == copied, True)
 
     # Assert changing the original doesn't affect the copied
-    original.verbose = False
+    original.spatial.verbose = False
     npt.assert_equal(original != copied, True)
 
 

@@ -61,7 +61,8 @@ def test_ScoreboardSpatial():
                               xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept({'A1': [1, 0], 'B3': [0, 2]})
-    npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
+    npt.assert_equal(percept.shape,
+                     list(_spatial(model).grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, 0], pmax[0])
     npt.assert_almost_equal(percept.data[2, 3, 1], 0)
@@ -100,19 +101,17 @@ def test_ScoreboardModel():
     npt.assert_equal(hasattr(model.spatial, 'rho'), True)
 
     # User can set `rho`:
-    model.rho = 123
-    npt.assert_equal(model.rho, 123)
+    model.spatial.rho = 123
     npt.assert_equal(model.spatial.rho, 123)
-    model.build(rho=987)
-    npt.assert_equal(model.rho, 987)
+    model.spatial.build(rho=987)
     npt.assert_equal(model.spatial.rho, 987)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
-    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
+    npt.assert_equal(isinstance(model.spatial.vfmap, Watson2014Map), True)
+    npt.assert_almost_equal(model.spatial.vfmap.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.spatial.vfmap.dva_to_ret(0, 0), (0, 0))
     model2 = ScoreboardModel(implant=ArgusII(), vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model2.spatial.vfmap, Watson2014DisplaceMap),
                      True)
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)
@@ -125,7 +124,8 @@ def test_ScoreboardModel():
                             xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept({'A1': [1, 2]})
-    npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
+    npt.assert_equal(percept.shape,
+                     list(_spatial(model).grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, :], pmax)
     npt.assert_almost_equal(pmax[1] / pmax[0], 2.0)
@@ -234,7 +234,8 @@ def test_AxonMapSpatial():
                            xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept({'A1': [1, 0], 'B3': [0, 2]})
-    npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
+    npt.assert_equal(percept.shape,
+                     list(_spatial(model).grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, 0], pmax[0])
     npt.assert_almost_equal(percept.data[2, 3, 1], 0)
@@ -309,23 +310,24 @@ def test_AxonMapModel():
         setattr(model.spatial, key, value)
         npt.assert_equal(getattr(model.spatial, key), value)
     model = AxonMapModel(implant=ArgusII(), **set_params)
-    model.build(**set_params)
+    model.spatial.build(**set_params)
     for key, value in set_params.items():
         npt.assert_equal(getattr(model.spatial, key), value)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
-    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
+    npt.assert_equal(isinstance(model.spatial.vfmap, Watson2014Map), True)
+    npt.assert_almost_equal(model.spatial.vfmap.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.spatial.vfmap.dva_to_ret(0, 0), (0, 0))
     model2 = AxonMapModel(implant=ArgusII(), vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model2.spatial.vfmap, Watson2014DisplaceMap),
                      True)
 
     # Zeros in, zeros out:
     npt.assert_almost_equal(model.predict_percept(np.zeros(60)).data, 0)
 
     # The eye is the implanted one, and is not settable on its own:
-    npt.assert_equal(AxonMapModel(implant=ArgusII(eye='LE'), step=5).eye, 'LE')
+    npt.assert_equal(
+        AxonMapModel(implant=ArgusII(eye='LE'), step=5).spatial.eye, 'LE')
     with pytest.raises(TypeError):
         AxonMapModel(implant=ArgusII(), eye='LE')
 
@@ -514,7 +516,8 @@ def test_AxonMapModel_calc_axon_sensitivity():
     # precision costs about as much accuracy as the whole comparison has to
     # spare. Building it here in float32 left roughly a 1.2x margin against
     # the tolerance, which held on some platforms and not on others.
-    max_d2 = -2.0 * model.lam ** 2 * np.log(model.min_ax_sensitivity)
+    max_d2 = -2.0 * model.spatial.lam ** 2 * np.log(
+        model.spatial.min_ax_sensitivity)
     for model_ax, xy in zip(axon_contrib, xyret):
         axon = np.insert(model_ax, 0, list(xy) + [0],
                          axis=0).astype(np.float64)
@@ -896,6 +899,11 @@ def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
     npt.assert_equal(payload[0], _AXON_CACHE_VERSION)
 
 
+def _spatial(model):
+    """The spatial model itself, or the one a composite wraps."""
+    return getattr(model, 'spatial', model)
+
+
 def _straddling_pair(coord):
     """Indices nearest zero from below and above."""
     below = np.flatnonzero(coord < 0)
@@ -918,12 +926,12 @@ def test_AxonMapSpatial_meridian_blend(ModelClass):
 
     width = 1
     blended_model = make()
-    npt.assert_equal(blended_model.meridian_blend, width)
+    npt.assert_equal(_spatial(blended_model).meridian_blend, width)
     blended = blended_model.predict_percept(source).data
     npt.assert_equal(blended.shape, unblended.shape)
     npt.assert_equal(blended.dtype, unblended.dtype)
 
-    y, x = plain.grid.y[:, 0], plain.grid.x[0, :]
+    y, x = _spatial(plain).grid.y[:, 0], _spatial(plain).grid.x[0, :]
     # The raphe is where the two halves of the axon map meet:
     seam = _straddling_pair(y)
 
@@ -1006,18 +1014,18 @@ def test_axon_map_eye_follows_the_implant():
     implant = ArgusII(eye='RE')
     model = AxonMapModel(implant=implant, step=2, n_axons=50,
                          n_ax_segments=30).build()
-    npt.assert_equal(model.eye, 'RE')
+    npt.assert_equal(model.spatial.eye, 'RE')
     # The optic disc is on the nasal side, which is a different side per eye:
-    npt.assert_equal(model.loc_od[0] > 0, True)
+    npt.assert_equal(model.spatial.loc_od[0] > 0, True)
 
     # Turning the *bound implant* around is the one build-invalidating change
     # the parameter machinery cannot see, so the model checks it itself:
     implant.eye = 'LE'
-    npt.assert_equal(model.eye, 'LE')
+    npt.assert_equal(model.spatial.eye, 'LE')
     npt.assert_equal(model.is_built, False)
     model.predict_percept({'A1': 20})
     npt.assert_equal(model.is_built, True)
-    npt.assert_equal(model.loc_od[0] < 0, True)
+    npt.assert_equal(model.spatial.loc_od[0] < 0, True)
 
 
 def test_axon_map_warns_when_the_implant_is_not_epiretinal():
@@ -1076,7 +1084,7 @@ def test_scoreboard_visualizes_a_photovoltaic_implant():
                                 xrange=(-2, 2), yrange=(-2, 2))
         percept = model.predict_percept(LogoBVL())
     npt.assert_equal(isinstance(percept, Percept), True)
-    npt.assert_equal(percept.shape, tuple(model.grid.x.shape) + (1,))
+    npt.assert_equal(percept.shape, tuple(model.spatial.grid.x.shape) + (1,))
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
     npt.assert_equal(percept.data.max() > 0, True)
     # Delivered stimulation is optical; the spatial view is normalized.
@@ -1102,7 +1110,7 @@ def test_scoreboard_visualizes_a_photovoltaic_video():
         frames[..., 1] = 1.0
         video = VideoStimulus(frames, time=[0.0, 40.0, 80.0])
         percept = model.predict_percept(video)
-    npt.assert_equal(percept.shape[:2], tuple(model.grid.x.shape))
+    npt.assert_equal(percept.shape[:2], tuple(model.spatial.grid.x.shape))
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
     npt.assert_equal(percept.data.max() > 0, True)
     # One percept frame per projector frame.

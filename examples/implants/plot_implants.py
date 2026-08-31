@@ -38,7 +38,7 @@ fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 # axon map is grown for a particular eye, so each model names its implant:
 for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
                              (ax[1], ArgusII(rot=-30), 'Argus II')]:
-    AxonMapModel(implant=implant).plot(ax=axis)
+    AxonMapModel(implant=implant).spatial.plot(ax=axis)
     implant.plot(ax=axis, annotate=title == 'Argus I')
     axis.set_title(title)
 

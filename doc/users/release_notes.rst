@@ -85,6 +85,13 @@ Models
   (:pull:`879`). ``BiphasicAxonMapModel`` no longer takes effect-model
   parameters such as ``a0``; set them on the effect model instead.
 
+* :py:class:`~pulse2percept.models.Model` takes component instances only and
+  requires at least one, and component parameters are reached through
+  ``model.spatial`` / ``model.temporal`` rather than the composite. ``Model``
+  keeps ``implant``; ``Model.set_params`` and ``model.build(**params)`` are
+  gone, in favor of ``model.spatial.rho = 250`` or
+  ``model.spatial.build(rho=250)`` (:pull:`879`).
+
 * :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
   photovoltaic drive produced by encoders such as
   :py:class:`~pulse2percept.stimuli.PRIMAEncoder` (:pull:`868`).

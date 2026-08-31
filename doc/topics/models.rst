@@ -118,12 +118,12 @@ invalidates the affected component, which is rebuilt when needed:
     percept = model.predict_percept(stim)
 
     # Rebuilds the spatial component:
-    model.rho = 250
+    model.spatial.rho = 250
     percept = model.predict_percept(stim)
 
 Rebinding the implant also invalidates the spatial build because it depends on
-device geometry. ``model.build()`` forces a full rebuild and can be used to
-build eagerly or pass build-time parameters (``model.build(rho=250)``).
+device geometry. ``model.build()`` forces a full rebuild; to set parameters as
+you build a component, use ``model.spatial.build(rho=250)``.
 
 Electrode-retina distance
 -------------------------
@@ -275,34 +275,55 @@ always available for the plain numerical answer.
 Spatial and temporal components
 -------------------------------
 
-Classes ending in ``Model`` are complete model objects. Classes ending in
-``Spatial`` or ``Temporal`` are components that can be composed:
+Classes ending in ``Model`` are complete model objects, and name every
+parameter they take in their constructor:
 
 .. code-block:: python
 
-    model = p2p.models.Model(
-        spatial=p2p.models.ScoreboardSpatial(implant),
-        temporal=p2p.models.Nanduri2012Temporal(),
+    model = p2p.models.AxonMapModel(
+        implant,
+        rho=300,
+        lam=500,
+    )
+    percept = model.predict_percept(stim)
+
+Classes ending in ``Spatial`` or ``Temporal`` are components, and
+:py:class:`~pulse2percept.models.Model` combines two of them:
+
+.. code-block:: python
+
+    spatial = p2p.models.AxonMapSpatial(
+        implant,
+        rho=300,
+        lam=500,
     )
 
-The implant belongs to the spatial component, because a temporal model never
-sees an electrode. ``Model`` composes components; it never builds them, so
-``spatial`` must be an instance that already names its implant.
+    temporal = p2p.models.FadingTemporal(tau=100)
+
+    model = p2p.models.Model(spatial, temporal)
+
 This is useful when the spatial and temporal assumptions come from different
 models. The combined model handles the intermediate representation and returns
-a ``Percept`` like any other Model.
-
-Components may also be used directly, but normal simulations are simpler
-through the complete Model interface.
+a ``Percept`` like any other Model. At least one component is required, and
+both must already be constructed: ``Model`` composes components, it never
+builds them. The implant belongs to the spatial component, because a temporal
+model never sees an electrode.
 
 Parameters
 ----------
 
-A combined Model forwards parameters to its components. For example,
-``model.rho`` may belong to the spatial component and ``model.dt`` to the
-temporal component. If both components define the same parameter, setting it on
-the parent updates both; set ``model.spatial.<name>`` or
-``model.temporal.<name>`` when you need to distinguish them.
+A parameter belongs to the component that uses it, and is read and written
+there:
+
+.. code-block:: python
+
+    model.spatial.rho = 250
+    model.temporal.tau = 50
+
+This holds for named models too. Their constructors are the convenience --
+``AxonMapModel(implant, rho=300)`` -- while afterwards the value lives on
+``model.spatial``. A name both components declare, such as ``thresh_percept``,
+is two separate parameters.
 
 The API reference for each model documents its assumptions, parameters, input
 requirements, and numerical units.

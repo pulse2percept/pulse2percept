@@ -129,7 +129,7 @@ offset_grid = ElectrodeGrid((11, 13), 500, type='hex', x=-600, y=200, z=150,
 # the grid belongs to:
 from pulse2percept.implants import Implant
 
-AxonMapModel(implant=Implant(offset_grid)).plot()
+AxonMapModel(implant=Implant(offset_grid)).spatial.plot()
 offset_grid.plot()
 
 ##############################################################################

@@ -230,16 +230,23 @@ def test_SpatialModel_removed_params(param, value):
         ValidSpatialModel(ArgusI()).set_params(**{param: value})
 
 
-@pytest.mark.parametrize('param, value', [('engine', 'serial'),
-                                          ('scheduler', 'dask'),
-                                          ('xystep', 2)])
-def test_Model_removed_params(param, value):
-    # A Model built from instances never reaches BaseModel.__init__, so this
-    # path needs checking separately:
+def test_Model_has_no_parameter_namespace():
+    """Component parameters live on the component, not on the composite"""
+    model = Model(spatial=ValidSpatialModel(ArgusI(), step=1),
+                  temporal=ValidTemporalModel())
+    # Nothing to construct with, nothing to set, nothing to build with:
+    with pytest.raises(TypeError):
+        Model(spatial=ValidSpatialModel(ArgusI()), step=2)
+    npt.assert_equal(hasattr(model, 'set_params'), False)
+    with pytest.raises(TypeError):
+        model.build(step=2)
+    # Reads are not forwarded, and an assignment cannot quietly reach the
+    # spatial model either:
     with pytest.raises(AttributeError):
-        Model(spatial=ValidSpatialModel(ArgusI()), **{param: value})
-    with pytest.raises(AttributeError):
-        Model(spatial=ValidSpatialModel(ArgusI())).set_params({param: value})
+        model.step
+    with pytest.raises(FreezeError):
+        model.step = 2
+    npt.assert_almost_equal(model.spatial.step, 1)
 
 
 def test_eq_SpatialModel():
@@ -315,29 +322,24 @@ class ValidTemporalModel(TemporalModel):
 
 
 def test_Model_units():
-    # A composite Model forwards parameters to its sub-models through its own
-    # `__setattr__`, which never routes through `Parametrized.set_params`.
-    # That is the path the `freeze_class` normalization hook exists for, so
-    # every way of reaching a sub-model parameter is pinned here.
+    # A unitful value normalizes wherever a component parameter is reached:
+    # assignment, `set_params`, and `build`.
     model = Model(temporal=FadingTemporal())
-    model.tau = 0.1 * s
+    model.temporal.tau = 0.1 * s
     npt.assert_almost_equal(model.temporal.tau, 100)
     npt.assert_equal(isinstance(model.temporal.tau, float), True)
-    model.build(tau=0.2 * s)
+    model.temporal.build(tau=0.2 * s)
     npt.assert_almost_equal(model.temporal.tau, 200)
-    model.set_params({'tau': 300 * ms})
+    model.temporal.set_params(tau=300 * ms)
     npt.assert_almost_equal(model.temporal.tau, 300)
-    # Straight to the sub-model, bypassing the composite entirely:
-    model.temporal.tau = 0.4 * s
-    npt.assert_almost_equal(model.temporal.tau, 400)
-    # A dimension mismatch is not swallowed by the spatial/temporal probing:
     with pytest.raises(DimensionMismatchError):
-        model.tau = 5 * uA
+        model.temporal.tau = 5 * uA
     with pytest.raises(DimensionMismatchError):
-        Model(temporal=FadingTemporal()).build(dt=5 * um)
+        Model(temporal=FadingTemporal()).temporal.build(dt=5 * um)
     # Both halves of a spatial+temporal model normalize independently:
     model = Model(spatial=ScoreboardSpatial(implant=ArgusII()), temporal=FadingTemporal())
-    model.set_params({'rho': 0.3 * mm, 'tau': 0.15 * s, 'dt': 0.01 * ms})
+    model.spatial.set_params(rho=0.3 * mm)
+    model.temporal.set_params(tau=0.15 * s, dt=0.01 * ms)
     npt.assert_almost_equal(model.spatial.rho, 300)
     npt.assert_almost_equal(model.temporal.tau, 150)
     npt.assert_almost_equal(model.temporal.dt, 0.01)
@@ -398,13 +400,15 @@ def test_SpatialModel_retinal_range():
                   {'vfmap': Curcio1990Map(), 'xrange': (-2.8 * mm, 2.8 * mm)}):
         npt.assert_allclose(ScoreboardSpatial(implant=ArgusII(), step=1, **order).xrange,
                             (-10, 10), rtol=1e-12)
-        npt.assert_allclose(ScoreboardModel(implant=ArgusII(), step=1, **order).xrange,
-                            (-10, 10), rtol=1e-12)
+        npt.assert_allclose(
+            ScoreboardModel(implant=ArgusII(), step=1, **order).spatial.xrange,
+            (-10, 10), rtol=1e-12)
         npt.assert_allclose(
             ScoreboardSpatial(implant=ArgusII(), step=1).build(**order).xrange, (-10, 10),
             rtol=1e-12)
         npt.assert_allclose(
-            ScoreboardModel(implant=ArgusII(), step=1).build(**order).xrange, (-10, 10),
+            ScoreboardModel(implant=ArgusII(),
+                            step=1).spatial.build(**order).xrange, (-10, 10),
             rtol=1e-12)
     # A quantity wrapping a pair says the same thing:
     npt.assert_allclose(
@@ -440,7 +444,8 @@ def test_SpatialModel_retinal_range_nonlinear_map():
     than to a scale factor. No ``build``: growing axon bundles is expensive
     and has nothing to do with what the range came out as.
     """
-    model = AxonMapModel(implant=ArgusII(), xrange=(-4 * mm, 4 * mm), yrange=(-2 * mm, 2 * mm))
+    model = AxonMapModel(implant=ArgusII(), xrange=(-4 * mm, 4 * mm),
+                         yrange=(-2 * mm, 2 * mm)).spatial
     npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
     # Each range is resolved along its own meridian, which is what makes the
     # two answers independent of one another:
@@ -456,8 +461,8 @@ def test_SpatialModel_retinal_range_nonlinear_map():
     # And the map really is consulted: a linear 280 um/dva reading would put
     # the edge of the x range half a degree away from where Watson does.
     npt.assert_equal(abs(model.xrange[1] - 4000 / 280.0) > 0.4, True)
-    # The spatial model alone answers identically, and is what the composite
-    # forwarded to:
+    # The spatial model alone answers identically, and is what the named model
+    # constructed:
     npt.assert_allclose(AxonMapSpatial(implant=ArgusII(), xrange=(-4 * mm, 4 * mm)).xrange,
                         model.xrange, rtol=1e-12)
 
@@ -631,43 +636,36 @@ def test_n_jobs_aliases_n_threads(cls, ImplantType):
 
 
 def test_Model_n_jobs_aliases_n_threads():
-    # Through a Model, n_jobs has to reach both sub-models:
-    model = Model(spatial=ValidSpatialModel(ArgusI()),
-                  temporal=ValidTemporalModel(), n_jobs=3)
+    # Each component of a composite carries its own thread count:
+    model = Model(spatial=ValidSpatialModel(ArgusI(), n_jobs=3),
+                  temporal=ValidTemporalModel(n_jobs=3))
     npt.assert_equal(model.spatial.n_threads, 3)
     npt.assert_equal(model.temporal.n_threads, 3)
-    model.n_jobs = 6
+    model.spatial.n_jobs = 6
+    model.temporal.n_jobs = 6
     npt.assert_equal(model.spatial.n_threads, 6)
     npt.assert_equal(model.temporal.n_threads, 6)
 
 
 def test_Model():
-    # A None Model:
-    model = Model()
-    npt.assert_equal(model.has_space, False)
-    npt.assert_equal(model.has_time, False)
-    npt.assert_equal(str(model), "Model(spatial=None, temporal=None)")
+    # A component-free Model is meaningless:
+    with pytest.raises(TypeError):
+        Model()
 
-    # Cannot add attributes outside the constructor:
-    with pytest.raises(AttributeError):
-        model.a
-    with pytest.raises(FreezeError):
-        model.a = 1
-
-    # Wrong model type:
+    # Wrong model type, and the class instead of an instance:
     with pytest.raises(TypeError):
         Model(spatial=ValidTemporalModel())
     with pytest.raises(TypeError):
         Model(temporal=ValidSpatialModel(ArgusI()))
+    with pytest.raises(TypeError, match='not the class itself'):
+        Model(temporal=ValidTemporalModel)
 
     # SpatialModel, but no TemporalModel:
     model = Model(spatial=ValidSpatialModel(ArgusI()))
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, False)
-    npt.assert_almost_equal(model.step, 0.25)
     npt.assert_almost_equal(model.spatial.step, 0.25)
-    model.step = 2
-    npt.assert_almost_equal(model.step, 2)
+    model.spatial.step = 2
     npt.assert_almost_equal(model.spatial.step, 2)
     # Cannot add more attributes:
     with pytest.raises(AttributeError):
@@ -679,78 +677,28 @@ def test_Model():
     model = Model(temporal=ValidTemporalModel())
     npt.assert_equal(model.has_space, False)
     npt.assert_equal(model.has_time, True)
-    npt.assert_almost_equal(model.dt, 5e-3)
     npt.assert_almost_equal(model.temporal.dt, 5e-3)
-    model.dt = 1
-    npt.assert_almost_equal(model.dt, 1)
+    model.temporal.dt = 1
     npt.assert_almost_equal(model.temporal.dt, 1)
-    # Cannot add more attributes:
-    with pytest.raises(AttributeError):
-        model.a
-    with pytest.raises(FreezeError):
-        model.a = 1
 
-    # SpatialModel and TemporalModel:
-    model = Model(spatial=ValidSpatialModel(ArgusI()),
-                  temporal=ValidTemporalModel())
+    # SpatialModel and TemporalModel, positionally:
+    model = Model(ValidSpatialModel(ArgusI()), ValidTemporalModel())
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, True)
-    npt.assert_almost_equal(model.step, 0.25)
     npt.assert_almost_equal(model.spatial.step, 0.25)
-    npt.assert_almost_equal(model.dt, 5e-3)
     npt.assert_almost_equal(model.temporal.dt, 5e-3)
-    # Setting a new spatial parameter:
-    model.step = 2
-    npt.assert_almost_equal(model.step, 2)
-    npt.assert_almost_equal(model.spatial.step, 2)
-    # Setting a new temporal parameter:
-    model.dt = 1
-    npt.assert_almost_equal(model.dt, 1)
-    npt.assert_almost_equal(model.temporal.dt, 1)
-    # Setting a parameter that's part of both spatial/temporal:
-    npt.assert_equal(model.thresh_percept, {'spatial': 0, 'temporal': 0})
-    model.thresh_percept = 1.234
+    # A name both components declare stays two separate parameters:
+    model.spatial.thresh_percept = 1.234
     npt.assert_almost_equal(model.spatial.thresh_percept, 1.234)
-    npt.assert_almost_equal(model.temporal.thresh_percept, 1.234)
-    # Cannot add more attributes:
-    with pytest.raises(AttributeError):
-        model.a
-    with pytest.raises(FreezeError):
-        model.a = 1
-
-
-def test_Model_set_params():
-    # SpatialModel, but no TemporalModel:
-    model = Model(spatial=ValidSpatialModel(ArgusI()))
-    model.set_params({'step': 2.33})
-    npt.assert_almost_equal(model.step, 2.33)
-    npt.assert_almost_equal(model.spatial.step, 2.33)
-
-    # TemporalModel, but no SpatialModel:
-    model = Model(temporal=ValidTemporalModel())
-    model.set_params({'dt': 2.33})
-    npt.assert_almost_equal(model.dt, 2.33)
-    npt.assert_almost_equal(model.temporal.dt, 2.33)
-
-    # SpatialModel and TemporalModel:
-    model = Model(spatial=ValidSpatialModel(ArgusI()),
-                  temporal=ValidTemporalModel())
-    # Setting both using the convenience function:
-    model.set_params({'step': 5, 'dt': 2.33})
-    npt.assert_almost_equal(model.step, 5)
-    npt.assert_almost_equal(model.spatial.step, 5)
-    npt.assert_equal(hasattr(model.temporal, 'step'), False)
-    npt.assert_almost_equal(model.dt, 2.33)
-    npt.assert_almost_equal(model.temporal.dt, 2.33)
-    npt.assert_equal(hasattr(model.spatial, 'dt'), False)
+    npt.assert_almost_equal(model.temporal.thresh_percept, 0)
 
 
 class ValidCompositeModel(Model):
     """A Model subclass that owns an attribute of its own"""
 
-    def __init__(self, implant, **params):
-        super().__init__(spatial=ValidSpatialModel(implant), temporal=None,
-                         **params)
+    def __init__(self, implant, *, step=0.25):
+        super().__init__(spatial=ValidSpatialModel(implant, step=step),
+                         temporal=None)
         self.n_calls = 0
 
 
@@ -765,29 +713,21 @@ def test_Model_subclass_constructor_owns_its_attributes():
 
 
 def test_Model_subclass_params_go_to_the_component_model():
-    # A user parameter belongs to the sub-model, even when it is passed to a
-    # subclass constructor that is free to create attributes of its own:
+    # A named model is convenient at construction time; the value it was given
+    # lives on the component, not as a second copy on the wrapper:
     model = ValidCompositeModel(ArgusI(), step=2.5)
     npt.assert_almost_equal(model.spatial.step, 2.5)
     npt.assert_equal('step' in model.__dict__, False)
-    model.set_params({'step': 0.5})
+    model.spatial.step = 0.5
     npt.assert_almost_equal(model.spatial.step, 0.5)
     npt.assert_equal('step' in model.__dict__, False)
     # A parameter no sub-model knows has nowhere to go, and must not quietly
     # become an attribute of the composite instead:
-    with pytest.raises(FreezeError):
+    with pytest.raises(TypeError):
         ValidCompositeModel(ArgusI(), nonexistent=1)
 
 
 def test_Model_build():
-    # A None model:
-    model = Model()
-    # Nothing to build, so `is_built` is always True (we want to be able to
-    # call `predict_percept`):
-    npt.assert_equal(model.is_built, True)
-    model.build()
-    npt.assert_equal(model.is_built, True)
-
     # SpatialModel, but no TemporalModel:
     model = Model(spatial=ValidSpatialModel(ArgusI()))
     npt.assert_equal(model.is_built, False)
@@ -830,7 +770,7 @@ def test_a_new_parameter_value_un_builds_the_model():
 def test_a_composite_un_builds_the_stage_the_parameter_belongs_to():
     model = Model(spatial=ValidSpatialModel(ArgusI(), step=1),
                   temporal=ValidTemporalModel()).build()
-    model.step = 2
+    model.spatial.step = 2
     npt.assert_equal(model.spatial.is_built, False)
     npt.assert_equal(model.temporal.is_built, True)
     npt.assert_equal(model.is_built, False)
@@ -918,25 +858,25 @@ def test_Model_takes_a_bound_spatial_instance():
     """`Model` composes spatial components; it does not construct them"""
     with pytest.raises(TypeError, match='not the class itself'):
         Model(spatial=ValidSpatialModel, temporal=ValidTemporalModel())
-    # `implant` is constructor context for the spatial model, not a parameter
-    # the composite forwards, so neither spelling reaches it:
-    with pytest.raises(AttributeError, match='not a Model parameter'):
+    # `implant` is constructor context for the spatial model, not something
+    # the composite takes:
+    with pytest.raises(TypeError):
         Model(spatial=ValidSpatialModel(ArgusI()), implant=ArgusII())
-    model = Model(spatial=ValidSpatialModel(ArgusI()))
-    with pytest.raises(AttributeError, match='not a Model parameter'):
-        model.set_params({'implant': ArgusII()})
-    # Rebinding is an explicit mutation, and stays allowed:
+    # Reading and rebinding delegate to the spatial model, and rebinding
+    # invalidates its build:
+    model = Model(spatial=ValidSpatialModel(ArgusI())).build()
     model.implant = ArgusII()
     npt.assert_equal(isinstance(model.implant, ArgusII), True)
+    npt.assert_equal(model.spatial.implant is model.implant, True)
+    npt.assert_equal(model.spatial.is_built, False)
+    # A temporal-only model has no electrodes to place:
+    temporal = Model(temporal=ValidTemporalModel())
+    npt.assert_equal(temporal.implant, None)
+    with pytest.raises(AttributeError):
+        temporal.implant = ArgusII()
 
 
 def test_Model_predict_percept():
-    # A None Model has nothing to build, nothing to perceive:
-    model = Model()
-    npt.assert_equal(model.predict_percept(None), None)
-    npt.assert_equal(model.predict_percept({'A1': 1}), None)
-    npt.assert_equal(model.predict_percept({'A1': 1}, t_percept=[0, 1]), None)
-
     # Just the spatial model:
     model = Model(spatial=ValidSpatialModel(ArgusI())).build()
     npt.assert_equal(model.predict_percept(None), None)
@@ -1115,15 +1055,11 @@ def test_Model_eq_and_hash():
 
 
 def test_Model_pprint_params():
-    # Covers both the spatial and the temporal branch of _pprint_params:
     both = Model(spatial=ValidSpatialModel(ArgusI()),
                  temporal=ValidTemporalModel())
     params = both._pprint_params()
-    npt.assert_equal('spatial' in params, True)
-    npt.assert_equal('temporal' in params, True)
-    # Parameters of the sub-models are pulled up:
-    npt.assert_equal('step' in params, True)
-    npt.assert_equal('dt' in params, True)
+    # The composition, not a flattened bag of component parameters:
+    npt.assert_equal(sorted(params), ['spatial', 'temporal'])
     npt.assert_equal(isinstance(str(both), str), True)
 
 
@@ -1140,23 +1076,34 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     npt.assert_equal(id(copied.spatial) != id(model.spatial), True)
     npt.assert_equal(id(copied.temporal) != id(model.temporal), True)
 
-    # Model parameters are forwarded to the sub-models, so they live in
-    # `spatial`/`temporal` rather than in `Model.__dict__`. Rebuilding the
-    # copy from the constructor alone would silently reset them to defaults:
+    # Component parameters live on the components, and a copy that rebuilt
+    # them from the constructor alone would silently reset them to defaults:
     model = Model(spatial=ValidSpatialModel(ArgusI(), step=5,
                                             thresh_percept=0.5))
     copied = copy.deepcopy(model)
-    npt.assert_almost_equal(copied.step, 5)
-    npt.assert_almost_equal(copied.thresh_percept, 0.5)
+    npt.assert_almost_equal(copied.spatial.step, 5)
+    npt.assert_almost_equal(copied.spatial.thresh_percept, 0.5)
     npt.assert_equal(copied == model, True)
 
     # The copy is independent of the original:
-    copied.step = 3
-    npt.assert_almost_equal(model.step, 5)
+    copied.spatial.step = 3
+    npt.assert_almost_equal(model.spatial.step, 5)
+
+    # The implant is context, and is shared rather than duplicated:
+    npt.assert_equal(copied.implant is model.implant, True)
 
     # A built model stays built:
     built = Model(spatial=ValidSpatialModel(ArgusI(), step=5)).build()
     npt.assert_equal(copy.deepcopy(built).is_built, True)
+
+    # A named model copies the same way, components and all:
+    named = ValidCompositeModel(ArgusI(), step=5)
+    named.n_calls = 3
+    twin = copy.deepcopy(named)
+    npt.assert_equal(isinstance(twin, ValidCompositeModel), True)
+    npt.assert_almost_equal(twin.spatial.step, 5)
+    npt.assert_equal(twin.n_calls, 3)
+    npt.assert_equal(id(twin.spatial) != id(named.spatial), True)
 
 
 def test_model_unit_contract():
@@ -1168,11 +1115,6 @@ def test_model_unit_contract():
         npt.assert_equal(model.stimulus_unit, uA)
         npt.assert_equal(model.time_unit, ms)
     npt.assert_equal(spatial.space_unit, um)
-    # A composite states them itself: forwarding would answer with a dict when
-    # both components have them, and with nothing at all when it has neither.
-    npt.assert_equal(Model().time_unit, ms)
-    npt.assert_equal(Model().stimulus_unit, uA)
-    npt.assert_equal(Model().space_unit, um)
 
 
 def test_model_electrode_coords_follow_the_stimulus():
@@ -1472,10 +1414,6 @@ def test_percept_time_crosses_model_boundary():
 
 def test_Model_units_follow_their_component():
     """A composite's declared units are the ones its numbers are really in"""
-    # Neither component: the canonical defaults, so that a bare Model can
-    # still normalize its arguments.
-    npt.assert_equal((Model().stimulus_unit, Model().space_unit,
-                      Model().time_unit), (uA, um, ms))
     # One component: its own.
     space_only = Model(spatial=MilliSpatial(ArgusII()))
     npt.assert_equal(space_only.stimulus_unit, mA)

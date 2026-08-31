@@ -97,13 +97,14 @@ print(model)
 # To change parameter values, either pass them directly to the constructor
 # above or set them by hand, like this:
 
-model.rho = 20
+model.spatial.rho = 20
 
 ##############################################################################
 # Before it can predict anything, the model performs a number of expensive
 # setup computations (building the spatial reference frame). That happens
 # automatically the first time you ask for a percept, and again whenever you
-# change a model parameter -- as the ``model.rho`` assignment above just did.
+# change a model parameter -- as the ``model.spatial.rho`` assignment above
+# just did.
 # You can also trigger it yourself with ``model.build()``, which is what the
 # next line does so that the grid exists to be plotted:
 
@@ -113,7 +114,7 @@ model.build()
 # We can visualize the implant and verify that we are simulating the correct
 # patch of retina as follows:
 
-model.plot()
+model.spatial.plot()
 implant.plot()
 
 ##############################################################################

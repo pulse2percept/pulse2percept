@@ -326,8 +326,8 @@ def test_NeuropythyMap_units(neuropythy):
 def test_ndim_mixup():
     """A 3D cortical map cannot drive a model that only knows 2D grids."""
     model = BeyelerScoreboard(ArgusII(), vfmap=ToyNeuropythyMap())
-    npt.assert_equal(2 in model.ndim, True)
-    npt.assert_equal(3 in model.ndim, False)
+    npt.assert_equal(2 in model.spatial.ndim, True)
+    npt.assert_equal(3 in model.spatial.ndim, False)
     with pytest.raises(ValueError):
         model.build()
 

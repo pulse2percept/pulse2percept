@@ -281,5 +281,5 @@ def test_ArgusII_encodes_pictures_on_preparation():
     model = AxonMapModel(implant=argus, xrange=(-4, 4), yrange=(-3, 3), step=1,
                          rho=200, lam=100).build()
     percept = model.predict_percept(LogoBVL())
-    npt.assert_equal(percept.data.shape[:2], model.grid.x.shape)
+    npt.assert_equal(percept.data.shape[:2], model.spatial.grid.x.shape)
     npt.assert_equal(np.any(percept.data > 0), True)

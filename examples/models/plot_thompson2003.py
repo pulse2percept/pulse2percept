@@ -44,7 +44,7 @@ percept.plot()
 
 fig, axes = plt.subplots(ncols=4, figsize=(15, 6))
 for ax, drop in zip(axes, [0, 0.25, 0.5, 0.75]):
-    model.build(dropout=drop)
+    model.spatial.build(dropout=drop)
     model.predict_percept(stim).plot(ax=ax)
     ax.set_title(f"{100*drop}% dropout")
 fig.tight_layout()
@@ -68,5 +68,5 @@ fig.tight_layout()
 
 video = p2p.stimuli.BostonTrain()
 encoded = video.encode(implant=implant, freq=30)
-model.build(dropout=0.2)
+model.spatial.build(dropout=0.2)
 model.predict_percept(encoded, t_percept=video.time).play()

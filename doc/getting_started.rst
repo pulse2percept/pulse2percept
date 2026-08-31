@@ -82,7 +82,7 @@ invalidates the affected build state, which is rebuilt on the next prediction:
     percept = model.predict_percept(stim)
 
     # Rebuilds automatically after a parameter change:
-    model.rho = 250
+    model.spatial.rho = 250
     percept = model.predict_percept(stim)
 
 Call ``model.build()`` explicitly to build ahead of a timed loop or inspect

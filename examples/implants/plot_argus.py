@@ -69,7 +69,7 @@ model.build()
 ###############################################################################
 # We can visualize where the implant sits on the axon map as follows:
 
-model.plot()
+model.spatial.plot()
 implant.plot()
 
 ###############################################################################
@@ -109,7 +109,7 @@ model.predict_percept(video).play()
 # To increase the arc length of individual phosphenes, we can choose a larger
 # ``lam`` value:
 
-model.lam = 600
+model.spatial.lam = 600
 model.predict_percept(video).play()
 
 ###############################################################################
@@ -117,8 +117,8 @@ model.predict_percept(video).play()
 # seeing thin and elongated phosphenes. In this case, the same video may appear
 # very different to them:
 
-model.rho = 100
-model.lam = 1000
+model.spatial.rho = 100
+model.spatial.lam = 1000
 model.predict_percept(video).play()
 
 
@@ -135,21 +135,21 @@ p2p.stimuli.GirlPool().play()
 # then feed it through the axon map model:
 
 video = p2p.stimuli.GirlPool()
-model.rho = 400
-model.lam = 200
+model.spatial.rho = 400
+model.spatial.lam = 200
 model.predict_percept(video).play()
 
 ###############################################################################
 # Here is the same video with longer phosphenes:
 
-model.lam = 600
+model.spatial.lam = 600
 model.predict_percept(video).play()
 
 ###############################################################################
 # Here is the same video with thin and long phosphenes:
 
-model.rho = 100
-model.lam = 1000
+model.spatial.rho = 100
+model.spatial.lam = 1000
 model.predict_percept(video).play()
 
 ###############################################################################
