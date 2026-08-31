@@ -259,7 +259,6 @@ def _scene_stim(model, scene, gaze):
         raise ValueError("A scene is registered against the retina, which "
                          "needs a spatial model. This model has only a "
                          "temporal one.")
-    model.spatial._require_implant()
     implant = model.implant
     vfmap = getattr(model.spatial, 'vfmap', None)
     if not isinstance(vfmap, RetinalMap):
@@ -666,15 +665,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             self._is_built = False
         self._implant = implant
 
-    def _require_implant(self):
-        """Raise if no implant is bound to the spatial model."""
-        if not isinstance(self.implant, ProsthesisSystem):
-            raise ValueError(
-                f"{type(self).__name__} predicts what a particular implant "
-                f"produces, so it needs one: "
-                f"{type(self).__name__}(implant=ArgusII()). The stimulus is "
-                f"what 'predict_percept' takes.")
-
     def set_params(self, **params):
         """Set the parameters of this model
 
@@ -824,7 +814,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         # See `BaseModel.build`:
         self.set_params(**build_params)
-        self._require_implant()
         if self.vfmap.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
                              f"visual field map has {self.vfmap.ndim} dimensions.")
@@ -1589,7 +1578,6 @@ class Model(Frozen, PrettyPrint):
         """
         if not self.has_space:
             return source
-        self.spatial._require_implant()
         return self.implant.prepare_stim(source)
 
     def _predict_percept(self, stim, t_percept=None):

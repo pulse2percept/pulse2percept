@@ -5,7 +5,6 @@ from copy import deepcopy, copy
 
 from ..base import BaseModel, _check_implant, _require_stim_dimension
 from ...percepts import Percept
-from ...implants import ProsthesisSystem
 from ...stimuli import BiphasicPulseTrain
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
 from ...utils import cart2pol
@@ -258,12 +257,6 @@ class DynaphosModel(BaseModel):
         from ...topography import Grid2D
         # See `BaseModel.build`:
         self.set_params(**build_params)
-        if not isinstance(self.implant, ProsthesisSystem):
-            raise ValueError(
-                f"{type(self).__name__} predicts what a particular implant "
-                f"produces, so it needs one: "
-                f"{type(self).__name__}(implant=Cortivis()). The stimulus is "
-                f"what 'predict_percept' takes.")
         # check that freq/pdur fit. `freq` counts cycles per second, and every
         # duration in this model is in milliseconds:
         window_dur = MS_PER_S / self.freq

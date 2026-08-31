@@ -399,7 +399,6 @@ class AxonMapSpatial(SpatialModel):
 
         .. versionchanged:: 0.11.0
             ``eye`` is no longer a separate model parameter."""
-        self._require_implant()
         return self.implant.eye
 
     @property
