@@ -161,3 +161,4 @@ Where to go from here
 .. _electrical stimuli: https://pulse2percept.readthedocs.io/en/latest/topics/stimuli.html
 .. _computational models: https://pulse2percept.readthedocs.io/en/latest/topics/models.html
 .. _FAQ: https://pulse2percept.readthedocs.io/en/latest/users/faq.html
+.. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

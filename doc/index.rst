@@ -60,3 +60,16 @@ Compatibility
 .. include:: ../README.rst
    :start-after: .. compat-begin
    :end-before: .. compat-end
+
+Where to go from here
+=====================
+
+*  Start with the :doc:`Getting Started <getting_started>` guide.
+*  Explore the :doc:`Example Gallery <examples/index>` for complete simulations and use cases.
+* Learn about :doc:`visual implants <topics/implants>`,
+  :doc:`electrical stimuli <topics/stimuli>`, and our
+  :doc:`computational models <topics/models>`.
+* Check the :doc:`FAQ <users/faq>` for common questions.
+*  Request features or report bugs on the `Issue Tracker`_.
+
+.. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
