@@ -123,24 +123,22 @@ plt.title('Amplitude Modulation Brightness')
 
 
 ###############################################################################
-# Using Built-In Plotting Functionality
-# -------------------------------------
+# Frequency and brightness
+# ------------------------
 #
-# Arguably the most important column is "freq". This is the current
-# amplitude of the different stimuli (single pulse, pulse trains, etc.) used
-# at threshold.
-#
-# We might be interested in seeing how the phosphene brightness varies as a function
-# of pulse frequency. We could either use Matplotlib to generate a scatter plot
-# or use pulse2percept's own visualization function:
+# The "freq" column gives the pulse frequency of the stimulus, so we can also
+# look at how phosphene brightness varies with it:
 
-from pulse2percept.viz import scatter_correlation
-scatter_correlation(data.freq, data.brightness)
+from scipy.stats import pearsonr
+
+plt.figure()
+plt.scatter(data.freq, data.brightness)
+plt.xlabel('Frequency (Hz)')
+plt.ylabel('Brightness rating')
+
+r, p = pearsonr(data.freq, data.brightness)
+print(f'r={r:.3f}, p={p:.3g}')
 
 ###############################################################################
-# :py:func:`~pulse2percept.viz.scatter_correlation` above generates a scatter
-# plot of the phosphene brightness as a function of pulse frequency, and performs
-# linear regression to calculate a correlation $r$ and a $p$ value.
-# As expected from the literature, now it becomes evident that phosphene
-# brightness is positively correlated with pulse frequency
-#
+# As expected from the literature, phosphene brightness is positively
+# correlated with pulse frequency.
