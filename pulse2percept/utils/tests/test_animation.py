@@ -43,7 +43,9 @@ def parse(html):
     imgs = [Image.open(BytesIO(base64.b64decode(b64)))
             for b64 in re.findall(r'data:image/\w+;base64,([A-Za-z0-9+/=]+)',
                                   html)]
-    return cfg, imgs[0], imgs[1]
+    # These animations have a single animated image; read its geometry as the
+    # config's own, the way the player did before it could stack layers:
+    return {**cfg, **cfg['layers'][0]}, imgs[0], imgs[1]
 
 
 def tile(cfg, sheet, i):
@@ -537,7 +539,75 @@ def test_HTMLAnimation_matplotlib_compat():
     # Without frame data there is nothing to accelerate, so Matplotlib's own
     # (slow) player is used:
     ani = make_ani(data)
-    ani._frame_data = None
+    ani._layers = None
     html = ani.to_jshtml()
     npt.assert_equal('<script' in html, True)
     npt.assert_equal('p2p-anim' in html, False)
+
+
+def make_layered_ani(src, percept, src_index):
+    """Two animated images in one figure, as ``play_stimulus_percept`` does"""
+    fig, axes = plt.subplots(ncols=2)
+    images = [ax.imshow(np.zeros(data.shape[:-1]), cmap='gray', vmin=0,
+                        vmax=data.max())
+              for ax, data in zip(axes, (src, percept))]
+    plt.close(fig)
+    n_frames = percept.shape[-1]
+    return HTMLAnimation(fig, lambda i: images, iter(range(n_frames)),
+                         save_count=n_frames, image=images,
+                         frame_data=[src, percept],
+                         frame_index=[src_index, None], interval=25.0,
+                         fmt='png')
+
+
+def parse_layers(html):
+    """The player config and one sprite sheet per animated image"""
+    cfg = json.loads(re.search(r'var cfg = (\{.*?\});', html, re.S).group(1))
+    sheets = [Image.open(BytesIO(base64.b64decode(b64)))
+              for b64 in re.findall(r'data:image/\w+;base64,([A-Za-z0-9+/=]+)',
+                                    html)]
+    # The first embedded image is the static background:
+    return cfg, sheets[1:]
+
+
+def test_HTMLAnimation_layers():
+    """Each animated image ships its own sheet, drawn in its own order"""
+    src = np.linspace(0, 1, 4 * 5 * 3).reshape((4, 5, 3))
+    percept = np.linspace(0, 1, 6 * 6 * 4).reshape((6, 6, 4))
+    src_index = [0, 0, 1, 2]
+    cfg, sheets = parse_layers(
+        make_layered_ani(src, percept, src_index).to_jshtml())
+    npt.assert_equal(cfg['n'], 4)
+    npt.assert_equal(len(sheets), 2)
+    # The source lags the display clock; the percept advances with it:
+    npt.assert_equal(cfg['layers'][0]['map'], src_index)
+    npt.assert_equal(cfg['layers'][1]['map'], None)
+    # Neither panel is drawn from the other's sheet or into the other's place:
+    for layer, sheet, data in zip(cfg['layers'], sheets, (src, percept)):
+        for i in range(data.shape[-1]):
+            expected = np.clip(data[..., i] / data.max() * 256, 0, 255)
+            npt.assert_equal(tile(layer, sheet, i), expected.astype(np.uint8))
+    left, right = cfg['layers']
+    npt.assert_equal(left['rect'][0] + left['rect'][2] <= right['rect'][0],
+                     True)
+
+
+def test_HTMLAnimation_layers_agree_on_frame_count():
+    src = np.random.rand(4, 5, 3)
+    percept = np.random.rand(6, 6, 4)
+    # A layer that maps every display frame is as long as its map, not as its
+    # data ...
+    make_layered_ani(src, percept, [0, 1, 2, 2])
+    # ... and every layer must cover the same display frames:
+    with pytest.raises(ValueError):
+        make_layered_ani(src, percept, [0, 1, 2])
+    with pytest.raises(ValueError):
+        make_layered_ani(src, percept, None)
+
+
+def test_HTMLAnimation_single_layer_aliases():
+    """A one-image animation still answers the questions it used to"""
+    data = np.random.rand(4, 4, 3)
+    ani = make_ani(data)
+    npt.assert_equal(ani._image is ani._layers[0].image, True)
+    npt.assert_almost_equal(ani._frame_data, data)

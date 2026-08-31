@@ -87,8 +87,8 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 ###############################################################################
 # However, we might be more interested in seeing how phosphene shape differs
 # for different electrodes.
-# For this we can use :py:func:`~pulse2percept.viz.plot_argus_phosphenes` from
-# the :py:mod:`~pulse2percept.viz` module.
+# For this we can use :py:func:`~pulse2percept.plotting.plot_argus_phosphenes` from
+# the :py:mod:`~pulse2percept.plotting` module.
 # In addition to the ``data`` matrix, the function will also want an
 # :py:class:`~pulse2percept.implants.ArgusII` object implanted at the correct
 # location.
@@ -106,12 +106,12 @@ data = fetch_beyeler2019(subjects='S2')
 
 ###############################################################################
 # Passing both ``data`` and ``argus`` to
-# :py:func:`~pulse2percept.viz.plot_argus_phosphenes` will then allow the
+# :py:func:`~pulse2percept.plotting.plot_argus_phosphenes` will then allow the
 # function to overlay the phosphene drawings over a schematic of the implant.
 # Here, phosphene drawings from different trials are averaged, and aligned with
 # the center of the electrode that was used to obtain the drawing:
 
-from pulse2percept.viz import plot_argus_phosphenes
+from pulse2percept.plotting import plot_argus_phosphenes
 plot_argus_phosphenes(data, argus)
 
 ###############################################################################
@@ -173,7 +173,7 @@ percepts.play()
 # Finally, we can visualize the ground-truth and simulated phosphenes
 # side-by-side:
 
-from pulse2percept.viz import plot_argus_simulated_phosphenes
+from pulse2percept.plotting import plot_argus_simulated_phosphenes
 fig, (ax_data, ax_sim) = plt.subplots(ncols=2, figsize=(15, 5))
 plot_argus_phosphenes(data, argus, scale=0.75, ax=ax_data)
 plot_argus_simulated_phosphenes(percepts, argus, scale=1.25, ax=ax_sim)

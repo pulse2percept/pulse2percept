@@ -98,6 +98,26 @@ Percepts and residual vision
   :py:meth:`~pulse2percept.vision.Scene.play` (:pull:`871`).
 
 
+Plotting
+~~~~~~~~
+
+* New :py:mod:`pulse2percept.plotting` module for figures and animations that
+  combine several objects; individual objects keep their own ``plot()`` and
+  ``play()``. :py:mod:`pulse2percept.viz` is deprecated until 0.12.0: its
+  Argus helpers moved to :py:mod:`pulse2percept.plotting`, and
+  ``scatter_correlation``/``correlation_matrix`` are generic statistical plots
+  that go away with it (:issue:`872`).
+
+* New :py:func:`~pulse2percept.plotting.plot_stimulus_percept` and
+  :py:func:`~pulse2percept.plotting.play_stimulus_percept` show a stimulus next
+  to the percept it produced. The animated pair runs both panels off the
+  percept's clock, holding each source frame for as long as it is up
+  (:issue:`872`).
+
+* :py:class:`~pulse2percept.utils.HTMLAnimation` animates more than one image
+  per figure, each with its own sprite sheet and frame order (:issue:`872`).
+
+
 Bug fixes
 ---------
 

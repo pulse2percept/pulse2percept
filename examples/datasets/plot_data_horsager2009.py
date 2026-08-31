@@ -87,19 +87,21 @@ print(load_horsager2009(stim_types='single_pulse'))
 # at threshold.
 #
 # We might be interested in seeing how threshold amplitude varies as a function
-# of pulse duration. We could either use Matplotlib to generate a scatter plot
-# or use pulse2percept's own visualization function:
+# of pulse duration:
 
-from pulse2percept.viz import scatter_correlation
-scatter_correlation(data.pulse_dur, data.stim_amp)
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
+
+plt.scatter(data.pulse_dur, data.stim_amp)
+plt.xlabel('Pulse duration (ms)')
+plt.ylabel('Threshold amplitude (uA)')
+
+r, p = pearsonr(data.pulse_dur, data.stim_amp)
+print(f'r={r:.3f}, p={p:.3g}')
 
 ###############################################################################
-# :py:func:`~pulse2percept.viz.scatter_correlation` above generates a scatter
-# plot of the stimulus amplitude as a function of pulse duration, and performs
-# linear regression to calculate a correlation $r$ and a $p$ value.
-# As expected from the literature, now it becomes evident that stimulus
-# amplitude is negatively correlated with pulse duration (no matter the exact
-# stimulus used).
+# As expected from the literature, stimulus amplitude is negatively correlated
+# with pulse duration (no matter the exact stimulus used).
 #
 # Recreating the stimuli
 # ----------------------

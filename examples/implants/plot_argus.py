@@ -43,7 +43,7 @@ import pulse2percept as p2p
 fig, axes = plt.subplots(ncols=3, figsize=(10, 3))
 for ax, subject, scale in zip(axes, ['S2', 'S3', 'S4'], [1, 1, 0.5]):
     data = p2p.datasets.fetch_beyeler2019(subjects=subject)
-    p2p.viz.plot_argus_phosphenes(data, ax=ax, scale=scale)
+    p2p.plotting.plot_argus_phosphenes(data, ax=ax, scale=scale)
     ax.axis('off')
     ax.set_title(subject)
 fig.tight_layout()

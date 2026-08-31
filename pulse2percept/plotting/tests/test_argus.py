@@ -1,4 +1,4 @@
-from pulse2percept.viz import (plot_argus_phosphenes,
+from pulse2percept.plotting import (plot_argus_phosphenes,
                                plot_argus_simulated_phosphenes)
 from pulse2percept.implants import ArgusI, ArgusII, AlphaAMS
 from pulse2percept.models import (AxonMapModel, AxonMapSpatial,

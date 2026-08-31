@@ -1,11 +1,22 @@
-""":py:class:`~pulse2percept.viz.correlation_matrix`, 
-   :py:class:`~pulse2percept.viz.scatter_correlation`"""
+""":py:func:`~pulse2percept.viz.correlation_matrix`,
+   :py:func:`~pulse2percept.viz.scatter_correlation`
+
+Deprecated. Generic statistical plots with nothing pulse2percept-specific
+about them; they go away with :py:mod:`pulse2percept.viz`.
+"""
 import numpy as np
 import pandas as pd
 import scipy.stats as spst
 import matplotlib.pyplot as plt
 
+from ..utils import deprecated
 
+_EXTRA = ('It plots any data, and nothing in pulse2percept uses it; copy it '
+          'into your own analysis code if you need it.')
+
+
+@deprecated(deprecated_version='0.11.0', removed_version='0.12.0',
+            extra_msg=_EXTRA)
 def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
                         color='k', text_size=10, show_slope_intercept=False,
                         ax=None, autoscale=True):
@@ -73,6 +84,8 @@ def scatter_correlation(x, y, marker='o', marker_size=50, marker_alpha=0.5,
     return ax
 
 
+@deprecated(deprecated_version='0.11.0', removed_version='0.12.0',
+            extra_msg=_EXTRA)
 def correlation_matrix(X, cols=None, dropna=True, ax=None):
     """Plot feature correlation matrix (requires seaborn)
 
