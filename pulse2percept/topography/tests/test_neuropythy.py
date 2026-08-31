@@ -9,7 +9,7 @@ import pytest
 from scipy.spatial import cKDTree
 from types import SimpleNamespace
 
-from pulse2percept.implants import EnsembleImplant
+from pulse2percept.implants import ArgusII, EnsembleImplant
 from pulse2percept.implants.cortex import Neuralink
 from pulse2percept.models import ScoreboardModel as BeyelerScoreboard
 from pulse2percept.models.cortex import ScoreboardModel
@@ -325,7 +325,7 @@ def test_NeuropythyMap_units(neuropythy):
 
 def test_ndim_mixup():
     """A 3D cortical map cannot drive a model that only knows 2D grids."""
-    model = BeyelerScoreboard(vfmap=ToyNeuropythyMap())
+    model = BeyelerScoreboard(ArgusII(), vfmap=ToyNeuropythyMap())
     npt.assert_equal(2 in model.ndim, True)
     npt.assert_equal(3 in model.ndim, False)
     with pytest.raises(ValueError):

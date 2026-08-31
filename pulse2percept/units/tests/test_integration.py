@@ -195,12 +195,11 @@ def test_every_spelling_builds_the_same_object():
     # --- And a whole pipeline, spelled unitfully end to end ---------------
     imp_bare = ArgusII(x=575)
     imp_unit = ArgusII(x=0.575 * mm)
-    bare = Model(implant=imp_bare,
-                 spatial=ScoreboardSpatial(rho=575, xrange=(-8, 8),
-                                           yrange=(-8, 8), step=2),
+    bare = Model(spatial=ScoreboardSpatial(imp_bare, rho=575,
+                                           xrange=(-8, 8), yrange=(-8, 8),
+                                           step=2),
                  temporal=FadingTemporal(tau=20)).build()
-    unitful = Model(implant=imp_unit,
-                    spatial=ScoreboardSpatial(rho=0.575 * mm,
+    unitful = Model(spatial=ScoreboardSpatial(imp_unit, rho=0.575 * mm,
                                               xrange=(-8 * dva, 8 * dva),
                                               yrange=(-8 * dva, 8 * dva),
                                               step=2 * dva),

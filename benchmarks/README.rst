@@ -196,8 +196,8 @@ automatically and no other file changes. For example, a temporal model:
         id='argus2_axonmap_fading',
         stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
         implant=p2p.implants.ArgusII,
-        model=lambda **kwargs: p2p.models.Model(
-            spatial=p2p.models.AxonMapSpatial(xrange=(-12, 12),
+        model=lambda implant, **kwargs: p2p.models.Model(
+            spatial=p2p.models.AxonMapSpatial(implant, xrange=(-12, 12),
                                               yrange=(-8, 8)),
             temporal=p2p.models.FadingTemporal(), **kwargs),
     )

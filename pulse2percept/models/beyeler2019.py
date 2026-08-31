@@ -94,9 +94,8 @@ class ScoreboardSpatial(SpatialModel):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry is modeled. Required before building
-        or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
 
@@ -207,9 +206,8 @@ class ScoreboardModel(Model):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry is modeled. Required before building
-        or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
 
@@ -261,10 +259,9 @@ class ScoreboardModel(Model):
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
 
-    def __init__(self, **params):
-        super(ScoreboardModel, self).__init__(spatial=ScoreboardSpatial(),
-                                              temporal=None,
-                                              **params)
+    def __init__(self, implant, **params):
+        super(ScoreboardModel, self).__init__(
+            spatial=ScoreboardSpatial(implant), temporal=None, **params)
 
 
 class AxonMapSpatial(SpatialModel):
@@ -298,9 +295,8 @@ class AxonMapSpatial(SpatialModel):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry and eye are modeled. Required before
-        building or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry and eye are modeled.
 
         .. versionadded:: 0.11.0
 
@@ -388,8 +384,8 @@ class AxonMapSpatial(SpatialModel):
     ``ax_segments_range`` values above 90 are outside the range for which this
     axon-map construction is considered reliable."""
 
-    def __init__(self, **params):
-        super(AxonMapSpatial, self).__init__(**params)
+    def __init__(self, implant, **params):
+        super(AxonMapSpatial, self).__init__(implant, **params)
         self.axon_contrib = None
         self.axon_idx_start = None
         self.axon_idx_end = None
@@ -1019,9 +1015,8 @@ class AxonMapModel(Model):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry and eye are modeled. Required before
-        building or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry and eye are modeled.
 
         .. versionadded:: 0.11.0
 
@@ -1116,8 +1111,7 @@ class AxonMapModel(Model):
     ``ax_segments_range`` values above 90 are outside the range for which this
     axon-map construction is considered reliable."""
 
-    def __init__(self, **params):
-        super(AxonMapModel, self).__init__(spatial=AxonMapSpatial(),
-                                           temporal=None,
-                                           **params)
+    def __init__(self, implant, **params):
+        super(AxonMapModel, self).__init__(
+            spatial=AxonMapSpatial(implant), temporal=None, **params)
 

@@ -29,7 +29,7 @@ def test_plot_argus_phosphenes():
 
     # Add axon map:
     _, ax = plt.subplots()
-    plot_argus_phosphenes(df, ArgusI(), ax=ax, axon_map=AxonMapModel())
+    plot_argus_phosphenes(df, ArgusI(), ax=ax, axon_map=AxonMapModel(ArgusI()))
 
     # Data must be a DataFrame:
     with pytest.raises(TypeError):
@@ -46,7 +46,8 @@ def test_plot_argus_phosphenes():
         plot_argus_phosphenes(df, AlphaAMS())
     # Works only for axon maps:
     with pytest.raises(TypeError):
-        plot_argus_phosphenes(df, ArgusI(), ax=ax, axon_map=ScoreboardModel())
+        plot_argus_phosphenes(df, ArgusI(), ax=ax,
+                              axon_map=ScoreboardModel(ArgusI()))
     # Manual subject selection
     plot_argus_phosphenes(df[df.electrode == 'B2'], ArgusI(), ax=ax)
     # If no implant given, dataframe must have additional columns:
@@ -74,7 +75,7 @@ def test_plot_argus_simulated_phosphenes(ImplantType):
     # Add axon map:
     _, ax = plt.subplots()
     plot_argus_simulated_phosphenes(percepts, implant, ax=ax,
-                                    axon_map=AxonMapModel())
+                                    axon_map=AxonMapModel(implant))
 
 
 def test_the_plotted_implant_owns_the_axon_laterality(monkeypatch):

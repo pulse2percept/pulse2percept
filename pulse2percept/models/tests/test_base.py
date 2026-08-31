@@ -10,16 +10,21 @@ from matplotlib.axes import Subplot
 import time
 
 from pulse2percept.implants import ArgusI, ArgusII
+from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    BostonTrain, ImageStimulus, LogoBVL,
                                    Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
-                                  FadingTemporal, Model,
+                                  BiphasicAxonMapModel, FadingTemporal,
+                                  Horsager2009Model, Model, Nanduri2012Model,
                                   ScoreboardModel, ScoreboardSpatial,
-                                  SpatialModel, TemporalModel)
+                                  SpatialModel, TemporalModel,
+                                  Thompson2003Model)
 from pulse2percept.models.base import _blend_meridian
-from pulse2percept.models.cortex import (ScoreboardSpatial as
+from pulse2percept.models.cortex import (ScoreboardModel as
+                                         CortexScoreboardModel,
+                                         ScoreboardSpatial as
                                          CortexScoreboardSpatial)
 from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
@@ -68,15 +73,11 @@ def test_BaseModel():
 
 
 class ValidSpatialModel(SpatialModel):
-    """A spatial model that predicts nothing, bound to a fresh ArgusI
-
-    A spatial model needs an implant before it can build, and which one is
-    beside the point for most of the tests below, so the double supplies one.
-    """
+    """A spatial model that predicts nothing"""
 
     def get_default_params(self):
         params = super(ValidSpatialModel, self).get_default_params()
-        params.update({'vfmap': Watson2014Map(), 'implant': ArgusI()})
+        params.update({'vfmap': Watson2014Map()})
         return params
 
     def _predict_spatial(self, earray, stim):
@@ -87,7 +88,7 @@ class ValidSpatialModel(SpatialModel):
 def test_SpatialModel():
     implant = ArgusI()
     # Build grid:
-    model = ValidSpatialModel(implant=implant)
+    model = ValidSpatialModel(implant)
     npt.assert_equal(model.grid, None)
     npt.assert_equal(model.is_built, False)
     model.build()
@@ -96,14 +97,14 @@ def test_SpatialModel():
     npt.assert_equal(isinstance(model.grid.ret.x, np.ndarray), True)
 
     # Can overwrite default values:
-    model = ValidSpatialModel(implant=implant, step=1.234)
+    model = ValidSpatialModel(implant, step=1.234)
     npt.assert_almost_equal(model.step, 1.234)
     model.build(step=2.345)
     npt.assert_almost_equal(model.step, 2.345)
 
     # Cannot add more attributes:
     with pytest.raises(AttributeError):
-        ValidSpatialModel(newparam=1)
+        ValidSpatialModel(ArgusI(), newparam=1)
     with pytest.raises(FreezeError):
         model.newparam = 1
 
@@ -124,15 +125,15 @@ def test_SpatialModel():
         # stim.time==None but requesting t_percept != None
         model.predict_percept(np.ones(16), t_percept=[0, 1, 2])
     # An unbuilt model builds itself rather than refusing:
-    fresh = ValidSpatialModel(implant=implant)
+    fresh = ValidSpatialModel(implant)
     npt.assert_equal(fresh.predict_percept(np.ones(16)) is not None, True)
     npt.assert_equal(fresh.is_built, True)
     with pytest.raises(TypeError):
         # the implant must be a ProsthesisSystem
-        ValidSpatialModel(implant=Stimulus(3))
+        ValidSpatialModel(Stimulus(3))
     with pytest.raises(ValueError):
         # ... and there must be one at all
-        ValidSpatialModel(implant=None).build()
+        ValidSpatialModel(None).build()
 
 
 def test_SpatialModel_predict_percept_time_order():
@@ -221,9 +222,9 @@ def test_SpatialModel_removed_params(param, value):
     # `xystep` was renamed to `step` in 0.10.0 and removed in 0.11.0. All
     # three are now unknown parameters:
     with pytest.raises(AttributeError):
-        ValidSpatialModel(**{param: value})
+        ValidSpatialModel(ArgusI(), **{param: value})
     with pytest.raises(AttributeError):
-        ValidSpatialModel().set_params(**{param: value})
+        ValidSpatialModel(ArgusI()).set_params(**{param: value})
 
 
 @pytest.mark.parametrize('param, value', [('engine', 'serial'),
@@ -233,13 +234,13 @@ def test_Model_removed_params(param, value):
     # A Model built from instances never reaches BaseModel.__init__, so this
     # path needs checking separately:
     with pytest.raises(AttributeError):
-        Model(spatial=ValidSpatialModel(), **{param: value})
+        Model(spatial=ValidSpatialModel(ArgusI()), **{param: value})
     with pytest.raises(AttributeError):
-        Model(spatial=ValidSpatialModel()).set_params({param: value})
+        Model(spatial=ValidSpatialModel(ArgusI())).set_params({param: value})
 
 
 def test_eq_SpatialModel():
-    valid = ValidSpatialModel()
+    valid = ValidSpatialModel(ArgusI())
 
     # Assert not equal for differing classes
     npt.assert_equal(valid == ValidBaseModel(), False)
@@ -256,11 +257,11 @@ def test_eq_SpatialModel():
     npt.assert_equal(valid == copied, True)
 
     # Assert different models do not equal each other
-    differing_model = ValidSpatialModel(xrange=(-10, 10))
+    differing_model = ValidSpatialModel(ArgusI(), xrange=(-10, 10))
     npt.assert_equal(valid != differing_model, True)
 
 def test_deepcopy_SpatialModel():
-    original = ValidSpatialModel()
+    original = ValidSpatialModel(ArgusI())
     copied = copy.deepcopy(original)
 
     # Assert they are different objects
@@ -287,10 +288,11 @@ def test_deepcopy_SpatialModel():
 
 
 def test_SpatialModel_plot():
-    model = ValidSpatialModel()
+    model = ValidSpatialModel(ArgusI())
     model.build()
     # Simulated area might be larger than that:
-    model = ValidSpatialModel(xrange=(-20.5, 20.5), yrange=(-16.1, 16.1))
+    model = ValidSpatialModel(ArgusI(), xrange=(-20.5, 20.5),
+                              yrange=(-16.1, 16.1))
     model.build()
     ax = model.plot(use_dva=True)
     npt.assert_almost_equal(ax.get_xlim(), (-22.55, 22.55))
@@ -466,7 +468,7 @@ def test_SpatialModel_retinal_range_needs_a_retinal_map():
     # ... or is the model's own default, which a cortical model installs only
     # after its parameters have been applied:
     with pytest.raises(DimensionMismatchError):
-        CortexScoreboardSpatial(yrange=(-2 * mm, 2 * mm))
+        CortexScoreboardSpatial(Cortivis(), yrange=(-2 * mm, 2 * mm))
 
     # A retinal map without an inverse cannot answer either, and says so:
     class NoInverse(RetinalMap):
@@ -557,7 +559,7 @@ def test_eq_TemporalModel():
     npt.assert_equal(valid == copied, True)
 
     # Assert different models do not equal each other
-    differing_model = ValidSpatialModel(xrange=(-10, 10))
+    differing_model = ValidSpatialModel(ArgusI(), xrange=(-10, 10))
     npt.assert_equal(valid != differing_model, True)
 
 
@@ -587,14 +589,18 @@ def test_deepcopy_TemporalModel():
     npt.assert_equal(copied is not None, True)
 
 
-@pytest.mark.parametrize('cls', [ValidSpatialModel, ValidTemporalModel])
-def test_n_jobs_aliases_n_threads(cls):
+@pytest.mark.parametrize('cls, ImplantType',
+                         [(ValidSpatialModel, ArgusI),
+                          (ValidTemporalModel, None)])
+def test_n_jobs_aliases_n_threads(cls, ImplantType):
+    # Only the spatial model takes an implant, and it is required there:
+    extra = {} if ImplantType is None else {'implant': ImplantType()}
     # `n_jobs` and `n_threads` are two names for the OpenMP thread count, and
     # must never disagree:
-    model = cls()
+    model = cls(**extra)
     npt.assert_equal(model.n_jobs, model.n_threads)
     # Setting either name moves both, whether in the constructor...
-    model = cls(n_jobs=3)
+    model = cls(n_jobs=3, **extra)
     npt.assert_equal(model.n_threads, 3)
     npt.assert_equal(model.n_jobs, 3)
     # ...or afterwards, by attribute or by set_params:
@@ -605,24 +611,26 @@ def test_n_jobs_aliases_n_threads(cls):
     model.set_params(n_jobs=2)
     npt.assert_equal(model.n_threads, 2)
     # The default must not quietly drop us to a single thread:
-    npt.assert_equal(cls().n_threads, multiprocessing.cpu_count())
+    npt.assert_equal(cls(**extra).n_threads, multiprocessing.cpu_count())
     # None and -1 both mean "every core", following scikit-learn:
-    npt.assert_equal(cls(n_jobs=None).n_threads, multiprocessing.cpu_count())
-    npt.assert_equal(cls(n_jobs=-1).n_threads, multiprocessing.cpu_count())
+    npt.assert_equal(cls(n_jobs=None, **extra).n_threads,
+                     multiprocessing.cpu_count())
+    npt.assert_equal(cls(n_jobs=-1, **extra).n_threads,
+                     multiprocessing.cpu_count())
     # Nonsense is rejected rather than silently ignored:
     for bad in (0, -2, 2.5, 'many'):
         with pytest.raises(ValueError):
-            cls(n_jobs=bad)
+            cls(n_jobs=bad, **extra)
     # It is an alias, not a deprecation -- it must not warn:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
-        cls(n_jobs=4)
+        cls(n_jobs=4, **extra)
 
 
 def test_Model_n_jobs_aliases_n_threads():
     # Through a Model, n_jobs has to reach both sub-models:
-    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel(),
-                  n_jobs=3)
+    model = Model(spatial=ValidSpatialModel(ArgusI()),
+                  temporal=ValidTemporalModel(), n_jobs=3)
     npt.assert_equal(model.spatial.n_threads, 3)
     npt.assert_equal(model.temporal.n_threads, 3)
     model.n_jobs = 6
@@ -647,10 +655,10 @@ def test_Model():
     with pytest.raises(TypeError):
         Model(spatial=ValidTemporalModel())
     with pytest.raises(TypeError):
-        Model(temporal=ValidSpatialModel())
+        Model(temporal=ValidSpatialModel(ArgusI()))
 
     # SpatialModel, but no TemporalModel:
-    model = Model(spatial=ValidSpatialModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()))
     # An implant is what a spatial model needs; a temporal one never sees an
     # electrode, so offering it one is a mistake worth naming:
     with pytest.raises(ValueError, match='only a temporal'):
@@ -684,7 +692,8 @@ def test_Model():
         model.a = 1
 
     # SpatialModel and TemporalModel:
-    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()),
+                  temporal=ValidTemporalModel())
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, True)
     npt.assert_almost_equal(model.step, 0.25)
@@ -713,7 +722,7 @@ def test_Model():
 
 def test_Model_set_params():
     # SpatialModel, but no TemporalModel:
-    model = Model(spatial=ValidSpatialModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()))
     # An implant is what a spatial model needs; a temporal one never sees an
     # electrode, so offering it one is a mistake worth naming:
     with pytest.raises(ValueError, match='only a temporal'):
@@ -729,7 +738,8 @@ def test_Model_set_params():
     npt.assert_almost_equal(model.temporal.dt, 2.33)
 
     # SpatialModel and TemporalModel:
-    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()),
+                  temporal=ValidTemporalModel())
     # Setting both using the convenience function:
     model.set_params({'step': 5, 'dt': 2.33})
     npt.assert_almost_equal(model.step, 5)
@@ -743,13 +753,14 @@ def test_Model_set_params():
 class ValidCompositeModel(Model):
     """A Model subclass that owns an attribute of its own"""
 
-    def __init__(self, **params):
-        super().__init__(spatial=ValidSpatialModel(), temporal=None, **params)
+    def __init__(self, implant, **params):
+        super().__init__(spatial=ValidSpatialModel(implant), temporal=None,
+                         **params)
         self.n_calls = 0
 
 
 def test_Model_subclass_constructor_owns_its_attributes():
-    model = ValidCompositeModel()
+    model = ValidCompositeModel(ArgusI())
     npt.assert_equal(model.n_calls, 0)
     npt.assert_equal('n_calls' in model.__dict__, True)
     npt.assert_equal(hasattr(model.spatial, 'n_calls'), False)
@@ -761,7 +772,7 @@ def test_Model_subclass_constructor_owns_its_attributes():
 def test_Model_subclass_params_go_to_the_component_model():
     # A user parameter belongs to the sub-model, even when it is passed to a
     # subclass constructor that is free to create attributes of its own:
-    model = ValidCompositeModel(step=2.5)
+    model = ValidCompositeModel(ArgusI(), step=2.5)
     npt.assert_almost_equal(model.spatial.step, 2.5)
     npt.assert_equal('step' in model.__dict__, False)
     model.set_params({'step': 0.5})
@@ -770,7 +781,7 @@ def test_Model_subclass_params_go_to_the_component_model():
     # A parameter no sub-model knows has nowhere to go, and must not quietly
     # become an attribute of the composite instead:
     with pytest.raises(FreezeError):
-        ValidCompositeModel(nonexistent=1)
+        ValidCompositeModel(ArgusI(), nonexistent=1)
 
 
 def test_Model_build():
@@ -783,7 +794,7 @@ def test_Model_build():
     npt.assert_equal(model.is_built, True)
 
     # SpatialModel, but no TemporalModel:
-    model = Model(spatial=ValidSpatialModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()))
     # An implant is what a spatial model needs; a temporal one never sees an
     # electrode, so offering it one is a mistake worth naming:
     with pytest.raises(ValueError, match='only a temporal'):
@@ -799,7 +810,8 @@ def test_Model_build():
     npt.assert_equal(model.is_built, True)
 
     # SpatialModel and TemporalModel:
-    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()),
+                  temporal=ValidTemporalModel())
     npt.assert_equal(model.is_built, False)
     model.build()
     npt.assert_equal(model.is_built, True)
@@ -807,7 +819,7 @@ def test_Model_build():
 
 def test_a_new_parameter_value_un_builds_the_model():
     """Which parameters a build depends on is not enumerated anywhere"""
-    model = ValidSpatialModel(step=1).build()
+    model = ValidSpatialModel(ArgusI(), step=1).build()
     # Assigning the value it already has changes nothing, so the build stands:
     model.step = model.step
     model.thresh_percept = 0
@@ -825,7 +837,7 @@ def test_a_new_parameter_value_un_builds_the_model():
 
 
 def test_a_composite_un_builds_the_stage_the_parameter_belongs_to():
-    model = Model(spatial=ValidSpatialModel(step=1),
+    model = Model(spatial=ValidSpatialModel(ArgusI(), step=1),
                   temporal=ValidTemporalModel()).build()
     model.step = 2
     npt.assert_equal(model.spatial.is_built, False)
@@ -851,7 +863,7 @@ def test_predict_percept_rebuilds_only_the_stale_stage():
             super()._build()
             builds['temporal'] += 1
 
-    model = Model(spatial=CountingSpatial(),
+    model = Model(spatial=CountingSpatial(ArgusI()),
                   temporal=CountingTemporal()).build()
     npt.assert_equal(builds, {'spatial': 1, 'temporal': 1})
 
@@ -873,9 +885,10 @@ def test_predict_percept_rebuilds_only_the_stale_stage():
 
 
 @pytest.mark.parametrize('make_model', [
-    lambda: ValidSpatialModel(),
-    lambda: Model(spatial=ValidSpatialModel()),
-    lambda: Model(spatial=ValidSpatialModel(), temporal=FadingTemporal()),
+    lambda: ValidSpatialModel(ArgusI()),
+    lambda: Model(spatial=ValidSpatialModel(ArgusI())),
+    lambda: Model(spatial=ValidSpatialModel(ArgusI()),
+                  temporal=FadingTemporal()),
 ])
 def test_predict_percept_builds_what_it_needs(make_model):
     model = make_model()
@@ -885,15 +898,43 @@ def test_predict_percept_builds_what_it_needs(make_model):
     npt.assert_equal(model.is_built, True)
 
 
+@pytest.mark.parametrize('ModelClass, ImplantType', [
+    (ScoreboardModel, ArgusII), (AxonMapModel, ArgusII),
+    (Thompson2003Model, ArgusII), (Nanduri2012Model, ArgusII),
+    (BiphasicAxonMapModel, ArgusII), (CortexScoreboardModel, Cortivis)])
+def test_a_standalone_spatial_model_needs_an_implant(ModelClass, ImplantType):
+    """Which device is modeled is not something to fill in later"""
+    with pytest.raises(TypeError):
+        ModelClass()
+    implant = ImplantType()
+    for model in (ModelClass(implant), ModelClass(implant=implant)):
+        npt.assert_equal(model.implant is implant, True)
+
+
+def test_a_temporal_only_model_takes_no_implant():
+    """`Horsager2009Model` has no electrodes to place"""
+    npt.assert_equal(Horsager2009Model().has_space, False)
+    with pytest.raises(ValueError, match='only a temporal'):
+        Horsager2009Model(implant=ArgusII())
+
+
+def test_Model_builds_a_spatial_class_around_its_implant():
+    """`spatial` given as a class is handed the implant `Model` was named"""
+    implant = ArgusI()
+    model = Model(spatial=ValidSpatialModel, temporal=ValidTemporalModel,
+                  implant=implant)
+    npt.assert_equal(model.spatial.implant is implant, True)
+
+
 def test_Model_names_one_implant():
     """Two implants is contradictory model context, not a precedence question"""
     implant = ArgusI()
     # The same object twice says nothing new:
-    model = Model(implant=implant, spatial=ValidSpatialModel(implant=implant))
+    model = Model(implant=implant, spatial=ValidSpatialModel(implant))
     npt.assert_equal(model.implant is implant, True)
     # Two different ones would have to silently pick a winner:
     with pytest.raises(ValueError, match='two different implants'):
-        Model(implant=implant, spatial=ValidSpatialModel(implant=ArgusII()))
+        Model(implant=implant, spatial=ValidSpatialModel(ArgusII()))
 
 
 def test_Model_predict_percept():
@@ -904,7 +945,7 @@ def test_Model_predict_percept():
     npt.assert_equal(model.predict_percept({'A1': 1}, t_percept=[0, 1]), None)
 
     # Just the spatial model:
-    model = Model(spatial=ValidSpatialModel()).build()
+    model = Model(spatial=ValidSpatialModel(ArgusI())).build()
     npt.assert_equal(model.predict_percept(None), None)
     # Just the temporal model:
     model = Model(temporal=ValidTemporalModel()).build()
@@ -912,7 +953,8 @@ def test_Model_predict_percept():
     # Both spatial and temporal:
 
     # Invalid calls:
-    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()),
+                  temporal=ValidTemporalModel())
     model.build()
     with pytest.raises(ValueError):
         # Cannot request t_percepts that are not multiples of dt:
@@ -952,9 +994,8 @@ def test_Model_predict_percept_frame_clock(fps):
     # Stimulus, so the frame clock has to survive that hop too. This leg needs
     # real models: `ValidTemporalModel` returns one row per electrode, not one
     # per grid point, so it cannot consume a spatial percept.
-    both = Model(implant=implant,
-                 spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                           step=1),
+    both = Model(spatial=ScoreboardSpatial(implant, xrange=(-2, 2),
+                                           yrange=(-2, 2), step=1),
                  temporal=FadingTemporal()).build()
     npt.assert_equal(both.predict_percept(stim).data.shape[-1], 6)
     # An explicit `t_percept` still wins:
@@ -1007,13 +1048,15 @@ def test_Model_predict_percept_frame_peak():
 
 def test_Model_predict_percept_correctly_parallelizes():
     # setup and time spatial model with 1 thread
-    one_thread_spatial = Model(spatial=ValidSpatialModel(n_threads=1)).build()
+    one_thread_spatial = Model(
+        spatial=ValidSpatialModel(ArgusI(), n_threads=1)).build()
     start_time_one_thread_spatial = time.perf_counter()
     one_thread_spatial.predict_percept(np.ones(16))
     one_thread_spatial_predict_time = time.perf_counter() - start_time_one_thread_spatial
 
     # setup and time spatial model with 2 threads
-    two_thread_spatial = Model(spatial=ValidSpatialModel(n_threads=2)).build()
+    two_thread_spatial = Model(
+        spatial=ValidSpatialModel(ArgusI(), n_threads=2)).build()
     start_time_two_thread_spatial = time.perf_counter()
     two_thread_spatial.predict_percept(np.ones(16))
     two_threaded_spatial_predict_time = time.perf_counter() - start_time_two_thread_spatial
@@ -1040,7 +1083,7 @@ def test_Model_predict_percept_correctly_parallelizes():
 
 
 def test_Model_deepcopy_memo():
-    model = Model(spatial=ValidSpatialModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()))
 
     # Called directly, without a memo dict:
     copied = model.__deepcopy__()
@@ -1052,26 +1095,26 @@ def test_Model_deepcopy_memo():
     npt.assert_equal(model.__deepcopy__({id(model): sentinel}), sentinel)
 
     # Shared references are copied once, not duplicated:
-    shared = ValidSpatialModel()
+    shared = ValidSpatialModel(ArgusI())
     pair = copy.deepcopy({'a': shared, 'b': shared})
     npt.assert_equal(pair['a'] is pair['b'], True)
 
 
 def test_SpatialModel_deepcopy_memo():
-    model = ValidSpatialModel()
+    model = ValidSpatialModel(ArgusI())
     npt.assert_equal(model.__deepcopy__() == model, True)
     sentinel = 'already copied'
     npt.assert_equal(model.__deepcopy__({id(model): sentinel}), sentinel)
 
 
 def test_Model_eq_and_hash():
-    model = Model(spatial=ValidSpatialModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()))
 
     # Identity short-circuit:
     npt.assert_equal(model == model, True)
     # Different type:
     npt.assert_equal(model == 'not a model', False)
-    npt.assert_equal(model == ValidSpatialModel(), False)
+    npt.assert_equal(model == ValidSpatialModel(ArgusI()), False)
 
     # Hashable, so models can go in sets/dicts:
     npt.assert_equal(isinstance(hash(model), int), True)
@@ -1080,7 +1123,8 @@ def test_Model_eq_and_hash():
 
 def test_Model_pprint_params():
     # Covers both the spatial and the temporal branch of _pprint_params:
-    both = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    both = Model(spatial=ValidSpatialModel(ArgusI()),
+                 temporal=ValidTemporalModel())
     params = both._pprint_params()
     npt.assert_equal('spatial' in params, True)
     npt.assert_equal('temporal' in params, True)
@@ -1093,7 +1137,8 @@ def test_Model_pprint_params():
 def test_Model_deepcopy_preserves_submodels_and_params():
     # A plain Model takes spatial/temporal as constructor arguments and does
     # not recreate them, so they must survive the copy:
-    model = Model(spatial=ValidSpatialModel(), temporal=ValidTemporalModel())
+    model = Model(spatial=ValidSpatialModel(ArgusI()),
+                  temporal=ValidTemporalModel())
     copied = copy.deepcopy(model)
     npt.assert_equal(isinstance(copied.spatial, ValidSpatialModel), True)
     npt.assert_equal(isinstance(copied.temporal, ValidTemporalModel), True)
@@ -1105,7 +1150,8 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     # Model parameters are forwarded to the sub-models, so they live in
     # `spatial`/`temporal` rather than in `Model.__dict__`. Rebuilding the
     # copy from the constructor alone would silently reset them to defaults:
-    model = Model(spatial=ValidSpatialModel(step=5, thresh_percept=0.5))
+    model = Model(spatial=ValidSpatialModel(ArgusI(), step=5,
+                                            thresh_percept=0.5))
     copied = copy.deepcopy(model)
     npt.assert_almost_equal(copied.step, 5)
     npt.assert_almost_equal(copied.thresh_percept, 0.5)
@@ -1116,7 +1162,7 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     npt.assert_almost_equal(model.step, 5)
 
     # A built model stays built:
-    built = Model(spatial=ValidSpatialModel(step=5)).build()
+    built = Model(spatial=ValidSpatialModel(ArgusI(), step=5)).build()
     npt.assert_equal(copy.deepcopy(built).is_built, True)
 
 
@@ -1172,9 +1218,8 @@ def test_model_t_percept_units():
     spatial = ScoreboardSpatial(implant=implant, xrange=(-2, 2),
                                 yrange=(-2, 2), step=1).build()
     temporal = FadingTemporal().build()
-    composite = Model(implant=implant,
-                      spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                                step=1),
+    composite = Model(spatial=ScoreboardSpatial(implant, xrange=(-2, 2),
+                                                yrange=(-2, 2), step=1),
                       temporal=FadingTemporal()).build()
     for model, stim in [(spatial, source),
                         (temporal, implant.prepare_stim(source)),
@@ -1214,9 +1259,8 @@ def test_model_requires_a_current_stimulus():
     spatial = ScoreboardSpatial(implant=implant, xrange=(-2, 2),
                                 yrange=(-2, 2), step=1).build()
     temporal = FadingTemporal().build()
-    composite = Model(implant=implant,
-                      spatial=ScoreboardSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                                step=1),
+    composite = Model(spatial=ScoreboardSpatial(implant, xrange=(-2, 2),
+                                                yrange=(-2, 2), step=1),
                       temporal=FadingTemporal()).build()
     with pytest.raises(DimensionMismatchError):
         ArgusII(preprocess=False, encoder=None).prepare_stim(img)
@@ -1237,8 +1281,7 @@ def test_model_requires_a_current_stimulus():
     argus = ArgusII(encoder=None, raster=None)
     for model in (ScoreboardSpatial(implant=argus, xrange=(-2, 2),
                                     yrange=(-2, 2), step=1).build(),
-                  Model(implant=argus,
-                        spatial=ScoreboardSpatial(xrange=(-2, 2),
+                  Model(spatial=ScoreboardSpatial(argus, xrange=(-2, 2),
                                                   yrange=(-2, 2), step=1),
                         temporal=FadingTemporal()).build()):
         npt.assert_equal(model.predict_percept(encoded) is None, False)
@@ -1410,9 +1453,8 @@ def test_percept_time_crosses_model_boundary():
     npt.assert_allclose(temporal.seen['values'], percept.data, rtol=0, atol=0)
 
     # The same crossing through a composite, which is where it really happens:
-    model = Model(implant=ArgusII(),
-                  spatial=SecondSpatial(xrange=(-2, 2), yrange=(-2, 2),
-                                        step=1),
+    model = Model(spatial=SecondSpatial(ArgusII(), xrange=(-2, 2),
+                                        yrange=(-2, 2), step=1),
                   temporal=MilliTemporal()).build()
     # A composite reports the unit of the stage that reads `t_percept` and
     # writes the percept, which is the temporal model:
@@ -1442,7 +1484,7 @@ def test_Model_units_follow_their_component():
     npt.assert_equal((Model().stimulus_unit, Model().space_unit,
                       Model().time_unit), (uA, um, ms))
     # One component: its own.
-    space_only = Model(spatial=MilliSpatial())
+    space_only = Model(spatial=MilliSpatial(ArgusII()))
     npt.assert_equal(space_only.stimulus_unit, mA)
     npt.assert_equal(space_only.space_unit, mm)
     npt.assert_equal(space_only.time_unit, s)
@@ -1452,7 +1494,7 @@ def test_Model_units_follow_their_component():
     # Both, disagreeing: the stimulus goes into the spatial model and the
     # percept comes out of the temporal one, so they are read off different
     # components rather than merged into the dict `__getattr__` would return.
-    both = Model(spatial=MilliSpatial(), temporal=MilliTemporal())
+    both = Model(spatial=MilliSpatial(ArgusII()), temporal=MilliTemporal())
     npt.assert_equal(both.stimulus_unit, mA)
     npt.assert_equal(both.space_unit, mm)
     npt.assert_equal(both.time_unit, ms)
@@ -1570,8 +1612,8 @@ def test_spatial_model_reads_modulation_not_pulses():
             seen.append(float(stim.data.min()))
             return super()._predict_spatial(earray, stim)
 
-    both = Model(implant=implant,
-                 spatial=Recording(xrange=(-12, 12), yrange=(-8, 8), step=1),
+    both = Model(spatial=Recording(implant, xrange=(-12, 12), yrange=(-8, 8),
+                                   step=1),
                  temporal=FadingTemporal(tau=100)).build()
     both.predict_percept(logo)
     npt.assert_array_less(seen[-1], 0)
@@ -1874,8 +1916,8 @@ def test_combined_model_still_integrates_the_delivered_pulses():
             seen.append(float(stim.data.min()))
             return super()._predict_spatial(earray, stim)
 
-    both = Model(implant=implant,
-                 spatial=Recording(xrange=(-12, 12), yrange=(-8, 8), step=1),
+    both = Model(spatial=Recording(implant, xrange=(-12, 12), yrange=(-8, 8),
+                                   step=1),
                  temporal=FadingTemporal(tau=100)).build()
     both.predict_percept(LogoBVL())
     npt.assert_array_less(seen[-1], 0)

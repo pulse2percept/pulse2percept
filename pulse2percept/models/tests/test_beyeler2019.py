@@ -339,9 +339,9 @@ def test_AxonMap_removed_axlambda(cls):
     # `lam` was called `axlambda` until 0.10.0; the old name was removed
     # in 0.11.0, so it is now an unknown parameter:
     with pytest.raises(AttributeError):
-        cls(axlambda=400)
+        cls(ArgusII(), axlambda=400)
     with pytest.raises(AttributeError):
-        model = cls(step=5)
+        model = cls(ArgusII(), step=5)
         if cls is AxonMapModel:
             model.set_params({'axlambda': 400})
         else:

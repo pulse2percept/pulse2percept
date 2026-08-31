@@ -505,8 +505,8 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
                   scotoma=Scotoma.circle(6), scotoma_fill=0.0)
 
     def spatiotemporal():
-        return Model(implant=implant_at(0, 0),
-                     spatial=ScoreboardSpatial(rho=200, xrange=(-4, 4),
+        return Model(spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
+                                               xrange=(-4, 4),
                                                yrange=(-4, 4), step=0.5,
                                                vfmap=Curcio1990Map()),
                      temporal=FadingTemporal()).build()
@@ -527,9 +527,9 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
 
 def test_a_temporal_stage_does_not_lose_the_visual_field_grid():
     """A percept rewritten frame by frame has not moved in the visual field"""
-    model = Model(implant=implant_at(0, 0),
-                  spatial=ScoreboardSpatial(rho=200, xrange=(-2, 2),
-                                            yrange=(-2, 2), step=1),
+    model = Model(spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
+                                            xrange=(-2, 2), yrange=(-2, 2),
+                                            step=1),
                   temporal=FadingTemporal()).build()
     percept = model.predict_percept(
         BiphasicPulseTrain(20, 30, 0.45, stim_dur=50))

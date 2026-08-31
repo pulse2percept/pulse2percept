@@ -48,9 +48,8 @@ class Thompson2003Spatial(SpatialModel):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry is modeled. Required before building
-        or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
 
@@ -146,9 +145,8 @@ class Thompson2003Model(Model):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry is modeled. Required before building
-        or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
 
@@ -198,7 +196,6 @@ class Thompson2003Model(Model):
         use this parameter.
     """
 
-    def __init__(self, **params):
-        super(Thompson2003Model, self).__init__(spatial=Thompson2003Spatial(),
-                                                temporal=None,
-                                                **params)
+    def __init__(self, implant, **params):
+        super(Thompson2003Model, self).__init__(
+            spatial=Thompson2003Spatial(implant), temporal=None, **params)

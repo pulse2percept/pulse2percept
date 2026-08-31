@@ -281,18 +281,16 @@ Classes ending in ``Model`` are complete model objects. Classes ending in
 .. code-block:: python
 
     model = p2p.models.Model(
-        implant=implant,
-        spatial=p2p.models.ScoreboardSpatial(),
+        spatial=p2p.models.ScoreboardSpatial(implant),
         temporal=p2p.models.Nanduri2012Temporal(),
     )
 
-The implant belongs to the spatial component -- a temporal model never sees an
-electrode -- and naming it on the parent is shorthand for that. Naming a
-*different* one on both raises rather than silently picking a winner.
-
+The implant belongs to the spatial component, because a temporal model never
+sees an electrode. ``Model`` also takes ``implant=`` for the case where
+``spatial`` is given as a class rather than an instance.
 This is useful when the spatial and temporal assumptions come from different
 models. The combined model handles the intermediate representation and returns
-a Percept like any other Model.
+a ``Percept`` like any other Model.
 
 Components may also be used directly, but normal simulations are simpler
 through the complete Model interface.

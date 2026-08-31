@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.models.Model`,
    :py:class:`~pulse2percept.models.SpatialModel`,
    :py:class:`~pulse2percept.models.TemporalModel`"""
+import inspect
 import warnings
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
@@ -565,9 +566,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant whose electrode geometry is modeled. Required before building
-        or predicting.
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
 
@@ -624,11 +624,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
     n_jobs = _n_jobs_alias()
 
-    def __init__(self, **params):
+    def __init__(self, implant, **params):
         # `vfmap` first: `xrange`/`yrange` may be given as a retinal extent,
         # which is resolved through the map as it is assigned. See
         # `_vfmap_first`.
-        super().__init__(**_vfmap_first(params))
+        super().__init__(implant=implant, **_vfmap_first(params))
         self.grid = None
 
     @property
@@ -1236,7 +1236,7 @@ class Model(Frozen, PrettyPrint):
 
     .. code-block:: python
 
-        model = Model(spatial=ScoreboardSpatial(),
+        model = Model(spatial=ScoreboardSpatial(ArgusII()),
                       temporal=Nanduri2012Temporal())
 
     Parameters
@@ -1246,7 +1246,8 @@ class Model(Frozen, PrettyPrint):
     temporal : :py:class:`~pulse2percept.models.TemporalModel` or type, optional
         Temporal model instance or class.
     implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant used by the spatial component.
+        Implant used by the spatial component. Required only when ``spatial``
+        is given as a class.
 
         .. versionadded:: 0.11.0
     **params : keyword arguments
@@ -1304,10 +1305,10 @@ class Model(Frozen, PrettyPrint):
             return self.spatial.time_unit
         return BaseModel.time_unit
 
-    def __init__(self, spatial=None, temporal=None, **params):
-        # Only the spatial component depends on implant geometry, so do not
-        # forward `implant` to the temporal component:
-        implant = params.pop('implant', None)
+    def __init__(self, spatial=None, temporal=None, *, implant=None,
+                 **params):
+        # `implant` is named explicitly so it cannot reach the temporal
+        # component through `**params`; only the spatial one has geometry.
         # Normalize renamed parameters once before class construction and
         # subsequent `set_params`, avoiding duplicate warnings.
         for model in (spatial, temporal):
@@ -1319,7 +1320,7 @@ class Model(Frozen, PrettyPrint):
         if spatial is not None and not isinstance(spatial, SpatialModel):
             if issubclass(spatial, SpatialModel):
                 # User should have passed an instance, not a class:
-                spatial = spatial(**params)
+                spatial = spatial(implant, **params)
             else:
                 raise TypeError(f"'spatial' must be a SpatialModel instance, "
                                 f"not {type(spatial)}.")
@@ -1425,6 +1426,15 @@ class Model(Frozen, PrettyPrint):
         # the constructor, so those cannot be passed in as parameters:
         spatial = attributes.pop('spatial', None)
         temporal = attributes.pop('temporal', None)
+        # A subclass builds its own spatial component and so requires the
+        # implant, which lives on that component and not in `__dict__`.
+        # `Model` itself declares it optional and takes the copy back below.
+        implant_param = inspect.signature(
+            self.__class__.__init__).parameters.get('implant')
+        implant_required = getattr(implant_param, 'default',
+                                   None) is inspect.Parameter.empty
+        if spatial is not None and implant_required:
+            attributes['implant'] = spatial.implant
         result = self.__class__(**attributes)
         # Restore copied sub-models after construction; their parameters do not
         # live in the composite `__dict__`. Bypass forwarding `__setattr__`.

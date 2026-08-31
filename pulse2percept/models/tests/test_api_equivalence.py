@@ -149,8 +149,7 @@ def test_axonmap_prediction_is_unchanged():
 
 
 def test_spatiotemporal_prediction_is_unchanged():
-    model = Model(implant=ArgusII(),
-                  spatial=ScoreboardSpatial(rho=200, **GRID),
+    model = Model(spatial=ScoreboardSpatial(ArgusII(), rho=200, **GRID),
                   temporal=FadingTemporal(tau=100)).build()
     percept = model.predict_percept(
         {'C5': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)},
@@ -177,8 +176,7 @@ def test_encoded_video_prediction_is_unchanged():
 def test_encoded_video_with_a_temporal_stage_is_unchanged():
     # With a temporal stage, the spatial model reads the delivered pulse
     # train rather than frame-level modulation.
-    model = Model(implant=ArgusII(),
-                  spatial=ScoreboardSpatial(rho=200, **GRID),
+    model = Model(spatial=ScoreboardSpatial(ArgusII(), rho=200, **GRID),
                   temporal=FadingTemporal(tau=100)).build()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
