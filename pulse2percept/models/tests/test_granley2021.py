@@ -163,22 +163,29 @@ def test_effects_models():
     npt.assert_almost_equal(
         np.sqrt(model(10, 1, 10000) * 200 * 200), model.min_lambda)
 
-    coeffs = {'a' + str(i): i for i in range(9)}
-    # Models can take correct coeffs
-    model_coeffs = {k: v for k, v in coeffs if hasattr(DefaultBrightModel(), k)}
+    # Each model takes the coefficients it declares and no others:
+    coeffs = {'a' + str(i): i for i in range(10)}
+    model_coeffs = {k: v for k, v in coeffs.items()
+                    if hasattr(DefaultBrightModel(), k)}
+    npt.assert_equal(sorted(model_coeffs), ['a0', 'a1', 'a2', 'a3', 'a4'])
     model = DefaultBrightModel(**model_coeffs)
-    npt.assert_equal(hasattr(model, 'a0'), True)
+    npt.assert_almost_equal(model.a0, 0)
+    npt.assert_almost_equal(model.a4, 4)
     npt.assert_equal(hasattr(model, 'a9'), False)
-    model_coeffs = {k: v for k, v in coeffs if hasattr(
-        DefaultSizeModel(200), k)}
+    model_coeffs = {k: v for k, v in coeffs.items()
+                    if hasattr(DefaultSizeModel(200), k)}
+    npt.assert_equal(sorted(model_coeffs), ['a0', 'a1', 'a5', 'a6'])
     model = DefaultSizeModel(200, **model_coeffs)
-    npt.assert_equal(hasattr(model, 'a0'), True)
+    npt.assert_almost_equal(model.a0, 0)
+    npt.assert_almost_equal(model.a5, 5)
     npt.assert_equal(hasattr(model, 'a9'), False)
-    model_coeffs = {k: v for k, v in coeffs if hasattr(
-        DefaultStreakModel(200), k)}
+    model_coeffs = {k: v for k, v in coeffs.items()
+                    if hasattr(DefaultStreakModel(200), k)}
+    npt.assert_equal(sorted(model_coeffs), ['a7', 'a8', 'a9'])
     model = DefaultStreakModel(200, **model_coeffs)
+    npt.assert_almost_equal(model.a7, 7)
+    npt.assert_almost_equal(model.a9, 9)
     npt.assert_equal(hasattr(model, 'a0'), False)
-    npt.assert_equal(hasattr(model, 'a9'), True)
 
 
 def test_effects_models_units():
