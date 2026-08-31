@@ -9,7 +9,7 @@ pulse2percept is organized into the following subpackages:
     models
     percepts
     datasets
-    viz
+    plotting
     utils
     topography
     units
@@ -89,17 +89,20 @@ from . import datasets
 from . import implants
 from . import models
 from . import percepts
+from . import plotting
 from . import stimuli
 from . import units
 from . import utils
-from . import viz
 from . import vision
+# Deprecated; re-exports from `plotting`:
+from . import viz
 
 __all__ = [
     "datasets",
     "implants",
     "models",
     "percepts",
+    "plotting",
     "set_debug_logging",
     "stimuli",
     "topography",

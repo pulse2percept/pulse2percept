@@ -684,7 +684,7 @@ class HTMLAnimation(FuncAnimation):
         image one frame at a time. This is what lets a still image or a source
         sampled at another rate share a clock with the rest of the figure.
 
-        .. versionadded:: 0.11
+        .. versionadded:: 0.11.0
     labels : list of str or None
         Per-frame titles. If None, the title is left alone
     title : matplotlib.text.Text, optional
@@ -692,7 +692,7 @@ class HTMLAnimation(FuncAnimation):
         first image's Axes; pass ``fig.suptitle('')`` to label a figure with
         more than one animated panel.
 
-        .. versionadded:: 0.11
+        .. versionadded:: 0.11.0
     fmt : {'jpg', 'png'}, optional
         Whether to encode the frames as JPEG or PNG. JPEG is typically an
         order of magnitude smaller, PNG is lossless
@@ -710,7 +710,7 @@ class HTMLAnimation(FuncAnimation):
     *  The per-frame title is drawn by the browser, so it uses DejaVu Sans if
        available and falls back to the default sans-serif font otherwise.
 
-    .. versionchanged:: 0.11
+    .. versionchanged:: 0.11.0
         A figure may animate more than one image.
     """
 
@@ -740,6 +740,16 @@ class HTMLAnimation(FuncAnimation):
         # Avoid Matplotlib's "deleted without rendering warning", which
         # turns into an unraisable exception wherever warnings are errors:
         self._draw_was_started = True
+
+    @property
+    def _image(self):
+        """The animated image, for a figure that animates a single one"""
+        return None if self._layers is None else self._layers[0].image
+
+    @property
+    def _frame_data(self):
+        """The frames that image shows"""
+        return None if self._layers is None else self._layers[0].data
 
     def _display_intervals(self, fps, n_frames):
         """How long each frame stays up (in ms), one value per frame"""

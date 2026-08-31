@@ -81,7 +81,7 @@ include-package-data = true
 [tool.setuptools.package-data]
 "pulse2percept.stimuli" = ["data/*"]
 "pulse2percept.datasets" = ["data/*"]
-"pulse2percept.viz" = ["data/*"]
+"pulse2percept.plotting" = ["data/*"]
 
 [tool.setuptools.packages.find]
 where = ["."]

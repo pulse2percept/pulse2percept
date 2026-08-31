@@ -520,8 +520,8 @@ def test_rings_take_a_color():
     plt.close('all')
     # It reaches the rasterized overlay the player is handed, too:
     video = video_scene()
-    black = video.play(rings=[10], ring_color='black')._layers[0].data
-    white = video.play(rings=[10], ring_color='white')._layers[0].data
+    black = video.play(rings=[10], ring_color='black')._frame_data
+    white = video.play(rings=[10], ring_color='white')._frame_data
     npt.assert_equal(np.allclose(black, white), False)
     plt.close('all')
 
@@ -561,8 +561,8 @@ def test_play_paints_readable_rings_into_the_frames_the_player_shows():
     white = np.full((120, 120), 1.0)
     scene = Scene(VideoStimulus(np.stack([white, white], axis=-1),
                                 time=[0, 1000]), fov=(40, 40))
-    plain = scene.play()._layers[0].data
-    ringed = scene.play(rings=[10])._layers[0].data
+    plain = scene.play()._frame_data
+    ringed = scene.play(rings=[10])._frame_data
     npt.assert_array_equal(plain, scene._native_rgb())
     contrast = (plain - ringed).max(axis=(2, 3))
     # The ring has to read against what it is drawn on, not merely differ:
@@ -706,7 +706,7 @@ def test_play_animates_a_video_scene_and_refuses_a_still_one():
     scene = Scene(VideoStimulus(frames, time=[0, 10]), fov=(6, 6),
                   scotoma=Scotoma.circle(1))
     ani = scene.play()
-    npt.assert_equal(ani._layers[0].data.shape, (6, 6, 3, 2))
+    npt.assert_equal(ani._frame_data.shape, (6, 6, 3, 2))
     plt.close('all')
     with pytest.raises(ValueError):
         ramp_scene().play()

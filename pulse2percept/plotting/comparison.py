@@ -1,5 +1,5 @@
-""":py:func:`~pulse2percept.viz.plot_stimulus_percept`,
-   :py:func:`~pulse2percept.viz.play_stimulus_percept`
+""":py:func:`~pulse2percept.plotting.plot_stimulus_percept`,
+   :py:func:`~pulse2percept.plotting.play_stimulus_percept`
 
 Views that span more than one object: what went into the model next to what
 came out of it.
@@ -37,11 +37,12 @@ def _panel_axes(axes, figsize, layout=None):
     return axes
 
 
-def _brightest_frame(video):
-    """The frame of ``video`` with the largest pixel value, as an image"""
-    idx = int(np.argmax(video.data.max(axis=0)))
-    return ImageStimulus(video._frames()[..., idx],
-                         electrodes=video.electrodes, metadata=video.metadata)
+def _reject_non_visual(stim):
+    """The error for a stimulus that is not the source the model was shown"""
+    return TypeError(
+        f"Cannot show a {type(stim).__name__} next to the percept. Pass the "
+        f"image or video that went into the model, not the electrical "
+        f"stimulus an encoder made of it.")
 
 
 def _source_frames(stim, times):
@@ -56,10 +57,7 @@ def _source_frames(stim, times):
     elif isinstance(stim, ImageStimulus):
         frames = stim.data.reshape(stim.img_shape)[..., np.newaxis]
     else:
-        raise TypeError(
-            f"Cannot animate a {type(stim).__name__} next to the percept. "
-            f"Pass the image or video that went into the model, not the "
-            f"electrical stimulus an encoder made of it.")
+        raise _reject_non_visual(stim)
     src = stim.times(ms)
     if src is None or frames.shape[-1] == 1:
         return frames[..., :1], np.zeros(np.size(times), dtype=np.intp)
@@ -80,22 +78,20 @@ def _image_artist(ax, frames, vmin=None, vmax=None):
 def plot_stimulus_percept(stim, percept, axes=None, figsize=None,
                           titles=('Stimulus', 'Percept'), stim_kwargs=None,
                           percept_kwargs=None):
-    """Plot a stimulus next to the percept it produced
+    """Plot an image next to the percept it produced
 
     Draws ``stim`` and ``percept`` side by side, each with its own ``plot``
-    method. A video stimulus is summarized by its brightest frame, the way
-    :py:meth:`~pulse2percept.percepts.Percept.plot` summarizes a
-    spatiotemporal percept; use
-    :py:func:`~pulse2percept.viz.play_stimulus_percept` to see all frames.
+    method. A video has no single frame that stands for the whole sequence,
+    and neither does the percept it produced, so use
+    :py:func:`~pulse2percept.plotting.play_stimulus_percept` for those.
 
-    .. versionadded:: 0.11
+    .. versionadded:: 0.11.0
 
     Parameters
     ----------
-    stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-        The stimulus that went into the model. Pass the original image or
-        video rather than ``implant.stim``, which holds the electrical
-        stimulus an encoder made of it.
+    stim : :py:class:`~pulse2percept.stimuli.ImageStimulus`
+        The image that went into the model, not the electrical stimulus an
+        encoder made of it.
     percept : :py:class:`~pulse2percept.percepts.Percept`
         The percept the model predicted.
     axes : list of two matplotlib.axes.Axes, optional
@@ -121,14 +117,21 @@ def plot_stimulus_percept(stim, percept, axes=None, figsize=None,
     >>> model = p2p.models.ScoreboardModel(implant=p2p.implants.ArgusII(),
     ...                                    xrange=(-4, 4), yrange=(-4, 4),
     ...                                    step=0.5).build()
-    >>> axes = p2p.viz.plot_stimulus_percept(stim, model.predict_percept(stim))
+    >>> percept = model.predict_percept(stim)
+    >>> axes = p2p.plotting.plot_stimulus_percept(stim, percept)
     >>> [ax.get_title() for ax in axes]
     ['Stimulus', 'Percept']
 
     """
-    axes = _panel_axes(axes, figsize, layout='constrained')
     if isinstance(stim, VideoStimulus):
-        stim = _brightest_frame(stim)
+        raise TypeError(
+            "A video and the percept it produced have no single frame that "
+            "stands for both of them: the brightest frame of one need not "
+            "line up with the brightest frame of the other. Use "
+            "play_stimulus_percept() instead.")
+    if not isinstance(stim, ImageStimulus):
+        raise _reject_non_visual(stim)
+    axes = _panel_axes(axes, figsize, layout='constrained')
     stim.plot(ax=axes[0], **(stim_kwargs or {}))
     percept.plot(ax=axes[1], **(percept_kwargs or {}))
     for ax, title in zip(axes, titles):
@@ -149,14 +152,13 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
     image stays put. ``fps`` resamples the whole presentation, exactly as in
     :py:meth:`~pulse2percept.percepts.Percept.play`.
 
-    .. versionadded:: 0.11
+    .. versionadded:: 0.11.0
 
     Parameters
     ----------
     stim : :py:class:`~pulse2percept.stimuli.ImageStimulus` or
            :py:class:`~pulse2percept.stimuli.VideoStimulus`
-        The image or video that went into the model. Pass the original
-        stimulus rather than ``implant.stim``, which holds the electrical
+        The image or video that went into the model, not the electrical
         stimulus an encoder made of it.
     percept : :py:class:`~pulse2percept.percepts.Percept`
         The percept the model predicted. Must have a time axis.

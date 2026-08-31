@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import ImageStimulus, Stimulus, VideoStimulus
 from pulse2percept.units import Hz, s
-from pulse2percept.viz import play_stimulus_percept, plot_stimulus_percept
+from pulse2percept.plotting import play_stimulus_percept, plot_stimulus_percept
 
 
 def video(n_frames=5, time=None, shape=(4, 6)):
@@ -65,12 +65,14 @@ def test_plot_stimulus_percept_axes():
         plot_stimulus_percept(stim, percept(n_frames=1), axes=['a', 'b'])
 
 
-def test_plot_stimulus_percept_video():
-    """A video is summarized by its brightest frame, like a percept is"""
-    vid = video()
-    axes = plot_stimulus_percept(vid, percept())
-    npt.assert_almost_equal(axes[0].images[0].get_array(),
-                            vid._frames()[..., -1])
+def test_plot_stimulus_percept_errors():
+    """Only a visual source, and only one that has a single frame"""
+    # A video and its percept have no frame that stands for both of them:
+    with pytest.raises(TypeError):
+        plot_stimulus_percept(video(), percept())
+    # The electrical stimulus an encoder made is not the source picture:
+    with pytest.raises(TypeError):
+        plot_stimulus_percept(Stimulus({'A1': 1}), percept(n_frames=1))
 
 
 def test_play_stimulus_percept_still_image():
@@ -151,7 +153,6 @@ def test_play_stimulus_percept_leaves_data_alone():
     stim_data, stim_time = vid.data.copy(), vid.time.copy()
     perc_data, perc_time = perc.data.copy(), perc.time.copy()
     play_stimulus_percept(vid, perc, fps=60).to_jshtml()
-    plot_stimulus_percept(vid, perc)
     npt.assert_almost_equal(vid.data, stim_data)
     npt.assert_almost_equal(vid.time, stim_time)
     npt.assert_almost_equal(perc.data, perc_data)

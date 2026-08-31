@@ -416,19 +416,19 @@ def test_Percept_play_zero_order_hold():
     percept = Percept(data, time=[0, 10, 20, 30])
     # 50 fps samples it at t = 0 and 20 ms ...
     ani = percept.play(fps=50)
-    npt.assert_equal(ani._layers[0].data.shape[-1], 2)
-    npt.assert_almost_equal(ani._layers[0].data[0, 0], [0.0, 0.5])
+    npt.assert_equal(ani._frame_data.shape[-1], 2)
+    npt.assert_almost_equal(ani._frame_data[0, 0], [0.0, 0.5])
     # ... 100 fps lands on every frame, and 200 fps holds each one for two
     # samples:
-    npt.assert_almost_equal(percept.play(fps=100)._layers[0].data[0, 0],
+    npt.assert_almost_equal(percept.play(fps=100)._frame_data[0, 0],
                             [0.0, 0.25, 0.5, 1.0])
-    npt.assert_almost_equal(percept.play(fps=200)._layers[0].data[0, 0],
+    npt.assert_almost_equal(percept.play(fps=200)._frame_data[0, 0],
                             [0, 0, 0.25, 0.25, 0.5, 0.5, 1.0, 1.0])
     # A display sample that falls between two percept frames shows the earlier
     # one, never an average of the two: at 25 ms per display frame, t = 25 ms
     # shows the frame from t = 20 ms (0.5), not the 0.75 that averaging it
     # with the frame from t = 30 ms would give:
-    held = percept.play(fps=40)._layers[0].data[0, 0]
+    held = percept.play(fps=40)._frame_data[0, 0]
     npt.assert_almost_equal(held, [0.0, 0.5])
     # The label follows the frame that is held, not the display clock:
     npt.assert_equal(player(percept.play(fps=50))['labels'],
@@ -473,15 +473,15 @@ def test_Percept_play_brief_events_are_missed():
     percept = pulse_train_percept()
     brightest = percept.data.max()
     # At its own rate, every pulse is on screen:
-    npt.assert_almost_equal(percept.play()._layers[0].data.max(), brightest)
+    npt.assert_almost_equal(percept.play()._frame_data.max(), brightest)
     # A 0.45 ms pulse every 166.67 ms almost never coincides with a display
     # sample, so the pulses are simply not seen:
-    frames = percept.play(fps=30)._layers[0].data
+    frames = percept.play(fps=30)._frame_data
     npt.assert_equal(frames.shape[-1], 10)
     npt.assert_almost_equal(frames.max(), 0)
     # No interpolation either: every display frame is one percept frame,
     # copied verbatim:
-    values = np.unique(percept.play(fps=1000)._layers[0].data)
+    values = np.unique(percept.play(fps=1000)._frame_data)
     npt.assert_equal(np.isin(values, np.unique(percept.data)).all(), True)
 
 
@@ -522,19 +522,17 @@ def test_Percept_play_keeps_the_last_frame():
     npt.assert_equal(cfg['labels'][-1], 't = 50.00 ms')
     # The last frame is on screen for as long as the interval in front of it:
     npt.assert_almost_equal(cfg['intervals'], [20, 30, 30])
-    npt.assert_almost_equal(percept.play()._layers[0].data[0, 0],
-                            [0, 0.5, 1.0])
+    npt.assert_almost_equal(percept.play()._frame_data[0, 0], [0, 0.5, 1.0])
     # ... and a display clock fine enough to resolve it reaches it, which a
     # zero-length last frame would not allow at any rate:
     for fps in (40, 100, 1000):
-        frames = percept.play(fps=fps)._layers[0].data[0, 0]
+        frames = percept.play(fps=fps)._frame_data[0, 0]
         npt.assert_almost_equal(frames[-1], 1.0)
         npt.assert_equal(player(percept.play(fps=fps))['labels'][-1],
                          't = 50.00 ms')
     # A clock too coarse to resolve it misses it, like any other frame: at
     # 25 fps the 80 ms percept is sampled at 0 and 40 ms only.
-    npt.assert_almost_equal(percept.play(fps=25)._layers[0].data[0, 0],
-                            [0, 0.5])
+    npt.assert_almost_equal(percept.play(fps=25)._frame_data[0, 0], [0, 0.5])
 
 
 def test_Percept_play_rejects_unordered_time(tmp_path):
@@ -671,13 +669,12 @@ def test_Percept_play_clim():
     percept = Percept(np.random.rand(4, 4, 10) * 20,
                       time=np.arange(10) * 10.0)
     auto = percept.play()
-    npt.assert_almost_equal(auto._layers[0].image.get_clim(),
-                            (0, percept.data.max()))
+    npt.assert_almost_equal(auto._image.get_clim(), (0, percept.data.max()))
     fixed = percept.play(vmin=-1, vmax=50)
-    npt.assert_almost_equal(fixed._layers[0].image.get_clim(), (-1, 50))
+    npt.assert_almost_equal(fixed._image.get_clim(), (-1, 50))
     npt.assert_almost_equal(player(fixed)['intervals'],
                             player(auto)['intervals'])
-    npt.assert_equal(fixed._layers[0].data.shape, auto._layers[0].data.shape)
+    npt.assert_equal(fixed._frame_data.shape, auto._frame_data.shape)
     with pytest.raises(ValueError):
         percept.play(vmin=1, vmax=0)
 
@@ -688,12 +685,10 @@ def test_Percept_play_clim_ignores_fps():
     data[..., 1] = 20.0
     percept = Percept(data, time=np.arange(10) * 10.0)
     # 20 fps samples t = 0 and 50 ms, missing the flash at t = 10 ms ...
-    npt.assert_equal(percept.play(fps=20)._layers[0].data.max(), 0)
+    npt.assert_equal(percept.play(fps=20)._frame_data.max(), 0)
     # ... but the brightness scale still knows about it:
-    npt.assert_almost_equal(percept.play(fps=20)._layers[0].image.get_clim(),
-                            (0, 20))
-    npt.assert_almost_equal(percept.play()._layers[0].image.get_clim(),
-                            (0, 20))
+    npt.assert_almost_equal(percept.play(fps=20)._image.get_clim(), (0, 20))
+    npt.assert_almost_equal(percept.play()._image.get_clim(), (0, 20))
 
 
 def test_Percept_save_common_clim(tmp_path):
@@ -1061,7 +1056,7 @@ def test_Percept_rgb_play():
     ani = percept.play()
     npt.assert_equal(isinstance(ani, FuncAnimation), True)
     # RGB frames reach the player as RGB, and it never gets a colorbar:
-    npt.assert_equal(ani._layers[0].data.shape, (4, 6, 3, 3))
+    npt.assert_equal(ani._frame_data.shape, (4, 6, 3, 3))
     npt.assert_equal(len(ani._fig.axes), 1)
     npt.assert_equal(player(ani)['n'], 3)
     with pytest.raises(ValueError):
