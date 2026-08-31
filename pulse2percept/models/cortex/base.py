@@ -22,7 +22,7 @@ class CortexSpatial(SpatialModel):
 
     Parameters:
     -----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         The implant whose stimulation this model predicts.
 
         .. versionadded:: 0.11.0
@@ -225,7 +225,7 @@ class ScoreboardSpatial(CortexSpatial):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         The implant whose stimulation this model predicts.
 
         .. versionadded:: 0.11.0
@@ -381,7 +381,7 @@ class ScoreboardModel(Model):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         The implant whose stimulation this model predicts.
 
         .. versionadded:: 0.11.0

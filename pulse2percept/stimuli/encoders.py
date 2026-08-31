@@ -240,7 +240,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         ----------
         source : :py:class:`~pulse2percept.stimuli.Stimulus`
             The image or video to encode. Must be dimensionless.
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        implant : :py:class:`~pulse2percept.implants.Implant`, optional
             The implant to encode for. If None, every pixel of the source is
             treated as its own stimulation site.
 
@@ -871,11 +871,11 @@ class StimulusEncoder(Encoder):
             be dimensionless: this method is the boundary at which a picture
             becomes stimulation, so an electrical stimulus is not a valid
             source for it.
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        implant : :py:class:`~pulse2percept.implants.Implant`, optional
             The implant to encode for. Its electrode locations are used to
             sample the source, its electrode names label the resulting
             stimulus, and its
-            :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` decides
+            :py:attr:`~pulse2percept.implants.Implant.raster` decides
             which electrodes may pulse when. If None, every pixel of the source
             is treated as its own electrode and every electrode fires on the
             same schedule.
@@ -933,7 +933,7 @@ class AmplitudeEncoder(StimulusEncoder):
         spelling ``(0, 3 * xTh)`` is rejected rather than guessed at. A
         threshold-relative range encodes to a ``xTh`` stimulus, which an
         implant converts to current when it has
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds` for
+        :py:attr:`~pulse2percept.implants.Implant.thresholds` for
         every driven electrode.
 
         .. versionchanged:: 0.11.0
@@ -1505,7 +1505,7 @@ class PRIMAEncoder(Encoder):
             which is what :py:class:`~pulse2percept.stimuli.ImageStimulus` and
             :py:class:`~pulse2percept.stimuli.VideoStimulus` produce. It must
             be dimensionless.
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        implant : :py:class:`~pulse2percept.implants.Implant`, optional
             The implant to encode for. Its pixel locations are used to sample
             the source and its pixel names label the resulting stimulus. If
             None, every pixel of the source is treated as its own photovoltaic

@@ -3,13 +3,13 @@
 import numpy as np
 from collections import OrderedDict
 
-from .base import ProsthesisSystem
+from .base import Implant
 from .electrodes import SquareElectrode, DiskElectrode
 from .electrode_arrays import ElectrodeGrid
 from ..units import as_value, um
 
 
-class AlphaIMS(ProsthesisSystem):
+class AlphaIMS(Implant):
     """Alpha-IMS
 
     This class creates an Alpha-IMS array with 1500 photovoltaic pixels (each
@@ -151,7 +151,7 @@ class AlphaIMS(ProsthesisSystem):
         return params
 
 
-class AlphaAMS(ProsthesisSystem):
+class AlphaAMS(Implant):
     """Alpha-AMS
 
     This class creates an Alpha-AMS array with 1600 photovoltaic pixels (each

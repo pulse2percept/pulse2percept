@@ -21,7 +21,7 @@ import pytest
 from scipy.integrate import trapezoid
 
 from pulse2percept.implants import (ArgusII, CustomRaster, DiskElectrode,
-                                    ElectrodeArray, ProsthesisSystem)
+                                    ElectrodeArray, Implant)
 from pulse2percept.models import FadingTemporal, Model, ScoreboardSpatial
 from pulse2percept.stimuli import (AmplitudeEncoder, BostonTrain,
                                    FrequencyEncoder, ImageStimulus,
@@ -39,7 +39,7 @@ def make_implant(raster=None):
     """Four well-separated electrodes, one per raster group"""
     earray = ElectrodeArray({n: DiskElectrode(x, y, 0, 100)
                              for n, (x, y) in zip(NAMES, POS)})
-    return ProsthesisSystem(earray, raster=raster)
+    return Implant(earray, raster=raster)
 
 
 def one_per_group():

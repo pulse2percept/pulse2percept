@@ -1,15 +1,14 @@
 """:py:class:`~pulse2percept.implants.cortex.Orion`"""
 import numpy as np
-from pulse2percept.implants import ProsthesisSystem
 
-from .. import ProsthesisSystem
+from .. import Implant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 from ...units import as_value, um
 from ...utils.constants import UM_PER_MM
 
 
-class Orion(ProsthesisSystem):
+class Orion(Implant):
     """Create a Orion array
     
     This function creates a Orion array and places it on the visual cortex

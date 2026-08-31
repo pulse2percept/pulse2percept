@@ -4,7 +4,7 @@ import pytest
 import copy
 
 from pulse2percept.implants import (DiskElectrode, PointSource, ElectrodeArray,
-                                    ProsthesisSystem, ArgusI)
+                                    Implant, ArgusI)
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (Nanduri2012Model, Nanduri2012Spatial,
@@ -35,15 +35,15 @@ def test_Nanduri2012Spatial():
     # the model is bound to, so it is caught when that model is built:
     with pytest.raises(TypeError):
         Nanduri2012Spatial(
-            implant=ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)))
+            implant=Implant(ElectrodeArray(PointSource(0, 0, 0)))
         ).build()
     with pytest.raises(TypeError):
-        Nanduri2012Spatial(implant=ProsthesisSystem(ElectrodeArray(
+        Nanduri2012Spatial(implant=Implant(ElectrodeArray(
             [DiskElectrode(0, 0, 0, 100), PointSource(100, 100, 0)]))).build()
 
     # The bound implant stays the caller's, so a build-time check alone would
     # let a swapped array through to a kernel that reads a radius off it:
-    model = Nanduri2012Spatial(implant=ProsthesisSystem(ElectrodeArray(
+    model = Nanduri2012Spatial(implant=Implant(ElectrodeArray(
         DiskElectrode(0, 0, 0, 100))), step=5).build()
     model.implant.earray = ElectrodeArray(PointSource(0, 0, 0))
     with pytest.raises(TypeError):
@@ -142,7 +142,7 @@ def test_Nanduri2012Temporal(scale_out):
     sdur = 1000.0  # stimulus duration (ms)
     pdur = 0.45  # (ms)
     t_percept = np.arange(0, sdur, 5)
-    implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+    implant = Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
     bright_amp = []
     for amp in np.linspace(0, 50, 5):
         stim = implant.prepare_stim(
@@ -234,7 +234,7 @@ def test_Nanduri2012Model_predict_percept():
     npt.assert_almost_equal(model.predict_percept(np.zeros(16)).data, 0)
 
     # Single-pixel model same as TemporalModel:
-    single = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
+    single = Implant(DiskElectrode(0, 0, 0, 100))
     model = Nanduri2012Model(implant=single, xrange=(0, 0), yrange=(0, 0))
     model.build()
     train = BiphasicPulseTrain(20, 20, 0.45, interphase_dur=0.45)
@@ -249,15 +249,15 @@ def test_Nanduri2012Model_predict_percept():
     # or is not, so it is caught when the model is built:
     with pytest.raises(TypeError):
         Nanduri2012Model(
-            implant=ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0))),
+            implant=Implant(ElectrodeArray(PointSource(0, 0, 0))),
             xrange=(0, 0), yrange=(0, 0)).build()
     with pytest.raises(TypeError):
-        Nanduri2012Model(implant=ProsthesisSystem(ElectrodeArray(
+        Nanduri2012Model(implant=Implant(ElectrodeArray(
             [DiskElectrode(0, 0, 0, 100), PointSource(100, 100, 0)])),
             xrange=(0, 0), yrange=(0, 0)).build()
 
     # Requested times must be multiples of model.dt:
-    implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+    implant = Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
     model = Nanduri2012Model(implant=implant, xrange=(0, 0), yrange=(0, 0))
     model.build()
     train = BiphasicPulseTrain(20, 20, 0.45)
@@ -288,7 +288,7 @@ def test_Nanduri2012Model_predict_percept():
                      (1, 1, 2))
 
     # Brightness vs. size (use values from Nanduri paper):
-    implant = ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+    implant = Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
     model = Nanduri2012Model(implant=implant, step=0.5, xrange=(-4, 4),
                              yrange=(-4, 4))
     model.build()

@@ -2,11 +2,11 @@
 import numpy as np
 from collections import OrderedDict
 
-from .base import ProsthesisSystem
+from .base import Implant
 from .electrodes import DiskElectrode
 from .electrode_arrays import ElectrodeGrid
 
-class IMIE(ProsthesisSystem):
+class IMIE(Implant):
     """The 256-channel epiretinal prosthesis system (IMIE 256)
 
     This class implements a 256-channel Intelligent Micro Implant Eye 

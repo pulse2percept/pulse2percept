@@ -1,13 +1,13 @@
 """:py:class:`~pulse2percept.implants.cortex.ICVP`"""
 import numpy as np
 
-from ..base import ProsthesisSystem
+from ..base import Implant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 from ...units import as_value, um
 
 
-class ICVP(ProsthesisSystem):
+class ICVP(Implant):
     """Create an ICVP array
 
     This function creates a ICVP array and places it on the visual cortex

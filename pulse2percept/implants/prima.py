@@ -10,7 +10,7 @@ from matplotlib.patches import Circle, Polygon, RegularPolygon
 import numpy as np
 from collections.abc import Sequence
 
-from .base import ProsthesisSystem
+from .base import Implant
 from .electrodes import HexElectrode
 from .electrode_arrays import ElectrodeGrid
 from ..stimuli import PRIMAEncoder
@@ -274,7 +274,7 @@ class PhotovoltaicPixel(HexElectrode):
         raise NotImplementedError
 
 
-class PRIMAPivotal(ProsthesisSystem):
+class PRIMAPivotal(Implant):
     """Create the PRIMA array used in the pivotal PRIMAvera trial
     
     The implant has 378 photovoltaic pixels, each 100 um wide on a 100 um
@@ -333,7 +333,7 @@ class PRIMAPivotal(ProsthesisSystem):
     -----
     *  The active-electrode diameter was estimated from Fig. 1 of
        [Palanker2020]_.
-    *  :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`
+    *  :py:meth:`~pulse2percept.implants.Implant.prepare_stim`
        returns optical irradiance (``mW/mm^2``). Photovoltaic conversion is not
        modeled.
     """
@@ -504,7 +504,7 @@ class PRIMAPivotal(ProsthesisSystem):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Lorach2015Array(ProsthesisSystem):
+class Lorach2015Array(Implant):
     """Create the 70 um photovoltaic array of [Lorach2015]_
     
     The array has 142 pixels, each 70 um wide on a 75 um hexagonal grid, with a
@@ -624,7 +624,7 @@ class Lorach2015Array(ProsthesisSystem):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Ho2019FlatArray(ProsthesisSystem):
+class Ho2019FlatArray(Implant):
     """Create a flat photovoltaic array of [Ho2019]_
     
     Supports the F55 and F40 arrays on a 1 mm substrate:
@@ -746,7 +746,7 @@ class Ho2019FlatArray(ProsthesisSystem):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Huang2021Array(ProsthesisSystem):
+class Huang2021Array(Implant):
     """Create a vertical-junction photovoltaic array of [Huang2021]_
     
     Supports four arrays on a 1.5 mm substrate. Only exposed pixels are modeled

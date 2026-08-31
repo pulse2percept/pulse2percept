@@ -94,7 +94,7 @@ class ScoreboardSpatial(SpatialModel):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
@@ -206,7 +206,7 @@ class ScoreboardModel(Model):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
@@ -295,7 +295,7 @@ class AxonMapSpatial(SpatialModel):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         Implant whose electrode geometry and eye are modeled.
 
         .. versionadded:: 0.11.0
@@ -1014,7 +1014,7 @@ class AxonMapModel(Model):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         Implant whose electrode geometry and eye are modeled.
 
         .. versionadded:: 0.11.0

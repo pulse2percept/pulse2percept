@@ -60,11 +60,11 @@ earray = ElectrodeArray(DiskElectrode(0, 0, 0, 260))
 # :py:class:`~pulse2percept.implants.ArgusII` or
 # :py:class:`~pulse2percept.implants.AlphaIMS`. Alternatively, we can wrap the
 # electrode array created above with a
-# :py:class:`~pulse2percept.implants.ProsthesisSystem` to create our own
+# :py:class:`~pulse2percept.implants.Implant` to create our own
 # retinal implant:
 
-from pulse2percept.implants import ProsthesisSystem
-implant = ProsthesisSystem(earray)
+from pulse2percept.implants import Implant
+implant = Implant(earray)
 
 ###############################################################################
 # Running the model

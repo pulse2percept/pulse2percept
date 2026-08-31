@@ -48,7 +48,7 @@ class Thompson2003Spatial(SpatialModel):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
@@ -145,7 +145,7 @@ class Thompson2003Model(Model):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0

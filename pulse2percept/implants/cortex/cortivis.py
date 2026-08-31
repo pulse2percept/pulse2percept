@@ -1,12 +1,12 @@
 """:py:class:`~pulse2percept.implants.cortex.Cortivis`"""
 import numpy as np
 
-from ..base import ProsthesisSystem
+from ..base import Implant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 from ...units import as_value, um
 
-class Cortivis(ProsthesisSystem):
+class Cortivis(Implant):
     """Create a Cortivis array
     
     This function creates a Cortivis array and places it on the visual cortex

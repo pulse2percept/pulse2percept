@@ -34,7 +34,7 @@ def _electrode_array(implant):
     earray = getattr(implant, 'earray', implant)
     if (getattr(earray, 'electrode_names', None) is None or
             getattr(earray, 'coordinates', None) is None):
-        raise TypeError(f"'implant' must be a ProsthesisSystem or an "
+        raise TypeError(f"'implant' must be an Implant or an "
                         f"ElectrodeArray, not {type(implant)}.")
     return earray
 
@@ -74,7 +74,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        # Deliberately without the implant: a ProsthesisSystem pretty-prints
+        # Deliberately without the implant: an Implant pretty-prints
         # its raster, so naming it back here would recurse.
         return {'group_dur': self.group_dur, 'n_groups': self.n_groups}
 
@@ -83,7 +83,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         """The implant this raster is bound to, or None
 
         Set by assigning the raster to
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` (see
+        :py:attr:`~pulse2percept.implants.Implant.raster` (see
         :py:meth:`bind`).
         """
         return getattr(self, '_implant', None)
@@ -96,7 +96,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
         Parameters
         ----------
-        implant : :class:`~pulse2percept.implants.ProsthesisSystem` or \
+        implant : :class:`~pulse2percept.implants.Implant` or \
                   :class:`~pulse2percept.implants.ElectrodeArray`
             Implant or electrode array to bind.
 
@@ -168,7 +168,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
         Parameters
         ----------
-        implant : :class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        implant : :class:`~pulse2percept.implants.Implant`, optional
             Implant to draw. If None, use the bound implant.
         annotate : bool, optional
             Write group indices on electrodes. If None, annotate arrays
@@ -652,7 +652,7 @@ class CheckerboardRaster(Raster):
 
     The pattern depends on where the electrodes are, so it is worked out when
     the raster is **bound** to an implant -- which assigning it to
-    :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster` does. Until
+    :py:attr:`~pulse2percept.implants.Implant.raster` does. Until
     then the raster knows how many groups it will have but not which electrode
     goes in which, and :py:meth:`groups`, :py:attr:`min_spacing` and
     :py:meth:`~pulse2percept.implants.Raster.plot` all raise. Binding it to a
@@ -740,7 +740,7 @@ class CheckerboardRaster(Raster):
 
         See :py:meth:`~pulse2percept.implants.Raster.bind`. Called for you
         when the raster is assigned to
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.raster`.
+        :py:attr:`~pulse2percept.implants.Implant.raster`.
         """
         earray = _electrode_array(implant)
         names = list(earray.electrode_names)

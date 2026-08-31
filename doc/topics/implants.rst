@@ -8,7 +8,7 @@ An implant describes the device: its electrodes, their geometry and location,
 and how a source stimulus becomes the current those electrodes deliver.
 
 All implants derive from
-:py:class:`~pulse2percept.implants.ProsthesisSystem`. The attributes used most
+:py:class:`~pulse2percept.implants.Implant`. The attributes used most
 often are:
 
 ``earray``
@@ -35,7 +35,7 @@ often are:
 
 New in v0.11.0: An implant holds no stimulus. What it delivers is derived from
 a source, on demand, by
-:py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`.
+:py:meth:`~pulse2percept.implants.Implant.prepare_stim`.
 
 Basic use
 ---------
@@ -58,7 +58,7 @@ directly:
 Preparing a stimulus
 --------------------
 
-:py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` converts a
+:py:meth:`~pulse2percept.implants.Implant.prepare_stim` converts a
 source into stimulation the device can deliver:
 
 .. code-block:: python
@@ -210,7 +210,7 @@ stimulation. Images and videos are encoded with an
 rastered one row at a time using a
 :py:class:`~pulse2percept.implants.SequentialRaster` with six groups separated
 by 2 ms. Thus visual stimuli can be passed directly to
-:py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`:
+:py:meth:`~pulse2percept.implants.Implant.prepare_stim`:
 
 .. code-block:: python
 
@@ -301,16 +301,16 @@ arguments for electrodes with a physical extent:
 
 :py:class:`~pulse2percept.implants.GridImplant` is a convenience only:
 :py:class:`~pulse2percept.implants.ElectrodeGrid` describes the geometry,
-:py:class:`~pulse2percept.implants.ProsthesisSystem` describes the device, and
+:py:class:`~pulse2percept.implants.Implant` describes the device, and
 the two can still be combined by hand. Do that for an irregular array, built
 from individual electrodes:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ElectrodeArray, ProsthesisSystem
+    from pulse2percept.implants import ElectrodeArray, Implant
 
     earray = ElectrodeArray(...)
-    implant = ProsthesisSystem(earray)
+    implant = Implant(earray)
 
 :py:class:`~pulse2percept.implants.EnsembleImplant` combines multiple implants
 into one system.

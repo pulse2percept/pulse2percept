@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 
 from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
-                                    GridImplant, ProsthesisSystem,
+                                    GridImplant, Implant,
                                     RectangleImplant, PhotovoltaicPixel)
 from pulse2percept.stimuli import (Stimulus, ImageStimulus, VideoStimulus,
                                    BostonTrain, LogoBVL)
@@ -23,7 +23,7 @@ from pulse2percept.implants import (ArgusII, DiskElectrode)
 from pulse2percept.models import ScoreboardModel
 
 
-class PhotovoltaicArray(ProsthesisSystem):
+class PhotovoltaicArray(Implant):
     def __init__(self, x=0, y=0, z=-100, r=5, spacing=40, rot=0,
                  preprocess=False, safe_mode=False):
         # 35 um pixels with 5 um trenches, 16 um active electrode:
@@ -50,16 +50,15 @@ class PhotovoltaicArray(ProsthesisSystem):
             self.earray.remove_electrode(e)
 
 
-def test_ProsthesisSystem():
+def test_Implant():
     # Invalid instantiations:
     with pytest.raises(ValueError):
-        ProsthesisSystem(ElectrodeArray(PointSource(0, 0, 0)),
-                         eye='both')
+        Implant(ElectrodeArray(PointSource(0, 0, 0)), eye='both')
     with pytest.raises(TypeError):
-        ProsthesisSystem(Stimulus)
+        Implant(Stimulus)
 
     # Iterating over the electrode array:
-    implant = ProsthesisSystem(PointSource(0, 0, 0))
+    implant = Implant(PointSource(0, 0, 0))
     npt.assert_equal(implant.n_electrodes, 1)
     npt.assert_equal(implant[0], implant.earray[0])
     npt.assert_equal(implant.electrode_names, implant.earray.electrode_names)
@@ -91,7 +90,7 @@ def test_ProsthesisSystem():
         implant.prepare_stim(Stimulus({'A1': 1}))
     # Safe mode requires charge-balanced pulses:
     with pytest.raises(ValueError):
-        implant = ProsthesisSystem(PointSource(0, 0, 0), safe_mode=True)
+        implant = Implant(PointSource(0, 0, 0), safe_mode=True)
         implant.prepare_stim(1)
 
     # Slots:
@@ -99,8 +98,8 @@ def test_ProsthesisSystem():
     npt.assert_equal(hasattr(implant, '__dict__'), False)
 
 
-def test_ProsthesisSystem_prepare_stim():
-    implant = ProsthesisSystem(ElectrodeGrid((13, 13), 20))
+def test_Implant_prepare_stim():
+    implant = Implant(ElectrodeGrid((13, 13), 20))
     with pytest.raises(ValueError):
         implant.prepare_stim(Stimulus(np.ones((13 * 13 + 1, 5))))
 
@@ -144,7 +143,7 @@ def test_ProsthesisSystem_prepare_stim():
     npt.assert_equal('H4' in implant.prepare_stim({'H4': 1}).electrodes, True)
 
 
-def test_ProsthesisSystem_prepare_stim_is_stateless():
+def test_Implant_prepare_stim_is_stateless():
     """Preparing leaves neither the implant nor the caller's source changed"""
     implant = ArgusII(preprocess=False)
     source = Stimulus({'A1': 10, 'B2': 20})
@@ -168,8 +167,8 @@ def test_ProsthesisSystem_prepare_stim_is_stateless():
 @pytest.mark.parametrize('rot', (0, 30, 92))
 @pytest.mark.parametrize('gtype', ('hex', 'rect'))
 @pytest.mark.parametrize('n_frames', (1, 3, 4))
-def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
-    implant = ProsthesisSystem(ElectrodeGrid((10, 10), 30, rot=rot, type=gtype))
+def test_Implant_reshape_stim(rot, gtype, n_frames):
+    implant = Implant(ElectrodeGrid((10, 10), 30, rot=rot, type=gtype))
     # Smoke test the reshaping. It runs inside `prepare_stim`, but
     # a picture is not a stimulus an implant can deliver, so it is exercised
     # directly here (which is also how an encoder reaches it):
@@ -205,8 +204,8 @@ def test_ProsthesisSystem_reshape_stim(rot, gtype, n_frames):
     implant.reshape_stim(LogoBVL())
 
 
-def test_ProsthesisSystem_deactivate():
-    implant = ProsthesisSystem(ElectrodeGrid((10, 10), 30))
+def test_Implant_deactivate():
+    implant = Implant(ElectrodeGrid((10, 10), 30))
     source = np.ones(implant.n_electrodes)
     electrode = 'A3'
     npt.assert_equal(electrode in implant.prepare_stim(source).electrodes, True)
@@ -313,9 +312,23 @@ def test_RectangleImplant_is_deprecated():
     npt.assert_almost_equal(le['A1'].x, implant['A4'].x)
 
 
-def test_GridImplant_is_a_grid_in_a_prosthesis_system():
+def test_ProsthesisSystem_is_a_deprecated_alias():
+    """Renamed to Implant in 0.11.0; the old name is the same class"""
+    for module in (implants, implants.base):
+        with pytest.deprecated_call(match='Use ``Implant``'):
+            alias = module.ProsthesisSystem
+        npt.assert_equal(alias is implants.Implant, True)
+    # An alias, not a subclass, so existing type checks still hold:
+    npt.assert_equal(isinstance(ArgusII(), alias), True)
+    npt.assert_equal(issubclass(GridImplant, alias), True)
+    npt.assert_equal(alias(PointSource(0, 0, 0)).n_electrodes, 1)
+    with pytest.raises(AttributeError):
+        implants.NotAnImplant
+
+
+def test_GridImplant_is_a_grid_in_an_implant():
     implant = GridImplant((3, 4), 100)
-    npt.assert_equal(isinstance(implant, ProsthesisSystem), True)
+    npt.assert_equal(isinstance(implant, Implant), True)
     npt.assert_equal(isinstance(implant.earray, ElectrodeGrid), True)
     npt.assert_equal(implant.n_electrodes, 12)
     npt.assert_equal(implant.earray.shape, (3, 4))
@@ -377,10 +390,10 @@ def test_GridImplant_geometry_passthrough():
         GridImplant((2, 3), 2 * dva)
 
 
-def test_GridImplant_device_arguments_reach_ProsthesisSystem():
-    """Everything that is not geometry is handed to ProsthesisSystem as given
+def test_GridImplant_device_arguments_reach_Implant():
+    """Everything that is not geometry is handed to Implant as given
 
-    What those arguments then do is ProsthesisSystem's business and is tested
+    What those arguments then do is Implant's business and is tested
     there; all a GridImplant owes them is not to drop or reinterpret one.
     """
     encoder = AmplitudeEncoder(amp_range=(0, 20))
@@ -406,7 +419,7 @@ def test_GridImplant_does_not_relabel_the_left_eye():
     npt.assert_almost_equal(le.earray.coordinates(), re.earray.coordinates())
 
 
-def test_ProsthesisSystem_reshape_stim_frames_independent():
+def test_Implant_reshape_stim_frames_independent():
     """Downsampling a video must treat each frame on its own.
 
     ``reshape_stim`` builds one interpolator for the whole video rather than
@@ -416,7 +429,7 @@ def test_ProsthesisSystem_reshape_stim_frames_independent():
     rng = np.random.default_rng(3)
     n_frames = 5
     vid = rng.random((24, 31, n_frames)).astype(np.float32)
-    implant = ProsthesisSystem(ElectrodeGrid((6, 8), 200))
+    implant = Implant(ElectrodeGrid((6, 8), 200))
 
     joint = implant.reshape_stim(VideoStimulus(vid,
                                                time=np.arange(n_frames))).data
@@ -435,7 +448,7 @@ def test_ProsthesisSystem_reshape_stim_frames_independent():
     npt.assert_equal(np.all(sampled.data[:, 2] == 0), True)
 
 
-def test_ProsthesisSystem_rgb_video_stim():
+def test_Implant_rgb_video_stim():
     """An RGB video can be presented to an implant directly (Issue #802)"""
     n_frames = 4
     vid = VideoStimulus(np.random.default_rng(0).random((6, 10, 3, n_frames)),
@@ -537,36 +550,36 @@ def test_implant_dimension_errors():
         implants.RectangleImplant(r=10 * uA)
 
 
-def test_ProsthesisSystem_max_current_units():
+def test_Implant_max_current_units():
     """`max_current` is a current, stored as a plain number of microamps"""
     earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     for value in (100, 100 * uA, 0.1 * mA, 100000 * nA):
-        implant = ProsthesisSystem(earray, max_current=value)
+        implant = Implant(earray, max_current=value)
         npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
         npt.assert_equal(isinstance(implant.max_current, Quantity), False)
     # An awkward conversion is no different:
     npt.assert_allclose(
-        ProsthesisSystem(earray, max_current=0.0417 * mA).max_current, 41.7,
+        Implant(earray, max_current=0.0417 * mA).max_current, 41.7,
         rtol=1e-12)
     # None means no limit, and is left alone:
-    npt.assert_equal(ProsthesisSystem(earray).max_current, None)
+    npt.assert_equal(Implant(earray).max_current, None)
     # Assigning later goes through the same setter:
-    implant = ProsthesisSystem(earray)
+    implant = Implant(earray)
     implant.max_current = 0.1 * mA
     npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
-        ProsthesisSystem(earray, max_current=5 * ms)
+        Implant(earray, max_current=5 * ms)
     with pytest.raises(DimensionMismatchError):
         implant.max_current = 5 * dva
     with pytest.raises(ValueError):
-        ProsthesisSystem(earray, max_current=-1 * uA)
+        Implant(earray, max_current=-1 * uA)
 
 
-def test_ProsthesisSystem_safety_checks_are_electrical():
+def test_Implant_safety_checks_are_electrical():
     """Electrical safety may only be asked about an electrical stimulus
 
     In the ordinary flow ``prepare_stim`` has already refused anything that is
-    not a current (see ``test_ProsthesisSystem_requires_an_electrical_stimulus``),
+    not a current (see ``test_Implant_requires_an_electrical_stimulus``),
     so these guards are reached by calling ``check_stim`` directly -- which is
     public, and which a subclass may call on a stimulus of its own making.
     """
@@ -598,7 +611,7 @@ def test_ProsthesisSystem_safety_checks_are_electrical():
                                 electrodes=ArgusII().electrode_names))
 
 
-def test_ProsthesisSystem_requires_an_electrical_stimulus():
+def test_Implant_requires_an_electrical_stimulus():
     """An implant delivers current, so a picture it cannot encode is refused
 
     Not when a model eventually reads it: the preparation is the line that was
@@ -607,7 +620,7 @@ def test_ProsthesisSystem_requires_an_electrical_stimulus():
     user's behalf.
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
-    npt.assert_equal(ProsthesisSystem.stimulus_unit, uA)
+    npt.assert_equal(Implant.stimulus_unit, uA)
 
     for source in (img, VideoStimulus(np.ones((6, 10, 3)) * 0.5,
                                       time=[0, 20, 40]), BostonTrain()):
@@ -618,7 +631,7 @@ def test_ProsthesisSystem_requires_an_electrical_stimulus():
         npt.assert_equal('dimensionless' in str(excinfo.value), True)
         # A generic system has no encoder either:
         with pytest.raises(DimensionMismatchError):
-            ProsthesisSystem(ArgusII().earray).prepare_stim(source)
+            Implant(ArgusII().earray).prepare_stim(source)
 
     # Encoded, the very same picture goes through:
     implant = ArgusII(encoder=None)
@@ -630,7 +643,7 @@ def test_ProsthesisSystem_requires_an_electrical_stimulus():
                    {'A1': BiphasicPulse(0.02 * mA, 0.45, stim_dur=50)}):
         npt.assert_equal(ArgusII().prepare_stim(source).unit, uA)
     for source in (20, BiphasicPulse(20, 0.45, stim_dur=50)):
-        single = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
+        single = Implant(DiskElectrode(0, 0, 0, 100))
         npt.assert_equal(single.prepare_stim(source).unit, uA)
 
     # A subclass may declare that it delivers something else, in which case a
@@ -641,17 +654,17 @@ def test_ProsthesisSystem_requires_an_electrical_stimulus():
     npt.assert_equal(Projector().prepare_stim(img).unit, dimensionless)
 
 
-def test_ProsthesisSystem_encoder():
+def test_Implant_encoder():
     """A picture prepared by an implant with an encoder is encoded on the way
     through
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
-    implant = ProsthesisSystem(ArgusII().earray)
+    implant = Implant(ArgusII().earray)
     npt.assert_equal(implant.encoder, None)
     with pytest.raises(TypeError):
         implant.encoder = 'amplitude'
     with pytest.raises(TypeError):
-        ProsthesisSystem(ArgusII().earray, encoder=ArgusII())
+        Implant(ArgusII().earray, encoder=ArgusII())
 
     # Giving it one is all it takes:
     implant.encoder = AmplitudeEncoder(amp_range=(0, 50), freq=20)
@@ -697,7 +710,7 @@ def test_ProsthesisSystem_encoder():
     npt.assert_equal(len(np.unique(np.abs(stim.data) > 0, axis=0)), 6)
 
 
-def test_ProsthesisSystem_encoded_stim_is_one_object():
+def test_Implant_encoded_stim_is_one_object():
     """An encoded stimulus knows both what it delivers and what it was asked
     for, so preparation returns one of it
     """
@@ -751,7 +764,7 @@ def test_ProsthesisSystem_encoded_stim_is_one_object():
     npt.assert_equal('A1' in stim._spatial_view().electrodes, False)
 
 
-def test_ProsthesisSystem_preprocess_crosses_the_boundary():
+def test_Implant_preprocess_crosses_the_boundary():
     """Preprocessing may turn a picture into current before the encoder sees it
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
@@ -780,7 +793,7 @@ def test_ProsthesisSystem_preprocess_crosses_the_boundary():
     npt.assert_equal(implant.prepare_stim(encoded).unit, uA)
 
 
-def test_ProsthesisSystem_historical_stimuli_unchanged():
+def test_Implant_historical_stimuli_unchanged():
     """A bare stimulus is electrical by contract, and is checked as before"""
     implant = ArgusII(preprocess=False, safe_mode=True)
     npt.assert_equal(implant.prepare_stim({'A1': BiphasicPulse(50, 0.45)}).unit,
@@ -799,7 +812,7 @@ def test_ProsthesisSystem_historical_stimuli_unchanged():
     npt.assert_equal(implant.prepare_stim(source).unit, uA)
 
 
-def test_ProsthesisSystem_deactivated_electrodes_do_not_mutate_the_source():
+def test_Implant_deactivated_electrodes_do_not_mutate_the_source():
     # Filtering out deactivated electrodes rewrites the stimulus, so it
     # happens on a copy. A stimulus defined by its pulse parameters cannot
     # lose an electrode and remain one, so what comes back for it is an
@@ -840,7 +853,7 @@ def test_ProsthesisSystem_deactivated_electrodes_do_not_mutate_the_source():
     npt.assert_equal(sorted(str(e) for e in stim.electrodes), ['A1', 'B2'])
 
 
-def test_ProsthesisSystem_deactivated_electrode_does_not_render_the_others():
+def test_Implant_deactivated_electrode_does_not_render_the_others():
     # An implant drops a deactivated electrode from a dict of pulse trains by
     # forgetting the entry that drives it, so the trains on the electrodes
     # that are still on never get sampled.
@@ -862,7 +875,7 @@ def test_ProsthesisSystem_deactivated_electrode_does_not_render_the_others():
     npt.assert_almost_equal(stim.time[-1], 200)
 
 
-def test_ProsthesisSystem_thresholds():
+def test_Implant_thresholds():
     implant = ArgusII()
     npt.assert_equal(implant.thresholds, {})
     implant.thresholds = 100 * uA
@@ -878,7 +891,7 @@ def test_ProsthesisSystem_thresholds():
     npt.assert_equal(implant.thresholds, {})
 
 
-def test_ProsthesisSystem_thresholds_at_construction():
+def test_Implant_thresholds_at_construction():
     npt.assert_equal(ArgusII().thresholds, {})
     for scalar in (80, 80 * uA, 0.08 * mA):
         implant = ArgusII(thresholds=scalar)
@@ -897,7 +910,7 @@ def test_ProsthesisSystem_thresholds_at_construction():
     npt.assert_equal(stim.unit, uA)
 
 
-def test_ProsthesisSystem_thresholds_at_construction_are_validated():
+def test_Implant_thresholds_at_construction_are_validated():
     for bad in (0, -5, np.nan, np.inf):
         with pytest.raises(ValueError):
             ArgusII(thresholds=bad)
@@ -907,11 +920,11 @@ def test_ProsthesisSystem_thresholds_at_construction_are_validated():
         ArgusII(thresholds={'ZZ9': 80 * uA})
     with pytest.raises(DimensionMismatchError):
         ArgusII(thresholds=5 * ms)
-    implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100), thresholds=80)
+    implant = Implant(DiskElectrode(0, 0, 0, 100), thresholds=80)
     npt.assert_almost_equal(implant.thresholds[0], 80)
 
 
-def test_ProsthesisSystem_thresholds_are_validated():
+def test_Implant_thresholds_are_validated():
     implant = ArgusII()
     with pytest.raises(ValueError):
         implant.thresholds = {'ZZ9': 80 * uA}
@@ -932,7 +945,7 @@ def test_ProsthesisSystem_thresholds_are_validated():
     npt.assert_equal(sorted(implant.thresholds), ['A1'])
 
 
-def test_ProsthesisSystem_thresholds_calibrate_pulse_trains():
+def test_Implant_thresholds_calibrate_pulse_trains():
     implant = ArgusII()
     source = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
               'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
@@ -948,7 +961,7 @@ def test_ProsthesisSystem_thresholds_calibrate_pulse_trains():
     npt.assert_almost_equal(np.abs(stim['A1']).max(), 160, decimal=3)
 
 
-def test_ProsthesisSystem_thresholds_hold_current_stimuli_fixed():
+def test_Implant_thresholds_hold_current_stimuli_fixed():
     implant = ArgusII()
     train = {'A1': BiphasicPulseTrain(20, 160 * uA, 0.45)}
     source = implant.prepare_stim(train)._structured_sources()[0][1]
@@ -961,8 +974,7 @@ def test_ProsthesisSystem_thresholds_hold_current_stimuli_fixed():
 
 @pytest.mark.parametrize('amp, cleared_amp',
                          [(2 * xTh, 2), (160 * uA, 160)])
-def test_ProsthesisSystem_clearing_thresholds_restores_the_train(amp,
-                                                                 cleared_amp):
+def test_Implant_clearing_thresholds_restores_the_train(amp, cleared_amp):
     implant = ArgusII()
     train = {'A1': BiphasicPulseTrain(20, amp, 0.45)}
     implant.thresholds = 40 * uA
@@ -973,7 +985,7 @@ def test_ProsthesisSystem_clearing_thresholds_restores_the_train(amp,
     npt.assert_equal(source.amp_factor, None if cleared_amp == 160 else 2)
 
 
-def test_ProsthesisSystem_thresholds_beat_the_pulse_trains_own():
+def test_Implant_thresholds_beat_the_pulse_trains_own():
     implant = ArgusII()
     train = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45,
                                       threshold_amp=50 * uA)}
@@ -987,7 +999,7 @@ def test_ProsthesisSystem_thresholds_beat_the_pulse_trains_own():
     npt.assert_almost_equal(source.threshold_amp, 50)
 
 
-def test_ProsthesisSystem_thresholds_leave_raw_waveforms_alone():
+def test_Implant_thresholds_leave_raw_waveforms_alone():
     implant = ArgusII()
     before = implant.prepare_stim({'A1': 30}).data.copy()
     implant.thresholds = 80 * uA
@@ -996,7 +1008,7 @@ def test_ProsthesisSystem_thresholds_leave_raw_waveforms_alone():
     npt.assert_equal(stim._structured_sources(), None)
 
 
-def test_ProsthesisSystem_thresholds_are_checked_when_the_stimulus_is():
+def test_Implant_thresholds_are_checked_when_the_stimulus_is():
     """A threshold that puts a stimulus over the limit is caught on preparation
 
     The implant holds no stimulus to recheck, so the pairing of thresholds and
@@ -1016,7 +1028,7 @@ def test_ProsthesisSystem_thresholds_are_checked_when_the_stimulus_is():
     npt.assert_almost_equal(stim._structured_sources()[0][1].amp, 180)
 
 
-def test_ProsthesisSystem_thresholds_do_not_render_the_stimulus():
+def test_Implant_thresholds_do_not_render_the_stimulus():
     implant = ArgusII()
     implant.thresholds = 80 * uA
     stim = implant.prepare_stim({'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
@@ -1025,7 +1037,7 @@ def test_ProsthesisSystem_thresholds_do_not_render_the_stimulus():
     npt.assert_equal(source._Stimulus__stim['data'], None)
 
 
-def test_ProsthesisSystem_thresholds_do_not_revive_deactivated_electrodes():
+def test_Implant_thresholds_do_not_revive_deactivated_electrodes():
     implant = ArgusII()
     source = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
               'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
@@ -1039,7 +1051,7 @@ def test_ProsthesisSystem_thresholds_do_not_revive_deactivated_electrodes():
     npt.assert_equal(list(implant.prepare_stim(source).electrodes), ['A2'])
 
 
-def test_ProsthesisSystem_thresholds_preserve_metadata():
+def test_Implant_thresholds_preserve_metadata():
     implant = ArgusII()
     source = Stimulus({'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45,
                                                 metadata='train'),
@@ -1052,7 +1064,7 @@ def test_ProsthesisSystem_thresholds_preserve_metadata():
                      'train')
 
 
-def test_ProsthesisSystem_thresholds_calibrate_from_the_original_source():
+def test_Implant_thresholds_calibrate_from_the_original_source():
     """Each preparation starts from the caller's source, not the last result
 
     Calibrating twice would compound the factors; calibrating from the source
@@ -1069,7 +1081,7 @@ def test_ProsthesisSystem_thresholds_calibrate_from_the_original_source():
     npt.assert_almost_equal(source.amp_factor, 2)
 
 
-def test_ProsthesisSystem_uncalibrated_xTh_is_not_yet_a_current():
+def test_Implant_uncalibrated_xTh_is_not_yet_a_current():
     implant = ArgusII()
     train = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
     stim = implant.prepare_stim(train)
@@ -1087,7 +1099,7 @@ def test_ProsthesisSystem_uncalibrated_xTh_is_not_yet_a_current():
     npt.assert_almost_equal(np.abs(stim.data).max(), 160, decimal=3)
 
 
-def test_ProsthesisSystem_partial_calibration_of_xTh_is_refused():
+def test_Implant_partial_calibration_of_xTh_is_refused():
     implant = ArgusII()
     xth_source = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
                   'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
@@ -1124,5 +1136,5 @@ def test_a_generic_array_says_nothing_about_placement():
     # "no claim" rather than as a placement of its own.
     npt.assert_equal(implants.GridImplant(shape=(2, 2), spacing=500).placement, None)
     npt.assert_equal(
-        implants.ProsthesisSystem(implants.PointSource(0, 0, 0)).placement,
+        implants.Implant(implants.PointSource(0, 0, 0)).placement,
         None)

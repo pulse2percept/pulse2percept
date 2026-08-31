@@ -164,7 +164,7 @@ logo_dilate.save('dilated_logo.png')
 # ---------------------------------------------
 #
 # :py:class:`~pulse2percept.stimuli.ImageStimulus` can be used in
-# combination with any :py:meth:`~pulse2percept.implants.ProsthesisSystem`.
+# combination with any :py:meth:`~pulse2percept.implants.Implant`.
 # We just have to resize the image first so that the number of pixels in the
 # image matches the number of electrodes in the implant.
 #

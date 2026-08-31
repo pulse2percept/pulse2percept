@@ -13,7 +13,7 @@ Four objects capture that situation:
 
 *  :py:class:`~pulse2percept.vision.Scene`: what is visually present, and
    where native vision is lost.
-*  :py:class:`~pulse2percept.implants.ProsthesisSystem`: where the implant's
+*  :py:class:`~pulse2percept.implants.Implant`: where the implant's
    electrodes are, and how it turns gray levels into stimulation.
 *  :py:class:`~pulse2percept.models.Model`: the retinotopy, which is what
    connects the two.

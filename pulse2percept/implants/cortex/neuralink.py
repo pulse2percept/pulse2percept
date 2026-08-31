@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from ..ensemble import EnsembleImplant
 from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
-from ..base import ProsthesisSystem
+from ..base import Implant
 from ...units import as_value, deg, dva, um
 from ...utils import parse_3d_orient
 
@@ -114,7 +114,7 @@ class EllipsoidElectrode(Electrode):
         return ax
 
 
-class NeuralinkThread(ProsthesisSystem, metaclass=ABCMeta):
+class NeuralinkThread(Implant, metaclass=ABCMeta):
     """Base class for Neuralink threads"""
 
     placement = 'intracortical'
@@ -387,7 +387,7 @@ class Neuralink(EnsembleImplant):
 
         Parameters
         ----------
-        implant_type : p2p.implants.ProsthesisSystem
+        implant_type : p2p.implants.Implant
             Type of implant to create. Currently only NeuralinkThread is supported.
         vfmap : p2p.topography.CorticalMap
             Cortical map to create implant from.

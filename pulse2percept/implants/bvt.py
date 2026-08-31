@@ -3,13 +3,13 @@
 import numpy as np
 from skimage.transform import SimilarityTransform
 
-from .base import ProsthesisSystem
+from .base import Implant
 from .electrodes import DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from ..units import as_value, deg, um
 
 
-class BVT24(ProsthesisSystem):
+class BVT24(Implant):
     """24-channel suprachoroidal retinal prosthesis
 
     This class creates a 24-channel suprachoroidal retinal prosthesis
@@ -137,7 +137,7 @@ class BVT24(ProsthesisSystem):
 
 
 
-class BVT44(ProsthesisSystem):
+class BVT44(Implant):
     """    44-channel suprachoroidal retinal prosthesis
 
     This class creates a 44-channel suprachoroidal retinal prosthesis

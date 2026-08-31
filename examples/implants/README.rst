@@ -12,4 +12,4 @@ state-of-the-art retinal prostheses, such as
 as well as :py:class:`~pulse2percept.implants.BVT24` (suprachoroidal).
 
 Other implants can be added by creating a new 
-:py:class:`~pulse2percept.implants.ProsthesisSystem` object.
+:py:class:`~pulse2percept.implants.Implant` object.

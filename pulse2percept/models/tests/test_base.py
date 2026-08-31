@@ -130,7 +130,7 @@ def test_SpatialModel():
     npt.assert_equal(fresh.predict_percept(np.ones(16)) is not None, True)
     npt.assert_equal(fresh.is_built, True)
     with pytest.raises(TypeError):
-        # the implant must be a ProsthesisSystem
+        # the implant must be an Implant
         ValidSpatialModel(Stimulus(3))
     with pytest.raises(TypeError):
         ValidSpatialModel(None)
@@ -1241,7 +1241,7 @@ def test_model_requires_a_current_stimulus():
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     # `implant.prepare_stim(img)` is either encoded by the implant or refused
-    # by it (see `ProsthesisSystem.stimulus_unit`), so the model-side guard is
+    # by it (see `Implant.stimulus_unit`), so the model-side guard is
     # reached through an implant that claims to deliver something else. Both
     # are needed: the implant one catches the call that was actually wrong,
     # and this one is what no model may be talked out of.

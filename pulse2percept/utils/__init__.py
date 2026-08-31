@@ -26,7 +26,8 @@ from .convolution import center_vector, conv
 from .optimize import bisect
 from .stats import r2_score, circ_r2_score
 from .deprecation import (deprecated, deprecate_parameter, deprecated_alias,
-                          rename_parameter, warn_deprecated_params,
+                          deprecated_names, rename_parameter,
+                          warn_deprecated_params,
                           rename_deprecated_params)
 from .three_dim import parse_3d_orient
 
@@ -44,6 +45,7 @@ __all__ = [
     'deprecate_parameter',
     'deprecated',
     'deprecated_alias',
+    'deprecated_names',
     'frame_interval',
     'FreezeError',
     'Frozen',

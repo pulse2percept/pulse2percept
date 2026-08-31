@@ -78,7 +78,7 @@ def test_Stimulus():
     # Multiple specific electrodes in time:
     stim = Stimulus({'C3': [[0, 1, 2, 3]],
                      'F4': [[4, -1, 4, -1]]})
-    # Stimulus from a Stimulus (might happen in ProsthesisSystem):
+    # Stimulus from a Stimulus (might happen in Implant):
     stim = Stimulus(Stimulus(4), electrodes='B3')
     npt.assert_equal(stim.shape, (1, 1))
     npt.assert_equal(stim.electrodes, ['B3'])
@@ -767,7 +767,7 @@ def test_Stimulus_remove():
     stim.remove(['A1', 'C3'])
     npt.assert_equal(stim.shape, (0, 3))
 
-    # Removing "nothing" is a no-op. ProsthesisSystem relies on this when none
+    # Removing "nothing" is a no-op. Implant relies on this when none
     # of its electrodes are deactivated:
     for nothing in (None, [], (), np.array([])):
         stim = Stimulus([[0, 1, 2], [3, 4, 5]])

@@ -1,13 +1,13 @@
 """:py:class:`~pulse2percept.implants.EnsembleImplant`"""
 import numpy as np
-from .base import ProsthesisSystem
+from .base import Implant
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli._merge import unique_time_points
 from ..stimuli.base import _describe_unit
 from ..units import DimensionMismatchError, as_value, dva, um
 
-class EnsembleImplant(ProsthesisSystem):
+class EnsembleImplant(Implant):
     
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_implants', '_earray', 'safe_mode', 'preprocess')
@@ -28,7 +28,7 @@ class EnsembleImplant(ProsthesisSystem):
             Visual field map to create implant from.
         implant_type : type
             Type of implant to create for the ensemble. Must subclass
-            p2p.implants.ProsthesisSystem
+            p2p.implants.Implant
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations to create implants at (dva).
             Not needed if using xrange, yrange, and step.
@@ -55,8 +55,8 @@ class EnsembleImplant(ProsthesisSystem):
         from ..topography import CorticalMap, Grid2D
         if not isinstance(vfmap, CorticalMap):
             raise TypeError("vfmap must be a p2p.topography.CorticalMap")
-        if not issubclass(implant_type, ProsthesisSystem):
-            raise TypeError("implant_type must be a sub-type of ProsthesisSystem")
+        if not issubclass(implant_type, Implant):
+            raise TypeError("implant_type must be a sub-type of Implant")
 
         # Where in the *visual field* the implants go; `vfmap` turns that into
         # a physical location further down:
@@ -125,8 +125,8 @@ class EnsembleImplant(ProsthesisSystem):
         """
         from ..topography.base import _rectangular_mesh
 
-        if not issubclass(implant_type, ProsthesisSystem):
-            raise TypeError("implant_type must be a sub-type of ProsthesisSystem")
+        if not issubclass(implant_type, Implant):
+            raise TypeError("implant_type must be a sub-type of Implant")
 
         # Physical coordinates, unlike the dva ranges `from_cortical_map`
         # takes:
@@ -202,12 +202,12 @@ class EnsembleImplant(ProsthesisSystem):
         """Implant dict setter (called upon ``self.implants = implants``)"""
         # Assign the implant dict:
         if isinstance(implants, list):
-            if not all(isinstance(implant, ProsthesisSystem) for implant in implants):
-                raise TypeError(f"All elements in 'implants' must be ProsthesisSystem objects.")
+            if not all(isinstance(implant, Implant) for implant in implants):
+                raise TypeError(f"All elements in 'implants' must be Implant objects.")
             self._implants = {i:implant for i,implant in enumerate(implants)}
         elif isinstance(implants, dict):
-            if not all(isinstance(implant, ProsthesisSystem) for implant in implants.values()):
-                raise TypeError(f"All elements in 'implants' must be ProsthesisSystem objects.")
+            if not all(isinstance(implant, Implant) for implant in implants.values()):
+                raise TypeError(f"All elements in 'implants' must be Implant objects.")
             self._implants = implants.copy()
         else:
             raise TypeError(f"'implants' must be a list or a dict object, not "

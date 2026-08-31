@@ -1,6 +1,7 @@
 """:py:class:`~pulse2percept.utils.deprecated`,
    :py:class:`~pulse2percept.utils.deprecate_parameter`,
    :py:class:`~pulse2percept.utils.deprecated_alias`,
+   :py:func:`~pulse2percept.utils.deprecated_names`,
    :py:class:`~pulse2percept.utils.rename_parameter`,
    :py:class:`~pulse2percept.utils.is_deprecated`"""
 
@@ -189,6 +190,48 @@ class deprecated:
         wrapped.__doc__ = self._update_doc(wrapped.__doc__, msg)
 
         return wrapped
+
+
+def deprecated_names(module, aliases, deprecated_version=None,
+                     removed_version=None):
+    """Build a module-level ``__getattr__`` for renamed module attributes.
+
+    The old name keeps resolving to the very same object, so ``isinstance``
+    and ``issubclass`` checks written against it behave as before; only
+    looking the name up warns. Use :class:`deprecated` instead when the old
+    name should keep its own (deprecated) implementation.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    module : str
+        Name of the module installing the hook, i.e. its ``__name__``. Used in
+        the ``AttributeError`` raised for names that are not aliases.
+    aliases : dict
+        Maps each deprecated name to the object it now refers to.
+    deprecated_version, removed_version : float or str, optional
+        Versions in which the old names were deprecated and will be removed.
+
+    Returns
+    -------
+    __getattr__ : callable
+        Assign to the module's ``__getattr__`` (see :pep:`562`).
+    """
+    clause = _version_clause(deprecated_version, removed_version)
+
+    def __getattr__(name):
+        try:
+            obj = aliases[name]
+        except KeyError:
+            raise AttributeError(f"module {module!r} has no attribute "
+                                 f"{name!r}") from None
+        _warn_external(f"{name} is deprecated{clause}. Use "
+                       f"``{obj.__name__}`` instead.")
+        return obj
+
+    return __getattr__
+
 
 class deprecate_parameter:
     """Decorator for a deprecated function or method parameter.

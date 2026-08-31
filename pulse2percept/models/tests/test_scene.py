@@ -12,7 +12,7 @@ import numpy.testing as npt
 import pytest
 
 from pulse2percept.implants import (ElectrodeGrid, PointSource,
-                                    ProsthesisSystem)
+                                    Implant)
 from pulse2percept.models import (FadingTemporal, Model, ScoreboardModel,
                                   ScoreboardSpatial)
 from pulse2percept.models.base import _scene_stim
@@ -67,7 +67,7 @@ def scene_of(source=None, **kwargs):
 
 def implant_at(x_um=0, y_um=0, encoder=True):
     """An implant whose single electrode sits where we want to look"""
-    return ProsthesisSystem(
+    return Implant(
         PointSource(x_um, y_um, 0),
         encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)) if encoder else None)
 
@@ -128,8 +128,8 @@ def test_gaze_moves_the_scene_past_the_implant():
                             seen_by(model, scene, gaze=(6.0, 0.0)))
     # Several electrodes keep their separation in the visual field whatever
     # the gaze: shifting gaze shifts what all of them see by the same amount.
-    grid = ProsthesisSystem(ElectrodeGrid((1, 3), 280),
-                            encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
+    grid = Implant(ElectrodeGrid((1, 3), 280),
+                   encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
     on_grid = model_for(grid)
     here = seen_by(on_grid, scene).ravel()
     there = seen_by(on_grid, scene, gaze=(2, 0)).ravel()
@@ -175,8 +175,8 @@ def test_scene_driven_prediction_leaves_the_implant_alone():
 
 def test_a_scene_driven_stimulus_still_goes_through_the_device():
     """The sampled scene is prepared by the implant, not written behind it"""
-    grid = ProsthesisSystem(ElectrodeGrid((1, 3), 280),
-                            encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
+    grid = Implant(ElectrodeGrid((1, 3), 280),
+                   encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
     grid.deactivate('A2')
     stim = _scene_stim(model_for(grid), scene_of(), None)
     npt.assert_equal('A2' in list(stim.electrodes), False)
@@ -346,8 +346,8 @@ def test_an_unbuilt_model_builds_itself_before_it_samples_anything():
 
 def test_an_ordinary_source_is_not_registered_as_a_scene():
     """Only a Scene takes the registration path; a picture is stimulation"""
-    grid = ProsthesisSystem(ElectrodeGrid((3, 3), 280),
-                            encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
+    grid = Implant(ElectrodeGrid((3, 3), 280),
+                   encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
     model = model_for(grid)
     # The same pixels, not wrapped in a Scene, are sampled onto the electrodes
     # and encoded rather than registered through the retinotopy, so `gaze` is

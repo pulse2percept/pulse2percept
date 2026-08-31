@@ -13,7 +13,7 @@ from scipy.spatial import cKDTree
 from pulse2percept.implants import (ArgusII, PhotovoltaicPixel, PRIMAPivotal,
                                     Lorach2015Array, Ho2019FlatArray,
                                     Huang2021Array, PointSource,
-                                    ProsthesisSystem, PRIMA, PRIMA75,
+                                    Implant, PRIMA, PRIMA75,
                                     PRIMA55, PRIMA40)
 from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
                                    ImageStimulus, LogoBVL, PRIMAEncoder,
@@ -316,7 +316,7 @@ def test_implant_metadata():
     for cls in (Lorach2015Array, Ho2019FlatArray, Huang2021Array):
         npt.assert_equal(cls.family, None)
     # Unclassified implants default to None rather than to a guess:
-    generic = ProsthesisSystem(PointSource(0, 0, 0))
+    generic = Implant(PointSource(0, 0, 0))
     npt.assert_equal((generic.placement, generic.technology, generic.family),
                      (None, None, None))
 

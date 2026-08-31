@@ -3,7 +3,7 @@
 import numpy as np
 from collections import OrderedDict
 
-from .base import ProsthesisSystem
+from .base import Implant
 from .electrodes import DiskElectrode
 from .electrode_arrays import ElectrodeGrid
 from .rasters import SequentialRaster
@@ -16,7 +16,7 @@ from ..units import Hz, ms
 _DEVICE_DEFAULT = object()
 
 
-class ArgusI(ProsthesisSystem):
+class ArgusI(Implant):
     """Create an Argus I array on the retina
 
     This function creates an Argus I array and places it on the retina
@@ -157,7 +157,7 @@ class ArgusI(ProsthesisSystem):
         return params
 
 
-class ArgusII(ProsthesisSystem):
+class ArgusII(Implant):
     """Create an Argus II array on the retina
 
     This function creates an Argus II array and places it on the retina
@@ -235,7 +235,7 @@ class ArgusII(ProsthesisSystem):
         modeling, used to calibrate threshold-relative (``xTh``) stimuli. A
         scalar applies to every electrode; a dict calibrates the named
         electrodes only. See
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`.
+        :py:attr:`~pulse2percept.implants.Implant.thresholds`.
 
         .. versionadded:: 0.11.0
 
