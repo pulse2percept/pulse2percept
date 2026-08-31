@@ -15,7 +15,8 @@ from ..topography import Watson2014Map
 from ..implants import ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
-from .base import _blend_meridian, _warn_ignores_z, _warn_rho_vs_pitch
+from .base import (_blend_meridian, _thread_params, _warn_ignores_z,
+                   _warn_rho_vs_pitch)
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)        
 
@@ -150,6 +151,20 @@ class ScoreboardSpatial(SpatialModel):
     #: Also accepts encoded normalized optical drive from PRIMAEncoder.
     extra_stimulus_units = (dimensionless,)
 
+    def __init__(self, implant, *, rho=100, xrange=(-15, 15),
+                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 n_gray=None, noise=None, verbose=True, ndim=None,
+                 n_threads=None, n_jobs=None):
+        super().__init__(
+            implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
+            grid_type=grid_type, thresh_percept=thresh_percept,
+            min_current_spread=min_current_spread,
+            vfmap=Watson2014Map() if vfmap is None else vfmap,
+            n_gray=n_gray, noise=noise, verbose=verbose,
+            ndim=[2] if ndim is None else ndim,
+            **_thread_params(n_threads, n_jobs))
+
     def get_default_params(self):
         """Return all settable scoreboard parameters."""
         base_params = super(ScoreboardSpatial, self).get_default_params()
@@ -259,9 +274,19 @@ class ScoreboardModel(Model):
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
 
-    def __init__(self, implant, **params):
-        super(ScoreboardModel, self).__init__(
-            spatial=ScoreboardSpatial(implant), temporal=None, **params)
+    def __init__(self, implant, *, rho=100, xrange=(-15, 15),
+                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 n_gray=None, noise=None, verbose=True, ndim=None,
+                 n_threads=None, n_jobs=None):
+        super().__init__(
+            spatial=ScoreboardSpatial(
+                implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
+                grid_type=grid_type, thresh_percept=thresh_percept,
+                min_current_spread=min_current_spread, vfmap=vfmap,
+                n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
+                n_threads=n_threads, n_jobs=n_jobs),
+            temporal=None)
 
 
 class AxonMapSpatial(SpatialModel):
@@ -384,8 +409,28 @@ class AxonMapSpatial(SpatialModel):
     ``ax_segments_range`` values above 90 are outside the range for which this
     axon-map construction is considered reliable."""
 
-    def __init__(self, implant, **params):
-        super(AxonMapSpatial, self).__init__(implant, **params)
+    def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
+                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
+                 axons_range=(-180, 180), n_ax_segments=500,
+                 ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
+                 meridian_blend=1, axon_pickle='axons.pickle',
+                 ignore_pickle=False, verbose=True, ndim=None,
+                 n_threads=None, n_jobs=None):
+        super().__init__(
+            implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange, step=step,
+            grid_type=grid_type, thresh_percept=thresh_percept,
+            min_current_spread=min_current_spread,
+            vfmap=Watson2014Map() if vfmap is None else vfmap,
+            n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
+            axons_range=axons_range, n_ax_segments=n_ax_segments,
+            ax_segments_range=ax_segments_range,
+            min_ax_sensitivity=min_ax_sensitivity,
+            meridian_blend=meridian_blend, axon_pickle=axon_pickle,
+            ignore_pickle=ignore_pickle, verbose=verbose,
+            ndim=[2] if ndim is None else ndim,
+            **_thread_params(n_threads, n_jobs))
         self.axon_contrib = None
         self.axon_idx_start = None
         self.axon_idx_end = None
@@ -1049,13 +1094,6 @@ class AxonMapModel(Model):
         .. versionchanged:: 0.10.0
             Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    step : float, (float, float), or Quantity, optional
-        Grid spacing in degrees of visual angle. A pair specifies separate x
-        and y spacing.
-
-        .. versionchanged:: 0.10.0
-            Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
-
     grid_type : {'rectangular', 'hexagonal'}, optional
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
@@ -1110,7 +1148,27 @@ class AxonMapModel(Model):
     ``ax_segments_range`` values above 90 are outside the range for which this
     axon-map construction is considered reliable."""
 
-    def __init__(self, implant, **params):
-        super(AxonMapModel, self).__init__(
-            spatial=AxonMapSpatial(implant), temporal=None, **params)
+    def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
+                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
+                 axons_range=(-180, 180), n_ax_segments=500,
+                 ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
+                 meridian_blend=1, axon_pickle='axons.pickle',
+                 ignore_pickle=False, verbose=True, ndim=None,
+                 n_threads=None, n_jobs=None):
+        super().__init__(
+            spatial=AxonMapSpatial(
+                implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange,
+                step=step, grid_type=grid_type,
+                thresh_percept=thresh_percept,
+                min_current_spread=min_current_spread, vfmap=vfmap,
+                n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
+                axons_range=axons_range, n_ax_segments=n_ax_segments,
+                ax_segments_range=ax_segments_range,
+                min_ax_sensitivity=min_ax_sensitivity,
+                meridian_blend=meridian_blend, axon_pickle=axon_pickle,
+                ignore_pickle=ignore_pickle, verbose=verbose, ndim=ndim,
+                n_threads=n_threads, n_jobs=n_jobs),
+            temporal=None)
 

@@ -2,10 +2,11 @@
    :py:class:`~pulse2percept.models.Nanduri2012Spatial`, 
    :py:class:`~pulse2percept.models.Nanduri2012Temporal` [Nanduri2012]_"""
 import numpy as np
-from .base import Model, SpatialModel, TemporalModel
+from .base import Model, SpatialModel, TemporalModel, _thread_params
 from ._nanduri2012 import spatial_fast, temporal_fast
 from ..implants import ElectrodeArray, DiskElectrode
 from ..stimuli import Stimulus
+from ..topography import Curcio1990Map
 from ..units import ms
 
 
@@ -113,6 +114,21 @@ class Nanduri2012Spatial(SpatialModel):
         n_jobs : int or None, optional
             Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
         """
+
+    def __init__(self, implant, *, atten_a=14000, atten_n=1.69,
+                 xrange=(-15, 15), yrange=(-15, 15), step=0.25,
+                 grid_type='rectangular', thresh_percept=0,
+                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+        super().__init__(
+            implant, atten_a=atten_a, atten_n=atten_n, xrange=xrange,
+            yrange=yrange, step=step, grid_type=grid_type,
+            thresh_percept=thresh_percept,
+            min_current_spread=min_current_spread,
+            vfmap=Curcio1990Map() if vfmap is None else vfmap,
+            n_gray=n_gray, noise=noise, verbose=verbose,
+            ndim=[2] if ndim is None else ndim,
+            **_thread_params(n_threads, n_jobs))
 
     def get_default_params(self):
         """Return default model parameters."""
@@ -251,6 +267,16 @@ class Nanduri2012Temporal(TemporalModel):
     # Positive current drives the Nanduri temporal cascade.
     _drive_sign = 1
 
+    def __init__(self, *, dt=0.005, tau1=0.42, tau2=45.25, tau3=26.25,
+                 eps=8.73, asymptote=14.0, slope=3.0, shift=16.0,
+                 scale_out=1.0, thresh_percept=0, reduce='last', verbose=True,
+                 n_threads=None, n_jobs=None):
+        super().__init__(
+            dt=dt, tau1=tau1, tau2=tau2, tau3=tau3, eps=eps,
+            asymptote=asymptote, slope=slope, shift=shift,
+            scale_out=scale_out, thresh_percept=thresh_percept, reduce=reduce,
+            verbose=verbose, **_thread_params(n_threads, n_jobs))
+
     def get_default_params(self):
         base_params = super(Nanduri2012Temporal, self).get_default_params()
         params = {
@@ -368,7 +394,26 @@ class Nanduri2012Model(Model):
             Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
         """
 
-    def __init__(self, implant, **params):
-        super(Nanduri2012Model, self).__init__(
-            spatial=Nanduri2012Spatial(implant),
-            temporal=Nanduri2012Temporal(), **params)
+    def __init__(self, implant, *, atten_a=14000, atten_n=1.69,
+                 xrange=(-15, 15), yrange=(-15, 15), step=0.25,
+                 grid_type='rectangular', min_current_spread=1e-8, vfmap=None,
+                 n_gray=None, noise=None, ndim=None, dt=0.005, tau1=0.42,
+                 tau2=45.25, tau3=26.25, eps=8.73, asymptote=14.0, slope=3.0,
+                 shift=16.0, scale_out=1.0, reduce='last', thresh_percept=0,
+                 verbose=True, n_threads=None, n_jobs=None):
+        # `thresh_percept`, `verbose` and the thread count are declared by both
+        # components and are applied to both.
+        super().__init__(
+            spatial=Nanduri2012Spatial(
+                implant, atten_a=atten_a, atten_n=atten_n, xrange=xrange,
+                yrange=yrange, step=step, grid_type=grid_type,
+                min_current_spread=min_current_spread, vfmap=vfmap,
+                n_gray=n_gray, noise=noise, ndim=ndim,
+                thresh_percept=thresh_percept, verbose=verbose,
+                n_threads=n_threads, n_jobs=n_jobs),
+            temporal=Nanduri2012Temporal(
+                dt=dt, tau1=tau1, tau2=tau2, tau3=tau3, eps=eps,
+                asymptote=asymptote, slope=slope, shift=shift,
+                scale_out=scale_out, reduce=reduce,
+                thresh_percept=thresh_percept, verbose=verbose,
+                n_threads=n_threads, n_jobs=n_jobs))

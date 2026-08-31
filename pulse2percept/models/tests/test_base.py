@@ -910,7 +910,7 @@ def test_a_standalone_spatial_model_needs_an_implant(ModelClass, ImplantType):
 def test_a_temporal_only_model_takes_no_implant():
     """`Horsager2009Model` has no electrodes to place"""
     npt.assert_equal(Horsager2009Model().has_space, False)
-    with pytest.raises(AttributeError, match='not a Model parameter'):
+    with pytest.raises(TypeError, match='implant'):
         Horsager2009Model(implant=ArgusII())
 
 

@@ -441,20 +441,39 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     axon-map construction is considered reliable."""
     extra_stimulus_units = (xTh,)
 
-    def __init__(self, implant, **params):
-        super(BiphasicAxonMapSpatial, self).__init__(implant, **params)
-        if self.bright_model is None:
-            self.bright_model = DefaultBrightModel()
-        if self.size_model is None:
-            self.size_model = DefaultSizeModel(self.rho)
-        if self.streak_model is None:
-            self.streak_model = DefaultStreakModel(self.lam)
-        for key, val in params.items():
-            if key in ['bright_model', 'size_model', 'streak_model']:
-                continue
-            # Deprecated names were already handled by ``super().__init__``.
-            spec = self._renamed_params.get(key)
-            setattr(self, spec.new_name if spec else key, val)
+    def __init__(self, implant, *, bright_model=None, size_model=None,
+                 streak_model=None, rho=300, lam=500, xrange=(-15, 15),
+                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
+                 axons_range=(-180, 180), n_ax_segments=500,
+                 ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
+                 meridian_blend=1, axon_pickle='axons.pickle',
+                 ignore_pickle=False, verbose=True, ndim=None,
+                 n_threads=None, n_jobs=None):
+        # The effect models are declared parameters, so `super().__init__`
+        # leaves them at their `None` default; they are installed below.
+        super().__init__(
+            implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange,
+            step=step, grid_type=grid_type, thresh_percept=thresh_percept,
+            min_current_spread=min_current_spread, vfmap=vfmap,
+            n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
+            axons_range=axons_range, n_ax_segments=n_ax_segments,
+            ax_segments_range=ax_segments_range,
+            min_ax_sensitivity=min_ax_sensitivity,
+            meridian_blend=meridian_blend, axon_pickle=axon_pickle,
+            ignore_pickle=ignore_pickle, verbose=verbose, ndim=ndim,
+            n_threads=n_threads, n_jobs=n_jobs)
+        self.bright_model = (DefaultBrightModel() if bright_model is None
+                             else bright_model)
+        self.size_model = (DefaultSizeModel(self.rho) if size_model is None
+                           else size_model)
+        self.streak_model = (DefaultStreakModel(self.lam)
+                             if streak_model is None else streak_model)
+        # `__setattr__` mirrors these onto the effect models, which did not
+        # exist yet while `super().__init__` was applying them:
+        self.rho = rho
+        self.lam = lam
 
     def __getattr__(self, attr):
         # Do not forward the effect-model attributes themselves.
@@ -828,6 +847,28 @@ class BiphasicAxonMapModel(Model):
         percept = model.predict_percept(p2p.stimuli.LogoBVL())
     """
 
-    def __init__(self, implant, **params):
-        super(BiphasicAxonMapModel, self).__init__(
-            spatial=BiphasicAxonMapSpatial(implant), temporal=None, **params)
+    def __init__(self, implant, *, bright_model=None, size_model=None,
+                 streak_model=None, rho=300, lam=500, xrange=(-15, 15),
+                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
+                 axons_range=(-180, 180), n_ax_segments=500,
+                 ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
+                 meridian_blend=1, axon_pickle='axons.pickle',
+                 ignore_pickle=False, verbose=True, ndim=None,
+                 n_threads=None, n_jobs=None):
+        super().__init__(
+            spatial=BiphasicAxonMapSpatial(
+                implant, bright_model=bright_model, size_model=size_model,
+                streak_model=streak_model, rho=rho, lam=lam, xrange=xrange,
+                yrange=yrange, step=step, grid_type=grid_type,
+                thresh_percept=thresh_percept,
+                min_current_spread=min_current_spread, vfmap=vfmap,
+                n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
+                axons_range=axons_range, n_ax_segments=n_ax_segments,
+                ax_segments_range=ax_segments_range,
+                min_ax_sensitivity=min_ax_sensitivity,
+                meridian_blend=meridian_blend, axon_pickle=axon_pickle,
+                ignore_pickle=ignore_pickle, verbose=verbose, ndim=ndim,
+                n_threads=n_threads, n_jobs=n_jobs),
+            temporal=None)

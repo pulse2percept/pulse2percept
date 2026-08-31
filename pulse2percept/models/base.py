@@ -51,6 +51,17 @@ def _n_jobs_alias():
                         "names read and write the same value.")
 
 
+def _thread_params(n_threads, n_jobs):
+    """Return the ``n_threads``/``n_jobs`` values a constructor forwards.
+
+    ``None`` means "not given" for both. ``n_jobs`` writes through to
+    ``n_threads``, so forwarding it unasked would overwrite an explicit
+    ``n_threads``.
+    """
+    return {**({} if n_threads is None else {'n_threads': n_threads}),
+            **({} if n_jobs is None else {'n_jobs': n_jobs})}
+
+
 #: Samples per video frame used when a temporal kernel cannot reduce an
 #: interval internally. This fallback is approximate for sub-frame transients.
 _FRAME_SUBSAMPLES = 8

@@ -309,8 +309,12 @@ def test_biphasicAxonMapModel():
     npt.assert_equal(model.rho, 350)
     npt.assert_equal(model.lam, 450)
 
-    # Effect model parameters can be passed even in constructor
-    model = BiphasicAxonMapModel(implant=ArgusII(), a0=5, rho=432)
+    # Effect model parameters are not model constructor arguments; they are
+    # assigned afterwards, or configured on a custom effect model
+    with pytest.raises(TypeError):
+        BiphasicAxonMapModel(implant=ArgusII(), a0=5)
+    model = BiphasicAxonMapModel(implant=ArgusII(), rho=432)
+    model.a0 = 5
     npt.assert_equal(model.a0, 5)
     npt.assert_equal(model.spatial.bright_model.a0, 5)
     npt.assert_equal(model.rho, 432)
@@ -370,7 +374,7 @@ def test_biphasicAxonMapModel():
     # The eye is the implanted one, and is not settable on its own:
     npt.assert_equal(
         BiphasicAxonMapModel(implant=ArgusII(eye='LE'), step=5).eye, 'LE')
-    with pytest.raises(AttributeError):
+    with pytest.raises(TypeError):
         BiphasicAxonMapModel(implant=ArgusII(), eye='LE')
 
     # Lambda cannot be too small:

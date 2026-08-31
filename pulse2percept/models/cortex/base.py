@@ -2,7 +2,8 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, 
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import Model, SpatialModel, _blend_meridian, _warn_rho_vs_pitch
+from ..base import (Model, SpatialModel, _blend_meridian, _thread_params,
+                    _warn_rho_vs_pitch)
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...units import DimensionMismatchError, dva, um
@@ -92,14 +93,19 @@ class CortexSpatial(SpatialModel):
             regions = [regions]
         self._regions = regions
 
-    def __init__(self, implant, **params):
+    def __init__(self, implant, *, regions=None, vfmap=None, **params):
         self._regions = None
+        # `None` means "not given" for both: each default depends on the other.
+        if regions is not None:
+            params['regions'] = regions
+        if vfmap is not None:
+            params['vfmap'] = vfmap
         super(CortexSpatial, self).__init__(implant, **params)
 
         # Use [Polemeni2006]_ visual field map by default
-        if 'vfmap' not in params.keys():
+        if vfmap is None:
             self.vfmap = Polimeni2006Map(regions=self.regions)
-        elif 'regions' in params.keys() and \
+        elif regions is not None and \
             set(self.regions) != set(self.vfmap.regions):
             raise ValueError("Conflicting regions in provided vfmap and user-supplied regions parameter")
         else:
@@ -290,8 +296,19 @@ class ScoreboardSpatial(CortexSpatial):
         next ``predict_percept`` builds it again.
 
     """
-    def __init__(self, implant, **params):
-        super(ScoreboardSpatial, self).__init__(implant, **params)
+    def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
+                 xrange=(-5, 5), yrange=(-5, 5), step=0.1,
+                 grid_type='rectangular', thresh_percept=0,
+                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+        super().__init__(
+            implant, rho=rho, regions=regions,
+            meridian_blend=meridian_blend, xrange=xrange, yrange=yrange,
+            step=step, grid_type=grid_type, thresh_percept=thresh_percept,
+            min_current_spread=min_current_spread, vfmap=vfmap,
+            n_gray=n_gray, noise=noise, verbose=verbose,
+            ndim=[2, 3] if ndim is None else ndim,
+            **_thread_params(n_threads, n_jobs))
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
@@ -446,7 +463,18 @@ class ScoreboardModel(Model):
 
     """
 
-    def __init__(self, implant, **params):
-        super(ScoreboardModel, self).__init__(
-            spatial=ScoreboardSpatial(implant, **params), temporal=None,
-            **params)
+    def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
+                 xrange=(-5, 5), yrange=(-5, 5), step=0.1,
+                 grid_type='rectangular', thresh_percept=0,
+                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+        super().__init__(
+            spatial=ScoreboardSpatial(
+                implant, rho=rho, regions=regions,
+                meridian_blend=meridian_blend, xrange=xrange, yrange=yrange,
+                step=step, grid_type=grid_type,
+                thresh_percept=thresh_percept,
+                min_current_spread=min_current_spread, vfmap=vfmap,
+                n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
+                n_threads=n_threads, n_jobs=n_jobs),
+            temporal=None)

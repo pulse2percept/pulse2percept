@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.models.Horsager2009Model`,
    :py:class:`~pulse2percept.models.Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
-from .base import Model, TemporalModel
+from .base import Model, TemporalModel, _thread_params
 from ..units import ms
 from ._horsager2009 import temporal_fast
 
@@ -91,6 +91,14 @@ class Horsager2009Temporal(TemporalModel):
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
+    def __init__(self, *, dt=0.005, tau1=0.42, tau2=45.25, tau3=26.25,
+                 eps=2.25, beta=3.43, thresh_percept=0, reduce='last',
+                 verbose=True, n_threads=None, n_jobs=None):
+        super().__init__(dt=dt, tau1=tau1, tau2=tau2, tau3=tau3, eps=eps,
+                         beta=beta, thresh_percept=thresh_percept,
+                         reduce=reduce, verbose=verbose,
+                         **_thread_params(n_threads, n_jobs))
+
     def get_default_params(self):
         base_params = super(Horsager2009Temporal, self).get_default_params()
         params = {
@@ -164,7 +172,12 @@ class Horsager2009Model(Model):
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
-    def __init__(self, **params):
-        super(Horsager2009Model, self).__init__(spatial=None,
-                                                temporal=Horsager2009Temporal,
-                                                **params)
+    def __init__(self, *, dt=0.005, tau1=0.42, tau2=45.25, tau3=26.25,
+                 eps=2.25, beta=3.43, thresh_percept=0, reduce='last',
+                 verbose=True, n_threads=None, n_jobs=None):
+        super().__init__(
+            spatial=None,
+            temporal=Horsager2009Temporal(
+                dt=dt, tau1=tau1, tau2=tau2, tau3=tau3, eps=eps, beta=beta,
+                thresh_percept=thresh_percept, reduce=reduce, verbose=verbose,
+                n_threads=n_threads, n_jobs=n_jobs))

@@ -17,7 +17,7 @@ Highlights
   .. code-block:: python
 
       implant = p2p.implants.ArgusII()
-      model = p2p.models.AxonMapModel(implant=implant)
+      model = p2p.models.AxonMapModel(implant)
       percept = model.predict_percept(stim)
 
 * New :py:mod:`pulse2percept.vision` module with
@@ -79,6 +79,11 @@ Implants
 
 Models
 ~~~~~~
+
+* Every shipped model constructor now lists its parameters explicitly instead
+  of accepting ``**params``, so an unknown keyword raises ``TypeError``
+  (:pull:`879`). ``BiphasicAxonMapModel`` no longer takes effect-model
+  parameters such as ``a0``; set them on the effect model instead.
 
 * :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
   photovoltaic drive produced by encoders such as

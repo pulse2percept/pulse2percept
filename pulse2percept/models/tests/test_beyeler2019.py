@@ -326,7 +326,7 @@ def test_AxonMapModel():
 
     # The eye is the implanted one, and is not settable on its own:
     npt.assert_equal(AxonMapModel(implant=ArgusII(eye='LE'), step=5).eye, 'LE')
-    with pytest.raises(AttributeError):
+    with pytest.raises(TypeError):
         AxonMapModel(implant=ArgusII(), eye='LE')
 
     # Lambda cannot be too small:
@@ -338,7 +338,7 @@ def test_AxonMapModel():
 def test_AxonMap_removed_axlambda(cls):
     # `lam` was called `axlambda` until 0.10.0; the old name was removed
     # in 0.11.0, so it is now an unknown parameter:
-    with pytest.raises(AttributeError):
+    with pytest.raises(TypeError):
         cls(ArgusII(), axlambda=400)
     with pytest.raises(AttributeError):
         model = cls(ArgusII(), step=5)
