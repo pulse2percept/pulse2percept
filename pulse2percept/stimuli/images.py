@@ -635,7 +635,7 @@ class ImageStimulus(Stimulus):
         freq : float, optional
             Pulse train frequency (Hz). The image is treated as a single frame
             lasting 500 ms unless ``frame_dur`` says otherwise.
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        implant : :py:class:`~pulse2percept.implants.Implant`, optional
             If given, the image is first sampled at the implant's electrode
             locations, so that the pulse trains are built at electrode rather
             than pixel resolution.

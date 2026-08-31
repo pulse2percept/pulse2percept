@@ -8,7 +8,7 @@ from scipy.spatial import cKDTree
 from pulse2percept.implants import (AlphaIMS, ArgusII, BVT24,
                                     CheckerboardRaster, CustomRaster,
                                     ElectrodeGrid, PRIMAPivotal,
-                                    ProsthesisSystem, Raster,
+                                    Implant, Raster,
                                     SequentialRaster)
 from pulse2percept.implants import rasters
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
@@ -145,7 +145,7 @@ def test_CheckerboardRaster():
 def test_CheckerboardRaster_grids():
     # A hex grid is handled the same way, and its 7-group pattern is the one
     # that puts every group on a hex lattice of its own, sqrt(7) pitches wide:
-    hexgrid = ProsthesisSystem(ElectrodeGrid((14, 14), 200, type='hex'))
+    hexgrid = Implant(ElectrodeGrid((14, 14), 200, type='hex'))
     raster = CheckerboardRaster(7).bind(hexgrid)
     npt.assert_almost_equal(raster.min_spacing, 200 * np.sqrt(7), decimal=3)
     npt.assert_almost_equal(_min_spacing(hexgrid, raster), raster.min_spacing,
@@ -157,11 +157,11 @@ def test_CheckerboardRaster_grids():
 
     # Rotating the implant rotates the pattern with it, since the pattern is
     # read off the electrode positions:
-    upright = ProsthesisSystem(ElectrodeGrid((10, 10), 400))
+    upright = Implant(ElectrodeGrid((10, 10), 400))
     expected = CheckerboardRaster(5).bind(upright).groups(
         upright.electrode_names)
     for angle in [11, 37, 84]:
-        turned = ProsthesisSystem(ElectrodeGrid((10, 10), 400, rot=angle))
+        turned = Implant(ElectrodeGrid((10, 10), 400, rot=angle))
         npt.assert_equal(
             CheckerboardRaster(5).bind(turned).groups(turned.electrode_names),
             expected)
@@ -169,7 +169,7 @@ def test_CheckerboardRaster_grids():
     # comes out transposed. It is the same pattern in every way that matters --
     # which is what is checked here -- just not the same labelling:
     for angle in [117, 300]:
-        turned = ProsthesisSystem(ElectrodeGrid((10, 10), 400, rot=angle))
+        turned = Implant(ElectrodeGrid((10, 10), 400, rot=angle))
         raster = CheckerboardRaster(5).bind(turned)
         npt.assert_almost_equal(raster.min_spacing, 400 * np.sqrt(5),
                                 decimal=3)
@@ -265,7 +265,7 @@ def test_CheckerboardRaster_is_reproducible(monkeypatch):
                     row_d[at], row_i[at] = row_d[to], row_i[to]
             return dist, idx
 
-    hexgrid = ProsthesisSystem(ElectrodeGrid((10, 10), 400, type='hex'))
+    hexgrid = Implant(ElectrodeGrid((10, 10), 400, type='hex'))
     for implant in [ArgusII(), hexgrid, PRIMAPivotal()]:
         names = implant.electrode_names
         expected = CheckerboardRaster(5).bind(implant).groups(names)
@@ -283,7 +283,7 @@ def test_CheckerboardRaster_is_reproducible(monkeypatch):
     expected = CheckerboardRaster(5).bind(implant).groups(names)
     rng = np.random.RandomState(0)
     for _ in range(4):
-        nudged = ProsthesisSystem(deepcopy(implant.earray))
+        nudged = Implant(deepcopy(implant.earray))
         for elec in nudged.earray.electrode_objects:
             elec.x *= 1 + rng.uniform(-1, 1) * 1e-13
             elec.y *= 1 + rng.uniform(-1, 1) * 1e-13
@@ -418,10 +418,10 @@ def test_CustomRaster():
     npt.assert_equal(np.bincount(full.groups(names)), [4, 56])
 
 
-def test_ProsthesisSystem_raster():
+def test_Implant_raster():
     implant = ArgusII()
     # Implants that do not set a raster in their constructor still report one:
-    npt.assert_equal(ProsthesisSystem(implant.earray).raster, None)
+    npt.assert_equal(Implant(implant.earray).raster, None)
     implant.raster = SequentialRaster(6)
     npt.assert_equal(implant.raster.n_groups, 6)
     npt.assert_equal('raster' in str(implant), True)
@@ -429,11 +429,11 @@ def test_ProsthesisSystem_raster():
         implant.raster = 'line'
     # It can be set through the constructor too:
     npt.assert_equal(
-        ProsthesisSystem(implant.earray,
-                         raster=SequentialRaster(3)).raster.n_groups, 3)
+        Implant(implant.earray,
+                raster=SequentialRaster(3)).raster.n_groups, 3)
 
 
-def test_ProsthesisSystem_raster_binds():
+def test_Implant_raster_binds():
     # Assigning a raster binds it, which is what lets a geometry-dependent
     # pattern work itself out and what lets `plot` be called with no argument:
     implant = ArgusII()
@@ -458,7 +458,7 @@ def test_ProsthesisSystem_raster_binds():
 
     # Rebinding recomputes: the same object on a different array describes
     # *that* array, rather than answering about the one it came from:
-    other = ProsthesisSystem(ElectrodeGrid((4, 5), 400))
+    other = Implant(ElectrodeGrid((4, 5), 400))
     other.raster = raster
     npt.assert_equal(raster.implant is other, True)
     npt.assert_almost_equal(raster.min_spacing, 400 * np.sqrt(5), decimal=3)
@@ -478,7 +478,7 @@ def test_ProsthesisSystem_raster_binds():
         plt.close('all')
 
 
-def test_ProsthesisSystem_max_current():
+def test_Implant_max_current():
     implant = ArgusII()
     npt.assert_equal(implant.max_current, None)
     with pytest.raises(ValueError):

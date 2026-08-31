@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from pulse2percept.models.cortex import DynaphosModel
 from pulse2percept.models.cortex.dynaphos import _pulse_train_clocks
 from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
-                                    EnsembleImplant, ProsthesisSystem)
+                                    EnsembleImplant, Implant)
 from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.percepts import Percept
@@ -81,7 +81,7 @@ def test_temporal_predict():
     pdur = model.p_dur  # (ms)
     t_percept = np.arange(0, sdur, 20)
     single = DynaphosModel(
-        implant=ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
+        implant=Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
         step=0.1, dt=20).build()
     bright_amp = []
     for amp in np.linspace(20, 70, 5):
@@ -202,7 +202,7 @@ def test_dynaphos_reads_the_pulse_train_itself():
     # That used to be false: a bare train carried no per-electrode metadata
     # and was simulated on the model's default clock instead of its own.
     model = DynaphosModel(
-        implant=ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
+        implant=Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
         step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
     model.dt = 20
     t_percept = np.arange(0, 200, 20)
@@ -227,7 +227,7 @@ def test_dynaphos_uses_its_defaults_for_an_arbitrary_waveform():
     # No pulse train behind the samples, so there is no clock to read and the
     # model simulates on its own -- which is what it has always done:
     model = DynaphosModel(
-        implant=ProsthesisSystem(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
+        implant=Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
         step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
     model.dt = 20
     source = Stimulus([[0, 100, 100, 0]], time=[0, 1, 199, 200])
@@ -246,7 +246,7 @@ def test_dynaphos_reads_the_clock_before_compression():
     # it no longer describe it. The parameters have to be taken first -- and
     # compression drops the electrodes driven at zero, so what is left has to
     # still line up with the right train.
-    implant = ProsthesisSystem(ElectrodeArray([
+    implant = Implant(ElectrodeArray([
         DiskElectrode(0, 0, 0, 260), DiskElectrode(1000, 0, 0, 260)]))
     model = DynaphosModel(implant=implant, step=0.5, xrange=(-2, 2),
                           yrange=(-2, 2)).build()

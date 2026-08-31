@@ -127,9 +127,9 @@ offset_grid = ElectrodeGrid((11, 13), 500, type='hex', x=-600, y=200, z=150,
 
 # An axon map is grown for a particular eye, so the model needs the implant
 # the grid belongs to:
-from pulse2percept.implants import ProsthesisSystem
+from pulse2percept.implants import Implant
 
-AxonMapModel(implant=ProsthesisSystem(offset_grid)).plot()
+AxonMapModel(implant=Implant(offset_grid)).plot()
 offset_grid.plot()
 
 ##############################################################################
@@ -140,7 +140,7 @@ offset_grid.plot()
 # cannot hold a stimulus. To turn one into a device that a model can predict
 # from, use :py:class:`~pulse2percept.implants.GridImplant`, which takes the
 # same grid arguments and adds the ones a
-# :py:class:`~pulse2percept.implants.ProsthesisSystem` understands:
+# :py:class:`~pulse2percept.implants.Implant` understands:
 
 from pulse2percept.implants import GridImplant
 

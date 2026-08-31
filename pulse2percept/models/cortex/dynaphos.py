@@ -50,7 +50,7 @@ class DynaphosModel(BaseModel):
     
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         The implant whose stimulation this model predicts.
 
         .. versionadded:: 0.11.0
@@ -410,7 +410,7 @@ class DynaphosModel(BaseModel):
         ----------
         source : :py:class:`~pulse2percept.stimuli.Stimulus` source type
             What is presented to the device; see
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`.
+            :py:meth:`~pulse2percept.implants.Implant.prepare_stim`.
         t_percept: float or list of floats, optional
             The time points at which to output a percept (ms). This
             model's numerical contract is fixed to milliseconds.

@@ -316,9 +316,9 @@ Most pulse2percept simulations involve four objects, plus an optional encoder:
     this specifies which electrodes are active, with what amplitudes, and
     optionally how stimulation changes over time.
 
-:py:class:`~pulse2percept.implants.ProsthesisSystem`
+:py:class:`~pulse2percept.implants.Implant`
     Describes the prosthetic device, including its electrode array, placement,
-    and stimulus. Specific devices such as
+    and input/encoding pipeline. Specific devices such as
     :py:class:`~pulse2percept.implants.ArgusII` are subclasses of this object.
 
 :py:class:`~pulse2percept.models.Model`
@@ -453,7 +453,7 @@ existing retinal and cortical prostheses.
 Choose one of these when you want to simulate a particular device. If your
 electrode layout does not correspond to an existing implant, you can construct
 your own :py:class:`~pulse2percept.implants.ElectrodeArray` and
-:py:class:`~pulse2percept.implants.ProsthesisSystem`.
+:py:class:`~pulse2percept.implants.Implant`.
 
 The implant matters because electrode size, spacing, location, and orientation
 can all affect the predicted response.

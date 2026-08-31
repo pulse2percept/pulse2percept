@@ -119,7 +119,7 @@ class Scenario:
     stimulus : callable
         Takes no arguments, returns a stimulus.
     implant : callable
-        Takes no arguments, returns a ``ProsthesisSystem``.
+        Takes no arguments, returns an ``Implant``.
     source : callable, optional
         Takes the implant and the stimulus, returns what ``predict_percept``
         is given. Defaults to the stimulus unchanged; the image scenarios use

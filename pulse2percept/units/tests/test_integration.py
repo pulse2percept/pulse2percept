@@ -13,7 +13,7 @@ import numpy.testing as npt
 import pytest
 
 from pulse2percept.implants import (ArgusII, DiskElectrode, ElectrodeGrid,
-                                    EnsembleImplant, ProsthesisSystem)
+                                    EnsembleImplant, Implant)
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.models import (AlphaTemporal, AxonMapSpatial,
                                   FadingTemporal, Model, ScoreboardSpatial)
@@ -126,8 +126,8 @@ def test_every_spelling_builds_the_same_object():
           lambda p: p.data, 'BiphasicPulseTrain.amp', rtol=1e-6)
     _same(lambda a: Stimulus([a]), amp, amps, lambda s: s.data,
           'Stimulus', rtol=1e-6)
-    _same(lambda a: ProsthesisSystem(ArgusII().earray, max_current=a),
-          amp, amps, lambda p: p.max_current, 'ProsthesisSystem.max_current')
+    _same(lambda a: Implant(ArgusII().earray, max_current=a),
+          amp, amps, lambda p: p.max_current, 'Implant.max_current')
     _same(lambda a: AmplitudeEncoder(amp_range=(0, a), freq=20).encode(
               ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6))),
               implant=ArgusII()),
@@ -283,15 +283,15 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         model.predict_percept(current, t_percept=[0, 20] * uA)
     with pytest.raises(DimensionMismatchError):
-        ProsthesisSystem(ArgusII().earray, max_current=5 * ms)
+        Implant(ArgusII().earray, max_current=5 * ms)
 
     # dimensionless -> safety check: there is no charge in a picture.
     with pytest.raises(DimensionMismatchError):
-        ProsthesisSystem(ArgusII().earray, safe_mode=True,
-                         preprocess=False).prepare_stim(img)
+        Implant(ArgusII().earray, safe_mode=True,
+                preprocess=False).prepare_stim(img)
     with pytest.raises(DimensionMismatchError):
-        ProsthesisSystem(ArgusII().earray, max_current=20,
-                         preprocess=False).prepare_stim(img)
+        Implant(ArgusII().earray, max_current=20,
+                preprocess=False).prepare_stim(img)
 
     # A bare number is never rejected, anywhere. That is the other half of the
     # contract, and the reason none of the above needs a deprecation cycle:
@@ -299,6 +299,6 @@ def test_the_whole_rejection_matrix():
                   lambda: ArgusII(x=575),
                   lambda: Grid2D((-2, 2), (-2, 2)),
                   lambda: BiphasicPulse(50, 0.45),
-                  lambda: ProsthesisSystem(ArgusII().earray, max_current=20),
+                  lambda: Implant(ArgusII().earray, max_current=20),
                   lambda: Watson2014Map().dva_to_ret(2, 2)):
         build()

@@ -604,7 +604,7 @@ def test_pulse_remove_refuses_to_outdate_its_parameters(cls, build, params):
         pulse.remove(pulse.electrodes[0])
     with pytest.raises(NotImplementedError):
         pulse.remove('all')
-    # Removing nothing is still a no-op, which ProsthesisSystem relies on:
+    # Removing nothing is still a no-op, which Implant relies on:
     for nothing in (None, [], (), np.array([])):
         pulse.remove(nothing)
     npt.assert_equal(pulse.shape[0], 1)

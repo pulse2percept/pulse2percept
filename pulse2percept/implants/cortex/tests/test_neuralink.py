@@ -8,7 +8,7 @@ import pytest
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from pulse2percept.implants import ProsthesisSystem
+from pulse2percept.implants import Implant
 from pulse2percept.implants.cortex import (EllipsoidElectrode, LinearEdgeThread,
                                            NeuralinkThread, Neuralink, Cortivis)
 from pulse2percept.topography import Grid2D, NeuropythyMap, Polimeni2006Map
@@ -290,7 +290,7 @@ def test_LinearEdgeThread_pprint():
     npt.assert_equal(params['r'], 8)
     npt.assert_equal(params['n_elecs'], 4)
     npt.assert_equal(params['spacing'], 25)
-    # Inherited from ProsthesisSystem:
+    # Inherited from Implant:
     npt.assert_equal(params['safe_mode'], False)
     npt.assert_equal('LinearEdgeThread' in str(thread), True)
 
@@ -558,7 +558,7 @@ def test_Neuralink_from_neuropythy_surface_mismatch():
 
 def test_Neuralink_from_cortical_map_requires_thread():
     # Only NeuralinkThreads can go into a Neuralink:
-    for implant_type in (Cortivis, ProsthesisSystem):
+    for implant_type in (Cortivis, Implant):
         with pytest.raises(TypeError):
             Neuralink.from_cortical_map(implant_type, Polimeni2006Map())
 

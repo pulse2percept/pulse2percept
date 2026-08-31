@@ -1,4 +1,4 @@
-""":py:class:`~pulse2percept.implants.ProsthesisSystem`,
+""":py:class:`~pulse2percept.implants.Implant`,
    :py:class:`~pulse2percept.implants.GridImplant`,
    :py:class:`~pulse2percept.implants.RectangleImplant`"""
 import numpy as np
@@ -17,20 +17,24 @@ from ..stimuli.encoders import _EncodedStimulus
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
 from ..utils import PrettyPrint, deprecated
+from ..utils.deprecation import _deprecated_names
 
 
-class ProsthesisSystem(PrettyPrint):
-    """Visual prosthesis system
+class Implant(PrettyPrint):
+    """Visual prosthesis
 
     A visual prosthesis describes an electrode array together with the input
     pipeline that turns what is presented to the device into the stimulation
     its electrodes deliver (see
-    :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`). This is
-    the base class for prosthesis systems such as
-    :py:class:`~pulse2percept.implants.ArgusII` and
+    :py:meth:`~pulse2percept.implants.Implant.prepare_stim`). This is the base
+    class for implants such as :py:class:`~pulse2percept.implants.ArgusII` and
     :py:class:`~pulse2percept.implants.AlphaIMS`.
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.11.0
+        Renamed from ``ProsthesisSystem``, which stays available as a
+        deprecated alias until 0.12.0.
 
     .. versionchanged:: 0.11.0
         An implant no longer stores a stimulus. ``implant.stim = source``
@@ -85,7 +89,7 @@ class ProsthesisSystem(PrettyPrint):
         Perceptual threshold current (uA) used to calibrate threshold-relative
         (``xTh``) stimuli. A scalar applies to every electrode; a dict
         calibrates the named electrodes only. See
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.thresholds`.
+        :py:attr:`~pulse2percept.implants.Implant.thresholds`.
 
         .. versionadded:: 0.11.0
 
@@ -95,8 +99,8 @@ class ProsthesisSystem(PrettyPrint):
     :py:class:`~pulse2percept.implants.DiskElectrode` with radius
     r=100um sitting at x=200um, y=-50um, z=10um:
 
-    >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
-    >>> implant = ProsthesisSystem(DiskElectrode(200, -50, 10, 100), eye='LE')
+    >>> from pulse2percept.implants import DiskElectrode, Implant
+    >>> implant = Implant(DiskElectrode(200, -50, 10, 100), eye='LE')
 
     """
     # Frozen class: User cannot add more class attributes
@@ -207,7 +211,7 @@ class ProsthesisSystem(PrettyPrint):
         Assign a single current for the whole array, a per-electrode dict,
         or None to clear the calibration. Threshold-relative pulse trains are
         calibrated against whatever is in force at the moment
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` runs.
+        :py:meth:`~pulse2percept.implants.Implant.prepare_stim` runs.
 
         .. versionadded:: 0.10.0
 
@@ -344,7 +348,7 @@ class ProsthesisSystem(PrettyPrint):
         """Quality-check the stimulus
 
         This method is executed every time a stimulus is prepared (see
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`).
+        :py:meth:`~pulse2percept.implants.Implant.prepare_stim`).
 
         If ``safe_mode`` is set to True, this function will only allow stimuli
         that are charge-balanced. If ``max_current`` is set, it will only allow
@@ -354,13 +358,13 @@ class ProsthesisSystem(PrettyPrint):
         a stimulus that is not a current, so each raises a
         :py:class:`~pulse2percept.units.DimensionMismatchError` on one. In the
         ordinary flow this cannot happen:
-        :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim` has
+        :py:meth:`~pulse2percept.implants.Implant.prepare_stim` has
         already checked the stimulus against
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`.
+        :py:attr:`~pulse2percept.implants.Implant.stimulus_unit`.
         ``check_stim`` is public, though, and may be handed anything.
 
         The user can define their own checks in implants that inherit from
-        :py:class:`~pulse2percept.implants.ProsthesisSystem`.
+        :py:class:`~pulse2percept.implants.Implant`.
 
         Parameters
         ----------
@@ -402,7 +406,7 @@ class ProsthesisSystem(PrettyPrint):
         No preprocessing is performed by default, but the user can define their
         own method in implants that inherit from
         return stim
-        :py:class:`~pulse2percept.implants.ProsthesisSystem`.
+        :py:class:`~pulse2percept.implants.Implant`.
 
         A custom method must return a
         :py:class:`~pulse2percept.stimuli.Stimulus` object with the correct
@@ -486,7 +490,7 @@ class ProsthesisSystem(PrettyPrint):
             (if exists) or create a new Axes object.
         stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type, optional
             What is presented to the device. Prepared through
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`,
+            :py:meth:`~pulse2percept.implants.Implant.prepare_stim`,
             so the colors show what the electrodes actually deliver. Required
             by ``stim_cmap``.
 
@@ -547,12 +551,12 @@ class ProsthesisSystem(PrettyPrint):
         The input is not modified and the result is not stored.
 
         Prepared stimuli use the implant's
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`
+        :py:attr:`~pulse2percept.implants.Implant.stimulus_unit`
         (electrical current for most devices; irradiance for PRIMA).
 
         Images and videos require an encoder unless preprocessing already converts
         them to the implant's
-        :py:attr:`~pulse2percept.implants.ProsthesisSystem.stimulus_unit`.
+        :py:attr:`~pulse2percept.implants.Implant.stimulus_unit`.
 
         .. versionadded:: 0.11.0
             Replaces the stateful ``stim`` property.
@@ -571,9 +575,9 @@ class ProsthesisSystem(PrettyPrint):
 
         Examples
         --------
-        >>> from pulse2percept.implants import DiskElectrode, ProsthesisSystem
+        >>> from pulse2percept.implants import DiskElectrode, Implant
         >>> from pulse2percept.stimuli import BiphasicPulse
-        >>> implant = ProsthesisSystem(DiskElectrode(0, 0, 0, 100))
+        >>> implant = Implant(DiskElectrode(0, 0, 0, 100))
         >>> stim = implant.prepare_stim(BiphasicPulse(30, 0.45))
 
         Stimulate Electrode B7 in Argus II with 13 uA:
@@ -646,7 +650,7 @@ class ProsthesisSystem(PrettyPrint):
     def eye(self):
         """Implanted eye
 
-        A :py:class:`~pulse2percept.implants.ProsthesisSystem` can be implanted
+        A :py:class:`~pulse2percept.implants.Implant` can be implanted
         either in a left eye ('LE') or right eye ('RE'). Models such as
         :py:class:`~pulse2percept.models.AxonMapModel` will treat left and
         right eyes differently (for example, adjusting the location of the
@@ -716,12 +720,12 @@ class ProsthesisSystem(PrettyPrint):
 
 
 
-class GridImplant(ProsthesisSystem):
+class GridImplant(Implant):
     """A prosthesis system whose electrodes form a regular grid
 
     Convenience composition of an
     :py:class:`~pulse2percept.implants.ElectrodeGrid` and a
-    :py:class:`~pulse2percept.implants.ProsthesisSystem`, for the common case
+    :py:class:`~pulse2percept.implants.Implant`, for the common case
     where a custom implant is just a grid of electrodes:
 
     .. code-block:: python
@@ -732,7 +736,7 @@ class GridImplant(ProsthesisSystem):
 
     .. code-block:: python
 
-        implant = ProsthesisSystem(ElectrodeGrid(shape=(10, 10), spacing=500))
+        implant = Implant(ElectrodeGrid(shape=(10, 10), spacing=500))
 
     .. versionadded:: 0.11.0
 
@@ -819,7 +823,7 @@ class GridImplant(ProsthesisSystem):
                       '``etype=DiskElectrode, r=75, preprocess=True`` to keep '
                       'these defaults, and note that a left-eye grid keeps '
                       'the column names of a right-eye one.')
-class RectangleImplant(ProsthesisSystem):
+class RectangleImplant(Implant):
     """ A generic rectangular implant
 
     .. deprecated:: 0.11.0
@@ -888,3 +892,11 @@ class RectangleImplant(ProsthesisSystem):
         params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
                        'preprocess': self.preprocess})
         return params
+
+
+# ``ProsthesisSystem`` was renamed to ``Implant`` in 0.11.0. It resolves to the
+# class itself rather than to a subclass, so ``isinstance`` and ``issubclass``
+# checks written against the old name keep working during the deprecation.
+__getattr__ = _deprecated_names(__name__, {'ProsthesisSystem': Implant},
+                                deprecated_version='0.11.0',
+                                removed_version='0.12.0')

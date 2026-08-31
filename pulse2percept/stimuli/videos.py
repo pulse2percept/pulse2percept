@@ -749,7 +749,7 @@ class VideoStimulus(Stimulus):
             ``min_amp``, a gray level of 1 onto ``max_amp``.
         freq : float, optional
             Pulse train frequency (Hz).
-        implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
+        implant : :py:class:`~pulse2percept.implants.Implant`, optional
             If given, the video is first sampled at the implant's electrode
             locations, so that the pulse trains are built at electrode rather
             than pixel resolution. Strongly recommended: a video has orders of

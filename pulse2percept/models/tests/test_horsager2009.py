@@ -4,7 +4,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import ProsthesisSystem, PointSource
+from pulse2percept.implants import Implant, PointSource
 from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
                                    Stimulus)
 from pulse2percept.percepts import Percept
@@ -24,7 +24,7 @@ def test_Horsager2009Temporal():
         model.rho = 100
 
     # Nothing in, None out:
-    implant = ProsthesisSystem(PointSource(0, 0, 0))
+    implant = Implant(PointSource(0, 0, 0))
     npt.assert_equal(model.predict_percept(implant.prepare_stim(None)),
                      None)
 

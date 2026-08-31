@@ -1055,11 +1055,11 @@ def test_rho_wider_than_the_electrode_pitch_warns(ModelClass):
 def test_electrode_pitch_ignores_a_dimension_the_model_drops(ModelClass):
     """A retinal model reads x and y, so z cannot pull neighbours apart"""
     from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
-                                        ProsthesisSystem)
+                                        Implant)
     extra = {'n_axons': 50, 'n_ax_segments': 30} if ModelClass is AxonMapModel         else {}
     # Three electrodes 100 um apart in x, but 1000 um apart in z. Reading all
     # three coordinates would call that a ~1005 um pitch and stay quiet:
-    stacked = ProsthesisSystem(ElectrodeArray(
+    stacked = Implant(ElectrodeArray(
         [DiskElectrode(100 * i, 0, 1000 * i, 50) for i in range(3)]))
     model = ModelClass(implant=stacked, rho=400, step=1, xrange=(-2, 2),
                        yrange=(-2, 2), **extra)

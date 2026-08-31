@@ -10,7 +10,7 @@ import multiprocessing
 from scipy.ndimage import gaussian_filter1d
 from scipy.spatial import cKDTree
 
-from ..implants import ProsthesisSystem
+from ..implants import Implant
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
@@ -206,9 +206,9 @@ def _delivered(stim):
 
 
 def _check_implant(implant):
-    """Raise unless ``implant`` is a ProsthesisSystem"""
-    if not isinstance(implant, ProsthesisSystem):
-        raise TypeError(f"'implant' must be a ProsthesisSystem object, not "
+    """Raise unless ``implant`` is an Implant"""
+    if not isinstance(implant, Implant):
+        raise TypeError(f"'implant' must be an Implant object, not "
                         f"{type(implant)}.")
 
 
@@ -580,7 +580,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     Parameters
     ----------
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+    implant : :py:class:`~pulse2percept.implants.Implant`
         Implant whose electrode geometry is modeled.
 
         .. versionadded:: 0.11.0
@@ -858,7 +858,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         ----------
         source : stimulus source
             Anything accepted by
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`.
+            :py:meth:`~pulse2percept.implants.Implant.prepare_stim`.
         t_percept : float or array-like, optional
             Output times in ``time_unit``. If omitted, use the source time points.
             Unitful times are accepted.
@@ -1512,7 +1512,7 @@ class Model(Frozen, PrettyPrint):
         ----------
         source : stimulus source or :py:class:`~pulse2percept.vision.Scene`
             What is presented to the device: anything accepted by
-            :py:meth:`~pulse2percept.implants.ProsthesisSystem.prepare_stim`, or a
+            :py:meth:`~pulse2percept.implants.Implant.prepare_stim`, or a
             visual scene.
         t_percept : float or array-like, optional
             Output times in ``time_unit``. Unitful times are accepted.

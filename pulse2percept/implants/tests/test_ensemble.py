@@ -4,7 +4,7 @@ import numpy.testing as npt
 from pulse2percept.units import DimensionMismatchError, mm, ms, um
 from pulse2percept.units import dva
 import pytest
-from pulse2percept.implants import (EnsembleImplant, PointSource, ProsthesisSystem)
+from pulse2percept.implants import (EnsembleImplant, PointSource, Implant)
 from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.models.cortex.base import ScoreboardModel
@@ -21,8 +21,8 @@ def test_EnsembleImplant():
         EnsembleImplant(implants={'1': Cortivis(), '2': 'abcd'})
 
     # Instantiate with list
-    p1 = ProsthesisSystem(PointSource(0,0,0))
-    p2 = ProsthesisSystem(PointSource(1,1,1))
+    p1 = Implant(PointSource(0,0,0))
+    p2 = Implant(PointSource(1,1,1))
     ensemble = EnsembleImplant(implants=[p1,p2])
     npt.assert_equal(ensemble.n_electrodes, 2)
     npt.assert_equal(ensemble[0], p1[0])

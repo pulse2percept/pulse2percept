@@ -51,6 +51,10 @@ Stimuli and encoding
 Implants
 ~~~~~~~~
 
+* ``ProsthesisSystem`` is renamed
+  :py:class:`~pulse2percept.implants.Implant`; the old name is a deprecated
+  alias for the same class until 0.12.0 (:pull:`876`).
+
 * ``PRIMA`` is renamed :py:class:`~pulse2percept.implants.PRIMAPivotal`,
   ``PRIMA75`` becomes :py:class:`~pulse2percept.implants.Lorach2015Array`, and
   ``PRIMA55``/``PRIMA40`` become ``Ho2019FlatArray(55)``/
@@ -63,10 +67,11 @@ Implants
   rendering, and hexagonal pixel orientation were corrected to match the
   corresponding devices (:pull:`865`).
 
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` adds descriptive
-  ``placement``, ``technology``, and ``family`` attributes (:pull:`865`) and
-  accepts ``thresholds`` at construction; :py:class:`~pulse2percept.implants.ArgusII`
-  likewise accepts ``thresholds`` (:pull:`869`).
+* :py:class:`~pulse2percept.implants.Implant` adds descriptive ``placement``,
+  ``technology``, and ``family`` attributes (:pull:`865`) and accepts
+  ``thresholds`` at construction;
+  :py:class:`~pulse2percept.implants.ArgusII` likewise accepts ``thresholds``
+  (:pull:`869`).
 
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`).
@@ -180,7 +185,8 @@ API changes:
 * Image and video stimuli now use grid-style electrode names such as ``'A1'``
   and ``'C12_G'`` instead of integer pixel indices (:pull:`805`)
 
-* :py:class:`~pulse2percept.implants.ProsthesisSystem` now supports stimulus
+* ``ProsthesisSystem`` (now
+  :py:class:`~pulse2percept.implants.Implant`) supports stimulus
   encoders, raster strategies, and maximum-current limits. Dimensionless
   image/video stimuli can be encoded automatically when assigned to an implant
   (:pull:`810`, :pull:`833`)

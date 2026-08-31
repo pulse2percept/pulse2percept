@@ -98,7 +98,7 @@ video.resize((40, 40)).rotate(10).invert().filter('median').play()
 # ---------------------------------------------
 #
 # :py:class:`~pulse2percept.stimuli.VideoStimulus` can be used in
-# combination with any :py:meth:`~pulse2percept.implants.ProsthesisSystem`.
+# combination with any :py:meth:`~pulse2percept.implants.Implant`.
 # What an implant delivers is current, though, not gray levels, so the video
 # has to be encoded first: sampled at the electrode locations, and turned into
 # a pulse train whose amplitude says how bright each pixel was.
