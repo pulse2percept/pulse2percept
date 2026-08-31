@@ -159,6 +159,16 @@ def test_play_stimulus_percept_leaves_data_alone():
     npt.assert_almost_equal(perc.time, perc_time)
 
 
+def test_play_stimulus_percept_untimed_video(monkeypatch):
+    """A source with no clock is refused, not frozen at its first frame"""
+    vid = video()
+    # ``Stimulus`` refuses to build a multi-frame stimulus without a time axis,
+    # so make one report that it has none:
+    monkeypatch.setattr(VideoStimulus, 'time', property(lambda self: None))
+    with pytest.raises(ValueError):
+        play_stimulus_percept(vid, percept())
+
+
 def test_play_stimulus_percept_errors():
     # A percept without a time axis is a still image:
     with pytest.raises(ValueError):

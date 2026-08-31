@@ -53,6 +53,12 @@ def _source_frames(stim, times):
     that outlast it hold its last. A still image contributes a single frame.
     """
     if isinstance(stim, VideoStimulus):
+        if stim.time is None:
+            raise ValueError(
+                "Cannot animate a video with time=None next to the percept: "
+                "without a time axis there is nothing to hold its frames on. "
+                "Give the video a time axis, or pass a single frame as an "
+                "ImageStimulus.")
         frames = stim._frames()
     elif isinstance(stim, ImageStimulus):
         frames = stim.data.reshape(stim.img_shape)[..., np.newaxis]
@@ -114,9 +120,9 @@ def plot_stimulus_percept(stim, percept, axes=None, figsize=None,
     >>> matplotlib.use('Agg')
     >>> import pulse2percept as p2p
     >>> stim = p2p.stimuli.LogoUCSB(resize=(24, 32))
-    >>> model = p2p.models.ScoreboardModel(implant=p2p.implants.ArgusII(),
+    >>> model = p2p.models.ScoreboardModel(p2p.implants.ArgusII(),
     ...                                    xrange=(-4, 4), yrange=(-4, 4),
-    ...                                    step=0.5).build()
+    ...                                    step=0.5)
     >>> percept = model.predict_percept(stim)
     >>> axes = p2p.plotting.plot_stimulus_percept(stim, percept)
     >>> [ax.get_title() for ax in axes]

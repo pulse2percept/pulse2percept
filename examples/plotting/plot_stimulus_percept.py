@@ -24,9 +24,9 @@ Start with a logo, an implant, and a model:
 import pulse2percept as p2p
 
 stim = p2p.stimuli.LogoUCSB(resize=(60, 80))
-model = p2p.models.ScoreboardModel(implant=p2p.implants.ArgusII(), rho=200,
+model = p2p.models.ScoreboardModel(p2p.implants.ArgusII(), rho=200,
                                    xrange=(-14, 12), yrange=(-12, 12),
-                                   step=0.25).build()
+                                   step=0.25)
 
 ###############################################################################
 # The model takes the image directly, and so does the plotting function. Keep
