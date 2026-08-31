@@ -662,10 +662,6 @@ def test_Model():
 
     # SpatialModel, but no TemporalModel:
     model = Model(spatial=ValidSpatialModel(ArgusI()))
-    # An implant is what a spatial model needs; a temporal one never sees an
-    # electrode, so offering it one is a mistake worth naming:
-    with pytest.raises(ValueError, match='only a temporal'):
-        Model(temporal=ValidTemporalModel(), implant=ArgusI())
     npt.assert_equal(model.has_space, True)
     npt.assert_equal(model.has_time, False)
     npt.assert_almost_equal(model.step, 0.25)
@@ -726,10 +722,6 @@ def test_Model():
 def test_Model_set_params():
     # SpatialModel, but no TemporalModel:
     model = Model(spatial=ValidSpatialModel(ArgusI()))
-    # An implant is what a spatial model needs; a temporal one never sees an
-    # electrode, so offering it one is a mistake worth naming:
-    with pytest.raises(ValueError, match='only a temporal'):
-        Model(temporal=ValidTemporalModel(), implant=ArgusI())
     model.set_params({'step': 2.33})
     npt.assert_almost_equal(model.step, 2.33)
     npt.assert_almost_equal(model.spatial.step, 2.33)
@@ -798,10 +790,6 @@ def test_Model_build():
 
     # SpatialModel, but no TemporalModel:
     model = Model(spatial=ValidSpatialModel(ArgusI()))
-    # An implant is what a spatial model needs; a temporal one never sees an
-    # electrode, so offering it one is a mistake worth naming:
-    with pytest.raises(ValueError, match='only a temporal'):
-        Model(temporal=ValidTemporalModel(), implant=ArgusI())
     npt.assert_equal(model.is_built, False)
     model.build()
     npt.assert_equal(model.is_built, True)
@@ -922,28 +910,14 @@ def test_a_standalone_spatial_model_needs_an_implant(ModelClass, ImplantType):
 def test_a_temporal_only_model_takes_no_implant():
     """`Horsager2009Model` has no electrodes to place"""
     npt.assert_equal(Horsager2009Model().has_space, False)
-    with pytest.raises(ValueError, match='only a temporal'):
+    with pytest.raises(AttributeError, match='not a valid parameter'):
         Horsager2009Model(implant=ArgusII())
 
 
-def test_Model_builds_a_spatial_class_around_its_implant():
-    """`spatial` given as a class is handed the implant `Model` was named"""
-    implant = ArgusI()
-    model = Model(spatial=ValidSpatialModel, temporal=ValidTemporalModel,
-                  implant=implant)
-    npt.assert_equal(model.spatial.implant is implant, True)
-    for missing in ({}, {'implant': None}):
-        with pytest.raises(TypeError):
-            Model(spatial=ValidSpatialModel, **missing)
-
-
-def test_Model_names_one_implant():
-    """A spatial instance is already bound, so `implant` has nothing to say"""
-    implant = ArgusI()
-    with pytest.raises(ValueError, match='already bound'):
-        Model(implant=implant, spatial=ValidSpatialModel(implant))
-    with pytest.raises(ValueError, match='already bound'):
-        Model(implant=implant, spatial=ValidSpatialModel(ArgusII()))
+def test_Model_takes_a_bound_spatial_instance():
+    """`Model` composes spatial components; it does not construct them"""
+    with pytest.raises(TypeError, match='not the class itself'):
+        Model(spatial=ValidSpatialModel, temporal=ValidTemporalModel())
 
 
 def test_Model_predict_percept():

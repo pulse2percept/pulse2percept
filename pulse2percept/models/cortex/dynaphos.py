@@ -8,7 +8,6 @@ from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
 from ...utils import cart2pol
-from ...utils.base import _is_constructing
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
 
@@ -131,8 +130,9 @@ class DynaphosModel(BaseModel):
 
     def __init__(self, implant, **params):
             _check_implant(implant)
+            self._implant = implant
             self._regions = None
-            super().__init__(implant=implant, **params)
+            super().__init__(**params)
 
             self.vfmap.regions = self.regions
             self.grid = None
@@ -147,16 +147,13 @@ class DynaphosModel(BaseModel):
 
         .. versionadded:: 0.11.0
         """
-        return getattr(self, '_implant', None)
+        return self._implant
 
     @implant.setter
     def implant(self, implant):
         """Implant setter (called upon ``self.implant = implant``)"""
-        # `get_default_params` declares the name and `__init__` supplies the
-        # value, so the placeholder None is tolerated only while constructing.
-        if not (implant is None and _is_constructing(self)):
-            _check_implant(implant)
-        if implant is not getattr(self, '_implant', None):
+        _check_implant(implant)
+        if implant is not self._implant:
             self._is_built = False
         self._implant = implant
 
@@ -164,9 +161,6 @@ class DynaphosModel(BaseModel):
     def get_default_params(self):
             """Returns all settable parameters of the Dynaphos model"""
             params = {
-                # The device whose electrodes this model places in the visual
-                # field. Required before building or predicting:
-                'implant': None,
                 'xrange': (-5, 5),  # dva
                 'yrange': (-5, 5),  # dva
                 'step': 0.25,  # dva

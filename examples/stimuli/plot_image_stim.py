@@ -324,9 +324,9 @@ stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
 # with a proper temporal model, such as
 # :py:class:`~pulse2percept.models.Horsager2009Temporal`:
 
-model = p2p.models.Model(implant=implant,
-                         spatial=p2p.models.ScoreboardSpatial,
-                         temporal=p2p.models.Horsager2009Temporal)
+model = p2p.models.Model(
+    spatial=p2p.models.ScoreboardSpatial(implant),
+    temporal=p2p.models.Horsager2009Temporal())
 
 ##############################################################################
 # .. note::

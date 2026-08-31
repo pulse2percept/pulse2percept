@@ -286,8 +286,8 @@ Classes ending in ``Model`` are complete model objects. Classes ending in
     )
 
 The implant belongs to the spatial component, because a temporal model never
-sees an electrode. ``Model`` also takes ``implant=`` for the case where
-``spatial`` is given as a class rather than an instance.
+sees an electrode. ``Model`` composes components; it never builds them, so
+``spatial`` must be an instance that already names its implant.
 This is useful when the spatial and temporal assumptions come from different
 models. The combined model handles the intermediate representation and returns
 a ``Percept`` like any other Model.

@@ -632,10 +632,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     def __init__(self, implant, **params):
         _check_implant(implant)
+        self._implant = implant
         # `vfmap` first: `xrange`/`yrange` may be given as a retinal extent,
         # which is resolved through the map as it is assigned. See
         # `_vfmap_first`.
-        super().__init__(implant=implant, **_vfmap_first(params))
+        super().__init__(**_vfmap_first(params))
         self.grid = None
 
     @property
@@ -646,7 +647,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. versionadded:: 0.11.0
         """
-        return getattr(self, '_implant', None)
+        return self._implant
 
     @implant.setter
     def implant(self, implant):
@@ -656,11 +657,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. versionadded:: 0.11.0
         """
-        # `get_default_params` declares the name and `__init__` supplies the
-        # value, so the placeholder None is tolerated only while constructing.
-        if not (implant is None and _is_constructing(self)):
-            _check_implant(implant)
-        if implant is not getattr(self, '_implant', None):
+        _check_implant(implant)
+        if implant is not self._implant:
             # Spatial build state depends on implant geometry:
             self._is_built = False
         self._implant = implant
@@ -737,7 +735,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
-            'implant': None,
             'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
             'step': 0.25,  # dva
@@ -1239,15 +1236,10 @@ class Model(Frozen, PrettyPrint):
 
     Parameters
     ----------
-    spatial : :py:class:`~pulse2percept.models.SpatialModel` or type, optional
-        Spatial model instance or class.
+    spatial : :py:class:`~pulse2percept.models.SpatialModel`, optional
+        Spatial model instance, already bound to its implant.
     temporal : :py:class:`~pulse2percept.models.TemporalModel` or type, optional
         Temporal model instance or class.
-    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`, optional
-        Implant used by the spatial component. Required when ``spatial`` is
-        given as a class.
-
-        .. versionadded:: 0.11.0
     **params : keyword arguments
         Parameters forwarded to the spatial and temporal components. A name
         present on both components is applied to both.
@@ -1303,11 +1295,7 @@ class Model(Frozen, PrettyPrint):
             return self.spatial.time_unit
         return BaseModel.time_unit
 
-    def __init__(self, spatial=None, temporal=None, *, implant=None,
-                 **params):
-        # `implant` is named explicitly so it cannot reach the temporal
-        # component through `**params`; only the spatial one has geometry.
-        spatial_from_class = isinstance(spatial, type)
+    def __init__(self, spatial=None, temporal=None, **params):
         # Normalize renamed parameters once before class construction and
         # subsequent `set_params`, avoiding duplicate warnings.
         for model in (spatial, temporal):
@@ -1317,11 +1305,12 @@ class Model(Frozen, PrettyPrint):
                     getattr(model, '_renamed_params', {}))
         # Set the spatial model:
         if spatial is not None and not isinstance(spatial, SpatialModel):
-            if issubclass(spatial, SpatialModel):
-                spatial = spatial(implant, **params)
-            else:
+            if isinstance(spatial, type) and issubclass(spatial, SpatialModel):
                 raise TypeError(f"'spatial' must be a SpatialModel instance, "
-                                f"not {type(spatial)}.")
+                                f"not the class itself: "
+                                f"{spatial.__name__}(implant).")
+            raise TypeError(f"'spatial' must be a SpatialModel instance, "
+                            f"not {type(spatial)}.")
         self.spatial = spatial
         # Set the temporal model:
         if temporal is not None and not isinstance(temporal, TemporalModel):
@@ -1333,16 +1322,6 @@ class Model(Frozen, PrettyPrint):
         self.temporal = temporal
         # Use user-specified parameter values instead of defaults:
         self.set_params(params)
-        if implant is not None and not spatial_from_class:
-            if not self.has_space:
-                raise ValueError(
-                    "An implant is where a spatial model puts its electrodes, "
-                    "and this model has only a temporal component. A temporal "
-                    "model is given the stimulus and nothing else.")
-            raise ValueError(
-                f"This model's spatial component is already bound to "
-                f"{type(self.spatial.implant).__name__}. 'implant' is for "
-                f"passing 'spatial' as a class and leaving Model to build it.")
 
     def __getattr__(self, attr):
         """Forward missing attributes to model components.
