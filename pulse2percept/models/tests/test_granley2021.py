@@ -209,7 +209,7 @@ def test_effects_models_units():
 def test_effects_models_removed_engine(cls, arg):
     # 'engine' used to switch between the numpy and the (now removed) jax
     # backend. Deprecated in 0.9.1, removed in 0.10.0:
-    with pytest.raises(AttributeError):
+    with pytest.raises(TypeError):
         cls(arg, engine='serial')
 
 

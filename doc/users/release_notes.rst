@@ -86,11 +86,13 @@ Models
   parameters such as ``a0``; set them on the effect model instead.
 
 * :py:class:`~pulse2percept.models.Model` takes component instances only and
-  requires at least one, and component parameters are reached through
-  ``model.spatial`` / ``model.temporal`` rather than the composite. ``Model``
-  keeps ``implant`` and ``plot``; ``Model.set_params`` and
-  ``model.build(**params)`` are gone, in favor of ``model.spatial.rho = 250``
-  or ``model.spatial.build(rho=250)`` (:pull:`879`).
+  requires at least one. It no longer forwards attributes or methods to its
+  components, so ``model.rho``, ``model.grid``, ``model.vfmap``, ``model.eye``
+  and ``model.plot3D`` are reached through ``model.spatial`` /
+  ``model.temporal``; ``implant``, ``build``, ``plot`` and ``predict_percept``
+  stay on the composite. ``Model.set_params`` and ``model.build(**params)``
+  are gone, in favor of ``model.spatial.rho = 250`` or
+  ``model.spatial.build(rho=250)`` (:pull:`879`).
 
 * :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` no longer forwards
   attributes to its effect models: a coefficient is read and written on the

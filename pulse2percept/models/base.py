@@ -1382,8 +1382,8 @@ class Model(Frozen, PrettyPrint):
         copied = copy(self)
         # Register before recursing, so a reference cycle terminates:
         memodict[id(self)] = copied
-        copied.spatial = deepcopy(self.spatial, memodict)
-        copied.temporal = deepcopy(self.temporal, memodict)
+        for attr, value in self.__dict__.items():
+            setattr(copied, attr, deepcopy(value, memodict))
         return copied
 
     def __eq__(self, other):

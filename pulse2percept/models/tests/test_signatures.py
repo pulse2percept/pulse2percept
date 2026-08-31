@@ -19,6 +19,9 @@ from pulse2percept.models import (AlphaTemporal, AxonMapModel, AxonMapSpatial,
                                   ScoreboardSpatial, Thompson2003Model,
                                   Thompson2003Spatial)
 from pulse2percept.models import cortex
+from pulse2percept.models.granley2021 import (DefaultBrightModel,
+                                              DefaultSizeModel,
+                                              DefaultStreakModel)
 
 #: Public concrete models bound to an implant, with the parameter each one
 #: adds on top of the inherited spatial parameters.
@@ -47,7 +50,17 @@ STANDALONE_MODELS = [
     (Nanduri2012Temporal, 'asymptote'),
 ]
 
-ALL_MODELS = IMPLANT_MODELS + STANDALONE_MODELS
+#: Granley effect models, and their own parameter.
+EFFECT_MODELS = [
+    (DefaultBrightModel, 'a2'),
+    (DefaultSizeModel, 'a5'),
+    (DefaultStreakModel, 'a7'),
+]
+
+#: The spatial parameter an effect model scales, its only positional argument.
+EFFECT_ARG = {DefaultSizeModel: 'rho', DefaultStreakModel: 'lam'}
+
+ALL_MODELS = IMPLANT_MODELS + STANDALONE_MODELS + EFFECT_MODELS
 
 
 def _implant_for(cls):
@@ -57,9 +70,12 @@ def _implant_for(cls):
 
 
 def _construct(cls, **params):
-    """Construct ``cls``, supplying an implant if it takes one."""
+    """Construct ``cls``, supplying the argument it takes positionally."""
     if any(cls is model for model, _ in IMPLANT_MODELS):
         return cls(_implant_for(cls), **params)
+    if cls in EFFECT_ARG:
+        # `rho`/`lam`, in microns:
+        return cls(200, **params)
     return cls(**params)
 
 
@@ -70,7 +86,12 @@ def test_constructor_signature_is_explicit(cls, own_param):
                  if p.kind in (p.VAR_KEYWORD, p.VAR_POSITIONAL)]
     npt.assert_equal(catch_all, [])
     npt.assert_equal(own_param in params, True)
-    # Inherited parameters are part of the public signature too:
+
+
+@pytest.mark.parametrize('cls,_', IMPLANT_MODELS + STANDALONE_MODELS)
+def test_inherited_params_are_in_the_signature(cls, _):
+    # Effect models are excluded: they declare no inherited parameters.
+    params = inspect.signature(cls).parameters
     inherited = 'step' if any(cls is m for m, _ in IMPLANT_MODELS) else 'dt'
     npt.assert_equal(inherited in params, True)
     npt.assert_equal('verbose' in params, True)
@@ -92,7 +113,11 @@ def test_model_params_are_keyword_only(cls, own_param):
     params = inspect.signature(cls).parameters
     positional = [name for name, p in params.items()
                   if p.kind is not p.KEYWORD_ONLY]
-    npt.assert_equal(positional, ['implant'] if 'implant' in params else [])
+    # The implant, and the quantity an effect model scales, are the only
+    # arguments that may be passed positionally:
+    expected = [name for name in ('implant', EFFECT_ARG.get(cls))
+                if name in params]
+    npt.assert_equal(positional, expected)
 
 
 @pytest.mark.parametrize('cls,_', ALL_MODELS)

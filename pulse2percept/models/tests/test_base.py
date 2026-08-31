@@ -701,6 +701,7 @@ class ValidCompositeModel(Model):
         super().__init__(spatial=ValidSpatialModel(implant, step=step),
                          temporal=None)
         self.n_calls = 0
+        self.history = []
 
 
 def test_Model_subclass_constructor_owns_its_attributes():
@@ -1133,6 +1134,9 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     npt.assert_almost_equal(twin.spatial.step, 5)
     npt.assert_equal(twin.n_calls, 3)
     npt.assert_equal(id(twin.spatial) != id(named.spatial), True)
+    # Mutable state a subclass owns is copied, not shared with the original:
+    twin.history.append('predict')
+    npt.assert_equal(named.history, [])
 
 
 def test_model_unit_contract():

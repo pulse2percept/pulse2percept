@@ -44,8 +44,9 @@ class DefaultBrightModel(BaseModel):
     a4 : float, optional
         Intercept in Eq. 4."""
 
-    def __init__(self, **params):
-        super(DefaultBrightModel, self).__init__(**params)
+    def __init__(self, *, a0=2.095, a1=0.054326, a2=0.1492147, a3=0.0163851,
+                 a4=0):
+        super().__init__(a0=a0, a1=a1, a2=a2, a3=a3, a4=a4)
         self.build()
 
     def get_default_params(self):
@@ -128,8 +129,9 @@ class DefaultSizeModel(BaseModel):
         Intercept in Eq. 5.
     """
 
-    def __init__(self, rho, **params):
-        super(DefaultSizeModel, self).__init__(**params)
+    def __init__(self, rho, *, a0=2.095, a1=0.054326, a5=1.0812, a6=-0.35338,
+                 min_rho=10):
+        super().__init__(a0=a0, a1=a1, a5=a5, a6=a6, min_rho=min_rho)
         self.rho = rho
         self.build()
 
@@ -201,8 +203,8 @@ class DefaultStreakModel(BaseModel):
     a7, a8, a9 : float, optional
         Regression coefficients in ``a9 - a7 * pdur ** a8``.
     """
-    def __init__(self, lam, **params):
-        super(DefaultStreakModel, self).__init__(**params)
+    def __init__(self, lam, *, a7=0.54, a8=0.21, a9=1.56, min_lambda=10):
+        super().__init__(a7=a7, a8=a8, a9=a9, min_lambda=min_lambda)
         self.lam = lam
         self.build()
 
