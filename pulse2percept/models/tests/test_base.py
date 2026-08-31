@@ -22,7 +22,8 @@ from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
                                   SpatialModel, TemporalModel,
                                   Thompson2003Model)
 from pulse2percept.models.base import _blend_meridian
-from pulse2percept.models.cortex import (ScoreboardModel as
+from pulse2percept.models.cortex import (DynaphosModel,
+                                         ScoreboardModel as
                                          CortexScoreboardModel,
                                          ScoreboardSpatial as
                                          CortexScoreboardSpatial)
@@ -131,9 +132,11 @@ def test_SpatialModel():
     with pytest.raises(TypeError):
         # the implant must be a ProsthesisSystem
         ValidSpatialModel(Stimulus(3))
-    with pytest.raises(ValueError):
-        # ... and there must be one at all
-        ValidSpatialModel(None).build()
+    with pytest.raises(TypeError):
+        ValidSpatialModel(None)
+    with pytest.raises(TypeError):
+        # ... and it cannot be unbound afterwards either
+        model.implant = None
 
 
 def test_SpatialModel_predict_percept_time_order():
@@ -901,14 +904,19 @@ def test_predict_percept_builds_what_it_needs(make_model):
 @pytest.mark.parametrize('ModelClass, ImplantType', [
     (ScoreboardModel, ArgusII), (AxonMapModel, ArgusII),
     (Thompson2003Model, ArgusII), (Nanduri2012Model, ArgusII),
-    (BiphasicAxonMapModel, ArgusII), (CortexScoreboardModel, Cortivis)])
+    (BiphasicAxonMapModel, ArgusII), (CortexScoreboardModel, Cortivis),
+    (DynaphosModel, Cortivis)])
 def test_a_standalone_spatial_model_needs_an_implant(ModelClass, ImplantType):
     """Which device is modeled is not something to fill in later"""
     with pytest.raises(TypeError):
         ModelClass()
+    with pytest.raises(TypeError):
+        ModelClass(None)
     implant = ImplantType()
     for model in (ModelClass(implant), ModelClass(implant=implant)):
         npt.assert_equal(model.implant is implant, True)
+        with pytest.raises(TypeError):
+            model.implant = None
 
 
 def test_a_temporal_only_model_takes_no_implant():
@@ -924,16 +932,17 @@ def test_Model_builds_a_spatial_class_around_its_implant():
     model = Model(spatial=ValidSpatialModel, temporal=ValidTemporalModel,
                   implant=implant)
     npt.assert_equal(model.spatial.implant is implant, True)
+    for missing in ({}, {'implant': None}):
+        with pytest.raises(TypeError):
+            Model(spatial=ValidSpatialModel, **missing)
 
 
 def test_Model_names_one_implant():
-    """Two implants is contradictory model context, not a precedence question"""
+    """A spatial instance is already bound, so `implant` has nothing to say"""
     implant = ArgusI()
-    # The same object twice says nothing new:
-    model = Model(implant=implant, spatial=ValidSpatialModel(implant))
-    npt.assert_equal(model.implant is implant, True)
-    # Two different ones would have to silently pick a winner:
-    with pytest.raises(ValueError, match='two different implants'):
+    with pytest.raises(ValueError, match='already bound'):
+        Model(implant=implant, spatial=ValidSpatialModel(implant))
+    with pytest.raises(ValueError, match='already bound'):
         Model(implant=implant, spatial=ValidSpatialModel(ArgusII()))
 
 

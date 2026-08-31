@@ -22,6 +22,11 @@ class CortexSpatial(SpatialModel):
 
     Parameters:
     -----------
+    implant : :py:class:`~pulse2percept.implants.ProsthesisSystem`
+        The implant whose stimulation this model predicts.
+
+        .. versionadded:: 0.11.0
+
     regions : list of str, optional
         The regions to simulate. Options are any combination of 'v1', 'v2', 'v3'. 
         Default: ['v1']. 
