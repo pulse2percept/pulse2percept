@@ -190,7 +190,7 @@ def test_deepcopy_Scoreboard(ModelClass):
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 def test_plot(ModelClass):
     # make sure that plotting works before and after building
-    m = _spatial(ModelClass(implant=Cortivis()))
+    m = ModelClass(implant=Cortivis())
     m.plot()
     plt.close()
     m.build()

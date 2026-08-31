@@ -180,7 +180,7 @@ model = p2p.models.ScoreboardModel(implant=implant, xrange=(-7, 7),
 model.build()
 
 # Show the visual field we're simulating (dashed lines) atop the implant:
-model.spatial.plot()
+model.plot()
 implant.plot()
 
 ##############################################################################

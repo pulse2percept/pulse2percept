@@ -1319,13 +1319,34 @@ class Model(Frozen, PrettyPrint):
         return self.spatial.time_unit
 
     def __init__(self, spatial=None, temporal=None):
-        _check_component('spatial', spatial, SpatialModel, 'implant')
-        _check_component('temporal', temporal, TemporalModel, '')
         if spatial is None and temporal is None:
             raise TypeError("A Model needs a spatial model, a temporal model, "
                             "or both.")
+        # Both assignments are validated by `__setattr__`:
         self.spatial = spatial
         self.temporal = temporal
+
+    def __setattr__(self, name, value):
+        """Set an attribute, validating a replaced component.
+
+        Swapping a component out is the point of a composite, so the two slots
+        stay writable, but they may only ever hold a component of their own
+        kind, and the model may not be left without either one.
+        """
+        if name in ('spatial', 'temporal'):
+            is_spatial = name == 'spatial'
+            _check_component(name, value,
+                             SpatialModel if is_spatial else TemporalModel,
+                             'implant' if is_spatial else '')
+            other = 'temporal' if is_spatial else 'spatial'
+            # During construction the other slot may not exist yet; the
+            # constructor checks the pair itself.
+            if (value is None and not _is_constructing(self) and
+                    getattr(self, other) is None):
+                raise TypeError(f"Removing '{name}' would leave this Model "
+                                f"with neither a spatial nor a temporal "
+                                f"component.")
+        super().__setattr__(name, value)
 
     @property
     def implant(self):
@@ -1402,6 +1423,17 @@ class Model(Frozen, PrettyPrint):
         if self.has_time:
             self.temporal.build()
         return self
+
+    def plot(self, *args, **kwargs):
+        """Plot the spatial model.
+
+        Takes and returns whatever the spatial component's ``plot`` does; see
+        :py:meth:`~pulse2percept.models.SpatialModel.plot`.
+        """
+        if not self.has_space:
+            raise ValueError("A temporal-only model has no spatial model to "
+                             "plot.")
+        return self.spatial.plot(*args, **kwargs)
 
     def _build_stale(self):
         """Build only components whose cached state is invalid.

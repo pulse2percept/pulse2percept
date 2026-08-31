@@ -8,8 +8,6 @@ from ..implants import ElectrodeArray
 from ..stimuli import BiphasicPulseTrain, Stimulus
 from ..percepts import Percept
 from ..units import as_value, um, xTh
-from ..utils import FreezeError
-from ..utils.base import has_own_attr
 from .base import BaseModel, _require_stim_dimension
 from ._granley2021 import fast_biphasic_axon_map
 
@@ -291,8 +289,9 @@ def _pulse_train_params(stim, thresholds=None):
     return params
 
 
-#: Effect models excluded from attribute forwarding.
-_EFFECT_MODELS = ('bright_model', 'size_model', 'streak_model')
+#: Spatial parameters that also parameterize an effect model, and the
+#: effect model each one belongs to.
+_SHARED_WITH_EFFECT = {'rho': 'size_model', 'lam': 'streak_model'}
 
 
 class BiphasicAxonMapSpatial(AxonMapSpatial):
@@ -475,43 +474,21 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         self.rho = rho
         self.lam = lam
 
-    def __getattr__(self, attr):
-        # Do not forward the effect-model attributes themselves.
-        if attr in _EFFECT_MODELS:
-            raise AttributeError(f"{attr} not found")
-        # Avoid recursion, and do not forward until all effect models exist.
-        if not all(has_own_attr(self, name) for name in _EFFECT_MODELS):
-            raise AttributeError(f"{attr} not found")
-        for m in [self.bright_model, self.size_model, self.streak_model]:
-            if hasattr(m, attr):
-                return getattr(m, attr)
-        raise AttributeError(f"{attr} not found")
-
     def __setattr__(self, name, value):
-        """Set a spatial or effect-model parameter.
+        """Set a spatial parameter, keeping the effect models in step.
 
-        Parameters shared with an effect model, including ``rho`` and ``lam``, are
-        forwarded to both."""
-        found = False
-        # Probe without triggering deprecated aliases.
-        if has_own_attr(self, name):
-            try:
-                super().__setattr__(name, value)
-                found = True
-            except AttributeError:
-                pass
-        # Shared parameters such as ``rho`` and ``lam`` must stay synchronized.
-        if name not in _EFFECT_MODELS + ('is_built', '_is_built'):
-            try:
-                for m in [self.bright_model, self.size_model, self.streak_model]:
-                    if hasattr(m, name):
-                        setattr(m, name, value)
-                        found = True
-            except (AttributeError, FreezeError):
-                pass
-        if not found:
-            # Let ``Frozen`` handle genuinely new attributes.
-            super().__setattr__(name, value)
+        ``rho`` and ``lam`` are this model's parameters but also parameterize
+        the default size and streak models, so those two values are mirrored.
+        Every other effect-model coefficient is set on the effect model itself.
+        """
+        super().__setattr__(name, value)
+        target = _SHARED_WITH_EFFECT.get(name)
+        if target is None:
+            return
+        effect = getattr(self, target, None)
+        if hasattr(effect, name):
+            # Mirror the stored value, which `super()` has already normalized:
+            setattr(effect, name, getattr(self, name))
 
     def get_default_params(self):
         base_params = super(BiphasicAxonMapSpatial, self).get_default_params()

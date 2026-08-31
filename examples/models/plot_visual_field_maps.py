@@ -141,7 +141,7 @@ model = p2p.models.cortex.ScoreboardModel(implant=p2p.implants.cortex.Orion(),
 model.build()
 vfmap.plot(ax=ax[0])
 ax[0].set_title('Polimeni Mapping')
-model.spatial.plot(ax=ax[1])
+model.plot(ax=ax[1])
 ax[1].set_title('Points in Cortex')
 plt.show()
 

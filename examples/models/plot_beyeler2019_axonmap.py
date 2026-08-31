@@ -111,7 +111,7 @@ print(model)
 # You can inspect the location of the implant with respect to the underlying
 # nerve fiber bundles using the built-in plot methods:
 
-model.spatial.plot()
+model.plot()
 implant.plot()
 
 
@@ -148,7 +148,7 @@ ax.set_title('Predicted percept')
 # by re-running the model on an implant shifted and rotated across the retina:
 
 model.implant = ArgusII(x=-50, y=50, rot=-45)
-model.spatial.plot()
+model.plot()
 model.implant.plot()
 
 ##############################################################################

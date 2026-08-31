@@ -295,19 +295,22 @@ def test_biphasicAxonMapModel():
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
 
-    # We can set and get effects model params
+    # Effect-model coefficients live on the effect model that reads them, and
+    # are neither readable nor settable through the spatial model:
     for atr in ['a' + str(i) for i in range(0, 10)]:
-        npt.assert_equal(hasattr(model.spatial, atr), True)
-    model.spatial.a0 = 5
-    # Should propogate to size and bright model
-    # But should not be a member of streak or spatial
-    npt.assert_equal(model.spatial.size_model.a0, 5)
+        npt.assert_equal(hasattr(model.spatial, atr), False)
+    with pytest.raises(FreezeError):
+        model.spatial.a0 = 5
+    npt.assert_equal(model.spatial.bright_model.a0, 2.095)
+    model.spatial.bright_model.a0 = 5
     npt.assert_equal(model.spatial.bright_model.a0, 5)
+    # `a0` is a coefficient of two of the three effect models, and setting it
+    # on one leaves the others alone:
+    npt.assert_equal(model.spatial.size_model.a0, 2.095)
     npt.assert_equal(hasattr(model.spatial.streak_model, 'a0'), False)
-    with pytest.raises(AttributeError):
-        model.spatial.__getattribute__('a0')
-    # If the spatial model and an effects model have a parameter with the
-    # Same name, both need to be changed
+
+    # `rho` and `lam` are the one genuine overlap: they belong to the spatial
+    # model and also parameterize the default size and streak models.
     model.spatial.rho = 350
     model.spatial.lam = 450
     npt.assert_equal(model.spatial.size_model.rho, 350)
@@ -315,51 +318,32 @@ def test_biphasicAxonMapModel():
     npt.assert_equal(model.spatial.rho, 350)
     npt.assert_equal(model.spatial.lam, 450)
 
-    # Effect model parameters are not model constructor arguments; they are
-    # assigned afterwards, or configured on a custom effect model
+    # Effect model parameters are not model constructor arguments either:
     with pytest.raises(TypeError):
         BiphasicAxonMapModel(implant=ArgusII(), a0=5)
     model = BiphasicAxonMapModel(implant=ArgusII(), rho=432)
-    model.spatial.a0 = 5
-    npt.assert_equal(model.spatial.a0, 5)
-    npt.assert_equal(model.spatial.bright_model.a0, 5)
     npt.assert_equal(model.spatial.rho, 432)
     npt.assert_equal(model.spatial.size_model.rho, 432)
 
-    # If parameter is not an effects model param, it cant be set
+    # A parameter no model knows cannot be set:
     with pytest.raises(FreezeError):
         model.spatial.invalid_param = 5
 
-    # Custom parameters also propogate to effects models
+    # A custom size model still receives `rho`:
     model = BiphasicAxonMapModel(implant=ArgusII())
 
     class TestSizeModel():
         def __init__(self):
+            self.rho = None
             self.test_param = 5
 
         def __call__(self, freq, amp, pdur):
             return 1
     model.spatial.size_model = TestSizeModel()
-    model.spatial.test_param = 10
-    npt.assert_equal(model.spatial.size_model.test_param, 10)
-    with pytest.raises(AttributeError):
-        model.spatial.__getattribute__('test_param')
-
-    # Values are passed correctly even in another classes __init__
-    # This also tests for recursion error in another classes __init__
-    class TestInitClassGood():
-        def __init__(self):
-            self.model = BiphasicAxonMapModel(implant=ArgusII())
-            self.model.spatial.a0
-
-    class TestInitClassBad():
-        def __init__(self):
-            self.model = BiphasicAxonMapModel(implant=ArgusII())
-            self.model.spatial.a10 = 999
-    # If this fails, something is wrong with getattr / setattr logic
-    TestInitClassGood()
-    with pytest.raises(FreezeError):
-        TestInitClassBad()
+    model.spatial.rho = 321
+    npt.assert_equal(model.spatial.size_model.rho, 321)
+    npt.assert_equal(model.spatial.size_model.test_param, 5)
+    npt.assert_equal(hasattr(model.spatial, 'test_param'), False)
 
     # User can override default values
     model = BiphasicAxonMapModel(implant=ArgusII())

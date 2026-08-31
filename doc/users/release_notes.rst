@@ -88,9 +88,14 @@ Models
 * :py:class:`~pulse2percept.models.Model` takes component instances only and
   requires at least one, and component parameters are reached through
   ``model.spatial`` / ``model.temporal`` rather than the composite. ``Model``
-  keeps ``implant``; ``Model.set_params`` and ``model.build(**params)`` are
-  gone, in favor of ``model.spatial.rho = 250`` or
-  ``model.spatial.build(rho=250)`` (:pull:`879`).
+  keeps ``implant`` and ``plot``; ``Model.set_params`` and
+  ``model.build(**params)`` are gone, in favor of ``model.spatial.rho = 250``
+  or ``model.spatial.build(rho=250)`` (:pull:`879`).
+
+* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` no longer forwards
+  attributes to its effect models: a coefficient is read and written on the
+  model that uses it, as ``model.spatial.bright_model.a0``. ``rho`` and
+  ``lam`` still mirror onto the size and streak models (:pull:`879`).
 
 * :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
   photovoltaic drive produced by encoders such as

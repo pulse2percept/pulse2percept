@@ -306,7 +306,7 @@ This is useful when the spatial and temporal assumptions come from different
 models. The combined model handles the intermediate representation and returns
 a ``Percept`` like any other Model. At least one component is required, and
 both must already be constructed: ``Model`` composes components, it never
-builds them. The implant belongs to the spatial component, because a temporal
+constructs them. The implant belongs to the spatial component, because a temporal
 model never sees an electrode.
 
 Parameters

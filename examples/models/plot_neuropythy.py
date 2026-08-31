@@ -62,8 +62,8 @@ Lets use our map in a model and visualize the transform
         implant=p2p.implants.cortex.Cortivis(), vfmap=nmap, regions=['v1'])
     model.build()
     fig, axes = plt.subplots(ncols=2, figsize=(10, 4))
-    model.spatial.plot(style='cell', ax=axes[0])
-    model.spatial.plot(style='scatter', ax=axes[1])
+    model.plot(style='cell', ax=axes[0])
+    model.plot(style='scatter', ax=axes[1])
 
 .. note::
 
@@ -135,7 +135,7 @@ Lets place a Neuralink implant across the right hemisphere of the cortex:
     model.spatial.plot3D(ax=ax1, style='cell')
     nlink.plot3D(ax=ax1)
     ax2 = fig.add_subplot(122)
-    model.spatial.plot(style='cell', ax=ax2)
+    model.plot(style='cell', ax=ax2)
     nlink.plot(ax=ax2)
 
 Finally, let's predict what a percept would look like if we stimulated one

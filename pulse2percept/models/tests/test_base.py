@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 from matplotlib.axes import Subplot
+import matplotlib.pyplot as plt
 import time
 
 from pulse2percept.implants import ArgusI, ArgusII
@@ -874,6 +875,34 @@ def test_Model_takes_a_bound_spatial_instance():
     npt.assert_equal(temporal.implant, None)
     with pytest.raises(AttributeError):
         temporal.implant = ArgusII()
+
+
+def test_Model_components_stay_swappable_but_valid():
+    """Replacing a component is allowed; breaking the composite is not"""
+    model = Model(ValidSpatialModel(ArgusI()), ValidTemporalModel())
+    # Swapping in another instance of the right kind is the whole point:
+    model.temporal = FadingTemporal(tau=50)
+    npt.assert_almost_equal(model.temporal.tau, 50)
+    model.temporal = None
+    npt.assert_equal(model.has_time, False)
+    # ... but the slots only take their own kind:
+    for value in (42, 'oops', ValidTemporalModel(), ValidSpatialModel):
+        with pytest.raises(TypeError):
+            model.spatial = value
+    # ... and the model may not be left with neither component:
+    with pytest.raises(TypeError):
+        model.spatial = None
+    npt.assert_equal(model.has_space, True)
+
+
+def test_Model_plots_its_spatial_model():
+    """Plotting a model means plotting where it samples the visual field"""
+    model = Model(ValidSpatialModel(ArgusI()), ValidTemporalModel())
+    _, ax = plt.subplots()
+    npt.assert_equal(model.plot(ax=ax) is ax, True)
+    plt.close()
+    with pytest.raises(ValueError):
+        Model(temporal=ValidTemporalModel()).plot()
 
 
 def test_Model_predict_percept():

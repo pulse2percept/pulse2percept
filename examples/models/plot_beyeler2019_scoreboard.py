@@ -114,7 +114,7 @@ model.build()
 # We can visualize the implant and verify that we are simulating the correct
 # patch of retina as follows:
 
-model.spatial.plot()
+model.plot()
 implant.plot()
 
 ##############################################################################

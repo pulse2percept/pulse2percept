@@ -69,7 +69,7 @@ model.build()
 ###############################################################################
 # We can visualize where the implant sits on the axon map as follows:
 
-model.spatial.plot()
+model.plot()
 implant.plot()
 
 ###############################################################################

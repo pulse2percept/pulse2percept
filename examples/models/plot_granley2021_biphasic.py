@@ -76,7 +76,7 @@ print(model)
 # Before it can predict anything, the model performs expensive, one-time
 # calculations (growing the axon map). That happens automatically the first
 # time you ask for a percept, and again whenever you change a model parameter
-# such as ``model.spatial.a5``. You can also trigger it yourself with
+# such as ``model.spatial.rho``. You can also trigger it yourself with
 # ``model.build()``, which is what the next line does so that the axon map
 # exists to be plotted:
 
@@ -85,7 +85,7 @@ model.build()
 ##############################################################################
 # You can visualize the location of the implant and the axon map
 
-model.spatial.plot()
+model.plot()
 implant.plot()
 plt.show()
 
@@ -212,9 +212,8 @@ print(f"{delivered.data.max():.0f} uA")
 #
 # The coefficients ``a0``-``a9`` parametrize these effect models. While the default values
 # are likely to work for most cases, they can be customized to be patient specific. 
-# Notice how we only have to set the value on the spatial model, and it is
-# automatically passed down to the effect models.
-model.spatial.a5 = 0
+# They belong to the effect model that reads them, and are set there:
+model.spatial.size_model.a5 = 0
 print(model.spatial.size_model.a5)
 
 ##################################################################################
@@ -223,9 +222,12 @@ print(model.spatial.size_model.a5)
 # scaling can easily be disabled by setting ``a0`` to 0 and ``a1`` to 1. If we increase 
 # pulse duration like we did previously, we will now see that only streak length decreases, 
 # and we no longer have to change amplitude to account for change in threshold
+# ``a0`` and ``a1`` appear in both the brightness and the size model, so set
+# them on each:
 model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
-model.spatial.a0 = 0
-model.spatial.a1 = 1
+for effect in (model.spatial.bright_model, model.spatial.size_model):
+    effect.a0 = 0
+    effect.a1 = 1
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
 percept = model.predict_percept({'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)})
 new_percept = model.predict_percept(
