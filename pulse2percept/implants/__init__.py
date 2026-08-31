@@ -39,7 +39,7 @@ from .prima import (PhotovoltaicPixel, PRIMAPivotal, Lorach2015Array,
 from .imie import IMIE
 from .ensemble import EnsembleImplant
 from . import cortex
-from ..utils import deprecated_names
+from ..utils.deprecation import _deprecated_names
 
 __all__ = [
     'AlphaAMS',
@@ -80,6 +80,6 @@ __all__ = [
 
 # Deprecated in 0.11.0, removed in 0.12.0. Defined here as well as in
 # ``base`` so that both import paths warn.
-__getattr__ = deprecated_names(__name__, {'ProsthesisSystem': Implant},
-                               deprecated_version='0.11.0',
-                               removed_version='0.12.0')
+__getattr__ = _deprecated_names(__name__, {'ProsthesisSystem': Implant},
+                                deprecated_version='0.11.0',
+                                removed_version='0.12.0')

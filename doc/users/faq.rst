@@ -318,7 +318,7 @@ Most pulse2percept simulations involve four objects, plus an optional encoder:
 
 :py:class:`~pulse2percept.implants.Implant`
     Describes the prosthetic device, including its electrode array, placement,
-    and stimulus. Specific devices such as
+    and input/encoding pipeline. Specific devices such as
     :py:class:`~pulse2percept.implants.ArgusII` are subclasses of this object.
 
 :py:class:`~pulse2percept.models.Model`

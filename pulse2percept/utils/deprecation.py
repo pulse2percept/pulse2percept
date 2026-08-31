@@ -1,7 +1,6 @@
 """:py:class:`~pulse2percept.utils.deprecated`,
    :py:class:`~pulse2percept.utils.deprecate_parameter`,
    :py:class:`~pulse2percept.utils.deprecated_alias`,
-   :py:func:`~pulse2percept.utils.deprecated_names`,
    :py:class:`~pulse2percept.utils.rename_parameter`,
    :py:class:`~pulse2percept.utils.is_deprecated`"""
 
@@ -192,31 +191,16 @@ class deprecated:
         return wrapped
 
 
-def deprecated_names(module, aliases, deprecated_version=None,
-                     removed_version=None):
-    """Build a module-level ``__getattr__`` for renamed module attributes.
+def _deprecated_names(module, aliases, deprecated_version=None,
+                      removed_version=None):
+    """Return a module ``__getattr__`` (:pep:`562`) for renamed classes.
 
-    The old name keeps resolving to the very same object, so ``isinstance``
-    and ``issubclass`` checks written against it behave as before; only
-    looking the name up warns. Use :class:`deprecated` instead when the old
-    name should keep its own (deprecated) implementation.
-
-    .. versionadded:: 0.11.0
-
-    Parameters
-    ----------
-    module : str
-        Name of the module installing the hook, i.e. its ``__name__``. Used in
-        the ``AttributeError`` raised for names that are not aliases.
-    aliases : dict
-        Maps each deprecated name to the object it now refers to.
-    deprecated_version, removed_version : float or str, optional
-        Versions in which the old names were deprecated and will be removed.
-
-    Returns
-    -------
-    __getattr__ : callable
-        Assign to the module's ``__getattr__`` (see :pep:`562`).
+    ``module`` is the installing module's ``__name__``, used in the
+    ``AttributeError`` raised for anything not in ``aliases``, which maps each
+    old name to the class it now refers to. The old name resolves to that very
+    class rather than to a deprecated subclass, so ``isinstance`` and
+    ``issubclass`` checks written against it keep working; only the lookup
+    warns.
     """
     clause = _version_clause(deprecated_version, removed_version)
 

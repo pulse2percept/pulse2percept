@@ -16,7 +16,8 @@ from ..stimuli.base import _describe_unit
 from ..stimuli.encoders import _EncodedStimulus
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
-from ..utils import PrettyPrint, deprecated, deprecated_names
+from ..utils import PrettyPrint, deprecated
+from ..utils.deprecation import _deprecated_names
 
 
 class Implant(PrettyPrint):
@@ -896,6 +897,6 @@ class RectangleImplant(Implant):
 # ``ProsthesisSystem`` was renamed to ``Implant`` in 0.11.0. It resolves to the
 # class itself rather than to a subclass, so ``isinstance`` and ``issubclass``
 # checks written against the old name keep working during the deprecation.
-__getattr__ = deprecated_names(__name__, {'ProsthesisSystem': Implant},
-                               deprecated_version='0.11.0',
-                               removed_version='0.12.0')
+__getattr__ = _deprecated_names(__name__, {'ProsthesisSystem': Implant},
+                                deprecated_version='0.11.0',
+                                removed_version='0.12.0')
