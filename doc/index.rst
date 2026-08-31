@@ -53,3 +53,10 @@ pulse2percept |version| documentation
 .. include:: ../README.rst
    :start-after: .. intro-begin
    :end-before: .. quickstart-end
+
+Compatibility
+=============
+
+.. include:: ../README.rst
+   :start-after: .. compat-begin
+   :end-before: .. compat-end

@@ -18,17 +18,6 @@ investing significant time in an implementation.
    responsibility for them, and participate in the review process. See
    :ref:`dev-contributing-ai` for the complete policy.
 
-This guide covers:
-
-* `Recommended workflow`_
-* `Human responsibility and AI-assisted tools`_
-* `Setting up a development environment`_
-* `Submitting a pull request`_
-* `Code style`_
-* `Documenting your code`_
-* `Documenting API changes`_
-* `Testing your code`_
-
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
 
 
@@ -39,14 +28,13 @@ Recommended workflow
 
 1. **Choose or open an issue.**
 
-   Check the `Issue Tracker`_ for existing work. For nontrivial bug fixes,
-   enhancements, or API changes, comment on the issue before starting so that
-   the scope can be agreed upon and duplicate work can be avoided.
+   Check the `Issue Tracker`_ for existing work. Discuss nontrivial bug fixes,
+   enhancements, and API changes before starting so that the scope is clear and
+   duplicate work can be avoided.
 
-2. **Fork and install the repository.**
+2. **Set up a development environment.**
 
-   Follow the :ref:`Installation Guide <install-source>` and install the
-   development dependencies as described below.
+   Fork and clone the repository, then follow :ref:`dev-contributing-setup`.
 
 3. **Create a focused branch.**
 
@@ -66,9 +54,7 @@ Recommended workflow
 
 6. **Participate in review.**
 
-   Respond to questions, revise the contribution when needed, and keep the
-   branch current enough for the test suite to run against the proposed
-   change.
+   Respond to questions and revise the contribution as needed.
 
 
 .. _dev-contributing-ai:
@@ -110,7 +96,7 @@ Setting up a development environment
 
 pulse2percept requires Python 3.11 or newer.
 
-After forking the repository, clone your fork and add the main repository as
+Fork the repository, clone your fork, and add the main repository as
 ``upstream``:
 
 .. code-block:: bash
@@ -119,14 +105,18 @@ After forking the repository, clone your fork and add the main repository as
     cd pulse2percept
     git remote add upstream https://github.com/pulse2percept/pulse2percept.git
 
-Create and activate a virtual environment using your preferred environment
-manager. Then install pulse2percept in editable mode with the development
-dependencies:
+Install pulse2percept in editable mode with the development dependencies:
 
 .. code-block:: bash
 
-    python -m pip install --upgrade pip
     python -m pip install -e ".[dev]"
+
+With `uv <https://docs.astral.sh/uv/>`_:
+
+.. code-block:: bash
+
+    uv venv
+    uv pip install -e ".[dev]"
 
 Before starting new work, update your local ``master`` branch:
 
@@ -136,18 +126,11 @@ Before starting new work, update your local ``master`` branch:
     git switch master
     git merge --ff-only upstream/master
 
-Create a branch for the change:
+Then create a branch:
 
 .. code-block:: bash
 
     git switch -c fix-short-description
-
-If ``git switch`` is unavailable in your Git version, the equivalent command
-is:
-
-.. code-block:: bash
-
-    git checkout -b fix-short-description
 
 
 .. _dev-contributing-pr:
@@ -188,14 +171,13 @@ A good pull request:
 * passes the automated checks, or clearly identifies any failure believed to
   be unrelated.
 
-Do not assume that a failing check is unrelated to the pull request.
-Investigate the failure and document what you found. The maintainers will
-decide whether a failure can safely be treated as independent of the proposed
-change.
+Investigate failing checks rather than assuming they are unrelated to the pull
+request.
 
 Open a draft pull request when the implementation is incomplete or when early
 feedback would be useful. Mark it ready for review only when you believe the
 change is complete.
+
 
 Code style
 ==========
@@ -271,9 +253,6 @@ User-facing API changes should be annotated in the relevant docstring:
 Include the pulse2percept version in which the change will appear. Ask a
 maintainer which version to use if it is not yet clear.
 
-.. _reST directives:
-   https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html
-
 
 .. _dev-contributing-test:
 
@@ -322,12 +301,19 @@ Benchmarking your code
 
 The ``benchmarks`` directory holds a small suite that measures execution time
 and peak memory for the library's main job: predicting a percept from a
-stimulus, an implant and a phosphene model. Run it when a change touches a
-hot path:
+stimulus, an implant, and a phosphene model. Run it when a change touches a
+hot path.
+
+If you have not already installed the development dependencies:
 
 .. code-block:: bash
 
-    pip install -e ".[benchmark]"
+    python -m pip install -e ".[dev,benchmark]"
+
+Then run:
+
+.. code-block:: bash
+
     pytest benchmarks/ --benchmark-only
 
 Benchmarks are skipped unless ``--benchmark-only`` is given, and they live
@@ -353,11 +339,3 @@ how to add a scenario.
 .. _pytest: https://docs.pytest.org/
 .. _NumPy testing:
    https://numpy.org/doc/stable/reference/routines.testing.html
-.. _GitHub Actions:
-   https://github.com/pulse2percept/pulse2percept/actions
-
-
-Thank you
-=========
-
-Thank you for helping improve pulse2percept.
