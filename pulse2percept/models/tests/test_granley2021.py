@@ -302,8 +302,7 @@ def test_biphasicAxonMapModel():
     for param in set_params:
         npt.assert_equal(hasattr(model.spatial, param), True)
 
-    # Effect-model coefficients live on the effect model that reads them, and
-    # are neither readable nor settable through the spatial model:
+    # Effect-model coefficients are accessed only through their effect model:
     for atr in ['a' + str(i) for i in range(0, 10)]:
         npt.assert_equal(hasattr(model.spatial, atr), False)
     with pytest.raises(FreezeError):
@@ -311,13 +310,12 @@ def test_biphasicAxonMapModel():
     npt.assert_equal(model.spatial.bright_model.a0, 2.095)
     model.spatial.bright_model.a0 = 5
     npt.assert_equal(model.spatial.bright_model.a0, 5)
-    # `a0` is a coefficient of two of the three effect models, and setting it
-    # on one leaves the others alone:
+    # Effect-model coefficients are independent:
     npt.assert_equal(model.spatial.size_model.a0, 2.095)
     npt.assert_equal(hasattr(model.spatial.streak_model, 'a0'), False)
 
-    # `rho` and `lam` are the one genuine overlap: they belong to the spatial
-    # model and also parameterize the default size and streak models.
+    # `rho` and `lam` are mirrored from the spatial model to the size and
+    # streak models.
     model.spatial.rho = 350
     model.spatial.lam = 450
     npt.assert_equal(model.spatial.size_model.rho, 350)
@@ -332,7 +330,7 @@ def test_biphasicAxonMapModel():
     npt.assert_equal(model.spatial.rho, 432)
     npt.assert_equal(model.spatial.size_model.rho, 432)
 
-    # A parameter no model knows cannot be set:
+    # Unknown parameters are rejected:
     with pytest.raises(FreezeError):
         model.spatial.invalid_param = 5
 

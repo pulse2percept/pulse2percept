@@ -169,9 +169,9 @@ def check_model_builds() -> list[str]:
         from pulse2percept.models import ScoreboardModel
 
         # This runs against released versions too, and 0.10.0 renamed the
-        # grid spacing parameter `xystep` -> `step`. Ask the constructor which
-        # spelling it takes: as of 0.11 a model no longer exposes its
-        # component's parameters as attributes, so probing an instance lies.
+        # grid spacing parameter `xystep` -> `step`. Inspect the constructor
+        # because as of 0.11 model parameters are accessed through their
+        # components.
         params = inspect.signature(ScoreboardModel).parameters
         spacing = "step" if "step" in params else "xystep"
         model = ScoreboardModel(implant=ArgusII(), xrange=(-4, 4),

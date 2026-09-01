@@ -1,7 +1,7 @@
 """Tests for the public model constructor signatures.
 
-The signature is the public API here: a shipped model has to say what it
-accepts, rather than absorbing anything into a catch-all and forwarding it.
+Concrete model constructors expose explicit signatures without ``*args`` or
+``**kwargs``.
 """
 import inspect
 
@@ -113,8 +113,7 @@ def test_model_params_are_keyword_only(cls, own_param):
     params = inspect.signature(cls).parameters
     positional = [name for name, p in params.items()
                   if p.kind is not p.KEYWORD_ONLY]
-    # The implant, and the quantity an effect model scales, are the only
-    # arguments that may be passed positionally:
+    # Only the implant and effect-model scale parameters may be positional:
     expected = [name for name in ('implant', EFFECT_ARG.get(cls))
                 if name in params]
     npt.assert_equal(positional, expected)

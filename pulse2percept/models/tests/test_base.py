@@ -235,14 +235,13 @@ def test_Model_has_no_parameter_namespace():
     """Component parameters live on the component, not on the composite"""
     model = Model(spatial=ValidSpatialModel(ArgusI(), step=1),
                   temporal=ValidTemporalModel())
-    # Nothing to construct with, nothing to set, nothing to build with:
+    # The composite accepts no component parameters:
     with pytest.raises(TypeError):
         Model(spatial=ValidSpatialModel(ArgusI()), step=2)
     npt.assert_equal(hasattr(model, 'set_params'), False)
     with pytest.raises(TypeError):
         model.build(step=2)
-    # Reads are not forwarded, and an assignment cannot quietly reach the
-    # spatial model either:
+    # Attributes are not forwarded to components:
     with pytest.raises(AttributeError):
         model.step
     with pytest.raises(FreezeError):
@@ -715,16 +714,14 @@ def test_Model_subclass_constructor_owns_its_attributes():
 
 
 def test_Model_subclass_params_go_to_the_component_model():
-    # A named model is convenient at construction time; the value it was given
-    # lives on the component, not as a second copy on the wrapper:
+    # Named-model constructor parameters are stored only on the component:
     model = ValidCompositeModel(ArgusI(), step=2.5)
     npt.assert_almost_equal(model.spatial.step, 2.5)
     npt.assert_equal('step' in model.__dict__, False)
     model.spatial.step = 0.5
     npt.assert_almost_equal(model.spatial.step, 0.5)
     npt.assert_equal('step' in model.__dict__, False)
-    # A parameter no sub-model knows has nowhere to go, and must not quietly
-    # become an attribute of the composite instead:
+    # Unknown constructor parameters are rejected:
     with pytest.raises(TypeError):
         ValidCompositeModel(ArgusI(), nonexistent=1)
 
@@ -881,16 +878,16 @@ def test_Model_takes_a_bound_spatial_instance():
 def test_Model_components_stay_swappable_but_valid():
     """Replacing a component is allowed; breaking the composite is not"""
     model = Model(ValidSpatialModel(ArgusI()), ValidTemporalModel())
-    # Swapping in another instance of the right kind is the whole point:
+    # Components may be replaced or removed when another remains:
     model.temporal = FadingTemporal(tau=50)
     npt.assert_almost_equal(model.temporal.tau, 50)
     model.temporal = None
     npt.assert_equal(model.has_time, False)
-    # ... but the slots only take their own kind:
+    # Each slot accepts only its corresponding component type:
     for value in (42, 'oops', ValidTemporalModel(), ValidSpatialModel):
         with pytest.raises(TypeError):
             model.spatial = value
-    # ... and the model may not be left with neither component:
+    # At least one component is required:
     with pytest.raises(TypeError):
         model.spatial = None
     npt.assert_equal(model.has_space, True)
@@ -1088,7 +1085,7 @@ def test_Model_pprint_params():
     both = Model(spatial=ValidSpatialModel(ArgusI()),
                  temporal=ValidTemporalModel())
     params = both._pprint_params()
-    # The composition, not a flattened bag of component parameters:
+    # Only the components are exposed at the Model level:
     npt.assert_equal(sorted(params), ['spatial', 'temporal'])
     npt.assert_equal(isinstance(str(both), str), True)
 
@@ -1106,8 +1103,7 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     npt.assert_equal(id(copied.spatial) != id(model.spatial), True)
     npt.assert_equal(id(copied.temporal) != id(model.temporal), True)
 
-    # Component parameters live on the components, and a copy that rebuilt
-    # them from the constructor alone would silently reset them to defaults:
+    # Deepcopy preserves component parameter values:
     model = Model(spatial=ValidSpatialModel(ArgusI(), step=5,
                                             thresh_percept=0.5))
     copied = copy.deepcopy(model)
@@ -1134,7 +1130,7 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     npt.assert_almost_equal(twin.spatial.step, 5)
     npt.assert_equal(twin.n_calls, 3)
     npt.assert_equal(id(twin.spatial) != id(named.spatial), True)
-    # Mutable state a subclass owns is copied, not shared with the original:
+    # Subclass-owned mutable state is deep-copied:
     twin.history.append('predict')
     npt.assert_equal(named.history, [])
 

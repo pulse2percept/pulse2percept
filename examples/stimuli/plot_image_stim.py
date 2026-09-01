@@ -335,8 +335,8 @@ model = p2p.models.Model(
 #    You can combine any spatial model (names ending in **Spatial**) with any
 #    temporal model (names ending in **Temporal**).
 #
-# Each parameter belongs to the component that uses it, so ``xrange``,
-# ``yrange``, ``step``, and ``rho`` went to the spatial model above.
+# ``xrange``, ``yrange``, ``step``, and ``rho`` are spatial parameters, so
+# they are set on ``ScoreboardSpatial`` above.
 #
 # The ``rho`` parameter of the scoreboard model controls how much blur we get
 # in the resulting percept. The value of this parameter should be set

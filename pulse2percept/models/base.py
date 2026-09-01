@@ -51,12 +51,7 @@ def _n_jobs_alias():
 
 
 def _thread_params(n_threads, n_jobs):
-    """Return the ``n_threads``/``n_jobs`` values a constructor forwards.
-
-    ``None`` means "not given" for both. ``n_jobs`` writes through to
-    ``n_threads``, so forwarding it unasked would overwrite an explicit
-    ``n_threads``.
-    """
+    """Return non-None thread-count arguments."""
     return {**({} if n_threads is None else {'n_threads': n_threads}),
             **({} if n_jobs is None else {'n_jobs': n_jobs})}
 
@@ -1258,8 +1253,8 @@ class Model(Frozen, PrettyPrint):
 
         model = Model(ScoreboardSpatial(ArgusII()), Nanduri2012Temporal())
 
-    The composite has no parameter namespace of its own: component parameters
-    are read and written where they live, as ``model.spatial.rho`` and
+    ``Model`` does not forward component parameters. Access them through
+    ``model.spatial`` or ``model.temporal``, as ``model.spatial.rho`` and
     ``model.temporal.tau``.
 
     Parameters
@@ -1329,9 +1324,9 @@ class Model(Frozen, PrettyPrint):
     def __setattr__(self, name, value):
         """Set an attribute, validating a replaced component.
 
-        Swapping a component out is the point of a composite, so the two slots
-        stay writable, but they may only ever hold a component of their own
-        kind, and the model may not be left without either one.
+        ``spatial`` and ``temporal`` remain writable, but must contain the
+        corresponding component type or ``None``. At least one component is
+        required.
         """
         if name in ('spatial', 'temporal'):
             is_spatial = name == 'spatial'
@@ -1339,8 +1334,7 @@ class Model(Frozen, PrettyPrint):
                              SpatialModel if is_spatial else TemporalModel,
                              'implant' if is_spatial else '')
             other = 'temporal' if is_spatial else 'spatial'
-            # During construction the other slot may not exist yet; the
-            # constructor checks the pair itself.
+            # During construction, the other component may not be assigned yet.
             if (value is None and not _is_constructing(self) and
                     getattr(self, other) is None):
                 raise TypeError(f"Removing '{name}' would leave this Model "
@@ -1352,9 +1346,8 @@ class Model(Frozen, PrettyPrint):
     def implant(self):
         """The implant the spatial model is bound to.
 
-        A temporal-only model has no electrodes to place, and returns ``None``.
-        Rebinding delegates to ``model.spatial.implant``, and invalidates the
-        spatial build as that assignment does.
+        Returns ``None`` for temporal-only models. Assignment forwards to
+        ``model.spatial.implant`` and invalidates the spatial build.
 
         .. versionadded:: 0.11.0
         """
@@ -1372,8 +1365,6 @@ class Model(Frozen, PrettyPrint):
     def __deepcopy__(self, memodict=None):
         """Return a deep copy of the model.
 
-        The components define their own copy semantics, including sharing the
-        implant across copies and rebuilding what was built.
         """
         if memodict is None:
             memodict = {}
@@ -1400,19 +1391,15 @@ class Model(Frozen, PrettyPrint):
         return id(self) // 16
 
     def _pprint_params(self):
-        """Return a dictionary of parameters to pretty - print
-
-        The composition, not a flattened bag of component parameters: each
-        component pretty-prints its own.
-        """
+        """Return the spatial and temporal components."""
         return {'spatial': self.spatial, 'temporal': self.temporal}
 
     def build(self):
         """Build all model components.
 
         Unlike prediction-time auto-building, this rebuilds every component.
-        Set a component parameter where it lives (``model.spatial.rho = 250``,
-        or ``model.spatial.build(rho=250)``) rather than through the composite.
+        To set parameters while building, call the component's ``build`` method,
+        e.g. ``model.spatial.build(rho=250)``.
 
         Returns
         -------
@@ -1427,7 +1414,7 @@ class Model(Frozen, PrettyPrint):
     def plot(self, *args, **kwargs):
         """Plot the spatial model.
 
-        Takes and returns whatever the spatial component's ``plot`` does; see
+        Parameters and return value are those of
         :py:meth:`~pulse2percept.models.SpatialModel.plot`.
         """
         if not self.has_space:

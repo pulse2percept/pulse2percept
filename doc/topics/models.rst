@@ -275,8 +275,8 @@ always available for the plain numerical answer.
 Spatial and temporal components
 -------------------------------
 
-Classes ending in ``Model`` are complete model objects, and name every
-parameter they take in their constructor:
+Classes ending in ``Model`` are complete models with explicit constructor
+parameters:
 
 .. code-block:: python
 
@@ -302,28 +302,23 @@ Classes ending in ``Spatial`` or ``Temporal`` are components, and
 
     model = p2p.models.Model(spatial, temporal)
 
-This is useful when the spatial and temporal assumptions come from different
-models. The combined model handles the intermediate representation and returns
-a ``Percept`` like any other Model. At least one component is required, and
-both must already be constructed: ``Model`` composes components, it never
-constructs them. The implant belongs to the spatial component, because a temporal
-model never sees an electrode.
+Use ``Model`` to combine spatial and temporal components from different
+models. At least one component is required, and each must already be
+constructed. The implant belongs to the spatial component.
 
 Parameters
 ----------
 
-A parameter belongs to the component that uses it, and is read and written
-there:
+Component parameters are accessed directly:
 
 .. code-block:: python
 
     model.spatial.rho = 250
     model.temporal.tau = 50
 
-This holds for named models too. Their constructors are the convenience --
-``AxonMapModel(implant, rho=300)`` -- while afterwards the value lives on
-``model.spatial``. A name both components declare, such as ``thresh_percept``,
-is two separate parameters.
+Named-model constructors expose the same parameters directly. After
+construction, access them through the component. Parameters declared by both
+components, such as ``thresh_percept``, remain independent.
 
 The API reference for each model documents its assumptions, parameters, input
 requirements, and numerical units.

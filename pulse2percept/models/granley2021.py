@@ -291,8 +291,7 @@ def _pulse_train_params(stim, thresholds=None):
     return params
 
 
-#: Spatial parameters that also parameterize an effect model, and the
-#: effect model each one belongs to.
+#: Spatial parameters mirrored to effect models.
 _SHARED_WITH_EFFECT = {'rho': 'size_model', 'lam': 'streak_model'}
 
 
@@ -452,8 +451,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                  meridian_blend=1, axon_pickle='axons.pickle',
                  ignore_pickle=False, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
-        # The effect models are declared parameters, so `super().__init__`
-        # leaves them at their `None` default; they are installed below.
+        # Install default effect models after AxonMapSpatial initialization.
         super().__init__(
             implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange,
             step=step, grid_type=grid_type, thresh_percept=thresh_percept,
@@ -471,17 +469,15 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                            else size_model)
         self.streak_model = (DefaultStreakModel(self.lam)
                              if streak_model is None else streak_model)
-        # `__setattr__` mirrors these onto the effect models, which did not
-        # exist yet while `super().__init__` was applying them:
+        # Synchronize rho/lam now that the effect models exist:
         self.rho = rho
         self.lam = lam
 
     def __setattr__(self, name, value):
-        """Set a spatial parameter, keeping the effect models in step.
+        """Set a spatial parameter and synchronize shared effect-model parameters.
 
-        ``rho`` and ``lam`` are this model's parameters but also parameterize
-        the default size and streak models, so those two values are mirrored.
-        Every other effect-model coefficient is set on the effect model itself.
+        ``rho`` and ``lam`` are mirrored to the size and streak models.
+        Other effect-model parameters are not forwarded.
         """
         super().__setattr__(name, value)
         target = _SHARED_WITH_EFFECT.get(name)
