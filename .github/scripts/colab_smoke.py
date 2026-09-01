@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Install pulse2percept inside the real Colab runtime and check what it broke.
+"""Install p2p inside the real Colab runtime and check what it broke.
 
-This runs *inside* Google's published Colab image (see colab.yml). It is
+This runs inside Google's published Colab image (see colab.yml). It is
 Python rather than shell so it can be run and debugged locally against the
 very same image a user gets in a notebook:
 
@@ -14,21 +14,6 @@ The working directory must not be the checkout: from there a source tree
 shadows the installed package on sys.path and the whole run tests the wrong
 thing (quietly).
 
-Why this exists
----------------
-An install that fails outright is the easy case, and the regular test matrix
-already catches it. The failure users actually hit in Colab is quieter: pip
-resolves a dependency, upgrades numpy or scipy, and the TensorFlow / JAX /
-PyTorch that Colab preinstalled against the old ABI stops importing -- or the
-notebook starts demanding a runtime restart. A clean virtualenv has nothing
-preinstalled, so it structurally cannot reproduce that. So we install into the
-real thing and compare `pip freeze` either side.
-
-Packages that appear are fine. Packages that *change version* are not.
-
-When something does move, the report also says *why*: pip states the
-requirement it was resolving and who asked for it, which is the difference
-between "numpy got downgraded" and "our own numpy ceiling downgraded it".
 """
 
 from __future__ import annotations
@@ -39,22 +24,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-# The distribution under test. A version change traceable to a requirement
-# this package declares itself is the actionable kind: it is ours to fix.
+# The distribution under test:
 DIST_NAME = "pulse2percept"
 
 # `Collecting numpy<3,>=2.0 (from pulse2percept)`, or with a chain of
-# requirers: `(from scikit-image>=0.24->pulse2percept)`. This is the only
-# place pip states the *reason* it picked a version.
+# requirers: `(from scikit-image>=0.24->pulse2percept)`
 COLLECTING = re.compile(
     r"^\s*Collecting\s+(?P<req>[^\s(]+)"
     r"(?:\s+\(from\s+(?P<chain>[^)]*)\))?\s*$"
 )
 # Leading distribution name of a requirement, e.g. `numpy` of `numpy<1.27`.
 REQ_NAME = re.compile(r"^[A-Za-z0-9._-]+")
-# Any version specifier. An unpinned requirement cannot move anything, so it
-# is never the thing to go fix. Both directions matter: an upper bound drags a
-# package down, a lower bound pushes it up.
+# Any version specifier:
 HAS_SPECIFIER = re.compile(r"[<>=!~]")
 
 
@@ -65,12 +46,7 @@ def canonicalize(name: str) -> str:
 
 def run(cmd: list[str], *, check: bool = True,
         tee: bool = False) -> subprocess.CompletedProcess:
-    """Run a command, echoing it so CI logs show exactly what happened.
-
-    With ``tee``, the output is captured *and* printed: the CI log stays
-    complete, and the text remains available to attribute version changes to
-    the requirement that caused them.
-    """
+    """Run a command, echoing it so CI logs show exactly what happened"""
     print(f"\n$ {' '.join(cmd)}", flush=True)
     if not tee:
         return subprocess.run(cmd, check=check, text=True)
@@ -82,7 +58,7 @@ def run(cmd: list[str], *, check: bool = True,
 
 
 def parse_requirements(output: str) -> dict[str, list[tuple[str, str]]]:
-    """Map each package pip resolved to the requirement(s) it was satisfying.
+    """Map each package pip resolved to the requirement(s) it was satisfying
 
     Returns ``{canonical name: [(requirement, requirer chain), ...]}``, where
     the chain is pip's own ``a->b`` rendering, nearest requirer first, and is
@@ -113,7 +89,7 @@ def explain(names: list[str],
         if not reqs:
             # pip only prints `Collecting` for packages it (re)installs by
             # name; a version can also move as a side effect of backtracking.
-            rows.append(f"{name}: no requirement line from pip -- most likely "
+            rows.append(f"{name}: no requirement line from pip - most likely "
                         f"resolver backtracking to satisfy another pin")
             continue
         for req, chain in reqs:
@@ -159,11 +135,10 @@ def freeze() -> dict[str, str]:
 
 
 def pip_check() -> set[str]:
-    """Whatever `pip check` complains about, as a set of lines.
+    """Whatever `pip check` complains about, as a set of lines
 
-    Colab's image routinely ships with dependency conflicts of its own, so an
-    absolute `pip check` result is not a signal. Only conflicts that appear
-    *because of* our install are.
+    Colab's image routinely ships with dependency conflicts of its own, so 
+    only conflicts that appear because of our install are important.
     """
     out = subprocess.run(
         [sys.executable, "-m", "pip", "check"], text=True, capture_output=True
@@ -219,10 +194,6 @@ def main() -> int:
     if conflicts_before:
         print(f"({len(conflicts_before)} pre-existing pip conflicts, not ours)")
 
-    # No wheel for Colab's interpreter means every user pays for a source
-    # build: minutes of compiling, and a hard failure if the image ever stops
-    # shipping a compiler. Asking pip resolves this against Colab's *actual*
-    # Python and platform, so nothing here needs updating when Colab moves.
     if args.require_wheel:
         probe = run(
             [
@@ -241,8 +212,7 @@ def main() -> int:
         print("A prebuilt wheel is available for Colab's interpreter.")
 
     # Install exactly the way a notebook user would: plain pip, build
-    # isolation left on. Deliberately *not* --no-build-isolation, which would
-    # test a path no Colab user is on.
+    # isolation left on
     install = run(
         [sys.executable, "-m", "pip", "install", "--root-user-action=ignore", args.spec],
         check=False,
@@ -275,10 +245,6 @@ def main() -> int:
     new_conflicts = sorted(pip_check() - conflicts_before)
     report("New dependency conflicts (must be empty)", new_conflicts)
 
-    # A bare list of what moved sends the reader digging through pip's log for
-    # the requirement behind it -- and the conflicts above name whichever
-    # preinstalled packages happened to be caught in the blast, which reads
-    # like the cause and is not.
     if changed_names or removed:
         report("Why those versions moved",
                explain(changed_names + removed,
@@ -303,9 +269,7 @@ def main() -> int:
 
     print("\nInstall left Colab's preinstalled packages untouched.")
 
-    # Hand off to the installed-package verifier, found next to this file so
-    # the mount point is not baked in. It is invoked as a script path (not
-    # `python -c`), which keeps the current directory off sys.path.
+    # Hand off to the installed-package verifier:
     verify = [sys.executable, str(Path(__file__).resolve().parent / "check_install.py")]
     if args.source_root:
         verify += ["--source-root", args.source_root]

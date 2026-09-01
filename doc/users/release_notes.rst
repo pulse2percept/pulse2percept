@@ -17,7 +17,7 @@ Highlights
   .. code-block:: python
 
       implant = p2p.implants.ArgusII()
-      model = p2p.models.AxonMapModel(implant=implant)
+      model = p2p.models.AxonMapModel(implant)
       percept = model.predict_percept(stim)
 
 * New :py:mod:`pulse2percept.vision` module with
@@ -79,6 +79,25 @@ Implants
 
 Models
 ~~~~~~
+
+* Every shipped model constructor now lists its parameters explicitly instead
+  of accepting ``**params``, so an unknown keyword raises ``TypeError``
+  (:pull:`879`). ``BiphasicAxonMapModel`` no longer takes effect-model
+  parameters such as ``a0``; set them on the effect model instead.
+
+* :py:class:`~pulse2percept.models.Model` takes component instances only and
+  requires at least one. It no longer forwards attributes or methods to its
+  components, so ``model.rho``, ``model.grid``, ``model.vfmap``, ``model.eye``
+  and ``model.plot3D`` are reached through ``model.spatial`` /
+  ``model.temporal``; ``implant``, ``build``, ``plot`` and ``predict_percept``
+  stay on the composite. ``Model.set_params`` and ``model.build(**params)``
+  are gone, in favor of ``model.spatial.rho = 250`` or
+  ``model.spatial.build(rho=250)`` (:pull:`879`).
+
+* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` no longer forwards
+  attributes to its effect models: a coefficient is read and written on the
+  model that uses it, as ``model.spatial.bright_model.a0``. ``rho`` and
+  ``lam`` still mirror onto the size and streak models (:pull:`879`).
 
 * :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
   photovoltaic drive produced by encoders such as

@@ -128,11 +128,28 @@ class DynaphosModel(BaseModel):
             regions = [regions]
         self._regions = regions
 
-    def __init__(self, implant, **params):
+    def __init__(self, implant, *, dt=20, regions=None, rheobase=23.9,
+                 tau_trace=1.96765520573e6, kappa_trace=13.95528162,
+                 excitability=675, tau_act=111.111111,
+                 sig_slope=19152642.500946816, a_thr=9.141886000943878e-08,
+                 a50=1.057631326853325e-07, freq=300, p_dur=0.170,
+                 xrange=(-5, 5), yrange=(-5, 5), step=0.25,
+                 grid_type='rectangular', vfmap=None, n_gray=None, noise=None,
+                 verbose=True):
             _check_implant(implant)
             self._implant = implant
             self._regions = None
-            super().__init__(**params)
+            super().__init__(
+                dt=dt, rheobase=rheobase, tau_trace=tau_trace,
+                kappa_trace=kappa_trace, excitability=excitability,
+                tau_act=tau_act, sig_slope=sig_slope, a_thr=a_thr, a50=a50,
+                freq=freq, p_dur=p_dur, xrange=xrange, yrange=yrange,
+                step=step, grid_type=grid_type,
+                # Published map parameters, see [vanderGrinten2023]_:
+                vfmap=(Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
+                       if vfmap is None else vfmap),
+                n_gray=n_gray, noise=noise, verbose=verbose,
+                regions=['v1'] if regions is None else regions)
 
             self.vfmap.regions = self.regions
             self.grid = None

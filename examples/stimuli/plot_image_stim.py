@@ -325,8 +325,9 @@ stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
 # :py:class:`~pulse2percept.models.Horsager2009Temporal`:
 
 model = p2p.models.Model(
-    spatial=p2p.models.ScoreboardSpatial(implant),
-    temporal=p2p.models.Horsager2009Temporal())
+    p2p.models.ScoreboardSpatial(implant, xrange=(-7, 7), yrange=(-7, 7),
+                                 step=0.1, rho=50),
+    p2p.models.Horsager2009Temporal())
 
 ##############################################################################
 # .. note::
@@ -334,16 +335,15 @@ model = p2p.models.Model(
 #    You can combine any spatial model (names ending in **Spatial**) with any
 #    temporal model (names ending in **Temporal**).
 #
-# To make the model focus on the same visual field as above, we set ``xrange``,
-# ``yrange``, and choose a proper ``step``.
+# ``xrange``, ``yrange``, ``step``, and ``rho`` are spatial parameters, so
+# they are set on ``ScoreboardSpatial`` above.
 #
 # The ``rho`` parameter of the scoreboard model controls how much blur we get
 # in the resulting percept. The value of this parameter should be set
 # empirically to match the quality of the vision reported behaviorally by each
-# implant user.
-# For the purpose of this tutorial, we will set it to 50um:
+# implant user. For the purpose of this tutorial, we set it to 50um.
 
-model.build(xrange=(-7, 7), yrange=(-7, 7), step=0.1, rho=50)
+model.build()
 
 ##############################################################################
 # The predicted percept will now be a movie, where the spatial response (i.e.,

@@ -109,15 +109,13 @@ def test_Horsager2009Model():
 
     # User can set `dt`:
     model.temporal.dt = 1e-5
-    npt.assert_almost_equal(model.dt, 1e-5)
     npt.assert_almost_equal(model.temporal.dt, 1e-5)
-    model.build(dt=3e-4)
-    npt.assert_almost_equal(model.dt, 3e-4)
+    model.temporal.build(dt=3e-4)
     npt.assert_almost_equal(model.temporal.dt, 3e-4)
 
     # User cannot add more model parameters:
     with pytest.raises(FreezeError):
-        model.rho = 100
+        model.temporal.rho = 100
 
     # Model and TemporalModel give the same result
     for amp, freq in zip([136.02, 120.35, 57.71], [5, 15, 225]):
@@ -137,10 +135,10 @@ def test_deepcopy_Horsager2009Model():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent
-    npt.assert_equal(original.__dict__, copied.__dict__)
+    npt.assert_equal(original == copied, True)
 
     # Assert changing the original doesn't affect the copied
-    original.verbose = False
+    original.temporal.verbose = False
     npt.assert_equal(original != copied, True)
 
 def _horsager_reference(data, t_stim, t_percept, dt, tau1, tau2, tau3, eps,

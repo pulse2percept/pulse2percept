@@ -105,4 +105,4 @@ def test_the_plotted_implant_owns_the_axon_laterality(monkeypatch):
     npt.assert_equal(grown, [('LE', (-15.5, 1.5))])
     # ... and the caller's model is left pointed where it was:
     npt.assert_equal(axon_map.implant.eye, 'RE')
-    npt.assert_equal(tuple(axon_map.loc_od), (15.5, 1.5))
+    npt.assert_equal(tuple(axon_map.spatial.loc_od), (15.5, 1.5))

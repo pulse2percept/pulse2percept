@@ -76,7 +76,7 @@ print(model)
 # Before it can predict anything, the model performs expensive, one-time
 # calculations (growing the axon map). That happens automatically the first
 # time you ask for a percept, and again whenever you change a model parameter
-# such as ``model.a5``. You can also trigger it yourself with
+# such as ``model.spatial.rho``. You can also trigger it yourself with
 # ``model.build()``, which is what the next line does so that the axon map
 # exists to be plotted:
 
@@ -212,10 +212,9 @@ print(f"{delivered.data.max():.0f} uA")
 #
 # The coefficients ``a0``-``a9`` parametrize these effect models. While the default values
 # are likely to work for most cases, they can be customized to be patient specific. 
-# Notice how we only have to change the value given to the `BiphasicAxonMapModel`, 
-# and it is automatically passed down to the effect models.
-model.a5 = 0
-print(model.size_model.a5)
+# They belong to the effect model that reads them, and are set there:
+model.spatial.size_model.a5 = 0
+print(model.spatial.size_model.a5)
 
 ##################################################################################
 # For example, ``a0`` and ``a1`` control how threshold changed with pulse duration: 
@@ -223,9 +222,12 @@ print(model.size_model.a5)
 # scaling can easily be disabled by setting ``a0`` to 0 and ``a1`` to 1. If we increase 
 # pulse duration like we did previously, we will now see that only streak length decreases, 
 # and we no longer have to change amplitude to account for change in threshold
+# ``a0`` and ``a1`` appear in both the brightness and the size model, so set
+# them on each:
 model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
-model.a0 = 0
-model.a1 = 1
+for effect in (model.spatial.bright_model, model.spatial.size_model):
+    effect.a0 = 0
+    effect.a1 = 1
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
 percept = model.predict_percept({'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)})
 new_percept = model.predict_percept(
@@ -253,7 +255,7 @@ plt.show()
 model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
 def size_modulation(freq, amp, pdur):
     return 1
-model.size_model = size_modulation
+model.spatial.size_model = size_modulation
 
 fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
 percept = model.predict_percept({'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)})
@@ -270,6 +272,6 @@ plt.show()
 #
 # The effect models can even be a class, and can have its own parameters, 
 # which can be shared with the overarching BiphasicAxonMapModel itself (e.g. an effect 
-# model can depend on ``rho``, and if ``model.rho`` is changed, ``rho`` will also be changed in
-# the effect model). For an example of this, 
+# model can depend on ``rho``, and if ``model.spatial.rho`` is changed, ``rho``
+# will also change in the effect model). For an example of this,
 # see :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel`

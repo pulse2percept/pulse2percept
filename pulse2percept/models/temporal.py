@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.models.FadingTemporal`,
 :py:class:`~pulse2percept.models.AlphaTemporal`"""
 import numpy as np
-from .base import TemporalModel
+from .base import TemporalModel, _thread_params
 from ..units import ms
 from ._temporal import alpha_fast, fading_fast
 
@@ -79,6 +79,12 @@ class FadingTemporal(TemporalModel):
 
     #: The kernel tracks interval peaks directly.
     _reduces_intervals = True
+
+    def __init__(self, *, tau=100, dt=0.005, thresh_percept=0, reduce='peak',
+                 verbose=True, n_threads=None, n_jobs=None):
+        super().__init__(tau=tau, dt=dt, thresh_percept=thresh_percept,
+                         reduce=reduce, verbose=verbose,
+                         **_thread_params(n_threads, n_jobs))
 
     def get_default_params(self):
         base_params = super(FadingTemporal, self).get_default_params()
@@ -195,6 +201,12 @@ class AlphaTemporal(TemporalModel):
 
     #: The kernel tracks interval peaks directly.
     _reduces_intervals = True
+
+    def __init__(self, *, tau=100, dt=0.005, thresh_percept=0, reduce='peak',
+                 verbose=True, n_threads=None, n_jobs=None):
+        super().__init__(tau=tau, dt=dt, thresh_percept=thresh_percept,
+                         reduce=reduce, verbose=verbose,
+                         **_thread_params(n_threads, n_jobs))
 
     def get_default_params(self):
         base_params = super(AlphaTemporal, self).get_default_params()

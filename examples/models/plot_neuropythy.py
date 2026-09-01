@@ -76,9 +76,9 @@ Lets use our map in a model and visualize the transform
 
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121, projection='3d')
-    model.plot3D(ax=ax1, style='cell')
+    model.spatial.plot3D(ax=ax1, style='cell')
     ax2 = fig.add_subplot(122, projection='3d')
-    model.plot3D(ax=ax2, style='scatter')
+    model.spatial.plot3D(ax=ax2, style='scatter')
 
 Neuropythy can use up to 'v1', 'v2', 'v3'. If you want to use all three regions,
 you can specify them as a list.
@@ -93,9 +93,9 @@ Lets use all three regions and plot the result (note it can get a little messy):
                                               vfmap=nmap, regions=['v1', 'v2', 'v3'])
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121, projection='3d')
-    model.plot3D(ax=ax1, style='cell')
+    model.spatial.plot3D(ax=ax1, style='cell')
     ax2 = fig.add_subplot(122, projection='3d')
-    model.plot3D(ax=ax2, style='scatter')
+    model.spatial.plot3D(ax=ax2, style='scatter')
 
 Note that the regions are not necessarily
 contiguous, and the map will likely be discontinuous at the boundaries between
@@ -132,7 +132,7 @@ Lets place a Neuralink implant across the right hemisphere of the cortex:
 
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121, projection='3d')
-    model.plot3D(ax=ax1, style='cell')
+    model.spatial.plot3D(ax=ax1, style='cell')
     nlink.plot3D(ax=ax1)
     ax2 = fig.add_subplot(122)
     model.plot(style='cell', ax=ax2)

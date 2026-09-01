@@ -7,7 +7,7 @@ from ..utils import sample
 from ..topography import Curcio1990Map
 from ..units import um
 from ..models import Model, SpatialModel
-from .base import _warn_ignores_z
+from .base import _thread_params, _warn_ignores_z
 from ._thompson2003 import fast_thompson2003
 
 import warnings
@@ -103,6 +103,21 @@ class Thompson2003Spatial(SpatialModel):
         use this parameter.
     """
 
+    def __init__(self, implant, *, radius=None, dropout=None,
+                 xrange=(-15, 15), yrange=(-15, 15), step=0.25,
+                 grid_type='rectangular', thresh_percept=0,
+                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+        super().__init__(
+            implant, radius=radius, dropout=dropout, xrange=xrange,
+            yrange=yrange, step=step, grid_type=grid_type,
+            thresh_percept=thresh_percept,
+            min_current_spread=min_current_spread,
+            vfmap=Curcio1990Map() if vfmap is None else vfmap,
+            n_gray=n_gray, noise=noise, verbose=verbose,
+            ndim=[2] if ndim is None else ndim,
+            **_thread_params(n_threads, n_jobs))
+
     def get_default_params(self):
         """Return default model parameters."""
         base_params = super(Thompson2003Spatial, self).get_default_params()
@@ -196,6 +211,17 @@ class Thompson2003Model(Model):
         use this parameter.
     """
 
-    def __init__(self, implant, **params):
-        super(Thompson2003Model, self).__init__(
-            spatial=Thompson2003Spatial(implant), temporal=None, **params)
+    def __init__(self, implant, *, radius=None, dropout=None,
+                 xrange=(-15, 15), yrange=(-15, 15), step=0.25,
+                 grid_type='rectangular', thresh_percept=0,
+                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+        super().__init__(
+            spatial=Thompson2003Spatial(
+                implant, radius=radius, dropout=dropout, xrange=xrange,
+                yrange=yrange, step=step, grid_type=grid_type,
+                thresh_percept=thresh_percept,
+                min_current_spread=min_current_spread, vfmap=vfmap,
+                n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
+                n_threads=n_threads, n_jobs=n_jobs),
+            temporal=None)

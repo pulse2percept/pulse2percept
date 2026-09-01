@@ -434,11 +434,12 @@ the next prediction picks the change up.
     model = SomeModel(implant=implant, ...)
 
     percept1 = model.predict_percept(stim1)
-    model.rho = 200          # un-builds the model
+    model.spatial.rho = 200  # un-builds the spatial component
     percept2 = model.predict_percept(stim2)   # builds it again
 
 Call ``build()`` explicitly when you want to pay that cost at a moment of your
-choosing, or to pass build-time parameters: ``model.build(rho=200)``.
+choosing; ``model.spatial.build(rho=200)`` sets a parameter as it builds that
+component.
 
 
 Implants and stimulation

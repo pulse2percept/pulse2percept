@@ -87,20 +87,18 @@ def test_Thompson2003Model():
     npt.assert_equal(hasattr(model.spatial, 'radius'), True)
 
     # User can set `radius`:
-    model.radius = 123
-    npt.assert_equal(model.radius, 123)
+    model.spatial.radius = 123
     npt.assert_equal(model.spatial.radius, 123)
-    model.build(radius=987)
-    npt.assert_equal(model.radius, 987)
+    model.spatial.build(radius=987)
     npt.assert_equal(model.spatial.radius, 987)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.vfmap, Curcio1990Map), True)
-    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
+    npt.assert_equal(isinstance(model.spatial.vfmap, Curcio1990Map), True)
+    npt.assert_almost_equal(model.spatial.vfmap.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.spatial.vfmap.dva_to_ret(0, 0), (0, 0))
     model2 = Thompson2003Model(implant=ArgusI(),
                                vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model2.spatial.vfmap, Watson2014DisplaceMap),
                      True)
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)
@@ -113,7 +111,8 @@ def test_Thompson2003Model():
                               xrange=(-20, 20), yrange=(-15, 15))
     model.build()
     percept = model.predict_percept({'A1': [1, 2]})
-    npt.assert_equal(percept.shape, list(model.grid.x.shape) + [2])
+    npt.assert_equal(percept.shape,
+                     list(model.spatial.grid.x.shape) + [2])
     pmax = percept.data.max(axis=(0, 1))
     npt.assert_almost_equal(percept.data[2, 3, :], pmax)
     print(pmax, percept.data)
@@ -169,7 +168,7 @@ def test_deepcopy_Thompson2003Model():
     npt.assert_equal(id(original) != id(copied), True)
 
     # Assert the objects are equivalent to each other
-    npt.assert_equal(original.__dict__, copied.__dict__)
+    npt.assert_equal(original == copied, True)
 
     # Assert building one object does not affect the copied
     original.build()
@@ -179,8 +178,8 @@ def test_deepcopy_Thompson2003Model():
     # Change the copied attribute by "destroying" the vfmap attribute
     # which should be unique to each SpatialModel object
     copied = copy.deepcopy(original)
-    copied.vfmap = None
-    npt.assert_equal(original.vfmap is not None, True)
+    copied.spatial.vfmap = None
+    npt.assert_equal(original.spatial.vfmap is not None, True)
     npt.assert_equal(original != copied, True)
 
     # Assert "destroying" the original doesn't affect the copied

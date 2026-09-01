@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import importlib.util
+import inspect
 import sys
 from importlib import metadata
 from importlib.machinery import EXTENSION_SUFFIXES
@@ -168,10 +169,11 @@ def check_model_builds() -> list[str]:
         from pulse2percept.models import ScoreboardModel
 
         # This runs against released versions too, and 0.10.0 renamed the
-        # grid spacing parameter `xystep` -> `step`. Ask the installed model
-        # which spelling it takes rather than assuming the current one.
-        probe = ScoreboardModel(implant=ArgusII())
-        spacing = "step" if hasattr(probe, "step") else "xystep"
+        # grid spacing parameter `xystep` -> `step`. Inspect the constructor
+        # because as of 0.11 model parameters are accessed through their
+        # components.
+        params = inspect.signature(ScoreboardModel).parameters
+        spacing = "step" if "step" in params else "xystep"
         model = ScoreboardModel(implant=ArgusII(), xrange=(-4, 4),
                                 yrange=(-4, 4), **{spacing: 1})
         percept = model.predict_percept({e: 1 for e in ("A1", "F10")})
