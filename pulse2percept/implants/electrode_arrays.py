@@ -335,24 +335,6 @@ class ElectrodeArray(PrettyPrint):
     def __iter__(self):
         return iter(self.electrodes)
 
-    def get(self, item, default=None):
-        """Return an electrode, or ``default`` if the array has no such one
-
-        .. versionadded:: 0.11.0
-
-        Parameters
-        ----------
-        item : str, int, or list thereof
-            An electrode selector, as ``electrode_array[item]`` takes.
-        default : optional
-            What to answer when the array has no such electrode.
-
-        """
-        try:
-            return self[item]
-        except (KeyError, IndexError):
-            return default
-
     @property
     def n_electrodes(self):
         return len(self.electrodes)

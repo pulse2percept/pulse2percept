@@ -123,7 +123,7 @@ class ScoreboardSpatial(SpatialModel):
         .. versionchanged:: 0.10.0
             Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
@@ -152,7 +152,7 @@ class ScoreboardSpatial(SpatialModel):
     extra_stimulus_units = (dimensionless,)
 
     def __init__(self, implant, *, rho=100, xrange=(-15, 15),
-                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None, verbose=True, ndim=None,
@@ -251,7 +251,7 @@ class ScoreboardModel(Model):
         .. versionchanged:: 0.10.0
             Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
@@ -277,7 +277,7 @@ class ScoreboardModel(Model):
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
 
     def __init__(self, implant, *, rho=100, xrange=(-15, 15),
-                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None, verbose=True, ndim=None,
@@ -359,7 +359,7 @@ class AxonMapSpatial(SpatialModel):
         .. versionchanged:: 0.10.0
             Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
@@ -414,7 +414,7 @@ class AxonMapSpatial(SpatialModel):
     axon-map construction is considered reliable."""
 
     def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
-                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
@@ -1104,7 +1104,7 @@ class AxonMapModel(Model):
         .. versionchanged:: 0.10.0
             Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
@@ -1159,7 +1159,7 @@ class AxonMapModel(Model):
     axon-map construction is considered reliable."""
 
     def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
-                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,

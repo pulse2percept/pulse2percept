@@ -51,7 +51,7 @@ class ImageStimulus(Stimulus):
     source : str, os.PathLike, ImageStimulus, or np.ndarray
         Path to an image file (``str`` or :py:class:`pathlib.Path`). File types
         are inferred from the file ending (support types include JPG, PNG, and
-        TIF). Enforce a specific fomrat via ``format``.
+        TIF).
 
         .. note::
 

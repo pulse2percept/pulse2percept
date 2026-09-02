@@ -385,7 +385,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         .. versionchanged:: 0.10.0
             Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
@@ -443,7 +443,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  streak_model=None, rho=300, lam=500, xrange=(-15, 15),
-                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
@@ -744,7 +744,7 @@ class BiphasicAxonMapModel(Model):
         .. versionchanged:: 0.10.0
             Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
@@ -826,7 +826,7 @@ class BiphasicAxonMapModel(Model):
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  streak_model=None, rho=300, lam=500, xrange=(-15, 15),
-                 yrange=(-15, 15), step=0.25, grid_type='rectangular',
+                 yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,

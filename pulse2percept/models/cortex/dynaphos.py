@@ -92,7 +92,7 @@ class DynaphosModel(BaseModel):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Whether to simulate points on a rectangular or hexagonal grid.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
@@ -134,7 +134,7 @@ class DynaphosModel(BaseModel):
                  sig_slope=19152642.500946816, a_thr=9.141886000943878e-08,
                  a50=1.057631326853325e-07, freq=300, p_dur=0.170,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.25,
-                 grid_type='rectangular', visual_field_map=None, n_gray=None,
+                 grid_type='rect', visual_field_map=None, n_gray=None,
                  noise=None,
                  verbose=True):
             _check_implant(implant)
@@ -183,7 +183,7 @@ class DynaphosModel(BaseModel):
                 'xrange': (-5, 5),  # dva
                 'yrange': (-5, 5),  # dva
                 'step': 0.25,  # dva
-                'grid_type': 'rectangular',
+                'grid_type': 'rect',
                 # Use [Polemeni2006]_ visual field map with parameters specified in the paper
                 'visual_field_map': Polimeni2006Map(a=0.75,k=17.3,b=120,
                                                     alpha1=0.95),

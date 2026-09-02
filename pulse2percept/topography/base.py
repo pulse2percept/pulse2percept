@@ -185,8 +185,8 @@ class Grid2D(PrettyPrint):
         multiple of ``step`` is sampled at the nearest spacing that reaches
         both. ``Grid2D((0, 1), (0, 0), step=0.3)`` gives four points spaced
         0.333 apart, not three spaced 0.3 with the last one short.
-    grid_type : {'rectangular', 'hexagonal'}
-        The grid type
+    grid_type : {'rect', 'hex'}
+        Grid type ('rect': rectangular, 'hex': hexagonal).
 
     Notes
     -----
@@ -277,7 +277,7 @@ class Grid2D(PrettyPrint):
     #: visual field, and a visual field map turns it into tissue coordinates.
     visual_unit = dva
 
-    def __init__(self, x_range, y_range, step=1, grid_type='rectangular'):
+    def __init__(self, x_range, y_range, step=1, grid_type='rect'):
         # A grid of *visual field* coordinates, so its extent is measured in
         # degrees of visual angle. How far a degree reaches on the retina or
         # the cortex is what a visual field map is for, and is not a unit
@@ -299,9 +299,9 @@ class Grid2D(PrettyPrint):
         self._register_regions(self.all_regions)
 
         # These could also be their own subclasses:
-        if grid_type == 'rectangular':
+        if grid_type == 'rect':
             self._make_rectangular_grid(x_range, y_range, step)
-        elif grid_type == 'hexagonal':
+        elif grid_type == 'hex':
             self._make_hexagonal_grid(x_range, y_range, step)
         else:
             raise ValueError(f"Unknown grid type '{grid_type}'.")
@@ -440,7 +440,7 @@ class Grid2D(PrettyPrint):
 
             if style.lower() == 'cell':
                 # Show a polygon for every grid cell that we are simulating:
-                if self.grid_type == 'hexagonal':
+                if self.grid_type == 'hex':
                     raise NotImplementedError
                 patches = []
                 for xret, yret in zip(x.ravel(), y.ravel()):

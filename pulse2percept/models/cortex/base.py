@@ -54,7 +54,7 @@ class CortexSpatial(SpatialModel):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
@@ -263,7 +263,7 @@ class ScoreboardSpatial(CortexSpatial):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
         Gaussian standard deviation (dva) for smoothing across the vertical
@@ -299,7 +299,7 @@ class ScoreboardSpatial(CortexSpatial):
     """
     def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
-                 grid_type='rectangular', thresh_percept=0,
+                 grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
@@ -432,7 +432,7 @@ class ScoreboardModel(Model):
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
         use ``xrange=(0, 1)`` and ``step=0.5``. Pass a tuple to give the x
         and y axes different step sizes.
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
     meridian_blend : float, optional
         Gaussian standard deviation (dva) for smoothing across the vertical
@@ -468,7 +468,7 @@ class ScoreboardModel(Model):
 
     def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
-                 grid_type='rectangular', thresh_percept=0,
+                 grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):

@@ -91,7 +91,7 @@ class Nanduri2012Spatial(SpatialModel):
             .. versionchanged:: 0.10.0
                 Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-        grid_type : {'rectangular', 'hexagonal'}, optional
+        grid_type : {'rect', 'hex'}, optional
             Sampling lattice used for the visual-field grid.
         thresh_percept : float, optional
             Brightness values below this threshold are set to zero.
@@ -119,7 +119,7 @@ class Nanduri2012Spatial(SpatialModel):
 
     def __init__(self, implant, *, atten_a=14000, atten_n=1.69,
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
-                 grid_type='rectangular', thresh_percept=0,
+                 grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
@@ -351,7 +351,7 @@ class Nanduri2012Model(Model):
             .. versionchanged:: 0.10.0
                 Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-        grid_type : {'rectangular', 'hexagonal'}, optional
+        grid_type : {'rect', 'hex'}, optional
             Sampling lattice used for the visual-field grid.
         visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
             Retinotopic map between visual-field and retinal coordinates. Defaults
@@ -404,7 +404,7 @@ class Nanduri2012Model(Model):
 
     def __init__(self, implant, *, atten_a=14000, atten_n=1.69,
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
-                 grid_type='rectangular', min_current_spread=1e-8,
+                 grid_type='rect', min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None, ndim=None, dt=0.005, tau1=0.42,
                  tau2=45.25, tau3=26.25, eps=8.73, asymptote=14.0, slope=3.0,

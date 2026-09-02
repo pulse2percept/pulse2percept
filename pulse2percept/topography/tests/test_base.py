@@ -17,11 +17,11 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, dva, mm,
 @pytest.mark.parametrize('x_range', [(0, 0), (-3, 3), (4, -2), (1, -1)])
 @pytest.mark.parametrize('y_range', [(0, 0), (0, 7), (-3, 3), (2, -2)])
 def test_Grid2D(x_range, y_range):
-    grid = Grid2D(x_range, y_range, step=1, grid_type='rectangular')
+    grid = Grid2D(x_range, y_range, step=1, grid_type='rect')
     npt.assert_equal(grid.x_range, x_range)
     npt.assert_equal(grid.y_range, y_range)
     npt.assert_equal(grid.step, 1)
-    npt.assert_equal(grid.grid_type, 'rectangular')
+    npt.assert_equal(grid.grid_type, 'rect')
     npt.assert_equal(hasattr(grid, 'type'), False)
 
     # Grid is created with indexing='xy', so check coordinates:

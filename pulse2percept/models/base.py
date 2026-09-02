@@ -615,7 +615,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         .. versionchanged:: 0.10.0
             Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
 
-    grid_type : {'rectangular', 'hexagonal'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
@@ -766,7 +766,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
             'step': 0.25,  # dva
-            'grid_type': 'rectangular',
+            'grid_type': 'rect',
             'thresh_percept': 0,
             'min_current_spread': 1e-8,
             'visual_field_map': Curcio1990Map(),

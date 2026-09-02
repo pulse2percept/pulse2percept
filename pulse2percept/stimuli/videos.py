@@ -98,7 +98,7 @@ class VideoStimulus(Stimulus):
     source : str, os.PathLike, VideoStimulus, or np.ndarray
         Path to a video file (``str`` or :py:class:`pathlib.Path`). File types
         are inferred from the file ending (support types include MP4, AVI, MOV,
-        and GIF). Enforce a specific fomrat via ``format``.
+        and GIF). Enforce a specific format via ``format``.
 
         .. versionchanged:: 0.11.0
             A :py:class:`pathlib.Path` is accepted wherever a filename is.

@@ -36,149 +36,93 @@ API changes and improvements
 Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
-* New :py:class:`~pulse2percept.stimuli.Encoder` base class supports electrical
-  and non-electrical encoders. New
-  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps images and videos to the
-  irradiance and pulse durations used by
-  :py:class:`~pulse2percept.implants.PRIMAPivotal` (:pull:`868`).
+* New :py:class:`~pulse2percept.stimuli.Encoder` framework supports electrical
+  and non-electrical stimulation. New
+  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` implements photovoltaic
+  image/video encoding, while
+  :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` supports threshold-based
+  amplitude ranges such as ``(0 * xTh, 3 * xTh)`` (:pull:`868`,
+  :pull:`869`).
 
-* :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` accepts ``amp_range`` in
-  threshold multiples such as ``(0 * xTh, 3 * xTh)`` (:pull:`869`). New
-  ``W``, ``mW``, and ``uW`` units support optical stimulation (:pull:`868`);
-  ``deg`` and ``rad`` are now proper geometric-angle units (:pull:`855`).
-
-* :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-  :py:class:`~pulse2percept.stimuli.VideoStimulus` accept a
-  :py:class:`pathlib.Path` wherever they accept a filename, and always record
-  ``metadata['source']`` as a string (:pull:`880`).
+* Added optical power units (``W``, ``mW``, ``uW``), proper geometric-angle
+  units (``deg``, ``rad``), and ``pathlib.Path`` support for image and video
+  stimuli (:pull:`855`, :pull:`868`, :pull:`880`).
 
 
 Implants
 ~~~~~~~~
 
 * ``ProsthesisSystem`` is renamed
-  :py:class:`~pulse2percept.implants.Implant`; the old name is a deprecated
-  alias for the same class until 0.12.0 (:pull:`876`).
+  :py:class:`~pulse2percept.implants.Implant`; the old name remains as a
+  deprecated alias until 0.12.0 (:pull:`876`).
 
-* ``PRIMA`` is renamed :py:class:`~pulse2percept.implants.PRIMAPivotal`,
-  ``PRIMA75`` becomes :py:class:`~pulse2percept.implants.Lorach2015Array`, and
-  ``PRIMA55``/``PRIMA40`` become ``Ho2019FlatArray(55)``/
-  ``Ho2019FlatArray(40)``. The old names are deprecated until 0.12.0
-  (:pull:`865`).
-
-* New :py:class:`~pulse2percept.implants.Ho2019FlatArray` and
-  :py:class:`~pulse2percept.implants.Huang2021Array` model published
-  photovoltaic array designs. PRIMA-family geometry, pixel sizes, substrate
-  rendering, and hexagonal pixel orientation were corrected to match the
-  corresponding devices (:pull:`865`).
-
-* :py:class:`~pulse2percept.implants.Implant` adds descriptive ``placement``,
-  ``technology``, and ``family`` attributes (:pull:`865`) and accepts
-  ``thresholds`` at construction;
-  :py:class:`~pulse2percept.implants.ArgusII` likewise accepts ``thresholds``
-  (:pull:`869`).
+* The PRIMA family was reorganized around the published devices:
+  ``PRIMA`` becomes :py:class:`~pulse2percept.implants.PRIMAPivotal`,
+  ``PRIMA75`` becomes :py:class:`~pulse2percept.implants.Lorach2015Array`,
+  and new :py:class:`~pulse2percept.implants.Ho2019FlatArray` and
+  :py:class:`~pulse2percept.implants.Huang2021Array` classes capture other
+  photovoltaic designs. Device geometry and pixel dimensions were corrected
+  accordingly (:pull:`865`).
 
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`).
 
-* Electrode geometry is spelled out: ``DiskElectrode.r`` is now ``radius``,
-  ``SquareElectrode.a`` is ``side_length``, ``HexElectrode.a`` is ``apothem``,
-  and ``LinearEdgeThread.r`` is ``radius`` (:pull:`880`).
+* Implant and electrode APIs were cleaned up for consistency: descriptive
+  names replace abbreviations such as ``earray``, ``vfmap``, ``etype``, ``r``,
+  and ``a``; ``grid_type`` now uses ``'rect'``/``'hex'`` throughout;
+  ``plot3D()`` becomes ``plot3d()``; and implants/electrode arrays follow
+  normal Python container behavior (:pull:`880`).
 
-* :py:class:`~pulse2percept.implants.ElectrodeGrid` and
-  :py:class:`~pulse2percept.implants.GridImplant` take ``grid_type`` (was
-  ``type``) and ``electrode_type`` (was ``etype``). Remaining keywords are
-  passed to ``electrode_type`` unchanged, except ``radius``, which may still
-  be given per electrode. A custom ``electrode_type`` is now built as itself
-  and decides for itself which parameters it requires (:pull:`880`).
+* :py:class:`~pulse2percept.implants.Implant` now exposes device
+  ``placement``, ``technology``, and ``family`` metadata and supports
+  per-electrode thresholds (:pull:`865`, :pull:`869`).
 
-* Electrode arrays and implants follow normal Python container semantics.
-  ``implant.earray`` / ``earray=`` is now
-  :py:attr:`~pulse2percept.implants.Implant.electrode_array` /
-  ``electrode_array=``, ``vfmap`` is ``visual_field_map``, ``plot3D()`` is
-  ``plot3d()``, and :py:class:`~pulse2percept.topography.Grid2D` stores its
-  grid as ``grid_type`` (:pull:`880`).
-  
 
 Models
 ~~~~~~
 
-* Every shipped model constructor now lists its parameters explicitly instead
-  of accepting ``**params``, so an unknown keyword raises ``TypeError``
-  (:pull:`879`). ``BiphasicAxonMapModel`` no longer takes effect-model
-  parameters such as ``a0``; set them on the effect model instead.
-
-* :py:class:`~pulse2percept.models.Model` takes component instances only and
-  requires at least one. It no longer forwards attributes or methods to its
-  components, so ``model.rho``, ``model.grid``, ``model.visual_field_map``,
-  ``model.eye`` and ``model.plot3d`` are reached through ``model.spatial`` /
-  ``model.temporal``; ``implant``, ``build``, ``plot`` and ``predict_percept``
-  stay on the composite. ``Model.set_params`` and ``model.build(**params)``
-  are gone, in favor of ``model.spatial.rho = 250`` or
-  ``model.spatial.build(rho=250)`` (:pull:`879`).
-
-* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` no longer forwards
-  attributes to its effect models: a coefficient is read and written on the
-  model that uses it, as ``model.spatial.bright_model.a0``. ``rho`` and
-  ``lam`` still mirror onto the size and streak models (:pull:`879`).
+* Model constructors now expose their supported parameters explicitly instead
+  of accepting arbitrary ``**params``. Composite models no longer forward
+  component attributes: spatial and temporal parameters are accessed through
+  ``model.spatial`` and ``model.temporal`` (:pull:`879`).
 
 * :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
-  photovoltaic drive produced by encoders such as
-  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` (:pull:`868`).
+  photovoltaic drive, and
+  :py:class:`~pulse2percept.models.BiphasicAxonMapModel` can predict directly
+  from still images encoded with the standard biphasic pipeline
+  (:pull:`868`, :pull:`869`).
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` can predict directly
-  from still images encoded with the standard biphasic encoder, using
-  amplitude, phase duration, and realized frequency (:pull:`869`).
-
-* ``find_threshold`` has been removed. Threshold searches are
-  experiment-specific optimizations over stimulus parameters and should be
-  implemented at that level (:pull:`862`).
+* ``find_threshold`` has been removed; threshold searches belong at the
+  experiment level rather than in the model API (:pull:`862`).
 
 
-Percepts and residual vision
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Residual vision
+~~~~~~~~~~~~~~~
 
-* :py:class:`~pulse2percept.vision.Scene` adds softened scotoma boundaries via
-  ``scotoma_blend``, biharmonic fill-in via ``scotoma_fill='inpaint'``,
-  configurable backgrounds for transparent images, and ``rings`` eccentricity
-  annotation in :py:meth:`~pulse2percept.vision.Scene.plot` and
-  :py:meth:`~pulse2percept.vision.Scene.play` (:pull:`871`).
+* :py:class:`~pulse2percept.vision.Scene` adds softened scotoma boundaries,
+  optional inpainting, configurable backgrounds, and eccentricity rings in
+  both static and animated views (:pull:`871`).
 
 
 Plotting
 ~~~~~~~~
 
-* New :py:mod:`pulse2percept.plotting` module for figures and animations that
-  combine several objects; individual objects keep their own ``plot()`` and
-  ``play()``. :py:mod:`pulse2percept.viz` is deprecated until 0.12.0: its
-  Argus helpers moved to :py:mod:`pulse2percept.plotting`, and
-  ``scatter_correlation``/``correlation_matrix`` are generic statistical plots
-  that go away with it (:issue:`872`).
-
-* New :py:func:`~pulse2percept.plotting.plot_stimulus_percept` and
-  :py:func:`~pulse2percept.plotting.play_stimulus_percept` show a stimulus next
-  to the percept it produced. The animated pair runs both panels off the
-  percept's clock, holding each source frame for as long as it is up
-  (:issue:`872`).
-
-* :py:class:`~pulse2percept.utils.HTMLAnimation` animates more than one image
-  per figure, each with its own sprite sheet and frame order (:issue:`872`).
+* New :py:mod:`pulse2percept.plotting` module provides combined stimulus/percept
+  figures and animations. :py:mod:`pulse2percept.viz` is deprecated until
+  0.12.0 (:issue:`872`).
 
 
 Bug fixes
 ---------
 
-* Single-row and single-column hexagonal
-  :py:class:`~pulse2percept.implants.ElectrodeGrid` instances are now correctly
-  centered (:pull:`859`).
+* Fixed centering of single-row and single-column hexagonal
+  :py:class:`~pulse2percept.implants.ElectrodeGrid` instances (:pull:`859`).
 
-* Corrected PRIMA-family pixel dimensions and layouts, including the F55/F40
-  arrays and :py:class:`~pulse2percept.implants.PRIMAPivotal` pixel width
-  (:pull:`865`).
+* Corrected PRIMA-family pixel dimensions and layouts (:pull:`865`).
 
 * :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` now respects
-  ``n_gray`` and ``noise`` and stores the full stimulus in
-  ``percept.metadata['stim']`` (:pull:`869`).
+  ``n_gray`` and ``noise`` and preserves the full stimulus in percept metadata
+  (:pull:`869`).
 
 
 v0.10.0 Encoders (2026-08-23)
