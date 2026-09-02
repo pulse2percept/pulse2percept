@@ -374,6 +374,14 @@ def test_GridImplant_electrode_kwargs():
         npt.assert_almost_equal(e.radius, 20)
 
 
+def test_GridImplant_rejects_the_old_spellings():
+    npt.assert_equal(GridImplant((2, 3), 100, grid_type='hex').n_electrodes, 6)
+    for kwargs in ({'type': 'hex'}, {'etype': DiskElectrode, 'r': 20},
+                   {'electrode_type': DiskElectrode, 'r': 20}):
+        with pytest.raises(TypeError):
+            GridImplant((2, 3), 100, **kwargs)
+
+
 def test_GridImplant_geometry_passthrough():
     implant = GridImplant((2, 3), 100, x=200, y=-300, z=50, rot=90)
     npt.assert_almost_equal(implant.electrode_array.coordinates().mean(axis=0),

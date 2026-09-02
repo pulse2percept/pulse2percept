@@ -290,6 +290,10 @@ def test_LinearEdgeThread_pprint():
     npt.assert_equal(params['radius'], 8)
     npt.assert_equal(params['n_elecs'], 4)
     npt.assert_equal(params['spacing'], 25)
+    # The thread radius is spelled out; the old `r` is gone:
+    npt.assert_equal(hasattr(thread, 'r'), False)
+    with pytest.raises(TypeError):
+        LinearEdgeThread(1, 2, 3, r=8)
     # Inherited from Implant:
     npt.assert_equal(params['safe_mode'], False)
     npt.assert_equal('LinearEdgeThread' in str(thread), True)

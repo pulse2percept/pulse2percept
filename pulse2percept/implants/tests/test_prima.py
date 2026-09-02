@@ -29,6 +29,11 @@ def test_PhotovoltaicPixel():
     npt.assert_almost_equal(electrode.z, 2)
     npt.assert_almost_equal(electrode.radius, 3)
     npt.assert_almost_equal(electrode.apothem, 4)
+    # The geometry is spelled out, and the old abbreviations are gone:
+    npt.assert_equal(PhotovoltaicPixel(0, 1, 2, radius=3, apothem=4).radius, 3)
+    for kwargs in ({'r': 3, 'apothem': 4}, {'radius': 3, 'a': 4}):
+        with pytest.raises(TypeError):
+            PhotovoltaicPixel(0, 1, 2, **kwargs)
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
     npt.assert_equal(hasattr(electrode, '__dict__'), False)
