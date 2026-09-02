@@ -65,7 +65,7 @@ class AlphaIMS(Implant):
 
     >>> from pulse2percept.implants import AlphaIMS
     >>> AlphaIMS(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    AlphaIMS(earray=ElectrodeGrid, eye='RE', preprocess=True,
+    AlphaIMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
              safe_mode=False, shape=(39, 39))
 
     Get access to the third electrode in the top row (by name or by row/column
@@ -104,26 +104,26 @@ class AlphaIMS(Implant):
         # the z values later:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100.0 if overwrite_z else z
-        self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=zarr,
-                                    rot=rot, electrode_type=SquareElectrode,
-                                    side_length=elec_width)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, e_spacing, x=x, y=y, z=zarr, rot=rot,
+            electrode_type=SquareElectrode, side_length=elec_width)
 
         # Unfortunately, in the left eye the labeling of columns is reversed...
         if eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = self.earray.electrode_names
-            objects = self.earray.electrode_objects
-            names = np.array(names).reshape(self.earray.shape)
+            names = self.electrode_array.electrode_names
+            objects = self.electrode_array.electrode_objects
+            names = np.array(names).reshape(self.electrode_array.shape)
             # Reverse column names:
-            for row in range(self.earray.shape[0]):
+            for row in range(self.electrode_array.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
             electrodes = OrderedDict([])
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
-            # Assign the new ordered dict to earray:
-            self.earray._electrodes = electrodes
+            # Assign the new ordered dict to electrode_array:
+            self.electrode_array._electrodes = electrodes
 
         # Remove electrodes:
         extra_elecs = ['AM39', 'AL39', 'AK39', 'AJ39', 'AI39', 'AH39', 'AG39',
@@ -131,7 +131,7 @@ class AlphaIMS(Implant):
                        'AM38', 'AL38', 'AK38', 'AJ38', 'AI38', 'AH38', 'AG38',
                        'AF38', 'AE38', 'AD38']
         for elec in extra_elecs:
-            self.earray.remove_electrode(elec)
+            self.electrode_array.remove_electrode(elec)
 
         # Now that the superfluous electrodes have been deleted, adjust the
         # z values:
@@ -141,7 +141,7 @@ class AlphaIMS(Implant):
             if z_arr.size != self.n_electrodes:
                 raise ValueError(f"If `z` is a list, it must have {self.n_electrodes} entries, "
                                  f"not {z_arr.size}.")
-            for elec, z_elec in zip(self.earray.electrode_objects, z):
+            for elec, z_elec in zip(self.electrode_array.electrode_objects, z):
                 elec.z = z_elec
 
     def _pprint_params(self):
@@ -207,7 +207,7 @@ class AlphaAMS(Implant):
 
     >>> from pulse2percept.implants import AlphaAMS
     >>> AlphaAMS(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    AlphaAMS(earray=ElectrodeGrid, eye='RE', preprocess=True,
+    AlphaAMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
              safe_mode=False, shape=(40, 40))
 
     Get access to the third electrode in the top row (by name or by row/column
@@ -235,27 +235,27 @@ class AlphaAMS(Implant):
         elec_radius = 15.0
         e_spacing = 70.0  # um
 
-        self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=z,
-                                    rot=rot, electrode_type=DiskElectrode,
-                                    radius=elec_radius)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, e_spacing, x=x, y=y, z=z, rot=rot,
+            electrode_type=DiskElectrode, radius=elec_radius)
 
         # Set left/right eye:
         # Unfortunately, in the left eye the labeling of columns is reversed...
         if eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = self.earray.electrode_names
-            objects = self.earray.electrode_objects
-            names = np.array(names).reshape(self.earray.shape)
+            names = self.electrode_array.electrode_names
+            objects = self.electrode_array.electrode_objects
+            names = np.array(names).reshape(self.electrode_array.shape)
             # Reverse column names:
-            for row in range(self.earray.shape[0]):
+            for row in range(self.electrode_array.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
             electrodes = OrderedDict([])
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
-            # Assign the new ordered dict to earray:
-            self.earray._electrodes = electrodes
+            # Assign the new ordered dict to electrode_array:
+            self.electrode_array._electrodes = electrodes
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

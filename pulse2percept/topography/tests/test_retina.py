@@ -113,27 +113,28 @@ def test_Watson2014DisplaceMap():
 def test_retinal_map_units():
     """dva in, microns out -- and either may be spelled with a unit"""
     for cls in (Curcio1990Map, Watson2014Map, Watson2014DisplaceMap):
-        vfmap = cls()
-        bare = vfmap.dva_to_ret(5, -2)
-        npt.assert_allclose(vfmap.dva_to_ret(5 * dva, -2 * dva), bare,
+        visual_field_map = cls()
+        bare = visual_field_map.dva_to_ret(5, -2)
+        npt.assert_allclose(visual_field_map.dva_to_ret(5 * dva, -2 * dva),
+                            bare,
                             rtol=1e-12, err_msg=cls.__name__)
         # The output is a plain number of microns, never a Quantity:
         for value in bare:
             npt.assert_equal(isinstance(value, Quantity), False)
         with pytest.raises(DimensionMismatchError):
-            vfmap.dva_to_ret(5 * um, -2)
+            visual_field_map.dva_to_ret(5 * um, -2)
         with pytest.raises(DimensionMismatchError):
-            vfmap.dva_to_ret(5, -2 * ms)
+            visual_field_map.dva_to_ret(5, -2 * ms)
 
     # The inverse takes a length, and mixed spellings round-trip:
     for cls in (Curcio1990Map, Watson2014Map):
-        vfmap = cls()
-        x_um, y_um = vfmap.dva_to_ret(5 * dva, -2 * dva)
-        bare = vfmap.ret_to_dva(x_um, y_um)
-        mixed = vfmap.ret_to_dva((x_um / 1000) * mm, y_um * um)
+        visual_field_map = cls()
+        x_um, y_um = visual_field_map.dva_to_ret(5 * dva, -2 * dva)
+        bare = visual_field_map.ret_to_dva(x_um, y_um)
+        mixed = visual_field_map.ret_to_dva((x_um / 1000) * mm, y_um * um)
         npt.assert_allclose(mixed, bare, rtol=1e-9, err_msg=cls.__name__)
         with pytest.raises(DimensionMismatchError):
-            vfmap.ret_to_dva(5 * dva, -2)
+            visual_field_map.ret_to_dva(5 * dva, -2)
     # Curcio is exactly linear, so its round trip closes exactly. (Watson's
     # forward and inverse are separate fits and only agree to ~2%, which is a
     # property of that map and not of the unit conversion.)

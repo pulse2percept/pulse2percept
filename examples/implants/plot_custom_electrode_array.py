@@ -104,17 +104,18 @@ x_center = 0  # x-coordinate of circle center (microns)
 y_center = 0  # y-coordinate of circle center (microns)
 
 # Create a new instance of type CircleElectrodeArray:
-earray = CircleElectrodeArray(n_electrodes, radius, x_center, y_center)
-print(earray)
+electrode_array = CircleElectrodeArray(n_electrodes, radius, x_center,
+                                       y_center)
+print(electrode_array)
 
 ##############################################################################
 # Individual electrodes can be accessed by their name or integer index:
 
-earray[0]
+electrode_array[0]
 
-earray['A0']
+electrode_array['A0']
 
-earray[0] == earray['A0']
+electrode_array[0] == electrode_array['A0']
 
 ##############################################################################
 # Visualizing the electrode array
@@ -122,7 +123,7 @@ earray[0] == earray['A0']
 #
 # Electrode arrays come with their own plotting method:
 
-earray.plot()
+electrode_array.plot()
 
 ##############################################################################
 # By default, the method will use the current Axes object or create a new one
@@ -160,16 +161,16 @@ class FlexibleCircleElectrodeArray(CircleElectrodeArray):
 # electrode array as above:
 
 
-flex_earray = FlexibleCircleElectrodeArray(
+flex_electrode_array = FlexibleCircleElectrodeArray(
     n_electrodes, radius, x_center, y_center)
-print(flex_earray)
+print(flex_electrode_array)
 
 ##############################################################################
 # A single electrode can be removed by passing its name to the ``remove``
 # method:
 
 # Remove electrode 'A1'
-flex_earray.remove('A1')
+flex_electrode_array.remove('A1')
 
 # Replot the implant:
-flex_earray.plot()
+flex_electrode_array.plot()

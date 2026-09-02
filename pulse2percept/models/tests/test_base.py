@@ -79,10 +79,10 @@ class ValidSpatialModel(SpatialModel):
 
     def get_default_params(self):
         params = super(ValidSpatialModel, self).get_default_params()
-        params.update({'vfmap': Watson2014Map()})
+        params.update({'visual_field_map': Watson2014Map()})
         return params
 
-    def _predict_spatial(self, earray, stim):
+    def _predict_spatial(self, electrode_array, stim):
         n_time = 1 if stim.time is None else stim.time.size
         return np.zeros((self.grid.x.size, n_time), dtype=np.float32)
 
@@ -149,7 +149,7 @@ def test_SpatialModel_predict_percept_time_order():
 
     class RecordingSpatialModel(ValidSpatialModel):
 
-        def _predict_spatial(self, earray, stim):
+        def _predict_spatial(self, electrode_array, stim):
             seen_time.append(np.asarray(stim.time))
             # Hand back the first electrode's amplitude at every grid point,
             # so the caller can tell which frame ended up where:
@@ -179,7 +179,7 @@ def test_SpatialModel_predict_percept_deduplicates_frames():
 
     class CountingSpatialModel(ValidSpatialModel):
 
-        def _predict_spatial(self, earray, stim):
+        def _predict_spatial(self, electrode_array, stim):
             n_calls.append(stim.data.shape[1])
             return np.tile(stim.data[0], (self.grid.x.size, 1))
 
@@ -200,7 +200,7 @@ def test_SpatialModel_predict_percept_keeps_metadata():
 
     class RecordingSpatialModel(ValidSpatialModel):
 
-        def _predict_spatial(self, earray, stim):
+        def _predict_spatial(self, electrode_array, stim):
             seen_metadata.append(stim.metadata)
             return np.zeros((self.grid.x.size, stim.data.shape[1]),
                             dtype=np.float32)
@@ -285,11 +285,11 @@ def test_deepcopy_SpatialModel():
     npt.assert_equal(copied.is_built, False)
     npt.assert_equal(original != copied, True)
 
-    # Change the copied attribute by "destroying" the vfmap attribute
-    # which should be unique to each SpatialModel object
+    # Change the copied attribute by "destroying" the visual_field_map
+    # attribute which should be unique to each SpatialModel object
     copied = copy.deepcopy(original)
-    copied.vfmap = None
-    npt.assert_equal(original.vfmap is not None, True)
+    copied.visual_field_map = None
+    npt.assert_equal(original.visual_field_map is not None, True)
     npt.assert_equal(original != copied, True)
 
     # Assert "destroying" the original doesn't affect the copied
@@ -383,7 +383,7 @@ def test_SpatialModel_retinal_range():
     # Curcio1990Map puts 280 um to the degree, so 2.8 mm is 10 dva:
     model = ScoreboardSpatial(implant=ArgusII(), xrange=(-2.8 * mm, 2.8 * mm),
                               yrange=(-1.4 * mm, 1.4 * mm),
-                              vfmap=Curcio1990Map(), step=1)
+                              visual_field_map=Curcio1990Map(), step=1)
     npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
     npt.assert_allclose(model.yrange, (-5, 5), rtol=1e-12)
     # What is stored is plain dva, not a quantity, and it grids exactly like
@@ -391,13 +391,15 @@ def test_SpatialModel_retinal_range():
     for value in (model.xrange, model.yrange):
         npt.assert_equal(isinstance(value, Quantity), False)
     bare = ScoreboardSpatial(implant=ArgusII(), xrange=(-10, 10), yrange=(-5, 5),
-                             vfmap=Curcio1990Map(), step=1).build()
+                             visual_field_map=Curcio1990Map(), step=1).build()
     npt.assert_almost_equal(bare.grid.x, model.build().grid.x)
     npt.assert_almost_equal(bare.grid.y, model.grid.y)
     # Which map is installed decides the answer, so the user's map has to be
     # applied first however the parameters were ordered:
-    for order in ({'xrange': (-2.8 * mm, 2.8 * mm), 'vfmap': Curcio1990Map()},
-                  {'vfmap': Curcio1990Map(), 'xrange': (-2.8 * mm, 2.8 * mm)}):
+    for order in ({'xrange': (-2.8 * mm, 2.8 * mm),
+                   'visual_field_map': Curcio1990Map()},
+                  {'visual_field_map': Curcio1990Map(), 'xrange': (-2.8 * mm,
+                                                                   2.8 * mm)}):
         npt.assert_allclose(ScoreboardSpatial(implant=ArgusII(), step=1, **order).xrange,
                             (-10, 10), rtol=1e-12)
         npt.assert_allclose(
@@ -412,26 +414,26 @@ def test_SpatialModel_retinal_range():
             rtol=1e-12)
     # A quantity wrapping a pair says the same thing:
     npt.assert_allclose(
-        ScoreboardSpatial(implant=ArgusII(), xrange=(-2.8, 2.8) * mm, vfmap=Curcio1990Map(),
+        ScoreboardSpatial(implant=ArgusII(), xrange=(-2.8, 2.8) * mm, visual_field_map=Curcio1990Map(),
                           step=1).xrange, (-10, 10), rtol=1e-12)
     # The retinal y axis points the other way, so the pair comes back sorted
     # rather than reversed:
     yrange = ScoreboardSpatial(implant=ArgusII(), yrange=(1.4 * mm, -1.4 * mm),
-                               vfmap=Curcio1990Map(), step=1).yrange
+                               visual_field_map=Curcio1990Map(), step=1).yrange
     npt.assert_allclose(yrange, (-5, 5), rtol=1e-12)
     # Resolved once, at assignment: a later map does not reinterpret it.
     model = ScoreboardSpatial(implant=ArgusII(), xrange=(-2.8 * mm, 2.8 * mm),
-                              vfmap=Curcio1990Map(), step=1)
-    model.vfmap = Watson2014Map()
+                              visual_field_map=Curcio1990Map(), step=1)
+    model.visual_field_map = Watson2014Map()
     npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
     # Direct assignment is sequential, and uses the map in place at the time:
     model = ScoreboardSpatial(implant=ArgusII(), step=1)
-    model.vfmap = Curcio1990Map()
+    model.visual_field_map = Curcio1990Map()
     model.xrange = (-2.8 * mm, 2.8 * mm)
     npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
     # It must be a pair, whatever the units:
     with pytest.raises(ValueError):
-        ScoreboardSpatial(implant=ArgusII(), xrange=2.8 * mm, vfmap=Curcio1990Map())
+        ScoreboardSpatial(implant=ArgusII(), xrange=2.8 * mm, visual_field_map=Curcio1990Map())
 
 
 def test_SpatialModel_retinal_range_nonlinear_map():
@@ -446,7 +448,7 @@ def test_SpatialModel_retinal_range_nonlinear_map():
     """
     model = AxonMapModel(implant=ArgusII(), xrange=(-4 * mm, 4 * mm),
                          yrange=(-2 * mm, 2 * mm)).spatial
-    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
+    npt.assert_equal(isinstance(model.visual_field_map, Watson2014Map), True)
     # Each range is resolved along its own meridian, which is what makes the
     # two answers independent of one another:
     watson = Watson2014Map()
@@ -471,7 +473,7 @@ def test_SpatialModel_retinal_range_needs_a_retinal_map():
     """Only a retinal map can say what visual field an extent covers"""
     # A cortical map is not one, whether it was passed explicitly ...
     with pytest.raises(DimensionMismatchError) as excinfo:
-        ScoreboardSpatial(implant=ArgusII(), xrange=(-2 * mm, 2 * mm), vfmap=Polimeni2006Map())
+        ScoreboardSpatial(implant=ArgusII(), xrange=(-2 * mm, 2 * mm), visual_field_map=Polimeni2006Map())
     npt.assert_equal('in dva instead' in str(excinfo.value), True)
     # ... or is the model's own default, which a cortical model installs only
     # after its parameters have been applied:
@@ -484,7 +486,7 @@ def test_SpatialModel_retinal_range_needs_a_retinal_map():
             return 280.0 * xdva, -280.0 * ydva
 
     with pytest.raises(NotImplementedError) as excinfo:
-        ScoreboardSpatial(implant=ArgusII(), xrange=(-2 * mm, 2 * mm), vfmap=NoInverse())
+        ScoreboardSpatial(implant=ArgusII(), xrange=(-2 * mm, 2 * mm), visual_field_map=NoInverse())
     npt.assert_equal('in dva instead' in str(excinfo.value), True)
 
 
@@ -1158,7 +1160,7 @@ def test_model_electrode_coords_follow_the_stimulus():
                               step=1)
     # A subset, in an order that is not the array's:
     stim = Stimulus({'F10': 1, 'A1': 2, 'C5': 3})
-    x, y, z = model._electrode_coords(implant.earray, stim)
+    x, y, z = model._electrode_coords(implant.electrode_array, stim)
     npt.assert_equal(len(x), len(stim.electrodes))
     npt.assert_almost_equal(x, [implant[e].x for e in stim.electrodes])
     npt.assert_almost_equal(y, [implant[e].y for e in stim.electrodes])
@@ -1275,8 +1277,8 @@ class RecordingSpatial(SpatialModel):
     def get_default_params(self):
         return {**super().get_default_params(), 'seen': None}
 
-    def _predict_spatial(self, earray, stim):
-        x, y, z = self._electrode_coords(earray, stim)
+    def _predict_spatial(self, electrode_array, stim):
+        x, y, z = self._electrode_coords(electrode_array, stim)
         self.seen = {'amp': self._stim_values(stim),
                      'time': self._stim_times(stim), 'x': x, 'y': y, 'z': z}
         return np.zeros((self.grid.x.size, stim.data.shape[1]),
@@ -1566,11 +1568,11 @@ def test_spatial_model_reads_modulation_not_pulses():
     seen = []
 
     class Recording(ScoreboardSpatial):
-        def _predict_spatial(self, earray, stim):
+        def _predict_spatial(self, electrode_array, stim):
             # A pulse train has cathodic phases in it; modulation amplitudes
             # are never negative. So the sign says which one arrived:
             seen.append(float(stim.data.min()))
-            return super()._predict_spatial(earray, stim)
+            return super()._predict_spatial(electrode_array, stim)
 
     both = Model(spatial=Recording(implant, xrange=(-12, 12), yrange=(-8, 8),
                                    step=1),
@@ -1870,11 +1872,11 @@ def test_combined_model_still_integrates_the_delivered_pulses():
     seen = []
 
     class Recording(ScoreboardSpatial):
-        def _predict_spatial(self, earray, stim):
+        def _predict_spatial(self, electrode_array, stim):
             # A pulse train has cathodic phases in it; modulation amplitudes
             # never do. The sign says which one arrived:
             seen.append(float(stim.data.min()))
-            return super()._predict_spatial(earray, stim)
+            return super()._predict_spatial(electrode_array, stim)
 
     both = Model(spatial=Recording(implant, xrange=(-12, 12), yrange=(-8, 8),
                                    step=1),
@@ -1901,3 +1903,12 @@ def test_deactivating_an_encoded_electrode_keeps_the_schedule():
     npt.assert_array_equal(after.data, before.data[keep])
     # The waveform is still there to be had, and matches too:
     npt.assert_equal(stim.data.shape[0], 58)
+
+
+def test_SpatialModel_visual_field_map_is_the_canonical_name():
+    """The map is reached as `visual_field_map`; `vfmap` is gone"""
+    spatial = ScoreboardSpatial(ArgusII(), visual_field_map=Curcio1990Map())
+    npt.assert_equal(isinstance(spatial.visual_field_map, Curcio1990Map), True)
+    npt.assert_equal(hasattr(spatial, 'vfmap'), False)
+    with pytest.raises(TypeError):
+        ScoreboardSpatial(ArgusII(), vfmap=Curcio1990Map())

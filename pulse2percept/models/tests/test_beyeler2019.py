@@ -43,11 +43,12 @@ def test_ScoreboardSpatial():
     npt.assert_equal(model.predict_percept(None), None)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
-    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
-    model2 = ScoreboardSpatial(implant=ArgusII(), vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model.visual_field_map, Watson2014Map), True)
+    npt.assert_almost_equal(model.visual_field_map.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.visual_field_map.dva_to_ret(0, 0), (0, 0))
+    model2 = ScoreboardSpatial(implant=ArgusII(), visual_field_map=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.visual_field_map,
+                                Watson2014DisplaceMap),
                      True)
 
     # Zero in = zero out:
@@ -107,11 +108,16 @@ def test_ScoreboardModel():
     npt.assert_equal(model.spatial.rho, 987)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.spatial.vfmap, Watson2014Map), True)
-    npt.assert_almost_equal(model.spatial.vfmap.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.spatial.vfmap.dva_to_ret(0, 0), (0, 0))
-    model2 = ScoreboardModel(implant=ArgusII(), vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.spatial.vfmap, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model.spatial.visual_field_map, Watson2014Map),
+                     True)
+    npt.assert_almost_equal(model.spatial.visual_field_map.ret_to_dva(0, 0),
+                            (0, 0))
+    npt.assert_almost_equal(model.spatial.visual_field_map.dva_to_ret(0, 0),
+                            (0, 0))
+    model2 = ScoreboardModel(implant=ArgusII(),
+                             visual_field_map=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.spatial.visual_field_map,
+                                Watson2014DisplaceMap),
                      True)
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)
@@ -208,11 +214,13 @@ def test_AxonMapSpatial():
     npt.assert_equal(model.rho, 987)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.vfmap, Watson2014Map), True)
-    npt.assert_almost_equal(model.vfmap.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.vfmap.dva_to_ret(0, 0), (0, 0))
-    model2 = AxonMapSpatial(implant=ArgusII(), vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model.visual_field_map, Watson2014Map), True)
+    npt.assert_almost_equal(model.visual_field_map.ret_to_dva(0, 0), (0, 0))
+    npt.assert_almost_equal(model.visual_field_map.dva_to_ret(0, 0), (0, 0))
+    model2 = AxonMapSpatial(implant=ArgusII(),
+                            visual_field_map=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.visual_field_map,
+                                Watson2014DisplaceMap),
                      True)
 
     # Nothing in, None out:
@@ -315,11 +323,16 @@ def test_AxonMapModel():
         npt.assert_equal(getattr(model.spatial, key), value)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.spatial.vfmap, Watson2014Map), True)
-    npt.assert_almost_equal(model.spatial.vfmap.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.spatial.vfmap.dva_to_ret(0, 0), (0, 0))
-    model2 = AxonMapModel(implant=ArgusII(), vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.spatial.vfmap, Watson2014DisplaceMap),
+    npt.assert_equal(isinstance(model.spatial.visual_field_map, Watson2014Map),
+                     True)
+    npt.assert_almost_equal(model.spatial.visual_field_map.ret_to_dva(0, 0),
+                            (0, 0))
+    npt.assert_almost_equal(model.spatial.visual_field_map.dva_to_ret(0, 0),
+                            (0, 0))
+    model2 = AxonMapModel(implant=ArgusII(),
+                          visual_field_map=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.spatial.visual_field_map,
+                                Watson2014DisplaceMap),
                      True)
 
     # Zeros in, zeros out:

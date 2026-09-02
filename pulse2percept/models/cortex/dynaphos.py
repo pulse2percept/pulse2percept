@@ -94,7 +94,7 @@ class DynaphosModel(BaseModel):
         and y axes different step sizes.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides visual field mappings.
         By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
@@ -134,7 +134,8 @@ class DynaphosModel(BaseModel):
                  sig_slope=19152642.500946816, a_thr=9.141886000943878e-08,
                  a50=1.057631326853325e-07, freq=300, p_dur=0.170,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.25,
-                 grid_type='rectangular', vfmap=None, n_gray=None, noise=None,
+                 grid_type='rectangular', visual_field_map=None, n_gray=None,
+                 noise=None,
                  verbose=True):
             _check_implant(implant)
             self._implant = implant
@@ -146,12 +147,13 @@ class DynaphosModel(BaseModel):
                 freq=freq, p_dur=p_dur, xrange=xrange, yrange=yrange,
                 step=step, grid_type=grid_type,
                 # Published map parameters, see [vanderGrinten2023]_:
-                vfmap=(Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
-                       if vfmap is None else vfmap),
+                visual_field_map=(
+                    Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
+                    if visual_field_map is None else visual_field_map),
                 n_gray=n_gray, noise=noise, verbose=verbose,
                 regions=['v1'] if regions is None else regions)
 
-            self.vfmap.regions = self.regions
+            self.visual_field_map.regions = self.regions
             self.grid = None
 
     @property
@@ -183,7 +185,8 @@ class DynaphosModel(BaseModel):
                 'step': 0.25,  # dva
                 'grid_type': 'rectangular',
                 # Use [Polemeni2006]_ visual field map with parameters specified in the paper
-                'vfmap': Polimeni2006Map(a=0.75,k=17.3,b=120,alpha1=0.95),
+                'visual_field_map': Polimeni2006Map(a=0.75,k=17.3,b=120,
+                                                    alpha1=0.95),
                 # Number of gray levels to use in the percept:
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
@@ -278,29 +281,29 @@ class DynaphosModel(BaseModel):
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
-        self.grid.build(self.vfmap)
+        self.grid.build(self.visual_field_map)
         self._build()
         self._is_built = True
         return self
                     
-    def _predict_percept(self, earray, stim, t_percept, clocks=None):
+    def _predict_percept(self, electrode_array, stim, t_percept, clocks=None):
         """Predicts the brightness at spatial locations over time"""
-        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
         # whether to allow current to spread between hemispheres
         separate = 0
         boundary = 0
-        if self.vfmap.split_map:
+        if self.visual_field_map.split_map:
             separate = 1
-            boundary = self.vfmap.left_offset/2
+            boundary = self.visual_field_map.left_offset/2
 
         phosphene_locations = {}
         for region in self.regions:
-            phosphene_locations[region] = self.vfmap.to_dva()[region](x_el, y_el)
+            phosphene_locations[region] = self.visual_field_map.to_dva()[region](x_el, y_el)
 
         theta, r = cart2pol(*phosphene_locations['v1'])
 
         # magnification factors (mm/dva)
-        M = self.vfmap.k * (self.vfmap.b - self.vfmap.a) / ((r + self.vfmap.a) * (r + self.vfmap.b))
+        M = self.visual_field_map.k * (self.visual_field_map.b - self.visual_field_map.a) / ((r + self.visual_field_map.a) * (r + self.visual_field_map.b))
 
         # excitability constant uA/mm^2
         K = self.excitability
@@ -492,7 +495,7 @@ class DynaphosModel(BaseModel):
             # Stimulus was compressed to zero:
             resp = np.zeros((self.grid.x.size, n_time), dtype=np.float32)
         else:
-            resp = self._predict_percept(self.implant.earray, stim,
+            resp = self._predict_percept(self.implant.electrode_array, stim,
                                          t_percept, clocks)
         return Percept(resp.reshape(list(self.grid.x.shape) + [t_percept.size]),
                        space=self.grid, time=t_percept,

@@ -21,85 +21,85 @@ def test_ElectrodeArray():
         ElectrodeArray([0])
 
     # Empty array:
-    earray = ElectrodeArray([])
-    npt.assert_equal(earray.n_electrodes, 0)
-    # npt.assert_equal(earray[0], None)
-    npt.assert_equal(earray['A01'], None)
+    electrode_array = ElectrodeArray([])
+    npt.assert_equal(electrode_array.n_electrodes, 0)
+    # npt.assert_equal(electrode_array[0], None)
+    npt.assert_equal(electrode_array['A01'], None)
     with pytest.raises(TypeError):
-        earray[PointSource(0, 0, 0)]
+        electrode_array[PointSource(0, 0, 0)]
     ElectrodeArray([])
 
     # A single electrode:
-    earray = ElectrodeArray(PointSource(0, 1, 2))
-    npt.assert_equal(earray.n_electrodes, 1)
-    npt.assert_equal(isinstance(earray[0], PointSource), True)
-    npt.assert_equal(isinstance(earray[[0]], list), True)
-    npt.assert_equal(isinstance(earray[[0]][0], PointSource), True)
-    npt.assert_almost_equal(earray[0].x, 0)
-    npt.assert_almost_equal(earray[0].y, 1)
-    npt.assert_almost_equal(earray[0].z, 2)
+    electrode_array = ElectrodeArray(PointSource(0, 1, 2))
+    npt.assert_equal(electrode_array.n_electrodes, 1)
+    npt.assert_equal(isinstance(electrode_array[0], PointSource), True)
+    npt.assert_equal(isinstance(electrode_array[[0]], list), True)
+    npt.assert_equal(isinstance(electrode_array[[0]][0], PointSource), True)
+    npt.assert_almost_equal(electrode_array[0].x, 0)
+    npt.assert_almost_equal(electrode_array[0].y, 1)
+    npt.assert_almost_equal(electrode_array[0].z, 2)
 
     # Indexing:
     ps1, ps2 = PointSource(0, 0, 0), PointSource(1, 1, 1)
-    earray = ElectrodeArray({'A01': ps1, 'D07': ps2})
-    npt.assert_equal(earray['A01'], ps1)
-    npt.assert_equal(earray['D07'], ps2)
+    electrode_array = ElectrodeArray({'A01': ps1, 'D07': ps2})
+    npt.assert_equal(electrode_array['A01'], ps1)
+    npt.assert_equal(electrode_array['D07'], ps2)
     # Slots:
-    npt.assert_equal(hasattr(earray, '__slots__'), True)
-    npt.assert_equal(hasattr(earray, '__dict__'), False)
+    npt.assert_equal(hasattr(electrode_array, '__slots__'), True)
+    npt.assert_equal(hasattr(electrode_array, '__dict__'), False)
 
 
 def test_ElectrodeArray_add_electrode():
-    earray = ElectrodeArray([])
-    npt.assert_equal(earray.n_electrodes, 0)
+    electrode_array = ElectrodeArray([])
+    npt.assert_equal(electrode_array.n_electrodes, 0)
 
     with pytest.raises(TypeError):
-        earray.add_electrode('A01', ElectrodeArray([]))
+        electrode_array.add_electrode('A01', ElectrodeArray([]))
 
     # Add an electrode:
     key0 = 'A04'
-    earray.add_electrode(key0, PointSource(0, 1, 2))
-    npt.assert_equal(earray.n_electrodes, 1)
+    electrode_array.add_electrode(key0, PointSource(0, 1, 2))
+    npt.assert_equal(electrode_array.n_electrodes, 1)
     # Both numeric and string index should work:
     for key in [key0, 0]:
-        npt.assert_equal(isinstance(earray[key], PointSource), True)
-        npt.assert_almost_equal(earray[key].x, 0)
-        npt.assert_almost_equal(earray[key].y, 1)
-        npt.assert_almost_equal(earray[key].z, 2)
+        npt.assert_equal(isinstance(electrode_array[key], PointSource), True)
+        npt.assert_almost_equal(electrode_array[key].x, 0)
+        npt.assert_almost_equal(electrode_array[key].y, 1)
+        npt.assert_almost_equal(electrode_array[key].z, 2)
     with pytest.raises(ValueError):
         # Can't add the same electrode twice:
-        earray.add_electrode(key0, PointSource(0, 1, 2))
+        electrode_array.add_electrode(key0, PointSource(0, 1, 2))
 
     # Add another electrode:
     key1 = 'A01'
-    earray.add_electrode(key1, DiskElectrode(4, 5, 6, 7))
-    npt.assert_equal(earray.n_electrodes, 2)
+    electrode_array.add_electrode(key1, DiskElectrode(4, 5, 6, 7))
+    npt.assert_equal(electrode_array.n_electrodes, 2)
     # Both numeric and string index should work:
     for key in [key1, 1]:
-        npt.assert_equal(isinstance(earray[key], DiskElectrode), True)
-        npt.assert_almost_equal(earray[key].x, 4)
-        npt.assert_almost_equal(earray[key].y, 5)
-        npt.assert_almost_equal(earray[key].z, 6)
-        npt.assert_almost_equal(earray[key].radius, 7)
+        npt.assert_equal(isinstance(electrode_array[key], DiskElectrode), True)
+        npt.assert_almost_equal(electrode_array[key].x, 4)
+        npt.assert_almost_equal(electrode_array[key].y, 5)
+        npt.assert_almost_equal(electrode_array[key].z, 6)
+        npt.assert_almost_equal(electrode_array[key].radius, 7)
 
     # We can also get a list of electrodes:
     for keys in [[key0, key1], [0, key1], [key0, 1], [0, 1]]:
-        selected = earray[keys]
+        selected = electrode_array[keys]
         npt.assert_equal(isinstance(selected, list), True)
         npt.assert_equal(isinstance(selected[0], PointSource), True)
         npt.assert_equal(isinstance(selected[1], DiskElectrode), True)
 
 
 def test_ElectrodeArray_remove_electrode():
-    earray1 = ElectrodeArray([])
-    earray2 = ElectrodeArray([])
-    npt.assert_equal(earray1.n_electrodes, 0)
+    electrode_array1 = ElectrodeArray([])
+    electrode_array2 = ElectrodeArray([])
+    npt.assert_equal(electrode_array1.n_electrodes, 0)
 
     # Can't remove electrodes from empty electrodeArray
     with pytest.raises(ValueError):
-        earray1.remove_electrode(None)
+        electrode_array1.remove_electrode(None)
     with pytest.raises(ValueError):
-        earray1.remove_electrode("foo")
+        electrode_array1.remove_electrode("foo")
 
     key = [0] * 4
     key[0] = 'D03'
@@ -107,48 +107,48 @@ def test_ElectrodeArray_remove_electrode():
     key[2] = 'F10'
     key[3] = 'E12'
 
-    earray1.add_electrode(key[0], PointSource(0, 1, 2))
-    earray1.add_electrode(key[1], PointSource(3, 4, 5))
-    earray1.add_electrode(key[2], PointSource(6, 7, 8))
-    earray1.add_electrode(key[3], PointSource(9, 10, 11))
-    npt.assert_equal(earray1.n_electrodes, 4)
+    electrode_array1.add_electrode(key[0], PointSource(0, 1, 2))
+    electrode_array1.add_electrode(key[1], PointSource(3, 4, 5))
+    electrode_array1.add_electrode(key[2], PointSource(6, 7, 8))
+    electrode_array1.add_electrode(key[3], PointSource(9, 10, 11))
+    npt.assert_equal(electrode_array1.n_electrodes, 4)
 
-    earray2.add_electrode(key[0], PointSource(0, 1, 2))
-    earray2.add_electrode(key[1], PointSource(3, 4, 5))
-    earray2.add_electrode(key[2], PointSource(6, 7, 8))
-    earray2.add_electrode(key[3], PointSource(9, 10, 11))
-    npt.assert_equal(earray2.n_electrodes, 4)
+    electrode_array2.add_electrode(key[0], PointSource(0, 1, 2))
+    electrode_array2.add_electrode(key[1], PointSource(3, 4, 5))
+    electrode_array2.add_electrode(key[2], PointSource(6, 7, 8))
+    electrode_array2.add_electrode(key[3], PointSource(9, 10, 11))
+    npt.assert_equal(electrode_array2.n_electrodes, 4)
 
     # Remove one electrode key[1] from the electrodeArray
-    earray1.remove_electrode(key[0])
-    npt.assert_equal(earray1.n_electrodes, 3)
+    electrode_array1.remove_electrode(key[0])
+    npt.assert_equal(electrode_array1.n_electrodes, 3)
     # Can't remove an electrode that has been removed
     with pytest.raises(ValueError):
-        earray1.remove_electrode(key[0])
+        electrode_array1.remove_electrode(key[0])
 
     # List keeps order:
-    npt.assert_equal(earray1[0], earray1[key[1]])
-    npt.assert_equal(earray1[1], earray1[key[2]])
-    npt.assert_equal(earray1[2], earray1[key[3]])
+    npt.assert_equal(electrode_array1[0], electrode_array1[key[1]])
+    npt.assert_equal(electrode_array1[1], electrode_array1[key[2]])
+    npt.assert_equal(electrode_array1[2], electrode_array1[key[3]])
 
     # Other electrodes stay the same
     for k in [key[1], key[2], key[3]]:
-        npt.assert_equal(earray1[k].x, earray2[k].x)
-        npt.assert_equal(earray1[k].y, earray2[k].y)
-        npt.assert_equal(earray1[k].z, earray2[k].z)
+        npt.assert_equal(electrode_array1[k].x, electrode_array2[k].x)
+        npt.assert_equal(electrode_array1[k].y, electrode_array2[k].y)
+        npt.assert_equal(electrode_array1[k].z, electrode_array2[k].z)
 
     # Remove two more electrodes from the electrodeArray
     # List keeps order
-    earray1.remove_electrode(key[1])
-    earray1.remove_electrode(key[2])
-    npt.assert_equal(earray1.n_electrodes, 1)
-    npt.assert_equal(earray1[0], earray1[key[3]])
+    electrode_array1.remove_electrode(key[1])
+    electrode_array1.remove_electrode(key[2])
+    npt.assert_equal(electrode_array1.n_electrodes, 1)
+    npt.assert_equal(electrode_array1[0], electrode_array1[key[3]])
 
     # The last electrode stays the same
     for key in [key[3]]:
-        npt.assert_equal(earray1[key].x, earray2[key].x)
-        npt.assert_equal(earray1[key].y, earray2[key].y)
-        npt.assert_equal(earray1[key].z, earray2[key].z)
+        npt.assert_equal(electrode_array1[key].x, electrode_array2[key].x)
+        npt.assert_equal(electrode_array1[key].y, electrode_array2[key].y)
+        npt.assert_equal(electrode_array1[key].z, electrode_array2[key].z)
 
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))
@@ -547,20 +547,23 @@ def test_ElectrodeGrid_naming_schemes():
 
 
 def test_ElectrodeArray_coordinates():
-    earray = ElectrodeArray([DiskElectrode(1000, -500, 100, 50),
-                             DiskElectrode(0, 0, 0, 50)])
-    npt.assert_equal(earray.coordinate_unit, um)
-    npt.assert_almost_equal(earray.coordinates(),
+    electrode_array = ElectrodeArray([DiskElectrode(1000, -500, 100, 50),
+                                      DiskElectrode(0, 0, 0, 50)])
+    npt.assert_equal(electrode_array.coordinate_unit, um)
+    npt.assert_almost_equal(electrode_array.coordinates(),
                             [[1000, -500, 100], [0, 0, 0]])
-    npt.assert_allclose(earray.coordinates(mm), [[1, -0.5, 0.1], [0, 0, 0]],
+    npt.assert_allclose(electrode_array.coordinates(mm), [[1, -0.5, 0.1], [0,
+                                                                           0,
+                                                                           0]],
                         rtol=1e-12)
     # Ordinary arrays, in electrode order, never quantities:
-    npt.assert_equal(isinstance(earray.coordinates(mm), np.ndarray), True)
-    npt.assert_equal(earray.coordinates().shape, (2, 3))
+    npt.assert_equal(isinstance(electrode_array.coordinates(mm), np.ndarray),
+                     True)
+    npt.assert_equal(electrode_array.coordinates().shape, (2, 3))
     # An empty array still has the right shape, so callers can index into it:
     npt.assert_equal(ElectrodeArray([]).coordinates().shape, (0, 3))
     with pytest.raises(DimensionMismatchError):
-        earray.coordinates(ms)
+        electrode_array.coordinates(ms)
 
 
 def test_ElectrodeGrid_units():
@@ -628,38 +631,43 @@ def test_ElectrodeGrid_rot_units():
 def test_ElectrodeArray_coordinates_subset():
     """`electrodes=` selects and reorders, which is what a stimulus needs"""
     implant = ArgusII()
-    earray = implant.earray
+    electrode_array = implant.electrode_array
     names = ['F10', 'A1', 'C5']
-    coords = earray.coordinates(electrodes=names)
+    coords = electrode_array.coordinates(electrodes=names)
     npt.assert_equal(coords.shape, (3, 3))
     npt.assert_almost_equal(coords[:, 0], [implant[e].x for e in names])
     npt.assert_almost_equal(coords[:, 1], [implant[e].y for e in names])
     # Order follows the request, not the array:
-    npt.assert_almost_equal(earray.coordinates(electrodes=['A1', 'F10']),
-                            earray.coordinates(electrodes=['F10', 'A1'])[::-1])
+    npt.assert_almost_equal(electrode_array.coordinates(electrodes=['A1',
+                                                                    'F10']),
+                            electrode_array.coordinates(
+                                electrodes=['F10', 'A1'])[::-1])
     # Converted the same way as the full array:
-    npt.assert_allclose(earray.coordinates(mm, electrodes=names),
-                        earray.coordinates(electrodes=names) / 1000,
+    npt.assert_allclose(electrode_array.coordinates(mm, electrodes=names),
+                        electrode_array.coordinates(electrodes=names) / 1000,
                         rtol=1e-12)
     # An electrode the array does not have says so, rather than surfacing as
     # an AttributeError somewhere downstream:
     with pytest.raises(ValueError) as excinfo:
-        earray.coordinates(electrodes=['A1', 'Z99'])
+        electrode_array.coordinates(electrodes=['A1', 'Z99'])
     npt.assert_equal('Z99' in str(excinfo.value), True)
     # Repeats are allowed: nothing here says an electrode may appear once.
-    npt.assert_almost_equal(earray.coordinates(electrodes=['A1', 'A1']),
-                            earray.coordinates(electrodes=['A1', 'A1']))
+    npt.assert_almost_equal(electrode_array.coordinates(electrodes=['A1',
+                                                                    'A1']),
+                            electrode_array.coordinates(electrodes=['A1',
+                                                                    'A1']))
 
 
 def test_ElectrodeArray_coordinates_selector():
-    """A selector means the same thing here as it does in `earray[...]`"""
+    """A selector means the same thing here as it does in
+    `electrode_array[...]`"""
     implant = ArgusII()
-    earray = implant.earray
+    electrode_array = implant.electrode_array
     grid = ElectrodeGrid((3, 3), 20)
     # Only a list or an array stands for several electrodes. A name, an index,
     # or a grid's (row, col) pair stands for one, and comes back as one row:
     for selector, expected in [('A1', implant['A1']), (0, implant['A1'])]:
-        coords = earray.coordinates(electrodes=selector)
+        coords = electrode_array.coordinates(electrodes=selector)
         npt.assert_equal(coords.shape, (1, 3))
         npt.assert_almost_equal(coords[0], expected.coordinates())
     npt.assert_equal(grid.coordinates(electrodes=(0, 0)).shape, (1, 3))

@@ -31,12 +31,12 @@ def _whole(name, value):
 
 def _electrode_array(implant):
     """Return the electrode array of an implant, or the array itself."""
-    earray = getattr(implant, 'earray', implant)
-    if (getattr(earray, 'electrode_names', None) is None or
-            getattr(earray, 'coordinates', None) is None):
+    electrode_array = getattr(implant, 'electrode_array', implant)
+    if (getattr(electrode_array, 'electrode_names', None) is None or
+            getattr(electrode_array, 'coordinates', None) is None):
         raise TypeError(f"'implant' must be an Implant or an "
                         f"ElectrodeArray, not {type(implant)}.")
-    return earray
+    return electrode_array
 
 
 class Raster(PrettyPrint, metaclass=ABCMeta):
@@ -185,8 +185,8 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         ax : matplotlib.axes.Axes
             The axes drawn on.
         """
-        earray = self._bound(implant)
-        names = list(earray.electrode_names)
+        electrode_array = self._bound(implant)
+        names = list(electrode_array.electrode_names)
         group = np.asarray(self.groups(names), dtype=np.int64)
         if annotate is None:
             annotate = len(names) <= 120
@@ -200,7 +200,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         colors = plt.get_cmap(cmap)(spread)
         # Microns, which is what the axis labels below say and what the patch
         # radii are sized in:
-        xy = earray.coordinates(um)[:, :2]
+        xy = electrode_array.coordinates(um)[:, :2]
         # Sized by the array rather than by what each electrode reports, since
         # neither of the two shapes an implant is usually built from would show
         # its color: a PointSource is a 5 um dot however far apart they are,
@@ -742,11 +742,11 @@ class CheckerboardRaster(Raster):
         when the raster is assigned to
         :py:attr:`~pulse2percept.implants.Implant.raster`.
         """
-        earray = _electrode_array(implant)
-        names = list(earray.electrode_names)
+        electrode_array = _electrode_array(implant)
+        names = list(electrode_array.electrode_names)
         n_groups, balance = self._n_groups, self._balance
         # Microns, which is what `min_spacing` reports the answer in:
-        xy = earray.coordinates(um)[:, :2]
+        xy = electrode_array.coordinates(um)[:, :2]
         if len(xy) < n_groups:
             raise ValueError(f"{len(xy)} electrode(s) cannot be split into "
                              f"{n_groups} groups.")

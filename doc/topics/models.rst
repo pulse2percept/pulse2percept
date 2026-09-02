@@ -177,7 +177,7 @@ The model maps implant coordinates into the visual field through its
 retinotopic map. Each electrode follows this chain::
 
     retinal coordinate (um)
-      -> vfmap.ret_to_dva -> eye-centered visual field (dva)
+      -> visual_field_map.ret_to_dva -> eye-centered visual field (dva)
       -> + gaze            -> scene coordinate (dva)
       -> sample the scene
 
@@ -210,8 +210,9 @@ stimulation belongs to the encoder. Pixel values and channels may change, but
 spatial shape and frame timing must remain unchanged because ``fov`` and the
 frame clock refer to the original scene.
 
-Scene registration currently requires a retinal ``vfmap`` and an implant
-``encoder``. A cortical ``vfmap`` or missing encoder raises ``ValueError``.
+Scene registration currently requires a retinal ``visual_field_map`` and an
+implant ``encoder``. A cortical ``visual_field_map`` or a missing encoder
+raises ``ValueError``.
 
 Residual vision
 ~~~~~~~~~~~~~~~

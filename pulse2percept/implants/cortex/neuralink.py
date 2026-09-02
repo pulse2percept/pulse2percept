@@ -78,7 +78,7 @@ class EllipsoidElectrode(Electrode):
         raise NotImplementedError
     
 
-    def plot3D(self, ax=None, **kwargs):
+    def plot3d(self, ax=None, **kwargs):
         """Plot the electrode in 3D space
         
         Parameters
@@ -206,7 +206,7 @@ class LinearEdgeThread(NeuralinkThread):
         for i, loc in enumerate(electrode_locs):
             electrodes[str(i)] = self.electrode(loc[0], loc[1], loc[2], orient=self.rot, orient_mode='rot')
         
-        self.earray = ElectrodeArray(electrodes)
+        self.electrode_array = ElectrodeArray(electrodes)
         self.safe_mode = safe_mode
         self.preprocess = preprocess
 
@@ -218,7 +218,7 @@ class LinearEdgeThread(NeuralinkThread):
                        'spacing': self.spacing})
         return params
     
-    def plot3D(self, ax=None, **kwargs):
+    def plot3d(self, ax=None, **kwargs):
         """Plot the thread in 3D space
 
         Parameters
@@ -253,7 +253,7 @@ class LinearEdgeThread(NeuralinkThread):
         ax.plot_surface(plotx, ploty, plotz, **self.plot_3d_kwargs)
 
         for electrode in self.electrode_objects:
-            electrode.plot3D(ax=ax, **{k:v for k, v in kwargs.items() if k not in fig_kwargs})
+            electrode.plot3d(ax=ax, **{k:v for k, v in kwargs.items() if k not in fig_kwargs})
 
         return ax
 
@@ -263,7 +263,7 @@ class Neuralink(EnsembleImplant):
     placement = 'intracortical'
 
     @classmethod
-    def from_neuropythy(cls, vfmap, locs=None, xrange=None, yrange=None, step=None,
+    def from_neuropythy(cls, visual_field_map, locs=None, xrange=None, yrange=None, step=None,
                         rand_insertion_angle=None, region='v1', Thread=LinearEdgeThread):
         """
         Create a Neuralink implant [Musk2019]_ from a neuropythy visual field map.
@@ -276,7 +276,7 @@ class Neuralink(EnsembleImplant):
 
         Parameters
         ----------
-        vfmap : p2p.topography.NeuropythyMap
+        visual_field_map : p2p.topography.NeuropythyMap
             Visual field map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations (dva) to create threads at. Not
@@ -310,11 +310,12 @@ class Neuralink(EnsembleImplant):
         """
         # import at runtime to avoid circular imports
         from ...topography import NeuropythyMap, Grid2D
-        if not isinstance(vfmap, NeuropythyMap):
-            raise TypeError("vfmap must be a p2p.topography.NeuropythyMap")
+        if not isinstance(visual_field_map, NeuropythyMap):
+            raise TypeError("visual_field_map must be a "
+                            "p2p.topography.NeuropythyMap")
 
-        # Where in the *visual field* each thread goes; `vfmap` turns that
-        # into a place on the cortical surface below:
+        # Where in the *visual field* each thread goes; `visual_field_map`
+        # turns that into a place on the cortical surface below:
         locs = as_value(locs, dva, 'locs')
         xrange = as_value(xrange, dva, 'xrange')
         yrange = as_value(yrange, dva, 'yrange')
@@ -341,8 +342,8 @@ class Neuralink(EnsembleImplant):
         
         # thread will extend from the pial point to the intracortical point
         # will be (3, npoints) shape
-        surface_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='pial'))
-        intra_points = np.array(vfmap.from_dva()[region](xlocs, ylocs, surface='midgray'))
+        surface_points = np.array(visual_field_map.from_dva()[region](xlocs, ylocs, surface='pial'))
+        intra_points = np.array(visual_field_map.from_dva()[region](xlocs, ylocs, surface='midgray'))
         surface_points= surface_points[:, np.isnan(surface_points).sum(axis=0) == 0]
         intra_points = intra_points[:, np.isnan(intra_points).sum(axis=0) == 0]
         # Both surfaces must have dropped the same points, or else the two
@@ -380,18 +381,19 @@ class Neuralink(EnsembleImplant):
         return cls(threads)
     
     @classmethod
-    def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None,
+    def from_cortical_map(cls, implant_type, visual_field_map, locs=None,
+                          xrange=None,
                           yrange=None, step=None, region='v1'):
         """
         Override of parent class from cortical map method.
         Uses from_neuropythy instead of from_cortical_map if the provided
-        vfmap is a NeuropythyMap.
+        visual_field_map is a NeuropythyMap.
 
         Parameters
         ----------
         implant_type : p2p.implants.Implant
             Type of implant to create. Currently only NeuralinkThread is supported.
-        vfmap : p2p.topography.CorticalMap
+        visual_field_map : p2p.topography.CorticalMap
             Cortical map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations to create threads at. Not
@@ -411,10 +413,10 @@ class Neuralink(EnsembleImplant):
         if not issubclass(implant_type, NeuralinkThread):
             raise TypeError("implant_type must be a subclass of NeuralinkThread")
         from ...topography import NeuropythyMap
-        if not isinstance(vfmap, NeuropythyMap):
-            return super().from_cortical_map(implant_type, vfmap, locs=locs, xrange=xrange,
+        if not isinstance(visual_field_map, NeuropythyMap):
+            return super().from_cortical_map(implant_type, visual_field_map, locs=locs, xrange=xrange,
                                              yrange=yrange, step=step, region=region)
-        return cls.from_neuropythy(vfmap, locs=locs, xrange=xrange, yrange=yrange,
+        return cls.from_neuropythy(visual_field_map, locs=locs, xrange=xrange, yrange=yrange,
                                     step=step, region=region, Thread=implant_type)
 
     
@@ -450,7 +452,7 @@ class Neuralink(EnsembleImplant):
                     raise TypeError("threads must be a collection of NeuralinkThread objects")
         super().__init__(threads, preprocess=preprocess, safe_mode=safe_mode)
     
-    def plot3D(self, ax=None, **kwargs):
+    def plot3d(self, ax=None, **kwargs):
         """Plot the implant in 3D space
         
         Parameters
@@ -470,5 +472,5 @@ class Neuralink(EnsembleImplant):
                 raise ValueError('ax must be a 3D axis')
         
         for thread in self.implants.values():
-            thread.plot3D(ax=ax, **{k:v for k, v in kwargs.items() if k not in fig_kwargs})
+            thread.plot3d(ax=ax, **{k:v for k, v in kwargs.items() if k not in fig_kwargs})
         return ax

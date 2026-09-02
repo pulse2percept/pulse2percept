@@ -87,7 +87,7 @@ class ArgusI(Implant):
 
     >>> from pulse2percept.implants import ArgusI
     >>> ArgusI(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusI(earray=ElectrodeGrid, eye='RE', preprocess=True,
+    ArgusI(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
            safe_mode=False, shape=(4, 4))
 
     Get access to electrode 'B1', either by name or by row/column index:
@@ -123,9 +123,9 @@ class ArgusI(Implant):
                              'L8', 'L4', 'M6', 'M2',
                              'L7', 'L3', 'M5', 'M1']
         names = old_names if use_legacy_names else ('1', 'A')
-        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
-                                    rot=rot, electrode_type=DiskElectrode,
-                                    radius=r_arr, names=names)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, spacing, x=x, y=y, z=z, rot=rot,
+            electrode_type=DiskElectrode, radius=r_arr, names=names)
 
         # Set left/right eye:
         if not isinstance(eye, str):
@@ -137,18 +137,18 @@ class ArgusI(Implant):
         if eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = self.earray.electrode_names
-            objects = self.earray.electrode_objects
-            names = np.array(names).reshape(self.earray.shape)
+            names = self.electrode_array.electrode_names
+            objects = self.electrode_array.electrode_objects
+            names = np.array(names).reshape(self.electrode_array.shape)
             # Reverse column names:
-            for row in range(self.earray.shape[0]):
+            for row in range(self.electrode_array.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
             electrodes = OrderedDict()
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
-            # Assign the new ordered dict to earray:
-            self.earray._electrodes = electrodes
+            # Assign the new ordered dict to electrode_array:
+            self.electrode_array._electrodes = electrodes
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
@@ -246,7 +246,7 @@ class ArgusII(Implant):
 
     >>> from pulse2percept.implants import ArgusII
     >>> ArgusII(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
-    ArgusII(earray=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
+    ArgusII(electrode_array=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
             preprocess=True, raster=SequentialRaster, safe_mode=False,
             shape=(6, 10))
 
@@ -282,9 +282,9 @@ class ArgusII(Implant):
         r = 225.0 / 2.0
         spacing = 575.0
         names = ('A', '1')
-        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
-                                    radius=r, rot=rot, names=names,
-                                    electrode_type=DiskElectrode)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, spacing, x=x, y=y, z=z, radius=r, rot=rot,
+            names=names, electrode_type=DiskElectrode)
 
         # Built per instance rather than shared between them: a raster binds to
         # the implant it schedules, and an encoder is a mutable object the
@@ -304,18 +304,18 @@ class ArgusII(Implant):
         if eye == 'LE':
             # TODO: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = self.earray.electrode_names
-            objects = self.earray.electrode_objects
-            names = np.array(names).reshape(self.earray.shape)
+            names = self.electrode_array.electrode_names
+            objects = self.electrode_array.electrode_objects
+            names = np.array(names).reshape(self.electrode_array.shape)
             # Reverse column names:
-            for row in range(self.earray.shape[0]):
+            for row in range(self.electrode_array.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
             electrodes = OrderedDict()
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
-            # Assign the new ordered dict to earray:
-            self.earray._electrodes = electrodes
+            # Assign the new ordered dict to electrode_array:
+            self.electrode_array._electrodes = electrodes
 
         # Set after left-eye electrode renaming:
         self.thresholds = thresholds

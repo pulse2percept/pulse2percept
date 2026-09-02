@@ -143,9 +143,9 @@ def test_BVT44_stim():
 @pytest.mark.parametrize('cls', (BVT24, BVT44))
 def test_BVT_rot_units(cls):
     """BVT lays out its own electrodes, so it owns this conversion"""
-    bare = cls(rot=30).earray.coordinates()
+    bare = cls(rot=30).electrode_array.coordinates()
     for rot in (30 * deg, np.pi / 6 * rad):
-        npt.assert_allclose(cls(rot=rot).earray.coordinates(), bare,
+        npt.assert_allclose(cls(rot=rot).electrode_array.coordinates(), bare,
                             rtol=1e-12)
     # Visual angle is a different dimension and is refused:
     with pytest.raises(DimensionMismatchError):

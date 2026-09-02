@@ -21,7 +21,7 @@ def test_orion(x, y, rot):
 
     # Make sure number of electrodes is correct
     npt.assert_equal(orion.n_electrodes, n_elec)
-    npt.assert_equal(len(orion.earray.electrodes), n_elec)
+    npt.assert_equal(len(orion.electrode_array.electrodes), n_elec)
 
     # Coordinates of 55 when device is not rotated:
     xy = np.array([non_rot_orion['55'].x, non_rot_orion['55'].y])
@@ -36,7 +36,7 @@ def test_orion(x, y, rot):
     npt.assert_almost_equal(orion['55'].y, xy[1] + y, decimal=2)
 
     # Make sure the radius is correct
-    for electrode in orion.earray.electrode_objects:
+    for electrode in orion.electrode_array.electrode_objects:
         npt.assert_almost_equal(electrode.radius, 1000)
 
     # Make sure the pitch is correct:

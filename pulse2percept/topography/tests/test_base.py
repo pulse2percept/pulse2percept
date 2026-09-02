@@ -90,13 +90,13 @@ class TestMapDouble(VisualFieldMap):
 # Parametrize over a factory, not over instances: arguments to `parametrize`
 # are built at import time (on every pytest run, even when this test is
 # deselected) and are shared across invocations.
-@pytest.mark.parametrize('make_vfmap', [
+@pytest.mark.parametrize('make_visual_field_map', [
     pytest.param(Watson2014Map, id='Watson2014Map'),
     pytest.param(lambda: Polimeni2006Map(regions=['v1', 'v2', 'v3']),
                  id='Polimeni2006Map'),
 ])
-def test_Grid2D_plot(make_vfmap):
-    vfmap = make_vfmap()
+def test_Grid2D_plot(make_visual_field_map):
+    visual_field_map = make_visual_field_map()
     plt.figure()
     # This test is slow
     grid = Grid2D((-20, 20), (-40, 40), step=1)
@@ -120,12 +120,12 @@ def test_Grid2D_plot(make_vfmap):
 
     plt.figure()
     grid = Grid2D((-5, 5), (-5, 5), step=1)
-    grid.build(vfmap=vfmap)
+    grid.build(visual_field_map=visual_field_map)
     # You can change the style (smoke test):
     ax = grid.plot(style='hull')
-    if isinstance(vfmap, Polimeni2006Map):
+    if isinstance(visual_field_map, Polimeni2006Map):
         npt.assert_equal(len(ax.patches), 6)
-    elif isinstance(vfmap, Watson2014Map):
+    elif isinstance(visual_field_map, Watson2014Map):
         npt.assert_equal(len(ax.patches), 1)
     ax = grid.plot(style='cell')
     ax = grid.plot(style='scatter')
@@ -177,14 +177,14 @@ def test_grid_regions():
     npt.assert_equal(grid.x, grid.dva.x)
     npt.assert_equal(grid.x, grid._grid['dva'].x)
 
-    vfmap = ValidCoordTransform()
-    grid.build(vfmap)
+    visual_field_map = ValidCoordTransform()
+    grid.build(visual_field_map)
     # Make sure xret gets populated
     npt.assert_equal(grid.dva.x, grid.ret.x)
 
     grid = Grid2D((-2, 2), (-2, 2), step=1)
-    vfmap = ValidCorticalTransform(regions=['v1', 'v2', 'v3'])
-    grid.build(vfmap)
+    visual_field_map = ValidCorticalTransform(regions=['v1', 'v2', 'v3'])
+    grid.build(visual_field_map)
     npt.assert_equal(grid.x, grid.v1.x)
     npt.assert_equal(grid.x, grid.v2.x)
     npt.assert_equal(grid.x, grid.v3.x)
@@ -206,8 +206,8 @@ class Valid3DTransform(RetinalMap):
     
 def test_3D_transform():
     grid = Grid2D((-2, 2), (-2, 2), step=1)
-    vfmap = Valid3DTransform()
-    grid.build(vfmap)
+    visual_field_map = Valid3DTransform()
+    grid.build(visual_field_map)
     npt.assert_equal(hasattr(grid.ret, 'z'), True)
     npt.assert_equal(grid.ret.x.shape, (5, 5))
     npt.assert_equal(grid.ret.y.shape, (5, 5))
@@ -249,28 +249,28 @@ def test_Grid2D_deepcopy_memo():
     npt.assert_equal(grid.x_range != copied.x_range, True)
 
 
-def test_Grid2D_plot3D_validation():
+def test_Grid2D_plot3d_validation():
     grid = Grid2D((-2, 2), (-2, 2), step=1)
     grid.build(Watson2014Map())
 
     # A 2D axis cannot be used for a 3D plot:
     _, ax2d = plt.subplots()
     with pytest.raises(ValueError):
-        grid.plot3D(ax=ax2d)
+        grid.plot3d(ax=ax2d)
 
     # A 2D visual field map has nothing to plot in 3D:
     fig = plt.figure()
     ax3d = fig.add_subplot(111, projection='3d')
     with pytest.raises(ValueError):
-        grid.plot3D(ax=ax3d)
+        grid.plot3d(ax=ax3d)
 
     # A 3D map gets past the ndim check, so style and surface are validated:
     grid3d = Grid2D((-2, 2), (-2, 2), step=1)
     grid3d.build(Valid3DTransform())
     with pytest.raises(ValueError):
-        grid3d.plot3D(style='invalid', ax=ax3d)
+        grid3d.plot3d(style='invalid', ax=ax3d)
     with pytest.raises(ValueError):
-        grid3d.plot3D(surface='invalid', ax=ax3d)
+        grid3d.plot3d(surface='invalid', ax=ax3d)
     plt.close('all')
 
 
@@ -308,7 +308,7 @@ def test_CoordinateGrid():
 
 
 class Valid3DMap(RetinalMap):
-    """A 3D retinal map, so `plot3D` can be exercised without neuropythy."""
+    """A 3D retinal map, so `plot3d` can be exercised without neuropythy."""
 
     def get_default_params(self):
         params = super().get_default_params()
@@ -323,7 +323,7 @@ class Valid3DMap(RetinalMap):
         return x_ret, y_ret
 
 
-def test_Grid2D_plot3D():
+def test_Grid2D_plot3d():
     grid = Grid2D((-2, 2), (-2, 2), step=1)
     grid.build(Valid3DMap())
 
@@ -333,55 +333,55 @@ def test_Grid2D_plot3D():
 
     # Both styles (smoke tests):
     for style in ['scatter', 'cell']:
-        npt.assert_equal(grid.plot3D(style=style, ax=new_ax()) is not None, True)
+        npt.assert_equal(grid.plot3d(style=style, ax=new_ax()) is not None, True)
 
     # All colorings:
     for color_by in ['region', 'eccentricity', 'angle']:
         npt.assert_equal(
-            grid.plot3D(color_by=color_by, ax=new_ax()) is not None, True)
+            grid.plot3d(color_by=color_by, ax=new_ax()) is not None, True)
     with pytest.raises(ValueError):
-        grid.plot3D(color_by='unknown', ax=new_ax())
+        grid.plot3d(color_by='unknown', ax=new_ax())
 
     # An explicit color overrides `color_by`:
-    npt.assert_equal(grid.plot3D(ax=new_ax(), c='blue') is not None, True)
+    npt.assert_equal(grid.plot3d(ax=new_ax(), c='blue') is not None, True)
 
     # Without an `ax`, a 3D axis is created. Close any open figures first:
-    # if a 3D axis is already current, `plot3D` reuses it as-is.
+    # if a 3D axis is already current, `plot3d` reuses it as-is.
     plt.close('all')
-    npt.assert_equal(grid.plot3D() is not None, True)
+    npt.assert_equal(grid.plot3d() is not None, True)
     plt.close('all')
-    ax = grid.plot3D(figsize=(9, 7))
+    ax = grid.plot3d(figsize=(9, 7))
     npt.assert_almost_equal(ax.figure.get_size_inches(), (9, 7))
     plt.close('all')
 
 
-@pytest.mark.parametrize('make_vfmap', [
+@pytest.mark.parametrize('make_visual_field_map', [
     pytest.param(Curcio1990Map, id='Curcio1990Map'),
     pytest.param(Watson2014Map, id='Watson2014Map'),
     pytest.param(lambda: Polimeni2006Map(regions=['v1']), id='Polimeni2006Map'),
 ])
-def test_VisualFieldMap_is_not_a_model(make_vfmap):
+def test_VisualFieldMap_is_not_a_model(make_visual_field_map):
     # A visual field map is handed *to* a model; it is not one itself. It must
     # therefore not carry the build workflow, nor the `_is_built` attribute
     # that used to be set (and immediately forced to True) by BaseModel.
-    vfmap = make_vfmap()
-    npt.assert_equal(isinstance(vfmap, Parametrized), True)
-    npt.assert_equal(isinstance(vfmap, BaseModel), False)
+    visual_field_map = make_visual_field_map()
+    npt.assert_equal(isinstance(visual_field_map, Parametrized), True)
+    npt.assert_equal(isinstance(visual_field_map, BaseModel), False)
     for attr in ('build', '_build', 'is_built', '_is_built'):
-        npt.assert_equal(hasattr(vfmap, attr), False)
+        npt.assert_equal(hasattr(visual_field_map, attr), False)
 
 
-@pytest.mark.parametrize('make_vfmap', [
+@pytest.mark.parametrize('make_visual_field_map', [
     pytest.param(Curcio1990Map, id='Curcio1990Map'),
     pytest.param(Watson2014Map, id='Watson2014Map'),
     pytest.param(lambda: Polimeni2006Map(regions=['v1']), id='Polimeni2006Map'),
 ])
-def test_VisualFieldMap_eq_handles_arrays(make_vfmap):
+def test_VisualFieldMap_eq_handles_arrays(make_visual_field_map):
     # Comparing attributes with a plain `self.__dict__ == other.__dict__`
     # raises ValueError as soon as one of them is an array, and defining
     # __eq__ without __hash__ makes the map unhashable. Both are inherited
     # from Parametrized, so neither can regress silently.
-    one, two = make_vfmap(), make_vfmap()
+    one, two = make_visual_field_map(), make_visual_field_map()
     npt.assert_equal(one == two, True)
 
     # Bypass Frozen to attach an array: no map ships one today, but nothing
@@ -393,7 +393,7 @@ def test_VisualFieldMap_eq_handles_arrays(make_vfmap):
     npt.assert_equal(one == two, False)
 
     # Still hashable, so maps can go in sets and dict keys:
-    npt.assert_equal(isinstance(hash(make_vfmap()), int), True)
+    npt.assert_equal(isinstance(hash(make_visual_field_map()), int), True)
 
 
 def test_VisualFieldMap_subclasses_do_not_compare_equal():
@@ -464,9 +464,9 @@ def test_VisualFieldMap_unit_contract():
     """Every map declares the two sides it converts between"""
     for cls in (Curcio1990Map, Watson2014Map, Watson2014DisplaceMap,
                 Polimeni2006Map):
-        vfmap = cls()
-        npt.assert_equal(vfmap.visual_unit, dva)
-        npt.assert_equal(vfmap.tissue_unit, um)
+        visual_field_map = cls()
+        npt.assert_equal(visual_field_map.visual_unit, dva)
+        npt.assert_equal(visual_field_map.tissue_unit, um)
 
     # A map written outside p2p gets the same boundary, without its author
     # having to do anything: the wrapping is by method name.
@@ -477,11 +477,13 @@ def test_VisualFieldMap_unit_contract():
         def ret_to_dva(self, x, y):
             return np.asarray(x) / 2.0, np.asarray(y) / 2.0
 
-    vfmap = DoubleMap()
-    npt.assert_allclose(vfmap.dva_to_ret(3 * dva, 1 * dva), [6, 2], rtol=1e-12)
-    npt.assert_allclose(vfmap.ret_to_dva(0.006 * mm, 2 * um), [3, 1],
+    visual_field_map = DoubleMap()
+    npt.assert_allclose(visual_field_map.dva_to_ret(3 * dva, 1 * dva), [6, 2],
+                        rtol=1e-12)
+    npt.assert_allclose(visual_field_map.ret_to_dva(0.006 * mm, 2 * um), [3,
+                                                                          1],
                         rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
-        vfmap.dva_to_ret(3 * um, 1)
+        visual_field_map.dva_to_ret(3 * um, 1)
     with pytest.raises(DimensionMismatchError):
-        vfmap.ret_to_dva(3 * dva, 1)
+        visual_field_map.ret_to_dva(3 * dva, 1)

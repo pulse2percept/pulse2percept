@@ -80,9 +80,9 @@ def test_Raster_offsets():
 
 def _min_spacing(implant, raster):
     """Closest two electrodes that the raster ever activates together"""
-    earray = getattr(implant, 'earray', implant)
-    xy = np.array([[e.x, e.y] for e in earray.electrode_objects])
-    groups = raster.groups(earray.electrode_names)
+    electrode_array = getattr(implant, 'electrode_array', implant)
+    xy = np.array([[e.x, e.y] for e in electrode_array.electrode_objects])
+    groups = raster.groups(electrode_array.electrode_names)
     closest = np.inf
     for group in np.unique(groups):
         pos = xy[groups == group]
@@ -283,8 +283,8 @@ def test_CheckerboardRaster_is_reproducible(monkeypatch):
     expected = CheckerboardRaster(5).bind(implant).groups(names)
     rng = np.random.RandomState(0)
     for _ in range(4):
-        nudged = Implant(deepcopy(implant.earray))
-        for elec in nudged.earray.electrode_objects:
+        nudged = Implant(deepcopy(implant.electrode_array))
+        for elec in nudged.electrode_array.electrode_objects:
             elec.x *= 1 + rng.uniform(-1, 1) * 1e-13
             elec.y *= 1 + rng.uniform(-1, 1) * 1e-13
         npt.assert_equal(CheckerboardRaster(5).bind(nudged).groups(names),
@@ -421,7 +421,7 @@ def test_CustomRaster():
 def test_Implant_raster():
     implant = ArgusII()
     # Implants that do not set a raster in their constructor still report one:
-    npt.assert_equal(Implant(implant.earray).raster, None)
+    npt.assert_equal(Implant(implant.electrode_array).raster, None)
     implant.raster = SequentialRaster(6)
     npt.assert_equal(implant.raster.n_groups, 6)
     npt.assert_equal('raster' in str(implant), True)
@@ -429,7 +429,7 @@ def test_Implant_raster():
         implant.raster = 'line'
     # It can be set through the constructor too:
     npt.assert_equal(
-        Implant(implant.earray,
+        Implant(implant.electrode_array,
                 raster=SequentialRaster(3)).raster.n_groups, 3)
 
 
@@ -550,7 +550,8 @@ def test_Raster_reads_coordinates_in_microns():
                            raster.groups(implant.electrode_names))
     # Both entry points accept an implant or its array, and refuse anything
     # that cannot say where its electrodes are:
-    npt.assert_equal(CheckerboardRaster(5).bind(implant.earray).n_groups, 5)
+    npt.assert_equal(
+        CheckerboardRaster(5).bind(implant.electrode_array).n_groups, 5)
     for call in (lambda: CheckerboardRaster(2).bind('not an implant'),
                  lambda: SequentialRaster(2).plot('not an implant')):
         with pytest.raises(TypeError):

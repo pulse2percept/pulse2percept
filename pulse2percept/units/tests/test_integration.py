@@ -126,7 +126,7 @@ def test_every_spelling_builds_the_same_object():
           lambda p: p.data, 'BiphasicPulseTrain.amp', rtol=1e-6)
     _same(lambda a: Stimulus([a]), amp, amps, lambda s: s.data,
           'Stimulus', rtol=1e-6)
-    _same(lambda a: Implant(ArgusII().earray, max_current=a),
+    _same(lambda a: Implant(ArgusII().electrode_array, max_current=a),
           amp, amps, lambda p: p.max_current, 'Implant.max_current')
     _same(lambda a: AmplitudeEncoder(amp_range=(0, a), freq=20).encode(
               ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6))),
@@ -157,7 +157,7 @@ def test_every_spelling_builds_the_same_object():
           lambda e: e.radius, 'DiskElectrode.radius')
     _same(lambda x: ArgusII(x=x), length, lengths,
           lambda i: np.array([[e.x, e.y, e.z]
-                              for e in i.earray.electrode_objects]),
+                              for e in i.electrode_array.electrode_objects]),
           'ArgusII.x')
     _same(lambda sp: ElectrodeGrid((2, 3), sp), length, lengths,
           lambda g: np.array([[e.x, e.y] for e in g.electrode_objects]),
@@ -187,7 +187,7 @@ def test_every_spelling_builds_the_same_object():
         Cortivis, Polimeni2006Map(), xrange=(-a, a), yrange=(-a, a),
         step=2 * a), angle, angles,
         lambda e: np.array([[el.x, el.y]
-                            for el in e.earray.electrode_objects]),
+                            for el in e.electrode_array.electrode_objects]),
         'EnsembleImplant.from_cortical_map')
     _same(lambda a: Watson2014Map().dva_to_ret(a, a), angle, angles,
           lambda xy: np.asarray(xy, dtype=float), 'Watson2014Map.dva_to_ret')
@@ -283,14 +283,14 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         model.predict_percept(current, t_percept=[0, 20] * uA)
     with pytest.raises(DimensionMismatchError):
-        Implant(ArgusII().earray, max_current=5 * ms)
+        Implant(ArgusII().electrode_array, max_current=5 * ms)
 
     # dimensionless -> safety check: there is no charge in a picture.
     with pytest.raises(DimensionMismatchError):
-        Implant(ArgusII().earray, safe_mode=True,
+        Implant(ArgusII().electrode_array, safe_mode=True,
                 preprocess=False).prepare_stim(img)
     with pytest.raises(DimensionMismatchError):
-        Implant(ArgusII().earray, max_current=20,
+        Implant(ArgusII().electrode_array, max_current=20,
                 preprocess=False).prepare_stim(img)
 
     # A bare number is never rejected, anywhere. That is the other half of the
@@ -299,6 +299,6 @@ def test_the_whole_rejection_matrix():
                   lambda: ArgusII(x=575),
                   lambda: Grid2D((-2, 2), (-2, 2)),
                   lambda: BiphasicPulse(50, 0.45),
-                  lambda: Implant(ArgusII().earray, max_current=20),
+                  lambda: Implant(ArgusII().electrode_array, max_current=20),
                   lambda: Watson2014Map().dva_to_ret(2, 2)):
         build()

@@ -22,7 +22,7 @@ def test_DynaphosModel():
     model = DynaphosModel(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
 
     npt.assert_equal(model.regions, ['v1'])
-    npt.assert_equal(model.vfmap.regions, ['v1'])
+    npt.assert_equal(model.visual_field_map.regions, ['v1'])
 
     # can't set frequency/pulse dur that don't match up. A failed build
     # leaves the parameters the caller asked for in place, so put them back:

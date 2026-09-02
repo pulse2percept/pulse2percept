@@ -77,7 +77,7 @@ class BVT24(Implant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
-        self.earray = ElectrodeArray([])
+        self.electrode_array = ElectrodeArray([])
         n_elecs = 35
         # This implant lays out its own electrodes rather than handing the
         # geometry to an ElectrodeGrid, so it normalizes for itself:
@@ -133,7 +133,7 @@ class BVT24(Implant):
         x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-            self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
+            self.electrode_array.add_electrode(name, DiskElectrode(x, y, z, r))
 
 
 
@@ -198,7 +198,7 @@ class BVT44(Implant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
-        self.earray = ElectrodeArray([])
+        self.electrode_array = ElectrodeArray([])
         n_elecs = 46
         # Placed by hand, like BVT24, once the hex grid has supplied the
         # in-array positions:
@@ -235,5 +235,5 @@ class BVT44(Implant):
         x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
-            self.earray.add_electrode(name, DiskElectrode(x, y, z, r))
+            self.electrode_array.add_electrode(name, DiskElectrode(x, y, z, r))
 

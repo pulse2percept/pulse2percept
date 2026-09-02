@@ -243,8 +243,9 @@ class Grid2D(PrettyPrint):
                 if regionname in self._grid.keys():
                     return self._grid[regionname]
                 else:
-                    raise ValueError(f"Region {regionname} not found. Make sure the model is" \
-                        " built with the correct visual field map (vfmap)")
+                    raise ValueError(
+                        f"Region {regionname} not found. Make sure the model "
+                        f"is built with the correct 'visual_field_map'.")
             return fn
         def setter(regionname):
             def fn(self, value):
@@ -288,7 +289,7 @@ class Grid2D(PrettyPrint):
         self.y_range = y_range
         self.step = step
         self.type = grid_type
-        self.vfmap = None
+        self.visual_field_map = None
         self.ndim = 2
         self.regions = []
         # Internally, coordinate grids for each region are stored in _grid
@@ -347,10 +348,10 @@ class Grid2D(PrettyPrint):
             raise ValueError(f"Unknown key: {key}. Must be region name or \
                               integer position")
 
-    def build(self, vfmap):
-        self.vfmap = vfmap
-        self.ndim = self.vfmap.ndim
-        for region, map_fn in vfmap.from_dva().items():
+    def build(self, visual_field_map):
+        self.visual_field_map = visual_field_map
+        self.ndim = self.visual_field_map.ndim
+        for region, map_fn in visual_field_map.from_dva().items():
             self._grid[region] = CoordinateGrid(*map_fn(self.x, self.y))
             if region not in self.regions:
                 self.regions.append(region)
@@ -385,15 +386,16 @@ class Grid2D(PrettyPrint):
         use_dva : bool, optional
             Whether dva or transformed points should be plotted.  If True, will
             not apply any transformations, and if False, will apply all
-            transformations in self.vfmap
+            transformations in self.visual_field_map
         legend : bool, optional
             Whether to add a plot legend. The legend is always added if there 
             are 2 or more regions. This only applies if there is 1 region.
         surface : str, optional
-            Name of the surface to plot (only for vfmaps that accept a surface argument)
+            Name of the surface to plot (only for visual_field_maps that accept a surface argument)
         """
-        if self.vfmap is not None and self.vfmap.ndim == 3:
-            print("Warning: Plotting 2D projection of 3D data. You might want plot3D() instead")
+        if (self.visual_field_map is not None and
+                self.visual_field_map.ndim == 3):
+            print("Warning: Plotting 2D projection of 3D data. You might want plot3d() instead")
         if style.lower() not in ['hull', 'scatter', 'cell']:
             raise ValueError(f'Unknown plotting style "{style}". Choose from: '
                              f'"hull", "scatter", "cell"')
@@ -417,7 +419,7 @@ class Grid2D(PrettyPrint):
 
         transforms = [('dva', None)]
         if not use_dva:
-            transforms = self.vfmap.from_dva().items()
+            transforms = self.visual_field_map.from_dva().items()
 
         color_map = {
             'ret' : 'gray',
@@ -481,9 +483,11 @@ class Grid2D(PrettyPrint):
                 # Remove NaN values from the grid:
                 points = points[:, ~np.logical_or(*np.isnan(points))]
                 if style.lower() == 'hull':
-                    if self.vfmap and self.vfmap.split_map and not use_dva:
+                    if (self.visual_field_map and
+                            self.visual_field_map.split_map and not use_dva):
                         # all split maps have an offset for left fovea
-                        divide = 0 if use_dva else self.vfmap.left_offset / 2
+                        divide = (0 if use_dva else
+                                  self.visual_field_map.left_offset / 2)
                         points_right = points[:, points[0] >= divide]
                         points_left = points[:, points[0] <= divide]
                         if points_right.size > 0:
@@ -509,8 +513,8 @@ class Grid2D(PrettyPrint):
         # plot boundary between hemispheres if it exists
         # but don't change the plot limits 
         lim = ax.get_xlim()
-        if self.vfmap and self.vfmap.split_map:
-            boundary = self.vfmap.left_offset / 2
+        if self.visual_field_map and self.visual_field_map.split_map:
+            boundary = self.visual_field_map.left_offset / 2
             if use_dva:
                 boundary = 0
             if lim[0] < boundary < lim[1]:
@@ -527,7 +531,7 @@ class Grid2D(PrettyPrint):
 
         return ax
     
-    def plot3D(self, style='scatter', ax=None, surface='midgray', color_by='region',
+    def plot3d(self, style='scatter', ax=None, surface='midgray', color_by='region',
                **kwargs):
         """
         Plots grid points in 3D space.
@@ -542,7 +546,8 @@ class Grid2D(PrettyPrint):
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object
         surface : str, optional
-            Name of the cortical surface to plot (only with neuropythy vfmap)
+            Name of the cortical surface to plot (only with neuropythy
+            visual_field_map)
         color_by : str, optional
             What to color the points by. Options are 'region' (default), 'eccentricity',
             or 'angle'
@@ -565,8 +570,8 @@ class Grid2D(PrettyPrint):
             if ax.name != '3d':
                 raise ValueError('ax must be a 3D axis')
             
-        if self.vfmap.ndim != 3:
-            raise ValueError('vfmap must be 3D to plot in 3D')
+        if self.visual_field_map.ndim != 3:
+            raise ValueError('visual_field_map must be 3D to plot in 3D')
         if style.lower() not in ['scatter', 'cell']:
             raise ValueError(f'Unknown plotting style "{style}". Choose from: '
                              f'"scatter", "cell"')
@@ -585,10 +590,10 @@ class Grid2D(PrettyPrint):
             'marker' : '+'
         }
 
-        for region, transform in self.vfmap.from_dva().items():
+        for region, transform in self.visual_field_map.from_dva().items():
             # get 3D coordinates
             vx, vy = self.x.flatten(), self.y.flatten()
-            if isinstance(self.vfmap, NeuropythyMap):
+            if isinstance(self.visual_field_map, NeuropythyMap):
                 cx, cy, cz = transform(vx, vy, surface=surface)
             else:
                 cx, cy, cz = transform(vx, vy)
@@ -619,7 +624,7 @@ class Grid2D(PrettyPrint):
                                                                  k not in default_kwargs.keys())})
             elif style.lower() == 'cell':
                 # need to plot both hemispheres separately
-                bound = 0 if not self.vfmap.jitter_boundary else .5
+                bound = 0 if not self.visual_field_map.jitter_boundary else .5
                 left = vx > bound
                 right = vx < -bound
                 for i, idx in enumerate([right, left]):

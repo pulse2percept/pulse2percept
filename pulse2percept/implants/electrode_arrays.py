@@ -61,8 +61,8 @@ class ElectrodeArray(PrettyPrint):
     Electrode array made from a single DiskElectrode:
 
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
-    >>> earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
-    >>> earray.electrodes  # doctest: +SKIP
+    >>> electrode_array = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
+    >>> electrode_array.electrodes  # doctest: +SKIP
     OrderedDict([(0,
                   DiskElectrode(activated=True, name=None, radius=100...,
                   x=0..., y=0..., z=0...))])
@@ -70,8 +70,8 @@ class ElectrodeArray(PrettyPrint):
     Electrode array made from a single DiskElectrode with name 'A1':
 
     >>> from pulse2percept.implants import ElectrodeArray, DiskElectrode
-    >>> earray = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
-    >>> earray.electrodes  # doctest: +SKIP
+    >>> electrode_array = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
+    >>> electrode_array.electrodes  # doctest: +SKIP
     OrderedDict([('A1',
                   DiskElectrode(activated=True, name=None, radius=100...,
                   x=0..., y=0..., z=0...))])
@@ -120,8 +120,8 @@ class ElectrodeArray(PrettyPrint):
             returned as they are stored (microns).
         electrodes : optional
             Which electrodes to return. Three things name a single electrode,
-            looked up as ``earray[...]`` looks one up: a name, an index into
-            the flattened array, and a ``(row, col)`` pair on an
+            looked up as ``electrode_array[...]`` looks one up: a name, an
+            index into the flattened array, and a ``(row, col)`` pair on an
             :py:class:`~pulse2percept.implants.ElectrodeGrid`. Anything else
             iterable -- a list, an array, or the
             :py:class:`~pulse2percept.stimuli.ElectrodeNames` a stimulus
@@ -147,9 +147,9 @@ class ElectrodeArray(PrettyPrint):
         --------
         >>> from pulse2percept.implants import ArgusII
         >>> from pulse2percept.units import mm
-        >>> ArgusII().earray.coordinates(mm)[0]
+        >>> ArgusII().electrode_array.coordinates(mm)[0]
         array([-2.5875, -1.4375,  0.    ])
-        >>> ArgusII().earray.coordinates(electrodes=['F10', 'A1'])
+        >>> ArgusII().electrode_array.coordinates(electrodes=['F10', 'A1'])
         array([[ 2587.5,  1437.5,     0. ],
                [-2587.5, -1437.5,     0. ]])
 
@@ -162,7 +162,8 @@ class ElectrodeArray(PrettyPrint):
                 elecs = [self[name] for name in names]
             else:
                 # A name, an index, or a grid's `(row, col)` pair: one
-                # electrode, looked up the way `earray[...]` looks one up.
+                # electrode, looked up the way `electrode_array[...]` looks one
+                # up.
                 names, elecs = [electrodes], [self[electrodes]]
             # `__getitem__` answers None for an electrode the array does not
             # have, which would otherwise surface as an AttributeError three
@@ -240,7 +241,8 @@ class ElectrodeArray(PrettyPrint):
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
         color_stim : ``pulse2percept.stimuli.Stimulus``, or None
-            If provided, colors the earray based on the stimulus amplitudes
+            If provided, colors the electrode_array based on the stimulus
+            amplitudes
         cmap : str
             Matplotlib colormap to use for stimulus coloring.
 
@@ -346,11 +348,12 @@ class ElectrodeArray(PrettyPrint):
 
         .. code::
 
-            for name, electrode in earray.electrodes.items():
+            for name, electrode in electrode_array.electrodes.items():
                 print(name, electrode)
 
         You can access an individual electrode by indexing directly into the
-        electrode array object, e.g. ``earray['A1']`` or ``earray[0]``.
+        electrode array object, e.g. ``electrode_array['A1']`` or
+        ``electrode_array[0]``.
 
         """
         return self._electrodes

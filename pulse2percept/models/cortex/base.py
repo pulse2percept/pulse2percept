@@ -56,7 +56,7 @@ class CortexSpatial(SpatialModel):
         and y axes different step sizes.
     grid_type : {'rectangular', 'hexagonal'}, optional
         Whether to simulate points on a rectangular or hexagonal grid
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
@@ -93,24 +93,25 @@ class CortexSpatial(SpatialModel):
             regions = [regions]
         self._regions = regions
 
-    def __init__(self, implant, *, regions=None, vfmap=None, **params):
+    def __init__(self, implant, *, regions=None, visual_field_map=None,
+                 **params):
         self._regions = None
         # `None` means "not given" for both: each default depends on the other.
         if regions is not None:
             params['regions'] = regions
-        if vfmap is not None:
-            params['vfmap'] = vfmap
+        if visual_field_map is not None:
+            params['visual_field_map'] = visual_field_map
         super(CortexSpatial, self).__init__(implant, **params)
 
         # Use [Polemeni2006]_ visual field map by default
-        if vfmap is None:
-            self.vfmap = Polimeni2006Map(regions=self.regions)
+        if visual_field_map is None:
+            self.visual_field_map = Polimeni2006Map(regions=self.regions)
         elif regions is not None and \
-            set(self.regions) != set(self.vfmap.regions):
-            raise ValueError("Conflicting regions in provided vfmap and user-supplied regions parameter")
+            set(self.regions) != set(self.visual_field_map.regions):
+            raise ValueError("Conflicting regions in provided visual_field_map and user-supplied regions parameter")
         else:
             # need to override self.regions
-            self.regions = self.vfmap.regions
+            self.regions = self.visual_field_map.regions
 
         if not isinstance(self.regions, list):
             self.regions = [self.regions]
@@ -199,10 +200,10 @@ class CortexSpatial(SpatialModel):
             ax.set_ylabel('y (mm)')
         return ax
 
-    def plot3D(self, style='scatter', ax=None, **kwargs):
+    def plot3d(self, style='scatter', ax=None, **kwargs):
         if not self.is_built:
             self.build()
-        ax = self.grid.plot3D(style=style, ax=ax, **kwargs)
+        ax = self.grid.plot3d(style=style, ax=ax, **kwargs)
         # this is only ever for cortex right now so this is safe
         ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
         ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
@@ -269,7 +270,7 @@ class ScoreboardSpatial(CortexSpatial):
         meridian. Default: 0.1. Set to 0 to disable.
 
         .. versionadded:: 0.10.0
-    vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
@@ -299,13 +300,15 @@ class ScoreboardSpatial(CortexSpatial):
     def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
                  grid_type='rectangular', thresh_percept=0,
-                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             implant, rho=rho, regions=regions,
             meridian_blend=meridian_blend, xrange=xrange, yrange=yrange,
             step=step, grid_type=grid_type, thresh_percept=thresh_percept,
-            min_current_spread=min_current_spread, vfmap=vfmap,
+            min_current_spread=min_current_spread,
+            visual_field_map=visual_field_map,
             n_gray=n_gray, noise=noise, verbose=verbose,
             ndim=[2, 3] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -346,19 +349,19 @@ class ScoreboardSpatial(CortexSpatial):
         blended[np.abs(blended) < self.thresh_percept] = 0
         return blended
 
-    def _predict_spatial(self, earray, stim):
+    def _predict_spatial(self, electrode_array, stim):
         """Predicts the brightness at spatial locations"""
-        x_el, y_el, z_el = self._electrode_coords(earray, stim)
+        x_el, y_el, z_el = self._electrode_coords(electrode_array, stim)
         amp = self._stim_values(stim)
 
         # whether to allow current to spread between hemispheres
         separate = 0
         boundary = 0
-        if self.vfmap.split_map:
+        if self.visual_field_map.split_map:
             separate = 1
-            boundary = self.vfmap.left_offset/2
+            boundary = self.visual_field_map.left_offset/2
         cutoff_r2 = self._cutoff_r2(self.rho)
-        if self.vfmap.ndim == 3:
+        if self.visual_field_map.ndim == 3:
             return np.sum([
                 fast_scoreboard_3d(amp, x_el, y_el, z_el,
                                 self.grid[region].x.ravel(),
@@ -369,7 +372,7 @@ class ScoreboardSpatial(CortexSpatial):
                                 self.n_threads)
                 for region in self.regions ],
             axis = 0)
-        elif self.vfmap.ndim == 2:
+        elif self.visual_field_map.ndim == 2:
             return np.sum([
                 fast_scoreboard(amp, x_el, y_el,
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
@@ -436,7 +439,7 @@ class ScoreboardModel(Model):
         meridian. Default: 0.1. Set to 0 to disable.
 
         .. versionadded:: 0.10.0
-    vfmap : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
@@ -466,7 +469,8 @@ class ScoreboardModel(Model):
     def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
                  grid_type='rectangular', thresh_percept=0,
-                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             spatial=ScoreboardSpatial(
@@ -474,7 +478,8 @@ class ScoreboardModel(Model):
                 meridian_blend=meridian_blend, xrange=xrange, yrange=yrange,
                 step=step, grid_type=grid_type,
                 thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread, vfmap=vfmap,
+                min_current_spread=min_current_spread,
+                visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)

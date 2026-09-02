@@ -87,6 +87,13 @@ Implants
   be given per electrode. A custom ``electrode_type`` is now built as itself
   and decides for itself which parameters it requires (:pull:`880`).
 
+* ``implant.earray`` / ``earray=`` is now
+  :py:attr:`~pulse2percept.implants.Implant.electrode_array` /
+  ``electrode_array=``, ``vfmap`` is ``visual_field_map``, and ``plot3D()`` is
+  ``plot3d()``. The class name
+  :py:class:`~pulse2percept.topography.VisualFieldMap` is unchanged
+  (:pull:`880`).
+
 
 Models
 ~~~~~~
@@ -98,8 +105,8 @@ Models
 
 * :py:class:`~pulse2percept.models.Model` takes component instances only and
   requires at least one. It no longer forwards attributes or methods to its
-  components, so ``model.rho``, ``model.grid``, ``model.vfmap``, ``model.eye``
-  and ``model.plot3D`` are reached through ``model.spatial`` /
+  components, so ``model.rho``, ``model.grid``, ``model.visual_field_map``,
+  ``model.eye`` and ``model.plot3d`` are reached through ``model.spatial`` /
   ``model.temporal``; ``implant``, ``build``, ``plot`` and ``predict_percept``
   stay on the composite. ``Model.set_params`` and ``model.build(**params)``
   are gone, in favor of ``model.spatial.rho = 250`` or

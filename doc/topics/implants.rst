@@ -11,7 +11,7 @@ All implants derive from
 :py:class:`~pulse2percept.implants.Implant`. The attributes used most
 often are:
 
-``earray``
+``electrode_array``
     The :py:class:`~pulse2percept.implants.ElectrodeArray`.
 
 ``eye``
@@ -52,7 +52,7 @@ directly:
     implant['A8']
     implant[0]
     implant.electrode_names
-    implant.earray.coordinates()
+    implant.electrode_array.coordinates()
     implant.plot()
 
 Preparing a stimulus
@@ -297,9 +297,11 @@ arguments for electrodes with a physical extent:
 
 .. code-block:: python
 
+    from pulse2percept.implants import DiskElectrode
+
     implant = p2p.implants.GridImplant(shape=(20, 20), spacing=400,
                                        grid_type='hex',
-                                       electrode_type=p2p.implants.DiskElectrode,
+                                       electrode_type=DiskElectrode,
                                        radius=75)
 
 :py:class:`~pulse2percept.implants.GridImplant` is a convenience only:
@@ -312,8 +314,8 @@ from individual electrodes:
 
     from pulse2percept.implants import ElectrodeArray, Implant
 
-    earray = ElectrodeArray(...)
-    implant = Implant(earray)
+    electrode_array = ElectrodeArray(...)
+    implant = Implant(electrode_array)
 
 :py:class:`~pulse2percept.implants.EnsembleImplant` combines multiple implants
 into one system.

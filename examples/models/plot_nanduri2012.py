@@ -53,7 +53,7 @@ stim.plot(time=(0, 60))
 # at (x,y) = (0,0); i.e., centered over the fovea:
 
 from pulse2percept.implants import DiskElectrode, ElectrodeArray
-earray = ElectrodeArray(DiskElectrode(0, 0, 0, 260))
+electrode_array = ElectrodeArray(DiskElectrode(0, 0, 0, 260))
 
 ###############################################################################
 # Usually we would use a predefined retinal implant such as
@@ -64,7 +64,7 @@ earray = ElectrodeArray(DiskElectrode(0, 0, 0, 260))
 # retinal implant:
 
 from pulse2percept.implants import Implant
-implant = Implant(earray)
+implant = Implant(electrode_array)
 
 ###############################################################################
 # Running the model

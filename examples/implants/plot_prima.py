@@ -80,7 +80,7 @@ def normalized_drive(stim):
             / implant.encoder.ref_drive)
 
 
-xy = implant.earray.coordinates()
+xy = implant.electrode_array.coordinates()
 fig, axes = plt.subplots(3, 3, figsize=(10, 9), constrained_layout=True)
 
 for col, (title, source) in enumerate(sources):

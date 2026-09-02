@@ -176,11 +176,11 @@ def test_polimeni_continuity():
 
 def test_cortical_map_units():
     """dva in, microns out, and a round trip that mixes the two spellings"""
-    vfmap = Polimeni2006Map(regions=['v1', 'v2', 'v3'])
+    visual_field_map = Polimeni2006Map(regions=['v1', 'v2', 'v3'])
     xdva, ydva = np.array([5.0, 2.0]), np.array([-2.0, 3.0])
     for region in ('v1', 'v2', 'v3'):
-        to_tissue = getattr(vfmap, f'dva_to_{region}')
-        to_visual = getattr(vfmap, f'{region}_to_dva')
+        to_tissue = getattr(visual_field_map, f'dva_to_{region}')
+        to_visual = getattr(visual_field_map, f'{region}_to_dva')
         bare = to_tissue(xdva, ydva)
         npt.assert_allclose(to_tissue(xdva * dva, ydva * dva), bare,
                             rtol=1e-12, err_msg=region)

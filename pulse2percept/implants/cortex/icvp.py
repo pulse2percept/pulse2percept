@@ -49,7 +49,7 @@ class ICVP(Implant):
 
     >>> from pulse2percept.implants.cortex import Orion
     >>> ICVP() # doctest: +NORMALIZE_WHITESPACE
-    ICVP(earray=ElectrodeGrid, preprocess=False, 
+    ICVP(electrode_array=ElectrodeGrid, preprocess=False, 
          safe_mode=False, shape=(5, 4))
 
     Get access to electrode '11':
@@ -102,15 +102,15 @@ class ICVP(Implant):
         z_offset = [650 if name in length_650 else 850 for name in names]
         z -= z_offset
 
-        self.earray = ElectrodeGrid(
+        self.electrode_array = ElectrodeGrid(
             self.shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
             grid_type='hex', orientation='vertical', radius=50,
             electrode_type=DiskElectrode
         )
         for e in ['t1', 't2']:
-            self.earray.remove_electrode(e)
+            self.electrode_array.remove_electrode(e)
 
-        self.earray.deactivate(['R', 'C'])
+        self.electrode_array.deactivate(['R', 'C'])
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

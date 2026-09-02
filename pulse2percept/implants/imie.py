@@ -61,9 +61,9 @@ class IMIE(Implant):
         elec_radius = 210.0 / 2
         e_spacing = 350.0  # um
 
-        self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=z,
-                                    rot=rot, electrode_type=DiskElectrode,
-                                    radius=elec_radius)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, e_spacing, x=x, y=y, z=z, rot=rot,
+            electrode_type=DiskElectrode, radius=elec_radius)
         
         # Set left/right eye:
         if not isinstance(eye, str):
@@ -75,47 +75,47 @@ class IMIE(Implant):
         if eye == 'LE':
             # TODO: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = self.earray.electrode_names
-            objects = self.earray.electrode_objects
-            names = np.array(names).reshape(self.earray.shape)
+            names = self.electrode_array.electrode_names
+            objects = self.electrode_array.electrode_objects
+            names = np.array(names).reshape(self.electrode_array.shape)
             # Reverse column names:
-            for row in range(self.earray.shape[0]):
+            for row in range(self.electrode_array.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
             electrodes = OrderedDict()
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
-            # Assign the new ordered dict to earray:
-            self.earray._electrodes = electrodes
+            # Assign the new ordered dict to electrode_array:
+            self.electrode_array._electrodes = electrodes
 
         # Remove electrodes:
         extra_elecs = ['N1', 'N2', 'M1', 'B1', 'A1', 'A2', 'N18', 'N19', 
                        'A18', 'A19' ]
         for elec in extra_elecs:
-            self.earray.remove_electrode(elec)
+            self.electrode_array.remove_electrode(elec)
 
         # Change electrodes to smaller ones in place:
         small_elecs = ['N16', 'A16', 'K1', 'D1']
         small_radius = 160.0 / 2
         for elec in small_elecs:
-            e = self.earray.electrodes[elec]
+            e = self.electrode_array.electrodes[elec]
             x, y, z = e.x, e.y, e.z
-            self.earray.remove_electrode(elec)
+            self.electrode_array.remove_electrode(elec)
             new_e = DiskElectrode(x, y, z, small_radius, name=elec)
-            self.earray.add_electrode(elec, new_e)
+            self.electrode_array.add_electrode(elec, new_e)
         
         # Change the rest smaller electrodes according to its neighbor:
         small_elecs_rest = {'N17' : 'N16', 'A17' : 'A16', 'L1' : 'K1', 
                             'C1' : 'D1'}
         for elec in small_elecs_rest:
-            e = self.earray.electrodes[elec]
+            e = self.electrode_array.electrodes[elec]
             x, y, z = e.x, e.y, e.z
-            neighbor = self.earray.electrodes[small_elecs_rest[elec]]
+            neighbor = self.electrode_array.electrodes[small_elecs_rest[elec]]
             nx, ny, nz = neighbor.x, neighbor.y, neighbor.z
             newx, newy, newz = x-(x-nx)/7, y-(y-ny)/7, z-(z-nz)/7
-            self.earray.remove_electrode(elec)
+            self.electrode_array.remove_electrode(elec)
             new_e = DiskElectrode(newx, newy, newz, small_radius, name=elec)
-            self.earray.add_electrode(elec, new_e)
+            self.electrode_array.add_electrode(elec, new_e)
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

@@ -54,9 +54,9 @@ class Thompson2003Spatial(SpatialModel):
         .. versionadded:: 0.11.0
 
     radius : float, Quantity, or None, optional
-        Radius of each circular phosphene, in microns. If ``None``, uses
-        ``0.45 * implant.earray.spacing``, giving a disk diameter equal to 90%
-        of the electrode spacing. The electrode array must provide a
+        Radius of each circular phosphene, in microns. If ``None``, uses ``0.45
+        * implant.electrode_array.spacing``, giving a disk diameter equal to
+        90% of the electrode spacing. The electrode array must provide a
         ``spacing`` attribute. Default: ``None``.
     dropout : int, float, or None, optional
         Number or fraction of electrodes randomly omitted from each stimulus
@@ -64,10 +64,10 @@ class Thompson2003Spatial(SpatialModel):
         [0, 1] gives their fraction. ``None`` disables dropout.
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``vfmap``.
+        retinal extent may instead be resolved through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``vfmap``.
+        retinal extent may instead be resolved through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -82,7 +82,7 @@ class Thompson2003Spatial(SpatialModel):
     min_current_spread : float, optional
         Inherited Gaussian current-spread cutoff. This parameter is not used
         by ``Thompson2003Spatial``.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.Curcio1990Map`.
     n_gray : int or None, optional
@@ -94,7 +94,7 @@ class Thompson2003Spatial(SpatialModel):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the model.
+        Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
         Inherited OpenMP thread count. The Thompson spatial kernel does not
         currently use this parameter.
@@ -106,14 +106,16 @@ class Thompson2003Spatial(SpatialModel):
     def __init__(self, implant, *, radius=None, dropout=None,
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rectangular', thresh_percept=0,
-                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             implant, radius=radius, dropout=dropout, xrange=xrange,
             yrange=yrange, step=step, grid_type=grid_type,
             thresh_percept=thresh_percept,
             min_current_spread=min_current_spread,
-            vfmap=Curcio1990Map() if vfmap is None else vfmap,
+            visual_field_map=(Curcio1990Map() if visual_field_map is None else
+                              visual_field_map),
             n_gray=n_gray, noise=noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -122,27 +124,27 @@ class Thompson2003Spatial(SpatialModel):
         """Return default model parameters."""
         base_params = super(Thompson2003Spatial, self).get_default_params()
         params = {'radius': None, 'dropout': None,
-                  'vfmap': Curcio1990Map()}
+                  'visual_field_map': Curcio1990Map()}
         return {**base_params, **params}
 
     def get_param_units(self):
         """Return units used to store model parameters."""
         return {**super().get_param_units(), 'radius': um}
 
-    def _predict_spatial(self, earray, stim):
+    def _predict_spatial(self, electrode_array, stim):
         """Predict the spatial response."""
-        _warn_ignores_z(self, earray)
+        _warn_ignores_z(self, electrode_array)
         radius = self.radius
         if radius is None:
-            if not hasattr(earray, 'spacing'):
+            if not hasattr(electrode_array, 'spacing'):
                 raise NotImplementedError
-            radius = 0.45 * earray.spacing
+            radius = 0.45 * electrode_array.spacing
         dropout = np.zeros(stim.shape, dtype=np.uint8)
         if self.dropout is not None:
             for t in range(dropout.shape[1]):
                 dropout[sample(np.arange(stim.shape[0]), k=self.dropout),
                         t] = 255
-        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
         return fast_thompson2003(self._stim_values(stim), x_el, y_el,
                                  self.grid.ret.x.ravel(),
                                  self.grid.ret.y.ravel(),
@@ -167,16 +169,16 @@ class Thompson2003Model(Model):
 
     radius : float, Quantity, or None, optional
         Radius of each circular phosphene, in microns. If ``None``, uses
-        ``0.45 * implant.earray.spacing``. Default: ``None``.
+        ``0.45 * implant.electrode_array.spacing``. Default: ``None``.
     dropout : int, float, or None, optional
         Number or fraction of electrodes randomly omitted from each stimulus
         frame. ``None`` disables dropout.
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``vfmap``.
+        retinal extent may instead be resolved through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``vfmap``.
+        retinal extent may instead be resolved through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -191,7 +193,7 @@ class Thompson2003Model(Model):
     min_current_spread : float, optional
         Inherited Gaussian current-spread cutoff. Not used by the Thompson
         spatial model.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.Curcio1990Map`.
     n_gray : int or None, optional
@@ -202,7 +204,7 @@ class Thompson2003Model(Model):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the spatial model.
+        Dimensionalities of ``visual_field_map`` accepted by the spatial model.
     n_threads : int, optional
         Inherited OpenMP thread count. The Thompson spatial kernel does not
         currently use this parameter.
@@ -214,14 +216,16 @@ class Thompson2003Model(Model):
     def __init__(self, implant, *, radius=None, dropout=None,
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rectangular', thresh_percept=0,
-                 min_current_spread=1e-8, vfmap=None, n_gray=None, noise=None,
+                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             spatial=Thompson2003Spatial(
                 implant, radius=radius, dropout=dropout, xrange=xrange,
                 yrange=yrange, step=step, grid_type=grid_type,
                 thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread, vfmap=vfmap,
+                min_current_spread=min_current_spread,
+                visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)

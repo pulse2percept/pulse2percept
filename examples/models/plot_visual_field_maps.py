@@ -5,7 +5,7 @@ Predicting the perceptual effects of different visual field maps
 ===============================================================================
 
 Every computational model needs to assume a mapping between retinal and visual
-field coordinates (``vfmap``). A number of these visual field maps are provided in the
+field coordinates (``visual_field_map``). A number of these visual field maps are provided in the
 :py:mod:`~pulse2percept.topography` module:
 
 *  :py:class:`~pulse2percept.topography.Curcio1990Map`: The [Curcio1990]_ model
@@ -102,14 +102,16 @@ stim = p2p.stimuli.LogoUCSB().encode(implant=implant)
 stim
 
 ###############################################################################
-# We can easily switch out the visual field maps by passing a ``vfmap``
-# attribute to :py:class:`~pulse2percept.models.ScoreboardModel` (by default,
-# the scoreboard model will use [Curcio1990]_):
+# We can easily switch out the visual field maps by passing a
+# ``visual_field_map`` attribute to
+# :py:class:`~pulse2percept.models.ScoreboardModel` (by default, the
+# scoreboard model will use [Curcio1990]_):
 
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
 for ax, transform in zip(axes, transforms):
     model = p2p.models.ScoreboardModel(implant=implant, xrange=(-6, 6),
-                                       yrange=(-6, 6), vfmap=transform)
+                                       yrange=(-6, 6),
+                                       visual_field_map=transform)
     model.predict_percept(stim).plot(ax=ax)
     ax.set_title(transform.__class__.__name__)
 
@@ -128,18 +130,18 @@ for ax, transform in zip(axes, transforms):
 # ``regions`` attribute, which specifies the cortical regions that the map uses.
 # 
 # Cortical maps simulate both hemispheres of the visual cortex on a single coordinate 
-# plane. The left hemisphere fovea is located at ``vfmap.left_offset`` (default: 
+# plane. The left hemisphere fovea is located at ``visual_field_map.left_offset`` (default: 
 # -20 mm), and current is not allowed to spread between hemispheres. 
 # 
 # The standard cortical map is :py:class:`~pulse2percept.topography.Polimeni2006Map`, 
 # which uses a wedge-dipole model to map visual field coordinates onto cortical 
 # coordinates in V1, V2, and V3. 
 fig, ax = plt.subplots(ncols=2, figsize=(9, 4))
-vfmap = p2p.topography.Polimeni2006Map(regions=['v1', 'v2', 'v3']) # simulate all 3 regions
+visual_field_map = p2p.topography.Polimeni2006Map(regions=['v1', 'v2', 'v3']) # simulate all 3 regions
 model = p2p.models.cortex.ScoreboardModel(implant=p2p.implants.cortex.Orion(),
-                                          vfmap=vfmap)
+                                          visual_field_map=visual_field_map)
 model.build()
-vfmap.plot(ax=ax[0])
+visual_field_map.plot(ax=ax[0])
 ax[0].set_title('Polimeni Mapping')
 model.plot(ax=ax[1])
 ax[1].set_title('Points in Cortex')
@@ -174,6 +176,6 @@ plt.show()
 #         def ret_to_dva(self, xret, yret):
 #             return xret, yret
 #
-# To use it with a model, you need to pass ``vfmap=MyVisualFieldMap()``
-# to the model's constructor.
+# To use it with a model, you need to pass
+# ``visual_field_map=MyVisualFieldMap()`` to the model's constructor.
 #

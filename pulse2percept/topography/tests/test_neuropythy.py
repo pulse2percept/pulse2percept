@@ -294,24 +294,28 @@ def test_dva_to_cortex_jitter_boundary(region, neuropythy):
 
 def test_NeuropythyMap_units(neuropythy):
     """The FreeSurfer map converts between the same two sides as any other"""
-    vfmap = ToyNeuropythyMap()
-    npt.assert_equal(vfmap.visual_unit, dva)
-    npt.assert_equal(vfmap.tissue_unit, um)
+    visual_field_map = ToyNeuropythyMap()
+    npt.assert_equal(visual_field_map.visual_unit, dva)
+    npt.assert_equal(visual_field_map.tissue_unit, um)
     x, y = np.array([1.0, 3.0]), np.array([1.0, -2.0])
-    bare = vfmap.dva_to_v1(x, y)
-    npt.assert_allclose(vfmap.dva_to_v1(x * dva, y * dva), bare, rtol=1e-12)
+    bare = visual_field_map.dva_to_v1(x, y)
+    npt.assert_allclose(visual_field_map.dva_to_v1(x * dva, y * dva), bare,
+                        rtol=1e-12)
     # `surface=` is not a coordinate and travels through untouched:
-    npt.assert_allclose(vfmap.dva_to_v1(x * dva, y * dva, surface='pial'),
-                        vfmap.dva_to_v1(x, y, surface='pial'), rtol=1e-12)
+    npt.assert_allclose(visual_field_map.dva_to_v1(x * dva, y * dva,
+                                                   surface='pial'),
+                        visual_field_map.dva_to_v1(x, y,
+                                                   surface='pial'), rtol=1e-12)
     # Back again, with the three coordinates spelled differently:
     xc, yc, zc = np.array([1000.0, 2500.0]), np.zeros(2), np.zeros(2)
     npt.assert_allclose(
-        vfmap.v1_to_dva((xc / 1000) * mm, yc * um, (zc / 1000) * mm),
-        vfmap.v1_to_dva(xc, yc, zc), rtol=1e-6)
+        visual_field_map.v1_to_dva((xc / 1000) * mm, yc * um,
+                                   (zc / 1000) * mm),
+        visual_field_map.v1_to_dva(xc, yc, zc), rtol=1e-6)
     with pytest.raises(DimensionMismatchError):
-        vfmap.dva_to_v1(x * um, y)
+        visual_field_map.dva_to_v1(x * um, y)
     with pytest.raises(DimensionMismatchError):
-        vfmap.v1_to_dva(xc * dva, yc, zc)
+        visual_field_map.v1_to_dva(xc * dva, yc, zc)
 
     # `cort_nn_thresh` is a distance between mesh vertices, so it is stored in
     # microns however it was handed over:
@@ -325,7 +329,7 @@ def test_NeuropythyMap_units(neuropythy):
 
 def test_ndim_mixup():
     """A 3D cortical map cannot drive a model that only knows 2D grids."""
-    model = BeyelerScoreboard(ArgusII(), vfmap=ToyNeuropythyMap())
+    model = BeyelerScoreboard(ArgusII(), visual_field_map=ToyNeuropythyMap())
     npt.assert_equal(2 in model.spatial.ndim, True)
     npt.assert_equal(3 in model.spatial.ndim, False)
     with pytest.raises(ValueError):
@@ -569,7 +573,7 @@ def test_fsaverage_scoreboard(fsaverage):
                 for region in ['v1', 'v2', 'v3']]
     implant = EnsembleImplant(implants)
     model = ScoreboardModel(implant=implant, rho=800, step=.25,
-                            vfmap=fsaverage, meridian_blend=0)
+                            visual_field_map=fsaverage, meridian_blend=0)
     percept = model.predict_percept({e: 1 for e in implant.electrode_names})
     npt.assert_almost_equal(np.sum(percept.data), 20245.445, decimal=1)
     npt.assert_almost_equal(np.max(percept.data), 86.4913, decimal=1)

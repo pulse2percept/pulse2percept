@@ -18,7 +18,7 @@ def test_IMIE(x, y, rot, eye):
     npt.assert_equal(hasattr(imie, '__dict__'), False)
 
     # Check if there is 256 electrodes in the array
-    npt.assert_equal(len(imie.earray.electrodes), 256)
+    npt.assert_equal(len(imie.electrode_array.electrodes), 256)
 
     # Coordinates of electrode 'N3'
     xy = np.array([imie0['N3'].x, imie0['N3'].y]).T

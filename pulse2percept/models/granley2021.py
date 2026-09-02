@@ -374,10 +374,10 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``vfmap``.
+        retinal extent may instead be resolved through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``vfmap``.
+        retinal extent may instead be resolved through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -393,7 +393,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         Fraction of peak current spread below which an electrode may be
         skipped at an axon segment. The cutoff is scaled by ``F_size``.
         Set to 0 to disable.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.Watson2014Map`.
     n_gray : int or None, optional
@@ -429,7 +429,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the model.
+        Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
         Number of OpenMP threads.
     n_jobs : int or None, optional
@@ -444,7 +444,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  streak_model=None, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rectangular',
-                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 thresh_percept=0, min_current_spread=1e-8,
+                 visual_field_map=None,
                  n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -455,7 +456,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         super().__init__(
             implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange,
             step=step, grid_type=grid_type, thresh_percept=thresh_percept,
-            min_current_spread=min_current_spread, vfmap=vfmap,
+            min_current_spread=min_current_spread,
+            visual_field_map=visual_field_map,
             n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
             axons_range=axons_range, n_ax_segments=n_ax_segments,
             ax_segments_range=ax_segments_range,
@@ -507,11 +509,11 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
 
         super(BiphasicAxonMapSpatial, self)._build()
 
-    def _predict_spatial(self, earray, stim):
+    def _predict_spatial(self, electrode_array, stim):
         """Predict the representative spatial percept."""
-        if not isinstance(earray, ElectrodeArray):
+        if not isinstance(electrode_array, ElectrodeArray):
             raise TypeError("Implant must be of type ElectrodeArray but it is " +
-                            str(type(earray)))
+                            str(type(electrode_array)))
         if not isinstance(stim, Stimulus):
             raise TypeError(
                 "Stim must be of type Stimulus but it is " + str(type(stim)))
@@ -520,7 +522,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         elec_params = np.array([p[1:4] for p in params],
                                dtype=np.float32).reshape((-1, 3))
         # Match coordinates to the active-electrode order above.
-        xyz = earray.coordinates(self.space_unit, electrodes=active)
+        xyz = electrode_array.coordinates(self.space_unit, electrodes=active)
         x = np.ascontiguousarray(xyz[:, 0], dtype=np.float32)
         y = np.ascontiguousarray(xyz[:, 1], dtype=np.float32)
 
@@ -581,7 +583,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             resp = np.zeros(list(self.grid.x.shape) + [n_time])
             # The representative Granley percept occupies the first frame.
             resp[:, :, 0] = self._predict_spatial(
-                self.implant.earray, stim).reshape(self.grid.x.shape)
+                self.implant.electrode_array, stim).reshape(self.grid.x.shape)
         # Apply the same spatial postprocessing as the generic path.
         resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
@@ -731,10 +733,10 @@ class BiphasicAxonMapModel(Model):
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``vfmap``.
+        retinal extent may instead be resolved through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``vfmap``.
+        retinal extent may instead be resolved through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -750,7 +752,7 @@ class BiphasicAxonMapModel(Model):
         Fraction of peak current spread below which an electrode may be
         skipped at an axon segment. The cutoff is scaled by ``F_size``.
         Set to 0 to disable.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.Watson2014Map`.
     n_gray : int or None, optional
@@ -786,7 +788,7 @@ class BiphasicAxonMapModel(Model):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the model.
+        Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
         Number of OpenMP threads.
     n_jobs : int or None, optional
@@ -825,7 +827,8 @@ class BiphasicAxonMapModel(Model):
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  streak_model=None, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rectangular',
-                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 thresh_percept=0, min_current_spread=1e-8,
+                 visual_field_map=None,
                  n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -838,7 +841,8 @@ class BiphasicAxonMapModel(Model):
                 streak_model=streak_model, rho=rho, lam=lam, xrange=xrange,
                 yrange=yrange, step=step, grid_type=grid_type,
                 thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread, vfmap=vfmap,
+                min_current_spread=min_current_spread,
+                visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
                 axons_range=axons_range, n_ax_segments=n_ax_segments,
                 ax_segments_range=ax_segments_range,

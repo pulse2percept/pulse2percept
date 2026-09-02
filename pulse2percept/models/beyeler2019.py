@@ -111,11 +111,11 @@ class ScoreboardSpatial(SpatialModel):
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. May also be
         passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``vfmap``.
+        correspondence is resolved through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. May also be
         passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``vfmap``.
+        correspondence is resolved through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -130,7 +130,7 @@ class ScoreboardSpatial(SpatialModel):
     min_current_spread : float, optional
         Fraction of peak Gaussian current spread below which an electrode may
         be skipped at a grid point. Set to 0 to disable the cutoff.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.Watson2014Map`.
     n_gray : int or None, optional
@@ -142,7 +142,7 @@ class ScoreboardSpatial(SpatialModel):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the model.
+        Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
         Number of OpenMP threads.
     n_jobs : int or None, optional
@@ -153,14 +153,16 @@ class ScoreboardSpatial(SpatialModel):
 
     def __init__(self, implant, *, rho=100, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rectangular',
-                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 thresh_percept=0, min_current_spread=1e-8,
+                 visual_field_map=None,
                  n_gray=None, noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
             grid_type=grid_type, thresh_percept=thresh_percept,
             min_current_spread=min_current_spread,
-            vfmap=Watson2014Map() if vfmap is None else vfmap,
+            visual_field_map=(Watson2014Map() if visual_field_map is None else
+                              visual_field_map),
             n_gray=n_gray, noise=noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -168,7 +170,7 @@ class ScoreboardSpatial(SpatialModel):
     def get_default_params(self):
         """Return all settable scoreboard parameters."""
         base_params = super(ScoreboardSpatial, self).get_default_params()
-        params = {'rho': 100, 'vfmap': Watson2014Map()}
+        params = {'rho': 100, 'visual_field_map': Watson2014Map()}
         return {**base_params, **params}
 
     def get_param_units(self):
@@ -178,10 +180,10 @@ class ScoreboardSpatial(SpatialModel):
     def _build(self):
         _warn_rho_vs_pitch(self)
 
-    def _predict_spatial(self, earray, stim):
+    def _predict_spatial(self, electrode_array, stim):
         """Predict brightness over the spatial grid."""
-        _warn_ignores_z(self, earray)
-        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        _warn_ignores_z(self, electrode_array)
+        x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
         return fast_scoreboard(self._stim_values(stim), x_el, y_el,
                                self.grid.ret.x.ravel(),
                                self.grid.ret.y.ravel(),
@@ -237,11 +239,11 @@ class ScoreboardModel(Model):
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. May also be
         passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``vfmap``.
+        correspondence is resolved through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. May also be
         passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``vfmap``.
+        correspondence is resolved through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -256,7 +258,7 @@ class ScoreboardModel(Model):
     min_current_spread : float, optional
         Fraction of peak Gaussian current spread below which an electrode may
         be skipped at a grid point. Set to 0 to disable the cutoff.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.Watson2014Map`.
     n_gray : int or None, optional
@@ -268,7 +270,7 @@ class ScoreboardModel(Model):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the model.
+        Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
         Number of OpenMP threads.
     n_jobs : int or None, optional
@@ -276,14 +278,16 @@ class ScoreboardModel(Model):
 
     def __init__(self, implant, *, rho=100, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rectangular',
-                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 thresh_percept=0, min_current_spread=1e-8,
+                 visual_field_map=None,
                  n_gray=None, noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
             spatial=ScoreboardSpatial(
                 implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
                 grid_type=grid_type, thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread, vfmap=vfmap,
+                min_current_spread=min_current_spread,
+                visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)
@@ -343,11 +347,11 @@ class AxonMapSpatial(SpatialModel):
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. May also be
         passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``vfmap``.
+        correspondence is resolved through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. May also be
         passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``vfmap``.
+        correspondence is resolved through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -362,7 +366,7 @@ class AxonMapSpatial(SpatialModel):
     min_current_spread : float, optional
         Fraction of peak Gaussian current spread below which an electrode may
         be skipped at an axon segment. Set to 0 to disable the cutoff.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.Watson2014Map`.
     n_gray : int or None, optional
@@ -398,7 +402,7 @@ class AxonMapSpatial(SpatialModel):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the model.
+        Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
         Number of OpenMP threads.
     n_jobs : int or None, optional
@@ -411,7 +415,8 @@ class AxonMapSpatial(SpatialModel):
 
     def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rectangular',
-                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 thresh_percept=0, min_current_spread=1e-8,
+                 visual_field_map=None,
                  n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -422,7 +427,8 @@ class AxonMapSpatial(SpatialModel):
             implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange, step=step,
             grid_type=grid_type, thresh_percept=thresh_percept,
             min_current_spread=min_current_spread,
-            vfmap=Watson2014Map() if vfmap is None else vfmap,
+            visual_field_map=(Watson2014Map() if visual_field_map is None else
+                              visual_field_map),
             n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
             axons_range=axons_range, n_ax_segments=n_ax_segments,
             ax_segments_range=ax_segments_range,
@@ -465,7 +471,7 @@ class AxonMapSpatial(SpatialModel):
             'meridian_blend': 1,
             'axon_pickle': 'axons.pickle',
             'ignore_pickle': False,
-            'vfmap': Watson2014Map()
+            'visual_field_map': Watson2014Map()
         }
         return {**base_params, **params}
 
@@ -575,7 +581,8 @@ class AxonMapSpatial(SpatialModel):
                                   bundles))
             bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert visual-field coordinates to retinal microns:
-        bundles = [np.array(self.vfmap.dva_to_ret(b[:, 0], b[:, 1])).T
+        bundles = [np.array(self.visual_field_map.dva_to_ret(b[:, 0], b[:,
+                                                                        1])).T
                    for b in bundles]
         return bundles
 
@@ -902,10 +909,10 @@ class AxonMapSpatial(SpatialModel):
                                   idx_segment)),
                         open(self.axon_pickle, 'wb'))
 
-    def _predict_spatial(self, earray, stim):
+    def _predict_spatial(self, electrode_array, stim):
         """Predict brightness over the spatial grid."""
-        _warn_ignores_z(self, earray)
-        x_el, y_el, _ = self._electrode_coords(earray, stim)
+        _warn_ignores_z(self, electrode_array)
+        x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
         return fast_axon_map(self._stim_values(stim), x_el, y_el,
                              self.axon_contrib,
                              self.axon_idx_start.astype(np.uint32),
@@ -971,20 +978,23 @@ class AxonMapSpatial(SpatialModel):
             od_w = 6.44
             od_h = 6.85
             # Convert bundles to dva:
-            axon_bundles = [np.array(self.vfmap.ret_to_dva(bundle[:, 0],
-                                                             bundle[:, 1])).T
-                            for bundle in axon_bundles]
+            axon_bundles = [
+                np.array(self.visual_field_map.ret_to_dva(bundle[:, 0],
+                                                          bundle[:, 1])).T
+                for bundle in axon_bundles]
             labels = ['upper', 'lower', 'left', 'right']
         else:
             units = 'microns'
             # Plot at least +/-5 mm, rounded to whole millimeters:
-            xmin, ymin = self.vfmap.dva_to_ret(self.xrange[0], self.yrange[0])
+            xmin, ymin = self.visual_field_map.dva_to_ret(self.xrange[0],
+                                                          self.yrange[0])
             xmin = min(np.floor(xmin / UM_PER_MM) * UM_PER_MM, -5000)
             ymin = min(np.floor(ymin / UM_PER_MM) * UM_PER_MM, -5000)
-            xmax, ymax = self.vfmap.dva_to_ret(self.xrange[1], self.yrange[1])
+            xmax, ymax = self.visual_field_map.dva_to_ret(self.xrange[1],
+                                                          self.yrange[1])
             xmax = max(np.ceil(xmax / UM_PER_MM) * UM_PER_MM, 5000)
             ymax = max(np.ceil(ymax / UM_PER_MM) * UM_PER_MM, 5000)
-            od_xy = self.vfmap.dva_to_ret(*self.loc_od)
+            od_xy = self.visual_field_map.dva_to_ret(*self.loc_od)
             od_w = 1770
             od_h = 1880
             if self.eye == 'RE':
@@ -1082,11 +1092,11 @@ class AxonMapModel(Model):
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. May also be
         passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``vfmap``.
+        correspondence is resolved through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. May also be
         passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``vfmap``.
+        correspondence is resolved through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -1101,7 +1111,7 @@ class AxonMapModel(Model):
     min_current_spread : float, optional
         Fraction of peak Gaussian current spread below which an electrode may
         be skipped at an axon segment. Set to 0 to disable the cutoff.
-    vfmap : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.Watson2014Map`.
     n_gray : int or None, optional
@@ -1137,7 +1147,7 @@ class AxonMapModel(Model):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the model.
+        Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
         Number of OpenMP threads.
     n_jobs : int or None, optional
@@ -1150,7 +1160,8 @@ class AxonMapModel(Model):
 
     def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rectangular',
-                 thresh_percept=0, min_current_spread=1e-8, vfmap=None,
+                 thresh_percept=0, min_current_spread=1e-8,
+                 visual_field_map=None,
                  n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -1162,7 +1173,8 @@ class AxonMapModel(Model):
                 implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange,
                 step=step, grid_type=grid_type,
                 thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread, vfmap=vfmap,
+                min_current_spread=min_current_spread,
+                visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
                 axons_range=axons_range, n_ax_segments=n_ax_segments,
                 ax_segments_range=ax_segments_range,

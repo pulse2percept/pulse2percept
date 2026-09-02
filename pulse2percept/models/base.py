@@ -150,12 +150,13 @@ def _frame_clock(stim, dt, unit=ms):
     return ends * dt, start * dt
 
 
-def _vfmap_first(params):
-    """Apply ``vfmap`` before parameters whose units depend on that map."""
-    if 'vfmap' not in params:
+def _visual_field_map_first(params):
+    """Apply ``visual_field_map`` before parameters whose units need it."""
+    if 'visual_field_map' not in params:
         return params
-    return {'vfmap': params['vfmap'],
-            **{key: val for key, val in params.items() if key != 'vfmap'}}
+    return {'visual_field_map': params['visual_field_map'],
+            **{key: val for key, val in params.items()
+               if key != 'visual_field_map'}}
 
 
 def _length_valued(value):
@@ -279,12 +280,13 @@ def _scene_stim(model, scene, gaze):
                          "needs a spatial model. This model has only a "
                          "temporal one.")
     implant = model.implant
-    vfmap = getattr(model.spatial, 'vfmap', None)
-    if not isinstance(vfmap, RetinalMap):
+    visual_field_map = getattr(model.spatial, 'visual_field_map', None)
+    if not isinstance(visual_field_map, RetinalMap):
         raise ValueError(
-            f"A scene reaches the electrodes through the model's 'vfmap', "
-            f"which has to say where on the retina each degree of visual "
-            f"angle lands. This model's is a {type(vfmap).__name__}; "
+            f"A scene reaches the electrodes through the model's "
+            f"'visual_field_map', which has to say where on the retina each "
+            f"degree of visual angle lands. This model's is a "
+            f"{type(visual_field_map).__name__}; "
             f"registering a scene against a cortical map is not implemented.")
     if implant.encoder is None:
         raise ValueError(
@@ -293,8 +295,9 @@ def _scene_stim(model, scene, gaze):
             "'encoder' (e.g. an AmplitudeEncoder, or a PRIMAEncoder for a "
             "photovoltaic device) to say how.")
     device_scene = _device_scene(scene, implant)
-    xy = implant.earray.coordinates(vfmap.tissue_unit)[:, :2].T
-    x_vf, y_vf = vfmap.ret_to_dva(*xy)
+    xy = implant.electrode_array.coordinates(
+        visual_field_map.tissue_unit)[:, :2].T
+    x_vf, y_vf = visual_field_map.ret_to_dva(*xy)
     gray = device_scene._device_input(x_vf, y_vf, gaze=gaze)
     if device_scene.time is None:
         # A still scene is sampled as a one-frame movie; a `Stimulus` with no
@@ -380,12 +383,12 @@ def _unchanged(before, after):
 def _electrode_pitch(model):
     """Return median nearest-neighbor electrode spacing in ``space_unit``.
 
-    Distances use the dimensions represented by ``vfmap`` so that pitch matches
-    the coordinates used for prediction. Returns ``None`` for fewer than two
-    electrodes or zero spacing.
+    Distances use the dimensions represented by ``visual_field_map`` so that
+    pitch matches the coordinates used for prediction. Returns ``None`` for
+    fewer than two electrodes or zero spacing.
     """
-    coords = model.implant.earray.coordinates(model.space_unit)
-    coords = coords[:, :model.vfmap.ndim]
+    coords = model.implant.electrode_array.coordinates(model.space_unit)
+    coords = coords[:, :model.visual_field_map.ndim]
     if len(coords) < 2:
         return None
     # The nearest *other* electrode, so the query asks for two:
@@ -409,9 +412,9 @@ def _warn_rho_vs_pitch(model):
         f"driven.")
 
 
-def _warn_ignores_z(model, earray):
+def _warn_ignores_z(model, electrode_array):
     """Warn when a model ignores nonzero electrode ``z`` coordinates."""
-    if np.allclose([e.z for e in earray.electrode_objects], 0):
+    if np.allclose([e.z for e in electrode_array.electrode_objects], 0):
         return
     warnings.warn(
         f"{type(model).__name__} does not model electrode-retina distance: "
@@ -510,7 +513,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
             return t
         return Quantity(t, self.time_unit).to_value(stim.time_unit)
 
-    def _electrode_coords(self, earray, stim):
+    def _electrode_coords(self, electrode_array, stim):
         """Return stimulus electrode coordinates in ``space_unit``.
 
         Coordinates follow ``stim.electrodes`` order and are returned as
@@ -518,7 +521,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
 
         Parameters
         ----------
-        earray : :py:class:`~pulse2percept.implants.ElectrodeArray`
+        electrode_array : :py:class:`~pulse2percept.implants.ElectrodeArray`
             Electrode array containing the named electrodes.
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
             Stimulus whose electrode ordering is required.
@@ -528,7 +531,8 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         x, y, z : tuple of ndarray
             Coordinate arrays with shape ``(n_electrodes,)``.
         """
-        xyz = earray.coordinates(self.space_unit, electrodes=stim.electrodes)
+        xyz = electrode_array.coordinates(self.space_unit,
+                                          electrodes=stim.electrodes)
         return tuple(np.ascontiguousarray(xyz[:, i], dtype=np.float32)
                      for i in range(3))
 
@@ -599,11 +603,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. On retinal
         maps, a physical retinal extent may be given instead and is resolved
-        through ``vfmap``.
+        through ``visual_field_map``.
     yrange : (float, float) or Quantity, optional
         Vertical visual-field extent in degrees of visual angle. On retinal
         maps, a physical retinal extent may be given instead and is resolved
-        through ``vfmap``.
+        through ``visual_field_map``.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -618,7 +622,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     min_current_spread : float, optional
         Fraction of peak Gaussian current spread below which an electrode may
         be skipped at a grid point. Set to 0 to disable the cutoff.
-    vfmap : VisualFieldMap, optional
+    visual_field_map : VisualFieldMap, optional
         Retinotopic map between visual-field and tissue coordinates.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
@@ -629,7 +633,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``vfmap`` accepted by the model.
+        Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
         Number of OpenMP threads.
     n_jobs : int or None, optional
@@ -639,9 +643,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     -----
     ``xrange`` and ``yrange`` always describe the simulated visual field and
     are stored in degrees of visual angle. A retinal length is only shorthand
-    for selecting that extent through ``vfmap``; the resulting grid is still
-    uniformly sampled in visual angle. ``step`` therefore only accepts angular
-    spacing.
+    for selecting that extent through ``visual_field_map``; the resulting grid
+    is still uniformly sampled in visual angle. ``step`` therefore only accepts
+    angular spacing.
 
     .. versionadded:: 0.6
     """
@@ -652,10 +656,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def __init__(self, implant, **params):
         _check_implant(implant)
         self._implant = implant
-        # `vfmap` first: `xrange`/`yrange` may be given as a retinal extent,
-        # which is resolved through the map as it is assigned. See
-        # `_vfmap_first`.
-        super().__init__(**_vfmap_first(params))
+        # `visual_field_map` first: `xrange`/`yrange` may be given as a retinal
+        # extent, which is resolved through the map as it is assigned. See
+        # `_visual_field_map_first`.
+        super().__init__(**_visual_field_map_first(params))
         self.grid = None
 
     @property
@@ -685,16 +689,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def set_params(self, **params):
         """Set the parameters of this model
 
-        ``vfmap`` is applied before the other parameters, so that a retinal
-        extent given for ``xrange``/``yrange`` in the same call is resolved
-        through the map the caller asked for. See ``_vfmap_first``.
+        ``visual_field_map`` is applied before the other parameters, so that a
+        retinal extent given for ``xrange``/``yrange`` in the same call is
+        resolved through the map the caller asked for. See
+        ``_visual_field_map_first``.
         """
-        super().set_params(**_vfmap_first(params))
+        super().set_params(**_visual_field_map_first(params))
 
     def _normalize_param_value(self, name, value):
         """Normalize a parameter to its stored unit.
 
-        Physical ``xrange`` and ``yrange`` values are resolved through ``vfmap``;
+        Physical ``xrange`` and ``yrange`` values are resolved through ``visual_field_map``;
         other unitful parameters use the generic conversion.
         """
         if name in ('xrange', 'yrange') and _length_valued(value):
@@ -705,8 +710,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Resolve a retinal extent to a visual-field range.
 
         ``xrange`` is converted along the horizontal retinal meridian and
-        ``yrange`` along the vertical meridian. The result is stored in degrees of
-        visual angle and is not reinterpreted if ``vfmap`` changes later.
+        ``yrange`` along the vertical meridian. The result is stored in degrees
+        of visual angle and is not reinterpreted if ``visual_field_map``
+        changes later.
 
         Parameters
         ----------
@@ -720,16 +726,18 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         tuple of float
             Visual-field extent in increasing order.
         """
-        vfmap = getattr(self, 'vfmap', None)
-        if not isinstance(vfmap, RetinalMap):
+        visual_field_map = getattr(self, 'visual_field_map', None)
+        if not isinstance(visual_field_map, RetinalMap):
             raise DimensionMismatchError(
                 f"'{name}' is a visual field extent, measured in degrees of "
                 f"visual angle. A physical length is shorthand for one only "
-                f"on a retinal map, and this model's vfmap is a "
-                f"{type(vfmap).__name__}. Specify '{name}' in dva instead.")
+                f"on a retinal map, and this model's visual_field_map is a "
+                f"{type(visual_field_map).__name__}. Specify '{name}' in "
+                f"dva instead.")
         # In the unit the map's tissue side is measured in, which is what its
         # inverse transform below expects:
-        extent = np.asarray(as_value(value, vfmap.tissue_unit, name),
+        extent = np.asarray(as_value(value, visual_field_map.tissue_unit,
+                                     name),
                             dtype=np.float64).ravel()
         if extent.size != 2:
             raise ValueError(f"'{name}' must be a (min, max) pair, not "
@@ -737,15 +745,16 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         lo, hi = extent
         try:
             if name == 'xrange':
-                lo_dva, _ = vfmap.ret_to_dva(lo, 0)
-                hi_dva, _ = vfmap.ret_to_dva(hi, 0)
+                lo_dva, _ = visual_field_map.ret_to_dva(lo, 0)
+                hi_dva, _ = visual_field_map.ret_to_dva(hi, 0)
             else:
-                _, lo_dva = vfmap.ret_to_dva(0, lo)
-                _, hi_dva = vfmap.ret_to_dva(0, hi)
+                _, lo_dva = visual_field_map.ret_to_dva(0, lo)
+                _, hi_dva = visual_field_map.ret_to_dva(0, hi)
         except NotImplementedError:
             raise NotImplementedError(
-                f"This visual field map ({type(vfmap).__name__}) cannot infer "
-                f"a visual field range from retinal distance. Specify "
+                f"This visual field map "
+                f"({type(visual_field_map).__name__}) cannot infer a visual "
+                f"field range from retinal distance. Specify "
                 f"'{name}' in dva instead.") from None
         # Sorted, because the retinal y axis points the opposite way from the
         # visual field's, so the two end points can come back swapped:
@@ -760,7 +769,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'grid_type': 'rectangular',
             'thresh_percept': 0,
             'min_current_spread': 1e-8,
-            'vfmap': Curcio1990Map(),
+            'visual_field_map': Curcio1990Map(),
             'n_gray': None,
             'noise': None,
             'verbose': True,
@@ -830,23 +839,23 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         # See `BaseModel.build`:
         self.set_params(**build_params)
-        if self.vfmap.ndim not in self.ndim:
+        if self.visual_field_map.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
-                             f"visual field map has {self.vfmap.ndim} dimensions.")
+                             f"visual field map has {self.visual_field_map.ndim} dimensions.")
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
-        self.grid.build(self.vfmap)
+        self.grid.build(self.visual_field_map)
         self._build()
         self._is_built = True
         return self
 
     @abstractmethod
-    def _predict_spatial(self, earray, stim):
+    def _predict_spatial(self, electrode_array, stim):
         """Compute the spatial response.
 
         Parameters
         ----------
-        earray : :py:class:`~pulse2percept.implants.ElectrodeArray`
+        electrode_array : :py:class:`~pulse2percept.implants.ElectrodeArray`
             Electrode array for the bound implant.
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
             Prepared stimulus with shape electrodes x time.
@@ -964,12 +973,13 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                     stim[:, stim.time[t_unique]], electrodes=stim.electrodes,
                     time=uniq_time
                 )._inherit_units(stim)._inherit_metadata(stim)
-                resp_unique = self._predict_spatial(self.implant.earray,
-                                                    stim_unique)
+                resp_unique = self._predict_spatial(
+                    self.implant.electrode_array, stim_unique)
                 # reconstruct original time points, making sure to preserve C ordering
                 resp = resp_unique[..., inverse].copy(order='C')
             else:
-                resp = self._predict_spatial(self.implant.earray, stim)
+                resp = self._predict_spatial(self.implant.electrode_array,
+                                             stim)
         resp = self._postprocess_spatial(resp)
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept,

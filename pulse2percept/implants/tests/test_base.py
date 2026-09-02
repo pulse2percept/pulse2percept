@@ -36,19 +36,17 @@ class PhotovoltaicArray(Implant):
         self.safe_mode = safe_mode
         dva2ret = 280.0
 
-        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
-                                    rot=rot, grid_type='hex',
-                                    orientation='vertical',
-                                    electrode_type=PhotovoltaicPixel,
-                                    radius=elec_radius,
-                                    apothem=(self.spacing - self.trench) / 2)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, spacing, x=x, y=y, z=z, rot=rot, grid_type='hex',
+            orientation='vertical', electrode_type=PhotovoltaicPixel,
+            radius=elec_radius, apothem=(self.spacing - self.trench) / 2)
 
         rm_names = []
-        for name, electrode in self.earray.electrodes.items():
+        for name, electrode in self.electrode_array.electrodes.items():
             if (electrode.x - x) ** 2 + (electrode.y - y) ** 2 > (r * dva2ret) ** 2:
                 rm_names.append(name)
         for e in rm_names:
-            self.earray.remove_electrode(e)
+            self.electrode_array.remove_electrode(e)
 
 
 def test_Implant():
@@ -61,9 +59,10 @@ def test_Implant():
     # Iterating over the electrode array:
     implant = Implant(PointSource(0, 0, 0))
     npt.assert_equal(implant.n_electrodes, 1)
-    npt.assert_equal(implant[0], implant.earray[0])
-    npt.assert_equal(implant.electrode_names, implant.earray.electrode_names)
-    for i, e in zip(implant, implant.earray):
+    npt.assert_equal(implant[0], implant.electrode_array[0])
+    npt.assert_equal(implant.electrode_names,
+                     implant.electrode_array.electrode_names)
+    for i, e in zip(implant, implant.electrode_array):
         npt.assert_equal(i, e)
 
     # Prepare a stimulus:
@@ -293,7 +292,7 @@ def test_rectangle_implant(ztype, x, y, rot):
     # test different shapes
     for shape in [(6, 10), (5, 12), (15, 15)]:
         implant = RectangleImplant(shape=shape)
-        npt.assert_equal(implant.earray.shape, shape)
+        npt.assert_equal(implant.electrode_array.shape, shape)
 
 
 def test_RectangleImplant_is_deprecated():
@@ -302,7 +301,7 @@ def test_RectangleImplant_is_deprecated():
         implant = RectangleImplant(shape=(3, 4), spacing=100)
     # The legacy defaults and geometry survive the deprecation:
     npt.assert_equal(implant.preprocess, True)
-    npt.assert_equal(implant.earray.shape, (3, 4))
+    npt.assert_equal(implant.electrode_array.shape, (3, 4))
     npt.assert_equal(isinstance(implant['A1'], DiskElectrode), True)
     npt.assert_almost_equal(implant['A1'].radius, 75.)
     # Including the left-eye column reversal that GridImplant does not do
@@ -330,9 +329,9 @@ def test_ProsthesisSystem_is_a_deprecated_alias():
 def test_GridImplant_is_a_grid_in_an_implant():
     implant = GridImplant((3, 4), 100)
     npt.assert_equal(isinstance(implant, Implant), True)
-    npt.assert_equal(isinstance(implant.earray, ElectrodeGrid), True)
+    npt.assert_equal(isinstance(implant.electrode_array, ElectrodeGrid), True)
     npt.assert_equal(implant.n_electrodes, 12)
-    npt.assert_equal(implant.earray.shape, (3, 4))
+    npt.assert_equal(implant.electrode_array.shape, (3, 4))
     npt.assert_equal(implant.electrode_names,
                      ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4',
                       'C1', 'C2', 'C3', 'C4'])
@@ -351,12 +350,12 @@ def test_GridImplant_is_a_grid_in_an_implant():
 
 def test_GridImplant_hex():
     implant = GridImplant((3, 4), 100, grid_type='hex')
-    npt.assert_equal(implant.earray.grid_type, 'hex')
+    npt.assert_equal(implant.electrode_array.grid_type, 'hex')
     npt.assert_equal(implant.n_electrodes, 12)
     # `grid_type` really produces a triangular lattice, not just some other set
     # coordinates: every nearest neighbor is exactly one spacing away, which
     # on a rect grid is only true of the orthogonal ones.
-    xy = implant.earray.coordinates()[:, :2]
+    xy = implant.electrode_array.coordinates()[:, :2]
     dist = np.linalg.norm(xy[:, None, :] - xy[None, :, :], axis=-1)
     np.fill_diagonal(dist, np.inf)
     npt.assert_almost_equal(dist.min(axis=1), 100)
@@ -376,7 +375,7 @@ def test_GridImplant_electrode_kwargs():
 
 def test_GridImplant_geometry_passthrough():
     implant = GridImplant((2, 3), 100, x=200, y=-300, z=50, rot=90)
-    npt.assert_almost_equal(implant.earray.coordinates().mean(axis=0),
+    npt.assert_almost_equal(implant.electrode_array.coordinates().mean(axis=0),
                             [200, -300, 50])
     # 90 deg CCW about the grid center: (dx, dy) -> (-dy, dx)
     unrot = GridImplant((2, 3), 100, x=200, y=-300, z=50)
@@ -386,8 +385,8 @@ def test_GridImplant_geometry_passthrough():
     # Unitful geometry normalizes to plain microns, as everywhere else:
     unitful = GridImplant((2, 3), 0.1 * mm, x=0.2 * mm, y=-300 * um,
                           z=50 * um, rot=90 * deg)
-    npt.assert_allclose(unitful.earray.coordinates(),
-                        implant.earray.coordinates(), rtol=1e-12)
+    npt.assert_allclose(unitful.electrode_array.coordinates(),
+                        implant.electrode_array.coordinates(), rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
         GridImplant((2, 3), 2 * dva)
 
@@ -418,7 +417,8 @@ def test_GridImplant_does_not_relabel_the_left_eye():
     re = GridImplant((3, 4), 100, eye='RE')
     le = GridImplant((3, 4), 100, eye='LE')
     npt.assert_equal(le.electrode_names, re.electrode_names)
-    npt.assert_almost_equal(le.earray.coordinates(), re.earray.coordinates())
+    npt.assert_almost_equal(le.electrode_array.coordinates(),
+                            re.electrode_array.coordinates())
 
 
 def test_Implant_reshape_stim_frames_independent():
@@ -501,26 +501,30 @@ def test_implant_geometry_units():
         (cortex.ICVP, {'x': 15 * mm}, {'x': 15000}),
     ]
     for cls, unitful, bare in cases:
-        coords = cls(**unitful).earray.coordinates()
-        npt.assert_allclose(coords, cls(**bare).earray.coordinates(),
+        coords = cls(**unitful).electrode_array.coordinates()
+        npt.assert_allclose(coords, cls(**bare).electrode_array.coordinates(),
                             rtol=1e-12, err_msg=cls.__name__)
         # Plain numbers all the way down, whatever went in:
         npt.assert_equal(coords.dtype, np.float64)
     # Orion is the documented default: 15 mm to the right of the fovea:
-    npt.assert_allclose(cortex.Orion(x=15 * mm).earray.coordinates(),
-                        cortex.Orion().earray.coordinates(), rtol=1e-12)
+    npt.assert_allclose(cortex.Orion(x=15 * mm).electrode_array.coordinates(),
+                        cortex.Orion().electrode_array.coordinates(),
+                        rtol=1e-12)
     # A conversion that does not land on a round number is no different:
     npt.assert_allclose(
-        implants.ArgusII(x=0.8625 * mm, z=0.0417 * mm).earray.coordinates(),
-        implants.ArgusII(x=862.5, z=41.7).earray.coordinates(), rtol=1e-12)
+        implants.ArgusII(x=0.8625 * mm,
+                         z=0.0417 * mm).electrode_array.coordinates(),
+        implants.ArgusII(x=862.5,
+                         z=41.7).electrode_array.coordinates(), rtol=1e-12)
 
 
 def test_implant_rot_units():
     """`rot` is an ordinary angle; the grid does the conversion for everyone"""
-    bare = implants.ArgusII(rot=45).earray.coordinates()
+    bare = implants.ArgusII(rot=45).electrode_array.coordinates()
     for rot in (45 * deg, np.pi / 4 * rad):
-        npt.assert_allclose(implants.ArgusII(rot=rot).earray.coordinates(),
-                            bare, rtol=1e-12)
+        npt.assert_allclose(
+            implants.ArgusII(rot=rot).electrode_array.coordinates(), bare,
+            rtol=1e-12)
 
 
 def test_implant_per_electrode_z_units():
@@ -530,10 +534,11 @@ def test_implant_per_electrode_z_units():
                    (implants.AlphaIMS, 1500)]:
         heights = np.linspace(-150, -50, n)
         unitful = cls(z=[h * um for h in heights])
-        npt.assert_allclose(unitful.earray.coordinates(),
-                            cls(z=list(heights)).earray.coordinates(),
+        npt.assert_allclose(unitful.electrode_array.coordinates(),
+                            cls(z=list(heights)).electrode_array.coordinates(),
                             rtol=1e-12, err_msg=cls.__name__)
-        npt.assert_allclose(unitful.earray.coordinates()[:, 2], heights,
+        npt.assert_allclose(unitful.electrode_array.coordinates()[:, 2],
+                            heights,
                             rtol=1e-12)
 
 
@@ -554,27 +559,27 @@ def test_implant_dimension_errors():
 
 def test_Implant_max_current_units():
     """`max_current` is a current, stored as a plain number of microamps"""
-    earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
+    electrode_array = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     for value in (100, 100 * uA, 0.1 * mA, 100000 * nA):
-        implant = Implant(earray, max_current=value)
+        implant = Implant(electrode_array, max_current=value)
         npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
         npt.assert_equal(isinstance(implant.max_current, Quantity), False)
     # An awkward conversion is no different:
     npt.assert_allclose(
-        Implant(earray, max_current=0.0417 * mA).max_current, 41.7,
+        Implant(electrode_array, max_current=0.0417 * mA).max_current, 41.7,
         rtol=1e-12)
     # None means no limit, and is left alone:
-    npt.assert_equal(Implant(earray).max_current, None)
+    npt.assert_equal(Implant(electrode_array).max_current, None)
     # Assigning later goes through the same setter:
-    implant = Implant(earray)
+    implant = Implant(electrode_array)
     implant.max_current = 0.1 * mA
     npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
-        Implant(earray, max_current=5 * ms)
+        Implant(electrode_array, max_current=5 * ms)
     with pytest.raises(DimensionMismatchError):
         implant.max_current = 5 * dva
     with pytest.raises(ValueError):
-        Implant(earray, max_current=-1 * uA)
+        Implant(electrode_array, max_current=-1 * uA)
 
 
 def test_Implant_safety_checks_are_electrical():
@@ -633,7 +638,7 @@ def test_Implant_requires_an_electrical_stimulus():
         npt.assert_equal('dimensionless' in str(excinfo.value), True)
         # A generic system has no encoder either:
         with pytest.raises(DimensionMismatchError):
-            Implant(ArgusII().earray).prepare_stim(source)
+            Implant(ArgusII().electrode_array).prepare_stim(source)
 
     # Encoded, the very same picture goes through:
     implant = ArgusII(encoder=None)
@@ -661,12 +666,12 @@ def test_Implant_encoder():
     through
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
-    implant = Implant(ArgusII().earray)
+    implant = Implant(ArgusII().electrode_array)
     npt.assert_equal(implant.encoder, None)
     with pytest.raises(TypeError):
         implant.encoder = 'amplitude'
     with pytest.raises(TypeError):
-        Implant(ArgusII().earray, encoder=ArgusII())
+        Implant(ArgusII().electrode_array, encoder=ArgusII())
 
     # Giving it one is all it takes:
     implant.encoder = AmplitudeEncoder(amp_range=(0, 50), freq=20)
@@ -1140,3 +1145,15 @@ def test_a_generic_array_says_nothing_about_placement():
     npt.assert_equal(
         implants.Implant(implants.PointSource(0, 0, 0)).placement,
         None)
+
+
+def test_Implant_electrode_array_is_the_canonical_name():
+    """The array is reached as `electrode_array`; `earray` is gone"""
+    array = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
+    implant = Implant(electrode_array=array)
+    npt.assert_equal(implant.electrode_array is array, True)
+    npt.assert_equal('electrode_array=' in str(implant), True)
+    npt.assert_equal(hasattr(implant, 'earray'), False)
+    npt.assert_equal(hasattr(ArgusII(), 'earray'), False)
+    with pytest.raises(TypeError):
+        Implant(earray=array)
