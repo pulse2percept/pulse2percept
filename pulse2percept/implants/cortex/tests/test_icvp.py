@@ -23,7 +23,7 @@ def test_icvp(x, y, rot):
 
     # Make sure number of electrodes is correct
     npt.assert_equal(icvp.n_electrodes, n_elec)
-    npt.assert_equal(len(icvp.earray.electrodes), n_elec)
+    npt.assert_equal(len(icvp.electrode_array.electrodes), n_elec)
 
     # Coordinates of 11 when device is not rotated:
     xy = np.array([non_rot_icvp['11'].x, non_rot_icvp['11'].y])
@@ -37,8 +37,8 @@ def test_icvp(x, y, rot):
     npt.assert_almost_equal(icvp['11'].x, xy[0] + x, decimal=2)
     npt.assert_almost_equal(icvp['11'].y, xy[1] + y, decimal=2)
 
-    for electrode in icvp.earray.electrode_objects:
-        npt.assert_almost_equal(electrode.r, radius)
+    for electrode in icvp.electrode_array.electrode_objects:
+        npt.assert_almost_equal(electrode.radius, radius)
 
         if electrode.name in deactivated_electrodes:
             npt.assert_equal(electrode.activated, False)

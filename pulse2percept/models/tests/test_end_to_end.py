@@ -37,9 +37,9 @@ POS = [(-600.0, -600.0), (600.0, -600.0), (-600.0, 600.0), (600.0, 600.0)]
 
 def make_implant(raster=None):
     """Four well-separated electrodes, one per raster group"""
-    earray = ElectrodeArray({n: DiskElectrode(x, y, 0, 100)
-                             for n, (x, y) in zip(NAMES, POS)})
-    return Implant(earray, raster=raster)
+    electrode_array = ElectrodeArray({n: DiskElectrode(x, y, 0, 100)
+                                      for n, (x, y) in zip(NAMES, POS)})
+    return Implant(electrode_array, raster=raster)
 
 
 def one_per_group():

@@ -18,7 +18,7 @@ def test_Cortivis(x, y, rot):
     npt.assert_equal(hasattr(cortivis, '__dict__'), False)
 
     # Check if there are 96 electrodes in the array
-    npt.assert_equal(len(cortivis.earray.electrodes), 96)
+    npt.assert_equal(len(cortivis.electrode_array.electrodes), 96)
 
     # Coordinates of electrode '1'
     xy = np.array([cortivis0['1'].x, cortivis0['1'].y]).T
@@ -35,6 +35,6 @@ def test_Cortivis(x, y, rot):
     npt.assert_almost_equal(cortivis['1'].y, xy[1] + y)
 
     # Check radii of electrodes
-    for e in cortivis.earray.electrode_objects:
-        npt.assert_almost_equal(e.r, 40)
+    for e in cortivis.electrode_array.electrode_objects:
+        npt.assert_almost_equal(e.radius, 40)
     

@@ -135,44 +135,47 @@ def _pixel_size_um(pixel_size, supported, cls_name):
                      f"Supported pixel sizes (um): {sizes}.")
 
 
-def _device_frame(earray, center):
+def _device_frame(electrode_array, center):
     """Return coordinates in the unrotated device frame."""
-    c, s = np.cos(np.radians(earray.rot)), np.sin(np.radians(earray.rot))
-    return ((earray.coordinates()[:, :2] - np.asarray(center, dtype=float))
+    rot = np.radians(electrode_array.rot)
+    c, s = np.cos(rot), np.sin(rot)
+    return ((electrode_array.coordinates()[:, :2] - np.asarray(center,
+                                                               dtype=float))
             @ np.array([[c, -s], [s, c]]))
 
 
-def _recenter(earray, center):
+def _recenter(electrode_array, center):
     """Center a trimmed array on ``center``."""
-    xy = _device_frame(earray, center)
+    xy = _device_frame(electrode_array, center)
     off = -0.5 * (xy.min(axis=0) + xy.max(axis=0))
-    c, s = np.cos(np.radians(earray.rot)), np.sin(np.radians(earray.rot))
+    rot = np.radians(electrode_array.rot)
+    c, s = np.cos(rot), np.sin(rot)
     dx, dy = off[0] * c - off[1] * s, off[0] * s + off[1] * c
-    for elec in earray.electrode_objects:
+    for elec in electrode_array.electrode_objects:
         elec.x += dx
         elec.y += dy
 
 
-def _trim_to_disc(earray, n_pixels, center):
+def _trim_to_disc(electrode_array, n_pixels, center):
     """Keep the ``n_pixels`` lattice sites nearest ``center``."""
-    xy = _device_frame(earray, center)
+    xy = _device_frame(electrode_array, center)
     # Round to keep ties stable under rotation:
     r = np.round(np.hypot(*xy.T), 6)
     ang = np.round(np.arctan2(xy[:, 1], xy[:, 0]), 6)
-    names = np.asarray(list(earray.electrodes))
+    names = np.asarray(list(electrode_array.electrodes))
     for name in names[np.lexsort((ang, r))[n_pixels:]]:
-        earray.remove_electrode(name)
+        electrode_array.remove_electrode(name)
 
 
-def _trim_to_axial_mask(earray, spans, center):
+def _trim_to_axial_mask(electrode_array, spans, center):
     """Trim a grid to an axial-coordinate mask."""
     cols = max(spans) - min(spans) + 1
     keep = {i * cols + j for i, j in _axial_rows(spans)}
-    for idx, name in enumerate(list(earray.electrodes)):
+    for idx, name in enumerate(list(electrode_array.electrodes)):
         if idx not in keep:
-            earray.remove_electrode(name)
+            electrode_array.remove_electrode(name)
     # Center reconstructed masks on the substrate:
-    _recenter(earray, center)
+    _recenter(electrode_array, center)
 
 
 def _plot_substrate(ax, center, rot, radius=None, side=None):
@@ -216,9 +219,9 @@ class PhotovoltaicPixel(HexElectrode):
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
-    r : double
+    radius : double
         Radius (um) of the active electrode.
-    a : double
+    apothem : double
         Apothem (um) of the hexagonal pixel body.
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
@@ -238,36 +241,36 @@ class PhotovoltaicPixel(HexElectrode):
        See :py:mod:`pulse2percept.units`.
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('r',)
+    __slots__ = ('radius',)
 
-    def __init__(self, x, y, z, r, a, name=None, activated=True,
+    def __init__(self, x, y, z, radius, apothem, name=None, activated=True,
                  orientation='vertical', rot=0):
-        super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name,
+        super(PhotovoltaicPixel, self).__init__(x, y, z, apothem, name=name,
                                                 activated=activated,
                                                 orientation=orientation,
                                                 rot=rot)
-        r = as_value(r, um, 'r')
-        if isinstance(r, (Sequence, np.ndarray)):
+        radius = as_value(radius, um, 'radius')
+        if isinstance(radius, (Sequence, np.ndarray)):
             raise TypeError("Radius of the active electrode must be a scalar.")
-        if r <= 0:
+        if radius <= 0:
             raise ValueError("Radius of the active electrode must be > 0, not "
-                             "{r}.")
-        self.r = r
+                             "{radius}.")
+        self.radius = radius
         # Plot the pixel body and active electrode:
         hex_kwargs = self._hex_patch_kwargs()
         self.plot_patch = [RegularPolygon, Circle]
         self.plot_kwargs = [{**hex_kwargs, 'alpha': 0.2, 'fc': 'k', 'ec': 'k'},
-                            {'radius': r, 'linewidth': 0, 'color': 'k',
+                            {'radius': radius, 'linewidth': 0, 'color': 'k',
                              'alpha': 0.5}]
         self.plot_deactivated_kwargs = [{**hex_kwargs, 'alpha': 0.1,
                                          'fc': 'k', 'ec': 'k'},
-                                        {'radius': r, 'linewidth': 0,
+                                        {'radius': radius, 'linewidth': 0,
                                          'color': 'k', 'alpha': 0.2}]
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'r': self.r, 'a': self.a})
+        params.update({'radius': self.radius, 'apothem': self.apothem})
         return params
 
     def electric_potential(self, x, y, z, v0):
@@ -374,11 +377,11 @@ class PRIMAPivotal(Implant):
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
-        self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
-                                    z=zarr, rot=rot, type='hex',
-                                    orientation='vertical',
-                                    etype=PhotovoltaicPixel, r=elec_radius,
-                                    a=self.pixel_width / 2)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, self.spacing, x=x, y=y, z=zarr, rot=rot,
+            grid_type='hex', orientation='vertical',
+            electrode_type=PhotovoltaicPixel, radius=elec_radius,
+            apothem=self.pixel_width / 2)
 
         # Remove extra electrodes to fit the actual implant:
         extra_elecs = ['A1', 'A2', 'A3', 'A4', 'A14', 'A16', 'A17',
@@ -388,7 +391,7 @@ class PRIMAPivotal(Implant):
                        'Q1', 'Q22', 'R1', 'R2', 'R21', 'R22', 'S1',
                        'S2', 'S3', 'S5', 'S19', 'S20', 'S21', 'S22']
         for elec in extra_elecs:
-            self.earray.remove_electrode(elec)
+            self.electrode_array.remove_electrode(elec)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -396,7 +399,7 @@ class PRIMAPivotal(Implant):
                 raise ValueError(f"If `z` is a list, it must have "
                                  f"{self.n_electrodes} entries, not "
                                  f"{z_arr.size}.")
-            for elec, z_elec in zip(self.earray.electrode_objects, z):
+            for elec, z_elec in zip(self.electrode_array.electrode_objects, z):
                 elec.z = z_elec
 
     def _require_physical_light(self, stim):
@@ -491,7 +494,7 @@ class PRIMAPivotal(Implant):
         .. versionadded:: 0.11.0
         """
         ax, substrate = _plot_substrate(ax, self._substrate_center,
-                                        self.earray.rot, side=2000)
+                                        self.electrode_array.rot, side=2000)
         drawn = list(ax.collections)
         ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
                           stim=stim, stim_cmap=stim_cmap)
@@ -576,11 +579,11 @@ class Lorach2015Array(Implant):
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
-        self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
-                                    z=zarr, rot=rot, type='hex',
-                                    orientation='vertical',
-                                    etype=PhotovoltaicPixel, r=elec_radius,
-                                    a=self.pixel_width / 2)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, self.spacing, x=x, y=y, z=zarr, rot=rot,
+            grid_type='hex', orientation='vertical',
+            electrode_type=PhotovoltaicPixel, radius=elec_radius,
+            apothem=self.pixel_width / 2)
 
         # Remove extra electrodes to fit the actual implant:
         extra_elecs = ['A1', 'B1', 'C1', 'D1', 'E1', 'I1', 'J1', 'K1', 'L1',
@@ -593,7 +596,7 @@ class Lorach2015Array(Implant):
                        'A15', 'B15', 'C15', 'D15', 'H15', 'I15', 'J15', 'K15',
                        'L15']
         for elec in extra_elecs:
-            self.earray.remove_electrode(elec)
+            self.electrode_array.remove_electrode(elec)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -601,7 +604,7 @@ class Lorach2015Array(Implant):
                 raise ValueError(f"If `z` is a list, it must have "
                                  f"{self.n_electrodes} entries, not "
                                  f"{z_arr.size}.")
-            for elec, z_elec in zip(self.earray.electrode_objects, z):
+            for elec, z_elec in zip(self.electrode_array.electrode_objects, z):
                 elec.z = z_elec
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
@@ -611,7 +614,7 @@ class Lorach2015Array(Implant):
         .. versionadded:: 0.11.0
         """
         ax, substrate = _plot_substrate(ax, self._substrate_center,
-                                        self.earray.rot, radius=500)
+                                        self.electrode_array.rot, radius=500)
         drawn = list(ax.collections)
         ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
                           stim=stim, stim_cmap=stim_cmap)
@@ -704,17 +707,16 @@ class Ho2019FlatArray(Implant):
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
-        self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
-                                    z=zarr, rot=rot, type='hex',
-                                    orientation='vertical',
-                                    etype=PhotovoltaicPixel,
-                                    r=spec['elec_radius'],
-                                    a=self.pixel_width / 2)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, self.spacing, x=x, y=y, z=zarr, rot=rot,
+            grid_type='hex', orientation='vertical',
+            electrode_type=PhotovoltaicPixel, radius=spec['elec_radius'],
+            apothem=self.pixel_width / 2)
         if spec['spans'] is not None:
-            _trim_to_axial_mask(self.earray, spec['spans'],
+            _trim_to_axial_mask(self.electrode_array, spec['spans'],
                                 self._substrate_center)
         else:
-            _trim_to_disc(self.earray, spec['n_pixels'],
+            _trim_to_disc(self.electrode_array, spec['n_pixels'],
                           self._substrate_center)
 
         if overwrite_z:
@@ -723,7 +725,7 @@ class Ho2019FlatArray(Implant):
                 raise ValueError(f"If `z` is a list, it must have "
                                  f"{self.n_electrodes} entries, not "
                                  f"{z_arr.size}.")
-            for elec, z_elec in zip(self.earray.electrode_objects, z):
+            for elec, z_elec in zip(self.electrode_array.electrode_objects, z):
                 elec.z = z_elec
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
@@ -733,7 +735,7 @@ class Ho2019FlatArray(Implant):
         .. versionadded:: 0.11.0
         """
         ax, substrate = _plot_substrate(ax, self._substrate_center,
-                                        self.earray.rot, radius=500)
+                                        self.electrode_array.rot, radius=500)
         drawn = list(ax.collections)
         ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
                           stim=stim, stim_cmap=stim_cmap)
@@ -832,12 +834,13 @@ class Huang2021Array(Implant):
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
-        self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
-                                    z=zarr, rot=rot, type='hex',
-                                    orientation='vertical',
-                                    etype=PhotovoltaicPixel, r=elec_radius,
-                                    a=self.pixel_width / 2)
-        _trim_to_axial_mask(self.earray, spans, self._substrate_center)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, self.spacing, x=x, y=y, z=zarr, rot=rot,
+            grid_type='hex', orientation='vertical',
+            electrode_type=PhotovoltaicPixel, radius=elec_radius,
+            apothem=self.pixel_width / 2)
+        _trim_to_axial_mask(self.electrode_array, spans,
+                            self._substrate_center)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -845,7 +848,7 @@ class Huang2021Array(Implant):
                 raise ValueError(f"If `z` is a list, it must have "
                                  f"{self.n_electrodes} entries, not "
                                  f"{z_arr.size}.")
-            for elec, z_elec in zip(self.earray.electrode_objects, z):
+            for elec, z_elec in zip(self.electrode_array.electrode_objects, z):
                 elec.z = z_elec
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
@@ -855,7 +858,7 @@ class Huang2021Array(Implant):
         .. versionadded:: 0.11.0
         """
         ax, substrate = _plot_substrate(ax, self._substrate_center,
-                                        self.earray.rot, radius=750)
+                                        self.electrode_array.rot, radius=750)
         drawn = list(ax.collections)
         ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
                           stim=stim, stim_cmap=stim_cmap)

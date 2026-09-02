@@ -18,7 +18,7 @@ def test_IMIE(x, y, rot, eye):
     npt.assert_equal(hasattr(imie, '__dict__'), False)
 
     # Check if there is 256 electrodes in the array
-    npt.assert_equal(len(imie.earray.electrodes), 256)
+    npt.assert_equal(len(imie.electrode_array.electrodes), 256)
 
     # Coordinates of electrode 'N3'
     xy = np.array([imie0['N3'].x, imie0['N3'].y]).T
@@ -50,9 +50,9 @@ def test_IMIE(x, y, rot, eye):
 
     # Check radii of electrodes
     for e in ['N16', 'N17', 'A16', 'A17', 'L1', 'K1', 'C1', 'D1']:
-        npt.assert_almost_equal(imie[e].r, 80.0)
+        npt.assert_almost_equal(imie[e].radius, 80.0)
     for e in ['A3', 'M15', 'B19', 'C15', 'D13']:
-        npt.assert_almost_equal(imie[e].r, 105.0)
+        npt.assert_almost_equal(imie[e].radius, 105.0)
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):

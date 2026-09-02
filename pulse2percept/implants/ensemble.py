@@ -10,11 +10,11 @@ from ..units import DimensionMismatchError, as_value, dva, um
 class EnsembleImplant(Implant):
     
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_implants', '_earray', 'safe_mode', 'preprocess')
+    __slots__ = ('_implants', '_electrode_array', 'safe_mode', 'preprocess')
 
     @classmethod
-    def from_cortical_map(cls, implant_type, vfmap, locs=None, xrange=None, yrange=None, step=None,
-                        region='v1'):
+    def from_cortical_map(cls, implant_type, visual_field_map, locs=None,
+                          xrange=None, yrange=None, step=None, region='v1'):
         """
         Create an ensemble implant from a cortical visual field map.
 
@@ -24,7 +24,7 @@ class EnsembleImplant(Implant):
 
         Parameters
         ----------
-        vfmap : p2p.topography.CorticalMap
+        visual_field_map : p2p.topography.CorticalMap
             Visual field map to create implant from.
         implant_type : type
             Type of implant to create for the ensemble. Must subclass
@@ -53,13 +53,14 @@ class EnsembleImplant(Implant):
            position in microns. See :py:mod:`pulse2percept.units`.
         """
         from ..topography import CorticalMap, Grid2D
-        if not isinstance(vfmap, CorticalMap):
-            raise TypeError("vfmap must be a p2p.topography.CorticalMap")
+        if not isinstance(visual_field_map, CorticalMap):
+            raise TypeError("visual_field_map must be a "
+                            "p2p.topography.CorticalMap")
         if not issubclass(implant_type, Implant):
             raise TypeError("implant_type must be a sub-type of Implant")
 
-        # Where in the *visual field* the implants go; `vfmap` turns that into
-        # a physical location further down:
+        # Where in the *visual field* the implants go; `visual_field_map` turns
+        # that into a physical location further down:
         locs = as_value(locs, dva, 'locs')
         xrange = as_value(xrange, dva, 'xrange')
         yrange = as_value(yrange, dva, 'yrange')
@@ -81,7 +82,8 @@ class EnsembleImplant(Implant):
             xlocs = locs[:, 0]
             ylocs = locs[:, 1]
 
-        implant_locations = np.array(vfmap.from_dva()[region](xlocs, ylocs)).T
+        implant_locations = np.array(
+            visual_field_map.from_dva()[region](xlocs, ylocs)).T
 
         return cls.from_coords(implant_type=implant_type, locs=implant_locations)
 
@@ -187,7 +189,8 @@ class EnsembleImplant(Implant):
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
-        return {'implants': self.implants, 'earray': self.earray,
+        return {'implants': self.implants,
+                'electrode_array': self.electrode_array,
                 'safe_mode': self.safe_mode, 'preprocess': self.preprocess}
 
     @property
@@ -215,10 +218,10 @@ class EnsembleImplant(Implant):
         # Create the electrode array
         electrodes = {}
         for i, implant in self._implants.items():
-            for name, electrode in implant.earray.electrodes.items():
+            for name, electrode in implant.electrode_array.electrodes.items():
                 electrodes[str(i) + "-" + str(name)] = electrode
             
-        self._earray = ElectrodeArray(electrodes)
+        self._electrode_array = ElectrodeArray(electrodes)
 
     def prepare_stim(self, source):
         """Prepare stimulation for an ensemble implant.

@@ -198,7 +198,7 @@ def test_LinearEdgeThread():
     # elecs arent actually at this spot, but are on the edge, a few microns off
     zs = []
     for e in thread.electrode_objects:
-        npt.assert_almost_equal(e.x, thread.r + 7 // 2)
+        npt.assert_almost_equal(e.x, thread.radius + 7 // 2)
         npt.assert_almost_equal(e.y, 0)
         npt.assert_almost_equal(e.rot, thread.rot)
         zs.append(e.z)
@@ -208,7 +208,7 @@ def test_LinearEdgeThread():
     thread = LinearEdgeThread(orient=[1, 0, 0])
     xs = []
     for e in thread.electrode_objects:
-        npt.assert_almost_equal(e.z, -thread.r - 7 // 2)
+        npt.assert_almost_equal(e.z, -thread.radius - 7 // 2)
         npt.assert_almost_equal(e.y, 0)
         xs.append(e.x)
     npt.assert_equal(np.allclose(np.diff(xs), thread.spacing), True)
@@ -227,7 +227,7 @@ def test_LinearEdgeThread_defaults():
     thread = LinearEdgeThread()
     npt.assert_equal(isinstance(thread, NeuralinkThread), True)
     npt.assert_almost_equal(thread.loc, [0, 0, 0])
-    npt.assert_almost_equal(thread.r, 5)
+    npt.assert_almost_equal(thread.radius, 5)
     npt.assert_equal(thread.n_elecs, 32)
     npt.assert_almost_equal(thread.spacing, 50)
     npt.assert_almost_equal(thread.insertion_depth, 0)
@@ -247,7 +247,7 @@ def test_LinearEdgeThread_defaults():
 
 def test_LinearEdgeThread_geometry():
     thread = LinearEdgeThread(10, 20, 30, n_elecs=4, spacing=25,
-                              insertion_depth=100, r=8)
+                              insertion_depth=100, radius=8)
     npt.assert_almost_equal(thread.thread_length, 4 * 25 + 1000 + 100)
     npt.assert_equal(thread.n_electrodes, 4)
     # Default orientation is +z, so electrodes start `insertion_depth` below
@@ -283,13 +283,17 @@ def test_LinearEdgeThread_stim():
 
 
 def test_LinearEdgeThread_pprint():
-    thread = LinearEdgeThread(1, 2, 3, n_elecs=4, spacing=25, r=8)
+    thread = LinearEdgeThread(1, 2, 3, n_elecs=4, spacing=25, radius=8)
     params = thread._pprint_params()
     npt.assert_equal(params['location'], (1, 2, 3))
     npt.assert_almost_equal(params['angles'], thread.angles)
-    npt.assert_equal(params['r'], 8)
+    npt.assert_equal(params['radius'], 8)
     npt.assert_equal(params['n_elecs'], 4)
     npt.assert_equal(params['spacing'], 25)
+    # The thread radius is spelled out; the old `r` is gone:
+    npt.assert_equal(hasattr(thread, 'r'), False)
+    with pytest.raises(TypeError):
+        LinearEdgeThread(1, 2, 3, r=8)
     # Inherited from Implant:
     npt.assert_equal(params['safe_mode'], False)
     npt.assert_equal('LinearEdgeThread' in str(thread), True)
@@ -353,28 +357,30 @@ def _ax3d():
                                     LinearEdgeThread(100, 0, 0)]),
                  id='Neuralink'),
 ])
-def test_plot3D(make_obj):
+def test_plot3d(make_obj):
     obj = make_obj()
+    # The method is spelled `plot3d`; the old `plot3D` is gone:
+    npt.assert_equal(hasattr(obj, 'plot3D'), False)
 
     # Plots onto a given 3D axis:
     plt.close('all')
     ax = _ax3d()
-    npt.assert_equal(obj.plot3D(ax=ax) is not None, True)
+    npt.assert_equal(obj.plot3d(ax=ax) is not None, True)
 
     # Creates its own 3D axis when none is given:
     plt.close('all')
-    npt.assert_equal(obj.plot3D() is not None, True)
+    npt.assert_equal(obj.plot3d() is not None, True)
 
     # ... and honors `figsize` when it does:
     plt.close('all')
-    ax = obj.plot3D(figsize=(8, 6))
+    ax = obj.plot3d(figsize=(8, 6))
     npt.assert_almost_equal(ax.figure.get_size_inches(), (8, 6))
 
     # A 2D axis is rejected:
     plt.close('all')
     _, ax2d = plt.subplots()
     with pytest.raises(ValueError):
-        obj.plot3D(ax=ax2d)
+        obj.plot3d(ax=ax2d)
     plt.close('all')
 
 
@@ -386,31 +392,31 @@ def test_plot3D(make_obj):
     pytest.param(lambda: Neuralink([LinearEdgeThread(0, 0, 0, n_elecs=2)]),
                  id='Neuralink'),
 ])
-def test_plot3D_reuses_existing_3d_axis(make_obj):
+def test_plot3d_reuses_existing_3d_axis(make_obj):
     # An existing 3D axis is drawn onto rather than replaced:
     plt.close('all')
     ax = _ax3d()
-    npt.assert_equal(make_obj().plot3D() is ax, True)
+    npt.assert_equal(make_obj().plot3d() is ax, True)
     plt.close('all')
 
 
-def test_plot3D_surfaces():
+def test_plot3d_surfaces():
     # The thread draws its own shaft plus one surface per electrode:
     plt.close('all')
-    ax = LinearEdgeThread(n_elecs=3).plot3D()
+    ax = LinearEdgeThread(n_elecs=3).plot3d()
     npt.assert_equal(len(ax.collections), 4)
 
     # ... and the implant draws every thread:
     plt.close('all')
     ax = Neuralink([LinearEdgeThread(n_elecs=3),
-                    LinearEdgeThread(500, 0, 0, n_elecs=3)]).plot3D()
+                    LinearEdgeThread(500, 0, 0, n_elecs=3)]).plot3d()
     npt.assert_equal(len(ax.collections), 8)
     plt.close('all')
 
 
 def test_Neuralink_from_neuropythy_requires_neuropythy_map():
-    # The vfmap must be a NeuropythyMap; this guard runs before any dataset
-    # is touched, so it is testable without neuropythy installed:
+    # The visual_field_map must be a NeuropythyMap; this guard runs before any
+    # dataset is touched, so it is testable without neuropythy installed:
     from pulse2percept.topography import Watson2014Map
     with pytest.raises(TypeError):
         Neuralink.from_neuropythy(Watson2014Map())
@@ -566,12 +572,13 @@ def test_Neuralink_from_cortical_map_requires_thread():
 def test_Neuralink_from_cortical_map_non_neuropythy():
     # A plain CorticalMap falls through to EnsembleImplant.from_cortical_map,
     # which just centers a thread on each cortical location:
-    vfmap = Polimeni2006Map()
-    nlink = Neuralink.from_cortical_map(LinearEdgeThread, vfmap,
+    visual_field_map = Polimeni2006Map()
+    nlink = Neuralink.from_cortical_map(LinearEdgeThread, visual_field_map,
                                         xrange=(-1, 1), yrange=(0, 0),
                                         step=1)
     npt.assert_equal(isinstance(nlink, Neuralink), True)
-    xc, yc = vfmap.dva_to_v1(np.array([-1., 0., 1.]), np.array([0., 0., 0.]))
+    xc, yc = visual_field_map.dva_to_v1(np.array([-1., 0., 1.]),
+                                        np.array([0., 0., 0.]))
     npt.assert_equal(len(nlink.implants), 3)
     for thread, x, y in zip(nlink.implants.values(), xc, yc):
         npt.assert_almost_equal(thread.x, x, decimal=3)
@@ -597,19 +604,20 @@ def test_Neuralink_from_cortical_map_neuropythy():
 
 def test_LinearEdgeThread_units():
     """A thread walks down its own insertion direction, so it normalizes too"""
-    bare = LinearEdgeThread(1000., -500., 0., r=5., n_elecs=8, spacing=50.,
-                            insertion_depth=100.)
-    unitful = LinearEdgeThread(1 * mm, -0.5 * mm, 0 * um, r=5 * um, n_elecs=8,
-                               spacing=0.05 * mm, insertion_depth=0.1 * mm)
-    npt.assert_allclose(unitful.earray.coordinates(),
-                        bare.earray.coordinates(), rtol=1e-12)
-    for attr in ('x', 'y', 'z', 'r', 'spacing', 'insertion_depth'):
+    bare = LinearEdgeThread(1000., -500., 0., radius=5., n_elecs=8,
+                            spacing=50., insertion_depth=100.)
+    unitful = LinearEdgeThread(1 * mm, -0.5 * mm, 0 * um, radius=5 * um,
+                               n_elecs=8, spacing=0.05 * mm,
+                               insertion_depth=0.1 * mm)
+    npt.assert_allclose(unitful.electrode_array.coordinates(),
+                        bare.electrode_array.coordinates(), rtol=1e-12)
+    for attr in ('x', 'y', 'z', 'radius', 'spacing', 'insertion_depth'):
         npt.assert_equal(isinstance(getattr(unitful, attr), Quantity), False)
     npt.assert_allclose(unitful.thread_length, bare.thread_length, rtol=1e-12)
     # The electrode's own radii, too:
     elec = EllipsoidElectrode(rx=0.007 * mm, ry=7 * um, rz=0.012 * mm)
     npt.assert_allclose([elec.rx, elec.ry, elec.rz], [7, 7, 12], rtol=1e-12)
-    for kwargs in ({'x': 5 * ms}, {'r': 10 * uA}, {'spacing': 1 * ms},
+    for kwargs in ({'x': 5 * ms}, {'radius': 10 * uA}, {'spacing': 1 * ms},
                    {'insertion_depth': 2 * dva}):
         with pytest.raises(DimensionMismatchError):
             LinearEdgeThread(**kwargs)

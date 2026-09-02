@@ -44,8 +44,8 @@ class Implant(PrettyPrint):
 
     Parameters
     ----------
-    earray : :py:class:`~pulse2percept.implants.ElectrodeArray` or
-             :py:class:`~pulse2percept.implants.Electrode`
+    electrode_array : :py:class:`~pulse2percept.implants.ElectrodeArray` or
+                      :py:class:`~pulse2percept.implants.Electrode`
         The electrode array used to deliver electrical stimuli to the retina.
     eye : 'LE' or 'RE'
         A string indicating whether the system is implanted in the left ('LE')
@@ -97,14 +97,14 @@ class Implant(PrettyPrint):
     --------
     A system in the left eye made from a single
     :py:class:`~pulse2percept.implants.DiskElectrode` with radius
-    r=100um sitting at x=200um, y=-50um, z=10um:
+    radius=100um sitting at x=200um, y=-50um, z=10um:
 
     >>> from pulse2percept.implants import DiskElectrode, Implant
     >>> implant = Implant(DiskElectrode(200, -50, 10, 100), eye='LE')
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_earray', '_eye', 'safe_mode', 'preprocess',
+    __slots__ = ('_electrode_array', '_eye', 'safe_mode', 'preprocess',
                  '_encoder', '_raster', '_max_current', '_thresholds')
 
     #: Unit used by prepared stimuli. Defaults to electrical current.
@@ -123,10 +123,10 @@ class Implant(PrettyPrint):
     #: .. versionadded:: 0.11.0
     family = None
 
-    def __init__(self, earray, eye='RE', preprocess=False,
+    def __init__(self, electrode_array, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
                  thresholds=None):
-        self.earray = earray
+        self.electrode_array = electrode_array
         self.eye = eye
         self.safe_mode = safe_mode
         self.preprocess = preprocess
@@ -139,7 +139,8 @@ class Implant(PrettyPrint):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = {
-            'earray': self.earray, 'safe_mode': self.safe_mode,
+            'electrode_array': self.electrode_array,
+            'safe_mode': self.safe_mode,
             'preprocess': self.preprocess
         }
         if hasattr(self, "eye"):
@@ -428,7 +429,7 @@ class Implant(PrettyPrint):
     def reshape_stim(self, stim):
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
             # Electrode coordinates define the image sampling grid.
-            x, y = self.earray.coordinates(um)[:, :2].T
+            x, y = self.electrode_array.coordinates(um)[:, :2].T
 
             # Sample color channels before grayscale conversion to avoid a
             # full-resolution grayscale copy.
@@ -513,33 +514,36 @@ class Implant(PrettyPrint):
                                  "enable stimulus coloring.")
             if stim_cmap == True:
                 stim_cmap = 'YlOrRd'
-        return self.earray.plot(annotate=annotate, autoscale=autoscale, ax=ax,
-                                color_stim=color_stim, cmap=stim_cmap)
+        return self.electrode_array.plot(annotate=annotate,
+                                         autoscale=autoscale, ax=ax,
+                                         color_stim=color_stim,
+                                         cmap=stim_cmap)
 
     def activate(self, electrodes):
-        self.earray.activate(electrodes)
+        self.electrode_array.activate(electrodes)
 
     def deactivate(self, electrodes):
-        self.earray.deactivate(electrodes)
+        self.electrode_array.deactivate(electrodes)
 
     @property
-    def earray(self):
+    def electrode_array(self):
         """Electrode array
 
         """
-        return self._earray
+        return self._electrode_array
 
-    @earray.setter
-    def earray(self, earray):
-        """Electrode array setter (called upon ``self.earray = earray``)"""
+    @electrode_array.setter
+    def electrode_array(self, electrode_array):
+        """Electrode array setter (called upon ``self.electrode_array =
+        electrode_array``)"""
         # Assign the electrode array:
-        if isinstance(earray, Electrode):
+        if isinstance(electrode_array, Electrode):
             # For convenience, build an array from a single electrode:
-            earray = ElectrodeArray(earray)
-        if not isinstance(earray, ElectrodeArray):
-            raise TypeError(f"'earray' must be an ElectrodeArray object, not "
-                            f"{type(earray)}.")
-        self._earray = earray
+            electrode_array = ElectrodeArray(electrode_array)
+        if not isinstance(electrode_array, ElectrodeArray):
+            raise TypeError(f"'electrode_array' must be an ElectrodeArray "
+                            f"object, not {type(electrode_array)}.")
+        self._electrode_array = electrode_array
 
     def prepare_stim(self, source):
         """Turn a source into stimulation the implant can deliver.
@@ -620,8 +624,7 @@ class Implant(PrettyPrint):
             stim = self.encoder.encode(stim, implant=self)
 
         # If the stim is larger than the number of electrodes, most commonly
-        # we're dealing with an image or video stim. In this case, we might
-        # want to try and reshape the stimulus to fit the array:
+        # we're dealing with an image or video stim, so try to reshape:
         if len(stim.electrodes) > self.n_electrodes:
             stim = self.reshape_stim(stim)
 
@@ -630,12 +633,12 @@ class Implant(PrettyPrint):
 
         # Make sure all electrode names are valid:
         for electrode in stim.electrodes:
-            # Invalid index will return None:
-            if not self.earray[electrode]:
+            try:
+                self.electrode_array[electrode]
+            except (KeyError, IndexError, TypeError):
                 raise ValueError(f'Electrode "{electrode}" not found in '
-                                 f'implant.')
-        # Remove deactivated electrodes without modifying the caller's source.
-        # `_without_electrodes` preserves structured stimulus information.
+                                 f'implant.') from None
+        # Remove deactivated electrodes without modifying the caller's source:
         off = [name for (name, e) in self.electrodes.items()
                if not e.activated and name in stim.electrodes]
         if off:
@@ -680,15 +683,19 @@ class Implant(PrettyPrint):
     def n_electrodes(self):
         """Number of electrodes in the array
 
-        This is equivalent to calling ``earray.n_electrodes``.
+        This is equivalent to calling ``electrode_array.n_electrodes``.
         """
-        return self.earray.n_electrodes
+        return self.electrode_array.n_electrodes
 
     def __getitem__(self, item):
-        return self.earray[item]
+        return self.electrode_array[item]
+
+    def __len__(self):
+        """.. versionadded:: 0.11.0"""
+        return len(self.electrode_array)
 
     def __iter__(self):
-        return iter(self.earray)
+        return iter(self.electrode_array)
 
     @property
     def electrodes(self):
@@ -703,20 +710,21 @@ class Implant(PrettyPrint):
                 print(name, electrode)
 
         You can access an individual electrode by indexing directly into the
-        prosthesis system object, e.g. ``implant['A1']`` or ``implant[0]``.
+        implant, e.g. ``implant['A1']`` or ``implant[0]``, and ask how many
+        there are with ``len(implant)``.
 
         """
-        return self.earray.electrodes
+        return self.electrode_array.electrodes
 
     @property
     def electrode_names(self):
         """Return a list of all electrode names in the electrode array"""
-        return self.earray.electrode_names
+        return self.electrode_array.electrode_names
 
     @property
     def electrode_objects(self):
         """Return a list of all electrode objects in the array"""
-        return self.earray.electrode_objects
+        return self.electrode_array.electrode_objects
 
 
 
@@ -753,12 +761,12 @@ class GridImplant(Implant):
     names : (name_rows, name_cols), optional
         Naming convention for rows and columns; see
         :py:class:`~pulse2percept.implants.ElectrodeGrid`.
-    type : {'rect', 'hex'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
     orientation : {'horizontal', 'vertical'}, optional
         Which way a hex grid staggers; see
         :py:class:`~pulse2percept.implants.ElectrodeGrid`.
-    etype : :py:class:`~pulse2percept.implants.Electrode`, optional
+    electrode_type : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class.
     eye : 'LE' or 'RE', optional
         The eye in which the implant is implanted. Device metadata: unlike
@@ -774,10 +782,11 @@ class GridImplant(Implant):
         How the stimulator takes turns between electrodes.
     max_current : float, optional
         The total current (uA) the stimulator can source at any one instant.
-    **electrode_kwargs :
-        Any additional arguments passed to the ``etype`` constructor, such as
-        radius ``r`` for
-        :py:class:`~pulse2percept.implants.DiskElectrode`.
+    **electrode_params :
+        Keyword arguments passed to the ``electrode_type`` constructor, such
+        as ``radius`` for
+        :py:class:`~pulse2percept.implants.DiskElectrode`; see
+        :py:class:`~pulse2percept.implants.ElectrodeGrid`.
 
     Examples
     --------
@@ -793,26 +802,27 @@ class GridImplant(Implant):
 
     >>> from pulse2percept.implants import DiskElectrode, GridImplant
     >>> from pulse2percept.units import um
-    >>> implant = GridImplant(shape=(20, 20), spacing=400 * um, type='hex',
-    ...                       etype=DiskElectrode, r=75 * um)
+    >>> implant = GridImplant(shape=(20, 20), spacing=400 * um,
+    ...                       grid_type='hex', electrode_type=DiskElectrode,
+    ...                       radius=75 * um)
     >>> implant['A1']  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    DiskElectrode(activated=True, name='A1', r=75.0, x=-3700.0,
-                  y=-3290.89..., z=0...)
+    DiskElectrode(activated=True, name='A1', radius=75.0,
+                  x=-3700.0, y=-3290.89..., z=0...)
 
     """
-    # Frozen class: geometry lives on `earray`, not duplicated here
+    # Frozen class: geometry lives on `electrode_array`, not duplicated here
     __slots__ = ()
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
-                 type='rect', orientation='horizontal', etype=PointSource,
-                 eye='RE', preprocess=False, safe_mode=False,
-                 encoder=None, raster=None, max_current=None,
-                 **electrode_kwargs):
-        earray = ElectrodeGrid(shape, spacing, x=x, y=y, z=z, rot=rot,
-                               names=names, type=type,
-                               orientation=orientation, etype=etype,
-                               **electrode_kwargs)
-        super().__init__(earray, eye=eye, preprocess=preprocess,
+                 grid_type='rect', orientation='horizontal',
+                 electrode_type=PointSource, eye='RE', preprocess=False,
+                 safe_mode=False, encoder=None, raster=None, max_current=None,
+                 **electrode_params):
+        electrode_array = ElectrodeGrid(
+            shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
+            grid_type=grid_type, orientation=orientation,
+            electrode_type=electrode_type, **electrode_params)
+        super().__init__(electrode_array, eye=eye, preprocess=preprocess,
                          safe_mode=safe_mode, encoder=encoder, raster=raster,
                          max_current=max_current)
 
@@ -820,9 +830,10 @@ class GridImplant(Implant):
 @deprecated(alt_func='GridImplant', deprecated_version='0.11.0',
             removed_version='0.12.0',
             extra_msg='Not a drop-in replacement: pass '
-                      '``etype=DiskElectrode, r=75, preprocess=True`` to keep '
-                      'these defaults, and note that a left-eye grid keeps '
-                      'the column names of a right-eye one.')
+                      '``electrode_type=DiskElectrode, radius=75, '
+                      'preprocess=True`` to keep these defaults, and note '
+                      'that a left-eye grid keeps the column names of a '
+                      'right-eye one.')
 class RectangleImplant(Implant):
     """ A generic rectangular implant
 
@@ -830,8 +841,8 @@ class RectangleImplant(Implant):
 
         Use :py:class:`~pulse2percept.implants.GridImplant` instead, although
         that is not a drop-in replacement. Pass
-        ``etype=DiskElectrode, r=75`` to keep the old geometry and
-        ``preprocess=True`` to keep preprocessing.
+        ``electrode_type=DiskElectrode, radius=75`` to keep the old geometry
+        and ``preprocess=True`` to keep preprocessing.
         Also note that left and right eyes have the same column names (no
         automatic flipping).
 
@@ -861,8 +872,9 @@ class RectangleImplant(Implant):
         self.preprocess = preprocess
         self.shape = shape
         names = ('A', '1')
-        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
-                                    rot=rot, names=names, etype=DiskElectrode)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, spacing, x=x, y=y, z=z, radius=r, rot=rot,
+            names=names, electrode_type=DiskElectrode)
 
         # Set left/right eye:
         if not isinstance(eye, str):
@@ -874,18 +886,18 @@ class RectangleImplant(Implant):
         if eye == 'LE':
             # TODO: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
-            names = self.earray.electrode_names
-            objects = self.earray.electrode_objects
-            names = np.array(names).reshape(self.earray.shape)
+            names = self.electrode_array.electrode_names
+            objects = self.electrode_array.electrode_objects
+            names = np.array(names).reshape(self.electrode_array.shape)
             # Reverse column names:
-            for row in range(self.earray.shape[0]):
+            for row in range(self.electrode_array.shape[0]):
                 names[row] = names[row][::-1]
             # Build a new ordered dict:
             electrodes = OrderedDict()
             for name, obj in zip(names.ravel(), objects):
                 electrodes.update({name: obj})
-            # Assign the new ordered dict to earray:
-            self.earray._electrodes = electrodes
+            # Assign the new ordered dict to electrode_array:
+            self.electrode_array._electrodes = electrodes
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()

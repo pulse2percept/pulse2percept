@@ -73,10 +73,10 @@ def implant_at(x_um=0, y_um=0, encoder=True):
 
 
 def model_for(implant, **kwargs):
-    # An explicit `vfmap`: the retinotopy is what the expected values below
-    # are computed through, so it cannot be left to a default.
+    # An explicit `visual_field_map`: the retinotopy is what the expected
+    # values below are computed through, so it cannot be left to a default.
     params = {'rho': 200, 'xrange': (-3, 3), 'yrange': (-3, 3), 'step': 1,
-              'vfmap': Curcio1990Map()}
+              'visual_field_map': Curcio1990Map()}
     params.update(kwargs)
     return ScoreboardModel(implant=implant, **params).build()
 
@@ -92,7 +92,7 @@ def seen_by(model, scene, gaze=None):
         (len(model.implant.electrode_names), -1)) / AMP_MAX
 
 
-def test_the_model_supplies_its_own_vfmap():
+def test_the_model_supplies_its_own_visual_field_map():
     """The caller never names a retinotopy; the model already has one"""
     scene = scene_of()
     implant = implant_at(*Curcio1990Map().dva_to_ret(6.0, 0.0))
@@ -101,7 +101,7 @@ def test_the_model_supplies_its_own_vfmap():
     # Give the model a different retinotopy and the same electrode reads a
     # different part of the scene, with nothing else changing and nothing
     # about the map appearing at the call site:
-    watson = model_for(implant, vfmap=Watson2014Map())
+    watson = model_for(implant, visual_field_map=Watson2014Map())
     npt.assert_equal(np.allclose(seen_by(watson, scene), ramp_at(6.0)),
                      False)
 
@@ -109,9 +109,9 @@ def test_the_model_supplies_its_own_vfmap():
 @pytest.mark.parametrize('x_dva', [-8.0, 2.5, 7.0])
 def test_a_nonlinear_retinal_map_still_registers(x_dva):
     """Not 280 um/dva, and not linear either"""
-    vfmap = SquareMap()
-    implant = implant_at(*vfmap.dva_to_ret(x_dva, 0.0))
-    model = model_for(implant, vfmap=vfmap)
+    visual_field_map = SquareMap()
+    implant = implant_at(*visual_field_map.dva_to_ret(x_dva, 0.0))
+    model = model_for(implant, visual_field_map=visual_field_map)
     npt.assert_almost_equal(seen_by(model, scene_of()), [[ramp_at(x_dva)]],
                             decimal=4)
 
@@ -142,9 +142,9 @@ def test_y_orientation_survives_the_map():
     data = np.tile(np.linspace(0, 1, SCENE_PX).reshape((-1, 1)),
                    (1, SCENE_PX))
     scene = scene_of(ImageStimulus(data))
-    vfmap = Curcio1990Map()
+    visual_field_map = Curcio1990Map()
     for y_dva in (5.0, -5.0):
-        implant = implant_at(*vfmap.dva_to_ret(0.0, y_dva))
+        implant = implant_at(*visual_field_map.dva_to_ret(0.0, y_dva))
         npt.assert_almost_equal(seen_by(model_for(implant), scene),
                                 [[(HALF - y_dva) / (2 * HALF)]], decimal=4)
 
@@ -322,7 +322,7 @@ def test_a_scene_needs_an_encoder_and_a_retina():
                                 step=1).build()
     with pytest.raises(ValueError) as excinfo:
         cortical.predict_percept(scene)
-    npt.assert_equal('vfmap' in str(excinfo.value), True)
+    npt.assert_equal('visual_field_map' in str(excinfo.value), True)
     # ... and neither has a temporal-only model:
     from pulse2percept.models import Nanduri2012Temporal
     temporal = Model(temporal=Nanduri2012Temporal()).build()
@@ -420,10 +420,10 @@ def test_the_intact_periphery_is_the_scene_exactly():
 
 def test_the_phosphene_lands_where_the_electrode_looks():
     """Position and y orientation, all the way through the composed result"""
-    vfmap = Curcio1990Map()
+    visual_field_map = Curcio1990Map()
     scene = scene_of(scotoma=Scotoma.circle(12), scotoma_fill=0.0)
     for x_dva, y_dva in [(4.0, 0.0), (0.0, 4.0), (-4.0, 0.0), (0.0, -4.0)]:
-        implant = implant_at(*vfmap.dva_to_ret(x_dva, y_dva))
+        implant = implant_at(*visual_field_map.dva_to_ret(x_dva, y_dva))
         model = model_for(implant, rho=80, xrange=(-8, 8), yrange=(-8, 8),
                           step=0.5)
         frame = model.predict_percept(scene, vmax=2).data[..., 0]
@@ -505,11 +505,12 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
                   scotoma=Scotoma.circle(6), scotoma_fill=0.0)
 
     def spatiotemporal():
-        return Model(spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
-                                               xrange=(-4, 4),
-                                               yrange=(-4, 4), step=0.5,
-                                               vfmap=Curcio1990Map()),
-                     temporal=FadingTemporal()).build()
+        return Model(
+            spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
+                                      xrange=(-4, 4), yrange=(-4, 4),
+                                      step=0.5,
+                                      visual_field_map=Curcio1990Map()),
+            temporal=FadingTemporal()).build()
 
     raw = spatiotemporal().predict_percept(
         Scene(source, fov=(SCENE_PX, SCENE_PX)))

@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.stimuli.LogoBVL`, 
    :py:class:`~pulse2percept.stimuli.LogoUCSB`, 
    :py:class:`~pulse2percept.stimuli.SnellenChart`"""
+import os
 from os.path import dirname, join
 import numpy as np
 import warnings
@@ -24,6 +25,13 @@ from ..utils import center_image, shift_image, scale_image, trim_image
 from ..utils.images import _as_writable
 
 
+def _as_filename(source):
+    """Return ``source`` as a string path, or None if it names no file"""
+    if isinstance(source, (str, os.PathLike)):
+        return os.fsdecode(source)
+    return None
+
+
 class ImageStimulus(Stimulus):
     """ImageStimulus
 
@@ -40,10 +48,18 @@ class ImageStimulus(Stimulus):
 
     Parameters
     ----------
-    source : str
-        Path to image file. Supported image types include JPG, PNG, and TIF;
-        and are inferred from the file ending.
-        Use :py:class:`~pulse2percept.stimuli.VideoStimulus` for GIFs.
+    source : str, os.PathLike, ImageStimulus, or np.ndarray
+        Path to an image file (``str`` or :py:class:`pathlib.Path`). File types
+        are inferred from the file ending (support types include JPG, PNG, and
+        TIF).
+
+        .. note::
+
+            For GIFs, use :py:class:`~pulse2percept.stimuli.VideoStimulus`.
+
+        .. versionchanged:: 0.11.0
+            A :py:class:`pathlib.Path` is accepted wherever a filename is.
+            ``metadata['source']`` is always a string.
 
     resize : (height, width) or None, optional
         Shape of the resized image. If one of the dimensions is set to -1,
@@ -85,10 +101,11 @@ class ImageStimulus(Stimulus):
             metadata = {'user': metadata}
         # The buffer the caller still holds, if any:
         borrowed = None
-        if isinstance(source, str):
+        fname = _as_filename(source)
+        if fname is not None:
             # Filename provided:
-            img = imread(source)
-            metadata['source'] = source
+            img = imread(fname)
+            metadata['source'] = fname
             metadata['source_shape'] = img.shape
         elif isinstance(source, ImageStimulus):
             img = source.data.reshape(source.img_shape)
@@ -100,8 +117,8 @@ class ImageStimulus(Stimulus):
             img = source
             borrowed = source
         else:
-            raise TypeError(f"Source must be a filename or another "
-                            f"ImageStimulus, not {type(source)}.")
+            raise TypeError(f"Source must be a filename, an array, or "
+                            f"another ImageStimulus, not {type(source)}.")
         if img.ndim < 2 or img.ndim > 3:
             raise ValueError(f"Images must have 2 or 3 dimensions, not "
                              f"{img.ndim}.")
@@ -692,11 +709,15 @@ class ImageStimulus(Stimulus):
 
         Parameters
         ----------
-        fname : str
+        fname : str or os.PathLike
             The name of the image file to be created. Image type will be
             inferred from the file extension.
 
+            .. versionchanged:: 0.11.0
+                A :py:class:`pathlib.Path` is accepted.
+
         """
+        fname = os.fsdecode(fname)
         # if vmax is not passed by user
         if vmax is None:
             vmax = self.data.max()

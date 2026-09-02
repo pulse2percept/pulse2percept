@@ -27,8 +27,13 @@ def test_PhotovoltaicPixel():
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
-    npt.assert_almost_equal(electrode.r, 3)
-    npt.assert_almost_equal(electrode.a, 4)
+    npt.assert_almost_equal(electrode.radius, 3)
+    npt.assert_almost_equal(electrode.apothem, 4)
+    # The geometry is spelled out, and the old abbreviations are gone:
+    npt.assert_equal(PhotovoltaicPixel(0, 1, 2, radius=3, apothem=4).radius, 3)
+    for kwargs in ({'r': 3, 'apothem': 4}, {'radius': 3, 'a': 4}):
+        with pytest.raises(TypeError):
+            PhotovoltaicPixel(0, 1, 2, **kwargs)
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
     npt.assert_equal(hasattr(electrode, '__dict__'), False)
@@ -62,7 +67,7 @@ def test_PRIMAPivotal(ztype, x, y, rot):
 
     # Make sure number of electrodes is correct
     npt.assert_equal(prima.n_electrodes, n_elec)
-    npt.assert_equal(len(prima.earray.electrodes), n_elec)
+    npt.assert_equal(len(prima.electrode_array.electrodes), n_elec)
 
     # Coordinates of A6 when device is not rotated:
     xy = np.array([-476.31, -925.0]).T
@@ -78,7 +83,7 @@ def test_PRIMAPivotal(ztype, x, y, rot):
 
     # Make sure the radius is correct
     for e in ['A7', 'B3', 'C5', 'D7', 'E9', 'F11', 'G13', 'H14']:
-        npt.assert_almost_equal(prima[e].r, 14)
+        npt.assert_almost_equal(prima[e].radius, 14)
 
     # Make sure the pitch is correct:
     distF6E6 = np.sqrt((prima['E6'].x - prima['F6'].x) ** 2 +
@@ -112,7 +117,7 @@ def test_Lorach2015Array(ztype, x, y, rot):
     npt.assert_equal(hasattr(prima, '__dict__'), False)
 
     # Make sure number of electrodes is correct
-    npt.assert_equal(len(prima.earray.electrodes), n_elec)
+    npt.assert_equal(len(prima.electrode_array.electrodes), n_elec)
     npt.assert_equal(prima.n_electrodes, n_elec)
 
     # Coordinates of A6 when device is not rotated:
@@ -129,7 +134,7 @@ def test_Lorach2015Array(ztype, x, y, rot):
 
     # Make sure the radius is correct
     for e in ['A6', 'B4', 'C5', 'D7', 'E9', 'F11', 'G13', 'H14']:
-        npt.assert_almost_equal(prima[e].r, 10)
+        npt.assert_almost_equal(prima[e].radius, 10)
 
     # Make sure the pitch is correct:
     distF6E6 = np.sqrt((prima['E6'].x - prima['F6'].x) ** 2 +
@@ -151,13 +156,13 @@ HUANG_VARIANTS = [(55, 421, 526, 22), (40, 821, 1027, 16),
 
 def _column_profile(implant):
     """Return the number of pixels in each lattice column."""
-    x = np.round(implant.earray.coordinates()[:, 0], 6)
+    x = np.round(implant.electrode_array.coordinates()[:, 0], 6)
     return [int(n) for n in np.unique(x, return_counts=True)[1]]
 
 
 def _mask_fingerprint(implant):
     """Return a placement-invariant digest of the pixel layout."""
-    xy = implant.earray.coordinates()[:, :2]
+    xy = implant.electrode_array.coordinates()[:, :2]
     xy = np.round((xy - 0.5 * (xy.min(axis=0) + xy.max(axis=0))) /
                   implant.spacing, 3)
     xy = xy[np.lexsort((xy[:, 1], xy[:, 0]))]
@@ -166,7 +171,7 @@ def _mask_fingerprint(implant):
 
 def _nn_spacing(implant):
     """Return each pixel's nearest-neighbor distance."""
-    xy = implant.earray.coordinates()[:, :2]
+    xy = implant.electrode_array.coordinates()[:, :2]
     return cKDTree(xy).query(xy, k=2)[0][:, 1]
 
 
@@ -190,9 +195,9 @@ def test_Ho2019FlatArray(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
 
     # The published pixel count:
     npt.assert_equal(prima.n_electrodes, n_elec)
-    npt.assert_equal(len(prima.earray.electrodes), n_elec)
+    npt.assert_equal(len(prima.electrode_array.electrodes), n_elec)
 
-    xy = prima.earray.coordinates()[:, :2]
+    xy = prima.electrode_array.coordinates()[:, :2]
     # Nearest-neighbor center spacing, in every direction:
     dist = np.linalg.norm(xy[:, None, :] - xy[None, :, :], axis=-1)
     np.fill_diagonal(dist, np.inf)
@@ -201,14 +206,14 @@ def test_Ho2019FlatArray(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
     # Row spacing is derived, not independent:
     npt.assert_almost_equal(prima.row_spacing, pixel_size * np.sqrt(3) / 2)
 
-    for elec in prima.earray.electrode_objects:
+    for elec in prima.electrode_array.electrode_objects:
         # Pixel bodies are as wide as the lattice, with no open gap:
         npt.assert_almost_equal(elec.width, pixel_size)
         npt.assert_almost_equal(prima.pixel_width, pixel_size)
         npt.assert_almost_equal(prima.spacing, pixel_size)
         npt.assert_almost_equal(prima.gap, 0)
         # Active electrode:
-        npt.assert_almost_equal(elec.r, elec_radius)
+        npt.assert_almost_equal(elec.radius, elec_radius)
         # Hex bodies turn with the lattice:
         npt.assert_almost_equal(elec.rot, rot)
         npt.assert_equal(elec.orientation, 'vertical')
@@ -230,10 +235,10 @@ def test_Ho2019FlatArray_units(pixel_size):
     bare = Ho2019FlatArray(pixel_size, x=1000, y=-500, z=-100, rot=30)
     unitful = Ho2019FlatArray(pixel_size * um, x=1 * mm, y=-0.5 * mm,
                               z=-0.1 * mm, rot=30 * deg)
-    npt.assert_equal(list(unitful.earray.electrodes),
-                     list(bare.earray.electrodes))
-    npt.assert_allclose(unitful.earray.coordinates(),
-                        bare.earray.coordinates(), atol=1e-9)
+    npt.assert_equal(list(unitful.electrode_array.electrodes),
+                     list(bare.electrode_array.electrodes))
+    npt.assert_allclose(unitful.electrode_array.coordinates(),
+                        bare.electrode_array.coordinates(), atol=1e-9)
 
 
 def test_Ho2019FlatArray_pixel_size():
@@ -257,7 +262,7 @@ def test_Ho2019FlatArray_F55_layout():
 
     prima = Ho2019FlatArray(55)
     s = prima.spacing
-    xy = prima.earray.coordinates()[:, :2]
+    xy = prima.electrode_array.coordinates()[:, :2]
     # Flat-top axial coordinates, read back off the pixel centers:
     q = xy[:, 0] / (s * np.sqrt(3) / 2)
     r = xy[:, 1] / s - q / 2
@@ -279,9 +284,10 @@ def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
     with pytest.deprecated_call(match='Ho et al'):
         old = old_cls(x=-100, y=400, rot=30)
     new = Ho2019FlatArray(pixel_size, x=-100, y=400, rot=30)
-    npt.assert_equal(list(old.earray.electrodes),
-                     list(new.earray.electrodes))
-    npt.assert_allclose(old.earray.coordinates(), new.earray.coordinates())
+    npt.assert_equal(list(old.electrode_array.electrodes),
+                     list(new.electrode_array.electrodes))
+    npt.assert_allclose(old.electrode_array.coordinates(),
+                        new.electrode_array.coordinates())
     npt.assert_equal(old.pixel_size, pixel_size)
     # Still frozen, and still take the rest of the old signature:
     npt.assert_equal(hasattr(old, '__dict__'), False)
@@ -297,8 +303,10 @@ def test_PRIMA_PRIMA75_are_deprecated(old_cls, new_cls):
     with pytest.deprecated_call():
         old = old_cls(x=-100, y=400, rot=30)
     new = new_cls(x=-100, y=400, rot=30)
-    npt.assert_equal(list(old.earray.electrodes), list(new.earray.electrodes))
-    npt.assert_allclose(old.earray.coordinates(), new.earray.coordinates())
+    npt.assert_equal(list(old.electrode_array.electrodes),
+                     list(new.electrode_array.electrodes))
+    npt.assert_allclose(old.electrode_array.coordinates(),
+                        new.electrode_array.coordinates())
     # Still frozen, and still take the whole old signature:
     npt.assert_equal(hasattr(old, '__dict__'), False)
     with pytest.deprecated_call():
@@ -347,7 +355,7 @@ def test_Huang2021Array(pixel_size, n_elec, n_total, elec_diam, ztype):
     npt.assert_equal(hasattr(prima, '__dict__'), False)
 
     npt.assert_equal(prima.n_electrodes, n_elec)
-    npt.assert_equal(len(prima.earray.electrodes), n_elec)
+    npt.assert_equal(len(prima.electrode_array.electrodes), n_elec)
     npt.assert_equal(prima.n_total_pixels, n_total)
 
     # Pixel bodies tile the lattice with no open gap:
@@ -358,16 +366,16 @@ def test_Huang2021Array(pixel_size, n_elec, n_total, elec_diam, ztype):
     npt.assert_almost_equal(prima.row_spacing, pixel_size * np.sqrt(3) / 2)
     npt.assert_almost_equal(_nn_spacing(prima), pixel_size)
 
-    for elec in prima.earray.electrode_objects:
+    for elec in prima.electrode_array.electrode_objects:
         npt.assert_almost_equal(elec.width, pixel_size)
         # Active electrode is 40% of the pixel size across:
-        npt.assert_almost_equal(2 * elec.r, elec_diam)
+        npt.assert_almost_equal(2 * elec.radius, elec_diam)
         # Flat-top hex bodies that turn with the lattice:
         npt.assert_equal(elec.orientation, 'vertical')
         npt.assert_almost_equal(elec.rot, rot)
 
     # Every pixel body sits on the 1.5 mm substrate, corners included:
-    xy = prima.earray.coordinates()[:, :2]
+    xy = prima.electrode_array.coordinates()[:, :2]
     corner = np.radians(np.arange(6) * 60 + rot)
     verts = ((xy - [x, y])[:, np.newaxis, :] + pixel_size / np.sqrt(3) *
              np.column_stack([np.cos(corner), np.sin(corner)]))
@@ -425,18 +433,18 @@ def test_Huang2021Array_placement(pixel_size):
 
     th = np.deg2rad(rot)
     R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
-    xy = origin.earray.coordinates()[:, :2]
-    npt.assert_allclose(moved.earray.coordinates()[:, :2],
+    xy = origin.electrode_array.coordinates()[:, :2]
+    npt.assert_allclose(moved.electrode_array.coordinates()[:, :2],
                         (R @ xy.T).T + [x, y], atol=1e-9)
     # The footprint is centered on the requested position:
     npt.assert_almost_equal(0.5 * (xy.min(axis=0) + xy.max(axis=0)), (0, 0))
 
     unitful = Huang2021Array(pixel_size * um, x=-0.1 * mm, y=0.4 * mm,
                              z=-0.1 * mm, rot=rot * deg)
-    npt.assert_equal(list(unitful.earray.electrodes),
-                     list(moved.earray.electrodes))
-    npt.assert_allclose(unitful.earray.coordinates(),
-                        moved.earray.coordinates(), atol=1e-9)
+    npt.assert_equal(list(unitful.electrode_array.electrodes),
+                     list(moved.electrode_array.electrodes))
+    npt.assert_allclose(unitful.electrode_array.coordinates(),
+                        moved.electrode_array.coordinates(), atol=1e-9)
 
 
 def _substrate(implant, **kwargs):
@@ -503,7 +511,7 @@ def test_PRIMA_square_substrate(rot):
 def test_PRIMA_substrate_holds_pixels(implant_type, radius):
     """Check that pixel centers lie on the substrate."""
     implant = implant_type()
-    xy = implant.earray.coordinates()[:, :2]
+    xy = implant.electrode_array.coordinates()[:, :2]
     if radius is None:
         npt.assert_array_less(np.abs(xy), 1000)
     else:
@@ -527,7 +535,7 @@ def test_PRIMA_substrate_holds_pixels(implant_type, radius):
 def test_PRIMA_pixel_bodies_vs_substrate(implant_type, radius, whole_bodies):
     """Check which arrays contain clipped rim pixels."""
     implant = implant_type()
-    xy = implant.earray.coordinates()[:, :2]
+    xy = implant.electrode_array.coordinates()[:, :2]
     th = np.radians(np.arange(6) * 60)
     verts = (xy[:, np.newaxis, :] + implant.pixel_width / np.sqrt(3) *
              np.column_stack([np.cos(th), np.sin(th)])).reshape(-1, 2)
@@ -593,14 +601,15 @@ def test_PRIMA_device_center(implant_type, offset):
     coordinate tests would all still pass if a device drifted sideways.
     """
     x, y, rot = -100, 400, 37
-    xy = implant_type(x=x, y=y).earray.coordinates()[:, :2]
+    xy = implant_type(x=x, y=y).electrode_array.coordinates()[:, :2]
     center = 0.5 * (xy.min(axis=0) + xy.max(axis=0))
     npt.assert_almost_equal(center, np.add([x, y], offset))
     # `rot` turns the whole footprint about (x, y), so the offset above is a
     # property of the device rather than of the coordinate axes:
     th = np.deg2rad(rot)
     R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
-    rotated = implant_type(x=x, y=y, rot=rot).earray.coordinates()[:, :2]
+    rotated = implant_type(x=x, y=y, rot=rot).electrode_array.coordinates()[:,
+                                                                            :2]
     npt.assert_almost_equal(rotated, (R @ (xy - [x, y]).T).T + [x, y])
 
 

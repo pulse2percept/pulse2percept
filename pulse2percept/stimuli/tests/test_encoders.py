@@ -42,7 +42,7 @@ def pixel_implant(shape, raster=None):
     implant's electrodes sit exactly on the pixels of a ``shape`` image, so
     sampling one at the other changes nothing about what gets encoded.
     """
-    implant = GridImplant(shape, 200, etype=DiskElectrode, r=50)
+    implant = GridImplant(shape, 200, electrode_type=DiskElectrode, radius=50)
     implant.raster = raster
     return implant
 

@@ -46,14 +46,14 @@ class Orion(Implant):
 
     >>> from pulse2percept.implants.cortex import Orion
     >>> Orion() # doctest: +NORMALIZE_WHITESPACE
-    Orion(earray=ElectrodeGrid, preprocess=False, 
+    Orion(electrode_array=ElectrodeGrid, preprocess=False, 
           safe_mode=False, shape=(10, 7))
 
     Get access to electrode '96':
 
     >>> orion = Orion()
     >>> orion['96'] # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='96', r=1000.0, 
+    DiskElectrode(activated=True, name='96', radius=1000.0,
                   x=3450.0, y=-9640.928378532848, z=0.0)
     """
     # Frozen class: User cannot add more class attributes
@@ -72,18 +72,19 @@ class Orion(Implant):
         self.shape = (10, 7)
         # The row offset is published in millimeters; coordinates are microns:
         spacing = (4200, np.sqrt(3**2-2.1**2) * UM_PER_MM)
-        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, rot=rot,
-                                    names=('A', '-1'), type='hex', r=1000,
-                                    etype=DiskElectrode)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, spacing, x=x, y=y, z=z, rot=rot, names=('A', '-1'),
+            grid_type='hex', radius=1000, electrode_type=DiskElectrode)
         for e in ['A1', 'F7', 'G7', 'H6', 'H7', 'I6', 'I7', 'J5', 'J6', 'J7']:
-            self.earray.remove_electrode(e)
+            self.electrode_array.remove_electrode(e)
         # Hacking the naming scheme:
         names = [f'{i:02}' for i in range(96, 36, -1)]
         electrodes = {}
-        for ename, eobject in zip(names, self.earray.electrode_objects):
+        for ename, eobject in zip(names,
+                                  self.electrode_array.electrode_objects):
             eobject.name = ename
             electrodes.update({ename: eobject})
-        self._earray._electrodes = electrodes
+        self._electrode_array._electrodes = electrodes
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

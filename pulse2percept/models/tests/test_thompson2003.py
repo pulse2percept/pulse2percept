@@ -29,8 +29,9 @@ def test_Thompson2003Spatial():
 
     # Converting ret <=> dva
     model2 = Thompson2003Spatial(implant=ArgusI(),
-                                 vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.vfmap, Watson2014DisplaceMap),
+                                 visual_field_map=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.visual_field_map,
+                                Watson2014DisplaceMap),
                      True)
 
     # Zero in = zero out:
@@ -68,11 +69,11 @@ def test_deepcopy_Thompson2003Spatial():
     npt.assert_equal(copied.is_built, False)
     npt.assert_equal(original != copied, True)
 
-    # Change the copied attribute by "destroying" the vfmap attribute
-    # which should be unique to each SpatialModel object
+    # Change the copied attribute by "destroying" the visual_field_map
+    # attribute which should be unique to each SpatialModel object
     copied = copy.deepcopy(original)
-    copied.vfmap = None
-    npt.assert_equal(original.vfmap is not None, True)
+    copied.visual_field_map = None
+    npt.assert_equal(original.visual_field_map is not None, True)
     npt.assert_equal(original != copied, True)
 
     # Assert "destroying" the original doesn't affect the copied
@@ -93,12 +94,16 @@ def test_Thompson2003Model():
     npt.assert_equal(model.spatial.radius, 987)
 
     # Converting ret <=> dva
-    npt.assert_equal(isinstance(model.spatial.vfmap, Curcio1990Map), True)
-    npt.assert_almost_equal(model.spatial.vfmap.ret_to_dva(0, 0), (0, 0))
-    npt.assert_almost_equal(model.spatial.vfmap.dva_to_ret(0, 0), (0, 0))
+    npt.assert_equal(isinstance(model.spatial.visual_field_map, Curcio1990Map),
+                     True)
+    npt.assert_almost_equal(model.spatial.visual_field_map.ret_to_dva(0, 0),
+                            (0, 0))
+    npt.assert_almost_equal(model.spatial.visual_field_map.dva_to_ret(0, 0),
+                            (0, 0))
     model2 = Thompson2003Model(implant=ArgusI(),
-                               vfmap=Watson2014DisplaceMap())
-    npt.assert_equal(isinstance(model2.spatial.vfmap, Watson2014DisplaceMap),
+                               visual_field_map=Watson2014DisplaceMap())
+    npt.assert_equal(isinstance(model2.spatial.visual_field_map,
+                                Watson2014DisplaceMap),
                      True)
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)
@@ -175,11 +180,11 @@ def test_deepcopy_Thompson2003Model():
     npt.assert_equal(copied.is_built, False)
     npt.assert_equal(original != copied, True)
 
-    # Change the copied attribute by "destroying" the vfmap attribute
-    # which should be unique to each SpatialModel object
+    # Change the copied attribute by "destroying" the visual_field_map
+    # attribute which should be unique to each SpatialModel object
     copied = copy.deepcopy(original)
-    copied.spatial.vfmap = None
-    npt.assert_equal(original.spatial.vfmap is not None, True)
+    copied.spatial.visual_field_map = None
+    npt.assert_equal(original.spatial.visual_field_map is not None, True)
     npt.assert_equal(original != copied, True)
 
     # Assert "destroying" the original doesn't affect the copied

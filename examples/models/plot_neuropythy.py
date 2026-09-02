@@ -59,7 +59,8 @@ Lets use our map in a model and visualize the transform
 .. code-block:: python
 
     model = p2p.models.cortex.ScoreboardModel(
-        implant=p2p.implants.cortex.Cortivis(), vfmap=nmap, regions=['v1'])
+        implant=p2p.implants.cortex.Cortivis(), visual_field_map=nmap,
+        regions=['v1'])
     model.build()
     fig, axes = plt.subplots(ncols=2, figsize=(10, 4))
     model.plot(style='cell', ax=axes[0])
@@ -70,15 +71,15 @@ Lets use our map in a model and visualize the transform
     If we call the usual plot() method, it will be plotting a 2D
     projection of the points. This can look quite strange sometimes, since the
     points are inherently 3D. To plot the points in 3D, we can use the
-    plot3D() method.
+    plot3d() method.
 
 .. code-block:: python
 
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121, projection='3d')
-    model.spatial.plot3D(ax=ax1, style='cell')
+    model.spatial.plot3d(ax=ax1, style='cell')
     ax2 = fig.add_subplot(122, projection='3d')
-    model.spatial.plot3D(ax=ax2, style='scatter')
+    model.spatial.plot3d(ax=ax2, style='scatter')
 
 Neuropythy can use up to 'v1', 'v2', 'v3'. If you want to use all three regions,
 you can specify them as a list.
@@ -90,12 +91,12 @@ Lets use all three regions and plot the result (note it can get a little messy):
     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1', 'v2', 'v3'])
     model = p2p.models.cortex.ScoreboardModel(p2p.implants.cortex.Cortivis(),
                                               xrange=(-20, 20), yrange=(-20, 20), step=0.5,
-                                              vfmap=nmap, regions=['v1', 'v2', 'v3'])
+                                              visual_field_map=nmap, regions=['v1', 'v2', 'v3'])
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121, projection='3d')
-    model.spatial.plot3D(ax=ax1, style='cell')
+    model.spatial.plot3d(ax=ax1, style='cell')
     ax2 = fig.add_subplot(122, projection='3d')
-    model.spatial.plot3D(ax=ax2, style='scatter')
+    model.spatial.plot3d(ax=ax2, style='scatter')
 
 Note that the regions are not necessarily
 contiguous, and the map will likely be discontinuous at the boundaries between
@@ -125,15 +126,16 @@ Lets place a Neuralink implant across the right hemisphere of the cortex:
     nlink = p2p.implants.cortex.Neuralink.from_neuropythy(
         nmap, xrange=xrange, yrange=yrange, step=1, rand_insertion_angle=0
     )
-    model = p2p.models.cortex.ScoreboardModel(nlink, vfmap=nmap, xrange=xrange,
-                                              yrange=yrange, step=.25)
+    model = p2p.models.cortex.ScoreboardModel(nlink, visual_field_map=nmap,
+                                              xrange=xrange, yrange=yrange,
+                                              step=.25)
     model.build()
     print(len(nlink.implants), " total threads")
 
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121, projection='3d')
-    model.spatial.plot3D(ax=ax1, style='cell')
-    nlink.plot3D(ax=ax1)
+    model.spatial.plot3d(ax=ax1, style='cell')
+    nlink.plot3d(ax=ax1)
     ax2 = fig.add_subplot(122)
     model.plot(style='cell', ax=ax2)
     nlink.plot(ax=ax2)
@@ -150,7 +152,7 @@ electrode on each thread, using the scoreboard model:
     )
     model = p2p.models.cortex.ScoreboardModel(nlink, rho=800, xrange=xrange,
                                               yrange=yrange, step=.25,
-                                              vfmap=nmap)
+                                              visual_field_map=nmap)
     stim = {e: 1 for e in [i for i in nlink.electrode_names if i[-1] == '1']}
     percept = model.predict_percept(stim)
     percept.plot()

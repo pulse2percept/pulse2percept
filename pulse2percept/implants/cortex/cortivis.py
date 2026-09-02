@@ -46,15 +46,15 @@ class Cortivis(Implant):
 
     >>> from pulse2percept.implants.cortex import Cortivis
     >>> Cortivis() # doctest: +NORMALIZE_WHITESPACE
-    Cortivis(earray=ElectrodeGrid, preprocess=False, 
+    Cortivis(electrode_array=ElectrodeGrid, preprocess=False, 
          safe_mode=False, shape=(10, 10))
 
     Get access to electrode '11':
 
     >>> cortivis = Cortivis()
     >>> cortivis['11'] # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='11', r=40.0, x=21400.0, 
-                  y=-6000.0, z=-1500.0)
+    DiskElectrode(activated=True, name='11', radius=40.0,
+                  x=21400.0, y=-6000.0, z=-1500.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
@@ -81,11 +81,11 @@ class Cortivis(Implant):
 
         # Account for depth of shanks
         z -= 1500
-        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, rot=rot,
-                                    names=names, type='rect', r=40,
-                                    etype=DiskElectrode)
+        self.electrode_array = ElectrodeGrid(
+            self.shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
+            grid_type='rect', radius=40, electrode_type=DiskElectrode)
         for e in ['01', '02', '03', '04']:
-            self.earray.remove_electrode(e)
+            self.electrode_array.remove_electrode(e)
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""

@@ -45,7 +45,7 @@ def test_Nanduri2012Spatial():
     # let a swapped array through to a kernel that reads a radius off it:
     model = Nanduri2012Spatial(implant=Implant(ElectrodeArray(
         DiskElectrode(0, 0, 0, 100))), step=5).build()
-    model.implant.earray = ElectrodeArray(PointSource(0, 0, 0))
+    model.implant.electrode_array = ElectrodeArray(PointSource(0, 0, 0))
     with pytest.raises(TypeError):
         model.predict_percept({0: 1})
 
@@ -61,12 +61,14 @@ def test_Nanduri2012Spatial():
 
     # Nanduri model uses a linear dva_to_ret conversion factor:
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.vfmap.dva_to_ret(factor, factor),
+        npt.assert_almost_equal(model.visual_field_map.dva_to_ret(factor,
+                                                                  factor),
                                 (280.0 * factor, -280.0 * factor))
     for factor in [0.0, 1.0, 2.0]:
-        npt.assert_almost_equal(model.vfmap.ret_to_dva(280.0 * factor,
-                                                         -280.0 * factor),
-                                (factor, factor))
+        npt.assert_almost_equal(
+            model.visual_field_map.ret_to_dva(280.0 * factor,
+                                              -280.0 * factor),
+            (factor, factor))
 
 
 def test_eq_Nanduri2012Spatial():

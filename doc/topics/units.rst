@@ -160,8 +160,8 @@ in another compatible unit:
     stim.time_unit
     stim.time_quantity
 
-    implant.earray.coordinates()
-    implant.earray.coordinates(mm)
+    implant.electrode_array.coordinates()
+    implant.electrode_array.coordinates(mm)
 
     percept.time_unit
     percept.times(s)

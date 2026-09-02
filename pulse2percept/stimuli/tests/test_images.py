@@ -587,3 +587,46 @@ def test_ImageStimulus_does_not_alias_another_stimulus():
                           .reshape((4, 6)))
     second = ImageStimulus(first)
     npt.assert_equal(np.shares_memory(first.data, second.data), False)
+
+
+class _BytesPath:
+    """A PathLike whose __fspath__ returns bytes, as the protocol allows"""
+
+    def __init__(self, path):
+        self._path = os.fsencode(path)
+
+    def __fspath__(self):
+        return self._path
+
+
+def test_ImageStimulus_accepts_a_bytes_pathlike(tmp_path):
+    """A path is decoded, so `source` is a string whatever __fspath__ gives"""
+    fname = tmp_path / 'test.png'
+    create_dummy_img(str(fname), (8, 12), 'rand')
+    stim = ImageStimulus(_BytesPath(fname))
+    npt.assert_equal(isinstance(stim.metadata['source'], str), True)
+    npt.assert_equal(stim.metadata['source'],
+                     ImageStimulus(fname).metadata['source'])
+    # The extension check in `save` needs a string too:
+    out = tmp_path / 'out.tif'
+    stim.save(_BytesPath(out))
+    npt.assert_equal(out.exists(), True)
+
+
+def test_ImageStimulus_accepts_a_path(tmp_path):
+    """A pathlib.Path names the same file a string does"""
+    fname = tmp_path / 'test.png'
+    create_dummy_img(str(fname), (8, 12), 'rand')
+    from_path = ImageStimulus(fname)
+    from_str = ImageStimulus(str(fname))
+    npt.assert_almost_equal(from_path.data, from_str.data)
+    # Metadata records a string either way, so two spellings of one file do
+    # not look like two different sources:
+    npt.assert_equal(isinstance(from_path.metadata['source'], str), True)
+    npt.assert_equal(from_path.metadata['source'],
+                     from_str.metadata['source'])
+    # And `save` takes one too:
+    out = tmp_path / 'out.tif'
+    from_path.save(out)
+    npt.assert_equal(out.exists(), True)
+    npt.assert_almost_equal(ImageStimulus(out).data, from_path.data)

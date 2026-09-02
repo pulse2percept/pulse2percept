@@ -85,12 +85,12 @@ def test_from_coords():
 
 # test from_cortical_map initialization (vf coords in dva)
 def test_from_cortical_map():
-    vfmap = Polimeni2006Map()
+    visual_field_map = Polimeni2006Map()
 
     locs = np.array([(2000,2000), (10000,0), (5000, 5000)]).astype(np.float64)
 
     # find locations in dva
-    dva_x, dva_y = vfmap.to_dva()['v1'](locs[:,0], locs[:,1])
+    dva_x, dva_y = visual_field_map.to_dva()['v1'](locs[:,0], locs[:,1])
     dva_list = [(x,y) for x,y in zip(dva_x, dva_y)]
     dva_locs = np.array(dva_list)
 
@@ -99,7 +99,8 @@ def test_from_cortical_map():
     c2 = Cortivis(x=5000, y=5000)
 
     # use dva coords to create ensemble
-    ensemble = EnsembleImplant.from_cortical_map(Cortivis, vfmap, dva_locs)
+    ensemble = EnsembleImplant.from_cortical_map(Cortivis, visual_field_map,
+                                                 dva_locs)
 
     # check that positions are approx. the same
     npt.assert_approx_equal(ensemble['0-1'].x, c0['1'].x, 5)
@@ -195,17 +196,17 @@ def test_EnsembleImplant_from_coords_units():
     bare = EnsembleImplant.from_coords(Cortivis, locs=locs)
     unitful = EnsembleImplant.from_coords(Cortivis,
                                           locs=locs / 1000 * mm)
-    npt.assert_allclose(unitful.earray.coordinates(),
-                        bare.earray.coordinates(), rtol=1e-12)
+    npt.assert_allclose(unitful.electrode_array.coordinates(),
+                        bare.electrode_array.coordinates(), rtol=1e-12)
     # ... and so may the range form:
     ranged = EnsembleImplant.from_coords(Cortivis,
                                          xrange=(-10 * mm, 10 * mm),
                                          yrange=(0, 0), step=10000 * um)
     npt.assert_allclose(
-        ranged.earray.coordinates(),
+        ranged.electrode_array.coordinates(),
         EnsembleImplant.from_coords(Cortivis, xrange=(-10000, 10000),
                                     yrange=(0, 0),
-                                    step=10000).earray.coordinates(),
+                                    step=10000).electrode_array.coordinates(),
         rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
         EnsembleImplant.from_coords(Cortivis, locs=locs * ms)
@@ -242,17 +243,16 @@ def test_EnsembleImplant_from_cortical_map_units():
     unitful = EnsembleImplant.from_cortical_map(
         Cortivis, Polimeni2006Map(), xrange=(-2 * dva, 2 * dva),
         yrange=(0 * dva, 0 * dva), step=2 * dva)
-    npt.assert_allclose(unitful.earray.coordinates(),
-                        bare.earray.coordinates(), rtol=1e-12)
+    npt.assert_allclose(unitful.electrode_array.coordinates(),
+                        bare.electrode_array.coordinates(), rtol=1e-12)
     # Locations, too:
     locs = np.array([[-2.0, 0.0], [2.0, 0.0]])
-    npt.assert_allclose(
-        EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
-                                          locs=locs * dva
-                                          ).earray.coordinates(),
-        EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
-                                          locs=locs).earray.coordinates(),
-        rtol=1e-12)
+    unitful = EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
+                                                locs=locs * dva)
+    bare = EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
+                                             locs=locs)
+    npt.assert_allclose(unitful.electrode_array.coordinates(),
+                        bare.electrode_array.coordinates(), rtol=1e-12)
     # These are degrees, not microns: the whole point of the map is that the
     # two are not interchangeable.
     for kwargs in ({'xrange': (-2 * mm, 2 * mm)}, {'step': 2 * um},
@@ -276,15 +276,15 @@ def test_EnsembleImplant_from_coords_is_physical():
     listed = EnsembleImplant.from_coords(
         Cortivis, locs=np.array([[-10000., 0.], [0., 0.], [10000., 0.]]))
     npt.assert_equal(len(ranged.implants), 3)
-    npt.assert_allclose(ranged.earray.coordinates(),
-                        listed.earray.coordinates(), rtol=1e-12)
+    npt.assert_allclose(ranged.electrode_array.coordinates(),
+                        listed.electrode_array.coordinates(), rtol=1e-12)
     # A micron range is fine here and a dva one is not -- the mirror image of
     # `from_cortical_map`:
     npt.assert_allclose(
-        EnsembleImplant.from_coords(Cortivis, xrange=(-10 * mm, 10 * mm),
-                                    yrange=(0, 0),
-                                    step=10000 * um).earray.coordinates(),
-        ranged.earray.coordinates(), rtol=1e-12)
+        EnsembleImplant.from_coords(
+            Cortivis, xrange=(-10 * mm, 10 * mm), yrange=(0, 0),
+            step=10000 * um).electrode_array.coordinates(),
+        ranged.electrode_array.coordinates(), rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
         EnsembleImplant.from_coords(Cortivis, xrange=(-2 * dva, 2 * dva),
                                     yrange=(0, 0), step=1)

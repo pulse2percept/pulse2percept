@@ -24,11 +24,11 @@ def _spatial(model):
     [['v1'], ['v2'], ['v3'], ['v1', 'v2'], ['v2', 'v3'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # ScoreboardSpatial automatically sets `regions`
-    vfmap = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1, vfmap=vfmap).build()
+    visual_field_map = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
+    model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1, visual_field_map=visual_field_map).build()
     spatial = _spatial(model)
     npt.assert_equal(spatial.regions, regions)
-    npt.assert_equal(spatial.vfmap.regions, regions)
+    npt.assert_equal(spatial.visual_field_map.regions, regions)
 
     # User can set `rho`:
     spatial.rho = 123
@@ -40,12 +40,14 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     npt.assert_equal(model.predict_percept(None), None)
 
     # Converting ret <=> dva
-    vfmap = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=1, vfmap=vfmap).build()
+    visual_field_map = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
+    model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=1, visual_field_map=visual_field_map).build()
     spatial = _spatial(model)
-    npt.assert_equal(isinstance(spatial.vfmap, Polimeni2006Map), True)
+    npt.assert_equal(isinstance(spatial.visual_field_map, Polimeni2006Map),
+                     True)
     if jitter_boundary:
-        npt.assert_equal(np.isnan(spatial.vfmap.dva_to_v1([0], [0])), False)
+        npt.assert_equal(
+            np.isnan(spatial.visual_field_map.dva_to_v1([0], [0])), False)
         if 'v1' in regions:
             npt.assert_equal(
                 spatial.grid.v1.x[~np.isnan(spatial.grid.v1.x)].size,
@@ -59,7 +61,8 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
                 spatial.grid.v3.x[~np.isnan(spatial.grid.v3.x)].size,
                 49)
     else:
-        npt.assert_equal(np.isnan(spatial.vfmap.dva_to_v1([0], [0])), True)
+        npt.assert_equal(
+            np.isnan(spatial.visual_field_map.dva_to_v1([0], [0])), True)
         if 'v1' in regions:
             npt.assert_equal(
                 spatial.grid.v1.x[~np.isnan(spatial.grid.v1.x)].size,
@@ -94,9 +97,10 @@ def test_predict_spatial(ModelClass, regions):
     npt.assert_equal(np.all(percept.data[:, :half] != 0), True)
 
     # implant only in v1, shouldnt change with v2/v3
-    vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
+    visual_field_map = Polimeni2006Map(k=15, a=0.5, b=90)
     model = ModelClass(implant=Cortivis(x=30000, y=0, rot=0), xrange=(-5, 0),
-                       yrange=(-3, 3), step=0.1, rho=400, vfmap=vfmap).build()
+                       yrange=(-3, 3), step=0.1, rho=400,
+                       visual_field_map=visual_field_map).build()
     elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
     percept = model.predict_percept({str(i): [1, 0] for i in elecs})
     npt.assert_equal(percept.shape, list(_spatial(model).grid.x.shape) + [2])
@@ -111,10 +115,10 @@ def test_predict_spatial(ModelClass, regions):
 
     if 'v1' in regions:
         # make sure cortical representation is flipped
-        vfmap = Polimeni2006Map(k=15, a=0.5, b=90)
+        visual_field_map = Polimeni2006Map(k=15, a=0.5, b=90)
         model = ModelClass(implant=Orion(x=30000, y=0, rot=0),
                            xrange=(-5, 0), yrange=(-3, 3), step=0.1, rho=400,
-                           vfmap=vfmap).build()
+                           visual_field_map=visual_field_map).build()
         percept = model.predict_percept({'40': 1, '94': 5})
         half = _spatial(model).grid.shape[0] // 2
         npt.assert_equal(np.sum(percept.data[:half, :, :]) >  np.sum(percept.data[half:, :, :]), True)
@@ -147,11 +151,12 @@ def test_predict_spatial_regionsum(ModelClass,regions):
 def test_eq_beyeler(ModelClass, stimval):
     
 
-    vfmap = Watson2014Map()
+    visual_field_map = Watson2014Map()
     implant = ArgusII()
     cortex = ModelClass(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
                         step=0.1, rho=200 * stimval, regions=['ret'],
-                        vfmap=vfmap, meridian_blend=0).build()
+                        visual_field_map=visual_field_map,
+                        meridian_blend=0).build()
     retina = BeyelerScoreboard(implant=implant, xrange=(-3, 3),
                                yrange=(-3, 3), step=0.1,
                                rho=200 * stimval).build()
@@ -292,8 +297,9 @@ def _user_warnings(build):
 
 def _cortex_grid(ndim):
     return dict(xrange=(-3, 3), yrange=(-3, 3), step=1,
-                vfmap=Polimeni2006Map(regions=['v1'], jitter_boundary=True,
-                                      ndim=ndim))
+                visual_field_map=Polimeni2006Map(regions=['v1'],
+                                                 jitter_boundary=True,
+                                                 ndim=ndim))
 
 
 @pytest.mark.parametrize('ndim', [2, 3])
