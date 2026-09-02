@@ -776,6 +776,11 @@ def test_ElectrodeArray_is_a_container():
     npt.assert_equal(array[['A1', 1, -1]],
                      [array['A1'], array['A2'], array['A3']])
     npt.assert_equal(array[np.array([0, 2])], [array['A1'], array['A3']])
+    # So does a slice, which is always positional:
+    npt.assert_equal(array[:], array.electrode_objects)
+    npt.assert_equal(array[1:], [array['A2'], array['A3']])
+    npt.assert_equal(array[::-1], array.electrode_objects[::-1])
+    npt.assert_equal(array[9:], [])
     with pytest.raises(KeyError):
         array['missing']
     with pytest.raises(IndexError):

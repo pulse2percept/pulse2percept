@@ -92,12 +92,13 @@ Implants
   be given per electrode. A custom ``electrode_type`` is now built as itself
   and decides for itself which parameters it requires (:pull:`880`).
 
-* ``implant.earray`` / ``earray=`` is now
+* Electrode arrays and implants follow normal Python container semantics.
+  ``implant.earray`` / ``earray=`` is now
   :py:attr:`~pulse2percept.implants.Implant.electrode_array` /
   ``electrode_array=``, ``vfmap`` is ``visual_field_map``, ``plot3D()`` is
   ``plot3d()``, and :py:class:`~pulse2percept.topography.Grid2D` stores its
   grid as ``grid_type`` (:pull:`880`).
-
+  
 
 Models
 ~~~~~~

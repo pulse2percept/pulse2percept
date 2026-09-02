@@ -278,9 +278,9 @@ class ElectrodeArray(PrettyPrint):
 
         Parameters
         ----------
-        item : str, int, or list thereof
+        item : str, int, slice, or list thereof
             An electrode name, or an index into the array (negative indices
-            count from the end). A list or NumPy array of either returns a
+            count from the end). A slice, a list, or a NumPy array returns a
             list of electrodes.
 
         Returns
@@ -315,6 +315,8 @@ class ElectrodeArray(PrettyPrint):
 
     def _by_position(self, item):
         """Return the ``item``-th electrode, for an ``item`` that is no name"""
+        if isinstance(item, slice):
+            return self.electrode_objects[item]
         if isinstance(item, (int, np.integer)):
             try:
                 return self.electrode_objects[item]
@@ -644,8 +646,8 @@ class ElectrodeGrid(ElectrodeArray):
             *  by index into the flattened array, e.g. ``grid[0]``
             *  by (row, column) index into the 2D grid, e.g. ``grid[0, 0]``
 
-            Indices may be negative, and a list or NumPy array of any of the
-            above returns a list of electrodes.
+            Indices may be negative, and a slice, list, or NumPy array of
+            any of the above returns a list of electrodes.
 
         Returns
         -------
