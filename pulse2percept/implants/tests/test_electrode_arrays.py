@@ -190,7 +190,9 @@ def test_ElectrodeGrid(gtype):
                          radius=np.arange(1, np.prod(gshape) + 1))
     for i, (_, e) in enumerate(grid.electrodes.items()):
         npt.assert_almost_equal(e.radius, i + 1)
-    with pytest.raises(ValueError):
+    # A required electrode parameter that is missing is the electrode class's
+    # error, not the grid's:
+    with pytest.raises(TypeError):
         ElectrodeGrid(gshape, spacing, grid_type=gtype,
                       electrode_type=DiskElectrode)
     # Number of radii must match number of electrodes
@@ -711,6 +713,26 @@ def test_ElectrodeGrid_radius_per_electrode():
                                          radius=[100, 100, 200, 200]
                                          ).electrode_objects],
         [100, 100, 200, 200])
+
+
+def test_ElectrodeGrid_electrode_subclass():
+    """A subclass is built as itself, and owns its own radius contract"""
+    class DefaultDisk(DiskElectrode):
+        __slots__ = ()
+
+        def __init__(self, x, y, z, radius=50, **kwargs):
+            super().__init__(x, y, z, radius, **kwargs)
+
+    grid = ElectrodeGrid((2, 2), 400, electrode_type=DefaultDisk)
+    for elec in grid.electrode_objects:
+        npt.assert_equal(isinstance(elec, DefaultDisk), True)
+        npt.assert_almost_equal(elec.radius, 50)
+    # An explicit radius still wins, and may still be given per electrode:
+    npt.assert_almost_equal(
+        [e.radius for e in ElectrodeGrid((1, 2), 400,
+                                         electrode_type=DefaultDisk,
+                                         radius=[10, 20]).electrode_objects],
+        [10, 20])
 
 
 def test_ElectrodeGrid_forwards_electrode_params():

@@ -122,10 +122,10 @@ class NeuralinkThread(Implant, metaclass=ABCMeta):
 
 class LinearEdgeThread(NeuralinkThread):
     
-    # __slots__ = ('r', 'l', 'n', 'pitch', 'orient') # TODO
+    # __slots__ = ('radius', 'l', 'n', 'pitch', 'orient') # TODO
     
     def __init__(self, x=0, y=0, z=0, orient=np.array([0,0,1]), orient_mode='direction', 
-                 r=5, n_elecs=32, spacing=50, insertion_depth=0, 
+                 radius=5, n_elecs=32, spacing=50, insertion_depth=0,
                  electrode=EllipsoidElectrode,
                  preprocess=False, safe_mode=False):
         """
@@ -149,7 +149,7 @@ class LinearEdgeThread(NeuralinkThread):
               should extend in (i.e. a unit vector in the z direction will
               point in the direction after being rotated by this matrix)
 
-        r : float
+        radius : float
             Radius (um) of the thread.
         n_elecs : int
             Number of electrodes along the thread.
@@ -175,12 +175,12 @@ class LinearEdgeThread(NeuralinkThread):
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
-        r = as_value(r, um, 'r')
+        radius = as_value(radius, um, 'radius')
         spacing = as_value(spacing, um, 'spacing')
         insertion_depth = as_value(insertion_depth, um, 'insertion_depth')
         self.x, self.y, self.z = x, y, z
         self.loc = np.array([x, y, z])
-        self.r = r
+        self.radius = radius
         self.n_elecs = n_elecs
         self.spacing = spacing
         self.electrode = electrode
@@ -200,7 +200,8 @@ class LinearEdgeThread(NeuralinkThread):
         # This chooses an arbitrary angle (facing x axis), rotates the direction vector 
         # towards that angle, and puts the electrodes on the edge of the thread in that direction.
         # also, the exact specs are unclear from the paper here
-        offset = parse_3d_orient([1, 0, 0], 'direction')[0] @ self.direction * (self.r + 7//2) 
+        offset = (parse_3d_orient([1, 0, 0], 'direction')[0] @
+                  self.direction * (self.radius + 7 // 2))
         electrode_locs = [start + i*self.spacing*self.direction + offset for i in range(self.n_elecs)]
         for i, loc in enumerate(electrode_locs):
             electrodes[str(i)] = self.electrode(loc[0], loc[1], loc[2], orient=self.rot, orient_mode='rot')
@@ -213,7 +214,8 @@ class LinearEdgeThread(NeuralinkThread):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
         params.update({'location' : (self.x, self.y, self.z), 'angles' : self.angles, 
-                       'r': self.r, 'n_elecs': self.n_elecs, 'spacing': self.spacing})
+                       'radius': self.radius, 'n_elecs': self.n_elecs,
+                       'spacing': self.spacing})
         return params
     
     def plot3D(self, ax=None, **kwargs):
@@ -239,8 +241,8 @@ class LinearEdgeThread(NeuralinkThread):
         npoints = 15
         thetas = np.linspace(0, 2 * np.pi, npoints)
         zs = np.linspace(0, self.thread_length, npoints)
-        xs = self.r * np.outer(np.cos(thetas), np.ones_like(zs))
-        ys = self.r * np.outer(np.sin(thetas), np.ones_like(zs))
+        xs = self.radius * np.outer(np.cos(thetas), np.ones_like(zs))
+        ys = self.radius * np.outer(np.sin(thetas), np.ones_like(zs))
         zs = np.outer(np.ones_like(thetas), zs)
         stacked_points = np.stack([xs, ys, zs], axis=-1).reshape(xs.shape[0], xs.shape[1], 3, 1)
         rotated = np.matmul(self.rot, stacked_points).reshape(xs.shape[0], xs.shape[1], 3)

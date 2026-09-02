@@ -9,8 +9,7 @@ import matplotlib.pyplot as plt
 from skimage.transform import SimilarityTransform
 from copy import deepcopy
 
-from .electrodes import (Electrode, PointSource, DiskElectrode,
-                         HexElectrode)
+from .electrodes import Electrode, PointSource, HexElectrode
 from ..stimuli.names import ElectrodeNames
 from ..units import Quantity, as_value, deg, um
 from ..utils import PrettyPrint, bijective26_name
@@ -574,9 +573,6 @@ class ElectrodeGrid(ElectrodeArray):
                 not issubclass(electrode_type, Electrode):
             raise TypeError("'electrode_type' must be a valid Electrode "
                             "class.")
-        if issubclass(electrode_type, DiskElectrode):
-            if 'radius' not in electrode_params:
-                raise ValueError("A DiskElectrode needs a ``radius``.")
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError(f"'names' must be a tuple or list, not "
                             f"{type(names)}.")

@@ -198,7 +198,7 @@ def test_LinearEdgeThread():
     # elecs arent actually at this spot, but are on the edge, a few microns off
     zs = []
     for e in thread.electrode_objects:
-        npt.assert_almost_equal(e.x, thread.r + 7 // 2)
+        npt.assert_almost_equal(e.x, thread.radius + 7 // 2)
         npt.assert_almost_equal(e.y, 0)
         npt.assert_almost_equal(e.rot, thread.rot)
         zs.append(e.z)
@@ -208,7 +208,7 @@ def test_LinearEdgeThread():
     thread = LinearEdgeThread(orient=[1, 0, 0])
     xs = []
     for e in thread.electrode_objects:
-        npt.assert_almost_equal(e.z, -thread.r - 7 // 2)
+        npt.assert_almost_equal(e.z, -thread.radius - 7 // 2)
         npt.assert_almost_equal(e.y, 0)
         xs.append(e.x)
     npt.assert_equal(np.allclose(np.diff(xs), thread.spacing), True)
@@ -227,7 +227,7 @@ def test_LinearEdgeThread_defaults():
     thread = LinearEdgeThread()
     npt.assert_equal(isinstance(thread, NeuralinkThread), True)
     npt.assert_almost_equal(thread.loc, [0, 0, 0])
-    npt.assert_almost_equal(thread.r, 5)
+    npt.assert_almost_equal(thread.radius, 5)
     npt.assert_equal(thread.n_elecs, 32)
     npt.assert_almost_equal(thread.spacing, 50)
     npt.assert_almost_equal(thread.insertion_depth, 0)
@@ -247,7 +247,7 @@ def test_LinearEdgeThread_defaults():
 
 def test_LinearEdgeThread_geometry():
     thread = LinearEdgeThread(10, 20, 30, n_elecs=4, spacing=25,
-                              insertion_depth=100, r=8)
+                              insertion_depth=100, radius=8)
     npt.assert_almost_equal(thread.thread_length, 4 * 25 + 1000 + 100)
     npt.assert_equal(thread.n_electrodes, 4)
     # Default orientation is +z, so electrodes start `insertion_depth` below
@@ -283,11 +283,11 @@ def test_LinearEdgeThread_stim():
 
 
 def test_LinearEdgeThread_pprint():
-    thread = LinearEdgeThread(1, 2, 3, n_elecs=4, spacing=25, r=8)
+    thread = LinearEdgeThread(1, 2, 3, n_elecs=4, spacing=25, radius=8)
     params = thread._pprint_params()
     npt.assert_equal(params['location'], (1, 2, 3))
     npt.assert_almost_equal(params['angles'], thread.angles)
-    npt.assert_equal(params['r'], 8)
+    npt.assert_equal(params['radius'], 8)
     npt.assert_equal(params['n_elecs'], 4)
     npt.assert_equal(params['spacing'], 25)
     # Inherited from Implant:
@@ -597,19 +597,20 @@ def test_Neuralink_from_cortical_map_neuropythy():
 
 def test_LinearEdgeThread_units():
     """A thread walks down its own insertion direction, so it normalizes too"""
-    bare = LinearEdgeThread(1000., -500., 0., r=5., n_elecs=8, spacing=50.,
-                            insertion_depth=100.)
-    unitful = LinearEdgeThread(1 * mm, -0.5 * mm, 0 * um, r=5 * um, n_elecs=8,
-                               spacing=0.05 * mm, insertion_depth=0.1 * mm)
+    bare = LinearEdgeThread(1000., -500., 0., radius=5., n_elecs=8,
+                            spacing=50., insertion_depth=100.)
+    unitful = LinearEdgeThread(1 * mm, -0.5 * mm, 0 * um, radius=5 * um,
+                               n_elecs=8, spacing=0.05 * mm,
+                               insertion_depth=0.1 * mm)
     npt.assert_allclose(unitful.earray.coordinates(),
                         bare.earray.coordinates(), rtol=1e-12)
-    for attr in ('x', 'y', 'z', 'r', 'spacing', 'insertion_depth'):
+    for attr in ('x', 'y', 'z', 'radius', 'spacing', 'insertion_depth'):
         npt.assert_equal(isinstance(getattr(unitful, attr), Quantity), False)
     npt.assert_allclose(unitful.thread_length, bare.thread_length, rtol=1e-12)
     # The electrode's own radii, too:
     elec = EllipsoidElectrode(rx=0.007 * mm, ry=7 * um, rz=0.012 * mm)
     npt.assert_allclose([elec.rx, elec.ry, elec.rz], [7, 7, 12], rtol=1e-12)
-    for kwargs in ({'x': 5 * ms}, {'r': 10 * uA}, {'spacing': 1 * ms},
+    for kwargs in ({'x': 5 * ms}, {'radius': 10 * uA}, {'spacing': 1 * ms},
                    {'insertion_depth': 2 * dva}):
         with pytest.raises(DimensionMismatchError):
             LinearEdgeThread(**kwargs)

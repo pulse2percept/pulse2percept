@@ -77,14 +77,15 @@ Implants
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`).
 
 * Electrode geometry is spelled out: ``DiskElectrode.r`` is now ``radius``,
-  ``SquareElectrode.a`` is ``side_length``, and ``HexElectrode.a`` is
-  ``apothem`` (:pull:`880`).
+  ``SquareElectrode.a`` is ``side_length``, ``HexElectrode.a`` is ``apothem``,
+  and ``LinearEdgeThread.r`` is ``radius`` (:pull:`880`).
 
 * :py:class:`~pulse2percept.implants.ElectrodeGrid` and
   :py:class:`~pulse2percept.implants.GridImplant` take ``grid_type`` (was
   ``type``) and ``electrode_type`` (was ``etype``). Remaining keywords are
   passed to ``electrode_type`` unchanged, except ``radius``, which may still
-  be given per electrode (:pull:`880`).
+  be given per electrode. A custom ``electrode_type`` is now built as itself
+  and decides for itself which parameters it requires (:pull:`880`).
 
 
 Models
