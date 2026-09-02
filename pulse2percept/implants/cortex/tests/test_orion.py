@@ -37,7 +37,7 @@ def test_orion(x, y, rot):
 
     # Make sure the radius is correct
     for electrode in orion.earray.electrode_objects:
-        npt.assert_almost_equal(electrode.r, 1000)
+        npt.assert_almost_equal(electrode.radius, 1000)
 
     # Make sure the pitch is correct:
     # distance between two electrodes that are one row apart and adjacent horizontally

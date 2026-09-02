@@ -216,9 +216,9 @@ class PhotovoltaicPixel(HexElectrode):
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
-    r : double
+    radius : double
         Radius (um) of the active electrode.
-    a : double
+    apothem : double
         Apothem (um) of the hexagonal pixel body.
     activated : bool
         To deactivate, set to ``False``. Deactivated electrodes cannot receive
@@ -238,36 +238,36 @@ class PhotovoltaicPixel(HexElectrode):
        See :py:mod:`pulse2percept.units`.
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('r',)
+    __slots__ = ('radius',)
 
-    def __init__(self, x, y, z, r, a, name=None, activated=True,
+    def __init__(self, x, y, z, radius, apothem, name=None, activated=True,
                  orientation='vertical', rot=0):
-        super(PhotovoltaicPixel, self).__init__(x, y, z, a, name=name,
+        super(PhotovoltaicPixel, self).__init__(x, y, z, apothem, name=name,
                                                 activated=activated,
                                                 orientation=orientation,
                                                 rot=rot)
-        r = as_value(r, um, 'r')
-        if isinstance(r, (Sequence, np.ndarray)):
+        radius = as_value(radius, um, 'radius')
+        if isinstance(radius, (Sequence, np.ndarray)):
             raise TypeError("Radius of the active electrode must be a scalar.")
-        if r <= 0:
+        if radius <= 0:
             raise ValueError("Radius of the active electrode must be > 0, not "
-                             "{r}.")
-        self.r = r
+                             "{radius}.")
+        self.radius = radius
         # Plot the pixel body and active electrode:
         hex_kwargs = self._hex_patch_kwargs()
         self.plot_patch = [RegularPolygon, Circle]
         self.plot_kwargs = [{**hex_kwargs, 'alpha': 0.2, 'fc': 'k', 'ec': 'k'},
-                            {'radius': r, 'linewidth': 0, 'color': 'k',
+                            {'radius': radius, 'linewidth': 0, 'color': 'k',
                              'alpha': 0.5}]
         self.plot_deactivated_kwargs = [{**hex_kwargs, 'alpha': 0.1,
                                          'fc': 'k', 'ec': 'k'},
-                                        {'radius': r, 'linewidth': 0,
+                                        {'radius': radius, 'linewidth': 0,
                                          'color': 'k', 'alpha': 0.2}]
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'r': self.r, 'a': self.a})
+        params.update({'radius': self.radius, 'apothem': self.apothem})
         return params
 
     def electric_potential(self, x, y, z, v0):
@@ -375,10 +375,11 @@ class PRIMAPivotal(Implant):
         zarr = -100 if overwrite_z else z
 
         self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
-                                    z=zarr, rot=rot, type='hex',
+                                    z=zarr, rot=rot, grid_type='hex',
                                     orientation='vertical',
-                                    etype=PhotovoltaicPixel, r=elec_radius,
-                                    a=self.pixel_width / 2)
+                                    electrode_type=PhotovoltaicPixel,
+                                    radius=elec_radius,
+                                    apothem=self.pixel_width / 2)
 
         # Remove extra electrodes to fit the actual implant:
         extra_elecs = ['A1', 'A2', 'A3', 'A4', 'A14', 'A16', 'A17',
@@ -577,10 +578,11 @@ class Lorach2015Array(Implant):
         zarr = -100 if overwrite_z else z
 
         self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
-                                    z=zarr, rot=rot, type='hex',
+                                    z=zarr, rot=rot, grid_type='hex',
                                     orientation='vertical',
-                                    etype=PhotovoltaicPixel, r=elec_radius,
-                                    a=self.pixel_width / 2)
+                                    electrode_type=PhotovoltaicPixel,
+                                    radius=elec_radius,
+                                    apothem=self.pixel_width / 2)
 
         # Remove extra electrodes to fit the actual implant:
         extra_elecs = ['A1', 'B1', 'C1', 'D1', 'E1', 'I1', 'J1', 'K1', 'L1',
@@ -705,11 +707,11 @@ class Ho2019FlatArray(Implant):
         zarr = -100 if overwrite_z else z
 
         self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
-                                    z=zarr, rot=rot, type='hex',
+                                    z=zarr, rot=rot, grid_type='hex',
                                     orientation='vertical',
-                                    etype=PhotovoltaicPixel,
-                                    r=spec['elec_radius'],
-                                    a=self.pixel_width / 2)
+                                    electrode_type=PhotovoltaicPixel,
+                                    radius=spec['elec_radius'],
+                                    apothem=self.pixel_width / 2)
         if spec['spans'] is not None:
             _trim_to_axial_mask(self.earray, spec['spans'],
                                 self._substrate_center)
@@ -833,10 +835,11 @@ class Huang2021Array(Implant):
         zarr = -100 if overwrite_z else z
 
         self.earray = ElectrodeGrid(self.shape, self.spacing, x=x, y=y,
-                                    z=zarr, rot=rot, type='hex',
+                                    z=zarr, rot=rot, grid_type='hex',
                                     orientation='vertical',
-                                    etype=PhotovoltaicPixel, r=elec_radius,
-                                    a=self.pixel_width / 2)
+                                    electrode_type=PhotovoltaicPixel,
+                                    radius=elec_radius,
+                                    apothem=self.pixel_width / 2)
         _trim_to_axial_mask(self.earray, spans, self._substrate_center)
 
         if overwrite_z:

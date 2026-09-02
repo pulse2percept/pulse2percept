@@ -289,15 +289,18 @@ Grids can also be hexagonal:
 
 .. code-block:: python
 
-    implant = p2p.implants.GridImplant(shape=(20, 20), spacing=400, type='hex')
+    implant = p2p.implants.GridImplant(shape=(20, 20), spacing=400,
+                                       grid_type='hex')
 
-By default the electrodes are point sources. Pass an ``etype`` and its
+By default the electrodes are point sources. Pass an ``electrode_type`` and its
 arguments for electrodes with a physical extent:
 
 .. code-block:: python
 
-    implant = p2p.implants.GridImplant(shape=(20, 20), spacing=400, type='hex',
-                                       etype=p2p.implants.DiskElectrode, r=75)
+    implant = p2p.implants.GridImplant(shape=(20, 20), spacing=400,
+                                       grid_type='hex',
+                                       electrode_type=p2p.implants.DiskElectrode,
+                                       radius=75)
 
 :py:class:`~pulse2percept.implants.GridImplant` is a convenience only:
 :py:class:`~pulse2percept.implants.ElectrodeGrid` describes the geometry,

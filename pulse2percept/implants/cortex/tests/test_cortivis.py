@@ -36,5 +36,5 @@ def test_Cortivis(x, y, rot):
 
     # Check radii of electrodes
     for e in cortivis.earray.electrode_objects:
-        npt.assert_almost_equal(e.r, 40)
+        npt.assert_almost_equal(e.radius, 40)
     

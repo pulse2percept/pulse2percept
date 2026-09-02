@@ -62,8 +62,8 @@ class IMIE(Implant):
         e_spacing = 350.0  # um
 
         self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=z,
-                                    rot=rot, etype=DiskElectrode,
-                                    r=elec_radius)
+                                    rot=rot, electrode_type=DiskElectrode,
+                                    radius=elec_radius)
         
         # Set left/right eye:
         if not isinstance(eye, str):

@@ -73,10 +73,10 @@ class AlphaIMS(Implant):
 
     >>> alpha_ims = AlphaIMS(x=0, y=0, z=100, rot=0)
     >>> alpha_ims['A3']  # doctest: +NORMALIZE_WHITESPACE
-    SquareElectrode(a=50.0, activated=True, name='A3',
+    SquareElectrode(activated=True, name='A3', side_length=50.0,
                     x=-1224.0, y=-1368.0, z=100.0)
     >>> alpha_ims[0, 2]  # doctest: +NORMALIZE_WHITESPACE
-    SquareElectrode(a=50.0, activated=True, name='A3',
+    SquareElectrode(activated=True, name='A3', side_length=50.0,
                     x=-1224.0, y=-1368.0, z=100.0)
 
     """
@@ -105,8 +105,8 @@ class AlphaIMS(Implant):
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100.0 if overwrite_z else z
         self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=zarr,
-                                    rot=rot, etype=SquareElectrode,
-                                    a=elec_width)
+                                    rot=rot, electrode_type=SquareElectrode,
+                                    side_length=elec_width)
 
         # Unfortunately, in the left eye the labeling of columns is reversed...
         if eye == 'LE':
@@ -215,11 +215,11 @@ class AlphaAMS(Implant):
 
     >>> alpha_ims = AlphaAMS(x=0, y=0, z=100, rot=0)
     >>> alpha_ims['A3']  # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='A3', r=15.0, x=-1225.0,
-                  y=-1365.0, z=100.0)
+    DiskElectrode(activated=True, name='A3', radius=15.0,
+                  x=-1225.0, y=-1365.0, z=100.0)
     >>> alpha_ims[0, 2]  # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='A3', r=15.0, x=-1225.0,
-                  y=-1365.0, z=100.0)
+    DiskElectrode(activated=True, name='A3', radius=15.0,
+                  x=-1225.0, y=-1365.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
@@ -236,8 +236,8 @@ class AlphaAMS(Implant):
         e_spacing = 70.0  # um
 
         self.earray = ElectrodeGrid(self.shape, e_spacing, x=x, y=y, z=z,
-                                    rot=rot, etype=DiskElectrode,
-                                    r=elec_radius)
+                                    rot=rot, electrode_type=DiskElectrode,
+                                    radius=elec_radius)
 
         # Set left/right eye:
         # Unfortunately, in the left eye the labeling of columns is reversed...

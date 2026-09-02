@@ -53,8 +53,8 @@ class Cortivis(Implant):
 
     >>> cortivis = Cortivis()
     >>> cortivis['11'] # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='11', r=40.0, x=21400.0, 
-                  y=-6000.0, z=-1500.0)
+    DiskElectrode(activated=True, name='11', radius=40.0,
+                  x=21400.0, y=-6000.0, z=-1500.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
@@ -82,8 +82,8 @@ class Cortivis(Implant):
         # Account for depth of shanks
         z -= 1500
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, rot=rot,
-                                    names=names, type='rect', r=40,
-                                    etype=DiskElectrode)
+                                    names=names, grid_type='rect', radius=40,
+                                    electrode_type=DiskElectrode)
         for e in ['01', '02', '03', '04']:
             self.earray.remove_electrode(e)
 

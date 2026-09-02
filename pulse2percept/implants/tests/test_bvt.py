@@ -36,11 +36,11 @@ def test_BVT24(x, y, rot, eye):
 
     # Check radii of electrodes
     for e in ['C1', 'C5', 'C8', 'C15', 'C20']:
-        npt.assert_almost_equal(bva[e].r, 300.0)
+        npt.assert_almost_equal(bva[e].radius, 300.0)
     for e in ['C9', 'C17', 'C19']:
-        npt.assert_almost_equal(bva[e].r, 200.0)
+        npt.assert_almost_equal(bva[e].radius, 200.0)
     for e in ['R1', 'R2']:
-        npt.assert_almost_equal(bva[e].r, 1000.0)
+        npt.assert_almost_equal(bva[e].radius, 1000.0)
 
     # Check the center is still at (x,y)
     y_center = (bva['C8'].y + bva['C13'].y) / 2
@@ -105,9 +105,9 @@ def test_BVT44(x, y, rot, eye):
 
     # Check radii of electrodes
     for e in ['A1', 'A5', 'B3', 'C5', 'D2']:
-        npt.assert_almost_equal(bva[e].r, 500.0)
+        npt.assert_almost_equal(bva[e].radius, 500.0)
     for e in ['R1', 'R2']:
-        npt.assert_almost_equal(bva[e].r, 1000.0)
+        npt.assert_almost_equal(bva[e].radius, 1000.0)
 
     # Check the center is still at (x,y)
     npt.assert_almost_equal((bva['D4'].x + bva['D5'].x) / 2.0, x)

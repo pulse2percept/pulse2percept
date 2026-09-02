@@ -65,8 +65,8 @@ class ElectrodeArray(PrettyPrint):
     >>> earray = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     >>> earray.electrodes  # doctest: +SKIP
     OrderedDict([(0,
-                  DiskElectrode(activated=True, name=None, r=100..., x=0..., y=0...,
-                  z=0...))])
+                  DiskElectrode(activated=True, name=None, radius=100...,
+                  x=0..., y=0..., z=0...))])
 
     Electrode array made from a single DiskElectrode with name 'A1':
 
@@ -74,8 +74,8 @@ class ElectrodeArray(PrettyPrint):
     >>> earray = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)})
     >>> earray.electrodes  # doctest: +SKIP
     OrderedDict([('A1',
-                  DiskElectrode(activated=True, name=None, r=100..., x=0..., y=0...,
-                  z=0...))])
+                  DiskElectrode(activated=True, name=None, radius=100...,
+                  x=0..., y=0..., z=0...))])
 
     """
     # Frozen class: User cannot add more class attributes
@@ -414,8 +414,11 @@ class ElectrodeGrid(ElectrodeArray):
         define the electrode-to-electrode distance, and ``y_spacing`` will
         define the vertical distance between adjacent hexagon centers.
         In a vertical hex grid, the order is reversed.
-    type : {'rect', 'hex'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
+
+        .. versionchanged:: 0.11.0
+            Renamed from ``type``.
     orientation : {'horizontal', 'vertical'}, optional
         Hex-grid orientation. ``'horizontal'`` staggers alternate rows;
         ``'vertical'`` staggers alternate columns. Hexagonal electrode bodies
@@ -456,18 +459,25 @@ class ElectrodeGrid(ElectrodeArray):
         .. versionchanged:: 0.10.0
             On a grid with exactly two electrodes, ``('A', '1')`` now yields
             'A1', 'A2' (was: 'A', '1'), consistent with every other shape.
-    etype : :py:class:`~pulse2percept.implants.Electrode`, optional
+    electrode_type : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class. By default,
         :py:class:`~pulse2percept.implants.PointSource` is used.
-    **kwargs :
-        Any additional arguments that should be passed to the
-        :py:class:`~pulse2percept.implants.Electrode` constructor, such as
-        radius ``r`` for :py:class:`~pulse2percept.implants.DiskElectrode`.
-        See examples below.
+
+        .. versionchanged:: 0.11.0
+            Renamed from ``etype``.
+    **electrode_params :
+        Keyword arguments passed to the ``electrode_type`` constructor, such
+        as ``radius`` for
+        :py:class:`~pulse2percept.implants.DiskElectrode`. They are forwarded
+        unchanged, except that ``radius`` may be given per electrode (see
+        below).
 
     Notes
     -----
-    *  ``spacing``, ``x``, ``y``, ``z`` and ``r`` may be given as plain
+    *  ``z`` and ``radius`` may be given per electrode, as a list or array
+       with one entry per grid position. Every other electrode parameter is
+       one value shared by all electrodes.
+    *  ``spacing``, ``x``, ``y``, ``z`` and ``radius`` may be given as plain
        numbers of microns or as unitful quantities, and may be mixed freely:
        ``spacing=(0.5 * mm, 600 * um)`` and ``z=[0 * um, 0.1 * mm, ...]`` both
        work. Any other electrode keyword is normalized by the electrode class
@@ -486,9 +496,11 @@ class ElectrodeGrid(ElectrodeArray):
         C1    C2    C3    C4
 
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
-    >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
-    ...               type='hex', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(rot=0, shape=(3, 4), spacing=20, type='hex')
+    >>> ElectrodeGrid((3, 4), 20, x=10, y=20, z=500, names=('A', '1'),
+    ...               radius=10, grid_type='hex',
+    ...               electrode_type=DiskElectrode)
+    ... # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    ElectrodeGrid(grid_type='hex', rot=0, shape=(3, 4), spacing=20)
 
     A rectangular electrode grid with 2 rows and 4 columns, made of disk
     electrodes with 10um radius spaced 20um apart, centered at (10, 20)um, and
@@ -500,9 +512,11 @@ class ElectrodeGrid(ElectrodeArray):
         B1 B2 B3 B4
 
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
-    >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'), r=10,
-    ...               type='rect', etype=DiskElectrode) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    ElectrodeGrid(rot=0, shape=(2, 4), spacing=20, type='rect')
+    >>> ElectrodeGrid((2, 4), 20, x=10, y=20, z=500, names=('A', '1'),
+    ...               radius=10, grid_type='rect',
+    ...               electrode_type=DiskElectrode)
+    ... # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    ElectrodeGrid(grid_type='rect', rot=0, shape=(2, 4), spacing=20)
 
     There are three ways to access (e.g.) the last electrode in the grid,
     either by name (``grid['C3']``), by row/column index (``grid[2, 2]``), or
@@ -520,22 +534,23 @@ class ElectrodeGrid(ElectrodeArray):
     list of indices/names (it's ok to mix-and-match):
 
     >>> from pulse2percept.implants import ElectrodeGrid, DiskElectrode
-    >>> grid = ElectrodeGrid((3, 3), 20, etype=DiskElectrode, r=10)
+    >>> grid = ElectrodeGrid((3, 3), 20, electrode_type=DiskElectrode,
+    ...                      radius=10)
     >>> grid[['A1', 1, (0, 2)]]  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [DiskElectrode(activated=True, name='A1', r=10..., x=-20.0,
+    [DiskElectrode(activated=True, name='A1', radius=10..., x=-20.0,
                    y=-20.0, z=0...),
-     DiskElectrode(activated=True, name='A2', r=10..., x=0.0,
+     DiskElectrode(activated=True, name='A2', radius=10..., x=0.0,
                    y=-20.0, z=0...),
-     DiskElectrode(activated=True, name='A3', r=10..., x=20.0,
+     DiskElectrode(activated=True, name='A3', radius=10..., x=20.0,
                    y=-20.0, z=0...)]
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'type', 'spacing', 'rot')
+    __slots__ = ('shape', 'grid_type', 'spacing', 'rot')
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
-                 type='rect', orientation='horizontal', etype=PointSource,
-                 **kwargs):
+                 grid_type='rect', orientation='horizontal',
+                 electrode_type=PointSource, **electrode_params):
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError("'names' must be a tuple/list of (rows, cols)")
         if not isinstance(shape, (tuple, list, np.ndarray)):
@@ -544,21 +559,24 @@ class ElectrodeGrid(ElectrodeArray):
             raise ValueError("'shape' must have two elements: (rows, cols)")
         if np.prod(shape) <= 0:
             raise ValueError("Grid must have all non-zero rows and columns.")
-        if not isinstance(type, str):
-            raise TypeError("'type' must be a string, either 'rect' or 'hex'.")
+        if not isinstance(grid_type, str):
+            raise TypeError("'grid_type' must be a string, either 'rect' or "
+                            "'hex'.")
         if not isinstance(orientation, str):
             raise TypeError("'orientation' must be a string, either "
                             "'horizontal' or 'veritical'.")
-        if type not in ['rect', 'hex']:
-            raise ValueError("'type' must be either 'rect' or 'hex'.")
+        if grid_type not in ['rect', 'hex']:
+            raise ValueError("'grid_type' must be either 'rect' or 'hex'.")
         if orientation not in ['horizontal', 'vertical']:
             raise ValueError(
                 "'orientation' must be either 'horizontal' or 'vertical'.")
-        if not issubclass(etype, Electrode):
-            raise TypeError("'etype' must be a valid Electrode object.")
-        if issubclass(etype, DiskElectrode):
-            if 'r' not in kwargs.keys():
-                raise ValueError("A DiskElectrode needs a radius ``r``.")
+        if not isinstance(electrode_type, type) or \
+                not issubclass(electrode_type, Electrode):
+            raise TypeError("'electrode_type' must be a valid Electrode "
+                            "class.")
+        if issubclass(electrode_type, DiskElectrode):
+            if 'radius' not in electrode_params:
+                raise ValueError("A DiskElectrode needs a ``radius``.")
         if not isinstance(names, (tuple, list, np.ndarray)):
             raise TypeError(f"'names' must be a tuple or list, not "
                             f"{type(names)}.")
@@ -569,31 +587,34 @@ class ElectrodeGrid(ElectrodeArray):
                                  f"{len(names)}")
         # Normalized before anything is built with them: `_make_grid` lays out
         # the pitch from `spacing`, translates by (x, y), broadcasts `z` and
-        # `r` over the electrodes, and stores `spacing` on the grid itself.
-        # Every other electrode keyword travels through **kwargs untouched and
-        # is normalized by the electrode class it belongs to.
+        # `radius` over the electrodes, and stores `spacing` on the grid
+        # itself. Every other electrode parameter travels through
+        # **electrode_params untouched and is normalized by the electrode
+        # class it belongs to.
         spacing = as_value(spacing, um, 'spacing')
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
-        if 'r' in kwargs:
-            kwargs['r'] = as_value(kwargs['r'], um, 'r')
+        if 'radius' in electrode_params:
+            electrode_params['radius'] = as_value(electrode_params['radius'],
+                                                  um, 'radius')
         # `deg` is an ordinary geometric angle; `dva` is visual angle, and is
         # rejected here:
         rot = as_value(rot, deg, 'rot')
         self.shape = shape
-        self.type = type
+        self.grid_type = grid_type
         self.spacing = spacing
         self.rot = rot
         # Instantiate empty collection of electrodes. This dictionary will be
         # populated in a private method ``_set_egrid``:
         self._electrodes = OrderedDict()
-        self._make_grid(x, y, z, rot, names, orientation, etype, **kwargs)
+        self._make_grid(x, y, z, rot, names, orientation, electrode_type,
+                        **electrode_params)
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = {'shape': self.shape, 'spacing': self.spacing,
-                  'type': self.type, 'rot': self.rot}
+                  'grid_type': self.grid_type, 'rot': self.rot}
         return params
 
     def __getitem__(self, item):
@@ -635,7 +656,8 @@ class ElectrodeGrid(ElectrodeArray):
                     # Index not found:
                     return None
 
-    def _make_grid(self, x, y, z, rot, names, orientation, etype, **kwargs):
+    def _make_grid(self, x, y, z, rot, names, orientation, electrode_type,
+                   **electrode_params):
         """Private method to build the electrode grid"""
         n_elecs = np.prod(self.shape)
         rows, cols = self.shape
@@ -712,7 +734,7 @@ class ElectrodeGrid(ElectrodeArray):
             x_spc, y_spc = self.spacing[:2]
         else:
             x_spc = y_spc = self.spacing
-            if self.type.lower() == 'hex':
+            if self.grid_type.lower() == 'hex':
                 # In a hex grid, we need to adjust the spacing so that
                 # neighboring electrodes are separated by self.spacing:
                 if orientation.lower() == 'horizontal':
@@ -724,7 +746,7 @@ class ElectrodeGrid(ElectrodeArray):
         x_arr = np.arange(cols, dtype=float) * x_spc
         y_arr = np.arange(rows, dtype=float) * y_spc
         x_arr, y_arr = np.meshgrid(x_arr, y_arr, sparse=False)
-        if self.type.lower() == 'hex':
+        if self.grid_type.lower() == 'hex':
             if orientation.lower() == 'horizontal':
                 # Shift every other row:
                 x_arr[::2] += 0.5 * x_spc
@@ -743,29 +765,32 @@ class ElectrodeGrid(ElectrodeArray):
         tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
         x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
-        if issubclass(etype, DiskElectrode):
-            if isinstance(kwargs['r'], (list, np.ndarray)):
-                # Specify different radius for every electrode in a list:
-                if len(kwargs['r']) != n_elecs:
-                    err_s = (f"If `r` is a list, it must have {n_elecs} entries, not "
-                             f"{len(kwargs['r'])}.")
-                    raise ValueError(err_s)
-                r_arr = kwargs['r']
+        if issubclass(electrode_type, HexElectrode):
+            # Match the hexagonal body to the grid:
+            electrode_params.setdefault('orientation', orientation)
+            electrode_params.setdefault('rot', rot)
+        # `radius` is the one electrode parameter the grid itself interprets,
+        # because implants with two electrode sizes exist (e.g. ArgusI): a
+        # list gives one radius per grid position. Everything else in
+        # `electrode_params` is one value shared by all electrodes.
+        radius = electrode_params.pop('radius', None)
+        if radius is None:
+            elecs = [electrode_type(ex, ey, ez, name=nm, **electrode_params)
+                     for ex, ey, ez, nm in zip(x_arr, y_arr, z_arr, names)]
+        else:
+            if isinstance(radius, (list, np.ndarray)):
+                if len(radius) != n_elecs:
+                    raise ValueError(f"If `radius` is a list, it must have "
+                                     f"{n_elecs} entries, not {len(radius)}.")
+                r_arr = radius
             else:
-                # If `r` is a scalar, choose same radius for all electrodes:
-                r_arr = np.ones(n_elecs, dtype=float) * kwargs['r']
-            # Create a grid of DiskElectrode objects:
-            elecs = [DiskElectrode(ex, ey, ez, er, name=nm)
+                # Floated like `z`, so that an integer radius gives the same
+                # electrodes a float one does:
+                r_arr = np.ones(n_elecs, dtype=float) * radius
+            elecs = [electrode_type(ex, ey, ez, radius=er, name=nm,
+                                    **electrode_params)
                      for ex, ey, ez, er, nm in zip(x_arr, y_arr, z_arr, r_arr,
                                                    names)]
-        else:
-            if issubclass(etype, HexElectrode):
-                # Match the hexagonal body to the grid:
-                kwargs.setdefault('orientation', orientation)
-                kwargs.setdefault('rot', rot)
-            # Pass keyword arguments to the electrode constructor:
-            elecs = [etype(ex, ey, ez, name=nm, **kwargs)
-                     for ex, ey, ez, nm in zip(x_arr, y_arr, z_arr, names)]
         # Populated in one shot rather than through ``add_electrode``: on a
         # grid every name is known up front, so a duplicate shows up as a
         # short dict instead of costing a lookup per electrode.

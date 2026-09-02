@@ -48,7 +48,7 @@ def test_AlphaIMS(ztype, x, y, rot):
 
     # Check width of square electrodes
     for e in ['A1', 'B2', 'C3']:
-        npt.assert_equal(alpha[e].a, 50)
+        npt.assert_equal(alpha[e].side_length, 50)
 
 
 # The checks below don't depend on x/y/rot/ztype, so they live outside the
@@ -134,7 +134,7 @@ def test_AlphaAMS(ztype, x, y, rot):
 
     # Check radii of electrodes
     for e in ['A1', 'B2', 'C3']:
-        npt.assert_equal(alpha[e].r, 15)
+        npt.assert_equal(alpha[e].radius, 15)
 
 
 # As above: independent of x/y/rot/ztype, so run once rather than 16 times.

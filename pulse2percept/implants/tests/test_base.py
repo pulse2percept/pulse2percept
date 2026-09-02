@@ -37,10 +37,11 @@ class PhotovoltaicArray(Implant):
         dva2ret = 280.0
 
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
-                                    rot=rot, type='hex',
+                                    rot=rot, grid_type='hex',
                                     orientation='vertical',
-                                    etype=PhotovoltaicPixel, r=elec_radius,
-                                    a=(self.spacing - self.trench) / 2)
+                                    electrode_type=PhotovoltaicPixel,
+                                    radius=elec_radius,
+                                    apothem=(self.spacing - self.trench) / 2)
 
         rm_names = []
         for name, electrode in self.earray.electrodes.items():
@@ -168,7 +169,7 @@ def test_Implant_prepare_stim_is_stateless():
 @pytest.mark.parametrize('gtype', ('hex', 'rect'))
 @pytest.mark.parametrize('n_frames', (1, 3, 4))
 def test_Implant_reshape_stim(rot, gtype, n_frames):
-    implant = Implant(ElectrodeGrid((10, 10), 30, rot=rot, type=gtype))
+    implant = Implant(ElectrodeGrid((10, 10), 30, rot=rot, grid_type=gtype))
     # Smoke test the reshaping. It runs inside `prepare_stim`, but
     # a picture is not a stimulus an implant can deliver, so it is exercised
     # directly here (which is also how an encoder reaches it):
@@ -249,7 +250,7 @@ def test_rectangle_implant(ztype, x, y, rot):
 
     # Make sure radius is correct
     for e in ['A1', 'B3', 'C5', 'D7', 'E9', 'F10']:
-        npt.assert_almost_equal(implant[e].r, 112.5)
+        npt.assert_almost_equal(implant[e].radius, 112.5)
 
     # Indexing must work for both integers and electrode names
     for idx, (name, electrode) in enumerate(implant.electrodes.items()):
@@ -303,7 +304,7 @@ def test_RectangleImplant_is_deprecated():
     npt.assert_equal(implant.preprocess, True)
     npt.assert_equal(implant.earray.shape, (3, 4))
     npt.assert_equal(isinstance(implant['A1'], DiskElectrode), True)
-    npt.assert_almost_equal(implant['A1'].r, 75.)
+    npt.assert_almost_equal(implant['A1'].radius, 75.)
     # Including the left-eye column reversal that GridImplant does not do
     # (see test_GridImplant_does_not_relabel_the_left_eye):
     with pytest.deprecated_call():
@@ -349,10 +350,10 @@ def test_GridImplant_is_a_grid_in_an_implant():
 
 
 def test_GridImplant_hex():
-    implant = GridImplant((3, 4), 100, type='hex')
-    npt.assert_equal(implant.earray.type, 'hex')
+    implant = GridImplant((3, 4), 100, grid_type='hex')
+    npt.assert_equal(implant.earray.grid_type, 'hex')
     npt.assert_equal(implant.n_electrodes, 12)
-    # `type` really produces a triangular lattice, not just some other set of
+    # `grid_type` really produces a triangular lattice, not just some other set
     # coordinates: every nearest neighbor is exactly one spacing away, which
     # on a rect grid is only true of the orthogonal ones.
     xy = implant.earray.coordinates()[:, :2]
@@ -365,11 +366,12 @@ def test_GridImplant_hex():
 
 
 def test_GridImplant_electrode_kwargs():
-    implant = GridImplant((2, 3), 100, etype=DiskElectrode, r=20)
+    implant = GridImplant((2, 3), 100, electrode_type=DiskElectrode,
+                          radius=20)
     npt.assert_equal(implant.n_electrodes, 6)
     for e in implant.electrode_objects:
         npt.assert_equal(isinstance(e, DiskElectrode), True)
-        npt.assert_almost_equal(e.r, 20)
+        npt.assert_almost_equal(e.radius, 20)
 
 
 def test_GridImplant_geometry_passthrough():

@@ -97,7 +97,7 @@ class Implant(PrettyPrint):
     --------
     A system in the left eye made from a single
     :py:class:`~pulse2percept.implants.DiskElectrode` with radius
-    r=100um sitting at x=200um, y=-50um, z=10um:
+    radius=100um sitting at x=200um, y=-50um, z=10um:
 
     >>> from pulse2percept.implants import DiskElectrode, Implant
     >>> implant = Implant(DiskElectrode(200, -50, 10, 100), eye='LE')
@@ -753,12 +753,12 @@ class GridImplant(Implant):
     names : (name_rows, name_cols), optional
         Naming convention for rows and columns; see
         :py:class:`~pulse2percept.implants.ElectrodeGrid`.
-    type : {'rect', 'hex'}, optional
+    grid_type : {'rect', 'hex'}, optional
         Grid type ('rect': rectangular, 'hex': hexagonal).
     orientation : {'horizontal', 'vertical'}, optional
         Which way a hex grid staggers; see
         :py:class:`~pulse2percept.implants.ElectrodeGrid`.
-    etype : :py:class:`~pulse2percept.implants.Electrode`, optional
+    electrode_type : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class.
     eye : 'LE' or 'RE', optional
         The eye in which the implant is implanted. Device metadata: unlike
@@ -774,10 +774,11 @@ class GridImplant(Implant):
         How the stimulator takes turns between electrodes.
     max_current : float, optional
         The total current (uA) the stimulator can source at any one instant.
-    **electrode_kwargs :
-        Any additional arguments passed to the ``etype`` constructor, such as
-        radius ``r`` for
-        :py:class:`~pulse2percept.implants.DiskElectrode`.
+    **electrode_params :
+        Keyword arguments passed to the ``electrode_type`` constructor, such
+        as ``radius`` for
+        :py:class:`~pulse2percept.implants.DiskElectrode`; see
+        :py:class:`~pulse2percept.implants.ElectrodeGrid`.
 
     Examples
     --------
@@ -793,25 +794,27 @@ class GridImplant(Implant):
 
     >>> from pulse2percept.implants import DiskElectrode, GridImplant
     >>> from pulse2percept.units import um
-    >>> implant = GridImplant(shape=(20, 20), spacing=400 * um, type='hex',
-    ...                       etype=DiskElectrode, r=75 * um)
+    >>> implant = GridImplant(shape=(20, 20), spacing=400 * um,
+    ...                       grid_type='hex', electrode_type=DiskElectrode,
+    ...                       radius=75 * um)
     >>> implant['A1']  # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    DiskElectrode(activated=True, name='A1', r=75.0, x=-3700.0,
-                  y=-3290.89..., z=0...)
+    DiskElectrode(activated=True, name='A1', radius=75.0,
+                  x=-3700.0, y=-3290.89..., z=0...)
 
     """
     # Frozen class: geometry lives on `earray`, not duplicated here
     __slots__ = ()
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
-                 type='rect', orientation='horizontal', etype=PointSource,
-                 eye='RE', preprocess=False, safe_mode=False,
-                 encoder=None, raster=None, max_current=None,
-                 **electrode_kwargs):
+                 grid_type='rect', orientation='horizontal',
+                 electrode_type=PointSource, eye='RE', preprocess=False,
+                 safe_mode=False, encoder=None, raster=None, max_current=None,
+                 **electrode_params):
         earray = ElectrodeGrid(shape, spacing, x=x, y=y, z=z, rot=rot,
-                               names=names, type=type,
-                               orientation=orientation, etype=etype,
-                               **electrode_kwargs)
+                               names=names, grid_type=grid_type,
+                               orientation=orientation,
+                               electrode_type=electrode_type,
+                               **electrode_params)
         super().__init__(earray, eye=eye, preprocess=preprocess,
                          safe_mode=safe_mode, encoder=encoder, raster=raster,
                          max_current=max_current)
@@ -820,9 +823,10 @@ class GridImplant(Implant):
 @deprecated(alt_func='GridImplant', deprecated_version='0.11.0',
             removed_version='0.12.0',
             extra_msg='Not a drop-in replacement: pass '
-                      '``etype=DiskElectrode, r=75, preprocess=True`` to keep '
-                      'these defaults, and note that a left-eye grid keeps '
-                      'the column names of a right-eye one.')
+                      '``electrode_type=DiskElectrode, radius=75, '
+                      'preprocess=True`` to keep these defaults, and note '
+                      'that a left-eye grid keeps the column names of a '
+                      'right-eye one.')
 class RectangleImplant(Implant):
     """ A generic rectangular implant
 
@@ -830,8 +834,8 @@ class RectangleImplant(Implant):
 
         Use :py:class:`~pulse2percept.implants.GridImplant` instead, although
         that is not a drop-in replacement. Pass
-        ``etype=DiskElectrode, r=75`` to keep the old geometry and
-        ``preprocess=True`` to keep preprocessing.
+        ``electrode_type=DiskElectrode, radius=75`` to keep the old geometry
+        and ``preprocess=True`` to keep preprocessing.
         Also note that left and right eyes have the same column names (no
         automatic flipping).
 
@@ -861,8 +865,9 @@ class RectangleImplant(Implant):
         self.preprocess = preprocess
         self.shape = shape
         names = ('A', '1')
-        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
-                                    rot=rot, names=names, etype=DiskElectrode)
+        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
+                                    radius=r, rot=rot, names=names,
+                                    electrode_type=DiskElectrode)
 
         # Set left/right eye:
         if not isinstance(eye, str):

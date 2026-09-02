@@ -154,7 +154,7 @@ def test_every_spelling_builds_the_same_object():
     _same(lambda x: DiskElectrode(x, 0, 0, 100), length, lengths,
           lambda e: e.x, 'DiskElectrode.x')
     _same(lambda r: DiskElectrode(0, 0, 0, r), length, lengths,
-          lambda e: e.r, 'DiskElectrode.r')
+          lambda e: e.radius, 'DiskElectrode.radius')
     _same(lambda x: ArgusII(x=x), length, lengths,
           lambda i: np.array([[e.x, e.y, e.z]
                               for e in i.earray.electrode_objects]),

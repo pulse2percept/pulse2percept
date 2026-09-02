@@ -267,7 +267,7 @@ class DiskElectrode(Electrode):
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
-    r : double
+    radius : double
         Disk radius (um) in the x,y plane
     name : str, optional
         Electrode name
@@ -283,28 +283,28 @@ class DiskElectrode(Electrode):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('r',)
+    __slots__ = ('radius',)
 
-    def __init__(self, x, y, z, r, name=None, activated=True):
+    def __init__(self, x, y, z, radius, name=None, activated=True):
         super(DiskElectrode, self).__init__(x, y, z, name, activated=activated)
-        r = as_value(r, um, 'r')
-        if _is_nonscalar(r):
+        radius = as_value(radius, um, 'radius')
+        if _is_nonscalar(radius):
             raise TypeError("Electrode radius must be a scalar.")
-        if r <= 0:
-            raise ValueError(f"Electrode radius must be > 0, not {r}.")
-        self.r = r
+        if radius <= 0:
+            raise ValueError(f"Electrode radius must be > 0, not {radius}.")
+        self.radius = radius
         self.plot_patch = Circle
-        self.plot_kwargs = {'radius': r, 'linewidth': 2,
+        self.plot_kwargs = {'radius': radius, 'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
                             'fc': (1, 1, 1, 0.8)}
-        self.plot_deactivated_kwargs = {'radius': r, 'linewidth': 2,
+        self.plot_deactivated_kwargs = {'radius': radius, 'linewidth': 2,
                                         'ec': (0.6, 0.6, 0.6, 1),
                                         'fc': (1, 1, 1, 0.6)}
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'r': self.r})
+        params.update({'radius': self.radius})
         return params
 
     def electric_potential(self, x, y, z, v0):
@@ -347,17 +347,19 @@ class DiskElectrode(Electrode):
         axial_dist = z - self.z
         if isclose(axial_dist, 0):
             # Potential on the electrode surface (Eq. 9 in Wiley & Webster):
-            if radial_dist > self.r:
+            if radial_dist > self.radius:
                 # Outside the electrode:
-                return 2.0 * v0 / np.pi * np.arcsin(self.r / radial_dist)
+                return 2.0 * v0 / np.pi * np.arcsin(self.radius / radial_dist)
             else:
                 # On the electrode:
                 return v0
         else:
             # Off the electrode surface (Eq. 10):
-            numer = 2 * self.r
-            denom = np.sqrt((radial_dist - self.r) ** 2 + axial_dist ** 2)
-            denom += np.sqrt((radial_dist + self.r) ** 2 + axial_dist ** 2)
+            numer = 2 * self.radius
+            denom = np.sqrt((radial_dist - self.radius) ** 2 +
+                            axial_dist ** 2)
+            denom += np.sqrt((radial_dist + self.radius) ** 2 +
+                             axial_dist ** 2)
             return 2.0 * v0 / np.pi * np.arcsin(numer / denom)
 
 
@@ -375,7 +377,7 @@ class SquareElectrode(Electrode):
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
-    a : double
+    side_length : double
         Side length (um) of the square
     name : str, optional
         Electrode name
@@ -390,23 +392,24 @@ class SquareElectrode(Electrode):
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('a')
+    __slots__ = ('side_length',)
 
-    def __init__(self, x, y, z, a, name=None, activated=True):
+    def __init__(self, x, y, z, side_length, name=None, activated=True):
         super(SquareElectrode, self).__init__(x, y, z, name=name,
                                               activated=activated)
-        a = as_value(a, um, 'a')
-        if _is_nonscalar(a):
+        side_length = as_value(side_length, um, 'side_length')
+        if _is_nonscalar(side_length):
             raise TypeError("Side length must be a scalar.")
-        if a <= 0:
-            raise ValueError(f"Side length must be > 0, not {a}.")
-        self.a = a
+        if side_length <= 0:
+            raise ValueError(f"Side length must be > 0, not {side_length}.")
+        self.side_length = side_length
         self.plot_patch = Rectangle
-        self.plot_kwargs = {'width': a, 'height': a, 'angle': 0,
-                            'linewidth': 2,
+        self.plot_kwargs = {'width': side_length, 'height': side_length,
+                            'angle': 0, 'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
                             'fc': (1, 1, 1, 0.8)}
-        self.plot_deactivated_kwargs = {'width': a, 'height': a, 'angle': 0,
+        self.plot_deactivated_kwargs = {'width': side_length,
+                                        'height': side_length, 'angle': 0,
                                         'linewidth': 2,
                                         'ec': (0.6, 0.6, 0.6, 1),
                                         'fc': (1, 1, 1, 0.6)}
@@ -414,7 +417,7 @@ class SquareElectrode(Electrode):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'a': self.a})
+        params.update({'side_length': self.side_length})
         return params
 
     def electric_potential(self, x, y, z, v0):
@@ -435,8 +438,9 @@ class HexElectrode(Electrode):
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
         vitreous humor (sometimes called electrode-retina distance).
-    a : double
-        Apothem (um) of the hexagon. The flat-to-flat width is ``2 * a``.
+    apothem : double
+        Apothem (um) of the hexagon. The flat-to-flat width is
+        ``2 * apothem``.
     name : str, optional
         Electrode name.
     activated : bool
@@ -457,23 +461,23 @@ class HexElectrode(Electrode):
        See :py:mod:`pulse2percept.units`.
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('a', 'orientation', 'rot')
+    __slots__ = ('apothem', 'orientation', 'rot')
 
-    def __init__(self, x, y, z, a, name=None, activated=True,
+    def __init__(self, x, y, z, apothem, name=None, activated=True,
                  orientation='vertical', rot=0):
         super(HexElectrode, self).__init__(x, y, z, name=name,
                                            activated=activated)
-        a = as_value(a, um, 'a')
-        if _is_nonscalar(a):
+        apothem = as_value(apothem, um, 'apothem')
+        if _is_nonscalar(apothem):
             raise TypeError("Apothem of the hexagon must be a scalar.")
-        if a <= 0:
+        if apothem <= 0:
             raise ValueError(f"Apothem of the hexagon must be > 0, not "
-                             f"{a}.")
+                             f"{apothem}.")
         if orientation not in _HEX_MPL_ORIENTATION:
             raise ValueError(f"'orientation' must be one of "
                              f"{sorted(_HEX_MPL_ORIENTATION)}, not "
                              f"'{orientation}'.")
-        self.a = a
+        self.apothem = apothem
         self.orientation = orientation
         self.rot = as_value(rot, deg, 'rot')
         self.plot_patch = RegularPolygon
@@ -488,7 +492,7 @@ class HexElectrode(Electrode):
     def _hex_patch_kwargs(self):
         """Return Matplotlib ``RegularPolygon`` geometry for this hexagon."""
         return {'numVertices': 6,
-                'radius': self.a * _HEX_CIRCUMRADIUS,
+                'radius': self.apothem * _HEX_CIRCUMRADIUS,
                 'orientation': (_HEX_MPL_ORIENTATION[self.orientation] +
                                 np.radians(self.rot))}
 
@@ -498,13 +502,13 @@ class HexElectrode(Electrode):
         
         .. versionadded:: 0.11.0
         """
-        return 2 * self.a
+        return 2 * self.apothem
 
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        params.update({'a': self.a, 'orientation': self.orientation,
-                       'rot': self.rot})
+        params.update({'apothem': self.apothem,
+                       'orientation': self.orientation, 'rot': self.rot})
         return params
 
     def electric_potential(self, x, y, z, v0):

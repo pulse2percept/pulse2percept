@@ -76,6 +76,16 @@ Implants
 * :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
   of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`).
 
+* Electrode geometry is spelled out: ``DiskElectrode.r`` is now ``radius``,
+  ``SquareElectrode.a`` is ``side_length``, and ``HexElectrode.a`` is
+  ``apothem`` (:pull:`880`).
+
+* :py:class:`~pulse2percept.implants.ElectrodeGrid` and
+  :py:class:`~pulse2percept.implants.GridImplant` take ``grid_type`` (was
+  ``type``) and ``electrode_type`` (was ``etype``). Remaining keywords are
+  passed to ``electrode_type`` unchanged, except ``radius``, which may still
+  be given per electrode (:pull:`880`).
+
 
 Models
 ~~~~~~

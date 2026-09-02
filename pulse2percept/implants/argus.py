@@ -94,11 +94,11 @@ class ArgusI(Implant):
 
     >>> argus = ArgusI(x=0, y=0, z=100, rot=0)
     >>> argus['B1']  # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='B1', r=250.0, x=-400.0,
-                  y=-1200.0, z=100.0)
+    DiskElectrode(activated=True, name='B1', radius=250.0,
+                  x=-400.0, y=-1200.0, z=100.0)
     >>> argus[0, 1]  # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='B1', r=250.0, x=-400.0,
-                  y=-1200.0, z=100.0)
+    DiskElectrode(activated=True, name='B1', radius=250.0,
+                  x=-400.0, y=-1200.0, z=100.0)
 
     """
     # Frozen class: User cannot add more class attributes
@@ -124,8 +124,8 @@ class ArgusI(Implant):
                              'L7', 'L3', 'M5', 'M1']
         names = old_names if use_legacy_names else ('1', 'A')
         self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
-                                    rot=rot, etype=DiskElectrode, r=r_arr,
-                                    names=names)
+                                    rot=rot, electrode_type=DiskElectrode,
+                                    radius=r_arr, names=names)
 
         # Set left/right eye:
         if not isinstance(eye, str):
@@ -254,11 +254,11 @@ class ArgusII(Implant):
 
     >>> argus = ArgusII(x=0, y=0, z=100, rot=0)
     >>> argus['E7']  # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='E7', r=112.5, x=862.5,
-                  y=862.5, z=100.0)
+    DiskElectrode(activated=True, name='E7', radius=112.5,
+                  x=862.5, y=862.5, z=100.0)
     >>> argus[4, 6]  # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='E7', r=112.5, x=862.5,
-                  y=862.5, z=100.0)
+    DiskElectrode(activated=True, name='E7', radius=112.5,
+                  x=862.5, y=862.5, z=100.0)
 
     Because the device brings its own encoder, a picture can be presented
     directly and comes back as current:
@@ -282,8 +282,9 @@ class ArgusII(Implant):
         r = 225.0 / 2.0
         spacing = 575.0
         names = ('A', '1')
-        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z, r=r,
-                                    rot=rot, names=names, etype=DiskElectrode)
+        self.earray = ElectrodeGrid(self.shape, spacing, x=x, y=y, z=z,
+                                    radius=r, rot=rot, names=names,
+                                    electrode_type=DiskElectrode)
 
         # Built per instance rather than shared between them: a raster binds to
         # the implant it schedules, and an encoder is a mutable object the

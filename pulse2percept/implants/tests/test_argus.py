@@ -46,9 +46,9 @@ def test_ArgusI(ztype, x, y, rot):
 
     # Check radii of electrodes
     for e in ['A1', 'A3', 'B2', 'C1', 'D4']:
-        npt.assert_almost_equal(argus[e].r, 125)
+        npt.assert_almost_equal(argus[e].radius, 125)
     for e in ['A2', 'A4', 'B1', 'C2', 'D3']:
-        npt.assert_almost_equal(argus[e].r, 250)
+        npt.assert_almost_equal(argus[e].radius, 250)
 
     # Check location of the tack
     tack = np.matmul(R, [-2000, 0])
@@ -144,7 +144,7 @@ def test_ArgusII(ztype, x, y, rot):
 
     # Make sure radius is correct
     for e in ['A1', 'B3', 'C5', 'D7', 'E9', 'F10']:
-        npt.assert_almost_equal(argus[e].r, 112.5)
+        npt.assert_almost_equal(argus[e].radius, 112.5)
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):

@@ -209,7 +209,7 @@ class BVT44(Implant):
 
         # The 44 stimulating electrodes are arranged in a hex grid; two return
         # electrodes are added as well:
-        grid = ElectrodeGrid((7, 7), (1320, 925), type='hex', x=-330)
+        grid = ElectrodeGrid((7, 7), (1320, 925), grid_type='hex', x=-330)
         for e in ['D1', 'A7', 'C7', 'E7', 'G7']:
             grid.remove_electrode(e)
         x_arr = np.array([e.x for e in grid.electrode_objects] + [-7000, -7000])

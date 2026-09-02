@@ -27,8 +27,8 @@ def test_PhotovoltaicPixel():
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
-    npt.assert_almost_equal(electrode.r, 3)
-    npt.assert_almost_equal(electrode.a, 4)
+    npt.assert_almost_equal(electrode.radius, 3)
+    npt.assert_almost_equal(electrode.apothem, 4)
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
     npt.assert_equal(hasattr(electrode, '__dict__'), False)
@@ -78,7 +78,7 @@ def test_PRIMAPivotal(ztype, x, y, rot):
 
     # Make sure the radius is correct
     for e in ['A7', 'B3', 'C5', 'D7', 'E9', 'F11', 'G13', 'H14']:
-        npt.assert_almost_equal(prima[e].r, 14)
+        npt.assert_almost_equal(prima[e].radius, 14)
 
     # Make sure the pitch is correct:
     distF6E6 = np.sqrt((prima['E6'].x - prima['F6'].x) ** 2 +
@@ -129,7 +129,7 @@ def test_Lorach2015Array(ztype, x, y, rot):
 
     # Make sure the radius is correct
     for e in ['A6', 'B4', 'C5', 'D7', 'E9', 'F11', 'G13', 'H14']:
-        npt.assert_almost_equal(prima[e].r, 10)
+        npt.assert_almost_equal(prima[e].radius, 10)
 
     # Make sure the pitch is correct:
     distF6E6 = np.sqrt((prima['E6'].x - prima['F6'].x) ** 2 +
@@ -208,7 +208,7 @@ def test_Ho2019FlatArray(pixel_size, n_elec, elec_radius, ztype, x, y, rot):
         npt.assert_almost_equal(prima.spacing, pixel_size)
         npt.assert_almost_equal(prima.gap, 0)
         # Active electrode:
-        npt.assert_almost_equal(elec.r, elec_radius)
+        npt.assert_almost_equal(elec.radius, elec_radius)
         # Hex bodies turn with the lattice:
         npt.assert_almost_equal(elec.rot, rot)
         npt.assert_equal(elec.orientation, 'vertical')
@@ -361,7 +361,7 @@ def test_Huang2021Array(pixel_size, n_elec, n_total, elec_diam, ztype):
     for elec in prima.earray.electrode_objects:
         npt.assert_almost_equal(elec.width, pixel_size)
         # Active electrode is 40% of the pixel size across:
-        npt.assert_almost_equal(2 * elec.r, elec_diam)
+        npt.assert_almost_equal(2 * elec.radius, elec_diam)
         # Flat-top hex bodies that turn with the lattice:
         npt.assert_equal(elec.orientation, 'vertical')
         npt.assert_almost_equal(elec.rot, rot)

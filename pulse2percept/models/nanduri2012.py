@@ -142,7 +142,8 @@ class Nanduri2012Spatial(SpatialModel):
         _require_disk_electrodes(earray.electrode_objects)
         x_el, y_el, z_el = self._electrode_coords(earray, stim)
         # Radius is not part of the coordinate array.
-        r_el = np.ascontiguousarray([earray[e].r for e in stim.electrodes],
+        r_el = np.ascontiguousarray([earray[e].radius
+                                     for e in stim.electrodes],
                                     dtype=np.float32)
         return spatial_fast(self._stim_values(stim), x_el, y_el, z_el,
                             r_el,

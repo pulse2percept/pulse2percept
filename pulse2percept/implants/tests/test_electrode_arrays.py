@@ -80,7 +80,7 @@ def test_ElectrodeArray_add_electrode():
         npt.assert_almost_equal(earray[key].x, 4)
         npt.assert_almost_equal(earray[key].y, 5)
         npt.assert_almost_equal(earray[key].z, 6)
-        npt.assert_almost_equal(earray[key].r, 7)
+        npt.assert_almost_equal(earray[key].radius, 7)
 
     # We can also get a list of electrodes:
     for keys in [[key0, key1], [0, key1], [key0, 1], [0, 1]]:
@@ -167,58 +167,45 @@ def test_ElectrodeGrid(gtype):
 
     # Must pass in valid Electrode type:
     with pytest.raises(TypeError):
-        ElectrodeGrid((2, 3), 10, type=gtype, etype=ElectrodeArray)
+        ElectrodeGrid((2, 3), 10, grid_type=gtype,
+                      electrode_type=ElectrodeArray)
     with pytest.raises(TypeError):
-        ElectrodeGrid((2, 3), 10, type=gtype, etype="foo")
+        ElectrodeGrid((2, 3), 10, grid_type=gtype, electrode_type="foo")
 
     # Must pass in valid Orientation value:
     with pytest.raises(ValueError):
-        ElectrodeGrid((2, 3), 10, type=gtype, orientation="foo")
+        ElectrodeGrid((2, 3), 10, grid_type=gtype, orientation="foo")
     with pytest.raises(TypeError):
-        ElectrodeGrid((2, 3), 10, type=gtype, orientation=False)
+        ElectrodeGrid((2, 3), 10, grid_type=gtype, orientation=False)
 
-    # Must pass in radius `r` for grid of DiskElectrode objects:
+    # Must pass in a `radius` for a grid of DiskElectrode objects:
     gshape = (4, 5)
     spacing = 100
-    grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
-                         r=13)
+    grid = ElectrodeGrid(gshape, spacing, grid_type=gtype,
+                         electrode_type=DiskElectrode, radius=13)
     for (_, e) in grid.electrodes.items():
-        npt.assert_almost_equal(e.r, 13)
-    grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
-                         r=np.arange(1, np.prod(gshape) + 1))
+        npt.assert_almost_equal(e.radius, 13)
+    grid = ElectrodeGrid(gshape, spacing, grid_type=gtype,
+                         electrode_type=DiskElectrode,
+                         radius=np.arange(1, np.prod(gshape) + 1))
     for i, (_, e) in enumerate(grid.electrodes.items()):
-        npt.assert_almost_equal(e.r, i + 1)
+        npt.assert_almost_equal(e.radius, i + 1)
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode)
-    with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
-                      radius=10)
+        ElectrodeGrid(gshape, spacing, grid_type=gtype,
+                      electrode_type=DiskElectrode)
     # Number of radii must match number of electrodes
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
-                      radius=[2, 13, 14])
-    # Only DiskElectrode needs r, not PointSource:
+        ElectrodeGrid(gshape, spacing, grid_type=gtype,
+                      electrode_type=DiskElectrode, radius=[2, 13, 14])
+    # Only DiskElectrode takes a radius, not PointSource:
     with pytest.raises(TypeError):
-        ElectrodeGrid(gshape, spacing, type=gtype, r=10)
-
-    # Must pass in radius `r` for grid of DiskElectrode objects:
-    gshape = (4, 5)
-    spacing = 100
-    with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode)
-    with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
-                      radius=10)
-    # Number of radii must match number of electrodes
-    with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
-                      radius=[2, 13])
+        ElectrodeGrid(gshape, spacing, grid_type=gtype, radius=10)
 
     # Must pass in valid grid type:
     with pytest.raises(TypeError):
-        ElectrodeGrid(gshape, spacing, type=DiskElectrode)
+        ElectrodeGrid(gshape, spacing, grid_type=DiskElectrode)
     with pytest.raises(ValueError):
-        ElectrodeGrid(gshape, spacing, type='unknown')
+        ElectrodeGrid(gshape, spacing, grid_type='unknown')
 
     # Slots:
     npt.assert_equal(hasattr(grid, '__slots__'), True)
@@ -233,8 +220,9 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
     radius = 30
     gshape = (4, 6)
     spacing = 100
-    egrid = ElectrodeGrid(gshape, spacing, x=x, y=y, type='rect', r=radius,
-                          etype=DiskElectrode, orientation=orientation)
+    egrid = ElectrodeGrid(gshape, spacing, x=x, y=y, grid_type='rect',
+                          radius=radius, electrode_type=DiskElectrode,
+                          orientation=orientation)
     npt.assert_equal(egrid.shape, gshape)
     npt.assert_equal(egrid.n_electrodes, np.prod(gshape))
     # Make sure different electrodes have different coordinates:
@@ -253,45 +241,51 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
 
     # Test whether egrid.z is set correctly, when z is a constant:
     z = 12
-    egrid = ElectrodeGrid(gshape, spacing, z=z, type=gtype, r=radius,
-                          etype=DiskElectrode, orientation=orientation)
+    egrid = ElectrodeGrid(gshape, spacing, z=z, grid_type=gtype,
+                          radius=radius, electrode_type=DiskElectrode,
+                          orientation=orientation)
     for i in egrid.electrode_objects:
         npt.assert_equal(i.z, z)
 
     # and when every electrode has a different z:
     z = np.arange(np.prod(gshape))
-    egrid = ElectrodeGrid(gshape, spacing, z=z, type=gtype, r=radius,
-                          etype=DiskElectrode, orientation=orientation)
+    egrid = ElectrodeGrid(gshape, spacing, z=z, grid_type=gtype,
+                          radius=radius, electrode_type=DiskElectrode,
+                          orientation=orientation)
     x = -1
     for i in egrid.electrode_objects:
         npt.assert_equal(i.z, x + 1)
         x = i.z
 
     # TODO test rotation, making sure positive angles rotate CCW
-    egrid1 = ElectrodeGrid((2, 2), spacing, type=gtype, etype=DiskElectrode,
-                           r=radius, orientation=orientation)
-    egrid2 = ElectrodeGrid((2, 2), spacing, rot=10, type=gtype, r=radius,
-                           etype=DiskElectrode, orientation=orientation)
+    egrid1 = ElectrodeGrid((2, 2), spacing, grid_type=gtype,
+                           electrode_type=DiskElectrode, radius=radius,
+                           orientation=orientation)
+    egrid2 = ElectrodeGrid((2, 2), spacing, rot=10, grid_type=gtype,
+                           radius=radius, electrode_type=DiskElectrode,
+                           orientation=orientation)
     npt.assert_equal(egrid1["A1"].x < egrid2["A1"].x, True)
     npt.assert_equal(egrid1["A1"].y > egrid2["A1"].y, True)
     npt.assert_equal(egrid1["B2"].x > egrid2["B2"].x, True)
     npt.assert_equal(egrid1["B2"].y < egrid2["B2"].y, True)
 
     # Smallest possible grid:
-    egrid = ElectrodeGrid((1, 1), spacing, type=gtype, etype=DiskElectrode,
-                          r=radius, orientation=orientation)
+    egrid = ElectrodeGrid((1, 1), spacing, grid_type=gtype,
+                          electrode_type=DiskElectrode, radius=radius,
+                          orientation=orientation)
     npt.assert_equal(egrid.shape, (1, 1))
     npt.assert_equal(egrid.n_electrodes, 1)
 
     # Can't have a zero-sized grid:
     with pytest.raises(ValueError):
-        egrid = ElectrodeGrid((0, 0), spacing, type=gtype)
+        egrid = ElectrodeGrid((0, 0), spacing, grid_type=gtype)
     with pytest.raises(ValueError):
-        egrid = ElectrodeGrid((5, 0), spacing, type=gtype)
+        egrid = ElectrodeGrid((5, 0), spacing, grid_type=gtype)
 
     # Verify spacing is correct:
-    grid = ElectrodeGrid(gshape, spacing, type=gtype, etype=DiskElectrode,
-                         r=30, orientation=orientation)
+    grid = ElectrodeGrid(gshape, spacing, grid_type=gtype,
+                         electrode_type=DiskElectrode, radius=30,
+                         orientation=orientation)
     npt.assert_almost_equal(np.sqrt((grid['A1'].x - grid['B1'].x) ** 2 +
                                     (grid['A1'].y - grid['B1'].y) ** 2),
                             spacing)
@@ -305,26 +299,27 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
 
     # Different spacing in x and y:
     x_spc, y_spc = 50, 100
-    grid = ElectrodeGrid(gshape, (x_spc, y_spc), type=gtype, r=30,
-                         etype=DiskElectrode, orientation=orientation)
+    grid = ElectrodeGrid(gshape, (x_spc, y_spc), grid_type=gtype, radius=30,
+                         electrode_type=DiskElectrode,
+                         orientation=orientation)
     print(gtype, orientation)
     npt.assert_almost_equal(grid['A2'].x - grid['A1'].x, x_spc)
     npt.assert_almost_equal(grid['B2'].y - grid['A2'].y, y_spc)
 
     # Grid has same size as 'names':
-    egrid = ElectrodeGrid((1, 2), spacing, type=gtype, names=('C1', '4'))
+    egrid = ElectrodeGrid((1, 2), spacing, grid_type=gtype, names=('C1', '4'))
     npt.assert_equal(egrid[0, 0], egrid['C1'])
     npt.assert_equal(egrid[0, 1], egrid['4'])
 
     # Invalid naming conventions:
     with pytest.raises(ValueError):
-        egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=[1])
+        egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=[1])
     with pytest.raises(ValueError):
-        egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=[])
+        egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=[])
     with pytest.raises(TypeError):
-        egrid = ElectrodeGrid(gshape, spacing, type=gtype, names={1})
+        egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names={1})
     with pytest.raises(TypeError):
-        egrid = ElectrodeGrid(gshape, spacing, type=gtype, names={})
+        egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names={})
     with pytest.raises(TypeError):
         ElectrodeGrid(gshape, spacing, names={'1': 2})
     with pytest.raises(ValueError):
@@ -340,42 +335,42 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
 
     # Test all naming conventions:
     gshape = (2, 3)
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '1'))
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=('A', '1'))
     # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('1', 'A'))
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=('1', 'A'))
     # print([e for e in egrid.keys()])
     # egrid = ElectrodeGrid(shape, names=('A', '1'))
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'])
 
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('1', '1'))
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=('1', '1'))
     # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['11', '12', '13', '21', '22', '23'])
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', 'A'))
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=('A', 'A'))
     # print([e for e in egrid.keys()])
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['AA', 'AB', 'AC', 'BA', 'BB', 'BC'])
 
     # Still starts at A:
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('B', '1'))
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=('B', '1'))
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '2'))
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=('A', '2'))
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'])
     # Reversal:
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('-A', '1'))
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=('-A', '1'))
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['B1', 'B2', 'B3', 'A1', 'A2', 'A3'])
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype, names=('A', '-1'))
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype, names=('A', '-1'))
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['A3', 'A2', 'A1', 'B3', 'B2', 'B1'])
 
     # test unique names
-    egrid = ElectrodeGrid(gshape, spacing, type=gtype,
+    egrid = ElectrodeGrid(gshape, spacing, grid_type=gtype,
                           names=['53', '18', '00', '81', '11', '12'])
     npt.assert_equal([e for e in egrid.electrode_names],
                      ['53', '18', '00', '81', '11', '12'])
@@ -395,7 +390,7 @@ def test_ElectrodeGrid_is_centered(gtype, orientation, shape):
     off, because the correction was applied unconditionally.
     """
     x, y = 200, -300
-    coords = ElectrodeGrid(shape, 100, x=x, y=y, type=gtype,
+    coords = ElectrodeGrid(shape, 100, x=x, y=y, grid_type=gtype,
                            orientation=orientation).coordinates()
     npt.assert_almost_equal((coords[:, 0].min() + coords[:, 0].max()) / 2, x)
     npt.assert_almost_equal((coords[:, 1].min() + coords[:, 1].max()) / 2, y)
@@ -409,7 +404,7 @@ def test_ElectrodeGrid_centers_the_extent_not_the_centroid():
     describe where the physical array sits, so the extent is what must land
     on them.
     """
-    coords = ElectrodeGrid((3, 4), 100, type='hex').coordinates()
+    coords = ElectrodeGrid((3, 4), 100, grid_type='hex').coordinates()
     npt.assert_almost_equal((coords[:, 0].min() + coords[:, 0].max()) / 2, 0)
     npt.assert_almost_equal(coords[:, 0].mean(), 100 / 12)
 
@@ -423,7 +418,7 @@ def test_ElectrodeGrid_hex_is_a_triangular_lattice(orientation, shape):
     diagonal neighbor is further away than the orthogonal one.
     """
     spacing = 100
-    coords = ElectrodeGrid(shape, spacing, type='hex',
+    coords = ElectrodeGrid(shape, spacing, grid_type='hex',
                            orientation=orientation).coordinates()[:, :2]
     dist = np.linalg.norm(coords[:, None, :] - coords[None, :, :], axis=-1)
     np.fill_diagonal(dist, np.inf)
@@ -446,9 +441,9 @@ def test_ElectrodeGrid_hex_bodies_tile_the_lattice(orientation, rot):
     pixels overlap their neighbors while leaving gaps elsewhere.
     """
     spacing = 100
-    grid = ElectrodeGrid((3, 4), spacing, type='hex', rot=rot,
-                         orientation=orientation, etype=HexElectrode,
-                         a=spacing / 2)
+    grid = ElectrodeGrid((3, 4), spacing, grid_type='hex', rot=rot,
+                         orientation=orientation, electrode_type=HexElectrode,
+                         apothem=spacing / 2)
     elec = grid['B2']
     npt.assert_equal(elec.orientation, orientation)
     npt.assert_almost_equal(elec.rot, rot)
@@ -469,15 +464,16 @@ def test_ElectrodeGrid_hex_bodies_tile_the_lattice(orientation, rot):
 def test_ElectrodeGrid_get_params(gtype):
     # When the electrode_type is 'DiskElectrode'
     # test the default value
-    egrid = ElectrodeGrid((2, 3), 40, type=gtype, etype=DiskElectrode, r=20)
+    egrid = ElectrodeGrid((2, 3), 40, grid_type=gtype,
+                          electrode_type=DiskElectrode, radius=20)
     npt.assert_equal(egrid.shape, (2, 3))
-    npt.assert_equal(egrid.type, gtype)
+    npt.assert_equal(egrid.grid_type, gtype)
 
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))
 def test_ElectrodeGrid___get_item__(gtype):
-    grid = ElectrodeGrid((2, 4), 20, names=('A', '1'), type=gtype,
-                         etype=DiskElectrode, r=20)
+    grid = ElectrodeGrid((2, 4), 20, names=('A', '1'), grid_type=gtype,
+                         electrode_type=DiskElectrode, radius=20)
     npt.assert_equal(grid[0], grid['A1'])
     npt.assert_equal(grid[0, 0], grid['A1'])
     npt.assert_equal(grid[1], grid['A2'])
@@ -568,15 +564,15 @@ def test_ElectrodeArray_coordinates():
 def test_ElectrodeGrid_units():
     """Every spatial argument may be unitful, and they may be mixed"""
     bare = ElectrodeGrid((2, 3), 575.0, x=1200.0, y=-100.0,
-                         z=[100., 200., 300., 400., 500., 600.], r=112.5,
-                         etype=DiskElectrode)
+                         z=[100., 200., 300., 400., 500., 600.], radius=112.5,
+                         electrode_type=DiskElectrode)
     unitful = ElectrodeGrid((2, 3), 0.575 * mm, x=1.2 * mm, y=-100 * um,
                             z=[100 * um, 0.2 * mm, 300 * um, 0.4 * mm,
                                500 * um, 0.06 * cm],
-                            r=112.5 * um, etype=DiskElectrode)
+                            radius=112.5 * um, electrode_type=DiskElectrode)
     npt.assert_allclose(unitful.coordinates(), bare.coordinates(), rtol=1e-12)
-    npt.assert_allclose([e.r for e in unitful.electrode_objects],
-                        [e.r for e in bare.electrode_objects], rtol=1e-12)
+    npt.assert_allclose([e.radius for e in unitful.electrode_objects],
+                        [e.radius for e in bare.electrode_objects], rtol=1e-12)
     # The grid stores plain numbers, so its repr is unchanged:
     npt.assert_almost_equal(unitful.spacing, 575.0)
     npt.assert_equal(isinstance(unitful.spacing, Quantity), False)
@@ -586,9 +582,9 @@ def test_ElectrodeGrid_units():
                         ElectrodeGrid((2, 2), (500., 600.)).coordinates(),
                         rtol=1e-12)
     # A per-electrode radius, too:
-    radii = ElectrodeGrid((1, 2), 100, r=[10 * um, 0.02 * mm],
-                          etype=DiskElectrode)
-    npt.assert_allclose([e.r for e in radii.electrode_objects], [10, 20],
+    radii = ElectrodeGrid((1, 2), 100, radius=[10 * um, 0.02 * mm],
+                          electrode_type=DiskElectrode)
+    npt.assert_allclose([e.radius for e in radii.electrode_objects], [10, 20],
                         rtol=1e-12)
     # An awkward conversion still lands where the bare spelling does:
     npt.assert_allclose(ElectrodeGrid((1, 2), 0.0417 * mm).coordinates(),
@@ -602,7 +598,8 @@ def test_ElectrodeGrid_dimension_errors():
         with pytest.raises(DimensionMismatchError):
             ElectrodeGrid(**{'shape': (2, 2), 'spacing': 400, **kwargs})
     with pytest.raises(DimensionMismatchError):
-        ElectrodeGrid((2, 2), 400, r=10 * uA, etype=DiskElectrode)
+        ElectrodeGrid((2, 2), 400, radius=10 * uA,
+                      electrode_type=DiskElectrode)
     # A rotation is an ordinary angle. `dva` is visual angle, which is not the
     # same thing, so it is refused rather than quietly reinterpreted:
     with pytest.raises(DimensionMismatchError) as excinfo:
@@ -685,3 +682,45 @@ def test_ElectrodeArray_coordinates_selector():
     for selector in ('Z99', ('A1', 'B2')):
         with pytest.raises(ValueError):
             grid.coordinates(electrodes=selector)
+
+
+def test_ElectrodeGrid_parameter_names():
+    """The grid takes `grid_type`/`electrode_type`, not `type`/`etype`"""
+    grid = ElectrodeGrid((10, 10), spacing=400, grid_type='hex',
+                         electrode_type=DiskElectrode, radius=75)
+    npt.assert_equal(grid.grid_type, 'hex')
+    npt.assert_equal(grid.n_electrodes, 100)
+    npt.assert_almost_equal(grid['A1'].radius, 75)
+    npt.assert_equal('grid_type=' in str(grid), True)
+    npt.assert_equal(hasattr(grid, 'type'), False)
+    for kwargs in ({'type': 'hex'}, {'etype': DiskElectrode, 'r': 75}):
+        with pytest.raises(TypeError):
+            ElectrodeGrid((2, 2), 400, **kwargs)
+
+
+def test_ElectrodeGrid_radius_per_electrode():
+    """A scalar radius is shared; a list gives one radius per electrode"""
+    npt.assert_almost_equal(
+        [e.radius for e in ElectrodeGrid((2, 2), 400, radius=100,
+                                         electrode_type=DiskElectrode
+                                         ).electrode_objects],
+        [100] * 4)
+    npt.assert_almost_equal(
+        [e.radius for e in ElectrodeGrid((2, 2), 400,
+                                         electrode_type=DiskElectrode,
+                                         radius=[100, 100, 200, 200]
+                                         ).electrode_objects],
+        [100, 100, 200, 200])
+
+
+def test_ElectrodeGrid_forwards_electrode_params():
+    """Anything but `radius` reaches the electrode class untouched"""
+    grid = ElectrodeGrid((2, 2), 400, electrode_type=HexElectrode,
+                         apothem=150, activated=False)
+    for elec in grid.electrode_objects:
+        npt.assert_almost_equal(elec.apothem, 150)
+        npt.assert_equal(elec.activated, False)
+    # An unknown parameter is the electrode class's error, not a silent drop:
+    with pytest.raises(TypeError):
+        ElectrodeGrid((2, 2), 400, electrode_type=HexElectrode, apothem=150,
+                      not_a_parameter=1)

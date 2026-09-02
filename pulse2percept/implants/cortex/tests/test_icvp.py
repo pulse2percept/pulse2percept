@@ -38,7 +38,7 @@ def test_icvp(x, y, rot):
     npt.assert_almost_equal(icvp['11'].y, xy[1] + y, decimal=2)
 
     for electrode in icvp.earray.electrode_objects:
-        npt.assert_almost_equal(electrode.r, radius)
+        npt.assert_almost_equal(electrode.radius, radius)
 
         if electrode.name in deactivated_electrodes:
             npt.assert_equal(electrode.activated, False)

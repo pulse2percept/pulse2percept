@@ -106,7 +106,7 @@ def test_SquareElectrode():
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
-    npt.assert_almost_equal(electrode.a, 100)
+    npt.assert_almost_equal(electrode.side_length, 100)
     npt.assert_equal(electrode.name, 'A001')
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
@@ -131,7 +131,7 @@ def test_HexElectrode():
     npt.assert_almost_equal(electrode.x, 0)
     npt.assert_almost_equal(electrode.y, 1)
     npt.assert_almost_equal(electrode.z, 2)
-    npt.assert_almost_equal(electrode.a, 100)
+    npt.assert_almost_equal(electrode.apothem, 100)
     npt.assert_equal(electrode.name, 'A001')
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
@@ -203,18 +203,20 @@ def test_Electrode_units():
     """Equivalent spellings of a position must give the same electrode"""
     bare = DiskElectrode(1000, 0, 100, 200)
     unitful = DiskElectrode(1 * mm, 0 * mm, 0.1 * mm, 0.2 * mm)
-    for attr in ('x', 'y', 'z', 'r'):
+    for attr in ('x', 'y', 'z', 'radius'):
         npt.assert_allclose(getattr(unitful, attr), getattr(bare, attr),
                             rtol=1e-12)
         # Electrodes store plain numbers, whatever they were given:
         npt.assert_equal(isinstance(getattr(unitful, attr), Quantity), False)
     # Including conversions that do not land on a round number:
     awkward = DiskElectrode(0.0417 * mm, -8.3 * um, 0, 0.0083 * mm)
-    npt.assert_allclose([awkward.x, awkward.y, awkward.r], [41.7, -8.3, 8.3],
-                        rtol=1e-12)
+    npt.assert_allclose([awkward.x, awkward.y, awkward.radius],
+                        [41.7, -8.3, 8.3], rtol=1e-12)
     # Every electrode type takes a unitful size:
-    npt.assert_allclose(SquareElectrode(0, 0, 0, 0.05 * mm).a, 50, rtol=1e-12)
-    npt.assert_allclose(HexElectrode(0, 0, 0, 0.05 * mm).a, 50, rtol=1e-12)
+    npt.assert_allclose(SquareElectrode(0, 0, 0, 0.05 * mm).side_length, 50,
+                        rtol=1e-12)
+    npt.assert_allclose(HexElectrode(0, 0, 0, 0.05 * mm).apothem, 50,
+                        rtol=1e-12)
     npt.assert_allclose(PointSource(1 * mm, 0, 0).x, 1000, rtol=1e-12)
     # A quantity wrapping an array is refused for the same reason a bare array
     # is, rather than being stored as one:
@@ -226,17 +228,17 @@ def test_Electrode_units():
 
 def test_Electrode_dimension_errors():
     for kwargs in ({'x': 5 * ms}, {'y': 5 * ms}, {'z': 5 * uA},
-                   {'r': 10 * uA}):
+                   {'radius': 10 * uA}):
         with pytest.raises(DimensionMismatchError):
-            DiskElectrode(**{'x': 0, 'y': 0, 'z': 0, 'r': 100, **kwargs})
-    for etype in (SquareElectrode, HexElectrode):
+            DiskElectrode(**{'x': 0, 'y': 0, 'z': 0, 'radius': 100, **kwargs})
+    for electrode_type in (SquareElectrode, HexElectrode):
         with pytest.raises(DimensionMismatchError):
-            etype(0, 0, 0, 2 * dva)
+            electrode_type(0, 0, 0, 2 * dva)
     # The message names the offending argument:
     with pytest.raises(DimensionMismatchError) as excinfo:
         DiskElectrode(0, 0, 0, 10 * uA)
-    npt.assert_equal("Parameter 'r' expects length (um), got electric current"
-                     in str(excinfo.value), True)
+    npt.assert_equal("Parameter 'radius' expects length (um), got electric"
+                     " current" in str(excinfo.value), True)
 
 
 def test_Electrode_coordinates():
@@ -262,3 +264,27 @@ def test_electric_potential_units():
             elec.electric_potential(1 * ms, 0, 0, *args)
         with pytest.raises(DimensionMismatchError):
             elec.electric_potential(0, 1 * uA, 0, *args)
+
+
+def test_electrode_geometry_names():
+    """Geometry is spelled out, and the old abbreviations are gone"""
+    disk = DiskElectrode(0, 0, 0, 100)
+    npt.assert_almost_equal(disk.radius, 100)
+    npt.assert_almost_equal(DiskElectrode(0, 0, 0, radius=100).radius, 100)
+    npt.assert_equal('radius=100' in str(disk), True)
+    square = SquareElectrode(0, 0, 0, side_length=100)
+    npt.assert_almost_equal(square.side_length, 100)
+    npt.assert_equal('side_length=100' in str(square), True)
+    hexagon = HexElectrode(0, 0, 0, apothem=100)
+    npt.assert_almost_equal(hexagon.apothem, 100)
+    npt.assert_almost_equal(hexagon.width, 200)
+    npt.assert_equal('apothem=100' in str(hexagon), True)
+    for elec in (disk, square, hexagon):
+        npt.assert_equal(hasattr(elec, 'r'), False)
+        npt.assert_equal(hasattr(elec, 'a'), False)
+    with pytest.raises(TypeError):
+        DiskElectrode(0, 0, 0, r=100)
+    with pytest.raises(TypeError):
+        SquareElectrode(0, 0, 0, a=100)
+    with pytest.raises(TypeError):
+        HexElectrode(0, 0, 0, a=100)

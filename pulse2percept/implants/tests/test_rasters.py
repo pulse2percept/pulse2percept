@@ -145,7 +145,7 @@ def test_CheckerboardRaster():
 def test_CheckerboardRaster_grids():
     # A hex grid is handled the same way, and its 7-group pattern is the one
     # that puts every group on a hex lattice of its own, sqrt(7) pitches wide:
-    hexgrid = Implant(ElectrodeGrid((14, 14), 200, type='hex'))
+    hexgrid = Implant(ElectrodeGrid((14, 14), 200, grid_type='hex'))
     raster = CheckerboardRaster(7).bind(hexgrid)
     npt.assert_almost_equal(raster.min_spacing, 200 * np.sqrt(7), decimal=3)
     npt.assert_almost_equal(_min_spacing(hexgrid, raster), raster.min_spacing,
@@ -265,7 +265,7 @@ def test_CheckerboardRaster_is_reproducible(monkeypatch):
                     row_d[at], row_i[at] = row_d[to], row_i[to]
             return dist, idx
 
-    hexgrid = Implant(ElectrodeGrid((10, 10), 400, type='hex'))
+    hexgrid = Implant(ElectrodeGrid((10, 10), 400, grid_type='hex'))
     for implant in [ArgusII(), hexgrid, PRIMAPivotal()]:
         names = implant.electrode_names
         expected = CheckerboardRaster(5).bind(implant).groups(names)

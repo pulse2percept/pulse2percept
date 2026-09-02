@@ -56,7 +56,7 @@ class ICVP(Implant):
 
     >>> icvp = ICVP()
     >>> icvp['11'] # doctest: +NORMALIZE_WHITESPACE
-    DiskElectrode(activated=True, name='11', r=50.0, 
+    DiskElectrode(activated=True, name='11', radius=50.0,
                   x=15173.205080756888, y=100.0, z=-650.0)
     """
     # Frozen class: User cannot add more class attributes
@@ -104,7 +104,8 @@ class ICVP(Implant):
 
         self.earray = ElectrodeGrid(
             self.shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
-            type='hex', orientation='vertical', r=50, etype=DiskElectrode
+            grid_type='hex', orientation='vertical', radius=50,
+            electrode_type=DiskElectrode
         )
         for e in ['t1', 't2']:
             self.earray.remove_electrode(e)
