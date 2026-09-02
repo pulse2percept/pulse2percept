@@ -820,3 +820,24 @@ def test_ElectrodeGrid_is_a_container(gtype):
     for item in (1.2, ('A1', 'B2'), (0, 1, 2)):
         with pytest.raises(TypeError):
             grid[item]
+
+
+def test_ElectrodeArray_get():
+    """`get` answers a default for a missing electrode, not for a bad type"""
+    array = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 10),
+                            'A2': DiskElectrode(10, 0, 0, 10)})
+    sentinel = object()
+    npt.assert_equal(array.get('A1') is array['A1'], True)
+    npt.assert_equal(array.get(1) is array['A2'], True)
+    npt.assert_equal(array.get('missing') is None, True)
+    npt.assert_equal(array.get('missing', sentinel) is sentinel, True)
+    npt.assert_equal(array.get(999, sentinel) is sentinel, True)
+    # A selector of the wrong type is a bug, not a missing electrode:
+    with pytest.raises(TypeError):
+        array.get(1.2)
+    # A grid inherits it, and its (row, col) is no different:
+    grid = ElectrodeGrid((2, 2), 20, names=('A', '1'))
+    npt.assert_equal(grid.get((1, 1)) is grid['B2'], True)
+    npt.assert_equal(grid.get((9, 9), sentinel) is sentinel, True)
+    with pytest.raises(TypeError):
+        grid.get(('A1', 'B2'))
