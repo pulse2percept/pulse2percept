@@ -89,10 +89,9 @@ Implants
 
 * ``implant.earray`` / ``earray=`` is now
   :py:attr:`~pulse2percept.implants.Implant.electrode_array` /
-  ``electrode_array=``, ``vfmap`` is ``visual_field_map``, and ``plot3D()`` is
-  ``plot3d()``. The class name
-  :py:class:`~pulse2percept.topography.VisualFieldMap` is unchanged
-  (:pull:`880`).
+  ``electrode_array=``, ``vfmap`` is ``visual_field_map``, ``plot3D()`` is
+  ``plot3d()``, and :py:class:`~pulse2percept.topography.Grid2D` stores its
+  grid as ``grid_type`` (:pull:`880`).
 
 
 Models

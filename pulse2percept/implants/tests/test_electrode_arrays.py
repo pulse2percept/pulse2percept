@@ -23,8 +23,11 @@ def test_ElectrodeArray():
     # Empty array:
     electrode_array = ElectrodeArray([])
     npt.assert_equal(electrode_array.n_electrodes, 0)
-    # npt.assert_equal(electrode_array[0], None)
-    npt.assert_equal(electrode_array['A01'], None)
+    npt.assert_equal(len(electrode_array), 0)
+    with pytest.raises(IndexError):
+        electrode_array[0]
+    with pytest.raises(KeyError):
+        electrode_array['A01']
     with pytest.raises(TypeError):
         electrode_array[PointSource(0, 0, 0)]
     ElectrodeArray([])
@@ -648,7 +651,7 @@ def test_ElectrodeArray_coordinates_subset():
                         rtol=1e-12)
     # An electrode the array does not have says so, rather than surfacing as
     # an AttributeError somewhere downstream:
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(KeyError) as excinfo:
         electrode_array.coordinates(electrodes=['A1', 'Z99'])
     npt.assert_equal('Z99' in str(excinfo.value), True)
     # Repeats are allowed: nothing here says an electrode may appear once.
@@ -689,9 +692,13 @@ def test_ElectrodeArray_coordinates_selector():
         grid.coordinates(electrodes=np.array(['A1', 'C3'])).shape, (2, 3))
     npt.assert_equal(grid.coordinates(electrodes=[]).shape, (0, 3))
     # Anything the array does not have says so, however it was spelled:
-    for selector in ('Z99', ('A1', 'B2')):
-        with pytest.raises(ValueError):
-            grid.coordinates(electrodes=selector)
+    with pytest.raises(KeyError):
+        grid.coordinates(electrodes='Z99')
+    with pytest.raises(IndexError):
+        grid.coordinates(electrodes=(0, 99))
+    # A tuple is one (row, col), so a pair of names is not a collection:
+    with pytest.raises(TypeError):
+        grid.coordinates(electrodes=('A1', 'B2'))
 
 
 def test_ElectrodeGrid_parameter_names():
@@ -754,3 +761,62 @@ def test_ElectrodeGrid_forwards_electrode_params():
     with pytest.raises(TypeError):
         ElectrodeGrid((2, 2), 400, electrode_type=HexElectrode, apothem=150,
                       not_a_parameter=1)
+
+
+def test_ElectrodeArray_is_a_container():
+    """Lookup follows normal Python container semantics"""
+    array = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 10),
+                            'A2': DiskElectrode(10, 0, 0, 10),
+                            'A3': DiskElectrode(20, 0, 0, 10)})
+    npt.assert_equal(len(array), 3)
+    npt.assert_equal(array['A1'] is array[0], True)
+    npt.assert_equal(array['A3'] is array[-1], True)
+    npt.assert_equal(array['A2'] is array[np.int64(1)], True)
+    # Several selectors give a list, and may be mixed:
+    npt.assert_equal(array[['A1', 1, -1]],
+                     [array['A1'], array['A2'], array['A3']])
+    npt.assert_equal(array[np.array([0, 2])], [array['A1'], array['A3']])
+    with pytest.raises(KeyError):
+        array['missing']
+    with pytest.raises(IndexError):
+        array[999]
+    with pytest.raises(IndexError):
+        array[-4]
+    with pytest.raises(TypeError):
+        array[1.2]
+
+
+def test_ElectrodeArray_prefers_a_name_over_a_position():
+    """Integer electrode names still resolve to the electrode of that name"""
+    array = ElectrodeArray({2: DiskElectrode(0, 0, 0, 10),
+                            0: DiskElectrode(10, 0, 0, 10),
+                            1: DiskElectrode(20, 0, 0, 10)})
+    # Names, not positions: electrode 0 is the second one in the array.
+    npt.assert_almost_equal(array[2].x, 0)
+    npt.assert_almost_equal(array[0].x, 10)
+    npt.assert_almost_equal(array[1].x, 20)
+    # Only an integer that names nothing falls through to a position:
+    npt.assert_almost_equal(array[-1].x, 20)
+
+
+@pytest.mark.parametrize('gtype', ('rect', 'hex'))
+def test_ElectrodeGrid_is_a_container(gtype):
+    """A grid adds (row, col) lookup without giving up the rest"""
+    grid = ElectrodeGrid((2, 3), 20, grid_type=gtype, names=('A', '1'))
+    npt.assert_equal(len(grid), 6)
+    npt.assert_equal(grid[0, 0] is grid['A1'], True)
+    npt.assert_equal(grid[1, 2] is grid['B3'], True)
+    npt.assert_equal(grid[-1, -1] is grid['B3'], True)
+    npt.assert_equal(grid[-1] is grid['B3'], True)
+    npt.assert_equal(grid[[(0, 0), 'A2', 2]],
+                     [grid['A1'], grid['A2'], grid['A3']])
+    with pytest.raises(KeyError):
+        grid['Z9']
+    with pytest.raises(IndexError):
+        grid[6]
+    for item in ((2, 0), (0, 3), (-3, 0)):
+        with pytest.raises(IndexError):
+            grid[item]
+    for item in (1.2, ('A1', 'B2'), (0, 1, 2)):
+        with pytest.raises(TypeError):
+            grid[item]

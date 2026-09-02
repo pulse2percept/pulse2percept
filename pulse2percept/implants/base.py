@@ -624,8 +624,7 @@ class Implant(PrettyPrint):
             stim = self.encoder.encode(stim, implant=self)
 
         # If the stim is larger than the number of electrodes, most commonly
-        # we're dealing with an image or video stim. In this case, we might
-        # want to try and reshape the stimulus to fit the array:
+        # we're dealing with an image or video stim, so try to reshape:
         if len(stim.electrodes) > self.n_electrodes:
             stim = self.reshape_stim(stim)
 
@@ -634,12 +633,12 @@ class Implant(PrettyPrint):
 
         # Make sure all electrode names are valid:
         for electrode in stim.electrodes:
-            # Invalid index will return None:
-            if not self.electrode_array[electrode]:
+            try:
+                self.electrode_array[electrode]
+            except (KeyError, IndexError, TypeError):
                 raise ValueError(f'Electrode "{electrode}" not found in '
-                                 f'implant.')
-        # Remove deactivated electrodes without modifying the caller's source.
-        # `_without_electrodes` preserves structured stimulus information.
+                                 f'implant.') from None
+        # Remove deactivated electrodes without modifying the caller's source:
         off = [name for (name, e) in self.electrodes.items()
                if not e.activated and name in stim.electrodes]
         if off:
@@ -691,6 +690,10 @@ class Implant(PrettyPrint):
     def __getitem__(self, item):
         return self.electrode_array[item]
 
+    def __len__(self):
+        """.. versionadded:: 0.11.0"""
+        return len(self.electrode_array)
+
     def __iter__(self):
         return iter(self.electrode_array)
 
@@ -707,7 +710,8 @@ class Implant(PrettyPrint):
                 print(name, electrode)
 
         You can access an individual electrode by indexing directly into the
-        prosthesis system object, e.g. ``implant['A1']`` or ``implant[0]``.
+        implant, e.g. ``implant['A1']`` or ``implant[0]``, and ask how many
+        there are with ``len(implant)``.
 
         """
         return self.electrode_array.electrodes

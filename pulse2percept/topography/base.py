@@ -288,7 +288,7 @@ class Grid2D(PrettyPrint):
         self.x_range = x_range
         self.y_range = y_range
         self.step = step
-        self.type = grid_type
+        self.grid_type = grid_type
         self.visual_field_map = None
         self.ndim = 2
         self.regions = []
@@ -310,7 +310,7 @@ class Grid2D(PrettyPrint):
         """Return dictionary of class arguments to pretty-print"""
         return {'x_range': self.x_range, 'y_range': self.y_range,
                 'step': self.step, 'shape': self.shape,
-                'type': self.type}
+                'grid_type': self.grid_type}
 
     def _make_rectangular_grid(self, x_range, y_range, step):
         """Creates a rectangular grid"""
@@ -440,7 +440,7 @@ class Grid2D(PrettyPrint):
 
             if style.lower() == 'cell':
                 # Show a polygon for every grid cell that we are simulating:
-                if self.type == 'hexagonal':
+                if self.grid_type == 'hexagonal':
                     raise NotImplementedError
                 patches = []
                 for xret, yret in zip(x.ravel(), y.ravel()):

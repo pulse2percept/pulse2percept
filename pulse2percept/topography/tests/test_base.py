@@ -21,7 +21,8 @@ def test_Grid2D(x_range, y_range):
     npt.assert_equal(grid.x_range, x_range)
     npt.assert_equal(grid.y_range, y_range)
     npt.assert_equal(grid.step, 1)
-    npt.assert_equal(grid.type, 'rectangular')
+    npt.assert_equal(grid.grid_type, 'rectangular')
+    npt.assert_equal(hasattr(grid, 'type'), False)
 
     # Grid is created with indexing='xy', so check coordinates:
     npt.assert_equal(grid.x.shape,

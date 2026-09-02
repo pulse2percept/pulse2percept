@@ -255,7 +255,8 @@ def test_rectangle_implant(ztype, x, y, rot):
     for idx, (name, electrode) in enumerate(implant.electrodes.items()):
         npt.assert_equal(electrode, implant[idx])
         npt.assert_equal(electrode, implant[name])
-    npt.assert_equal(implant["unlikely name for an electrode"], None)
+    with pytest.raises(KeyError):
+        implant["unlikely name for an electrode"]
 
     # Right-eye implant:
     xc, yc = 500, -500
@@ -1157,3 +1158,18 @@ def test_Implant_electrode_array_is_the_canonical_name():
     npt.assert_equal(hasattr(ArgusII(), 'earray'), False)
     with pytest.raises(TypeError):
         Implant(earray=array)
+
+
+def test_Implant_is_a_container():
+    """An implant indexes and sizes like the array it wraps"""
+    implant = ArgusII()
+    npt.assert_equal(len(implant), 60)
+    npt.assert_equal(len(implant), len(implant.electrode_array))
+    npt.assert_equal(implant['A1'] is implant[0], True)
+    npt.assert_equal(implant['F10'] is implant[-1], True)
+    with pytest.raises(KeyError):
+        implant['Z99']
+    with pytest.raises(IndexError):
+        implant[60]
+    with pytest.raises(TypeError):
+        implant[1.2]

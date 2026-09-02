@@ -119,29 +119,15 @@ class ElectrodeArray(PrettyPrint):
             Length unit to express the coordinates in. If None, they are
             returned as they are stored (microns).
         electrodes : optional
-            Which electrodes to return. Three things name a single electrode,
-            looked up as ``electrode_array[...]`` looks one up: a name, an
-            index into the flattened array, and a ``(row, col)`` pair on an
-            :py:class:`~pulse2percept.implants.ElectrodeGrid`. Anything else
-            iterable -- a list, an array, or the
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames` a stimulus
-            reports -- is a collection, taken in the order given. If None,
-            every electrode in the array, in array order.
-
-            A model passes ``stim.electrodes`` here: a stimulus need not name
-            every electrode of the implant, and need not name them in array
-            order, so the coordinates it wants are a reordered subset.
+            Which electrodes to return, either by name, index into the
+            flattened array, or a ``(row, col)`` pair on an
+            :py:class:`~pulse2percept.implants.ElectrodeGrid`.
+            Everything else is treated as a collection.
 
         Returns
         -------
         coords : (n_electrodes, 3) np.ndarray
-            One ``[x, y, z]`` row per electrode -- always two-dimensional, so
-            a single-electrode selection comes back as ``(1, 3)``. (For one
-            electrode's position as a flat triple, see
-            :py:meth:`~pulse2percept.implants.Electrode.coordinates`.) An
-            ordinary NumPy array, never a
-            :py:class:`~pulse2percept.units.Quantity`: this is the boundary a
-            numerical implementation should take the geometry across.
+            One ``[x, y, z]`` row per electrode
 
         Examples
         --------
@@ -158,21 +144,10 @@ class ElectrodeArray(PrettyPrint):
             elecs = self.electrode_objects
         else:
             if _is_electrode_collection(electrodes):
-                names = list(electrodes)
-                elecs = [self[name] for name in names]
+                elecs = [self[name] for name in electrodes]
             else:
-                # A name, an index, or a grid's `(row, col)` pair: one
-                # electrode, looked up the way `electrode_array[...]` looks one
-                # up.
-                names, elecs = [electrodes], [self[electrodes]]
-            # `__getitem__` answers None for an electrode the array does not
-            # have, which would otherwise surface as an AttributeError three
-            # frames deep in a model:
-            missing = [str(name) for name, e in zip(names, elecs)
-                       if e is None]
-            if missing:
-                raise ValueError(f"Electrode(s) {missing[:10]} are not in "
-                                 f"this array.")
+                # A name, an index, or a grid's `(row, col)` pair:
+                elecs = [self[electrodes]]
         xyz = np.array([[e.x, e.y, e.z] for e in elecs],
                        dtype=float).reshape((-1, 3))
         if unit is None:
@@ -301,36 +276,59 @@ class ElectrodeArray(PrettyPrint):
     def __getitem__(self, item):
         """Return an electrode from the array
 
-        An electrode in the array can be accessed either by its name (the
-        key value in the dictionary) or by index (in the list).
-
         Parameters
         ----------
-        item : int|string
-            If `item` is an integer, returns the `item`-th electrode in the
-            array. If `item` is a string, returns the electrode with string
-            identifier `item`.
+        item : str, int, or list thereof
+            An electrode name, or an index into the array (negative indices
+            count from the end). A list or NumPy array of either returns a
+            list of electrodes.
+
+        Returns
+        -------
+        electrode : :py:class:`~pulse2percept.implants.Electrode` or list
+
+        Raises
+        ------
+        KeyError
+            If ``item`` names an electrode the array does not have.
+        IndexError
+            If ``item`` is an index outside the array.
+        TypeError
+            If ``item`` is neither a name nor an index.
+
+        Notes
+        -----
+        *  A name is looked up before an integer is read as a position, so an
+           array whose electrodes are *named* 0, 1, 2 answers with the
+           electrode of that name rather than the one in that position.
+
+        .. versionchanged:: 0.11.0
+            A lookup that fails raises instead of returning ``None``.
         """
-        if isinstance(item, (list, np.ndarray)):
-            # Recursive call for list items:
-            return [self.__getitem__(i) for i in item]
-        if isinstance(item, str):
-            # A string is probably a dict key:
-            try:
-                return self.electrodes[item]
-            except KeyError:
-                return None
+        if _is_electrode_collection(item):
+            return [self[i] for i in item]
         try:
-            # Else, try indexing in various ways:
-            return self.electrodes[item]
+            return self._electrodes[item]
         except (KeyError, TypeError):
-            # If not a dict key, `item` might be an int index into the list:
+            pass
+        return self._by_position(item)
+
+    def _by_position(self, item):
+        """Return the ``item``-th electrode, for an ``item`` that is no name"""
+        if isinstance(item, (int, np.integer)):
             try:
-                key = list(self.electrode_names)[item]
-                return self.electrodes[key]
+                return self.electrode_objects[item]
             except IndexError:
-                raise StopIteration
-            return None
+                raise IndexError(f"Index {item} is out of range for an array "
+                                 f"of {len(self)} electrodes.") from None
+        if isinstance(item, (str, bytes)):
+            raise KeyError(item)
+        raise TypeError(f"An electrode is selected by name or by integer "
+                        f"index, not by {type(item).__name__}.")
+
+    def __len__(self):
+        """.. versionadded:: 0.11.0"""
+        return len(self._electrodes)
 
     def __iter__(self):
         return iter(self.electrodes)
@@ -621,39 +619,55 @@ class ElectrodeGrid(ElectrodeArray):
 
         Parameters
         ----------
-        item : index, string, tuple, or list thereof
+        item : str, int, (row, col), or list thereof
             An electrode in the grid can be accessed in three ways:
 
-            *  by name, e.g. grid['A1']
-            *  by index into the flattened array, e.g. grid[0]
-            *  by (row, column) index into the 2D grid, e.g. grid[0, 0]
+            *  by name, e.g. ``grid['A1']``
+            *  by index into the flattened array, e.g. ``grid[0]``
+            *  by (row, column) index into the 2D grid, e.g. ``grid[0, 0]``
 
-            You can also pass a list or NumPy array of the above.
+            Indices may be negative, and a list or NumPy array of any of the
+            above returns a list of electrodes.
 
         Returns
         -------
-        electrode : `~pulse2percept.implants.Electrode`, list thereof, or None
-            Returns the corresponding `~pulse2percept.implants.Electrode`
-            object or ``None`` if index is not valid.
+        electrode : :py:class:`~pulse2percept.implants.Electrode` or list
+
+        Raises
+        ------
+        KeyError
+            If ``item`` names an electrode the grid does not have.
+        IndexError
+            If ``item`` is a flat index or a (row, col) pair outside the grid.
+        TypeError
+            If ``item`` is none of the three forms above.
+
+        .. versionchanged:: 0.11.0
+            A lookup that fails raises instead of returning ``None``.
         """
-        if isinstance(item, (list, np.ndarray)):
-            # Recursive call for list items:
-            return [self.__getitem__(i) for i in item]
+        if _is_electrode_collection(item):
+            return [self[i] for i in item]
         try:
-            # Access by key into OrderedDict, e.g. grid['A1']:
-            return self.electrodes[item]
+            return self._electrodes[item]
         except (KeyError, TypeError):
-            # Access by index into flattened array, e.g. grid[0]:
-            try:
-                return list(self.electrodes.values())[item]
-            except (IndexError, KeyError, TypeError):
-                # Access by [r, c] into 2D grid, e.g. grid[0, 3]:
-                try:
-                    idx = np.ravel_multi_index(item, self.shape)
-                    return list(self.electrodes.values())[idx]
-                except (KeyError, TypeError, ValueError):
-                    # Index not found:
-                    return None
+            pass
+        if isinstance(item, tuple):
+            return self._by_row_col(item)
+        return self._by_position(item)
+
+    def _by_row_col(self, item):
+        """Return the electrode at a ``(row, col)`` position in the grid"""
+        rows, cols = self.shape
+        if len(item) != 2 or not all(isinstance(i, (int, np.integer))
+                                     for i in item):
+            raise TypeError(f"A tuple selects one electrode by (row, col); "
+                            f"{item!r} is not one. Pass a list to select "
+                            f"several electrodes.")
+        row, col = item
+        if not -rows <= row < rows or not -cols <= col < cols:
+            raise IndexError(f"({row}, {col}) is out of range for a "
+                             f"{rows}x{cols} grid.")
+        return self.electrode_objects[(row % rows) * cols + col % cols]
 
     def _make_grid(self, x, y, z, rot, names, orientation, electrode_type,
                    **electrode_params):

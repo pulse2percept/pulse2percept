@@ -66,7 +66,8 @@ def test_AlphaIMS_indexing():
     for idx, (name, electrode) in enumerate(alpha.electrodes.items()):
         npt.assert_equal(electrode, alpha[idx])
         npt.assert_equal(electrode, alpha[name])
-        npt.assert_equal(alpha["unlikely name for an electrode"], None)
+        with pytest.raises(KeyError):
+            alpha["unlikely name for an electrode"]
 
 
 def test_AlphaIMS_eye():
@@ -150,7 +151,8 @@ def test_AlphaAMS_indexing():
     for idx, (name, electrode) in enumerate(alpha.electrodes.items()):
         npt.assert_equal(electrode, alpha[idx])
         npt.assert_equal(electrode, alpha[name])
-        npt.assert_equal(alpha["unlikely name for an electrode"], None)
+        with pytest.raises(KeyError):
+            alpha["unlikely name for an electrode"]
 
 
 def test_AlphaAMS_eye():

@@ -51,6 +51,8 @@ directly:
 
     implant['A8']
     implant[0]
+    implant[-1]
+    len(implant)
     implant.electrode_names
     implant.electrode_array.coordinates()
     implant.plot()
