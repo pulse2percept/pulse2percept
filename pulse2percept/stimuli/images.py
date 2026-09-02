@@ -28,7 +28,7 @@ from ..utils.images import _as_writable
 def _as_filename(source):
     """Return ``source`` as a string path, or None if it names no file"""
     if isinstance(source, (str, os.PathLike)):
-        return os.fspath(source)
+        return os.fsdecode(source)
     return None
 
 
@@ -717,7 +717,7 @@ class ImageStimulus(Stimulus):
                 A :py:class:`pathlib.Path` is accepted.
 
         """
-        fname = os.fspath(fname)
+        fname = os.fsdecode(fname)
         # if vmax is not passed by user
         if vmax is None:
             vmax = self.data.max()
