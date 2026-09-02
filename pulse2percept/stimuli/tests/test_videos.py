@@ -822,3 +822,18 @@ def test_VideoStimulus_does_not_alias_another_stimulus():
                           .reshape((4, 5, 3)))
     second = VideoStimulus(first)
     npt.assert_equal(np.shares_memory(first.data, second.data), False)
+
+
+def test_VideoStimulus_accepts_a_path(tmp_path):
+    """A pathlib.Path names the same file a string does"""
+    fname = tmp_path / 'test.mp4'
+    ndarray = np.random.rand(10, 32, 48)
+    mimwrite(str(fname), (255 * ndarray).astype(np.uint8), fps=1)
+    from_path = VideoStimulus(fname, as_gray=True)
+    from_str = VideoStimulus(str(fname), as_gray=True)
+    npt.assert_almost_equal(from_path.data, from_str.data)
+    npt.assert_equal(isinstance(from_path.metadata['source'], str), True)
+    npt.assert_equal(from_path.metadata['source'],
+                     from_str.metadata['source'])
+    # A Path is a filename, so the file-only arguments still apply:
+    npt.assert_equal(VideoStimulus(fname, stop_time=3000).vid_shape[-1], 3)

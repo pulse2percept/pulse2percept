@@ -47,6 +47,11 @@ Stimuli and encoding
   ``W``, ``mW``, and ``uW`` units support optical stimulation (:pull:`868`);
   ``deg`` and ``rad`` are now proper geometric-angle units (:pull:`855`).
 
+* :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+  :py:class:`~pulse2percept.stimuli.VideoStimulus` accept a
+  :py:class:`pathlib.Path` wherever they accept a filename, and always record
+  ``metadata['source']`` as a string (:pull:`880`).
+
 
 Implants
 ~~~~~~~~

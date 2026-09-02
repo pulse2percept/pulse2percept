@@ -14,7 +14,7 @@ from skimage import img_as_float32
 from imageio import get_reader as video_reader
 
 from .base import Stimulus, _adoptable
-from .images import ImageStimulus
+from .images import ImageStimulus, _as_filename
 from ..units import as_value, deg, dimensionless, ms
 from .names import ElectrodeNames
 from ..utils import (center_image, shift_image, scale_image, trim_image,
@@ -95,10 +95,14 @@ class VideoStimulus(Stimulus):
 
     Parameters
     ----------
-    source : str
-        Path to video file. Supported file types include MP4, AVI, MOV, and
-        GIF; and are inferred from the file ending. If the file does not have
-        a proper file ending, specify the file type via ``format``.
+    source : str, os.PathLike, VideoStimulus, or np.ndarray
+        Path to a video file (``str`` or :py:class:`pathlib.Path`). File types
+        are inferred from the file ending (support types include MP4, AVI, MOV,
+        and GIF). Enforce a specific fomrat via ``format``.
+
+        .. versionchanged:: 0.11.0
+            A :py:class:`pathlib.Path` is accepted wherever a filename is.
+            ``metadata['source']`` is always a string.
 
         Alternatively, pass a <rows x columns x channels x frames> NumPy array
         or another :py:class:`~pulse2percept.stimuli.VideoStimulus` object.
@@ -165,8 +169,9 @@ class VideoStimulus(Stimulus):
             metadata = {'user': metadata}
         # The buffer the caller still holds, if any (see below):
         borrowed = None
-        if isinstance(source, str):
-            vid, meta = _read_video(source, format, start_time, stop_time)
+        fname = _as_filename(source)
+        if fname is not None:
+            vid, meta = _read_video(fname, format, start_time, stop_time)
             # Move frame index to the last dimension:
             if vid.ndim == 4:
                 vid = np.ascontiguousarray(vid.transpose((1, 2, 3, 0)))
@@ -175,7 +180,7 @@ class VideoStimulus(Stimulus):
             # Combine video metadata with user-specified metadata:
             if meta is not None:
                 metadata.update(meta)
-            metadata['source'] = source
+            metadata['source'] = fname
             metadata['source_shape'] = vid.shape
             # Infer the time points from the video frame rate:
             time = np.arange(vid.shape[-1]) * MS_PER_S / meta['fps']
@@ -196,8 +201,8 @@ class VideoStimulus(Stimulus):
         else:
             raise TypeError(f"Source must be a filename, a 3D NumPy array or "
                             f"another VideoStimulus, not {type(source)}.")
-        if not isinstance(source, str) and (start_time is not None or
-                                            stop_time is not None):
+        if fname is None and (start_time is not None or
+                              stop_time is not None):
             raise ValueError('"start_time"/"stop_time" only apply to a video '
                              'read from a file. Use crop(idx_time=...) to '
                              'shorten an array or another VideoStimulus.')

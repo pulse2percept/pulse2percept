@@ -587,3 +587,22 @@ def test_ImageStimulus_does_not_alias_another_stimulus():
                           .reshape((4, 6)))
     second = ImageStimulus(first)
     npt.assert_equal(np.shares_memory(first.data, second.data), False)
+
+
+def test_ImageStimulus_accepts_a_path(tmp_path):
+    """A pathlib.Path names the same file a string does"""
+    fname = tmp_path / 'test.png'
+    create_dummy_img(str(fname), (8, 12), 'rand')
+    from_path = ImageStimulus(fname)
+    from_str = ImageStimulus(str(fname))
+    npt.assert_almost_equal(from_path.data, from_str.data)
+    # Metadata records a string either way, so two spellings of one file do
+    # not look like two different sources:
+    npt.assert_equal(isinstance(from_path.metadata['source'], str), True)
+    npt.assert_equal(from_path.metadata['source'],
+                     from_str.metadata['source'])
+    # And `save` takes one too:
+    out = tmp_path / 'out.tif'
+    from_path.save(out)
+    npt.assert_equal(out.exists(), True)
+    npt.assert_almost_equal(ImageStimulus(out).data, from_path.data)
