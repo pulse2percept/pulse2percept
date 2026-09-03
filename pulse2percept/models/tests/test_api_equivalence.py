@@ -130,9 +130,16 @@ def scene_of(**kwargs):
     return Scene(ramp, fov=(px, px), **kwargs)
 
 
-def encoding_grid():
-    return GridImplant(shape=(4, 4), spacing=500,
-                       encoder=AmplitudeEncoder(amp_range=(0, 50)))
+class EyeCoupledGrid(GridImplant):
+    """A grid fed through the eye's optics, so that gaze moves its input"""
+    __slots__ = ()
+
+    scene_input_frame = 'eye'
+
+
+def encoding_grid(cls=GridImplant):
+    return cls(shape=(4, 4), spacing=500,
+               encoder=AmplitudeEncoder(amp_range=(0, 50)))
 
 
 def test_scoreboard_prediction_is_unchanged():
@@ -203,9 +210,17 @@ def test_dynaphos_prediction_is_unchanged():
 
 
 def test_scene_with_gaze_prediction_is_unchanged():
-    model = ScoreboardModel(implant=encoding_grid(), rho=200, **GRID).build()
+    # The reference predates `scene_input_frame`, when every implant sampled
+    # the scene through the eye:
+    model = ScoreboardModel(implant=encoding_grid(EyeCoupledGrid), rho=200,
+                            **GRID).build()
     percept = model.predict_percept(scene_of(), gaze=(4, 0) * dva)
     assert_matches_reference('scene_gaze', percept)
+    # A head-mounted camera is handed the same scene whatever the gaze:
+    camera = ScoreboardModel(implant=encoding_grid(), rho=200, **GRID).build()
+    npt.assert_array_equal(
+        camera.predict_percept(scene_of(), gaze=(4, 0) * dva).data,
+        camera.predict_percept(scene_of()).data)
 
 
 def test_scene_with_scotoma_prediction_is_unchanged():

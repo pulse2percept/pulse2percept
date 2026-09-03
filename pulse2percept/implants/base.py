@@ -123,6 +123,15 @@ class Implant(PrettyPrint):
     #: .. versionadded:: 0.11.0
     family = None
 
+    #: Which frame the device's visual input is acquired in: ``'head'`` for a
+    #: head-mounted camera, whose image does not move when the eye rotates, or
+    #: ``'eye'`` when the input passes through the eye's optics, so that gaze
+    #: moves the image across the implant. Only scene sampling uses this;
+    #: where the resulting percept lands in the scene is gaze-dependent either
+    #: way.
+    #: .. versionadded:: 0.11.0
+    scene_input_frame = 'head'
+
     def __init__(self, electrode_array, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
                  thresholds=None):

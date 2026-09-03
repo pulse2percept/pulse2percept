@@ -258,7 +258,15 @@ class Scene(PrettyPrint):
 
     The scotoma is *eye-centered*: it is fixed relative to the fovea, and so
     is an implant, which sits on the retina. Gaze moves the scene past both of
-    them rather than moving either.
+    them rather than moving either::
+
+        (x_scene, y_scene) = (x_eye, y_eye) + (x_gaze, y_gaze)
+
+    Gaze always decides where an eye-centered percept lands in the scene. Only
+    for a device whose input passes through the eye's optics (see
+    :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`) does it also
+    decide what the device is given to encode; a head-mounted camera sees the
+    same scene whatever the eye does.
 
     A scene's source and FOV geometry are fixed after construction: ``fov`` is
     resolved against the source's frame shape, so swapping one out without the
