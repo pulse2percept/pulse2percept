@@ -25,7 +25,8 @@ from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
                                   SpatialModel, TemporalModel,
                                   Thompson2003Model)
 from pulse2percept.models.base import (_blend_meridian, _electrode_dva,
-                                       _location_noise_field)
+                                       _location_noise_field,
+                                       _warp_visual_field)
 from pulse2percept.models.cortex import (DynaphosModel,
                                          ScoreboardModel as
                                          CortexScoreboardModel,
@@ -2117,3 +2118,25 @@ def test_location_noise_ignores_region_order():
         percepts.append(model.predict_percept(source).data)
     npt.assert_array_equal(*fields)
     npt.assert_array_equal(*percepts)
+
+
+def test_meridian_blend_precedes_the_warp():
+    # The seam is an artifact of the canonical split map, so it has to be
+    # repaired while it still lies on the canonical meridian:
+    np.random.seed(5)
+    model = CortexScoreboardSpatial(Cortivis(), xrange=(-6, 6),
+                                    yrange=(-6, 6), step=0.5,
+                                    meridian_blend=1.0,
+                                    location_noise=1.0).build()
+    resp = _step_across(model.grid, 'vertical')
+    blended = _blend_meridian(resp, model.grid, 'vertical', 1.0)
+    npt.assert_allclose(
+        model._postprocess_spatial(resp),
+        _warp_visual_field(blended, model.grid, model._location_noise))
+    # Blending the warped response instead would smooth a meridian the seam
+    # has already moved off:
+    other = _blend_meridian(
+        _warp_visual_field(resp, model.grid, model._location_noise),
+        model.grid, 'vertical', 1.0)
+    npt.assert_equal(np.allclose(model._postprocess_spatial(resp), other),
+                     False)

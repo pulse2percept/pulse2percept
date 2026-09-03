@@ -355,17 +355,15 @@ class ScoreboardSpatial(CortexSpatial):
         On this model rather than on `CortexSpatial`: the seam is a property
         of the split map this one is built on, not of being cortical, and a
         future cortical model without one should not inherit a correction for
-        it. It applies to the rendered visual field, so it comes after the
-        base class' retinotopic warp.
+        it. It sits on the canonical meridian, so it is repaired before the
+        base class displaces the field.
         """
-        resp = super()._postprocess_spatial(resp)
         blended = _blend_meridian(resp, self.grid, 'vertical',
                                   self.meridian_blend)
-        if blended is resp:
-            return resp
-        # Restore percept threshold after blending:
-        blended[np.abs(blended) < self.thresh_percept] = 0
-        return blended
+        if blended is not resp:
+            # Restore percept threshold after blending:
+            blended[np.abs(blended) < self.thresh_percept] = 0
+        return super()._postprocess_spatial(blended)
 
     def _predict_spatial(self, electrode_array, stim):
         """Predicts the brightness at spatial locations"""

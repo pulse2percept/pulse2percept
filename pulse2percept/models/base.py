@@ -746,7 +746,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     location_noise : float or None, optional
         Standard deviation of the variation in phosphene location from the
         ``visual_field_map``, in dva. Locations are fixed for a model instance.
-        ``None`` or 0 disables the variation.
+        ``None`` or 0 disables the variation. Requires a ``visual_field_map``
+        that implements ``to_dva``, which is what places the electrodes in the
+        visual field. Phenomenological: the standard deviation is not
+        empirically calibrated, and trial-to-trial or gaze-dependent shifts
+        are not modeled.
 
         .. versionadded:: 0.11.0
 
