@@ -923,7 +923,12 @@ class AxonMapSpatial(SpatialModel):
                              self.n_threads)
 
     def _postprocess_spatial(self, resp):
-        """Blend the response across the horizontal meridian."""
+        """Blend the response across the horizontal meridian.
+
+        The seam correction applies to the rendered visual field, so it comes
+        after the base class' retinotopic warp.
+        """
+        resp = super()._postprocess_spatial(resp)
         blended = _blend_meridian(resp, self.grid, 'horizontal',
                                   self.meridian_blend)
         if blended is resp:

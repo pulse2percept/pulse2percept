@@ -7,7 +7,8 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
-from scipy.ndimage import gaussian_filter1d
+from scipy.interpolate import RBFInterpolator
+from scipy.ndimage import gaussian_filter1d, map_coordinates
 from scipy.spatial import cKDTree
 
 from ..implants import Implant
@@ -354,6 +355,119 @@ def _blend_meridian(resp, grid, meridian, width):
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
+def _electrode_dva(model):
+    """Return the implant's electrode coordinates in dva.
+
+    Requires an invertible ``visual_field_map``. On a map with several
+    regions, the electrodes sit in one place, so the model's first region is
+    the one that locates them.
+    """
+    vfmap = model.visual_field_map
+    coords = model.implant.electrode_array.coordinates(vfmap.tissue_unit)
+    try:
+        inverse = vfmap.to_dva()
+        regions = getattr(model, 'regions', None) or list(inverse)
+        x, y = inverse[regions[0]](coords[:, 0], coords[:, 1])
+    except (NotImplementedError, KeyError):
+        raise NotImplementedError(
+            f"location_noise places electrodes in the visual field, which "
+            f"requires a visual field map that can be inverted. "
+            f"{type(vfmap).__name__} cannot map tissue coordinates back to "
+            f"dva.") from None
+    return (np.asarray(x, dtype=np.float64).ravel(),
+            np.asarray(y, dtype=np.float64).ravel())
+
+
+def _axis_origin_step(along):
+    """Return (origin, signed spacing) of a regular grid axis.
+
+    Returns None for an axis with a single sample.
+    """
+    if along.size < 2:
+        return None
+    return float(along[0]), float(np.diff(along).mean())
+
+
+def _fractional_index(axis, coord):
+    """Position of ``coord`` along a grid axis, in fractional sample index."""
+    if axis is None:
+        # A single sample along this axis: nothing to shift into.
+        return np.zeros_like(coord)
+    origin, step = axis
+    return (coord - origin) / step
+
+
+def _location_noise_field(model):
+    """Return the sampling coordinates that displace percepts on the grid.
+
+    Draws one Gaussian ``(dx, dy)`` offset per electrode in dva, interpolates
+    those offsets across ``model.grid``, and expresses the result as fractional
+    row/column indices for ``map_coordinates``: a grid point reads the
+    undisplaced response one offset away, so a phosphene at ``e`` is rendered
+    at ``e + offset(e)``. Returns None when the noise is disabled.
+
+    ``location_noise`` is the standard deviation in dva, and the offsets are
+    drawn from the global NumPy random state, so ``np.random.seed`` makes a
+    build reproducible.
+    """
+    sigma = model.location_noise
+    if sigma is None:
+        return None
+    sigma = float(sigma)
+    if sigma < 0:
+        raise ValueError(f"location_noise must be non-negative (or None to "
+                         f"disable it), not {sigma}.")
+    if sigma == 0:
+        return None
+    grid = model.grid
+    rows = _axis_origin_step(grid.y[:, 0])
+    cols = _axis_origin_step(grid.x[0, :])
+    if rows is None and cols is None:
+        # A single grid point cannot be displaced:
+        return None
+    x_el, y_el = _electrode_dva(model)
+    offsets = np.random.normal(0.0, sigma, size=(x_el.size, 2))
+    points = np.column_stack([x_el, y_el])
+    # One interpolation node per location: electrodes that map to the same
+    # visual-field point cannot pull the field in two directions, and a
+    # repeated node makes the interpolation matrix singular.
+    points, inverse = np.unique(points, axis=0, return_inverse=True)
+    inverse = np.ravel(inverse)
+    if points.shape[0] < offsets.shape[0]:
+        counts = np.bincount(inverse, minlength=points.shape[0])
+        merged = np.zeros((points.shape[0], 2))
+        np.add.at(merged, inverse, offsets)
+        offsets = merged / counts[:, np.newaxis]
+    query = np.column_stack([grid.x.ravel(), grid.y.ravel()])
+    if points.shape[0] == 1:
+        shift = np.broadcast_to(offsets[0], query.shape)
+    else:
+        # The linear kernel (-r) needs no shape parameter and stays solvable
+        # for collinear electrodes, which a thin-plate spline is not:
+        shift = RBFInterpolator(points, offsets, kernel='linear')(query)
+    dx = shift[:, 0].reshape(grid.x.shape)
+    dy = shift[:, 1].reshape(grid.y.shape)
+    return np.stack([_fractional_index(rows, grid.y - dy),
+                     _fractional_index(cols, grid.x - dx)]).astype(np.float64)
+
+
+def _warp_visual_field(resp, grid, sample):
+    """Resample a response at displaced visual-field locations.
+
+    ``sample`` holds the fractional row/column indices built by
+    ``_location_noise_field``. Time points are warped independently by bilinear
+    interpolation; a sample falling off the grid repeats its edge value.
+    """
+    if sample is None:
+        return resp
+    work = np.asarray(resp).reshape(grid.x.shape + (-1,))
+    warped = np.empty_like(work)
+    for t in range(work.shape[-1]):
+        warped[..., t] = map_coordinates(work[..., t], sample, order=1,
+                                         mode='nearest')
+    return warped.reshape(resp.shape).astype(resp.dtype, copy=False)
+
+
 #: Parameter names declared by each model class, cached for ``__setattr__``.
 _declared = {}
 
@@ -630,6 +744,16 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    location_noise : float or None, optional
+        Standard deviation (dva) of the retinotopic jitter between where an
+        electrode sits and where its percept appears. One offset is drawn per
+        electrode at build time and interpolated across the grid, so the
+        displacement is smooth and fixed until the model is rebuilt. ``None``
+        or 0 leaves the percept untouched. Offsets come from the global NumPy
+        random state; seed it for a reproducible build.
+
+        .. versionadded:: 0.11.0
+
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
@@ -661,6 +785,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # `_visual_field_map_first`.
         super().__init__(**_visual_field_map_first(params))
         self.grid = None
+        # Set by `build`; see `_location_noise_field`:
+        self._location_noise = None
 
     @property
     def implant(self):
@@ -772,6 +898,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'visual_field_map': Curcio1990Map(),
             'n_gray': None,
             'noise': None,
+            'location_noise': None,  # dva
             'verbose': True,
             'ndim' : [2],
             # `n_jobs` writes through to `n_threads`, so it must come last.
@@ -795,6 +922,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
+            # The percept is displaced in the visual field, not on tissue:
+            'location_noise': dva,
         }
 
     def _cutoff_r2(self, rho):
@@ -845,6 +974,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
+        self._location_noise = _location_noise_field(self)
         self._build()
         self._is_built = True
         return self
@@ -868,8 +998,18 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         raise NotImplementedError
 
     def _postprocess_spatial(self, resp):
-        """Hook for spatial-model postprocessing."""
-        return resp
+        """Displace the response by the ``location_noise`` field.
+
+        Subclasses that override this hook must chain to it first: the warp
+        renders the visual field, and corrections such as meridian blending
+        apply to the rendered field.
+        """
+        warped = _warp_visual_field(resp, self.grid, self._location_noise)
+        if warped is resp:
+            return resp
+        # Interpolation mixes in sub-threshold neighbours:
+        warped[np.abs(warped) < self.thresh_percept] = 0
+        return warped
 
     def predict_percept(self, source, t_percept=None):
         """Predict the spatial response.

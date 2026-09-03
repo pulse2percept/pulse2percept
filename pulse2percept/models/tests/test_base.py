@@ -10,7 +10,8 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 import time
 
-from pulse2percept.implants import ArgusI, ArgusII
+from pulse2percept.implants import (ArgusI, ArgusII, DiskElectrode,
+                                    ElectrodeArray, Implant)
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    BostonTrain, ImageStimulus, LogoBVL,
@@ -23,6 +24,7 @@ from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
                                   SpatialModel, TemporalModel,
                                   Thompson2003Model)
 from pulse2percept.models.base import _blend_meridian
+from pulse2percept.units import DimensionMismatchError, dva, um
 from pulse2percept.models.cortex import (DynaphosModel,
                                          ScoreboardModel as
                                          CortexScoreboardModel,
@@ -1912,3 +1914,92 @@ def test_SpatialModel_visual_field_map_is_the_canonical_name():
     npt.assert_equal(hasattr(spatial, 'vfmap'), False)
     with pytest.raises(TypeError):
         ScoreboardSpatial(ArgusII(), vfmap=Curcio1990Map())
+
+
+def _one_electrode_model(location_noise=None, seed=0, step=0.25):
+    """A scoreboard on a single electrode at the fovea, built with `seed`
+
+    One electrode means the interpolated displacement field is the one offset
+    that was drawn, everywhere, so the percept's peak is where that offset put
+    it.
+    """
+    implant = Implant(ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 100)}))
+    model = ScoreboardSpatial(implant, xrange=(-10, 10), yrange=(-10, 10),
+                              step=step, rho=500)
+    model.location_noise = location_noise
+    np.random.seed(seed)
+    return model.build()
+
+
+def _peak_dva(percept, grid):
+    """The (x, y) location of the brightest grid point, in dva"""
+    idx = np.unravel_index(np.argmax(percept.data[..., 0]),
+                           percept.data[..., 0].shape)
+    return float(grid.x[idx]), float(grid.y[idx])
+
+
+@pytest.mark.parametrize('location_noise', (None, 0))
+def test_location_noise_off(location_noise):
+    # No noise is an exact no-op, down to the postprocessing hook returning
+    # the response it was handed:
+    model = _one_electrode_model(location_noise=location_noise)
+    npt.assert_equal(model._location_noise, None)
+    resp = np.arange(model.grid.x.size, dtype=np.float32).reshape(-1, 1)
+    npt.assert_equal(model._postprocess_spatial(resp) is resp, True)
+    plain = _one_electrode_model()
+    npt.assert_array_equal(model.predict_percept({'A1': 1}).data,
+                           plain.predict_percept({'A1': 1}).data)
+
+
+def test_location_noise_must_be_non_negative():
+    model = _one_electrode_model()
+    model.location_noise = -1
+    with pytest.raises(ValueError):
+        model.build()
+
+
+def test_location_noise_displaces_the_percept():
+    # The offset the model drew, redrawn from the same seed:
+    np.random.seed(7)
+    dx, dy = np.random.normal(0, 2.0, size=(1, 2))[0]
+    model = _one_electrode_model(location_noise=2.0, seed=7)
+    x, y = _peak_dva(model.predict_percept({'A1': 1}), model.grid)
+    # Within half a grid step of where the offset moved the phosphene:
+    npt.assert_almost_equal(x, dx, decimal=1)
+    npt.assert_almost_equal(y, dy, decimal=1)
+
+
+def test_location_noise_is_fixed_until_rebuild():
+    model = _one_electrode_model(location_noise=2.0, seed=7)
+    first = model.predict_percept({'A1': 1}).data
+    npt.assert_array_equal(model.predict_percept({'A1': 1}).data, first)
+    # Rebuilding draws a new field:
+    np.random.seed(8)
+    model.build()
+    npt.assert_equal(np.array_equal(model.predict_percept({'A1': 1}).data,
+                                    first), False)
+
+
+def test_location_noise_is_a_visual_angle():
+    model = _one_electrode_model(location_noise=2 * dva, seed=7)
+    npt.assert_almost_equal(model.location_noise, 2.0)
+    with pytest.raises(DimensionMismatchError):
+        _one_electrode_model(location_noise=500 * um)
+
+
+@pytest.mark.parametrize('model', (AxonMapSpatial(ArgusII(), xrange=(-8, 8),
+                                                 yrange=(-8, 8), step=0.5),
+                                   CortexScoreboardSpatial(Cortivis(),
+                                                           xrange=(-8, 8),
+                                                           yrange=(-8, 8),
+                                                           step=0.5)))
+def test_location_noise_reaches_blending_models(model):
+    # Models that override `_postprocess_spatial` to blend a meridian have to
+    # chain to the warp, or their percepts would ignore `location_noise`:
+    source = {model.implant.electrode_names[0]: 100}
+    np.random.seed(2)
+    plain = model.build().predict_percept(source).data
+    model.location_noise = 1.0
+    np.random.seed(2)
+    warped = model.build().predict_percept(source).data
+    npt.assert_equal(np.array_equal(plain, warped), False)
