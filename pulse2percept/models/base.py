@@ -439,7 +439,11 @@ def _require_placed(model, region, electrodes, coords, which):
         placed &= np.isfinite(np.asarray(coord, dtype=np.float64))
     if np.all(placed):
         return
-    lost = [str(e) for e, ok in zip(electrodes, placed) if not ok]
+    # `.item()` unwraps the NumPy scalars a stimulus reports, so that an
+    # integer-named electrode prints as `0` rather than `np.int64(0)` -- and
+    # still not as `'0'`, which would be a different electrode.
+    lost = [e.item() if isinstance(e, np.generic) else e
+            for e, ok in zip(electrodes, placed) if not ok]
     raise ValueError(
         f"location_noise cannot displace electrode(s) "
         f"{', '.join(repr(e) for e in lost[:5])} in region {region!r} because "
