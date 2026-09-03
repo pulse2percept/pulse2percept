@@ -123,14 +123,16 @@ class Implant(PrettyPrint):
     #: .. versionadded:: 0.11.0
     family = None
 
-    #: Which frame the device's visual input is acquired in: ``'head'`` for a
-    #: head-mounted camera, whose image does not move when the eye rotates, or
-    #: ``'eye'`` when the input passes through the eye's optics, so that gaze
-    #: moves the image across the implant. Only scene sampling uses this;
-    #: where the resulting percept lands in the scene is gaze-dependent either
-    #: way.
+    #: Coordinate frame in which scene content is registered to the implant.
+    #: ``'eye'`` (the default) means gaze moves the scene across the implant;
+    #: ``'head'`` means eye rotation does not change which scene content
+    #: drives each electrode. This is about registration, not acquisition:
+    #: PRIMA is ``'eye'`` despite its head-mounted camera, because the
+    #: processed image is projected through the moving eye onto the array.
+    #: Only scene sampling reads this; where the resulting percept lands in
+    #: the scene is gaze-dependent either way.
     #: .. versionadded:: 0.11.0
-    scene_input_frame = 'head'
+    scene_input_frame = 'eye'
 
     def __init__(self, electrode_array, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,

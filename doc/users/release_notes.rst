@@ -108,10 +108,11 @@ Residual vision
   optional inpainting, configurable backgrounds, and eccentricity rings in
   both static and animated views (:pull:`871`).
 
-* ``gaze`` moves the scene across the electrodes only for implants whose
-  :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is ``'eye'``
-  (Alpha, PRIMA); a head-mounted camera keeps its input, and gaze places the
-  percept in the scene as before (:pull:`882`).
+* ``gaze`` no longer moves the scene across the electrodes of implants
+  driven by a head-fixed camera (Argus, BVT, IMIE, Orion, Cortivis, ICVP),
+  which now set
+  :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` to ``'head'``;
+  gaze still places the percept in the scene (:pull:`882`).
 
 
 Plotting

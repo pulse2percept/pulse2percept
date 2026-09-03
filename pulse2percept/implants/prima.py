@@ -347,7 +347,6 @@ class PRIMAPivotal(Implant):
     placement = 'subretinal'
     technology = 'photovoltaic'
     family = 'PRIMA'
-    scene_input_frame = 'eye'
 
     #: The device is illuminated, not driven by a current source.
     stimulus_unit = mW / mm ** 2
@@ -556,7 +555,6 @@ class Lorach2015Array(Implant):
 
     placement = 'subretinal'
     technology = 'photovoltaic'
-    scene_input_frame = 'eye'
 
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
@@ -684,7 +682,6 @@ class Ho2019FlatArray(Implant):
 
     placement = 'subretinal'
     technology = 'photovoltaic'
-    scene_input_frame = 'eye'
 
     def __init__(self, pixel_size, x=0, y=0, z=-100, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):
@@ -809,7 +806,6 @@ class Huang2021Array(Implant):
 
     placement = 'subretinal'
     technology = 'photovoltaic'
-    scene_input_frame = 'eye'
 
     def __init__(self, pixel_size, x=0, y=0, z=-100, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):

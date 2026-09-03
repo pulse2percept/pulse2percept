@@ -299,11 +299,16 @@ def _scene_stim(model, scene, gaze):
     xy = implant.electrode_array.coordinates(
         visual_field_map.tissue_unit)[:, :2].T
     x_vf, y_vf = visual_field_map.ret_to_dva(*xy)
-    # A head-mounted camera does not turn with the eye, so gaze changes only
+    frame = implant.scene_input_frame
+    if frame not in ('eye', 'head'):
+        raise ValueError(f"This implant's 'scene_input_frame' is {frame!r}, "
+                         f"which says nothing about how gaze registers the "
+                         f"scene onto it; expected 'eye' or 'head'.")
+    # A head-fixed camera does not turn with the eye, so gaze changes only
     # where the percept lands in the scene, not what the electrodes are given.
     # Either way a malformed gaze is an error, so check it before dropping it:
     _gaze_points(gaze, device_scene.n_frames)
-    input_gaze = gaze if implant.scene_input_frame == 'eye' else None
+    input_gaze = gaze if frame == 'eye' else None
     gray = device_scene._device_input(x_vf, y_vf, gaze=input_gaze)
     if device_scene.time is None:
         # A still scene is sampled as a one-frame movie; a `Stimulus` with no
@@ -1595,11 +1600,11 @@ class Model(Frozen, PrettyPrint):
         gaze : (x, y) or (n_frames, 2), optional
             Scene location falling on the fovea, in degrees of visual angle,
             so that ``scene = eye-centered visual field + gaze``. Requires
-            ``source`` to be a scene. Gaze always moves the percept across the
-            scene; it also moves the scene across the electrodes only when the
+            ``source`` to be a scene. Gaze always moves the percept across
+            the scene; it moves the scene across the electrodes too unless the
             implant's
             :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is
-            ``'eye'``.
+            ``'head'``.
         vmax : float, optional
             Percept brightness mapped to white when composing a scene with a
             scotoma. Required for scotoma composition.

@@ -62,6 +62,7 @@ class Cortivis(Implant):
     # 400um spacing, 80um diameter at base, 10x10
     # depth of shanks: 1.5mm
     placement = 'intracortical'
+    scene_input_frame = 'head'
 
     def __init__(self, x=20000, y=-5000, z=0, rot=0, preprocess=False, safe_mode=False):
         # Inspected and offset here, before the grid ever sees it:

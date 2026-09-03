@@ -72,6 +72,7 @@ class ICVP(Implant):
     # (https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9175335)
 
     placement = 'intracortical'
+    scene_input_frame = 'head'
 
     def __init__(self, x=15000, y=0, z=0, rot=0, preprocess=False, safe_mode=False):
         # Inspected, broadcast and offset here, before the grid ever sees it:

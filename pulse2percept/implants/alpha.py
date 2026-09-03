@@ -84,7 +84,6 @@ class AlphaIMS(Implant):
     __slots__ = ('shape',)
 
     placement = 'subretinal'
-    scene_input_frame = 'eye'
 
     def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=True, safe_mode=False):
         self.eye = eye
@@ -227,7 +226,6 @@ class AlphaAMS(Implant):
     __slots__ = ('shape',)
 
     placement = 'subretinal'
-    scene_input_frame = 'eye'
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True, safe_mode=False):
         self.eye = eye

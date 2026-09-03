@@ -65,24 +65,24 @@ def scene_of(source=None, **kwargs):
                  fov=(SCENE_PX, SCENE_PX), **kwargs)
 
 
-class EyeCoupledImplant(Implant):
-    """An implant fed through the eye's optics, e.g. Alpha IMS or PRIMA"""
+class HeadCameraImplant(Implant):
+    """An implant driven by a head-fixed camera, e.g. Argus II"""
     __slots__ = ()
 
-    scene_input_frame = 'eye'
+    scene_input_frame = 'head'
 
 
-def implant_at(x_um=0, y_um=0, encoder=True, input_frame='head'):
+def implant_at(x_um=0, y_um=0, encoder=True, input_frame='eye'):
     """An implant whose single electrode sits where we want to look"""
-    cls = EyeCoupledImplant if input_frame == 'eye' else Implant
+    cls = HeadCameraImplant if input_frame == 'head' else Implant
     return cls(
         PointSource(x_um, y_um, 0),
         encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)) if encoder else None)
 
 
-def grid_implant(input_frame='head'):
+def grid_implant(input_frame='eye'):
     """Three electrodes in a row"""
-    cls = EyeCoupledImplant if input_frame == 'eye' else Implant
+    cls = HeadCameraImplant if input_frame == 'head' else Implant
     return cls(ElectrodeGrid((1, 3), 280),
                encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
 
@@ -134,7 +134,7 @@ def test_a_nonlinear_retinal_map_still_registers(x_dva):
 def test_gaze_moves_the_scene_past_an_eye_coupled_implant():
     """Gaze is the scene point on the fovea, so scene = visual field + gaze"""
     scene = scene_of()
-    model = model_for(implant_at(0, 0, input_frame='eye'))
+    model = model_for(implant_at(0, 0))
     for gaze_x in (-4.0, 0.0, 6.0):
         npt.assert_almost_equal(seen_by(model, scene, gaze=(gaze_x, 0)),
                                 [[ramp_at(gaze_x)]], decimal=4)
@@ -143,7 +143,7 @@ def test_gaze_moves_the_scene_past_an_eye_coupled_implant():
                             seen_by(model, scene, gaze=(6.0, 0.0)))
     # Several electrodes keep their separation in the visual field whatever
     # the gaze: shifting gaze shifts what all of them see by the same amount.
-    on_grid = model_for(grid_implant(input_frame='eye'))
+    on_grid = model_for(grid_implant())
     here = seen_by(on_grid, scene).ravel()
     there = seen_by(on_grid, scene, gaze=(2, 0)).ravel()
     npt.assert_almost_equal(np.diff(here), np.diff(there), decimal=4)
@@ -153,22 +153,35 @@ def test_gaze_moves_the_scene_past_an_eye_coupled_implant():
 def test_gaze_leaves_a_head_mounted_camera_looking_where_it_was():
     """A camera on the head does not turn when the eye does"""
     scene = scene_of()
-    model = model_for(implant_at(0, 0))
+    model = model_for(implant_at(0, 0, input_frame='head'))
     fixating = seen_by(model, scene)
     npt.assert_almost_equal(fixating, [[ramp_at(0.0)]], decimal=4)
     for gaze in ((-4.0, 0.0), (6.0, 0.0), (0.0, 5.0), (6, 0) * dva):
         npt.assert_almost_equal(seen_by(model, scene, gaze=gaze), fixating,
                                 decimal=6)
     # Same for several electrodes, and gaze=(0, 0) is the fixating case:
-    on_grid = model_for(grid_implant())
+    on_grid = model_for(grid_implant(input_frame='head'))
     npt.assert_almost_equal(seen_by(on_grid, scene, gaze=(3, -2)),
                             seen_by(on_grid, scene, gaze=(0, 0)), decimal=6)
+
+
+def test_an_unknown_scene_input_frame_is_refused():
+    """A typo would silently change the physics, so it raises instead"""
+    class Typo(Implant):
+        __slots__ = ()
+        scene_input_frame = 'retinal'
+
+    model = model_for(Typo(PointSource(0, 0, 0),
+                           encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX))))
+    with pytest.raises(ValueError):
+        _scene_stim(model, scene_of(), None)
 
 
 def test_a_camera_driven_phosphene_still_travels_with_the_eye():
     """Caspi-style: the same phosphene, drawn where the eye now points"""
     scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
-    model = model_for(implant_at(*Curcio1990Map().dva_to_ret(2.0, 0.0)),
+    model = model_for(implant_at(*Curcio1990Map().dva_to_ret(2.0, 0.0),
+                                 input_frame='head'),
                       rho=100, xrange=(-4, 4), yrange=(-4, 4), step=0.5)
     fixating = model.predict_percept(scene, vmax=2).data[..., 0]
     shifted = model.predict_percept(scene, gaze=(5, 0) * dva,
@@ -260,8 +273,7 @@ def test_preprocessing_does_not_reach_native_vision():
     """What the device does to its input is not what the eye goes through"""
     source = ramp_source()
     scene = scene_of(source, scotoma=Scotoma.circle(6), scotoma_fill=0.0)
-    implant = implant_at(*Curcio1990Map().dva_to_ret(0.0, 0.0),
-                        input_frame='eye')
+    implant = implant_at(*Curcio1990Map().dva_to_ret(0.0, 0.0))
     implant.preprocess = lambda stim: stim.invert()
     model = model_for(implant, rho=100)
     # The electrode is at the fovea, where the ramp reads 0.5 either way, so
@@ -288,7 +300,7 @@ def test_preprocessing_runs_exactly_once():
         return stim.invert()
 
     scene = scene_of()
-    implant = implant_at(0, 0, input_frame='eye')
+    implant = implant_at(0, 0)
     implant.preprocess = counted
     model = model_for(implant)
     model.predict_percept(scene)
@@ -498,9 +510,8 @@ def test_gaze_moves_the_scotoma_and_the_phosphene_together():
 def test_a_fixed_vmax_does_not_renormalize_when_gaze_changes():
     """Nothing rescales the display behind the user's back"""
     scene = scene_of(scotoma=Scotoma.circle(12), scotoma_fill=0.0)
-    # Eye-coupled, so gaze walks the electrode up the ramp:
-    model = model_for(implant_at(0, 0, input_frame='eye'), rho=100,
-                      xrange=(-4, 4), yrange=(-4, 4), step=0.5)
+    model = model_for(implant_at(0, 0), rho=100, xrange=(-4, 4),
+                      yrange=(-4, 4), step=0.5)
 
     def phosphene(gaze_x, **kwargs):
         """The composed pixel the foveal electrode paints
@@ -645,11 +656,11 @@ def test_per_frame_gaze_moves_the_eye_between_video_frames():
         (SCENE_PX, SCENE_PX, 1)), 3, axis=-1)
     scene = scene_of(VideoStimulus(frames, time=[0, 100, 200]))
     gaze = np.array([[-6.0, 0.0], [0.0, 0.0], [6.0, 0.0]])
-    eye = model_for(implant_at(0, 0, input_frame='eye'))
+    eye = model_for(implant_at(0, 0))
     seen = seen_by(eye, scene, gaze=gaze * dva)
     npt.assert_almost_equal(seen.ravel(), ramp_at(gaze[:, 0]), decimal=4)
     # A head-mounted camera holds still through the same eye movements:
-    camera = model_for(implant_at(0, 0))
+    camera = model_for(implant_at(0, 0, input_frame='head'))
     npt.assert_almost_equal(seen_by(camera, scene, gaze=gaze * dva).ravel(),
                             [ramp_at(0.0)] * 3, decimal=4)
     # A still scene has one frame, so there is no per-frame gaze to give

@@ -72,6 +72,7 @@ class BVT24(Implant):
     __slots__ = ()
 
     placement = 'suprachoroidal'
+    scene_input_frame = 'head'
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=False, safe_mode=False):
         self.eye = eye
@@ -193,6 +194,7 @@ class BVT44(Implant):
     __slots__ = ()
 
     placement = 'suprachoroidal'
+    scene_input_frame = 'head'
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='LE', preprocess=False, safe_mode=False):
         self.eye = eye
