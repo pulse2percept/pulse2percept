@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify an *installed* pulse2percept, beyond what `import pulse2percept` proves.
+"""Verify an *installed* p2p, beyond what `import pulse2percept` proves.
 
 Run this from a directory that is not the repo root. It answers four things a
 plain import does not:
@@ -9,7 +9,7 @@ plain import does not:
    checkout, which has no compiled extensions in it.)
 2. Did every C extension load as a real binary, or did something quietly fall
    back to pure Python? A broken extension that degrades silently is worse
-   than one that raises, because the install looks healthy.
+   than one that raises an error, because the install looks healthy.
 3. Do the installed dependencies satisfy the versions the distribution
    metadata asks for?
 4. Does a model actually build?
@@ -66,8 +66,7 @@ def check_not_shadowed(source_root: Path | None) -> list[str]:
 
     if not any(part in ("site-packages", "dist-packages") for part in origin.parts):
         # Not fatal on its own: an editable install legitimately resolves
-        # outside site-packages. The source-root check above is the one that
-        # catches the real mistake.
+        # outside site-packages
         print(f"note: {origin} is outside site-packages (editable install?)")
     return []
 
@@ -138,7 +137,7 @@ def check_dependencies() -> list[str]:
             continue
 
         # Trust installed metadata over a module's __version__ attribute; the
-        # two can disagree, and metadata is what pip resolved against.
+        # two can disagree, but metadata is what pip resolved against.
         try:
             version = metadata.version(req.name)
         except metadata.PackageNotFoundError:
