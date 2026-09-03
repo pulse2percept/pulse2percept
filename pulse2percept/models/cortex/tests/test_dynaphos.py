@@ -333,3 +333,30 @@ def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
     solo = AmplitudeEncoder().encode(ImageStimulus(np.array([[0.7]])))
     npt.assert_equal(len(solo._structured_sources()), 1)
     npt.assert_equal(_pulse_train_clocks(solo), None)
+
+
+def test_location_noise():
+    implant = Cortivis()
+    source = {e: BiphasicPulseTrain(freq=300, amp=200, phase_dur=0.17)
+              for e in implant.electrode_names}
+    kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), step=0.1)
+    plain = DynaphosModel(implant=implant, **kwargs).build()
+    expected = plain.predict_percept(source).data
+
+    # None and 0 are exact no-ops:
+    for off in (None, 0):
+        model = DynaphosModel(implant=implant, location_noise=off,
+                              **kwargs).build()
+        npt.assert_array_equal(model.predict_percept(source).data, expected)
+
+    np.random.seed(0)
+    warped = DynaphosModel(implant=implant, location_noise=0.5,
+                           **kwargs).build()
+    got = warped.predict_percept(source).data
+    npt.assert_equal(got.shape, expected.shape)
+    npt.assert_equal(np.array_equal(got, expected), False)
+    # The distortion is the subject's, so it survives a rebuild:
+    npt.assert_array_equal(warped.build().predict_percept(source).data, got)
+
+    with pytest.raises(ValueError):
+        DynaphosModel(implant=implant, location_noise=-1, **kwargs).build()

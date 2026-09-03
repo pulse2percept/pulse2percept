@@ -91,6 +91,13 @@ class Thompson2003Spatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    location_noise : float or None, optional
+        Standard deviation (dva) of this subject's retinotopic
+        distortion; see
+        :py:class:`~pulse2percept.models.SpatialModel`.
+
+        .. versionadded:: 0.11.0
+
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
@@ -108,6 +115,7 @@ class Thompson2003Spatial(SpatialModel):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             implant, radius=radius, dropout=dropout, xrange=xrange,
@@ -116,7 +124,8 @@ class Thompson2003Spatial(SpatialModel):
             min_current_spread=min_current_spread,
             visual_field_map=(Curcio1990Map() if visual_field_map is None else
                               visual_field_map),
-            n_gray=n_gray, noise=noise, verbose=verbose,
+            n_gray=n_gray, noise=noise,
+            location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
 
@@ -201,6 +210,13 @@ class Thompson2003Model(Model):
         gray-level quantization.
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame.
+    location_noise : float or None, optional
+        Standard deviation (dva) of this subject's retinotopic
+        distortion; see
+        :py:class:`~pulse2percept.models.SpatialModel`.
+
+        .. versionadded:: 0.11.0
+
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
@@ -218,6 +234,7 @@ class Thompson2003Model(Model):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             spatial=Thompson2003Spatial(
@@ -226,6 +243,7 @@ class Thompson2003Model(Model):
                 thresh_percept=thresh_percept,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
+                n_gray=n_gray, noise=noise,
+                location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)

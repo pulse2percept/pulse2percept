@@ -95,9 +95,9 @@ Models
 * ``find_threshold`` has been removed; threshold searches belong at the
   experiment level rather than in the model API (:pull:`862`).
 
-* New ``location_noise`` parameter on every
-  :py:class:`~pulse2percept.models.SpatialModel` jitters where each
-  electrode's percept appears in the visual field, in dva (:pull:`881`).
+* New ``location_noise`` parameter gives a model a subject-specific
+  retinotopic distortion (dva), warping the rendered percept away from the
+  canonical ``visual_field_map`` (:pull:`881`).
 
 
 Residual vision

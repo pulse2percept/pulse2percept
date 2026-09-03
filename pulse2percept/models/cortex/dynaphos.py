@@ -3,7 +3,8 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import BaseModel, _check_implant, _require_stim_dimension
+from ..base import (BaseModel, _check_implant, _location_noise_field,
+                    _require_stim_dimension, _warp_visual_field)
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
@@ -103,6 +104,14 @@ class DynaphosModel(BaseModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
+    location_noise : float or None, optional
+        Standard deviation (dva) of this subject's retinotopic distortion: how
+        far the percept of an electrode lands from where
+        ``visual_field_map`` predicts it. ``None`` or 0 leaves the percept
+        untouched.
+
+        .. versionadded:: 0.11.0
+
     noise : float or int, optional
         Adds salt-and-pepper noise to each percept frame. An integer will be
         interpreted as the number of pixels to subject to noise in each 
@@ -136,6 +145,7 @@ class DynaphosModel(BaseModel):
                  xrange=(-5, 5), yrange=(-5, 5), step=0.25,
                  grid_type='rect', visual_field_map=None, n_gray=None,
                  noise=None,
+                 location_noise=None,
                  verbose=True):
             _check_implant(implant)
             self._implant = implant
@@ -150,11 +160,16 @@ class DynaphosModel(BaseModel):
                 visual_field_map=(
                     Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
                     if visual_field_map is None else visual_field_map),
-                n_gray=n_gray, noise=noise, verbose=verbose,
+                n_gray=n_gray, noise=noise,
+                location_noise=location_noise, verbose=verbose,
                 regions=['v1'] if regions is None else regions)
 
             self.visual_field_map.regions = self.regions
             self.grid = None
+            # This subject's electrode offsets and the grid warp they produce;
+            # see `_electrode_offsets` and `_location_noise_field`:
+            self._location_noise_z = None
+            self._location_noise = None
 
     @property
     def implant(self):
@@ -174,6 +189,8 @@ class DynaphosModel(BaseModel):
         _check_implant(implant)
         if implant is not self._implant:
             self._is_built = False
+            # A different implant is a different set of electrodes to displace:
+            self._location_noise_z = None
         self._implant = implant
 
     
@@ -191,6 +208,8 @@ class DynaphosModel(BaseModel):
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
                 'noise': None,
+                # Retinotopic distortion of this subject's percepts (dva)
+                'location_noise': None,
                 # True: print status messages, 0: silent
                 'verbose': True,
                 # Visual field regions to simulate
@@ -235,6 +254,8 @@ class DynaphosModel(BaseModel):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
+            # The percept is displaced in the visual field, not on cortex:
+            'location_noise': dva,
             'dt': ms,
             # Decay constants, both converted to seconds where they are used:
             'tau_act': ms,
@@ -282,6 +303,7 @@ class DynaphosModel(BaseModel):
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
+        self._location_noise = _location_noise_field(self)
         self._build()
         self._is_built = True
         return self
@@ -497,6 +519,7 @@ class DynaphosModel(BaseModel):
         else:
             resp = self._predict_percept(self.implant.electrode_array, stim,
                                          t_percept, clocks)
+        resp = _warp_visual_field(resp, self.grid, self._location_noise)
         return Percept(resp.reshape(list(self.grid.x.shape) + [t_percept.size]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
