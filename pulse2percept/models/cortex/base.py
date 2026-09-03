@@ -71,12 +71,9 @@ class CortexSpatial(SpatialModel):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     location_noise : float or None, optional
-        Standard deviation of the variation in phosphene location from the
-        ``visual_field_map``, in dva. Locations are fixed for a model instance.
-        ``None`` or 0 disables the variation.
-        Moves the effective stimulation location, so phosphene shape and
-        size change too wherever the model makes them location-dependent
-        (axon bundles, cortical magnification).
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
 
         .. versionadded:: 0.11.0
 
@@ -295,12 +292,9 @@ class ScoreboardSpatial(CortexSpatial):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     location_noise : float or None, optional
-        Standard deviation of the variation in phosphene location from the
-        ``visual_field_map``, in dva. Locations are fixed for a model instance.
-        ``None`` or 0 disables the variation.
-        Moves the effective stimulation location, so phosphene shape and
-        size change too wherever the model makes them location-dependent
-        (axon bundles, cortical magnification).
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
 
         .. versionadded:: 0.11.0
 
@@ -480,12 +474,9 @@ class ScoreboardModel(Model):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     location_noise : float or None, optional
-        Standard deviation of the variation in phosphene location from the
-        ``visual_field_map``, in dva. Locations are fixed for a model instance.
-        ``None`` or 0 disables the variation.
-        Moves the effective stimulation location, so phosphene shape and
-        size change too wherever the model makes them location-dependent
-        (axon bundles, cortical magnification).
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
         
         .. versionadded:: 0.11.0
 

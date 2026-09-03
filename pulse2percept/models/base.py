@@ -365,8 +365,7 @@ def _location_noise_sigma(model):
                          f"(or None to disable it), not {sigma}.")
     ndim = model.visual_field_map.ndim
     if sigma > 0 and ndim != 2:
-        # A visual field maps onto a surface, so the dva round trip in
-        # `_displaced_coords` cannot preserve a coordinate normal to it:
+        # Round-tripping through dva cannot preserve depth in a 3D map.
         raise NotImplementedError(
             f"location_noise is only defined for 2D visual field maps, and "
             f"{type(model.visual_field_map).__name__} is {ndim}D.")
@@ -374,11 +373,7 @@ def _location_noise_sigma(model):
 
 
 def _latent_offsets(model):
-    """Return (electrode names, this subject's (n, 2) standard normals).
-
-    Drawn once per implant and kept on the model, so that the same subject is
-    simulated across predictions, rebuilds and copies.
-    """
+    """Return electrode names and fixed per-electrode standard normals."""
     names = list(model.implant.electrode_array.electrodes)
     latent = model._location_noise_z
     if latent is None or latent.shape[0] != len(names):
@@ -388,12 +383,9 @@ def _latent_offsets(model):
 
 
 def _electrode_offsets(model, electrodes):
-    """Return the (n, 2) dva displacements of the named electrodes.
+    """Return fixed electrode offsets in dva, or None when disabled.
 
-    ``None`` where ``location_noise`` is disabled. Matched by electrode name,
-    since a compressed stimulus carries only a subset of the implant. Names
-    are matched by identity: an array may name its electrodes with integers,
-    for which ``0`` and ``'0'`` are different electrodes.
+    Electrode IDs are matched without string coercion.
     """
     sigma = _location_noise_sigma(model)
     if sigma is None:
@@ -404,23 +396,14 @@ def _electrode_offsets(model, electrodes):
 
 
 def _displaced_coords(model, region, electrodes, xyz, offsets):
-    """Return the effective tissue coordinates of displaced electrodes.
+    """Return displaced tissue coordinates via tissue -> dva -> tissue.
 
-    Round-trips each electrode through ``region`` of the visual field map:
-    tissue -> dva, add the electrode's fixed offset, dva -> tissue. Only the
-    percept prediction sees these; the implant is not moved. 2D maps only;
-    see `_location_noise_sigma`.
-
-    Raises if the map places an electrode nowhere, before or after the offset.
-    Substituting the canonical location would set that electrode's offset to
-    zero, which censors the Gaussian near the edge of a map's domain and makes
-    ``location_noise`` mean something different depending on where an
-    electrode sits.
+    The physical implant is unchanged. Raises if either location is unmappable.
     """
     vfmap = model.visual_field_map
     try:
         inverse = vfmap.to_dva()[region]
-        # Copies, since a map is free to edit the array it is handed:
+        # Some maps mutate their inputs.
         x_dva, y_dva = inverse(*[np.array(a, dtype=np.float64)
                                  for a in xyz[:2]])
     except (NotImplementedError, KeyError):
@@ -447,9 +430,7 @@ def _require_placed(model, region, electrodes, coords, which):
         placed &= np.isfinite(np.asarray(coord, dtype=np.float64))
     if np.all(placed):
         return
-    # `.item()` unwraps the NumPy scalars a stimulus reports, so that an
-    # integer-named electrode prints as `0` rather than `np.int64(0)` -- and
-    # still not as `'0'`, which would be a different electrode.
+    # Preserve integer electrode IDs in error messages.
     lost = [e.item() if isinstance(e, np.generic) else e
             for e, ok in zip(electrodes, placed) if not ok]
     raise ValueError(
@@ -741,16 +722,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     location_noise : float or None, optional
-        Standard deviation of the variation in phosphene location from the
-        ``visual_field_map``, in dva. Locations are fixed for a model instance.
-        ``None`` or 0 disables the variation. Requires an invertible, 2D
-        ``visual_field_map``, which is what places the electrodes in the
-        visual field. Moves the effective stimulation location, so phosphene
-        shape and size change too wherever the model makes them
-        location-dependent (axon bundles, cortical magnification).
-        Phenomenological: the standard deviation is not empirically
-        calibrated, and trial-to-trial or gaze-dependent shifts are not
-        modeled.
+        Standard deviation of fixed electrode-specific phosphene offsets, in
+        dva. Requires an invertible 2D ``visual_field_map``. Moving the effective
+        stimulation location may also change phosphene shape or size in
+        location-dependent models. This phenomenological parameter is not
+        empirically calibrated and does not model trial-to-trial or gaze effects.
 
         .. versionadded:: 0.11.0
 
@@ -785,7 +761,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # `_visual_field_map_first`.
         super().__init__(**_visual_field_map_first(params))
         self.grid = None
-        # This subject's latent electrode offsets; see `_latent_offsets`:
         self._location_noise_z = None
 
     @property
@@ -810,7 +785,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if implant is not self._implant:
             # Spatial build state depends on implant geometry:
             self._is_built = False
-            # A different implant is a different set of electrodes to displace:
             self._location_noise_z = None
         self._implant = implant
 
@@ -924,7 +898,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
-            # The percept is displaced in the visual field, not on tissue:
             'location_noise': dva,
         }
 
@@ -977,8 +950,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
         if _location_noise_sigma(self) is not None:
-            # Draw the subject here so that the offsets do not depend on which
-            # stimulus is predicted first:
+            # Draw once so the first stimulus does not determine the subject.
             _latent_offsets(self)
         self._build()
         self._is_built = True

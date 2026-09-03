@@ -1965,7 +1965,6 @@ def _blob_moments(percept, grid):
 
 @pytest.mark.parametrize('location_noise', (None, 0))
 def test_location_noise_off(location_noise):
-    # No noise is an exact no-op, down to no subject being drawn:
     model = _one_electrode_model(location_noise=location_noise)
     npt.assert_equal(model._location_noise_z, None)
     npt.assert_array_equal(model.predict_percept({'A0': 1}).data,
@@ -1974,8 +1973,6 @@ def test_location_noise_off(location_noise):
 
 
 def test_location_noise_must_be_finite_and_non_negative():
-    # NaN would otherwise pass both the < 0 and > 0 tests and disable the
-    # noise silently:
     for bad in (-1, np.nan, np.inf):
         model = _one_electrode_model()
         model.location_noise = bad
@@ -1991,8 +1988,6 @@ def test_location_noise_is_a_visual_angle():
 
 
 def test_location_noise_moves_a_phosphene_without_deforming_it():
-    # A displaced electrode gives the same phosphene somewhere else, not a
-    # locally stretched image: under a linear map the blob is unchanged.
     offset = 1.0 * _latents(1, 7)[0]
     plain = _one_electrode_model()
     moved = _one_electrode_model(location_noise=1.0, seed=7)
@@ -2000,13 +1995,11 @@ def test_location_noise_moves_a_phosphene_without_deforming_it():
     now, cov_now = _blob_moments(moved.predict_percept({'A0': 1}), moved.grid)
     npt.assert_allclose(now - was, offset, atol=0.02)
     npt.assert_allclose(cov_now, cov_was, atol=1e-3)
-    # Still circular, so it did not turn into a streak:
     npt.assert_allclose(cov_now[0, 0], cov_now[1, 1], rtol=0.05)
     npt.assert_allclose(cov_now[0, 1], 0, atol=1e-3)
 
 
 def test_location_noise_moves_sparse_phosphenes_independently():
-    # Each electrode carries its own offset, and each blob stays circular.
     coords = [(-1400, -1400), (1400, -1400), (-1400, 1400), (1400, 1400)]
     offsets = 1.0 * _latents(len(coords), 3)
     plain = _scoreboard_at(coords)
@@ -2017,14 +2010,11 @@ def test_location_noise_moves_sparse_phosphenes_independently():
         now, cov_now = _blob_moments(moved.predict_percept({electrode: 1}),
                                      moved.grid)
         npt.assert_allclose(now - was, offsets[i], atol=0.02)
-        # Still the same circular blob, just off the electrode grid:
         npt.assert_allclose(cov_now, cov_was, atol=0.02)
         npt.assert_allclose(cov_now[0, 0], cov_now[1, 1], rtol=0.05)
 
 
 def test_location_noise_follows_the_stimulus_electrodes():
-    # A stimulus on a subset of the implant must still get each electrode's
-    # own offset, not the first few rows of the cached ones.
     coords = [(-1400, 0), (0, 0), (1400, 0)]
     offsets = 1.0 * _latents(len(coords), 4)
     plain = _scoreboard_at(coords)
@@ -2035,8 +2025,6 @@ def test_location_noise_follows_the_stimulus_electrodes():
 
 
 def test_location_noise_is_fixed_for_a_subject():
-    # The offsets belong to the subject, not to the build: changing an
-    # unrelated parameter must not hand the subject a new retinotopy.
     model = _one_electrode_model(location_noise=1.0, seed=7)
     first = model.predict_percept({'A0': 1}).data
     npt.assert_array_equal(model.predict_percept({'A0': 1}).data, first)
@@ -2048,10 +2036,8 @@ def test_location_noise_is_fixed_for_a_subject():
     model.rho = 400
     model.build()
     npt.assert_array_equal(model.predict_percept({'A0': 1}).data, first)
-    # A deepcopy is the same subject, too:
     npt.assert_array_equal(
         copy.deepcopy(model).predict_percept({'A0': 1}).data, first)
-    # A new model is a new subject:
     other = _one_electrode_model(location_noise=1.0, seed=8)
     npt.assert_equal(np.array_equal(other.predict_percept({'A0': 1}).data,
                                     first), False)
@@ -2075,8 +2061,7 @@ def test_location_noise_needs_an_invertible_map():
 
 
 def test_location_noise_keeps_the_axon_map_kernel_joint():
-    # AxonMap sums electrode contributions per axon segment before picking the
-    # brightest one, so a displaced electrode must reach that same kernel.
+    # Location offsets must enter the joint AxonMap kernel before summation.
     implant = ArgusII()
     both = ['C4', 'C6']
     kwargs = dict(xrange=(-8, 8), yrange=(-8, 8), step=0.25, rho=200,
@@ -2087,11 +2072,9 @@ def test_location_noise_keeps_the_axon_map_kernel_joint():
     joint = model.predict_percept({e: 1 for e in both}).data
     npt.assert_equal(np.all(np.isfinite(joint)), True)
     npt.assert_equal(joint.max() > 0, True)
-    # Superposition would make this equal; the joint kernel does not:
     apart = sum(model.predict_percept({e: 1}).data for e in both)
     npt.assert_equal(np.allclose(joint, apart), False)
-    # The percept is the canonical one for electrodes moved in the visual
-    # field, so the phosphenes stay coherent streaks:
+    # Compare against an equivalent implant physically displaced in tissue.
     vfmap = model.visual_field_map
     xyz = implant.electrode_array.coordinates(um, electrodes=both)
     rows = [implant.electrode_names.index(e) for e in both]
@@ -2119,9 +2102,7 @@ def test_cortical_location_noise_moves_the_phosphene():
     now, cov_now = _blob_moments(moved.predict_percept({electrode: 100}),
                                  moved.grid)
     npt.assert_allclose(now - was, offset, atol=0.1)
-    # A coherent phosphene, not a smeared one: it still reaches the drive it
-    # was given. Its dva extent does change, since cortical magnification
-    # falls off with eccentricity, so `cov` is only checked for compactness.
+    # Cortical magnification may change size, so only require compactness.
     for percept in (plain.predict_percept({electrode: 100}),
                     moved.predict_percept({electrode: 100})):
         npt.assert_equal(percept.data.max() > 70, True)
@@ -2129,8 +2110,6 @@ def test_cortical_location_noise_moves_the_phosphene():
 
 
 def test_cortical_location_noise_ignores_region_order():
-    # A multi-region model sums its regions, so naming them in a different
-    # order describes the same simulation and must displace the same way:
     implant = Cortivis()
     source = {implant.electrode_names[10]: 100}
     percepts = []
@@ -2164,8 +2143,7 @@ class _Slab3DMap(VisualFieldMap):
 
 
 def test_location_noise_rejects_3d_maps():
-    # A visual field maps onto a surface embedded in the tissue, so the dva
-    # round trip cannot carry the coordinate normal to it (cortical depth).
+    # A dva round trip cannot preserve cortical depth.
     kwargs = dict(visual_field_map=_Slab3DMap(), regions=['v1'], rho=400,
                   xrange=(-10, 10), yrange=(-10, 10), step=0.5)
     CortexScoreboardSpatial(_implant_at([(560, 0)]), **kwargs).build()
@@ -2175,8 +2153,7 @@ def test_location_noise_rejects_3d_maps():
 
 
 def test_location_noise_matches_integer_electrode_names():
-    # A list-built array names its electrodes 0..N-1, and a stimulus carries
-    # those integers: matching them as strings would raise or mismatch.
+    # Integer and string electrode IDs must remain distinct.
     array = ElectrodeArray([DiskElectrode(x, 0, 0, 100)
                             for x in (-1400, 0, 1400)])
     offsets = 1.0 * _latents(3, 4)
@@ -2215,12 +2192,10 @@ def _bounded_model(x_um, location_noise, seed):
 
 
 def test_location_noise_refuses_an_unplaceable_electrode():
-    # Falling back to the canonical location would silently zero this
-    # electrode's offset, censoring the Gaussian at the edge of the map.
+    # Do not silently discard offsets at the map boundary.
     off_map = _bounded_model(2000, 1.0, 7)
     with pytest.raises(ValueError, match='canonical'):
         off_map.predict_percept({'A0': 1})
-    # Same for an electrode the offset pushes off the map:
     displaced = _bounded_model(1300, 5.0, 7)
     with pytest.raises(ValueError, match='displaced'):
         displaced.predict_percept({'A0': 1})

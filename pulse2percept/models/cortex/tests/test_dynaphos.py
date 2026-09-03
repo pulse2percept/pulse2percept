@@ -352,7 +352,6 @@ def test_location_noise():
     plain = DynaphosModel(implant=implant, **kwargs).build()
     expected = plain.predict_percept(source).data
 
-    # None and 0 are exact no-ops:
     for off in (None, 0):
         model = DynaphosModel(implant=implant, location_noise=off,
                               **kwargs).build()
@@ -364,29 +363,22 @@ def test_location_noise():
     moved = DynaphosModel(implant=implant, location_noise=1.0,
                           **kwargs).build()
     got = moved.predict_percept(source).data
-    # The phosphene moves by this electrode's offset, within a grid step:
     npt.assert_allclose(_brightest_dva(moved.predict_percept(source),
                                        moved.grid) -
                         _brightest_dva(plain.predict_percept(source),
                                        plain.grid),
                         offset, atol=0.06)
-    # It is the same phosphene, just elsewhere:
     npt.assert_allclose(got.max(), expected.max(), rtol=0.05)
-    # The offsets are the subject's, so they survive a rebuild:
     npt.assert_array_equal(moved.build().predict_percept(source).data, got)
 
     with pytest.raises(ValueError):
         DynaphosModel(implant=implant, location_noise=-1, **kwargs).build()
-    # NaN is not a quiet no-op:
     with pytest.raises(ValueError):
         DynaphosModel(implant=implant, location_noise=np.nan, **kwargs).build()
 
 
 def test_location_noise_crosses_meridian():
-    # A phosphene displaced across the vertical meridian is drawn in the
-    # hemifield it lands in, not the one its electrode maps to. This
-    # electrode sits just left of the meridian (x = +0.24 dva) and the
-    # offset below carries it 0.83 dva to the right of it.
+    # Choose an electrode/offset pair that crosses the vertical meridian.
     implant = Implant(ElectrodeArray([DiskElectrode(-25000, 2000, 0, 100)]))
     source = {0: BiphasicPulseTrain(freq=300, amp=200, phase_dur=0.17)}
     kwargs = dict(xrange=(-4, 4), yrange=(-4, 4), step=0.05)
@@ -403,12 +395,9 @@ def test_location_noise_crosses_meridian():
     npt.assert_allclose(_brightest_dva(got, moved.grid) -
                         _brightest_dva(canonical, plain.grid), offset,
                         atol=0.06)
-    # The whole phosphene came along; a hemifield mask left behind would
-    # have clipped most of it away:
     npt.assert_allclose(got.data.sum(), canonical.data.sum(), rtol=0.05)
 
-    # An offset that lands outside the map's domain (here beyond its 90 dva
-    # eccentricity) says so, rather than silently dropping the phosphene:
+    # Displacements outside the map domain must fail explicitly.
     np.random.seed(2)
     off_map = DynaphosModel(implant=implant, location_noise=300.0,
                             **kwargs).build()

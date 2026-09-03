@@ -106,9 +106,8 @@ class DynaphosModel(BaseModel):
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
     location_noise : float or None, optional
-        Standard deviation of the variation in phosphene location from the
-        ``visual_field_map``, in dva. Locations are fixed for a model instance.
-        ``None`` or 0 disables the variation.
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
         
         .. versionadded:: 0.11.0
 
@@ -166,7 +165,6 @@ class DynaphosModel(BaseModel):
 
             self.visual_field_map.regions = self.regions
             self.grid = None
-            # This subject's latent electrode offsets; see `_latent_offsets`:
             self._location_noise_z = None
 
     @property
@@ -187,7 +185,6 @@ class DynaphosModel(BaseModel):
         _check_implant(implant)
         if implant is not self._implant:
             self._is_built = False
-            # A different implant is a different set of electrodes to displace:
             self._location_noise_z = None
         self._implant = implant
 
@@ -252,7 +249,6 @@ class DynaphosModel(BaseModel):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
-            # The percept is displaced in the visual field, not on cortex:
             'location_noise': dva,
             'dt': ms,
             # Decay constants, both converted to seconds where they are used:
@@ -302,8 +298,7 @@ class DynaphosModel(BaseModel):
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
         if _location_noise_sigma(self) is not None:
-            # Draw the subject here so that the offsets do not depend on which
-            # stimulus is predicted first:
+            # Draw once so the first stimulus does not determine the subject.
             _latent_offsets(self)
         self._build()
         self._is_built = True
@@ -325,18 +320,15 @@ class DynaphosModel(BaseModel):
 
         theta, r = cart2pol(*phosphene_locations['v1'])
 
-        # `location_noise` moves the phosphene, not the electrode: the size
-        # below still follows the canonical cortical magnification.
+        # Dynaphos moves the phosphene but keeps its canonical size.
         offsets = _electrode_offsets(self, stim.electrodes)
         x_split = x_el
         if offsets is not None:
             for region, (px, py) in phosphene_locations.items():
                 phosphene_locations[region] = (px + offsets[:, 0],
                                                py + offsets[:, 1])
-            # `create_gaussian` clips each phosphene to one hemifield, and a
-            # displaced phosphene belongs to the one it lands in. Ask the map
-            # rather than the sign of the displaced dva x: near the meridian
-            # the inverse is only accurate to a few hundredths of a degree.
+            # Use displaced cortical location for hemifield assignment;
+            # dva sign is unreliable near the meridian.
             split = self.visual_field_map.from_dva()['v1'](
                 *[np.array(c, dtype=np.float64)
                   for c in phosphene_locations['v1']])
