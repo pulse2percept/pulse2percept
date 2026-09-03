@@ -301,14 +301,11 @@ def _scene_stim(model, scene, gaze):
     x_vf, y_vf = visual_field_map.ret_to_dva(*xy)
     frame = implant.scene_input_frame
     if frame not in ('eye', 'head'):
-        # Reachable through a bad `default_scene_input_frame` on a custom
-        # class, which the instance-level setter never sees:
+        # Validate class defaults as well as instance overrides:
         raise ValueError(f"This implant's 'scene_input_frame' is {frame!r}, "
                          f"which says nothing about how gaze registers the "
                          f"scene onto it; expected 'eye' or 'head'.")
-    # A head-fixed camera does not turn with the eye, so gaze changes only
-    # where the percept lands in the scene, not what the electrodes are given.
-    # Either way a malformed gaze is an error, so check it before dropping it:
+    # Head-fixed input ignores gaze when sampling, but gaze is still validated:
     _gaze_points(gaze, device_scene.n_frames)
     input_gaze = gaze if frame == 'eye' else None
     gray = device_scene._device_input(x_vf, y_vf, gaze=input_gaze)

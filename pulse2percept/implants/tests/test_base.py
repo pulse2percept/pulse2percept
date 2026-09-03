@@ -1163,24 +1163,23 @@ def test_named_devices_say_where_they_sit(cls, expected):
     (implants.Huang2021Array, 'eye'),
 ])
 def test_named_devices_say_how_gaze_reaches_them(cls, expected):
-    npt.assert_equal(cls.default_scene_input_frame, expected)
+    npt.assert_equal(cls._default_scene_input_frame, expected)
 
 
 def test_a_generic_array_moves_its_input_with_the_eye():
     # Only a head-fixed camera breaks the natural coupling, and a bare grid of
     # electrodes is not one:
-    npt.assert_equal(implants.GridImplant.default_scene_input_frame, 'eye')
+    npt.assert_equal(implants.GridImplant._default_scene_input_frame, 'eye')
 
 
 def test_one_system_can_override_how_gaze_reaches_it():
-    # An Argus II run with eye tracking shifts the camera ROI with gaze, so
-    # the same hardware is eye-coupled without needing a subclass:
+    # Eye-tracked Argus II:
     tracked = implants.ArgusII()
     tracked.scene_input_frame = 'eye'
     npt.assert_equal(tracked.scene_input_frame, 'eye')
     npt.assert_equal(implants.ArgusII().scene_input_frame, 'head')
     npt.assert_equal('scene_input_frame' in str(tracked), True)
-    # None means "whatever this device class does":
+    # None restores the class default:
     tracked.scene_input_frame = None
     npt.assert_equal(tracked.scene_input_frame, 'head')
     npt.assert_equal('scene_input_frame' in str(tracked), False)

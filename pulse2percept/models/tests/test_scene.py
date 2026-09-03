@@ -164,7 +164,7 @@ def test_an_unknown_scene_input_frame_is_refused():
     # A device class may also declare a bad default, which no setter sees:
     class Typo(Implant):
         __slots__ = ()
-        default_scene_input_frame = 'retinal'
+        _default_scene_input_frame = 'retinal'
 
     model = model_for(Typo(PointSource(0, 0, 0),
                            encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX))))

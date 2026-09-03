@@ -86,9 +86,10 @@ class Implant(PrettyPrint):
 
         .. versionadded:: 0.10.0
     scene_input_frame : 'eye' or 'head', optional
-        Overrides the device class's
-        :py:attr:`~pulse2percept.implants.Implant.default_scene_input_frame`
-        for this system, e.g. ``'eye'`` for an Argus II run with eye tracking.
+        How gaze registers a scene onto this system, overriding what the
+        device class does, e.g. ``'eye'`` for an Argus II run with eye
+        tracking. See
+        :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`.
 
         .. versionadded:: 0.11.0
     thresholds : float, Quantity, or dict, optional
@@ -131,9 +132,9 @@ class Implant(PrettyPrint):
     family = None
 
     #: What :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`
-    #: is for devices of this class, before any per-system override.
-    #: .. versionadded:: 0.11.0
-    default_scene_input_frame = 'eye'
+    #: falls back to for devices of this class. Subclasses describing a
+    #: head-fixed-camera system override it.
+    _default_scene_input_frame = 'eye'
 
     def __init__(self, electrode_array, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
@@ -172,33 +173,22 @@ class Implant(PrettyPrint):
 
     @property
     def scene_input_frame(self):
-        """Coordinate frame in which scene content registers to the implant.
+        """Coordinate frame used to register scene input.
 
-        ``'eye'`` means gaze moves the scene across the implant; ``'head'``
-        means eye rotation does not change which scene content drives each
-        electrode. This is about registration, not acquisition: PRIMA is
-        ``'eye'`` despite its head-mounted camera, because the processed image
-        is projected through the moving eye onto the array. Only scene
-        sampling reads this; where the resulting percept lands in the scene is
-        gaze-dependent either way.
+        ``'eye'`` means gaze changes which scene content reaches the implant;
+        ``'head'`` means scene input is fixed relative to the head.
 
-        A ``'head'`` system still takes its per-electrode samples at the
-        electrodes' own visual-field locations, which assumes the device's
-        camera-to-electrode registration matches them. Real systems configure
-        that mapping separately and it is not modeled here.
-
-        Defaults to
-        :py:attr:`~pulse2percept.implants.Implant.default_scene_input_frame`;
-        setting it to None restores that default.
+        Defaults to ``default_scene_input_frame``. Setting to ``None`` restores
+        that default.
 
         .. versionadded:: 0.11.0
+
         """
         frame = getattr(self, '_scene_input_frame', None)
-        return self.default_scene_input_frame if frame is None else frame
+        return self._default_scene_input_frame if frame is None else frame
 
     @scene_input_frame.setter
     def scene_input_frame(self, frame):
-        """Input frame setter (called upon ``self.scene_input_frame = ...``)"""
         if frame is not None and frame not in ('eye', 'head'):
             raise ValueError(f"'scene_input_frame' says how gaze registers a "
                              f"scene onto the implant and must be 'eye' or "

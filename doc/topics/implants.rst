@@ -33,9 +33,9 @@ often are:
     implant: ``'eye'`` if gaze moves the scene across the electrodes,
     ``'head'`` for systems driven by a head-fixed camera, whose input the eye
     cannot move. PRIMA is ``'eye'`` despite its head-mounted camera, because
-    its processed image is projected through the eye. Defaults to the device
-    class's ``default_scene_input_frame`` (``'eye'`` for a generic array) and
-    can be set per system.
+    its processed image is projected through the eye. Defaults to what the
+    device class does (``'eye'`` for a generic array) and can be set per
+    system.
 
 ``encoder`` and ``raster``
     Optional device behavior used when visual input is converted to electrical
