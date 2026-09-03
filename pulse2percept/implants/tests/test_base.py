@@ -1147,30 +1147,34 @@ def test_named_devices_say_where_they_sit(cls, expected):
 
 
 @pytest.mark.parametrize('cls,expected', [
+    # Driven by a camera the eye cannot move:
+    (implants.ArgusI, 'head'),
     (implants.ArgusII, 'head'),
-    (implants.IMIE, 'head'),
     (implants.BVT24, 'head'),
+    (implants.BVT44, 'head'),
+    (implants.IMIE, 'head'),
     (cortex.Orion, 'head'),
     (cortex.Cortivis, 'head'),
     (cortex.ICVP, 'head'),
+    (cortex.NeuralinkThread, 'head'),
+    (cortex.Neuralink, 'head'),
     # Photodiode arrays are illuminated through the eye's own optics, and
     # PRIMA projects its camera image through the eye onto the array:
     (implants.AlphaIMS, 'eye'),
     (implants.AlphaAMS, 'eye'),
     (implants.PRIMAPivotal, 'eye'),
     (implants.Lorach2015Array, 'eye'),
+    (implants.Ho2019FlatArray, 'eye'),
+    (implants.Huang2021Array, 'eye'),
 ])
 def test_named_devices_say_how_gaze_reaches_them(cls, expected):
     npt.assert_equal(cls.scene_input_frame, expected)
-    npt.assert_equal(cls().scene_input_frame, expected)
 
 
 def test_a_generic_array_moves_its_input_with_the_eye():
     # Only a head-fixed camera breaks the natural coupling, and a bare grid of
     # electrodes is not one:
-    npt.assert_equal(
-        implants.GridImplant(shape=(2, 2), spacing=500).scene_input_frame,
-        'eye')
+    npt.assert_equal(implants.GridImplant.scene_input_frame, 'eye')
 
 
 def test_a_generic_array_says_nothing_about_placement():

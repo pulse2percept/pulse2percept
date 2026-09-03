@@ -23,7 +23,8 @@ Highlights
 * New :py:mod:`pulse2percept.vision` module with
   :py:class:`~pulse2percept.vision.Scene` and
   :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
-  residual vision and retinal prostheses (:pull:`854`, :pull:`871`).
+  residual vision and retinal prostheses (:pull:`854`, :pull:`871`, 
+  :pull:`883`).
 
 * New photovoltaic stimulation pipeline for
   :py:class:`~pulse2percept.implants.PRIMAPivotal`, from image encoding to
@@ -107,12 +108,6 @@ Residual vision
 * :py:class:`~pulse2percept.vision.Scene` adds softened scotoma boundaries,
   optional inpainting, configurable backgrounds, and eccentricity rings in
   both static and animated views (:pull:`871`).
-
-* ``gaze`` no longer moves the scene across the electrodes of implants
-  driven by a head-fixed camera (Argus, BVT, IMIE, Orion, Cortivis, ICVP),
-  which now set
-  :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` to ``'head'``;
-  gaze still places the percept in the scene (:pull:`882`).
 
 
 Plotting

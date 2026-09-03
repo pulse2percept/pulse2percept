@@ -118,6 +118,7 @@ class NeuralinkThread(Implant, metaclass=ABCMeta):
     """Base class for Neuralink threads"""
 
     placement = 'intracortical'
+    scene_input_frame = 'head'
 
 
 class LinearEdgeThread(NeuralinkThread):
@@ -261,6 +262,7 @@ class LinearEdgeThread(NeuralinkThread):
 class Neuralink(EnsembleImplant):
 
     placement = 'intracortical'
+    scene_input_frame = 'head'
 
     @classmethod
     def from_neuropythy(cls, visual_field_map, locs=None, xrange=None, yrange=None, step=None,
