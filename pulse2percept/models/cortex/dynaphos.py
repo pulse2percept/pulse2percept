@@ -427,12 +427,11 @@ class DynaphosModel(BaseModel):
             brightness = np.divide(1, 1 + np.exp(-self.sig_slope * (A - self.a50)))
             # create gaussian blobs & add to frame
             def create_gaussian(x0,y0,sigma,x_el):
+                gaussX = np.exp(-(xRange - x0)**2 / (2 * sigma ** 2))
+                # Only a split map has hemifields to keep current out of.
                 if separate:
-                    if x_el < boundary:
-                        cutoff = xRange <= 0
-                    else:
-                        cutoff = xRange > 0
-                gaussX = np.where(cutoff, 0, np.exp(-(xRange - x0)**2 / (2 * sigma ** 2)))
+                    cutoff = xRange <= 0 if x_el < boundary else xRange > 0
+                    gaussX = np.where(cutoff, 0, gaussX)
                 gaussY = np.exp(-(yRange - y0)**2 / (2 * sigma ** 2))
                 gauss = np.outer(gaussY, gaussX)
                 return gauss
