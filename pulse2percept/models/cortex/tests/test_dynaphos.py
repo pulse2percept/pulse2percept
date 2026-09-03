@@ -406,3 +406,11 @@ def test_location_noise_crosses_meridian():
     # The whole phosphene came along; a hemifield mask left behind would
     # have clipped most of it away:
     npt.assert_allclose(got.data.sum(), canonical.data.sum(), rtol=0.05)
+
+    # An offset that lands outside the map's domain (here beyond its 90 dva
+    # eccentricity) says so, rather than silently dropping the phosphene:
+    np.random.seed(2)
+    off_map = DynaphosModel(implant=implant, location_noise=300.0,
+                            **kwargs).build()
+    with pytest.raises(ValueError):
+        off_map.predict_percept(source)

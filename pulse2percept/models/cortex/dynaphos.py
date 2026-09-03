@@ -4,7 +4,7 @@ import warnings
 from copy import deepcopy, copy
 
 from ..base import (BaseModel, _check_implant, _electrode_offsets,
-                    _latent_offsets, _location_noise_sigma,
+                    _latent_offsets, _location_noise_sigma, _require_placed,
                     _require_stim_dimension)
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
@@ -337,9 +337,11 @@ class DynaphosModel(BaseModel):
             # displaced phosphene belongs to the one it lands in. Ask the map
             # rather than the sign of the displaced dva x: near the meridian
             # the inverse is only accurate to a few hundredths of a degree.
-            x_split = self.visual_field_map.from_dva()['v1'](
+            split = self.visual_field_map.from_dva()['v1'](
                 *[np.array(c, dtype=np.float64)
-                  for c in phosphene_locations['v1']])[0]
+                  for c in phosphene_locations['v1']])
+            _require_placed(self, 'v1', stim.electrodes, split, 'displaced')
+            x_split = split[0]
 
         # magnification factors (mm/dva)
         M = self.visual_field_map.k * (self.visual_field_map.b - self.visual_field_map.a) / ((r + self.visual_field_map.a) * (r + self.visual_field_map.b))
