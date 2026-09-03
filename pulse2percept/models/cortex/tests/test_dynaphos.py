@@ -57,6 +57,24 @@ def test_predict_spatial():
     npt.assert_equal(np.all(percept[:, half+1:] == 0), True)
     npt.assert_equal(np.all(percept[:, :half] != 0), True)
 
+def test_predict_spatial_unsplit_map():
+    # A map without hemifields must not be masked (used to raise NameError)
+    class UnsplitMap(Polimeni2006Map):
+        split_map = False
+
+    implant = Orion(x=15000)
+    model = DynaphosModel(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
+                          step=0.5, visual_field_map=UnsplitMap()).build()
+    source = {e: BiphasicPulseTrain(freq=300, amp=2000, phase_dur=0.17)
+              for e in implant.electrode_names}
+    percept = model.predict_percept(source).max(axis='frames')
+    npt.assert_equal(np.all(np.isfinite(percept)), True)
+    npt.assert_equal(np.any(percept > 0), True)
+    # Nothing is zeroed out by hemifield, so both halves get light
+    half = percept.shape[1] // 2
+    npt.assert_equal(np.any(percept[:, half + 1:] > 0), True)
+
+
 def test_temporal_predict():
     model = DynaphosModel(implant=Cortivis(), step=0.1).build()
     # User can set params
