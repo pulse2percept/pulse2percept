@@ -384,24 +384,30 @@ def _electrode_offsets(model, electrodes):
     """Return the (n, 2) dva displacements of the named electrodes.
 
     ``None`` where ``location_noise`` is disabled. Matched by electrode name,
-    since a compressed stimulus carries only a subset of the implant.
+    since a compressed stimulus carries only a subset of the implant. Names
+    are matched by identity: an array may name its electrodes with integers,
+    for which ``0`` and ``'0'`` are different electrodes.
     """
     sigma = _location_noise_sigma(model)
     if sigma is None:
         return None
     names, latent = _latent_offsets(model)
     row = {name: i for i, name in enumerate(names)}
-    return sigma * latent[[row[str(e)] for e in electrodes]]
+    return sigma * latent[[row[e] for e in electrodes]]
 
 
-def _displaced_coords(model, region, xyz, offsets):
+def _displaced_coords(model, region, electrodes, xyz, offsets):
     """Return the effective tissue coordinates of displaced electrodes.
 
     Round-trips each electrode through ``region`` of the visual field map:
     tissue -> dva, add the electrode's fixed offset, dva -> tissue. Only the
-    percept prediction sees these; the implant is not moved. Electrodes the
-    map cannot place in the visual field (NaN) keep their canonical
-    coordinates.
+    percept prediction sees these; the implant is not moved.
+
+    Raises if the map places an electrode nowhere, before or after the offset.
+    Substituting the canonical location would set that electrode's offset to
+    zero, which censors the Gaussian near the edge of a map's domain and makes
+    ``location_noise`` mean something different depending on where an
+    electrode sits.
     """
     vfmap = model.visual_field_map
     try:
@@ -412,21 +418,33 @@ def _displaced_coords(model, region, xyz, offsets):
     except (NotImplementedError, KeyError):
         raise NotImplementedError(
             f"location_noise places electrodes in the visual field, which "
-            f"requires a visual field map that can map tissue coordinates "
-            f"back to dva. {type(vfmap).__name__} cannot.") from None
+            f"requires an invertible visual field map. "
+            f"{type(vfmap).__name__} cannot map tissue coordinates back to "
+            f"dva.") from None
+    _require_placed(model, region, electrodes, [x_dva, y_dva], 'canonical')
     moved = [np.asarray(c, dtype=np.float64) for c in
              vfmap.from_dva()[region](x_dva + offsets[:, 0],
                                       y_dva + offsets[:, 1])]
-    # An electrode the map cannot place, or cannot place once displaced, stays
-    # where it is rather than turning the kernel's input into NaN:
-    placed = np.isfinite(x_dva) & np.isfinite(y_dva)
-    for coord in moved:
-        placed &= np.isfinite(coord)
+    _require_placed(model, region, electrodes, moved, 'displaced')
     out = list(xyz)
     for i, coord in enumerate(moved[:len(out)]):
-        out[i] = np.ascontiguousarray(np.where(placed, coord, xyz[i]),
-                                      dtype=np.float32)
+        out[i] = np.ascontiguousarray(coord, dtype=np.float32)
     return tuple(out)
+
+
+def _require_placed(model, region, electrodes, coords, which):
+    """Raise if the map returned a non-finite coordinate for an electrode."""
+    placed = np.ones(len(electrodes), dtype=bool)
+    for coord in coords:
+        placed &= np.isfinite(np.asarray(coord, dtype=np.float64))
+    if np.all(placed):
+        return
+    lost = [str(e) for e, ok in zip(electrodes, placed) if not ok]
+    raise ValueError(
+        f"location_noise cannot displace electrode(s) "
+        f"{', '.join(repr(e) for e in lost[:5])} in region {region!r} because "
+        f"{type(model.visual_field_map).__name__} does not map their "
+        f"{which} location.")
 
 
 #: Parameter names declared by each model class, cached for ``__setattr__``.
@@ -713,8 +731,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     location_noise : float or None, optional
         Standard deviation of the variation in phosphene location from the
         ``visual_field_map``, in dva. Locations are fixed for a model instance.
-        ``None`` or 0 disables the variation. Requires a ``visual_field_map``
-        that implements ``to_dva``, which is what places the electrodes in the
+        ``None`` or 0 disables the variation. Requires an invertible
+        ``visual_field_map``, which is what places the electrodes in the
         visual field. Phenomenological: the standard deviation is not
         empirically calibrated, and trial-to-trial or gaze-dependent shifts
         are not modeled.
@@ -991,7 +1009,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                                  f"through, since {type(self).__name__} maps "
                                  f"{regions}.")
             region = regions[0]
-        return _displaced_coords(self, region, xyz, offsets)
+        return _displaced_coords(self, region, electrodes, xyz, offsets)
 
     def _postprocess_spatial(self, resp):
         """Hook for spatial-model postprocessing."""

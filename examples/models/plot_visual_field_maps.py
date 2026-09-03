@@ -157,7 +157,9 @@ for ax, noise, title in zip(
 ###############################################################################
 # The phosphenes move; they do not change shape. Each one is still the circular
 # Gaussian the Scoreboard model draws, sitting somewhere else in the visual
-# field.
+# field. On cortex the same is true of coherence but not of size: a displaced
+# electrode samples a different cortical magnification, so its phosphene
+# covers a different extent of the visual field.
 #
 # The same mechanism applies to cortical stimulation. Here a sparse subset of
 # CORTIVIS electrodes is mapped through V1 with ``Polimeni2006Map``. The
@@ -217,14 +219,13 @@ for ax, noise, title in zip(
 
 ###############################################################################
 # The logo stays legible but its mosaic is spatially jumbled: the phosphenes
-# are the same, only misplaced.
+# remain coherent, but appear at subject-specific locations.
 #
 # ``location_noise`` changes the predicted percept, not the physical electrode
 # locations or the canonical visual-field map. It therefore captures
 # subject-specific phosphene-location variability while leaving the anatomical
-# model intact. It requires a map that can place electrodes in the visual
-# field, so a map without an inverse (such as ``Watson2014DisplaceMap``) is not
-# supported.
+# model intact. It requires an invertible map, so one without an inverse (such
+# as ``Watson2014DisplaceMap``) is not supported.
 #
 # Creating your own visual field map
 # ----------------------------------

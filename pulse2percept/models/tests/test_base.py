@@ -2176,3 +2176,55 @@ def test_location_noise_supports_3d_maps():
     now, cov_now = _blob_moments(moved.predict_percept({'A0': 1}), moved.grid)
     npt.assert_allclose(now - was, offset, atol=0.02)
     npt.assert_allclose(cov_now, cov_was, atol=1e-3)
+
+
+def test_location_noise_matches_integer_electrode_names():
+    # A list-built array names its electrodes 0..N-1, and a stimulus carries
+    # those integers: matching them as strings would raise or mismatch.
+    array = ElectrodeArray([DiskElectrode(x, 0, 0, 100)
+                            for x in (-1400, 0, 1400)])
+    offsets = 1.0 * _latents(3, 4)
+    percepts = []
+    for noise, seed in ((None, 0), (1.0, 4)):
+        np.random.seed(seed)
+        model = ScoreboardSpatial(Implant(array), xrange=(-10, 10),
+                                  yrange=(-10, 10), step=0.1, rho=400,
+                                  location_noise=noise,
+                                  visual_field_map=Curcio1990Map()).build()
+        percepts.append(_blob_moments(model.predict_percept({2: 1}),
+                                      model.grid)[0])
+    npt.assert_allclose(percepts[1] - percepts[0], offsets[2], atol=0.02)
+
+
+class _BoundedMap(RetinalMap):
+    """Linear retinal map that covers only the central +/-5 dva"""
+
+    def dva_to_ret(self, xdva, ydva):
+        off = np.abs(xdva) > 5
+        return (np.where(off, np.nan, 280.0 * xdva),
+                np.where(off, np.nan, -280.0 * ydva))
+
+    def ret_to_dva(self, xret, yret):
+        off = np.abs(xret) > 1400
+        return (np.where(off, np.nan, xret / 280.0),
+                np.where(off, np.nan, -yret / 280.0))
+
+
+def _bounded_model(x_um, location_noise, seed):
+    np.random.seed(seed)
+    return ScoreboardSpatial(_implant_at([(x_um, 0)]), xrange=(-4, 4),
+                             yrange=(-4, 4), step=0.25, rho=400,
+                             location_noise=location_noise,
+                             visual_field_map=_BoundedMap()).build()
+
+
+def test_location_noise_refuses_an_unplaceable_electrode():
+    # Falling back to the canonical location would silently zero this
+    # electrode's offset, censoring the Gaussian at the edge of the map.
+    off_map = _bounded_model(2000, 1.0, 7)
+    with pytest.raises(ValueError, match='canonical'):
+        off_map.predict_percept({'A0': 1})
+    # Same for an electrode the offset pushes off the map:
+    displaced = _bounded_model(1300, 5.0, 7)
+    with pytest.raises(ValueError, match='displaced'):
+        displaced.predict_percept({'A0': 1})
