@@ -335,11 +335,20 @@ def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
     npt.assert_equal(_pulse_train_clocks(solo), None)
 
 
+
+def _brightest_dva(percept, grid):
+    """The (x, y) location of the brightest grid point of the last frame"""
+    frame = percept.data[..., -1]
+    idx = np.unravel_index(np.argmax(frame), frame.shape)
+    return np.array([float(grid.x[idx]), float(grid.y[idx])])
+
+
 def test_location_noise():
     implant = Cortivis()
-    source = {e: BiphasicPulseTrain(freq=300, amp=200, phase_dur=0.17)
-              for e in implant.electrode_names}
-    kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), step=0.1)
+    electrode = implant.electrode_names[10]
+    source = {electrode: BiphasicPulseTrain(freq=300, amp=200,
+                                            phase_dur=0.17)}
+    kwargs = dict(xrange=(-4, 4), yrange=(-4, 4), step=0.05)
     plain = DynaphosModel(implant=implant, **kwargs).build()
     expected = plain.predict_percept(source).data
 
@@ -349,14 +358,22 @@ def test_location_noise():
                               **kwargs).build()
         npt.assert_array_equal(model.predict_percept(source).data, expected)
 
-    np.random.seed(0)
-    warped = DynaphosModel(implant=implant, location_noise=0.5,
-                           **kwargs).build()
-    got = warped.predict_percept(source).data
-    npt.assert_equal(got.shape, expected.shape)
-    npt.assert_equal(np.array_equal(got, expected), False)
-    # The distortion is the subject's, so it survives a rebuild:
-    npt.assert_array_equal(warped.build().predict_percept(source).data, got)
+    np.random.seed(3)
+    offset = np.random.normal(size=(len(implant.electrode_names), 2))[10]
+    np.random.seed(3)
+    moved = DynaphosModel(implant=implant, location_noise=1.0,
+                          **kwargs).build()
+    got = moved.predict_percept(source).data
+    # The phosphene moves by this electrode's offset, within a grid step:
+    npt.assert_allclose(_brightest_dva(moved.predict_percept(source),
+                                       moved.grid) -
+                        _brightest_dva(plain.predict_percept(source),
+                                       plain.grid),
+                        offset, atol=0.06)
+    # It is the same phosphene, just elsewhere:
+    npt.assert_allclose(got.max(), expected.max(), rtol=0.05)
+    # The offsets are the subject's, so they survive a rebuild:
+    npt.assert_array_equal(moved.build().predict_percept(source).data, got)
 
     with pytest.raises(ValueError):
         DynaphosModel(implant=implant, location_noise=-1, **kwargs).build()

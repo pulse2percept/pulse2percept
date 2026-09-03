@@ -98,7 +98,7 @@ def test_inherited_params_are_in_the_signature(cls, _):
     npt.assert_equal('verbose' in params, True)
     if on_implant:
         # Every model that has electrodes to displace exposes the subject's
-        # retinotopic distortion:
+        # phosphene locations:
         npt.assert_equal('location_noise' in params, True)
 
 

@@ -146,7 +146,7 @@ for ax, noise, title in zip(
     np.random.seed(1)
     model = p2p.models.ScoreboardModel(
         implant=implant,
-        xrange=(-10, 10),
+        xrange=(-12, 2),
         yrange=(-7, 7),
         visual_field_map=p2p.topography.Curcio1990Map(),
         location_noise=noise,
@@ -155,37 +155,46 @@ for ax, noise, title in zip(
     ax.set_title(title)
 
 ###############################################################################
-# The same mechanism applies to cortical stimulation. Here a sparse set of
+# The phosphenes move; they do not change shape. Each one is still the circular
+# Gaussian the Scoreboard model draws, sitting somewhere else in the visual
+# field.
+#
+# The same mechanism applies to cortical stimulation. Here a sparse subset of
 # CORTIVIS electrodes is mapped through V1 with ``Polimeni2006Map``. The
 # cortical implant and retinotopic map are unchanged; only the predicted
 # phosphene locations differ:
 
 implant_cortex = p2p.implants.cortex.Cortivis()
+cortex_coords = implant_cortex.electrode_array.coordinates(p2p.units.um)
 stim_cortex = {
     electrode: 100
-    for electrode in implant_cortex.electrode_names[::12]
+    for electrode, (x, y) in zip(implant_cortex.electrode_names,
+                                 cortex_coords[:, :2])
+    if round(x) in (18600, 20200, 21400) and round(y) in (-6400, -4800, -3600)
 }
 
 fig, axes = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(9, 4))
 for ax, noise, title in zip(
         axes,
-        [None, 1],
+        [None, 0.5],
         ['Canonical locations', 'Subject-specific locations']):
     np.random.seed(2)
     model = p2p.models.cortex.ScoreboardModel(
         implant=implant_cortex,
         regions=['v1'],
-        xrange=(-6, 6),
-        yrange=(-6, 6),
+        rho=300,
+        xrange=(-4, 0.5),
+        yrange=(-1, 3.5),
+        step=0.02,
         location_noise=noise,
     )
     model.predict_percept(stim_cortex).plot(ax=ax)
     ax.set_title(title)
 
 ###############################################################################
-# With a more complex stimulus, the same location errors distort the percept
-# as a whole. Here the retinal implant sees the same encoded UCSB logo with and
-# without subject-specific phosphene displacement:
+# With a dense stimulus, the same per-electrode offsets scramble the percept as
+# a whole. Here the retinal implant sees the same encoded UCSB logo with and
+# without subject-specific phosphene locations:
 
 implant = p2p.implants.AlphaAMS()
 stim = p2p.stimuli.LogoUCSB().encode(implant=implant)
@@ -193,7 +202,7 @@ stim = p2p.stimuli.LogoUCSB().encode(implant=implant)
 fig, axes = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(9, 4))
 for ax, noise, title in zip(
         axes,
-        [None, 1],
+        [None, 0.3],
         ['Canonical locations', 'Subject-specific locations']):
     np.random.seed(3)
     model = p2p.models.ScoreboardModel(
@@ -207,10 +216,15 @@ for ax, noise, title in zip(
     ax.set_title(title)
 
 ###############################################################################
+# The logo stays legible but its mosaic is spatially jumbled: the phosphenes
+# are the same, only misplaced.
+#
 # ``location_noise`` changes the predicted percept, not the physical electrode
 # locations or the canonical visual-field map. It therefore captures
 # subject-specific phosphene-location variability while leaving the anatomical
-# model intact.
+# model intact. It requires a map that can place electrodes in the visual
+# field, so a map without an inverse (such as ``Watson2014DisplaceMap``) is not
+# supported.
 #
 # Creating your own visual field map
 # ----------------------------------

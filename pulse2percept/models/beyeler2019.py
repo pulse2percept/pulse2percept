@@ -950,17 +950,15 @@ class AxonMapSpatial(SpatialModel):
                              self.n_threads)
 
     def _postprocess_spatial(self, resp):
-        """Blend the response across the horizontal meridian.
-
-        The seam sits on the canonical meridian, so it is repaired before the
-        base class displaces the field.
-        """
+        """Blend the response across the horizontal meridian."""
         blended = _blend_meridian(resp, self.grid, 'horizontal',
                                   self.meridian_blend)
-        if blended is not resp:
-            # Reapply the percept threshold after blending:
-            blended[np.abs(blended) < self.thresh_percept] = 0
-        return super()._postprocess_spatial(blended)
+        if blended is resp:
+            # Preserve the unblended response bit-for-bit.
+            return resp
+        # Reapply the percept threshold after blending:
+        blended[np.abs(blended) < self.thresh_percept] = 0
+        return blended
 
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
              ax=None, figsize=None):

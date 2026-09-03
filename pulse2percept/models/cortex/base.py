@@ -355,19 +355,18 @@ class ScoreboardSpatial(CortexSpatial):
         On this model rather than on `CortexSpatial`: the seam is a property
         of the split map this one is built on, not of being cortical, and a
         future cortical model without one should not inherit a correction for
-        it. It sits on the canonical meridian, so it is repaired before the
-        base class displaces the field.
+        it.
         """
         blended = _blend_meridian(resp, self.grid, 'vertical',
                                   self.meridian_blend)
-        if blended is not resp:
-            # Restore percept threshold after blending:
-            blended[np.abs(blended) < self.thresh_percept] = 0
-        return super()._postprocess_spatial(blended)
+        if blended is resp:
+            return resp
+        # Restore percept threshold after blending:
+        blended[np.abs(blended) < self.thresh_percept] = 0
+        return blended
 
     def _predict_spatial(self, electrode_array, stim):
         """Predicts the brightness at spatial locations"""
-        x_el, y_el, z_el = self._electrode_coords(electrode_array, stim)
         amp = self._stim_values(stim)
 
         # whether to allow current to spread between hemispheres
@@ -377,9 +376,14 @@ class ScoreboardSpatial(CortexSpatial):
             separate = 1
             boundary = self.visual_field_map.left_offset/2
         cutoff_r2 = self._cutoff_r2(self.rho)
+        # `location_noise` displaces an electrode in the visual field, so its
+        # cortical coordinates are region-specific:
+        coords = {region: self._electrode_coords(electrode_array, stim,
+                                                 region=region)
+                  for region in self.regions}
         if self.visual_field_map.ndim == 3:
             return np.sum([
-                fast_scoreboard_3d(amp, x_el, y_el, z_el,
+                fast_scoreboard_3d(amp, *coords[region],
                                 self.grid[region].x.ravel(),
                                 self.grid[region].y.ravel(),
                                 self.grid[region].z.ravel(),
@@ -390,7 +394,7 @@ class ScoreboardSpatial(CortexSpatial):
             axis = 0)
         elif self.visual_field_map.ndim == 2:
             return np.sum([
-                fast_scoreboard(amp, x_el, y_el,
+                fast_scoreboard(amp, *coords[region][:2],
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
                                 self.rho, self.thresh_percept, cutoff_r2,
                                 separate, boundary,

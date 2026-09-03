@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 import copy
-from types import SimpleNamespace
 import multiprocessing
 import warnings
 
@@ -24,9 +23,7 @@ from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
                                   ScoreboardModel, ScoreboardSpatial,
                                   SpatialModel, TemporalModel,
                                   Thompson2003Model)
-from pulse2percept.models.base import (_blend_meridian, _electrode_dva,
-                                       _location_noise_field,
-                                       _warp_visual_field)
+from pulse2percept.models.base import _blend_meridian
 from pulse2percept.models.cortex import (DynaphosModel,
                                          ScoreboardModel as
                                          CortexScoreboardModel,
@@ -38,7 +35,8 @@ from pulse2percept.units import (DimensionMismatchError, Quantity,
 from pulse2percept.utils import FreezeError, frame_interval
 from pulse2percept.topography import (Curcio1990Map, Grid2D,
                                       Polimeni2006Map, RetinalMap,
-                                      VisualFieldMap, Watson2014Map)
+                                      VisualFieldMap, Watson2014DisplaceMap,
+                                      Watson2014Map)
 
 
 class ValidBaseModel(BaseModel):
@@ -1918,49 +1916,61 @@ def test_SpatialModel_visual_field_map_is_the_canonical_name():
         ScoreboardSpatial(ArgusII(), vfmap=Curcio1990Map())
 
 
-def _scoreboard_at(coords, location_noise=None, seed=0, step=0.25):
-    """A scoreboard on electrodes at the given retinal coordinates (um)
 
-    Seeded before construction, since the subject's offsets are drawn the
-    first time the model is built.
-    """
-    implant = Implant(ElectrodeArray(
+def _implant_at(coords):
+    """A disk-electrode implant at the given tissue coordinates (um)"""
+    return Implant(ElectrodeArray(
         {f'A{i}': DiskElectrode(x, y, 0, 100)
          for i, (x, y) in enumerate(coords)}))
+
+
+def _latents(n, seed):
+    """The standard normals a model seeded with `seed` draws for n electrodes"""
     np.random.seed(seed)
-    model = ScoreboardSpatial(implant, xrange=(-10, 10), yrange=(-10, 10),
-                              step=step, rho=500,
-                              location_noise=location_noise)
+    return np.random.normal(size=(n, 2))
+
+
+def _scoreboard_at(coords, location_noise=None, seed=0, step=0.1,
+                   visual_field_map=None):
+    """A scoreboard on electrodes at the given retinal coordinates (um)
+
+    Seeded before construction, since the subject's offsets are drawn when the
+    model is built.
+    """
+    np.random.seed(seed)
+    model = ScoreboardSpatial(
+        _implant_at(coords), xrange=(-10, 10), yrange=(-10, 10), step=step,
+        rho=400, location_noise=location_noise,
+        visual_field_map=(Curcio1990Map() if visual_field_map is None
+                          else visual_field_map))
     return model.build()
 
 
 def _one_electrode_model(location_noise=None, seed=0):
-    """A scoreboard on a single electrode at the fovea
-
-    One electrode means the displacement field is the one offset that was
-    drawn, everywhere, so the percept's peak is where that offset put it.
-    """
-    return _scoreboard_at([(0, 0)], location_noise=location_noise, seed=seed)
+    """A scoreboard on a single electrode 2 deg into the temporal retina"""
+    return _scoreboard_at([(560, 0)], location_noise=location_noise, seed=seed)
 
 
-def _peak_dva(percept, grid):
-    """The (x, y) location of the brightest grid point, in dva"""
-    idx = np.unravel_index(np.argmax(percept.data[..., 0]),
-                           percept.data[..., 0].shape)
-    return float(grid.x[idx]), float(grid.y[idx])
+def _blob_moments(percept, grid):
+    """Brightness-weighted centroid (dva) and 2x2 covariance of one frame"""
+    w = np.asarray(percept.data[..., 0], dtype=np.float64)
+    total = w.sum()
+    x, y = np.asarray(grid.x), np.asarray(grid.y)
+    cx, cy = (w * x).sum() / total, (w * y).sum() / total
+    dx, dy = x - cx, y - cy
+    cov = np.array([[(w * dx * dx).sum(), (w * dx * dy).sum()],
+                    [(w * dx * dy).sum(), (w * dy * dy).sum()]]) / total
+    return np.array([cx, cy]), cov
 
 
 @pytest.mark.parametrize('location_noise', (None, 0))
 def test_location_noise_off(location_noise):
-    # No noise is an exact no-op, down to the postprocessing hook returning
-    # the response it was handed:
+    # No noise is an exact no-op, down to no subject being drawn:
     model = _one_electrode_model(location_noise=location_noise)
-    npt.assert_equal(model._location_noise, None)
-    resp = np.arange(model.grid.x.size, dtype=np.float32).reshape(-1, 1)
-    npt.assert_equal(model._postprocess_spatial(resp) is resp, True)
-    plain = _one_electrode_model()
+    npt.assert_equal(model._location_noise_z, None)
     npt.assert_array_equal(model.predict_percept({'A0': 1}).data,
-                           plain.predict_percept({'A0': 1}).data)
+                           _one_electrode_model().predict_percept(
+                               {'A0': 1}).data)
 
 
 def test_location_noise_must_be_non_negative():
@@ -1970,60 +1980,6 @@ def test_location_noise_must_be_non_negative():
         model.build()
 
 
-def test_location_noise_displaces_the_percept():
-    # The offset the model drew, redrawn from the same seed:
-    np.random.seed(7)
-    dx, dy = 2.0 * np.random.normal(size=(1, 2))[0]
-    model = _one_electrode_model(location_noise=2.0, seed=7)
-    x, y = _peak_dva(model.predict_percept({'A0': 1}), model.grid)
-    # Within half a grid step of where the offset moved the phosphene:
-    npt.assert_almost_equal(x, dx, decimal=1)
-    npt.assert_almost_equal(y, dy, decimal=1)
-
-
-def test_location_noise_survives_a_rebuild():
-    # The distortion belongs to the subject, not to the build: changing an
-    # unrelated parameter must not hand the subject a new retinotopy.
-    model = _one_electrode_model(location_noise=2.0, seed=7)
-    first = model.predict_percept({'A0': 1}).data
-    npt.assert_array_equal(model.predict_percept({'A0': 1}).data, first)
-    subject = model._location_noise_z.copy()
-    np.random.seed(8)
-    model.rho = 501
-    model.build()
-    npt.assert_array_equal(model._location_noise_z, subject)
-    model.rho = 500
-    model.build()
-    npt.assert_array_equal(model.predict_percept({'A0': 1}).data, first)
-    # A deepcopy is the same subject, too:
-    npt.assert_array_equal(
-        copy.deepcopy(model).predict_percept({'A0': 1}).data, first)
-    # A new model is a new subject:
-    other = _one_electrode_model(location_noise=2.0, seed=8)
-    npt.assert_equal(np.array_equal(other.predict_percept({'A0': 1}).data,
-                                    first), False)
-
-
-def test_location_noise_places_every_electrode():
-    # Two electrodes far enough apart to be told apart, each stimulated on its
-    # own: a field fitted the wrong way round is only exact for one offset,
-    # a uniform shift.
-    sigma, seed, coords = 2.0, 2, [(-1400, 0), (1400, 0)]
-    np.random.seed(seed)
-    offsets = sigma * np.random.normal(size=(2, 2))
-    model = _scoreboard_at(coords, location_noise=sigma, seed=seed, step=0.1)
-    plain = _scoreboard_at(coords, step=0.1)
-    # Where the percept sits without the warp, since a retinal Gaussian is not
-    # quite centered on the electrode once the map has bent it:
-    for i, electrode in enumerate(model.implant.electrode_names):
-        was = np.array(_peak_dva(plain.predict_percept({electrode: 1}),
-                                 plain.grid))
-        now = np.array(_peak_dva(model.predict_percept({electrode: 1}),
-                                 model.grid))
-        # Snapping to the brightest grid point costs half a step per axis:
-        npt.assert_allclose(now - was, offsets[i], atol=0.15)
-
-
 def test_location_noise_is_a_visual_angle():
     model = _one_electrode_model(location_noise=2 * dva, seed=7)
     npt.assert_almost_equal(model.location_noise, 2.0)
@@ -2031,112 +1987,192 @@ def test_location_noise_is_a_visual_angle():
         _one_electrode_model(location_noise=500 * um)
 
 
-@pytest.mark.parametrize('model', (AxonMapSpatial(ArgusII(), xrange=(-8, 8),
-                                                 yrange=(-8, 8), step=0.5),
-                                   CortexScoreboardSpatial(Cortivis(),
-                                                           xrange=(-8, 8),
-                                                           yrange=(-8, 8),
-                                                           step=0.5)))
-def test_location_noise_reaches_blending_models(model):
-    # Models that override `_postprocess_spatial` to blend a meridian have to
-    # chain to the warp, or their percepts would ignore `location_noise`:
-    source = {model.implant.electrode_names[0]: 100}
-    np.random.seed(2)
-    plain = model.build().predict_percept(source).data
-    model.location_noise = 1.0
-    np.random.seed(2)
-    warped = model.build().predict_percept(source).data
-    npt.assert_equal(np.array_equal(plain, warped), False)
+def test_location_noise_moves_a_phosphene_without_deforming_it():
+    # A displaced electrode gives the same phosphene somewhere else, not a
+    # locally stretched image: under a linear map the blob is unchanged.
+    offset = 1.0 * _latents(1, 7)[0]
+    plain = _one_electrode_model()
+    moved = _one_electrode_model(location_noise=1.0, seed=7)
+    was, cov_was = _blob_moments(plain.predict_percept({'A0': 1}), plain.grid)
+    now, cov_now = _blob_moments(moved.predict_percept({'A0': 1}), moved.grid)
+    npt.assert_allclose(now - was, offset, atol=0.02)
+    npt.assert_allclose(cov_now, cov_was, atol=1e-3)
+    # Still circular, so it did not turn into a streak:
+    npt.assert_allclose(cov_now[0, 0], cov_now[1, 1], rtol=0.05)
+    npt.assert_allclose(cov_now[0, 1], 0, atol=1e-3)
 
 
-class _ZMap(VisualFieldMap):
-    """A 3D map whose inverse needs all three tissue coordinates
-
-    Electrodes off its (thin) slab of tissue come back as NaN, the way
-    :py:class:`~pulse2percept.topography.NeuropythyMap` reports a point its
-    mesh does not cover.
-    """
-    ndim = 3
-
-    def get_default_params(self):
-        return {**super().get_default_params(), 'ndim': 3}
-
-    def from_dva(self):
-        return {'ret': lambda x, y: (x, y, np.zeros_like(x))}
-
-    def ret_to_dva(self, x, y, z):
-        off_slab = np.abs(z) > 1
-        return (np.where(off_slab, np.nan, x / 280.0),
-                np.where(off_slab, np.nan, -y / 280.0))
-
-    def to_dva(self):
-        return {'ret': self.ret_to_dva}
+def test_location_noise_moves_sparse_phosphenes_independently():
+    # Each electrode carries its own offset, and each blob stays circular.
+    coords = [(-1400, -1400), (1400, -1400), (-1400, 1400), (1400, 1400)]
+    offsets = 1.0 * _latents(len(coords), 3)
+    plain = _scoreboard_at(coords)
+    moved = _scoreboard_at(coords, location_noise=1.0, seed=3)
+    for i, electrode in enumerate(moved.implant.electrode_names):
+        was, cov_was = _blob_moments(plain.predict_percept({electrode: 1}),
+                                     plain.grid)
+        now, cov_now = _blob_moments(moved.predict_percept({electrode: 1}),
+                                     moved.grid)
+        npt.assert_allclose(now - was, offsets[i], atol=0.02)
+        # Still the same circular blob, just off the electrode grid:
+        npt.assert_allclose(cov_now, cov_was, atol=0.02)
+        npt.assert_allclose(cov_now[0, 0], cov_now[1, 1], rtol=0.05)
 
 
-def _fake_model(zs, location_noise=1.0):
-    """The pieces of a spatial model that the warp helpers actually read"""
-    implant = Implant(ElectrodeArray(
-        {f'A{i}': DiskElectrode(280.0 * i, 0, z, 100)
-         for i, z in enumerate(zs)}))
-    grid = Grid2D((-5, 5), (-5, 5), step=0.5)
-    grid.build(Curcio1990Map())
-    return SimpleNamespace(implant=implant, grid=grid,
-                           visual_field_map=_ZMap(),
-                           location_noise=location_noise,
-                           _location_noise_z=None)
+def test_location_noise_follows_the_stimulus_electrodes():
+    # A stimulus on a subset of the implant must still get each electrode's
+    # own offset, not the first few rows of the cached ones.
+    coords = [(-1400, 0), (0, 0), (1400, 0)]
+    offsets = 1.0 * _latents(len(coords), 4)
+    plain = _scoreboard_at(coords)
+    moved = _scoreboard_at(coords, location_noise=1.0, seed=4)
+    was, _ = _blob_moments(plain.predict_percept({'A2': 1}), plain.grid)
+    now, _ = _blob_moments(moved.predict_percept({'A2': 1}), moved.grid)
+    npt.assert_allclose(now - was, offsets[2], atol=0.02)
 
 
-def test_electrode_dva_passes_every_tissue_dimension():
-    # A 3D map is handed (x, y, z), not just (x, y):
-    x, y, _ = _electrode_dva(_fake_model([0, 0]))
-    npt.assert_almost_equal(x, [0, 1])
-    npt.assert_almost_equal(y, [0, 0])
-    # An electrode the map cannot place comes back non-finite, and is left out
-    # of the interpolation rather than poisoning it:
-    model = _fake_model([0, 5])
-    npt.assert_equal(np.isfinite(_electrode_dva(model)[0]), [True, False])
-    npt.assert_equal(np.all(np.isfinite(_location_noise_field(model))), True)
+def test_location_noise_is_fixed_for_a_subject():
+    # The offsets belong to the subject, not to the build: changing an
+    # unrelated parameter must not hand the subject a new retinotopy.
+    model = _one_electrode_model(location_noise=1.0, seed=7)
+    first = model.predict_percept({'A0': 1}).data
+    npt.assert_array_equal(model.predict_percept({'A0': 1}).data, first)
+    subject = model._location_noise_z.copy()
+    np.random.seed(8)
+    model.rho = 401
+    model.build()
+    npt.assert_array_equal(model._location_noise_z, subject)
+    model.rho = 400
+    model.build()
+    npt.assert_array_equal(model.predict_percept({'A0': 1}).data, first)
+    # A deepcopy is the same subject, too:
+    npt.assert_array_equal(
+        copy.deepcopy(model).predict_percept({'A0': 1}).data, first)
+    # A new model is a new subject:
+    other = _one_electrode_model(location_noise=1.0, seed=8)
+    npt.assert_equal(np.array_equal(other.predict_percept({'A0': 1}).data,
+                                    first), False)
 
 
-def test_location_noise_needs_a_placeable_electrode():
-    with pytest.raises(ValueError):
-        _location_noise_field(_fake_model([5, 5]))
+def test_location_noise_resets_on_a_new_implant():
+    model = _one_electrode_model(location_noise=1.0, seed=7)
+    model.predict_percept({'A0': 1})
+    model.implant = _implant_at([(560, 0), (0, 0)])
+    npt.assert_equal(model._location_noise_z, None)
+    model.build()
+    npt.assert_equal(model._location_noise_z.shape, (2, 2))
 
 
-def test_location_noise_ignores_region_order():
-    # A multi-region model sums its regions, so naming them in a different
-    # order describes the same simulation and must warp the same way:
+def test_location_noise_needs_an_invertible_map():
+    model = _one_electrode_model(location_noise=1.0, seed=7)
+    model.visual_field_map = Watson2014DisplaceMap()
+    model.build()
+    with pytest.raises(NotImplementedError):
+        model.predict_percept({'A0': 1})
+
+
+def test_location_noise_keeps_the_axon_map_kernel_joint():
+    # AxonMap sums electrode contributions per axon segment before picking the
+    # brightest one, so a displaced electrode must reach that same kernel.
+    implant = ArgusII()
+    both = ['C4', 'C6']
+    kwargs = dict(xrange=(-8, 8), yrange=(-8, 8), step=0.25, rho=200,
+                  lam=800, n_axons=250, n_ax_segments=200,
+                  ignore_pickle=True)
+    np.random.seed(5)
+    model = AxonMapSpatial(implant, location_noise=1.0, **kwargs).build()
+    joint = model.predict_percept({e: 1 for e in both}).data
+    npt.assert_equal(np.all(np.isfinite(joint)), True)
+    npt.assert_equal(joint.max() > 0, True)
+    # Superposition would make this equal; the joint kernel does not:
+    apart = sum(model.predict_percept({e: 1}).data for e in both)
+    npt.assert_equal(np.allclose(joint, apart), False)
+    # The percept is the canonical one for electrodes moved in the visual
+    # field, so the phosphenes stay coherent streaks:
+    vfmap = model.visual_field_map
+    xyz = implant.electrode_array.coordinates(um, electrodes=both)
+    rows = [implant.electrode_names.index(e) for e in both]
+    x_dva, y_dva = vfmap.ret_to_dva(xyz[:, 0].copy(), xyz[:, 1].copy())
+    offsets = model._location_noise_z[rows]
+    x_ret, y_ret = vfmap.dva_to_ret(x_dva + offsets[:, 0],
+                                    y_dva + offsets[:, 1])
+    displaced = AxonMapSpatial(_implant_at(list(zip(x_ret, y_ret))),
+                               **kwargs).build()
+    npt.assert_allclose(displaced.predict_percept({'A0': 1, 'A1': 1}).data,
+                        joint, atol=1e-5)
+
+
+def test_cortical_location_noise_moves_the_phosphene():
     implant = Cortivis()
-    source = {implant.electrode_names[0]: 100}
-    percepts, fields = [], []
+    electrode = implant.electrode_names[10]
+    offset = 1.0 * _latents(len(implant.electrode_names), 3)[10]
+    kwargs = dict(xrange=(-6, 6), yrange=(-6, 6), step=0.05)
+    plain = CortexScoreboardSpatial(implant, **kwargs).build()
+    np.random.seed(3)
+    moved = CortexScoreboardSpatial(implant, location_noise=1.0,
+                                    **kwargs).build()
+    was, cov_was = _blob_moments(plain.predict_percept({electrode: 100}),
+                                 plain.grid)
+    now, cov_now = _blob_moments(moved.predict_percept({electrode: 100}),
+                                 moved.grid)
+    npt.assert_allclose(now - was, offset, atol=0.1)
+    # A coherent phosphene, not a smeared one: it still reaches the drive it
+    # was given. Its dva extent does change, since cortical magnification
+    # falls off with eccentricity, so `cov` is only checked for compactness.
+    for percept in (plain.predict_percept({electrode: 100}),
+                    moved.predict_percept({electrode: 100})):
+        npt.assert_equal(percept.data.max() > 70, True)
+    npt.assert_equal(np.trace(cov_now) < 1.0, True)
+
+
+def test_cortical_location_noise_ignores_region_order():
+    # A multi-region model sums its regions, so naming them in a different
+    # order describes the same simulation and must displace the same way:
+    implant = Cortivis()
+    source = {implant.electrode_names[10]: 100}
+    percepts = []
     for regions in (['v1', 'v2'], ['v2', 'v1']):
         np.random.seed(11)
         model = CortexScoreboardSpatial(implant, regions=regions,
                                         xrange=(-6, 6), yrange=(-6, 6),
                                         step=0.25, location_noise=1.0).build()
-        fields.append(model._location_noise)
         percepts.append(model.predict_percept(source).data)
-    npt.assert_array_equal(*fields)
     npt.assert_array_equal(*percepts)
 
 
-def test_meridian_blend_precedes_the_warp():
-    # The seam is an artifact of the canonical split map, so it has to be
-    # repaired while it still lies on the canonical meridian:
-    np.random.seed(5)
-    model = CortexScoreboardSpatial(Cortivis(), xrange=(-6, 6),
-                                    yrange=(-6, 6), step=0.5,
-                                    meridian_blend=1.0,
-                                    location_noise=1.0).build()
-    resp = _step_across(model.grid, 'vertical')
-    blended = _blend_meridian(resp, model.grid, 'vertical', 1.0)
-    npt.assert_allclose(
-        model._postprocess_spatial(resp),
-        _warp_visual_field(blended, model.grid, model._location_noise))
-    # Blending the warped response instead would smooth a meridian the seam
-    # has already moved off:
-    other = _blend_meridian(
-        _warp_visual_field(resp, model.grid, model._location_noise),
-        model.grid, 'vertical', 1.0)
-    npt.assert_equal(np.allclose(model._postprocess_spatial(resp), other),
-                     False)
+class _Slab3DMap(VisualFieldMap):
+    """A 3D map whose inverse needs all three tissue coordinates
+
+    Linear, so a displaced phosphene is exactly the canonical one moved.
+    """
+
+    def get_default_params(self):
+        return {**super().get_default_params(), 'ndim': 3,
+                'regions': ['v1']}
+
+    def dva_to_v1(self, x, y):
+        return 280.0 * x, -280.0 * y, np.zeros_like(np.asarray(x))
+
+    def v1_to_dva(self, x, y, z):
+        return x / 280.0, -y / 280.0
+
+    def from_dva(self):
+        return {'v1': self.dva_to_v1}
+
+    def to_dva(self):
+        return {'v1': self.v1_to_dva}
+
+
+def test_location_noise_supports_3d_maps():
+    implant = _implant_at([(560, 0)])
+    offset = 1.0 * _latents(1, 6)[0]
+    kwargs = dict(visual_field_map=_Slab3DMap(), regions=['v1'], rho=400,
+                  xrange=(-10, 10), yrange=(-10, 10), step=0.1)
+    plain = CortexScoreboardSpatial(implant, **kwargs).build()
+    np.random.seed(6)
+    moved = CortexScoreboardSpatial(implant, location_noise=1.0,
+                                    **kwargs).build()
+    was, cov_was = _blob_moments(plain.predict_percept({'A0': 1}), plain.grid)
+    now, cov_now = _blob_moments(moved.predict_percept({'A0': 1}), moved.grid)
+    npt.assert_allclose(now - was, offset, atol=0.02)
+    npt.assert_allclose(cov_now, cov_was, atol=1e-3)

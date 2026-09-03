@@ -7,8 +7,7 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
-from scipy.interpolate import RBFInterpolator
-from scipy.ndimage import gaussian_filter1d, map_coordinates
+from scipy.ndimage import gaussian_filter1d
 from scipy.spatial import cKDTree
 
 from ..implants import Implant
@@ -355,59 +354,8 @@ def _blend_meridian(resp, grid, meridian, width):
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
-def _electrode_dva(model):
-    """Return the visual-field locations of the implant's electrodes."""
-    vfmap = model.visual_field_map
-    coords = model.implant.electrode_array.coordinates(vfmap.tissue_unit)
-    tissue = coords[:, :vfmap.ndim].T
-    try:
-        inverse = vfmap.to_dva()
-        regions = getattr(model, 'regions', None) or list(inverse)
-        placed = [inverse[region](*tissue) for region in regions]
-    except (NotImplementedError, KeyError):
-        raise NotImplementedError(
-            f"location_noise places electrodes in the visual field, which "
-            f"requires a visual field map that can be inverted. "
-            f"{type(vfmap).__name__} cannot map tissue coordinates back to "
-            f"dva.") from None
-    flat = [[np.asarray(c, dtype=np.float64).ravel() for c in xy]
-            for xy in placed]
-    electrode = np.tile(np.arange(coords.shape[0]), len(placed))
-    return (np.concatenate([xy[0] for xy in flat]),
-            np.concatenate([xy[1] for xy in flat]), electrode)
-
-
-def _electrode_offsets(model, sigma):
-    """Return this subject's electrode displacements in dva."""
-    n_electrodes = len(model.implant.electrode_array.electrodes)
-    latent = model._location_noise_z
-    if latent is None or latent.shape[0] != n_electrodes:
-        latent = np.random.normal(size=(n_electrodes, 2))
-        model._location_noise_z = latent
-    return sigma * latent
-
-
-def _axis_origin_step(along):
-    """Return (origin, signed spacing) of a regular grid axis.
-
-    Returns None for an axis with a single sample.
-    """
-    if along.size < 2:
-        return None
-    return float(along[0]), float(np.diff(along).mean())
-
-
-def _fractional_index(axis, coord):
-    """Position of ``coord`` along a grid axis, in fractional sample index"""
-    if axis is None:
-        # A single sample along this axis: nothing to shift into.
-        return np.zeros_like(coord)
-    origin, step = axis
-    return (coord - origin) / step
-
-
-def _location_noise_field(model):
-    """Return the sampling coordinates of the location-noise warp"""
+def _location_noise_sigma(model):
+    """Return ``location_noise`` in dva, or None where it is disabled."""
     sigma = model.location_noise
     if sigma is None:
         return None
@@ -415,56 +363,70 @@ def _location_noise_field(model):
     if sigma < 0:
         raise ValueError(f"location_noise must be non-negative (or None to "
                          f"disable it), not {sigma}.")
-    if sigma == 0:
-        return None
-    grid = model.grid
-    rows = _axis_origin_step(grid.y[:, 0])
-    cols = _axis_origin_step(grid.x[0, :])
-    if rows is None and cols is None:
-        # A single grid point cannot be displaced:
-        return None
-    x_el, y_el, electrode = _electrode_dva(model)
-    offsets = _electrode_offsets(model, sigma)[electrode]
-    # Electrodes the map places outside the visual field (`NeuropythyMap`
-    # returns NaN beyond its mesh) cannot anchor the warp:
-    seen = np.isfinite(x_el) & np.isfinite(y_el)
-    if not np.any(seen):
-        raise ValueError(
-            f"location_noise needs at least one electrode that "
-            f"{type(model.visual_field_map).__name__} can place in the visual "
-            f"field, and it maps none of this implant's electrodes there.")
-    offsets = offsets[seen]
-    points = np.column_stack([x_el[seen], y_el[seen]]) + offsets
-    # One interpolation node per location:
-    points, inverse = np.unique(points, axis=0, return_inverse=True)
-    inverse = np.ravel(inverse)
-    counts = np.bincount(inverse, minlength=points.shape[0])
-    merged = np.zeros((points.shape[0], 2))
-    np.add.at(merged, inverse, offsets)
-    offsets = merged / counts[:, np.newaxis]
-    query = np.column_stack([grid.x.ravel(), grid.y.ravel()])
-    if points.shape[0] == 1:
-        back = np.broadcast_to(-offsets[0], query.shape)
-    else:
-        # The linear kernel (-r) needs no shape parameter and stays solvable
-        # for collinear electrodes, which a thin-plate spline is not:
-        back = RBFInterpolator(points, -offsets, kernel='linear')(query)
-    dx = back[:, 0].reshape(grid.x.shape)
-    dy = back[:, 1].reshape(grid.y.shape)
-    return np.stack([_fractional_index(rows, grid.y + dy),
-                     _fractional_index(cols, grid.x + dx)])
+    return sigma if sigma > 0 else None
 
 
-def _warp_visual_field(resp, grid, sample):
-    """Resample a response at displaced visual-field locations"""
-    if sample is None:
-        return resp
-    work = np.asarray(resp).reshape(grid.x.shape + (-1,))
-    warped = np.empty_like(work)
-    for t in range(work.shape[-1]):
-        warped[..., t] = map_coordinates(work[..., t], sample, order=1,
-                                         mode='constant', cval=0)
-    return warped.reshape(resp.shape).astype(resp.dtype, copy=False)
+def _latent_offsets(model):
+    """Return (electrode names, this subject's (n, 2) standard normals).
+
+    Drawn once per implant and kept on the model, so that the same subject is
+    simulated across predictions, rebuilds and copies.
+    """
+    names = list(model.implant.electrode_array.electrodes)
+    latent = model._location_noise_z
+    if latent is None or latent.shape[0] != len(names):
+        latent = np.random.normal(size=(len(names), 2))
+        model._location_noise_z = latent
+    return names, latent
+
+
+def _electrode_offsets(model, electrodes):
+    """Return the (n, 2) dva displacements of the named electrodes.
+
+    ``None`` where ``location_noise`` is disabled. Matched by electrode name,
+    since a compressed stimulus carries only a subset of the implant.
+    """
+    sigma = _location_noise_sigma(model)
+    if sigma is None:
+        return None
+    names, latent = _latent_offsets(model)
+    row = {name: i for i, name in enumerate(names)}
+    return sigma * latent[[row[str(e)] for e in electrodes]]
+
+
+def _displaced_coords(model, region, xyz, offsets):
+    """Return the effective tissue coordinates of displaced electrodes.
+
+    Round-trips each electrode through ``region`` of the visual field map:
+    tissue -> dva, add the electrode's fixed offset, dva -> tissue. Only the
+    percept prediction sees these; the implant is not moved. Electrodes the
+    map cannot place in the visual field (NaN) keep their canonical
+    coordinates.
+    """
+    vfmap = model.visual_field_map
+    try:
+        inverse = vfmap.to_dva()[region]
+        args = xyz[:vfmap.ndim] if vfmap.ndim == 3 else xyz[:2]
+        # Copies, since a map is free to edit the array it is handed:
+        x_dva, y_dva = inverse(*[np.array(a, dtype=np.float64) for a in args])
+    except (NotImplementedError, KeyError):
+        raise NotImplementedError(
+            f"location_noise places electrodes in the visual field, which "
+            f"requires a visual field map that can map tissue coordinates "
+            f"back to dva. {type(vfmap).__name__} cannot.") from None
+    moved = [np.asarray(c, dtype=np.float64) for c in
+             vfmap.from_dva()[region](x_dva + offsets[:, 0],
+                                      y_dva + offsets[:, 1])]
+    # An electrode the map cannot place, or cannot place once displaced, stays
+    # where it is rather than turning the kernel's input into NaN:
+    placed = np.isfinite(x_dva) & np.isfinite(y_dva)
+    for coord in moved:
+        placed &= np.isfinite(coord)
+    out = list(xyz)
+    for i, coord in enumerate(moved[:len(out)]):
+        out[i] = np.ascontiguousarray(np.where(placed, coord, xyz[i]),
+                                      dtype=np.float32)
+    return tuple(out)
 
 
 #: Parameter names declared by each model class, cached for ``__setattr__``.
@@ -626,7 +588,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
             return t
         return Quantity(t, self.time_unit).to_value(stim.time_unit)
 
-    def _electrode_coords(self, electrode_array, stim):
+    def _electrode_coords(self, electrode_array, stim, electrodes=None):
         """Return stimulus electrode coordinates in ``space_unit``.
 
         Coordinates follow ``stim.electrodes`` order and are returned as
@@ -638,14 +600,19 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
             Electrode array containing the named electrodes.
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
             Stimulus whose electrode ordering is required.
+        electrodes : list of str, optional
+            Electrode names to return instead of ``stim.electrodes``, for a
+            model that reorders or drops rows before calling its kernel.
 
         Returns
         -------
         x, y, z : tuple of ndarray
             Coordinate arrays with shape ``(n_electrodes,)``.
         """
+        if electrodes is None:
+            electrodes = stim.electrodes
         xyz = electrode_array.coordinates(self.space_unit,
-                                          electrodes=stim.electrodes)
+                                          electrodes=electrodes)
         return tuple(np.ascontiguousarray(xyz[:, i], dtype=np.float32)
                      for i in range(3))
 
@@ -785,10 +752,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # `_visual_field_map_first`.
         super().__init__(**_visual_field_map_first(params))
         self.grid = None
-        # This subject's electrode offsets and the grid warp they produce; see
-        # `_electrode_offsets` and `_location_noise_field`:
+        # This subject's latent electrode offsets; see `_latent_offsets`:
         self._location_noise_z = None
-        self._location_noise = None
 
     @property
     def implant(self):
@@ -978,7 +943,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
-        self._location_noise = _location_noise_field(self)
+        if _location_noise_sigma(self) is not None:
+            # Draw the subject here so that the offsets do not depend on which
+            # stimulus is predicted first:
+            _latent_offsets(self)
         self._build()
         self._is_built = True
         return self
@@ -1001,19 +969,33 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def _postprocess_spatial(self, resp):
-        """Displace the response by the ``location_noise`` field.
+    def _electrode_coords(self, electrode_array, stim, electrodes=None,
+                          region=None):
+        """Return the electrode coordinates the spatial kernel is given.
 
-        Subclasses that override this hook must chain to it first: the warp
-        renders the visual field, and corrections such as meridian blending
-        apply to the rendered field.
+        With ``location_noise`` set, these are the effective coordinates of
+        electrodes displaced in the visual field, not the implant's own; see
+        `_displaced_coords`. ``region`` names the visual field map region to
+        displace through, and defaults to the only one the map has.
         """
-        warped = _warp_visual_field(resp, self.grid, self._location_noise)
-        if warped is resp:
-            return resp
-        # Interpolation mixes in sub-threshold neighbours:
-        warped[np.abs(warped) < self.thresh_percept] = 0
-        return warped
+        if electrodes is None:
+            electrodes = stim.electrodes
+        xyz = super()._electrode_coords(electrode_array, stim, electrodes)
+        offsets = _electrode_offsets(self, electrodes)
+        if offsets is None:
+            return xyz
+        if region is None:
+            regions = list(self.visual_field_map.from_dva())
+            if len(regions) != 1:
+                raise ValueError(f"location_noise needs a region to displace "
+                                 f"through, since {type(self).__name__} maps "
+                                 f"{regions}.")
+            region = regions[0]
+        return _displaced_coords(self, region, xyz, offsets)
+
+    def _postprocess_spatial(self, resp):
+        """Hook for spatial-model postprocessing."""
+        return resp
 
     def predict_percept(self, source, t_percept=None):
         """Predict the spatial response.

@@ -3,8 +3,9 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import (BaseModel, _check_implant, _location_noise_field,
-                    _require_stim_dimension, _warp_visual_field)
+from ..base import (BaseModel, _check_implant, _electrode_offsets,
+                    _latent_offsets, _location_noise_sigma,
+                    _require_stim_dimension)
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
@@ -165,10 +166,8 @@ class DynaphosModel(BaseModel):
 
             self.visual_field_map.regions = self.regions
             self.grid = None
-            # This subject's electrode offsets and the grid warp they produce;
-            # see `_electrode_offsets` and `_location_noise_field`:
+            # This subject's latent electrode offsets; see `_latent_offsets`:
             self._location_noise_z = None
-            self._location_noise = None
 
     @property
     def implant(self):
@@ -207,7 +206,7 @@ class DynaphosModel(BaseModel):
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
                 'noise': None,
-                # Retinotopic distortion of this subject's percepts (dva)
+                # Subject-specific phosphene displacement (dva):
                 'location_noise': None,
                 # True: print status messages, 0: silent
                 'verbose': True,
@@ -302,7 +301,10 @@ class DynaphosModel(BaseModel):
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
-        self._location_noise = _location_noise_field(self)
+        if _location_noise_sigma(self) is not None:
+            # Draw the subject here so that the offsets do not depend on which
+            # stimulus is predicted first:
+            _latent_offsets(self)
         self._build()
         self._is_built = True
         return self
@@ -322,6 +324,14 @@ class DynaphosModel(BaseModel):
             phosphene_locations[region] = self.visual_field_map.to_dva()[region](x_el, y_el)
 
         theta, r = cart2pol(*phosphene_locations['v1'])
+
+        # `location_noise` moves the phosphene, not the electrode: the size
+        # below still follows the canonical cortical magnification.
+        offsets = _electrode_offsets(self, stim.electrodes)
+        if offsets is not None:
+            for region, (px, py) in phosphene_locations.items():
+                phosphene_locations[region] = (px + offsets[:, 0],
+                                               py + offsets[:, 1])
 
         # magnification factors (mm/dva)
         M = self.visual_field_map.k * (self.visual_field_map.b - self.visual_field_map.a) / ((r + self.visual_field_map.a) * (r + self.visual_field_map.b))
@@ -518,7 +528,6 @@ class DynaphosModel(BaseModel):
         else:
             resp = self._predict_percept(self.implant.electrode_array, stim,
                                          t_percept, clocks)
-        resp = _warp_visual_field(resp, self.grid, self._location_noise)
         return Percept(resp.reshape(list(self.grid.x.shape) + [t_percept.size]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,

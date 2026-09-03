@@ -531,9 +531,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         elec_params = np.array([p[1:4] for p in params],
                                dtype=np.float32).reshape((-1, 3))
         # Match coordinates to the active-electrode order above.
-        xyz = electrode_array.coordinates(self.space_unit, electrodes=active)
-        x = np.ascontiguousarray(xyz[:, 0], dtype=np.float32)
-        y = np.ascontiguousarray(xyz[:, 1], dtype=np.float32)
+        x, y, _ = self._electrode_coords(electrode_array, stim,
+                                         electrodes=active)
 
         bright_effects = np.array(self.bright_model(elec_params[:, 0], elec_params[:, 1], elec_params[:, 2]),
                                   dtype=np.float32).reshape((-1))

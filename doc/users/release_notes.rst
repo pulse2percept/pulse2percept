@@ -95,9 +95,9 @@ Models
 * ``find_threshold`` has been removed; threshold searches belong at the
   experiment level rather than in the model API (:pull:`862`).
 
-* New ``location_noise`` parameter gives a model a subject-specific
-  retinotopic distortion (dva), warping the rendered percept away from the
-  canonical ``visual_field_map`` (:pull:`881`).
+* New ``location_noise`` parameter displaces each electrode's phosphene by a
+  fixed, subject-specific offset in the visual field (dva) rather than at the
+  location the ``visual_field_map`` gives it (:pull:`881`).
 
 
 Residual vision
