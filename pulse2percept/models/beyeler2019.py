@@ -139,6 +139,13 @@ class ScoreboardSpatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
+
+        .. versionadded:: 0.11.0
+
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
@@ -155,7 +162,8 @@ class ScoreboardSpatial(SpatialModel):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None, verbose=True, ndim=None,
+                 n_gray=None, noise=None,
+                 location_noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
@@ -163,7 +171,8 @@ class ScoreboardSpatial(SpatialModel):
             min_current_spread=min_current_spread,
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
-            n_gray=n_gray, noise=noise, verbose=verbose,
+            n_gray=n_gray, noise=noise,
+            location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
 
@@ -267,6 +276,13 @@ class ScoreboardModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
+
+        .. versionadded:: 0.11.0
+
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
@@ -280,7 +296,8 @@ class ScoreboardModel(Model):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None, verbose=True, ndim=None,
+                 n_gray=None, noise=None,
+                 location_noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
             spatial=ScoreboardSpatial(
@@ -288,7 +305,8 @@ class ScoreboardModel(Model):
                 grid_type=grid_type, thresh_percept=thresh_percept,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
+                n_gray=n_gray, noise=noise,
+                location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)
 
@@ -375,6 +393,13 @@ class AxonMapSpatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
+
+        .. versionadded:: 0.11.0
+
     loc_od : (float, float) or Quantity, optional
         Optic-disc location in degrees of visual angle. Its horizontal sign is
         set from the bound implant's eye.
@@ -417,7 +442,8 @@ class AxonMapSpatial(SpatialModel):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
+                 n_gray=None, noise=None,
+                 location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
                  meridian_blend=1, axon_pickle='axons.pickle',
@@ -429,7 +455,8 @@ class AxonMapSpatial(SpatialModel):
             min_current_spread=min_current_spread,
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
-            n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
+            n_gray=n_gray, noise=noise,
+            location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
             axons_range=axons_range, n_ax_segments=n_ax_segments,
             ax_segments_range=ax_segments_range,
             min_ax_sensitivity=min_ax_sensitivity,
@@ -1120,6 +1147,13 @@ class AxonMapModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
+        
+        .. versionadded:: 0.11.0
+
     loc_od : (float, float) or Quantity, optional
         Optic-disc location in degrees of visual angle. Its horizontal sign is
         set from the bound implant's eye.
@@ -1162,7 +1196,8 @@ class AxonMapModel(Model):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None, loc_od=(15.5, 1.5), n_axons=1000,
+                 n_gray=None, noise=None,
+                 location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
                  meridian_blend=1, axon_pickle='axons.pickle',
@@ -1175,7 +1210,8 @@ class AxonMapModel(Model):
                 thresh_percept=thresh_percept,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise, loc_od=loc_od, n_axons=n_axons,
+                n_gray=n_gray, noise=noise,
+                location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
                 axons_range=axons_range, n_ax_segments=n_ax_segments,
                 ax_segments_range=ax_segments_range,
                 min_ax_sensitivity=min_ax_sensitivity,

@@ -333,3 +333,73 @@ def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
     solo = AmplitudeEncoder().encode(ImageStimulus(np.array([[0.7]])))
     npt.assert_equal(len(solo._structured_sources()), 1)
     npt.assert_equal(_pulse_train_clocks(solo), None)
+
+
+
+def _brightest_dva(percept, grid):
+    """The (x, y) location of the brightest grid point of the last frame"""
+    frame = percept.data[..., -1]
+    idx = np.unravel_index(np.argmax(frame), frame.shape)
+    return np.array([float(grid.x[idx]), float(grid.y[idx])])
+
+
+def test_location_noise():
+    implant = Cortivis()
+    electrode = implant.electrode_names[10]
+    source = {electrode: BiphasicPulseTrain(freq=300, amp=200,
+                                            phase_dur=0.17)}
+    kwargs = dict(xrange=(-4, 4), yrange=(-4, 4), step=0.05)
+    plain = DynaphosModel(implant=implant, **kwargs).build()
+    expected = plain.predict_percept(source).data
+
+    for off in (None, 0):
+        model = DynaphosModel(implant=implant, location_noise=off,
+                              **kwargs).build()
+        npt.assert_array_equal(model.predict_percept(source).data, expected)
+
+    np.random.seed(3)
+    offset = np.random.normal(size=(len(implant.electrode_names), 2))[10]
+    np.random.seed(3)
+    moved = DynaphosModel(implant=implant, location_noise=1.0,
+                          **kwargs).build()
+    got = moved.predict_percept(source).data
+    npt.assert_allclose(_brightest_dva(moved.predict_percept(source),
+                                       moved.grid) -
+                        _brightest_dva(plain.predict_percept(source),
+                                       plain.grid),
+                        offset, atol=0.06)
+    npt.assert_allclose(got.max(), expected.max(), rtol=0.05)
+    npt.assert_array_equal(moved.build().predict_percept(source).data, got)
+
+    with pytest.raises(ValueError):
+        DynaphosModel(implant=implant, location_noise=-1, **kwargs).build()
+    with pytest.raises(ValueError):
+        DynaphosModel(implant=implant, location_noise=np.nan, **kwargs).build()
+
+
+def test_location_noise_crosses_meridian():
+    # Choose an electrode/offset pair that crosses the vertical meridian.
+    implant = Implant(ElectrodeArray([DiskElectrode(-25000, 2000, 0, 100)]))
+    source = {0: BiphasicPulseTrain(freq=300, amp=200, phase_dur=0.17)}
+    kwargs = dict(xrange=(-4, 4), yrange=(-4, 4), step=0.05)
+    plain = DynaphosModel(implant=implant, **kwargs).build()
+    canonical = plain.predict_percept(source)
+    npt.assert_array_less(0, _brightest_dva(canonical, plain.grid)[0])
+
+    np.random.seed(2)
+    offset = np.random.normal(size=(1, 2))[0] * 2.0
+    np.random.seed(2)
+    moved = DynaphosModel(implant=implant, location_noise=2.0,
+                          **kwargs).build()
+    got = moved.predict_percept(source)
+    npt.assert_allclose(_brightest_dva(got, moved.grid) -
+                        _brightest_dva(canonical, plain.grid), offset,
+                        atol=0.06)
+    npt.assert_allclose(got.data.sum(), canonical.data.sum(), rtol=0.05)
+
+    # Displacements outside the map domain must fail explicitly.
+    np.random.seed(2)
+    off_map = DynaphosModel(implant=implant, location_noise=300.0,
+                            **kwargs).build()
+    with pytest.raises(ValueError):
+        off_map.predict_percept(source)

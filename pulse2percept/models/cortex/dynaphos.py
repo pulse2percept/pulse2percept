@@ -3,7 +3,9 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import BaseModel, _check_implant, _require_stim_dimension
+from ..base import (BaseModel, _check_implant, _electrode_offsets,
+                    _latent_offsets, _location_noise_sigma, _require_placed,
+                    _require_stim_dimension)
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
 from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
@@ -103,6 +105,12 @@ class DynaphosModel(BaseModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        
+        .. versionadded:: 0.11.0
+
     noise : float or int, optional
         Adds salt-and-pepper noise to each percept frame. An integer will be
         interpreted as the number of pixels to subject to noise in each 
@@ -136,6 +144,7 @@ class DynaphosModel(BaseModel):
                  xrange=(-5, 5), yrange=(-5, 5), step=0.25,
                  grid_type='rect', visual_field_map=None, n_gray=None,
                  noise=None,
+                 location_noise=None,
                  verbose=True):
             _check_implant(implant)
             self._implant = implant
@@ -150,11 +159,13 @@ class DynaphosModel(BaseModel):
                 visual_field_map=(
                     Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
                     if visual_field_map is None else visual_field_map),
-                n_gray=n_gray, noise=noise, verbose=verbose,
+                n_gray=n_gray, noise=noise,
+                location_noise=location_noise, verbose=verbose,
                 regions=['v1'] if regions is None else regions)
 
             self.visual_field_map.regions = self.regions
             self.grid = None
+            self._location_noise_z = None
 
     @property
     def implant(self):
@@ -174,6 +185,7 @@ class DynaphosModel(BaseModel):
         _check_implant(implant)
         if implant is not self._implant:
             self._is_built = False
+            self._location_noise_z = None
         self._implant = implant
 
     
@@ -191,6 +203,8 @@ class DynaphosModel(BaseModel):
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
                 'noise': None,
+                # Subject-specific phosphene displacement (dva):
+                'location_noise': None,
                 # True: print status messages, 0: silent
                 'verbose': True,
                 # Visual field regions to simulate
@@ -235,6 +249,7 @@ class DynaphosModel(BaseModel):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
+            'location_noise': dva,
             'dt': ms,
             # Decay constants, both converted to seconds where they are used:
             'tau_act': ms,
@@ -282,6 +297,9 @@ class DynaphosModel(BaseModel):
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
+        if _location_noise_sigma(self) is not None:
+            # Draw once so the first stimulus does not determine the subject.
+            _latent_offsets(self)
         self._build()
         self._is_built = True
         return self
@@ -301,6 +319,21 @@ class DynaphosModel(BaseModel):
             phosphene_locations[region] = self.visual_field_map.to_dva()[region](x_el, y_el)
 
         theta, r = cart2pol(*phosphene_locations['v1'])
+
+        # Dynaphos moves the phosphene but keeps its canonical size.
+        offsets = _electrode_offsets(self, stim.electrodes)
+        x_split = x_el
+        if offsets is not None:
+            for region, (px, py) in phosphene_locations.items():
+                phosphene_locations[region] = (px + offsets[:, 0],
+                                               py + offsets[:, 1])
+            # Use displaced cortical location for hemifield assignment;
+            # dva sign is unreliable near the meridian.
+            split = self.visual_field_map.from_dva()['v1'](
+                *[np.array(c, dtype=np.float64)
+                  for c in phosphene_locations['v1']])
+            _require_placed(self, 'v1', stim.electrodes, split, 'displaced')
+            x_split = split[0]
 
         # magnification factors (mm/dva)
         M = self.visual_field_map.k * (self.visual_field_map.b - self.visual_field_map.a) / ((r + self.visual_field_map.a) * (r + self.visual_field_map.b))
@@ -413,7 +446,7 @@ class DynaphosModel(BaseModel):
                     if A[el_idx] >= self.a_thr:
                         gauss = create_gaussian(phosphene_locations['v1'][0][el_idx], 
                                                 phosphene_locations['v1'][1][el_idx], 
-                                                sigma[el_idx], x_el[el_idx])
+                                                sigma[el_idx], x_split[el_idx])
                         bright[:,frame_idx] += gauss.ravel() * brightness[el_idx]
                 bright[:,frame_idx] = np.clip(bright[:,frame_idx], 0, 1)
                 frame_idx = frame_idx + 1

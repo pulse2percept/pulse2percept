@@ -107,6 +107,13 @@ class Nanduri2012Spatial(SpatialModel):
         noise : float, int, or None, optional
             Salt-and-pepper noise applied to each percept frame. An integer gives
             the number of affected pixels; a float in [0, 1] gives their fraction.
+        location_noise : float or None, optional
+            Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+            Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+            Location-dependent models may also change phosphene shape or size.
+            
+            .. versionadded:: 0.11.0
+
         verbose : bool, optional
             Whether to print status messages.
         ndim : list of int, optional
@@ -122,6 +129,7 @@ class Nanduri2012Spatial(SpatialModel):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             implant, atten_a=atten_a, atten_n=atten_n, xrange=xrange,
@@ -130,7 +138,8 @@ class Nanduri2012Spatial(SpatialModel):
             min_current_spread=min_current_spread,
             visual_field_map=(Curcio1990Map() if visual_field_map is None else
                               visual_field_map),
-            n_gray=n_gray, noise=noise, verbose=verbose,
+            n_gray=n_gray, noise=noise,
+            location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
 
@@ -361,6 +370,13 @@ class Nanduri2012Model(Model):
             gray-level quantization.
         noise : float, int, or None, optional
             Salt-and-pepper noise applied to each percept frame.
+        location_noise : float or None, optional
+            Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+            Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+            Location-dependent models may also change phosphene shape or size.
+            
+            .. versionadded:: 0.11.0
+
         min_current_spread : float, optional
             Inherited Gaussian current-spread cutoff. Not used by the Nanduri
             spatial model.
@@ -406,7 +422,8 @@ class Nanduri2012Model(Model):
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rect', min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None, ndim=None, dt=0.005, tau1=0.42,
+                 n_gray=None, noise=None,
+                 location_noise=None, ndim=None, dt=0.005, tau1=0.42,
                  tau2=45.25, tau3=26.25, eps=8.73, asymptote=14.0, slope=3.0,
                  shift=16.0, scale_out=1.0, reduce='last', thresh_percept=0,
                  verbose=True, n_threads=None, n_jobs=None):
@@ -418,7 +435,8 @@ class Nanduri2012Model(Model):
                 yrange=yrange, step=step, grid_type=grid_type,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise, ndim=ndim,
+                n_gray=n_gray, noise=noise,
+                location_noise=location_noise, ndim=ndim,
                 thresh_percept=thresh_percept, verbose=verbose,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=Nanduri2012Temporal(

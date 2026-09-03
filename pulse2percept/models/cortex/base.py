@@ -70,6 +70,13 @@ class CortexSpatial(SpatialModel):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
+
+        .. versionadded:: 0.11.0
+
     n_threads : int, optional
         Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
@@ -284,6 +291,13 @@ class ScoreboardSpatial(CortexSpatial):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
+
+        .. versionadded:: 0.11.0
+
     n_threads : int, optional
         Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
@@ -302,6 +316,7 @@ class ScoreboardSpatial(CortexSpatial):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             implant, rho=rho, regions=regions,
@@ -309,7 +324,8 @@ class ScoreboardSpatial(CortexSpatial):
             step=step, grid_type=grid_type, thresh_percept=thresh_percept,
             min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
-            n_gray=n_gray, noise=noise, verbose=verbose,
+            n_gray=n_gray, noise=noise,
+            location_noise=location_noise, verbose=verbose,
             ndim=[2, 3] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
 
@@ -351,7 +367,6 @@ class ScoreboardSpatial(CortexSpatial):
 
     def _predict_spatial(self, electrode_array, stim):
         """Predicts the brightness at spatial locations"""
-        x_el, y_el, z_el = self._electrode_coords(electrode_array, stim)
         amp = self._stim_values(stim)
 
         # whether to allow current to spread between hemispheres
@@ -361,9 +376,14 @@ class ScoreboardSpatial(CortexSpatial):
             separate = 1
             boundary = self.visual_field_map.left_offset/2
         cutoff_r2 = self._cutoff_r2(self.rho)
+        # `location_noise` displaces an electrode in the visual field, so its
+        # cortical coordinates are region-specific:
+        coords = {region: self._electrode_coords(electrode_array, stim,
+                                                 region=region)
+                  for region in self.regions}
         if self.visual_field_map.ndim == 3:
             return np.sum([
-                fast_scoreboard_3d(amp, x_el, y_el, z_el,
+                fast_scoreboard_3d(amp, *coords[region],
                                 self.grid[region].x.ravel(),
                                 self.grid[region].y.ravel(),
                                 self.grid[region].z.ravel(),
@@ -374,7 +394,7 @@ class ScoreboardSpatial(CortexSpatial):
             axis = 0)
         elif self.visual_field_map.ndim == 2:
             return np.sum([
-                fast_scoreboard(amp, x_el, y_el,
+                fast_scoreboard(amp, *coords[region][:2],
                                 self.grid[region].x.ravel(), self.grid[region].y.ravel(),
                                 self.rho, self.thresh_percept, cutoff_r2,
                                 separate, boundary,
@@ -453,6 +473,13 @@ class ScoreboardModel(Model):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
+        
+        .. versionadded:: 0.11.0
+
     n_threads : int, optional
         Number of CPU threads to use during parallelization using OpenMP.
         Defaults to max number of user CPU cores.
@@ -471,6 +498,7 @@ class ScoreboardModel(Model):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
             spatial=ScoreboardSpatial(
@@ -480,6 +508,7 @@ class ScoreboardModel(Model):
                 thresh_percept=thresh_percept,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise, verbose=verbose, ndim=ndim,
+                n_gray=n_gray, noise=noise,
+                location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)
