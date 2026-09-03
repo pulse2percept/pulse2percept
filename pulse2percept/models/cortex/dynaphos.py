@@ -105,11 +105,10 @@ class DynaphosModel(BaseModel):
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
     location_noise : float or None, optional
-        Standard deviation (dva) of this subject's retinotopic distortion: how
-        far the percept of an electrode lands from where
-        ``visual_field_map`` predicts it. ``None`` or 0 leaves the percept
-        untouched.
-
+        Standard deviation of the variation in phosphene location from the
+        ``visual_field_map``, in dva. Locations are fixed for a model instance.
+        ``None`` or 0 disables the variation.
+        
         .. versionadded:: 0.11.0
 
     noise : float or int, optional

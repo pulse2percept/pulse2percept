@@ -403,9 +403,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     location_noise : float or None, optional
-        Standard deviation (dva) of this subject's retinotopic
-        distortion; see
-        :py:class:`~pulse2percept.models.SpatialModel`.
+        Standard deviation of the variation in phosphene location from the
+        ``visual_field_map``, in dva. Locations are fixed for a model instance.
+        ``None`` or 0 disables the variation.
 
         .. versionadded:: 0.11.0
 
@@ -771,10 +771,10 @@ class BiphasicAxonMapModel(Model):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     location_noise : float or None, optional
-        Standard deviation (dva) of this subject's retinotopic
-        distortion; see
-        :py:class:`~pulse2percept.models.SpatialModel`.
-
+        Standard deviation of the variation in phosphene location from the
+        ``visual_field_map``, in dva. Locations are fixed for a model instance.
+        ``None`` or 0 disables the variation.
+        
         .. versionadded:: 0.11.0
 
     loc_od : (float, float) or Quantity, optional

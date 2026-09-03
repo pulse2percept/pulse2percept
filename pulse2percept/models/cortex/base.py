@@ -71,9 +71,9 @@ class CortexSpatial(SpatialModel):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     location_noise : float or None, optional
-        Standard deviation (dva) of this subject's retinotopic
-        distortion; see
-        :py:class:`~pulse2percept.models.SpatialModel`.
+        Standard deviation of the variation in phosphene location from the
+        ``visual_field_map``, in dva. Locations are fixed for a model instance.
+        ``None`` or 0 disables the variation.
 
         .. versionadded:: 0.11.0
 
@@ -292,9 +292,9 @@ class ScoreboardSpatial(CortexSpatial):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     location_noise : float or None, optional
-        Standard deviation (dva) of this subject's retinotopic
-        distortion; see
-        :py:class:`~pulse2percept.models.SpatialModel`.
+        Standard deviation of the variation in phosphene location from the
+        ``visual_field_map``, in dva. Locations are fixed for a model instance.
+        ``None`` or 0 disables the variation.
 
         .. versionadded:: 0.11.0
 
@@ -472,10 +472,10 @@ class ScoreboardModel(Model):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     location_noise : float or None, optional
-        Standard deviation (dva) of this subject's retinotopic
-        distortion; see
-        :py:class:`~pulse2percept.models.SpatialModel`.
-
+        Standard deviation of the variation in phosphene location from the
+        ``visual_field_map``, in dva. Locations are fixed for a model instance.
+        ``None`` or 0 disables the variation.
+        
         .. versionadded:: 0.11.0
 
     n_threads : int, optional

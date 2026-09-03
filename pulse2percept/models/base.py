@@ -356,37 +356,29 @@ def _blend_meridian(resp, grid, meridian, width):
 
 
 def _electrode_dva(model):
-    """Return the implant's electrode locations in dva.
-
-    Requires an invertible ``visual_field_map``, which is handed as many
-    tissue coordinates as it has dimensions. On a map with several regions the
-    electrodes still sit in one place, so the model's first region is the one
-    that locates them. Locations the map cannot resolve come back non-finite.
-    """
+    """Return the visual-field locations of the implant's electrodes."""
     vfmap = model.visual_field_map
     coords = model.implant.electrode_array.coordinates(vfmap.tissue_unit)
+    tissue = coords[:, :vfmap.ndim].T
     try:
         inverse = vfmap.to_dva()
         regions = getattr(model, 'regions', None) or list(inverse)
-        x, y = inverse[regions[0]](*coords[:, :vfmap.ndim].T)
+        placed = [inverse[region](*tissue) for region in regions]
     except (NotImplementedError, KeyError):
         raise NotImplementedError(
             f"location_noise places electrodes in the visual field, which "
             f"requires a visual field map that can be inverted. "
             f"{type(vfmap).__name__} cannot map tissue coordinates back to "
             f"dva.") from None
-    return (np.asarray(x, dtype=np.float64).ravel(),
-            np.asarray(y, dtype=np.float64).ravel())
+    flat = [[np.asarray(c, dtype=np.float64).ravel() for c in xy]
+            for xy in placed]
+    electrode = np.tile(np.arange(coords.shape[0]), len(placed))
+    return (np.concatenate([xy[0] for xy in flat]),
+            np.concatenate([xy[1] for xy in flat]), electrode)
 
 
 def _electrode_offsets(model, sigma):
-    """Return this subject's electrode displacements in dva.
-
-    The latent standard normals are drawn once per model instance and cached,
-    so rebuilding (after a change to ``rho``, ``step``, ...) rescales the same
-    subject instead of simulating a new one. A new model instance, or a new
-    implant, is a new subject.
-    """
+    """Return this subject's electrode displacements in dva."""
     n_electrodes = len(model.implant.electrode_array.electrodes)
     latent = model._location_noise_z
     if latent is None or latent.shape[0] != n_electrodes:
@@ -406,7 +398,7 @@ def _axis_origin_step(along):
 
 
 def _fractional_index(axis, coord):
-    """Position of ``coord`` along a grid axis, in fractional sample index."""
+    """Position of ``coord`` along a grid axis, in fractional sample index"""
     if axis is None:
         # A single sample along this axis: nothing to shift into.
         return np.zeros_like(coord)
@@ -415,17 +407,7 @@ def _fractional_index(axis, coord):
 
 
 def _location_noise_field(model):
-    """Return the sampling coordinates of the location-noise warp.
-
-    The subject's offsets (see ``_electrode_offsets``) put the percept of an
-    electrode whose canonical location is ``e`` at ``e + offset``. The
-    *inverse* displacement is what warps the rendered field, so ``-offset`` is
-    interpolated at the displaced locations ``e + offset``: that makes those
-    correspondences exact rather than only true for a uniform shift. The
-    result is returned as fractional row/column indices for
-    ``map_coordinates``, which pulls each grid point from where the
-    undisplaced response holds its value. Returns None when the warp is off.
-    """
+    """Return the sampling coordinates of the location-noise warp"""
     sigma = model.location_noise
     if sigma is None:
         return None
@@ -441,8 +423,8 @@ def _location_noise_field(model):
     if rows is None and cols is None:
         # A single grid point cannot be displaced:
         return None
-    x_el, y_el = _electrode_dva(model)
-    offsets = _electrode_offsets(model, sigma)
+    x_el, y_el, electrode = _electrode_dva(model)
+    offsets = _electrode_offsets(model, sigma)[electrode]
     # Electrodes the map places outside the visual field (`NeuropythyMap`
     # returns NaN beyond its mesh) cannot anchor the warp:
     seen = np.isfinite(x_el) & np.isfinite(y_el)
@@ -453,16 +435,13 @@ def _location_noise_field(model):
             f"field, and it maps none of this implant's electrodes there.")
     offsets = offsets[seen]
     points = np.column_stack([x_el[seen], y_el[seen]]) + offsets
-    # One interpolation node per location: electrodes displaced onto the same
-    # visual-field point cannot pull the field in two directions, and a
-    # repeated node makes the interpolation matrix singular.
+    # One interpolation node per location:
     points, inverse = np.unique(points, axis=0, return_inverse=True)
     inverse = np.ravel(inverse)
-    if points.shape[0] < offsets.shape[0]:
-        counts = np.bincount(inverse, minlength=points.shape[0])
-        merged = np.zeros((points.shape[0], 2))
-        np.add.at(merged, inverse, offsets)
-        offsets = merged / counts[:, np.newaxis]
+    counts = np.bincount(inverse, minlength=points.shape[0])
+    merged = np.zeros((points.shape[0], 2))
+    np.add.at(merged, inverse, offsets)
+    offsets = merged / counts[:, np.newaxis]
     query = np.column_stack([grid.x.ravel(), grid.y.ravel()])
     if points.shape[0] == 1:
         back = np.broadcast_to(-offsets[0], query.shape)
@@ -477,13 +456,7 @@ def _location_noise_field(model):
 
 
 def _warp_visual_field(resp, grid, sample):
-    """Resample a response at displaced visual-field locations.
-
-    ``sample`` holds the fractional row/column indices built by
-    ``_location_noise_field``. Time points are warped independently by bilinear
-    interpolation. A grid point that pulls from outside the simulated field
-    reads zero, since nothing is known about the percept out there.
-    """
+    """Resample a response at displaced visual-field locations"""
     if sample is None:
         return resp
     work = np.asarray(resp).reshape(grid.x.shape + (-1,))
@@ -771,15 +744,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     location_noise : float or None, optional
-        Standard deviation (dva) of a subject-specific retinotopic distortion:
-        how far the percept of an electrode lands from where the canonical
-        ``visual_field_map`` predicts it. One offset is drawn per electrode and
-        interpolated smoothly across the grid, then warps the rendered percept
-        as a whole, so overlapping phosphenes stay consistent with each other.
-        The distortion belongs to the model instance and survives a rebuild;
-        a new instance is a new subject. ``None`` or 0 leaves the percept
-        untouched. Offsets come from the global NumPy random state; seed it
-        before constructing the model to reproduce a subject.
+        Standard deviation of the variation in phosphene location from the
+        ``visual_field_map``, in dva. Locations are fixed for a model instance.
+        ``None`` or 0 disables the variation.
 
         .. versionadded:: 0.11.0
 

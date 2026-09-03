@@ -2087,7 +2087,7 @@ def _fake_model(zs, location_noise=1.0):
 
 def test_electrode_dva_passes_every_tissue_dimension():
     # A 3D map is handed (x, y, z), not just (x, y):
-    x, y = _electrode_dva(_fake_model([0, 0]))
+    x, y, _ = _electrode_dva(_fake_model([0, 0]))
     npt.assert_almost_equal(x, [0, 1])
     npt.assert_almost_equal(y, [0, 0])
     # An electrode the map cannot place comes back non-finite, and is left out
@@ -2100,3 +2100,20 @@ def test_electrode_dva_passes_every_tissue_dimension():
 def test_location_noise_needs_a_placeable_electrode():
     with pytest.raises(ValueError):
         _location_noise_field(_fake_model([5, 5]))
+
+
+def test_location_noise_ignores_region_order():
+    # A multi-region model sums its regions, so naming them in a different
+    # order describes the same simulation and must warp the same way:
+    implant = Cortivis()
+    source = {implant.electrode_names[0]: 100}
+    percepts, fields = [], []
+    for regions in (['v1', 'v2'], ['v2', 'v1']):
+        np.random.seed(11)
+        model = CortexScoreboardSpatial(implant, regions=regions,
+                                        xrange=(-6, 6), yrange=(-6, 6),
+                                        step=0.25, location_noise=1.0).build()
+        fields.append(model._location_noise)
+        percepts.append(model.predict_percept(source).data)
+    npt.assert_array_equal(*fields)
+    npt.assert_array_equal(*percepts)

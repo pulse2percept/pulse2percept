@@ -92,9 +92,14 @@ def test_constructor_signature_is_explicit(cls, own_param):
 def test_inherited_params_are_in_the_signature(cls, _):
     # Effect models are excluded: they declare no inherited parameters.
     params = inspect.signature(cls).parameters
-    inherited = 'step' if any(cls is m for m, _ in IMPLANT_MODELS) else 'dt'
+    on_implant = any(cls is m for m, _ in IMPLANT_MODELS)
+    inherited = 'step' if on_implant else 'dt'
     npt.assert_equal(inherited in params, True)
     npt.assert_equal('verbose' in params, True)
+    if on_implant:
+        # Every model that has electrodes to displace exposes the subject's
+        # retinotopic distortion:
+        npt.assert_equal('location_noise' in params, True)
 
 
 @pytest.mark.parametrize('cls,_', IMPLANT_MODELS)
