@@ -59,7 +59,6 @@ class Orion(Implant):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
     placement = 'epicortical'
-    scene_input_frame = 'head'
 
     def __init__(self, x=15000, y=0, z=0, rot=0, preprocess=False, safe_mode=False):
 

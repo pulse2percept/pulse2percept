@@ -85,6 +85,12 @@ class Implant(PrettyPrint):
         (e.g. ``0.1 * mA``); see :py:mod:`pulse2percept.units`.
 
         .. versionadded:: 0.10.0
+    scene_input_frame : 'eye' or 'head', optional
+        Overrides the device class's
+        :py:attr:`~pulse2percept.implants.Implant.default_scene_input_frame`
+        for this system, e.g. ``'eye'`` for an Argus II run with eye tracking.
+
+        .. versionadded:: 0.11.0
     thresholds : float, Quantity, or dict, optional
         Perceptual threshold current (uA) used to calibrate threshold-relative
         (``xTh``) stimuli. A scalar applies to every electrode; a dict
@@ -105,7 +111,8 @@ class Implant(PrettyPrint):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_electrode_array', '_eye', 'safe_mode', 'preprocess',
-                 '_encoder', '_raster', '_max_current', '_thresholds')
+                 '_encoder', '_raster', '_max_current', '_thresholds',
+                 '_scene_input_frame')
 
     #: Unit used by prepared stimuli. Defaults to electrical current.
     stimulus_unit = uA
@@ -123,24 +130,19 @@ class Implant(PrettyPrint):
     #: .. versionadded:: 0.11.0
     family = None
 
-    #: Coordinate frame in which scene content is registered to the implant.
-    #: ``'eye'`` (the default) means gaze moves the scene across the implant;
-    #: ``'head'`` means eye rotation does not change which scene content
-    #: drives each electrode. This is about registration, not acquisition:
-    #: PRIMA is ``'eye'`` despite its head-mounted camera, because the
-    #: processed image is projected through the moving eye onto the array.
-    #: Only scene sampling reads this; where the resulting percept lands in
-    #: the scene is gaze-dependent either way.
+    #: What :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`
+    #: is for devices of this class, before any per-system override.
     #: .. versionadded:: 0.11.0
-    scene_input_frame = 'eye'
+    default_scene_input_frame = 'eye'
 
     def __init__(self, electrode_array, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
-                 thresholds=None):
+                 thresholds=None, scene_input_frame=None):
         self.electrode_array = electrode_array
         self.eye = eye
         self.safe_mode = safe_mode
         self.preprocess = preprocess
+        self.scene_input_frame = scene_input_frame
         self.encoder = encoder
         self.raster = raster
         self.max_current = max_current
@@ -164,7 +166,44 @@ class Implant(PrettyPrint):
             params['max_current'] = self.max_current
         if self.thresholds:
             params['thresholds'] = self.thresholds
+        if getattr(self, '_scene_input_frame', None) is not None:
+            params['scene_input_frame'] = self.scene_input_frame
         return params
+
+    @property
+    def scene_input_frame(self):
+        """Coordinate frame in which scene content registers to the implant.
+
+        ``'eye'`` means gaze moves the scene across the implant; ``'head'``
+        means eye rotation does not change which scene content drives each
+        electrode. This is about registration, not acquisition: PRIMA is
+        ``'eye'`` despite its head-mounted camera, because the processed image
+        is projected through the moving eye onto the array. Only scene
+        sampling reads this; where the resulting percept lands in the scene is
+        gaze-dependent either way.
+
+        A ``'head'`` system still takes its per-electrode samples at the
+        electrodes' own visual-field locations, which assumes the device's
+        camera-to-electrode registration matches them. Real systems configure
+        that mapping separately and it is not modeled here.
+
+        Defaults to
+        :py:attr:`~pulse2percept.implants.Implant.default_scene_input_frame`;
+        setting it to None restores that default.
+
+        .. versionadded:: 0.11.0
+        """
+        frame = getattr(self, '_scene_input_frame', None)
+        return self.default_scene_input_frame if frame is None else frame
+
+    @scene_input_frame.setter
+    def scene_input_frame(self, frame):
+        """Input frame setter (called upon ``self.scene_input_frame = ...``)"""
+        if frame is not None and frame not in ('eye', 'head'):
+            raise ValueError(f"'scene_input_frame' says how gaze registers a "
+                             f"scene onto the implant and must be 'eye' or "
+                             f"'head', not {frame!r}.")
+        self._scene_input_frame = frame
 
     @property
     def encoder(self):
@@ -828,14 +867,15 @@ class GridImplant(Implant):
                  grid_type='rect', orientation='horizontal',
                  electrode_type=PointSource, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
-                 **electrode_params):
+                 scene_input_frame=None, **electrode_params):
         electrode_array = ElectrodeGrid(
             shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
             grid_type=grid_type, orientation=orientation,
             electrode_type=electrode_type, **electrode_params)
         super().__init__(electrode_array, eye=eye, preprocess=preprocess,
                          safe_mode=safe_mode, encoder=encoder, raster=raster,
-                         max_current=max_current)
+                         max_current=max_current,
+                         scene_input_frame=scene_input_frame)
 
 
 @deprecated(alt_func='GridImplant', deprecated_version='0.11.0',

@@ -178,14 +178,41 @@ retinotopic map. Each electrode follows this chain::
 
     retinal coordinate (um)
       -> visual_field_map.ret_to_dva -> eye-centered visual field (dva)
-      -> + gaze            -> scene coordinate (dva)
+      -> + gaze, for eye-coupled input only -> scene coordinate (dva)
       -> sample the scene
 
 ``gaze`` is the scene location that currently falls on the fovea, so
-``scene = visual field + gaze``. The implant does not move when gaze does, and
-neither does an eye-centered
-:py:class:`~pulse2percept.vision.Scotoma`: the scene moves past them. Pass one
+``scene = eye-centered visual field + gaze``. Gaze always decides where the
+percept lands in scene coordinates. Whether it also decides what the
+electrodes are given depends on the implant's
+:py:attr:`~pulse2percept.implants.Implant.scene_input_frame`:
+
+==========  =================================================================
+``'eye'``   Input passes through the eye's optics (Alpha, PRIMA), so gaze
+            moves the scene across the implant as well as moving the percept
+            across the scene. This is the default.
+``'head'``  Input comes from a head-fixed camera (Argus, BVT, IMIE) that the
+            eye cannot move: the electrodes are handed the same scene
+            whatever the gaze, and only the percept moves.
+==========  =================================================================
+
+Neither the implant nor an eye-centered
+:py:class:`~pulse2percept.vision.Scotoma` moves when gaze does. Pass one
 ``(x, y)`` to fixate, or one per video frame to move the eye between frames.
+
+For a ``'head'`` system, the sampling locations above are still the electrodes'
+own visual-field positions, which assumes the device's camera-to-electrode
+registration is aligned with them. Real systems configure that mapping
+separately and it is not modeled here.
+
+``scene_input_frame`` follows the device class but is a property of the
+system, so one implant can be run the other way -- an Argus II with eye
+tracking, which shifts the camera ROI with gaze:
+
+.. code-block:: python
+
+    implant = p2p.implants.ArgusII()
+    implant.scene_input_frame = 'eye'
 
 The sampled values are passed to ``implant.encoder``, which maps gray levels
 to current and applies device timing constraints. A scene is per-prediction

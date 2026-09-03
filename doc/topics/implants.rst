@@ -30,10 +30,12 @@ often are:
 
 ``scene_input_frame``
     How gaze registers a :py:class:`~pulse2percept.vision.Scene` onto the
-    implant: ``'eye'`` (the default) if gaze moves the scene across the
-    electrodes, ``'head'`` for systems driven by a head-fixed camera, whose
-    input the eye cannot move. PRIMA is ``'eye'`` despite its head-mounted
-    camera, because its processed image is projected through the eye.
+    implant: ``'eye'`` if gaze moves the scene across the electrodes,
+    ``'head'`` for systems driven by a head-fixed camera, whose input the eye
+    cannot move. PRIMA is ``'eye'`` despite its head-mounted camera, because
+    its processed image is projected through the eye. Defaults to the device
+    class's ``default_scene_input_frame`` (``'eye'`` for a generic array) and
+    can be set per system.
 
 ``encoder`` and ``raster``
     Optional device behavior used when visual input is converted to electrical

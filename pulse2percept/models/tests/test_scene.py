@@ -65,26 +65,17 @@ def scene_of(source=None, **kwargs):
                  fov=(SCENE_PX, SCENE_PX), **kwargs)
 
 
-class HeadCameraImplant(Implant):
-    """An implant driven by a head-fixed camera, e.g. Argus II"""
-    __slots__ = ()
-
-    scene_input_frame = 'head'
-
-
 def implant_at(x_um=0, y_um=0, encoder=True, input_frame='eye'):
     """An implant whose single electrode sits where we want to look"""
-    cls = HeadCameraImplant if input_frame == 'head' else Implant
-    return cls(
-        PointSource(x_um, y_um, 0),
+    return Implant(
+        PointSource(x_um, y_um, 0), scene_input_frame=input_frame,
         encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)) if encoder else None)
 
 
 def grid_implant(input_frame='eye'):
     """Three electrodes in a row"""
-    cls = HeadCameraImplant if input_frame == 'head' else Implant
-    return cls(ElectrodeGrid((1, 3), 280),
-               encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
+    return Implant(ElectrodeGrid((1, 3), 280), scene_input_frame=input_frame,
+                   encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
 
 
 def model_for(implant, **kwargs):
@@ -167,9 +158,13 @@ def test_gaze_leaves_a_head_mounted_camera_looking_where_it_was():
 
 def test_an_unknown_scene_input_frame_is_refused():
     """A typo would silently change the physics, so it raises instead"""
+    with pytest.raises(ValueError):
+        implant_at(0, 0, input_frame='retinal')
+
+    # A device class may also declare a bad default, which no setter sees:
     class Typo(Implant):
         __slots__ = ()
-        scene_input_frame = 'retinal'
+        default_scene_input_frame = 'retinal'
 
     model = model_for(Typo(PointSource(0, 0, 0),
                            encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX))))

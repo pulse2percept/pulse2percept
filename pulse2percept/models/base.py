@@ -301,6 +301,8 @@ def _scene_stim(model, scene, gaze):
     x_vf, y_vf = visual_field_map.ret_to_dva(*xy)
     frame = implant.scene_input_frame
     if frame not in ('eye', 'head'):
+        # Reachable through a bad `default_scene_input_frame` on a custom
+        # class, which the instance-level setter never sees:
         raise ValueError(f"This implant's 'scene_input_frame' is {frame!r}, "
                          f"which says nothing about how gaze registers the "
                          f"scene onto it; expected 'eye' or 'head'.")
