@@ -93,15 +93,19 @@ def test_temporal_predict():
     npt.assert_almost_equal(bright_amp, bright_amp_ref, decimal=3)
     npt.assert_equal(np.all(np.diff(bright_amp) >= 0), True)
 
-    # Test that default models give expected values
-    orion = DynaphosModel(implant=Orion(x=15000), step=0.1, dt=20).build()
+    # Test that default models give expected values.
+    # `step` is finer than the model default here on purpose: with sigma = P/4
+    # a foveal phosphene is smaller than a pixel at step=0.1, so every
+    # threshold below the peak selects the same single pixel and the counts
+    # stop distinguishing anything. At 0.02 dva the profile is resolved.
+    orion = DynaphosModel(implant=Orion(x=15000), step=0.02, dt=20).build()
     percept = orion.predict_percept(
         {'55': BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)})
-    npt.assert_equal(np.sum(percept.data > 0.0122), 147)
-    npt.assert_equal(np.sum(percept.data > 0.0375), 96)
-    npt.assert_equal(np.sum(percept.data > 0.3305), 49)
-    npt.assert_equal(np.sum(percept.data > 0.8451), 39)
-    npt.assert_equal(np.sum(percept.data > 0.8883), 9)
+    npt.assert_equal(np.sum(percept.data > 0.05), 637)
+    npt.assert_equal(np.sum(percept.data > 0.2), 384)
+    npt.assert_equal(np.sum(percept.data > 0.4), 195)
+    npt.assert_equal(np.sum(percept.data > 0.6), 138)
+    npt.assert_equal(np.sum(percept.data > 0.8), 47)
 
 def test_deepcopy_Dynaphos():
     original = DynaphosModel(implant=Cortivis())
@@ -333,3 +337,38 @@ def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
     solo = AmplitudeEncoder().encode(ImageStimulus(np.array([[0.7]])))
     npt.assert_equal(len(solo._structured_sources()), 1)
     npt.assert_equal(_pulse_train_clocks(solo), None)
+
+
+def test_phosphene_size_matches_the_analytical_sigma():
+    """The rendered Gaussian width must equal the size the model specifies.
+
+    van der Grinten et al. set "two standard deviations equal to the phosphene
+    size P, such that 95% of the Gaussian falls within the predicted phosphene
+    size". 95% of a Gaussian lies within +/-2 sigma, so that interval equals P
+    and sigma = P / 4, with P = D / M and D = 2 * sqrt(amp / K).
+
+    The grid must resolve the phosphene: at the default step a foveal phosphene
+    is smaller than a pixel and the measured width is dominated by the sampling
+    rather than by the model.
+    """
+    amp = 200.0
+    implant = Orion(x=15000)
+    model = DynaphosModel(implant=implant, step=0.005, dt=20).build()
+    percept = model.predict_percept(
+        {'55': BiphasicPulseTrain(freq=300, amp=amp, phase_dur=0.17)})
+
+    frame = percept.data.max(axis=-1)
+    weight = frame / frame.sum()
+    x, y = model.grid.x, model.grid.y
+    x0 = float((weight * x).sum())
+    y0 = float((weight * y).sum())
+    # Second moment of an isotropic Gaussian, averaged over the two axes.
+    measured = float(np.sqrt(
+        (weight * ((x - x0) ** 2 + (y - y0) ** 2)).sum() / 2.0))
+
+    r = np.hypot(x0, y0)
+    M = model.vfmap.k * (model.vfmap.b - model.vfmap.a) / \
+        ((r + model.vfmap.a) * (r + model.vfmap.b))
+    expected = 2 * np.sqrt(amp / model.excitability) / M / 4.0
+
+    npt.assert_allclose(measured, expected, rtol=0.15)

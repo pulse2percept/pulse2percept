@@ -47,6 +47,19 @@ class DynaphosModel(BaseModel):
     Implements the Dynaphos model. Percepts from each
     electrode are Gaussian blobs, with the size dictated by a magnification factor
     M determined by the electrode's position in the visual cortex.
+
+    Phosphene size follows [vanderGrinten2023]_: the diameter of activated
+    cortex is ``D = 2 * sqrt(amp / K)``, the phosphene size in degrees is
+    ``P = D / M``, and the Gaussian is set so that two standard deviations
+    either side of the centre span P, i.e. ``sigma = P / 4``, putting 95% of
+    the Gaussian within the predicted phosphene size.
+
+    .. note::
+
+        Phosphenes near the fovea are small, and at the default ``step`` they
+        can be narrower than one pixel. When that happens the rendered peak
+        brightness is limited by the sampling grid rather than by the model, so
+        reduce ``step`` if you are measuring phosphene size or brightness.
     
     Parameters
     ----------
@@ -386,8 +399,14 @@ class DynaphosModel(BaseModel):
             # update phosphene size
             D = 2 * np.sqrt(amp / K) # mm
             P = (D / M) # dva
-            # calculate sigma for gaussian (only update sigma if amplitude > 0)
-            sigma = np.where(amp > 0, np.clip(P / 2, 1e-22, None), sigma) 
+            # Calculate sigma for the Gaussian (only update sigma if
+            # amplitude > 0). van der Grinten et al. set "two standard
+            # deviations equal to the phosphene size P, such that 95% of the
+            # Gaussian falls within the predicted phosphene size". 95% of a
+            # Gaussian lies within +/-2 sigma, so that interval must equal P,
+            # giving sigma = P / 4. Using P / 2 makes the +/-2 sigma interval
+            # span 2P, i.e. phosphenes twice the intended size.
+            sigma = np.where(amp > 0, np.clip(P / 4, 1e-22, None), sigma) 
             # get activation (Ieff converted from uA to A)
             A = A + ((-A / tau_act_s) + Ieff * _A_PER_UA) * dt_s
             # get brightness
