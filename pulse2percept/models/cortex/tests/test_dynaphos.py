@@ -377,3 +377,32 @@ def test_location_noise():
 
     with pytest.raises(ValueError):
         DynaphosModel(implant=implant, location_noise=-1, **kwargs).build()
+    # NaN is not a quiet no-op:
+    with pytest.raises(ValueError):
+        DynaphosModel(implant=implant, location_noise=np.nan, **kwargs).build()
+
+
+def test_location_noise_crosses_meridian():
+    # A phosphene displaced across the vertical meridian is drawn in the
+    # hemifield it lands in, not the one its electrode maps to. This
+    # electrode sits just left of the meridian (x = +0.24 dva) and the
+    # offset below carries it 0.83 dva to the right of it.
+    implant = Implant(ElectrodeArray([DiskElectrode(-25000, 2000, 0, 100)]))
+    source = {0: BiphasicPulseTrain(freq=300, amp=200, phase_dur=0.17)}
+    kwargs = dict(xrange=(-4, 4), yrange=(-4, 4), step=0.05)
+    plain = DynaphosModel(implant=implant, **kwargs).build()
+    canonical = plain.predict_percept(source)
+    npt.assert_array_less(0, _brightest_dva(canonical, plain.grid)[0])
+
+    np.random.seed(2)
+    offset = np.random.normal(size=(1, 2))[0] * 2.0
+    np.random.seed(2)
+    moved = DynaphosModel(implant=implant, location_noise=2.0,
+                          **kwargs).build()
+    got = moved.predict_percept(source)
+    npt.assert_allclose(_brightest_dva(got, moved.grid) -
+                        _brightest_dva(canonical, plain.grid), offset,
+                        atol=0.06)
+    # The whole phosphene came along; a hemifield mask left behind would
+    # have clipped most of it away:
+    npt.assert_allclose(got.data.sum(), canonical.data.sum(), rtol=0.05)

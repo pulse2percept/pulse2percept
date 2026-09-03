@@ -111,6 +111,9 @@ class Nanduri2012Spatial(SpatialModel):
             Standard deviation of the variation in phosphene location from the
             ``visual_field_map``, in dva. Locations are fixed for a model instance.
             ``None`` or 0 disables the variation.
+            Moves the effective stimulation location, so phosphene shape and
+            size change too wherever the model makes them location-dependent
+            (axon bundles, cortical magnification).
             
             .. versionadded:: 0.11.0
 
@@ -374,6 +377,9 @@ class Nanduri2012Model(Model):
             Standard deviation of the variation in phosphene location from the
             ``visual_field_map``, in dva. Locations are fixed for a model instance.
             ``None`` or 0 disables the variation.
+            Moves the effective stimulation location, so phosphene shape and
+            size change too wherever the model makes them location-dependent
+            (axon bundles, cortical magnification).
             
             .. versionadded:: 0.11.0
 

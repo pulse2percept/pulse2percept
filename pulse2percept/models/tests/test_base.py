@@ -1973,11 +1973,14 @@ def test_location_noise_off(location_noise):
                                {'A0': 1}).data)
 
 
-def test_location_noise_must_be_non_negative():
-    model = _one_electrode_model()
-    model.location_noise = -1
-    with pytest.raises(ValueError):
-        model.build()
+def test_location_noise_must_be_finite_and_non_negative():
+    # NaN would otherwise pass both the < 0 and > 0 tests and disable the
+    # noise silently:
+    for bad in (-1, np.nan, np.inf):
+        model = _one_electrode_model()
+        model.location_noise = bad
+        with pytest.raises(ValueError):
+            model.build()
 
 
 def test_location_noise_is_a_visual_angle():
@@ -2141,10 +2144,7 @@ def test_cortical_location_noise_ignores_region_order():
 
 
 class _Slab3DMap(VisualFieldMap):
-    """A 3D map whose inverse needs all three tissue coordinates
-
-    Linear, so a displaced phosphene is exactly the canonical one moved.
-    """
+    """A 3D map placing the visual field on the z=0 plane of a slab"""
 
     def get_default_params(self):
         return {**super().get_default_params(), 'ndim': 3,
@@ -2163,19 +2163,15 @@ class _Slab3DMap(VisualFieldMap):
         return {'v1': self.v1_to_dva}
 
 
-def test_location_noise_supports_3d_maps():
-    implant = _implant_at([(560, 0)])
-    offset = 1.0 * _latents(1, 6)[0]
+def test_location_noise_rejects_3d_maps():
+    # A visual field maps onto a surface embedded in the tissue, so the dva
+    # round trip cannot carry the coordinate normal to it (cortical depth).
     kwargs = dict(visual_field_map=_Slab3DMap(), regions=['v1'], rho=400,
-                  xrange=(-10, 10), yrange=(-10, 10), step=0.1)
-    plain = CortexScoreboardSpatial(implant, **kwargs).build()
-    np.random.seed(6)
-    moved = CortexScoreboardSpatial(implant, location_noise=1.0,
-                                    **kwargs).build()
-    was, cov_was = _blob_moments(plain.predict_percept({'A0': 1}), plain.grid)
-    now, cov_now = _blob_moments(moved.predict_percept({'A0': 1}), moved.grid)
-    npt.assert_allclose(now - was, offset, atol=0.02)
-    npt.assert_allclose(cov_now, cov_was, atol=1e-3)
+                  xrange=(-10, 10), yrange=(-10, 10), step=0.5)
+    CortexScoreboardSpatial(_implant_at([(560, 0)]), **kwargs).build()
+    with pytest.raises(NotImplementedError):
+        CortexScoreboardSpatial(_implant_at([(560, 0)]), location_noise=1.0,
+                                **kwargs).build()
 
 
 def test_location_noise_matches_integer_electrode_names():

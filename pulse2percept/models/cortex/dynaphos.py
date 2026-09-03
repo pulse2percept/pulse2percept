@@ -328,10 +328,18 @@ class DynaphosModel(BaseModel):
         # `location_noise` moves the phosphene, not the electrode: the size
         # below still follows the canonical cortical magnification.
         offsets = _electrode_offsets(self, stim.electrodes)
+        x_split = x_el
         if offsets is not None:
             for region, (px, py) in phosphene_locations.items():
                 phosphene_locations[region] = (px + offsets[:, 0],
                                                py + offsets[:, 1])
+            # `create_gaussian` clips each phosphene to one hemifield, and a
+            # displaced phosphene belongs to the one it lands in. Ask the map
+            # rather than the sign of the displaced dva x: near the meridian
+            # the inverse is only accurate to a few hundredths of a degree.
+            x_split = self.visual_field_map.from_dva()['v1'](
+                *[np.array(c, dtype=np.float64)
+                  for c in phosphene_locations['v1']])[0]
 
         # magnification factors (mm/dva)
         M = self.visual_field_map.k * (self.visual_field_map.b - self.visual_field_map.a) / ((r + self.visual_field_map.a) * (r + self.visual_field_map.b))
@@ -444,7 +452,7 @@ class DynaphosModel(BaseModel):
                     if A[el_idx] >= self.a_thr:
                         gauss = create_gaussian(phosphene_locations['v1'][0][el_idx], 
                                                 phosphene_locations['v1'][1][el_idx], 
-                                                sigma[el_idx], x_el[el_idx])
+                                                sigma[el_idx], x_split[el_idx])
                         bright[:,frame_idx] += gauss.ravel() * brightness[el_idx]
                 bright[:,frame_idx] = np.clip(bright[:,frame_idx], 0, 1)
                 frame_idx = frame_idx + 1

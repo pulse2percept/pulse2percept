@@ -360,9 +360,16 @@ def _location_noise_sigma(model):
     if sigma is None:
         return None
     sigma = float(sigma)
-    if sigma < 0:
-        raise ValueError(f"location_noise must be non-negative (or None to "
-                         f"disable it), not {sigma}.")
+    if not np.isfinite(sigma) or sigma < 0:
+        raise ValueError(f"location_noise must be a finite non-negative number "
+                         f"(or None to disable it), not {sigma}.")
+    ndim = model.visual_field_map.ndim
+    if sigma > 0 and ndim != 2:
+        # A visual field maps onto a surface, so the dva round trip in
+        # `_displaced_coords` cannot preserve a coordinate normal to it:
+        raise NotImplementedError(
+            f"location_noise is only defined for 2D visual field maps, and "
+            f"{type(model.visual_field_map).__name__} is {ndim}D.")
     return sigma if sigma > 0 else None
 
 
@@ -401,7 +408,8 @@ def _displaced_coords(model, region, electrodes, xyz, offsets):
 
     Round-trips each electrode through ``region`` of the visual field map:
     tissue -> dva, add the electrode's fixed offset, dva -> tissue. Only the
-    percept prediction sees these; the implant is not moved.
+    percept prediction sees these; the implant is not moved. 2D maps only;
+    see `_location_noise_sigma`.
 
     Raises if the map places an electrode nowhere, before or after the offset.
     Substituting the canonical location would set that electrode's offset to
@@ -412,9 +420,9 @@ def _displaced_coords(model, region, electrodes, xyz, offsets):
     vfmap = model.visual_field_map
     try:
         inverse = vfmap.to_dva()[region]
-        args = xyz[:vfmap.ndim] if vfmap.ndim == 3 else xyz[:2]
         # Copies, since a map is free to edit the array it is handed:
-        x_dva, y_dva = inverse(*[np.array(a, dtype=np.float64) for a in args])
+        x_dva, y_dva = inverse(*[np.array(a, dtype=np.float64)
+                                 for a in xyz[:2]])
     except (NotImplementedError, KeyError):
         raise NotImplementedError(
             f"location_noise places electrodes in the visual field, which "
@@ -735,11 +743,14 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     location_noise : float or None, optional
         Standard deviation of the variation in phosphene location from the
         ``visual_field_map``, in dva. Locations are fixed for a model instance.
-        ``None`` or 0 disables the variation. Requires an invertible
+        ``None`` or 0 disables the variation. Requires an invertible, 2D
         ``visual_field_map``, which is what places the electrodes in the
-        visual field. Phenomenological: the standard deviation is not
-        empirically calibrated, and trial-to-trial or gaze-dependent shifts
-        are not modeled.
+        visual field. Moves the effective stimulation location, so phosphene
+        shape and size change too wherever the model makes them
+        location-dependent (axon bundles, cortical magnification).
+        Phenomenological: the standard deviation is not empirically
+        calibrated, and trial-to-trial or gaze-dependent shifts are not
+        modeled.
 
         .. versionadded:: 0.11.0
 

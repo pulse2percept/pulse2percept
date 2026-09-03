@@ -97,7 +97,8 @@ Models
 
 * New ``location_noise`` parameter displaces each electrode's phosphene by a
   fixed, subject-specific offset in the visual field (dva) rather than at the
-  location the ``visual_field_map`` gives it (:pull:`881`).
+  location the ``visual_field_map`` gives it. Requires a 2D, invertible map
+  (:pull:`881`).
 
 
 Residual vision
