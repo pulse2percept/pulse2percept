@@ -29,7 +29,7 @@ from pulse2percept.models.cortex import (DynaphosModel,
                                          CortexScoreboardModel,
                                          ScoreboardSpatial as
                                          CortexScoreboardSpatial)
-from pulse2percept.units import (DimensionMismatchError, Quantity,
+from pulse2percept.units import (DimensionMismatchError, Quantity, deg,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
                                  us)
 from pulse2percept.utils import FreezeError, frame_interval
@@ -2152,6 +2152,51 @@ def test_location_noise_rejects_3d_maps():
     with pytest.raises(NotImplementedError):
         CortexScoreboardSpatial(_implant_at([(560, 0)]), location_noise=1.0,
                                 **kwargs).build()
+
+
+def _slab_model(**params):
+    """A cortical scoreboard on a 3D map, with two electrodes 560 um apart"""
+    return CortexScoreboardSpatial(
+        _implant_at([(0, 0), (560, 0)]), visual_field_map=_Slab3DMap(),
+        regions=['v1'], rho=400, xrange=(-10, 10), yrange=(-10, 10),
+        step=0.5, **params)
+
+
+def test_identity_placement_is_allowed_on_a_3d_map():
+    """Implants built in the map's own frame keep working"""
+    model = _slab_model().build()
+    implant = model.implant
+    stim = implant.prepare_stim({name: 1 for name in implant.electrode_names})
+    placed = np.column_stack(
+        model._electrode_coords(implant.electrode_array, stim))
+    npt.assert_almost_equal(placed, implant.electrode_array.coordinates(),
+                            decimal=3)
+    # Spelling the identity out changes nothing:
+    same = _slab_model(implant_position=(0, 0) * um, implant_rotation=0,
+                       implant_depth=0).build()
+    npt.assert_almost_equal(
+        np.column_stack(same._electrode_coords(implant.electrode_array, stim)),
+        placed, decimal=6)
+
+
+@pytest.mark.parametrize('params', [
+    {'implant_position': (100, 0)},
+    {'implant_position': (100, 0) * um},
+    {'implant_position': (1, 0) * dva},
+    # Even the visual field origin names a cortical location, not the origin:
+    {'implant_position': (0, 0) * dva},
+    {'implant_rotation': 15},
+    {'implant_rotation': 15 * deg},
+    {'implant_depth': 100},
+    {'implant_depth': 100 * um},
+])
+def test_placement_is_refused_on_a_3d_map(params):
+    """`z` in a 3D tissue frame is an axis, not depth along the normal"""
+    model = _slab_model(**params).build()
+    implant = model.implant
+    stim = implant.prepare_stim({implant.electrode_names[0]: 1})
+    with pytest.raises(NotImplementedError):
+        model._electrode_coords(implant.electrode_array, stim)
 
 
 def test_location_noise_matches_integer_electrode_names():

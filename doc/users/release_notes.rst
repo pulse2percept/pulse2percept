@@ -125,8 +125,11 @@ Models
   parameters place an implant in the modeled tissue: ``implant_position`` says
   where its local ``(0, 0)`` origin sits, in dva (resolved through
   ``visual_field_map``) or as a physical position, ``implant_rotation`` turns
-  the array about that origin, and ``implant_depth`` sets the depth. The
-  transform is rigid and leaves the implant itself unchanged (:pull:`N`).
+  the array about that origin, and ``implant_depth`` offsets it along the
+  tissue plane's normal. The transform is rigid and leaves the implant itself
+  unchanged. It is a 2D pose, so a 3D map such as ``NeuropythyMap`` accepts
+  only the default identity placement; build the implant in the map's own
+  frame instead (:pull:`N`).
 
 
 Residual vision

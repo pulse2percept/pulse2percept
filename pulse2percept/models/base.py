@@ -366,6 +366,27 @@ def _blend_meridian(resp, grid, meridian, width):
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
+def _tissue_map_ndim(model):
+    """Return the dimensionality of the model's visual field map."""
+    visual_field_map = getattr(model, 'visual_field_map', None)
+    return 2 if visual_field_map is None else visual_field_map.ndim
+
+
+def _refuse_3d_placement(model, name):
+    """Raise for a nontrivial pose on a map that is not a 2D tissue sheet."""
+    visual_field_map = model.visual_field_map
+    raise NotImplementedError(
+        f"'{name}' is a pose in a 2D tissue plane, and "
+        f"{type(visual_field_map).__name__} is {visual_field_map.ndim}D: its "
+        f"third coordinate is an axis of the tissue frame rather than depth "
+        f"along the local surface normal, so there is no plane to pose the "
+        f"device in. Placing a device in such a map needs a full 3D pose "
+        f"defined against that normal, which pulse2percept does not model "
+        f"yet. Build the implant in the map's own frame, as "
+        f"Neuralink.from_neuropythy does, and leave the placement at "
+        f"identity.")
+
+
 def _dva_pos_to_tissue(model, value):
     """Return the tissue position, in um, of a dva ``implant_position``.
 
@@ -380,12 +401,6 @@ def _dva_pos_to_tissue(model, value):
     if xy.size != 2 or not np.all(np.isfinite(xy)):
         raise ValueError(f"'implant_position' must be a finite (x, y) pair, "
                          f"not {value}.")
-    if visual_field_map.ndim != 2:
-        raise NotImplementedError(
-            f"A visual field position places an implant on a 2D sheet, "
-            f"and {type(visual_field_map).__name__} is "
-            f"{visual_field_map.ndim}D. Give 'implant_position' as a physical "
-            f"position instead.")
     regions = list(visual_field_map.from_dva())
     if len(regions) != 1:
         raise NotImplementedError(
@@ -404,11 +419,13 @@ def _dva_pos_to_tissue(model, value):
 
 
 def _placement_depth(model):
-    """Return ``implant_depth`` in um."""
+    """Return ``implant_depth`` in um, as a signed offset along the normal."""
     depth = float(as_value(getattr(model, 'implant_depth', 0), um,
                            'implant_depth'))
     if not np.isfinite(depth):
         raise ValueError(f"'implant_depth' must be finite, not {depth}.")
+    if depth and _tissue_map_ndim(model) != 2:
+        _refuse_3d_placement(model, 'implant_depth')
     return depth
 
 
@@ -419,7 +436,12 @@ def _placement_shift(model, unit):
     the implant sits. Returns None for an implant at the tissue origin.
     """
     pos = getattr(model, 'implant_position', (0, 0))
+    is_2d = _tissue_map_ndim(model) == 2
     if has_units(pos) and not _length_valued(pos):
+        # A visual field position is a tissue location even at (0, 0) dva, so
+        # it is never the identity placement a 3D map still allows.
+        if not is_2d:
+            _refuse_3d_placement(model, 'implant_position')
         # Resolved here, not at assignment: `visual_field_map` may change.
         xy = _dva_pos_to_tissue(model, pos)
     else:
@@ -428,6 +450,8 @@ def _placement_shift(model, unit):
     if xy.size != 2 or not np.all(np.isfinite(xy)):
         raise ValueError(f"'implant_position' must be a finite (x, y) pair, "
                          f"not {pos}.")
+    if np.any(xy) and not is_2d:
+        _refuse_3d_placement(model, 'implant_position')
     depth = _placement_depth(model)
     shift = np.array([xy[0], xy[1], depth], dtype=float)
     if not np.any(shift):
@@ -443,6 +467,8 @@ def _placement_rotation(model):
         raise ValueError(f"'implant_rotation' must be finite, not {rot}.")
     if rot == 0:
         return None
+    if _tissue_map_ndim(model) != 2:
+        _refuse_3d_placement(model, 'implant_rotation')
     return np.deg2rad(rot)
 
 
@@ -821,31 +847,43 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         .. versionadded:: 0.11.0
 
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits, defaulting to the
-        tissue origin. The unit decides how it is read: a bare pair or a
-        length is a tissue position in microns, whereas ``(6, -2) * dva``
-        names a visual field location and is resolved through
-        ``visual_field_map`` at prediction time. A dva position requires a 2D
-        map with a single region. The array is translated rigidly, so device
-        geometry is unchanged and the implant is never mutated. Distinct from
-        ``location_noise``, which perturbs individual phosphene locations
-        afterwards.
+        Where the implant's local ``(0, 0)`` origin sits in the tissue plane,
+        defaulting to the tissue origin. The unit decides how it is read: a
+        bare pair or a length is a tissue position in microns, whereas
+        ``(6, -2) * dva`` names a visual field location and is resolved
+        through ``visual_field_map`` at prediction time. A dva position
+        requires a map with a single region. The array is translated rigidly,
+        so device geometry is unchanged and the implant is never mutated.
+        Distinct from ``location_noise``, which perturbs individual phosphene
+        locations afterwards.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin rather than its
+        Angle (deg) the implant is rotated by within the tissue plane,
+        positive counter-clockwise, about its own local origin rather than its
         centroid. Applied before ``implant_position``.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Depth (um) the implant is placed at, added to every electrode's local
-        ``z``. Only models that read ``z``, such as
+        Signed offset (um) of the implant along the tissue plane's normal,
+        carried by the electrodes' local ``z``. Positive is away from the
+        tissue, e.g. epiretinal electrode-retina distance. Only models that
+        read ``z``, such as
         :py:class:`~pulse2percept.models.Nanduri2012Model`, respond to it.
 
         .. versionadded:: 0.11.0
+
+    .. note::
+
+        Placement is a pose in a 2D tissue plane. A 3D ``visual_field_map``
+        such as :py:class:`~pulse2percept.topography.NeuropythyMap` has no
+        such plane -- its third coordinate is an axis of the tissue frame, not
+        depth along the local surface normal -- so it accepts only the default
+        identity placement, and an implant is instead built in the map's own
+        frame (see
+        :py:meth:`~pulse2percept.implants.cortex.Neuralink.from_neuropythy`).
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. On retinal

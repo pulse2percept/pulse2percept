@@ -153,8 +153,8 @@ class ScoreboardSpatial(SpatialModel):
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Depth (um) the implant is placed at, added to every electrode's
-        local ``z``.
+        Signed offset (um) along the tissue plane's normal, carried by
+        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
@@ -314,8 +314,8 @@ class ScoreboardModel(Model):
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Depth (um) the implant is placed at, added to every electrode's
-        local ``z``.
+        Signed offset (um) along the tissue plane's normal, carried by
+        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
@@ -455,8 +455,8 @@ class AxonMapSpatial(SpatialModel):
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Depth (um) the implant is placed at, added to every electrode's
-        local ``z``.
+        Signed offset (um) along the tissue plane's normal, carried by
+        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
@@ -1233,8 +1233,8 @@ class AxonMapModel(Model):
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Depth (um) the implant is placed at, added to every electrode's
-        local ``z``.
+        Signed offset (um) along the tissue plane's normal, carried by
+        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
