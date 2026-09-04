@@ -99,13 +99,22 @@ Models
 * Named implants no longer take ``x``/``y``: their electrodes describe the
   device about its own ``(0, 0)`` origin, and where it is implanted is the
   spatial model's ``implant_pos``. ``rot`` stays on the implant as local
-  orientation, and per-electrode ``z`` stays local geometry, with
-  ``implant_z`` supplying the global depth. The cortical defaults that
-  encoded a placement (``Cortivis(x=20000, y=-5000)``,
-  ``ICVP``/``Orion(x=15000)``) are gone; pass e.g.
-  ``implant_pos=(20, -5) * mm`` to the model instead. ``Electrode``,
+  orientation. The cortical defaults that encoded a placement
+  (``Cortivis(x=20000, y=-5000)``, ``ICVP``/``Orion(x=15000)``) are gone;
+  pass e.g. ``implant_pos=(20, -5) * mm`` to the model instead. ``Electrode``,
   ``ElectrodeGrid`` and Neuralink threads keep ``x``/``y``/``z``, which are
   local geometry there (:pull:`N`).
+
+* Flat named retinal arrays now default to ``z=0``: the ``z=-100`` that
+  Alpha-IMS and the PRIMA family used to carry was electrode-retina distance,
+  which is placement and belongs in ``implant_z``. Per-electrode ``z`` remains
+  available for real non-planarity, and fixed shank depths (CORTIVIS
+  -1500 um, ICVP -650/-850 um) stay device geometry (:pull:`N`).
+
+* ``EnsembleImplant([Orion(), Orion(x=-35000)])`` no longer works, since named
+  implants have no ``x``. Build an ensemble with
+  :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords`, which takes
+  the positions directly (:pull:`N`).
 
 * New ``location_noise`` parameter displaces each electrode's phosphene by a
   fixed, subject-specific offset in the visual field (dva) rather than at the

@@ -31,8 +31,8 @@ class BVT24(Implant):
     -   2 return electrodes with 2000um diameter (Electrodes R1, R2)
 
     Electrodes C21a-m are typically being ganged to provide an external
-    ring for common ground. The center of the array is assumed to lie
-    between Electrodes C7, C8, C9, and C13.
+    ring for common ground. The array's own ``(0, 0)`` origin is assumed to
+    lie between Electrodes C7, C8, C9, and C13.
 
     .. note::
 
@@ -142,8 +142,8 @@ class BVT44(Implant):
     [Petoe2021]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
 
-    The center of the array (x,y,z) is located at the center of electrodes
-    D4, D5, C4, and E4, and the  array is rotated counter-clockwise by rotation
+    The array's own ``(0, 0)`` origin lies at the center of electrodes D4,
+    D5, C4 and E4, and the array is rotated counter-clockwise by rotation
     angle ``rot``, given in degrees.
 
     The array consists of:

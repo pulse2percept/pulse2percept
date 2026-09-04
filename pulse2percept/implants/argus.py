@@ -81,23 +81,22 @@ class ArgusI(Implant):
 
     Examples
     --------
-    Create an Argus I array centered on the fovea, at 100um distance from
-    the retina, rotated counter-clockwise by 5 degrees:
+    Create an Argus I array, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import ArgusI
-    >>> ArgusI(z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> ArgusI(rot=5)  # doctest: +NORMALIZE_WHITESPACE
     ArgusI(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
            safe_mode=False, shape=(4, 4))
 
     Get access to electrode 'B1', either by name or by row/column index:
 
-    >>> argus = ArgusI(z=100, rot=0)
+    >>> argus = ArgusI(rot=0)
     >>> argus['B1']  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='B1', radius=250.0,
-                  x=-400.0, y=-1200.0, z=100.0)
+                  x=-400.0, y=-1200.0, z=0.0)
     >>> argus[0, 1]  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='B1', radius=250.0,
-                  x=-400.0, y=-1200.0, z=100.0)
+                  x=-400.0, y=-1200.0, z=0.0)
 
     """
     # Frozen class: User cannot add more class attributes
@@ -240,24 +239,23 @@ class ArgusII(Implant):
 
     Examples
     --------
-    Create an ArgusII array centered on the fovea, at 100um distance from
-    the retina, rotated counter-clockwise by 5 degrees:
+    Create an Argus II array, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import ArgusII
-    >>> ArgusII(z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> ArgusII(rot=5)  # doctest: +NORMALIZE_WHITESPACE
     ArgusII(electrode_array=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
             preprocess=True, raster=SequentialRaster, safe_mode=False,
             shape=(6, 10))
 
     Get access to electrode 'E7', either by name or by row/column index:
 
-    >>> argus = ArgusII(z=100, rot=0)
+    >>> argus = ArgusII(rot=0)
     >>> argus['E7']  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='E7', radius=112.5,
-                  x=862.5, y=862.5, z=100.0)
+                  x=862.5, y=862.5, z=0.0)
     >>> argus[4, 6]  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='E7', radius=112.5,
-                  x=862.5, y=862.5, z=100.0)
+                  x=862.5, y=862.5, z=0.0)
 
     Because the device brings its own encoder, a picture can be presented
     directly and comes back as current:

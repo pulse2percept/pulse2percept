@@ -57,24 +57,23 @@ class AlphaIMS(Implant):
 
     Examples
     --------
-    Create an Alpha-IMS array centered on the fovea, at 100um distance from
-    the retina, rotated counter-clockwise by 5 degrees:
+    Create an Alpha-IMS array, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import AlphaIMS
-    >>> AlphaIMS(z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> AlphaIMS(rot=5)  # doctest: +NORMALIZE_WHITESPACE
     AlphaIMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
              safe_mode=False, shape=(39, 39))
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
 
-    >>> alpha_ims = AlphaIMS(z=100, rot=0)
+    >>> alpha_ims = AlphaIMS(rot=0)
     >>> alpha_ims['A3']  # doctest: +NORMALIZE_WHITESPACE
     SquareElectrode(activated=True, name='A3', side_length=50.0,
-                    x=-1224.0, y=-1368.0, z=100.0)
+                    x=-1224.0, y=-1368.0, z=0.0)
     >>> alpha_ims[0, 2]  # doctest: +NORMALIZE_WHITESPACE
     SquareElectrode(activated=True, name='A3', side_length=50.0,
-                    x=-1224.0, y=-1368.0, z=100.0)
+                    x=-1224.0, y=-1368.0, z=0.0)
 
     """
     # Frozen class: User cannot add more class attributes
@@ -82,7 +81,7 @@ class AlphaIMS(Implant):
 
     placement = 'subretinal'
 
-    def __init__(self, z=-100, rot=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -101,7 +100,7 @@ class AlphaIMS(Implant):
         # In this case, don't pass it to ElectrodeGrid, but overwrite
         # the z values later:
         overwrite_z = isinstance(z, (list, np.ndarray))
-        zarr = -100.0 if overwrite_z else z
+        zarr = 0.0 if overwrite_z else z
         self.electrode_array = ElectrodeGrid(
             self.shape, e_spacing, z=zarr, rot=rot,
             electrode_type=SquareElectrode, side_length=elec_width)
@@ -197,24 +196,23 @@ class AlphaAMS(Implant):
 
     Examples
     --------
-    Create an AlphaAMS array centered on the fovea, at 100um distance from
-    the retina, rotated counter-clockwise by 5 degrees:
+    Create an AlphaAMS array, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import AlphaAMS
-    >>> AlphaAMS(z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> AlphaAMS(rot=5)  # doctest: +NORMALIZE_WHITESPACE
     AlphaAMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
              safe_mode=False, shape=(40, 40))
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
 
-    >>> alpha_ims = AlphaAMS(z=100, rot=0)
+    >>> alpha_ims = AlphaAMS(rot=0)
     >>> alpha_ims['A3']  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='A3', radius=15.0,
-                  x=-1225.0, y=-1365.0, z=100.0)
+                  x=-1225.0, y=-1365.0, z=0.0)
     >>> alpha_ims[0, 2]  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='A3', radius=15.0,
-                  x=-1225.0, y=-1365.0, z=100.0)
+                  x=-1225.0, y=-1365.0, z=0.0)
 
     """
     # Frozen class: User cannot add more class attributes

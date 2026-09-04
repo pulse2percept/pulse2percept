@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.models.cortex import DynaphosModel
 from pulse2percept.models.cortex.dynaphos import _pulse_train_clocks
+from pulse2percept.models.base import _placement_shift
 from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
                                     EnsembleImplant, Implant)
 from pulse2percept.implants.cortex import Cortivis, Orion
@@ -15,8 +16,8 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulseTrain,
                                    BiphasicPulseTrain, ImageStimulus,
                                    Stimulus)
-from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
-                                 mm, ms, s, uA, um)
+from pulse2percept.units import (DimensionMismatchError, Quantity, dva,
+                                 mA, mm, ms, s, uA, um)
 
 def test_DynaphosModel():
     model = DynaphosModel(implant=Cortivis(), implant_pos=(20, -5) * mm,
@@ -367,6 +368,21 @@ def _brightest_dva(percept, grid):
     frame = percept.data[..., -1]
     idx = np.unravel_index(np.argmax(frame), frame.shape)
     return np.array([float(grid.x[idx]), float(grid.y[idx])])
+
+
+def test_dynaphos_places_an_implant_by_visual_field_position():
+    """A dva `implant_pos` names the cortical image of that location"""
+    implant = Cortivis()
+    model = DynaphosModel(implant=implant, implant_pos=(6, -2) * dva)
+    npt.assert_almost_equal(
+        _placement_shift(model, um)[:2],
+        model.visual_field_map.dva_to_v1(6.0, -2.0), decimal=2)
+    # ... and it agrees with naming the same spot physically:
+    physical = DynaphosModel(
+        implant=implant,
+        implant_pos=model.visual_field_map.dva_to_v1(6.0, -2.0) * um)
+    npt.assert_almost_equal(_placement_shift(physical, um),
+                            _placement_shift(model, um), decimal=2)
 
 
 def test_location_noise():

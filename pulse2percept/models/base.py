@@ -599,8 +599,13 @@ def _warn_rho_vs_pitch(model):
 
 
 def _warn_ignores_z(model, electrode_array):
-    """Warn when a model ignores nonzero electrode ``z`` coordinates."""
-    if np.allclose([e.z for e in electrode_array.electrode_objects], 0):
+    """Warn when a model ignores nonzero electrode ``z`` coordinates.
+
+    Reads the placed coordinates, so ``implant_z`` counts as depth just as a
+    per-electrode ``z`` does.
+    """
+    if np.allclose(_placed_coords(model, electrode_array,
+                                  model.space_unit)[:, 2], 0):
         return
     warnings.warn(
         f"{type(model).__name__} does not model electrode-retina distance: "
@@ -698,6 +703,16 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
                 or stim.time_unit == self.time_unit:
             return t
         return Quantity(t, self.time_unit).to_value(stim.time_unit)
+
+    def _normalize_param_value(self, name, value):
+        """Normalize a parameter to its stored unit.
+
+        ``implant_pos`` is stored as given: whether it is a tissue position or
+        a visual field one decides how `_placement_shift` reads it.
+        """
+        if name == 'implant_pos':
+            return value
+        return super()._normalize_param_value(name, value)
 
     def _electrode_coords(self, electrode_array, stim, electrodes=None):
         """Return stimulus electrode coordinates in ``space_unit``.
@@ -932,10 +947,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if name in ('xrange', 'yrange') and _length_valued(value):
             return self._retinal_range_to_dva(name, value)
-        if name == 'implant_pos':
-            # Tissue position or visual field position; which one it is
-            # decides how it is read, so it is stored unconverted.
-            return value
         return super()._normalize_param_value(name, value)
 
     def _retinal_range_to_dva(self, name, value):

@@ -1288,3 +1288,21 @@ def test_one_implant_serves_two_models_at_different_depths():
     # Non-planarity is device geometry and is not flattened by placement:
     npt.assert_almost_equal(np.diff(deep), np.diff(local[:, 2]), decimal=3)
     npt.assert_array_equal(implant.electrode_array.coordinates(), local)
+
+
+def test_a_flat_named_array_is_flat_in_its_own_frame():
+    """Electrode-retina distance is placement, so it is not baked into z"""
+    for implant_type in (implants.AlphaIMS, implants.AlphaAMS,
+                         implants.ArgusI, implants.ArgusII, implants.BVT24,
+                         implants.BVT44, implants.IMIE,
+                         implants.PRIMAPivotal, implants.Lorach2015Array,
+                         partial(implants.Ho2019FlatArray, 55),
+                         partial(implants.Huang2021Array, 55)):
+        z = implant_type().electrode_array.coordinates()[:, 2]
+        npt.assert_almost_equal(z, 0, decimal=9,
+                                err_msg=_name_of(implant_type))
+    # Fixed shank lengths are real device geometry and stay:
+    for implant_type, depths in [(cortex.Cortivis, {-1500.0}),
+                                 (cortex.ICVP, {-650.0, -850.0})]:
+        z = implant_type().electrode_array.coordinates()[:, 2]
+        npt.assert_equal(set(np.round(z, 6)), depths)

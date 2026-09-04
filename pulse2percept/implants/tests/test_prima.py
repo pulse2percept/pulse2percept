@@ -430,7 +430,7 @@ def test_Huang2021Array_placement(pixel_size):
     # The footprint is centered on the device's own origin:
     npt.assert_almost_equal(0.5 * (xy.min(axis=0) + xy.max(axis=0)), (0, 0))
 
-    unitful = Huang2021Array(pixel_size * um, z=-0.1 * mm, rot=rot * deg)
+    unitful = Huang2021Array(pixel_size * um, rot=rot * deg)
     npt.assert_equal(list(unitful.electrode_array.electrodes),
                      list(moved.electrode_array.electrodes))
     npt.assert_allclose(unitful.electrode_array.coordinates(),

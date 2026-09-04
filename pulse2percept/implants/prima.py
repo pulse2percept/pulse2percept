@@ -347,7 +347,7 @@ class PRIMAPivotal(Implant):
     #: The device is illuminated, not driven by a current source.
     stimulus_unit = mW / mm ** 2
 
-    def __init__(self, z=-100, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
                  safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.spacing = 100  # um, nearest-neighbor center-to-center
         self.pixel_width = 100  # um, flat-to-flat
@@ -368,7 +368,7 @@ class PRIMAPivotal(Implant):
         z = as_value(z, um, 'z')
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
-        zarr = -100 if overwrite_z else z
+        zarr = 0 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
             self.shape, self.spacing, z=zarr, rot=rot,
@@ -545,7 +545,7 @@ class Lorach2015Array(Implant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, z=-100, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
         self.spacing = 75  # um, nearest-neighbor center-to-center
         self.pixel_width = 70  # um, flat-to-flat
@@ -563,7 +563,7 @@ class Lorach2015Array(Implant):
         z = as_value(z, um, 'z')
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
-        zarr = -100 if overwrite_z else z
+        zarr = 0 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
             self.shape, self.spacing, z=zarr, rot=rot,
@@ -667,7 +667,7 @@ class Ho2019FlatArray(Implant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, pixel_size, z=-100, rot=0, eye='RE',
+    def __init__(self, pixel_size, z=0, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HO2019_VARIANTS,
                                          'Ho2019FlatArray')
@@ -686,7 +686,7 @@ class Ho2019FlatArray(Implant):
         z = as_value(z, um, 'z')
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
-        zarr = -100 if overwrite_z else z
+        zarr = 0 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
             self.shape, self.spacing, z=zarr, rot=rot,
@@ -785,7 +785,7 @@ class Huang2021Array(Implant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, pixel_size, z=-100, rot=0, eye='RE',
+    def __init__(self, pixel_size, z=0, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HUANG2021_AXIAL_SPANS,
                                          'Huang2021Array')
@@ -807,7 +807,7 @@ class Huang2021Array(Implant):
         z = as_value(z, um, 'z')
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
-        zarr = -100 if overwrite_z else z
+        zarr = 0 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
             self.shape, self.spacing, z=zarr, rot=rot,
@@ -859,7 +859,7 @@ class PRIMA55(Ho2019FlatArray):
     """
     __slots__ = ()
 
-    def __init__(self, z=-100, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
         super().__init__(55, z=z, rot=rot, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)
@@ -879,7 +879,7 @@ class PRIMA40(Ho2019FlatArray):
     """
     __slots__ = ()
 
-    def __init__(self, z=-100, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
         super().__init__(40, z=z, rot=rot, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)

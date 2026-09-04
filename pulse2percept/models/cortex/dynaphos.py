@@ -269,7 +269,6 @@ class DynaphosModel(BaseModel):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
-            'implant_pos': um,
             'implant_z': um,
             'location_noise': dva,
             'dt': ms,
