@@ -85,6 +85,13 @@ class Implant(PrettyPrint):
         (e.g. ``0.1 * mA``); see :py:mod:`pulse2percept.units`.
 
         .. versionadded:: 0.10.0
+    scene_input_frame : 'eye' or 'head', optional
+        How gaze registers a scene onto this system, overriding what the
+        device class does, e.g. ``'eye'`` for an Argus II run with eye
+        tracking. See
+        :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`.
+
+        .. versionadded:: 0.11.0
     thresholds : float, Quantity, or dict, optional
         Perceptual threshold current (uA) used to calibrate threshold-relative
         (``xTh``) stimuli. A scalar applies to every electrode; a dict
@@ -105,7 +112,8 @@ class Implant(PrettyPrint):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_electrode_array', '_eye', 'safe_mode', 'preprocess',
-                 '_encoder', '_raster', '_max_current', '_thresholds')
+                 '_encoder', '_raster', '_max_current', '_thresholds',
+                 '_scene_input_frame')
 
     #: Unit used by prepared stimuli. Defaults to electrical current.
     stimulus_unit = uA
@@ -123,13 +131,19 @@ class Implant(PrettyPrint):
     #: .. versionadded:: 0.11.0
     family = None
 
+    #: What :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`
+    #: falls back to for devices of this class. Subclasses describing a
+    #: head-fixed-camera system override it.
+    _default_scene_input_frame = 'eye'
+
     def __init__(self, electrode_array, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
-                 thresholds=None):
+                 thresholds=None, scene_input_frame=None):
         self.electrode_array = electrode_array
         self.eye = eye
         self.safe_mode = safe_mode
         self.preprocess = preprocess
+        self.scene_input_frame = scene_input_frame
         self.encoder = encoder
         self.raster = raster
         self.max_current = max_current
@@ -153,7 +167,33 @@ class Implant(PrettyPrint):
             params['max_current'] = self.max_current
         if self.thresholds:
             params['thresholds'] = self.thresholds
+        if getattr(self, '_scene_input_frame', None) is not None:
+            params['scene_input_frame'] = self.scene_input_frame
         return params
+
+    @property
+    def scene_input_frame(self):
+        """Coordinate frame used to register scene input.
+
+        ``'eye'`` means gaze changes which scene content reaches the implant;
+        ``'head'`` means scene input is fixed relative to the head.
+
+        Defaults to ``default_scene_input_frame``. Setting to ``None`` restores
+        that default.
+
+        .. versionadded:: 0.11.0
+
+        """
+        frame = getattr(self, '_scene_input_frame', None)
+        return self._default_scene_input_frame if frame is None else frame
+
+    @scene_input_frame.setter
+    def scene_input_frame(self, frame):
+        if frame is not None and frame not in ('eye', 'head'):
+            raise ValueError(f"'scene_input_frame' says how gaze registers a "
+                             f"scene onto the implant and must be 'eye' or "
+                             f"'head', not {frame!r}.")
+        self._scene_input_frame = frame
 
     @property
     def encoder(self):
@@ -817,14 +857,15 @@ class GridImplant(Implant):
                  grid_type='rect', orientation='horizontal',
                  electrode_type=PointSource, eye='RE', preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
-                 **electrode_params):
+                 scene_input_frame=None, **electrode_params):
         electrode_array = ElectrodeGrid(
             shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
             grid_type=grid_type, orientation=orientation,
             electrode_type=electrode_type, **electrode_params)
         super().__init__(electrode_array, eye=eye, preprocess=preprocess,
                          safe_mode=safe_mode, encoder=encoder, raster=raster,
-                         max_current=max_current)
+                         max_current=max_current,
+                         scene_input_frame=scene_input_frame)
 
 
 @deprecated(alt_func='GridImplant', deprecated_version='0.11.0',

@@ -52,6 +52,7 @@ class IMIE(Implant):
     __slots__ = ('shape',)
 
     placement = 'epiretinal'
+    _default_scene_input_frame = 'head'
 
     def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True, safe_mode=False):
         self.eye = eye

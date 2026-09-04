@@ -18,6 +18,7 @@ from ..topography import Curcio1990Map, Grid2D, RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva, ms,
                      um, uA)
 from ..vision import Scene
+from ..vision.scene import _gaze_points
 from ..utils import PrettyPrint, Frozen, Parametrized
 from ..utils.base import _is_constructing
 from ..utils.constants import ZORDER
@@ -298,7 +299,16 @@ def _scene_stim(model, scene, gaze):
     xy = implant.electrode_array.coordinates(
         visual_field_map.tissue_unit)[:, :2].T
     x_vf, y_vf = visual_field_map.ret_to_dva(*xy)
-    gray = device_scene._device_input(x_vf, y_vf, gaze=gaze)
+    frame = implant.scene_input_frame
+    if frame not in ('eye', 'head'):
+        # Validate class defaults as well as instance overrides:
+        raise ValueError(f"This implant's 'scene_input_frame' is {frame!r}, "
+                         f"which says nothing about how gaze registers the "
+                         f"scene onto it; expected 'eye' or 'head'.")
+    # Head-fixed input ignores gaze when sampling, but gaze is still validated:
+    _gaze_points(gaze, device_scene.n_frames)
+    input_gaze = gaze if frame == 'eye' else None
+    gray = device_scene._device_input(x_vf, y_vf, gaze=input_gaze)
     if device_scene.time is None:
         # A still scene is sampled as a one-frame movie; a `Stimulus` with no
         # time axis wants that frame axis gone, or it reads the frame as a
@@ -1587,8 +1597,13 @@ class Model(Frozen, PrettyPrint):
         t_percept : float or array-like, optional
             Output times in ``time_unit``. Unitful times are accepted.
         gaze : (x, y) or (n_frames, 2), optional
-            Scene location falling on the fovea, in degrees of visual angle.
-            Requires ``source`` to be a scene.
+            Scene location falling on the fovea, in degrees of visual angle,
+            so that ``scene = eye-centered visual field + gaze``. Requires
+            ``source`` to be a scene. Gaze always moves the percept across
+            the scene; it moves the scene across the electrodes too unless the
+            implant's
+            :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is
+            ``'head'``.
         vmax : float, optional
             Percept brightness mapped to white when composing a scene with a
             scotoma. Required for scotoma composition.

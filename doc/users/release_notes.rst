@@ -23,7 +23,8 @@ Highlights
 * New :py:mod:`pulse2percept.vision` module with
   :py:class:`~pulse2percept.vision.Scene` and
   :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
-  residual vision and retinal prostheses (:pull:`854`, :pull:`871`).
+  residual vision and retinal prostheses (:pull:`854`, :pull:`871`, 
+  :pull:`883`).
 
 * New photovoltaic stimulation pipeline for
   :py:class:`~pulse2percept.implants.PRIMAPivotal`, from image encoding to
