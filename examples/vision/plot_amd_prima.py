@@ -31,9 +31,12 @@ from pulse2percept.units import dva
 from pulse2percept.vision import Scene, Scotoma
 
 ###############################################################################
-# Geographic atrophy is rarely a circle centered on the fovea:
+# Geographic atrophy is rarely a circle centered on the fovea. The same center
+# is used twice below: once for the lesion, and once to place the implant
+# inside it.
 
-scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=(6, -2) * dva)
+center = (6, -2) * dva
+scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=center)
 
 ###############################################################################
 # ``scotoma_fill`` determines what a user inside the scotoma sees.
@@ -53,11 +56,22 @@ scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=(6, -2) * dva)
 # the default black. ``rings=True`` adds 5-degree rings about the
 # fovea; they are drawn on top and change nothing about the scene.
 
-scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma,
-              scotoma_fill='inpaint', background=1)
+logo = LogoBVL(resize=(240, 300))
+filled_in = Scene(logo, fov=40 * dva, scotoma=scotoma,
+                  scotoma_fill='inpaint', background=1)
 
-scene.plot(gaze=(0, 0) * dva, rings=True)
-plt.title('Native vision alone')
+filled_in.plot(gaze=(0, 0) * dva, rings=True)
+plt.title('Native vision alone, with filling-in')
+
+###############################################################################
+# ``'inpaint'`` cannot be combined with a prosthetic percept: the inpainted
+# scene would act as a brightness floor inside the scotoma, so an
+# unstimulated electrode could never read dark, and how filling-in interacts
+# with prosthetic vision is not modeled here. The scenes below therefore use
+# a numeric fill, and black is the honest choice for what the device draws on.
+
+scene = Scene(logo, fov=40 * dva, scotoma=scotoma, scotoma_fill=0,
+              background=1)
 
 ###############################################################################
 
@@ -67,9 +81,15 @@ plt.title('Native vision alone')
 implant = PRIMAPivotal()
 
 ###############################################################################
+# ``PRIMAPivotal`` is built about the fovea, which is exactly where this
+# patient has no photoreceptors left to spare. ``implant_offset`` moves the
+# whole array into the lesion: it is a visual-field displacement, resolved
+# through the model's ``visual_field_map`` into a single retinal translation,
+# so the 100 um pixel pitch is unchanged and the implant object itself is
+# left alone. The grid is widened to cover where the array now sits.
 
-model = ScoreboardModel(implant=implant, rho=50, xrange=(-6, 6),
-                        yrange=(-6, 6), step=0.05)
+model = ScoreboardModel(implant=implant, implant_offset=center, rho=50,
+                        xrange=(0, 12), yrange=(-8, 4), step=0.05)
 
 ###############################################################################
 # The scene is trial input, like any other stimulus:
@@ -80,6 +100,8 @@ percept.plot()
 plt.title('Native vision with a PRIMA percept in the scotoma')
 
 ###############################################################################
+# The lesion is eye-centered and the implant is on the retina, so both travel
+# together when the eye moves:
 
 percept = model.predict_percept(scene, gaze=(8, -4) * dva, vmax=2)
 

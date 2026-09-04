@@ -590,6 +590,14 @@ class Scene(PrettyPrint):
 
     def _compose(self, prosthetic, vmax, vmin=0, gaze=None):
         """Native vision with a prosthetic percept painted into the loss"""
+        if self._scotoma_fill == _INPAINT:
+            raise ValueError(
+                f"scotoma_fill={_INPAINT!r} cannot be combined with a "
+                f"prosthetic percept: filling-in and prosthetic vision would "
+                f"have to be added up, and their interaction is not modeled. "
+                f"Use a numeric 'scotoma_fill' (e.g. 0) for prosthetic "
+                f"composition; {_INPAINT!r} stays available for native "
+                f"vision, e.g. Scene.plot.")
         if not isinstance(prosthetic, Percept):
             raise TypeError(f"'prosthetic' must be a Percept, not "
                             f"{type(prosthetic)}.")

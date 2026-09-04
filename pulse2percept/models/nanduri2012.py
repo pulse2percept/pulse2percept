@@ -107,6 +107,14 @@ class Nanduri2012Spatial(SpatialModel):
         noise : float, int, or None, optional
             Salt-and-pepper noise applied to each percept frame. An integer gives
             the number of affected pixels; a float in [0, 1] gives their fraction.
+        implant_offset : (x, y) or Quantity, optional
+            Visual field displacement of the whole implant, in dva,
+            resolved through ``visual_field_map`` into one tissue
+            translation. A nonzero offset requires an invertible retinal
+            map. The implant's own coordinates are left unchanged.
+
+            .. versionadded:: 0.11.0
+
         location_noise : float or None, optional
             Standard deviation of fixed electrode-specific phosphene offsets, in dva.
             Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -129,6 +137,7 @@ class Nanduri2012Spatial(SpatialModel):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_offset=(0, 0),
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -139,6 +148,7 @@ class Nanduri2012Spatial(SpatialModel):
             visual_field_map=(Curcio1990Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
+            implant_offset=implant_offset,
             location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -370,6 +380,14 @@ class Nanduri2012Model(Model):
             gray-level quantization.
         noise : float, int, or None, optional
             Salt-and-pepper noise applied to each percept frame.
+        implant_offset : (x, y) or Quantity, optional
+            Visual field displacement of the whole implant, in dva,
+            resolved through ``visual_field_map`` into one tissue
+            translation. A nonzero offset requires an invertible retinal
+            map. The implant's own coordinates are left unchanged.
+
+            .. versionadded:: 0.11.0
+
         location_noise : float or None, optional
             Standard deviation of fixed electrode-specific phosphene offsets, in dva.
             Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -423,6 +441,7 @@ class Nanduri2012Model(Model):
                  grid_type='rect', min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
+                 implant_offset=(0, 0),
                  location_noise=None, ndim=None, dt=0.005, tau1=0.42,
                  tau2=45.25, tau3=26.25, eps=8.73, asymptote=14.0, slope=3.0,
                  shift=16.0, scale_out=1.0, reduce='last', thresh_percept=0,
@@ -436,6 +455,7 @@ class Nanduri2012Model(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
+                implant_offset=implant_offset,
                 location_noise=location_noise, ndim=ndim,
                 thresh_percept=thresh_percept, verbose=verbose,
                 n_threads=n_threads, n_jobs=n_jobs),

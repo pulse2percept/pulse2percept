@@ -281,7 +281,8 @@ def _scene_stim(model, scene, gaze):
                          "needs a spatial model. This model has only a "
                          "temporal one.")
     implant = model.implant
-    visual_field_map = getattr(model.spatial, 'visual_field_map', None)
+    spatial = model.spatial
+    visual_field_map = getattr(spatial, 'visual_field_map', None)
     if not isinstance(visual_field_map, RetinalMap):
         raise ValueError(
             f"A scene reaches the electrodes through the model's "
@@ -296,8 +297,8 @@ def _scene_stim(model, scene, gaze):
             "'encoder' (e.g. an AmplitudeEncoder, or a PRIMAEncoder for a "
             "photovoltaic device) to say how.")
     device_scene = _device_scene(scene, implant)
-    xy = implant.electrode_array.coordinates(
-        visual_field_map.tissue_unit)[:, :2].T
+    xy = _placed_coords(spatial, implant.electrode_array,
+                        visual_field_map.tissue_unit)[:, :2].T
     x_vf, y_vf = visual_field_map.ret_to_dva(*xy)
     frame = implant.scene_input_frame
     if frame not in ('eye', 'head'):
@@ -362,6 +363,52 @@ def _blend_meridian(resp, grid, meridian, width):
     np.multiply(blurred, weight, out=blurred)
     np.add(blurred, work, out=blurred)
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
+
+
+def _implant_translation(model, unit):
+    """Return ``implant_offset`` as a single tissue translation, in ``unit``"""
+    # Cortical models that redeclare their parameters may not have it:
+    offset = getattr(model, 'implant_offset', None)
+    if offset is None:
+        return None
+    offset = np.asarray(offset, dtype=float).ravel()
+    if offset.size != 2 or not np.all(np.isfinite(offset)):
+        raise ValueError(f"implant_offset must be a finite (x, y) pair of "
+                         f"visual field degrees, not {offset.tolist()}.")
+    if not np.any(offset):
+        return None
+    vfmap = model.visual_field_map
+    if not isinstance(vfmap, RetinalMap):
+        raise NotImplementedError(
+            f"implant_offset places an implant in the visual field, which "
+            f"requires an invertible retinal map. This model's "
+            f"visual_field_map is a {type(vfmap).__name__}.")
+    coords = model.implant.electrode_array.coordinates(vfmap.tissue_unit)
+    anchor = coords[:, :2].mean(axis=0)
+    try:
+        x_dva, y_dva = vfmap.ret_to_dva(float(anchor[0]), float(anchor[1]))
+    except NotImplementedError:
+        raise NotImplementedError(
+            f"implant_offset turns a visual field displacement into a tissue "
+            f"translation, so {type(vfmap).__name__} has to map tissue "
+            f"coordinates back to dva, and it cannot.") from None
+    moved = vfmap.dva_to_ret(float(x_dva) + offset[0],
+                             float(y_dva) + offset[1])
+    shift = np.asarray(moved, dtype=float).ravel()[:2] - anchor
+    if not np.all(np.isfinite(shift)):
+        raise ValueError(
+            f"implant_offset {tuple(offset)} dva would place this implant "
+            f"where {type(vfmap).__name__} has no tissue coordinates.")
+    return Quantity(shift, vfmap.tissue_unit).to_value(unit)
+
+
+def _placed_coords(model, electrode_array, unit, electrodes=None):
+    """Electrode coordinates in ``unit``, with ``implant_offset`` applied"""
+    xyz = electrode_array.coordinates(unit, electrodes=electrodes)
+    shift = _implant_translation(model, unit)
+    if shift is None:
+        return xyz
+    return xyz + np.array([shift[0], shift[1], 0.0])
 
 
 def _location_noise_sigma(model):
@@ -701,6 +748,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. versionadded:: 0.11.0
 
+    implant_offset : (x, y) or Quantity, optional
+        Where the implant sits in the visual field, in dva, relative to where
+        its own coordinates put it. Resolved through ``visual_field_map`` into
+        a single tissue translation that is added to every electrode, so the
+        physical array is moved rather than warped, and the implant object
+        itself is left unchanged. A nonzero offset requires an invertible
+        retinal map. Separate from ``location_noise``, which perturbs
+        individual phosphene locations afterwards.
+
+        .. versionadded:: 0.11.0
+
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. On retinal
         maps, a physical retinal extent may be given instead and is resolved
@@ -875,6 +933,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
+            'implant_offset': (0, 0),  # dva
             'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
             'step': 0.25,  # dva
@@ -905,6 +964,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # The simulated patch of visual field is specified in degrees of
             # visual angle; the visual field map turns those into tissue
             # coordinates when the grid is built:
+            'implant_offset': dva,
             'xrange': dva,
             'yrange': dva,
             'step': dva,
@@ -988,14 +1048,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                           region=None):
         """Return the electrode coordinates the spatial kernel is given.
 
-        With ``location_noise`` set, these are the effective coordinates of
-        electrodes displaced in the visual field, not the implant's own; see
-        `_displaced_coords`. ``region`` names the visual field map region to
-        displace through, and defaults to the only one the map has.
+        These are the implant's own coordinates translated by
+        ``implant_offset`` (see `_placed_coords`) and, with ``location_noise``
+        set, further displaced in the visual field (see `_displaced_coords`).
+        ``region`` names the visual field map region to displace through, and
+        defaults to the only one the map has.
         """
         if electrodes is None:
             electrodes = stim.electrodes
-        xyz = super()._electrode_coords(electrode_array, stim, electrodes)
+        xyz = tuple(np.ascontiguousarray(c, dtype=np.float32)
+                    for c in _placed_coords(self, electrode_array,
+                                            self.space_unit, electrodes).T)
         offsets = _electrode_offsets(self, electrodes)
         if offsets is None:
             return xyz
