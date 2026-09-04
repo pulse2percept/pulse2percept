@@ -8,7 +8,7 @@ from ..base import (BaseModel, _check_implant, _electrode_offsets,
                     _require_stim_dimension)
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
-from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
+from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA, um
 from ...utils import cart2pol
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
@@ -203,6 +203,10 @@ class DynaphosModel(BaseModel):
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
                 'noise': None,
+                # Tissue position of the implant's local origin, and its
+                # depth (um):
+                'implant_pos': (0, 0),
+                'implant_z': 0,
                 # Subject-specific phosphene displacement (dva):
                 'location_noise': None,
                 # True: print status messages, 0: silent
@@ -249,6 +253,8 @@ class DynaphosModel(BaseModel):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
+            'implant_pos': um,
+            'implant_z': um,
             'location_noise': dva,
             'dt': ms,
             # Decay constants, both converted to seconds where they are used:

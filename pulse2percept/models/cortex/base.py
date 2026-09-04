@@ -70,6 +70,21 @@ class CortexSpatial(SpatialModel):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    implant_pos : (x, y) or Quantity, optional
+        Tissue position of the implant's local ``(0, 0)`` origin. A
+        dva position names the cortical representation of that visual
+        field location and is resolved through ``visual_field_map``,
+        which must map it onto a single region; a physical position is
+        used as given. Defaults to the tissue origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_z : float or Quantity, optional
+        Depth the implant is placed at (um), added to every
+        electrode's local ``z``.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -142,9 +157,6 @@ class CortexSpatial(SpatialModel):
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(CortexSpatial, self).get_default_params()
-        # `implant_offset` is resolved through a retinal map, which a cortical
-        # model does not have:
-        base_params.pop('implant_offset', None)
         params = {
                     'xrange' : (-5, 5),
                     'yrange' : (-5, 5),
@@ -294,6 +306,21 @@ class ScoreboardSpatial(CortexSpatial):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    implant_pos : (x, y) or Quantity, optional
+        Tissue position of the implant's local ``(0, 0)`` origin. A
+        dva position names the cortical representation of that visual
+        field location and is resolved through ``visual_field_map``,
+        which must map it onto a single region; a physical position is
+        used as given. Defaults to the tissue origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_z : float or Quantity, optional
+        Depth the implant is placed at (um), added to every
+        electrode's local ``z``.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -319,6 +346,7 @@ class ScoreboardSpatial(CortexSpatial):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_pos=(0, 0), implant_z=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -328,6 +356,7 @@ class ScoreboardSpatial(CortexSpatial):
             min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
             n_gray=n_gray, noise=noise,
+            implant_pos=implant_pos, implant_z=implant_z,
             location_noise=location_noise, verbose=verbose,
             ndim=[2, 3] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -476,6 +505,21 @@ class ScoreboardModel(Model):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    implant_pos : (x, y) or Quantity, optional
+        Tissue position of the implant's local ``(0, 0)`` origin. A
+        dva position names the cortical representation of that visual
+        field location and is resolved through ``visual_field_map``,
+        which must map it onto a single region; a physical position is
+        used as given. Defaults to the tissue origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_z : float or Quantity, optional
+        Depth the implant is placed at (um), added to every
+        electrode's local ``z``.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -501,6 +545,7 @@ class ScoreboardModel(Model):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_pos=(0, 0), implant_z=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -512,6 +557,7 @@ class ScoreboardModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
+                implant_pos=implant_pos, implant_z=implant_z,
                 location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)

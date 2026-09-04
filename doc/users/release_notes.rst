@@ -101,9 +101,11 @@ Models
   location the ``visual_field_map`` gives it. Requires a 2D, invertible map
   (:pull:`881`).
 
-* New ``implant_offset`` parameter places an implant in the visual field
-  (dva), resolved through ``visual_field_map`` into one retinal translation
-  applied to every electrode; the implant itself is unchanged (:pull:`N`).
+* New ``implant_pos`` and ``implant_z`` parameters place an implant in the
+  modeled tissue: ``implant_pos`` says where its local ``(0, 0)`` origin
+  sits, in dva (resolved through ``visual_field_map``) or as a physical
+  position, and ``implant_z`` sets the depth. Both translate the array
+  rigidly and leave the implant itself unchanged (:pull:`N`).
 
 
 Residual vision

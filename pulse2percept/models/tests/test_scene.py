@@ -11,19 +11,19 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import (ElectrodeGrid, PointSource,
-                                    Implant)
+from pulse2percept.implants import (ElectrodeArray, ElectrodeGrid,
+                                    Implant, PointSource)
 from pulse2percept.models import (FadingTemporal, Model, ScoreboardModel,
                                   ScoreboardSpatial)
-from pulse2percept.models.base import _scene_stim
+from pulse2percept.models.base import _placement_shift, _scene_stim
 from pulse2percept.models.cortex import ScoreboardModel as CortexScoreboard
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, ImageStimulus,
                                    VideoStimulus)
-from pulse2percept.topography import Curcio1990Map, RetinalMap, Watson2014Map
-from pulse2percept.units import dva, ms, s
-from pulse2percept.utils import FreezeError
+from pulse2percept.topography import (Curcio1990Map, Polimeni2006Map,
+                                      RetinalMap, Watson2014Map)
+from pulse2percept.units import dva, ms, s, um
 from pulse2percept.vision import Scene, Scotoma
 
 #: A square scene laid out so that one pixel is exactly one degree and the
@@ -690,115 +690,157 @@ def test_a_bound_implant_survives_a_deepcopy():
                             seen_by(model, scene_of()))
 
 
-def test_implant_offset_defaults_to_leaving_the_implant_where_it_is():
-    scene = scene_of()
-    implant = implant_at(*Curcio1990Map().dva_to_ret(3.0, 1.0))
-    here = model_for(implant)
-    there = model_for(implant, implant_offset=(0, 0) * dva)
-    npt.assert_array_equal(seen_by(there, scene), seen_by(here, scene))
-    npt.assert_array_equal(there.predict_percept(scene).data,
-                           here.predict_percept(scene).data)
+def offset_implant(input_frame='eye'):
+    """Three electrodes whose centroid is nowhere near the local origin
+
+    Placement anchors on the array's own ``(0, 0)``, so an array that is not
+    centered on it reads back the difference.
+    """
+    array = ElectrodeArray([PointSource(0, 0, 0), PointSource(280, 0, 0),
+                            PointSource(560, 0, 0)])
+    return Implant(array, scene_input_frame=input_frame,
+                   encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
 
 
-def test_implant_offset_moves_what_the_electrodes_look_at():
-    """A visual field displacement, read back off the sampled scene"""
-    scene = scene_of()
-    implant = grid_implant()
-    at_origin = model_for(implant)
-    placed = model_for(implant, implant_offset=(6, -2) * dva)
-    # Curcio is linear, so six degrees of placement and six degrees of gaze
-    # land the electrodes on the same part of the scene:
-    npt.assert_almost_equal(seen_by(placed, scene),
-                            seen_by(at_origin, scene, gaze=(6, -2) * dva),
-                            decimal=4)
-    npt.assert_equal(np.allclose(seen_by(placed, scene),
-                                 seen_by(at_origin, scene)), False)
-    # Physical placement, so gaze still moves the scene past it:
-    npt.assert_almost_equal(seen_by(placed, scene, gaze=(2, 0) * dva),
-                            seen_by(at_origin, scene, gaze=(8, -2) * dva),
-                            decimal=4)
-
-
-def test_implant_offset_moves_the_percept_by_the_same_amount():
-    scene = scene_of(scotoma=Scotoma.circle(14), scotoma_fill=0.0)
-    implant = implant_at(0, 0)
-    fovea = model_for(implant, rho=80, xrange=(-8, 8), yrange=(-8, 8),
-                      step=0.5).predict_percept(scene, vmax=2).data[..., 0]
-    placed = model_for(implant, rho=80, xrange=(-8, 8), yrange=(-8, 8),
-                       step=0.5, implant_offset=(4, -3) * dva)
-    moved = placed.predict_percept(scene, vmax=2).data[..., 0]
-    # Row is -y, column is +x:
-    npt.assert_almost_equal(moved[HALF + 3, HALF + 4], fovea[HALF, HALF],
-                            decimal=4)
-
-
-def test_implant_offset_translates_rather_than_warps_the_array():
-    """One tissue translation, so physical spacing survives a nonlinear map"""
-    implant = grid_implant()
-    before = implant.electrode_array.coordinates()
-    visual_field_map = SquareMap()
-    model = model_for(implant, visual_field_map=visual_field_map,
-                      implant_offset=(7, 2) * dva)
+def placed_coords(model, implant):
+    """The tissue coordinates the model actually stimulates through"""
     stim = _scene_stim(model, scene_of(), None)
     x, y, z = model.spatial._electrode_coords(implant.electrode_array, stim)
-    after = np.column_stack((x, y, z)).astype(float)
-    npt.assert_almost_equal(np.diff(after, axis=0), np.diff(before, axis=0),
+    return np.column_stack((x, y, z)).astype(float)
+
+
+def test_implant_pos_defaults_to_the_tissue_origin():
+    """The default is exactly the unplaced implant, on any map"""
+    scene = scene_of()
+    implant = implant_at(*Curcio1990Map().dva_to_ret(3.0, 1.0))
+    for visual_field_map in (Curcio1990Map(), SquareMap()):
+        here = model_for(implant, visual_field_map=visual_field_map)
+        there = model_for(implant, visual_field_map=visual_field_map,
+                          implant_pos=(0, 0))
+        npt.assert_array_equal(seen_by(there, scene), seen_by(here, scene))
+        npt.assert_array_equal(there.predict_percept(scene).data,
+                               here.predict_percept(scene).data)
+        npt.assert_array_equal(placed_coords(there, implant),
+                               implant.electrode_array.coordinates())
+
+
+@pytest.mark.parametrize('visual_field_map', [Curcio1990Map(), SquareMap()])
+def test_implant_pos_puts_the_local_origin_exactly_there(visual_field_map):
+    """Absolute placement of the array's own (0, 0), not of its centroid"""
+    implant = offset_implant()
+    model = model_for(implant, visual_field_map=visual_field_map,
+                      implant_pos=(6, -2) * dva)
+    placed = placed_coords(model, implant)
+    # The electrode sitting at the implant's local origin lands on the
+    # requested visual field location; the centroid, 280 um away, does not.
+    npt.assert_almost_equal(visual_field_map.ret_to_dva(placed[0, 0],
+                                                        placed[0, 1]),
+                            (6.0, -2.0), decimal=4)
+    npt.assert_almost_equal(placed[0, :2],
+                            visual_field_map.dva_to_ret(6.0, -2.0), decimal=3)
+    # A physical position says the same thing without going through the map:
+    same = model_for(implant, visual_field_map=visual_field_map,
+                     implant_pos=visual_field_map.dva_to_ret(6.0, -2.0) * um)
+    npt.assert_almost_equal(placed_coords(same, implant), placed, decimal=3)
+
+
+@pytest.mark.parametrize('visual_field_map', [Curcio1990Map(), SquareMap()])
+def test_implant_pos_translates_rather_than_warps_the_array(visual_field_map):
+    """One rigid tissue translation, so device geometry is untouched"""
+    implant = offset_implant()
+    before = implant.electrode_array.coordinates()
+    placed = placed_coords(model_for(implant,
+                                     visual_field_map=visual_field_map,
+                                     implant_pos=(7, 2) * dva), implant)
+    npt.assert_almost_equal(np.diff(placed, axis=0), np.diff(before, axis=0),
                             decimal=2)
-    shift = after - before
+    shift = placed - before
     npt.assert_almost_equal(shift - shift[0], 0, decimal=2)
     # The implant itself never moved:
     npt.assert_array_equal(implant.electrode_array.coordinates(), before)
-    # Under a nonlinear map one tissue translation is *not* the same as adding
-    # the offset to each electrode's own dva position, which is what this
-    # placement deliberately avoids:
-    dva_before = np.column_stack(visual_field_map.ret_to_dva(before[:, 0],
-                                                             before[:, 1]))
-    dva_after = np.column_stack(visual_field_map.ret_to_dva(after[:, 0],
-                                                            after[:, 1]))
-    moved = dva_after - dva_before
-    npt.assert_equal(np.allclose(moved, moved[0], atol=1e-3), False)
-    # What *is* displaced by exactly the offset is the anchor: the center of
-    # the array's extent, not any individual electrode.
-    def anchor(coords):
-        xy = coords[:, :2]
-        return visual_field_map.ret_to_dva(*(0.5 * (xy.min(axis=0) +
-                                                    xy.max(axis=0))))
-    npt.assert_almost_equal(np.subtract(anchor(after), anchor(before)),
-                            (7, 2), decimal=3)
 
 
-def test_implant_offset_needs_an_invertible_retinal_map():
-    class OneWay(Curcio1990Map):
-        def ret_to_dva(self, xret, yret):
-            raise NotImplementedError
+def test_implant_pos_moves_scene_sampling_and_the_percept_alike():
+    scene = scene_of(scotoma=Scotoma.circle(14), scotoma_fill=0.0)
+    implant = implant_at(0, 0)
+    grid = {'rho': 80, 'xrange': (-8, 8), 'yrange': (-8, 8), 'step': 0.5}
+    fovea = model_for(implant, **grid)
+    placed = model_for(implant, implant_pos=(4, -3) * dva, **grid)
+    # Same gray level, read four degrees to the right and three down:
+    npt.assert_almost_equal(seen_by(placed, scene_of()),
+                            seen_by(fovea, scene_of(), gaze=(4, -3) * dva),
+                            decimal=4)
+    # ... and the phosphene is drawn there too. Row is -y, column is +x:
+    here = fovea.predict_percept(scene, vmax=2).data[..., 0]
+    there = placed.predict_percept(scene, vmax=2).data[..., 0]
+    npt.assert_almost_equal(there[HALF + 3, HALF + 4], here[HALF, HALF],
+                            decimal=4)
 
-    model = model_for(implant_at(0, 0), visual_field_map=OneWay(),
-                      implant_offset=(3, 0) * dva)
+
+def test_implant_z_translates_depth_without_flattening_the_array():
+    """Global placement depth on top of local, per-electrode z"""
+    array = ElectrodeArray([PointSource(0, 0, 0), PointSource(280, 0, 50),
+                            PointSource(560, 0, -20)])
+    implant = Implant(array,
+                      encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
+    before = implant.electrode_array.coordinates()
+    placed = placed_coords(model_for(implant, implant_z=150 * um), implant)
+    npt.assert_almost_equal(placed[:, :2], before[:, :2], decimal=4)
+    npt.assert_almost_equal(placed[:, 2], before[:, 2] + 150, decimal=3)
+    # Local non-planarity survives:
+    npt.assert_almost_equal(np.diff(placed[:, 2]), np.diff(before[:, 2]),
+                            decimal=3)
+    npt.assert_array_equal(implant.electrode_array.coordinates(), before)
+
+
+def test_one_implant_can_be_placed_in_several_models_at_once():
+    """Placement lives on the model, so the implant stays reusable"""
+    implant = offset_implant()
+    before = implant.electrode_array.coordinates()
+    near = model_for(implant, implant_pos=(2, 0) * dva, implant_z=0)
+    far = model_for(implant, implant_pos=(8, 0) * dva, implant_z=200 * um)
+    a, b = placed_coords(near, implant), placed_coords(far, implant)
+    npt.assert_equal(np.allclose(a, b), False)
+    npt.assert_almost_equal(np.diff(a, axis=0), np.diff(b, axis=0), decimal=2)
+    npt.assert_almost_equal(b[:, 2] - a[:, 2], 200, decimal=3)
+    npt.assert_array_equal(implant.electrode_array.coordinates(), before)
+    # Neither model's placement leaked into the other:
+    npt.assert_almost_equal(placed_coords(near, implant), a, decimal=6)
+
+
+def test_a_cortical_implant_is_placed_by_visual_field_position():
+    """(6, -2) dva names the cortical representation of that location"""
+    visual_field_map = Polimeni2006Map(regions=['v1'])
+    model = CortexScoreboard(implant=implant_at(0, 0),
+                             implant_pos=(6, -2) * dva,
+                             visual_field_map=visual_field_map)
+    shift = _placement_shift(model.spatial, um)
+    npt.assert_almost_equal(shift[:2],
+                            visual_field_map.dva_to_v1(6.0, -2.0), decimal=2)
+    npt.assert_almost_equal(shift[2], 0, decimal=6)
+
+
+def test_an_ambiguous_cortical_placement_is_refused():
+    """One visual field location, several tissue images: which one?"""
+    model = CortexScoreboard(implant=implant_at(0, 0), regions=['v1', 'v2'],
+                             implant_pos=(6, -2) * dva)
     with pytest.raises(NotImplementedError):
-        _scene_stim(model, scene_of(), None)
+        _placement_shift(model.spatial, um)
+    # A physical position is unambiguous and still works:
+    model.spatial.implant_pos = (1000, 0) * um
+    npt.assert_almost_equal(_placement_shift(model.spatial, um),
+                            (1000, 0, 0), decimal=6)
 
 
-def test_a_cortical_model_has_no_implant_offset():
-    """Placement resolves through a retinal map, which cortex does not have"""
-    with pytest.raises(TypeError):
-        CortexScoreboard(implant=implant_at(0, 0), implant_offset=(3, 0) * dva)
-    cortex = CortexScoreboard(implant=implant_at(0, 0))
-    npt.assert_equal('implant_offset' in cortex.spatial.get_default_params(),
-                     False)
-    with pytest.raises(FreezeError):
-        cortex.spatial.implant_offset = (3, 0) * dva
-
-
-def test_implant_offset_and_location_noise_stay_separate():
+def test_implant_pos_and_location_noise_stay_separate():
     """Placement is physical and shared; location noise is per electrode"""
     scene = scene_of()
     implant = grid_implant()
-    placed = model_for(implant, implant_offset=(5, 0) * dva)
+    plain = model_for(implant)
+    placed = model_for(implant, implant_pos=(5, 0) * dva)
     noisy = model_for(implant, location_noise=1.0)
-    both = model_for(implant, implant_offset=(5, 0) * dva,
-                     location_noise=1.0)
+    both = model_for(implant, implant_pos=(5, 0) * dva, location_noise=1.0)
     # `location_noise` displaces the percept, not what the scene is sampled
-    # at, so only `implant_offset` shows up in the sampled gray levels:
-    npt.assert_array_equal(seen_by(noisy, scene), seen_by(model_for(implant),
-                                                          scene))
+    # at, so only `implant_pos` shows up in the sampled gray levels:
+    npt.assert_array_equal(seen_by(noisy, scene), seen_by(plain, scene))
     npt.assert_array_equal(seen_by(both, scene), seen_by(placed, scene))

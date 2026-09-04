@@ -139,11 +139,16 @@ class ScoreboardSpatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
-    implant_offset : (x, y) or Quantity, optional
-        Visual field displacement of the whole implant, in dva,
-        resolved through ``visual_field_map`` into one tissue
-        translation. A nonzero offset requires an invertible retinal
-        map. The implant's own coordinates are left unchanged.
+    implant_pos : (x, y) or Quantity, optional
+        Tissue position of the implant's local ``(0, 0)`` origin.
+        A dva position is resolved through ``visual_field_map``; a
+        physical one is used as given. Defaults to the tissue origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_z : float or Quantity, optional
+        Depth the implant is placed at (um), added to every
+        electrode's local ``z``.
 
         .. versionadded:: 0.11.0
 
@@ -171,7 +176,7 @@ class ScoreboardSpatial(SpatialModel):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_offset=(0, 0),
+                 implant_pos=(0, 0), implant_z=0,
                  location_noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
@@ -181,7 +186,7 @@ class ScoreboardSpatial(SpatialModel):
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
-            implant_offset=implant_offset,
+            implant_pos=implant_pos, implant_z=implant_z,
             location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -286,11 +291,16 @@ class ScoreboardModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
-    implant_offset : (x, y) or Quantity, optional
-        Visual field displacement of the whole implant, in dva,
-        resolved through ``visual_field_map`` into one tissue
-        translation. A nonzero offset requires an invertible retinal
-        map. The implant's own coordinates are left unchanged.
+    implant_pos : (x, y) or Quantity, optional
+        Tissue position of the implant's local ``(0, 0)`` origin.
+        A dva position is resolved through ``visual_field_map``; a
+        physical one is used as given. Defaults to the tissue origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_z : float or Quantity, optional
+        Depth the implant is placed at (um), added to every
+        electrode's local ``z``.
 
         .. versionadded:: 0.11.0
 
@@ -315,7 +325,7 @@ class ScoreboardModel(Model):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_offset=(0, 0),
+                 implant_pos=(0, 0), implant_z=0,
                  location_noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
@@ -325,7 +335,7 @@ class ScoreboardModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
-                implant_offset=implant_offset,
+                implant_pos=implant_pos, implant_z=implant_z,
                 location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)
@@ -413,11 +423,16 @@ class AxonMapSpatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
-    implant_offset : (x, y) or Quantity, optional
-        Visual field displacement of the whole implant, in dva,
-        resolved through ``visual_field_map`` into one tissue
-        translation. A nonzero offset requires an invertible retinal
-        map. The implant's own coordinates are left unchanged.
+    implant_pos : (x, y) or Quantity, optional
+        Tissue position of the implant's local ``(0, 0)`` origin.
+        A dva position is resolved through ``visual_field_map``; a
+        physical one is used as given. Defaults to the tissue origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_z : float or Quantity, optional
+        Depth the implant is placed at (um), added to every
+        electrode's local ``z``.
 
         .. versionadded:: 0.11.0
 
@@ -471,7 +486,7 @@ class AxonMapSpatial(SpatialModel):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_offset=(0, 0),
+                 implant_pos=(0, 0), implant_z=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -485,7 +500,7 @@ class AxonMapSpatial(SpatialModel):
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
-            implant_offset=implant_offset,
+            implant_pos=implant_pos, implant_z=implant_z,
             location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
             axons_range=axons_range, n_ax_segments=n_ax_segments,
             ax_segments_range=ax_segments_range,
@@ -1177,11 +1192,16 @@ class AxonMapModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
-    implant_offset : (x, y) or Quantity, optional
-        Visual field displacement of the whole implant, in dva,
-        resolved through ``visual_field_map`` into one tissue
-        translation. A nonzero offset requires an invertible retinal
-        map. The implant's own coordinates are left unchanged.
+    implant_pos : (x, y) or Quantity, optional
+        Tissue position of the implant's local ``(0, 0)`` origin.
+        A dva position is resolved through ``visual_field_map``; a
+        physical one is used as given. Defaults to the tissue origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_z : float or Quantity, optional
+        Depth the implant is placed at (um), added to every
+        electrode's local ``z``.
 
         .. versionadded:: 0.11.0
 
@@ -1235,7 +1255,7 @@ class AxonMapModel(Model):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_offset=(0, 0),
+                 implant_pos=(0, 0), implant_z=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -1250,7 +1270,7 @@ class AxonMapModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
-                implant_offset=implant_offset,
+                implant_pos=implant_pos, implant_z=implant_z,
                 location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
                 axons_range=axons_range, n_ax_segments=n_ax_segments,
                 ax_segments_range=ax_segments_range,
