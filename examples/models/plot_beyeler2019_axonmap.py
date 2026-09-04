@@ -49,6 +49,7 @@ meridian (rot=0):
 import numpy as np
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
+from pulse2percept.units import um
 
 implant = ArgusII()
 
@@ -145,9 +146,12 @@ ax.set_title('Predicted percept')
 ##############################################################################
 # A major prediction of the axon map model is that the percept changes
 # depending on the location of the implant. You can convince yourself of that
-# by re-running the model on an implant shifted and rotated across the retina:
+# by re-running the model on an implant shifted and rotated across the retina.
+# Rotation belongs to the device; where it sits on the retina is the model's
+# ``implant_pos``:
 
-model.implant = ArgusII(x=-50, y=50, rot=-45)
+model.implant = ArgusII(rot=-45)
+model.spatial.implant_pos = (-50, 50) * um
 model.plot()
 model.implant.plot()
 

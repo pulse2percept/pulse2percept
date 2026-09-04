@@ -16,10 +16,11 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    BiphasicPulseTrain, ImageStimulus,
                                    Stimulus)
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
-                                 ms, s, uA, um)
+                                 mm, ms, s, uA, um)
 
 def test_DynaphosModel():
-    model = DynaphosModel(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
+    model = DynaphosModel(implant=Cortivis(), implant_pos=(20, -5) * mm,
+                          xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
 
     npt.assert_equal(model.regions, ['v1'])
     npt.assert_equal(model.visual_field_map.regions, ['v1'])
@@ -46,8 +47,9 @@ def test_DynaphosModel():
 
 def test_predict_spatial():
     # test that no current can spread between hemispheres
-    implant = Orion(x=15000)
-    model = DynaphosModel(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
+    implant = Orion()
+    model = DynaphosModel(implant=implant, implant_pos=(15, 0) * mm,
+                          xrange=(-3, 3), yrange=(-3, 3),
                           step=0.5).build()
     source = {e: BiphasicPulseTrain(freq=300, amp=2000, phase_dur=0.17)
               for e in implant.electrode_names}
@@ -62,8 +64,9 @@ def test_predict_spatial_unsplit_map():
     class UnsplitMap(Polimeni2006Map):
         split_map = False
 
-    implant = Orion(x=15000)
-    model = DynaphosModel(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
+    implant = Orion()
+    model = DynaphosModel(implant=implant, implant_pos=(15, 0) * mm,
+                          xrange=(-3, 3), yrange=(-3, 3),
                           step=0.5, visual_field_map=UnsplitMap()).build()
     source = {e: BiphasicPulseTrain(freq=300, amp=2000, phase_dur=0.17)
               for e in implant.electrode_names}
@@ -112,7 +115,8 @@ def test_temporal_predict():
     npt.assert_equal(np.all(np.diff(bright_amp) >= 0), True)
 
     # Test that default models give expected values
-    orion = DynaphosModel(implant=Orion(x=15000), step=0.1, dt=20).build()
+    orion = DynaphosModel(implant=Orion(), implant_pos=(15, 0) * mm,
+                          step=0.1, dt=20).build()
     percept = orion.predict_percept(
         {'55': BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)})
     npt.assert_equal(np.sum(percept.data > 0.0122), 147)
@@ -177,7 +181,8 @@ def test_DynaphosModel_units():
 
 def test_DynaphosModel_t_percept_units():
     """This model overrides `predict_percept`, so it normalizes for itself"""
-    model = DynaphosModel(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=1).build()
+    model = DynaphosModel(implant=Cortivis(), implant_pos=(20, -5) * mm,
+                          xrange=(-3, 3), yrange=(-3, 3), step=1).build()
     source = {'11': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)}
     bare = model.predict_percept(source, t_percept=[0, 20, 40])
     for spelling in ([0, 20, 40] * ms, np.array([0, .02, .04]) * s):
@@ -198,7 +203,8 @@ def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
     """
     source = {'11': BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)}
     delivered = Cortivis().prepare_stim(source)
-    kwargs = dict(implant=Cortivis(), xrange=(-2, 2), yrange=(-2, 2), step=1)
+    kwargs = dict(implant=Cortivis(), implant_pos=(20, -5) * mm,
+                  xrange=(-2, 2), yrange=(-2, 2), step=1)
 
     # Coarser than a millisecond, which is the case the literal was written
     # for, and still the same clock it always produced:
@@ -284,7 +290,9 @@ def test_dynaphos_reads_the_clock_before_compression():
 
 def _ensemble_of_two_clocks():
     """Two implants driven at different frequencies, and their merged input"""
-    ensemble = EnsembleImplant([Orion(), Orion(x=-35000)])
+    ensemble = EnsembleImplant.from_coords(Orion,
+                                          locs=np.array([(0, 0),
+                                                         (-35000, 0)]))
     names = Orion().electrode_names
     source = {0: {e: BiphasicPulseTrain(50, 300, 0.45, stim_dur=100)
                   for e in names},
@@ -342,7 +350,7 @@ def test_dynaphos_clocks_are_not_read_when_structure_says_otherwise():
 def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
     # An encoder's schedule can change frequency from frame to frame, so there
     # is no per-electrode clock to take from it. The model stays on its own:
-    implant = Cortivis(x=1000)
+    implant = Cortivis()
     encoded = AmplitudeEncoder().encode(
         ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
     npt.assert_equal(_pulse_train_clocks(encoded), None)
@@ -366,7 +374,8 @@ def test_location_noise():
     electrode = implant.electrode_names[10]
     source = {electrode: BiphasicPulseTrain(freq=300, amp=200,
                                             phase_dur=0.17)}
-    kwargs = dict(xrange=(-4, 4), yrange=(-4, 4), step=0.05)
+    kwargs = dict(implant_pos=(20, -5) * mm, xrange=(-4, 4), yrange=(-4, 4),
+                  step=0.05)
     plain = DynaphosModel(implant=implant, **kwargs).build()
     expected = plain.predict_percept(source).data
 

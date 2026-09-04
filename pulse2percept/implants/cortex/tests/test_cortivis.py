@@ -4,14 +4,12 @@ import numpy.testing as npt
 
 from pulse2percept.implants.cortex import Cortivis
 
-@pytest.mark.parametrize('x', (-100, 200))
-@pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
-def test_Cortivis(x, y, rot):
+def test_Cortivis(rot):
     # Create a Cortivis implant and make sure location is correct
     # Depth 'z' must be 0
-    cortivis = Cortivis(x=x, y=y, rot=rot)
-    cortivis0 = Cortivis(x=0, y=0, rot=0)
+    cortivis = Cortivis(rot=rot)
+    cortivis0 = Cortivis(rot=0)
     
     # Slots:
     npt.assert_equal(hasattr(cortivis, '__slots__'), True)
@@ -31,8 +29,8 @@ def test_Cortivis(x, y, rot):
 
     # Then off-set: Make sure first electrode is placed
     # correctly
-    npt.assert_almost_equal(cortivis['1'].x, xy[0] + x)
-    npt.assert_almost_equal(cortivis['1'].y, xy[1] + y)
+    npt.assert_almost_equal(cortivis['1'].x, xy[0])
+    npt.assert_almost_equal(cortivis['1'].y, xy[1])
 
     # Check radii of electrodes
     for e in cortivis.electrode_array.electrode_objects:

@@ -43,15 +43,12 @@ class BVT24(Implant):
 
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 35 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of 35 entries
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity
@@ -74,7 +71,8 @@ class BVT24(Implant):
     placement = 'suprachoroidal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=False, safe_mode=False):
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
+                 safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -82,8 +80,6 @@ class BVT24(Implant):
         n_elecs = 35
         # This implant lays out its own electrodes rather than handing the
         # geometry to an ElectrodeGrid, so it normalizes for itself:
-        x = as_value(x, um, 'x')
-        y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
         rot = as_value(rot, deg, 'rot')
 
@@ -129,8 +125,9 @@ class BVT24(Implant):
                       'C21k', 'C21l', 'C21m'])
         names.extend(['R1', 'R2'])
 
-        # Rotate the grid and center at (x,y):
-        tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
+        # Local in-plane orientation only; where the device sits is the
+        # model's business:
+        tf = SimilarityTransform(rotation=np.deg2rad(rot))
         x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
@@ -166,15 +163,12 @@ class BVT44(Implant):
 
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 35 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of 35 entries
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity
@@ -196,7 +190,8 @@ class BVT44(Implant):
     placement = 'suprachoroidal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='LE', preprocess=False, safe_mode=False):
+    def __init__(self, z=0, rot=0, eye='LE', preprocess=False,
+                 safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -204,8 +199,6 @@ class BVT44(Implant):
         n_elecs = 46
         # Placed by hand, like BVT24, once the hex grid has supplied the
         # in-array positions:
-        x = as_value(x, um, 'x')
-        y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
         rot = as_value(rot, deg, 'rot')
 
@@ -232,8 +225,9 @@ class BVT44(Implant):
         if eye == 'LE':
             x_arr = np.negative(x_arr)
 
-        # Rotate the grid and center at (x,y):
-        tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
+        # Local in-plane orientation only; where the device sits is the
+        # model's business:
+        tf = SimilarityTransform(rotation=np.deg2rad(rot))
         x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):

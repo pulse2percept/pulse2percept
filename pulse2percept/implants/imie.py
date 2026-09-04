@@ -25,15 +25,14 @@ class IMIE(Implant):
 
     Parameters
     ----------
-    x/y/z : double
-        3D location of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 35 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of 35 entries
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -54,7 +53,8 @@ class IMIE(Implant):
     placement = 'epiretinal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True, safe_mode=False):
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
+                 safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -63,7 +63,7 @@ class IMIE(Implant):
         e_spacing = 350.0  # um
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, e_spacing, x=x, y=y, z=z, rot=rot,
+            self.shape, e_spacing, z=z, rot=rot,
             electrode_type=DiskElectrode, radius=elec_radius)
         
         # Set left/right eye:

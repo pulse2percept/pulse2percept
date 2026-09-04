@@ -1,4 +1,6 @@
 """:py:class:`~pulse2percept.implants.EnsembleImplant`"""
+from inspect import signature
+
 import numpy as np
 from .base import Implant
 from .electrodes import Electrode
@@ -6,6 +8,26 @@ from .electrode_arrays import ElectrodeArray
 from ..stimuli._merge import unique_time_points
 from ..stimuli.base import _describe_unit
 from ..units import DimensionMismatchError, as_value, dva, um
+
+def _placed(implant_type, x, y):
+    """One device of an ensemble, positioned in the ensemble's own frame.
+
+    An ensemble is itself a single implant, so where its devices sit relative
+    to one another is local geometry, unlike the model-side ``implant_pos``
+    that places the ensemble as a whole. A device whose own constructor takes
+    ``x``/``y`` is a geometry primitive (a Neuralink thread, say) and is built
+    there; a named device describes hardware about its own origin, so it is
+    translated after the fact.
+    """
+    params = signature(implant_type).parameters
+    if 'x' in params and 'y' in params:
+        return implant_type(x=x, y=y)
+    implant = implant_type()
+    for elec in implant.electrode_array.electrode_objects:
+        elec.x += x
+        elec.y += y
+    return implant
+
 
 class EnsembleImplant(Implant):
     
@@ -162,7 +184,8 @@ class EnsembleImplant(Implant):
             xlocs = locs[:, 0]
             ylocs = locs[:, 1]
 
-        implant_list = [implant_type(x=x, y=y) for x,y in zip(xlocs, ylocs)]
+        implant_list = [_placed(implant_type, x, y)
+                        for x, y in zip(xlocs, ylocs)]
         
         return cls(implant_list)
 
@@ -250,7 +273,8 @@ class EnsembleImplant(Implant):
         >>> import numpy as np
         >>> from pulse2percept.implants import EnsembleImplant
         >>> from pulse2percept.implants.cortex import Orion
-        >>> ensemble = EnsembleImplant([Orion(), Orion(x=-35000)])
+        >>> ensemble = EnsembleImplant.from_coords(
+        ...     Orion, locs=np.array([(0, 0), (-35000, 0)]))
         >>> ensemble.prepare_stim({0: np.ones(60),
         ...                        1: 2 * np.ones(60)}).data.shape
         (120, 1)

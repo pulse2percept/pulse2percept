@@ -11,6 +11,24 @@ from pulse2percept.models.cortex.base import ScoreboardModel
 from pulse2percept.stimuli import BiphasicPulseTrain, MonophasicPulse
 from pulse2percept.utils.constants import DT
 
+def _shifted(implant_type, dx, dy):
+    """A device translated inside the ensemble's own coordinate frame
+
+    Named implants describe hardware about their own origin; where several of
+    them sit relative to one another is the ensemble's geometry.
+    """
+    implant = implant_type()
+    for elec in implant.electrode_array.electrode_objects:
+        elec.x += dx
+        elec.y += dy
+    return implant
+
+
+def _orion_pair(**kwargs):
+    """Two Orions side by side, the way an ensemble would be built"""
+    return EnsembleImplant([Orion(), _shifted(Orion, -35000, 0)], **kwargs)
+
+
 def test_EnsembleImplant():
     # Invalid instantiations:
     with pytest.raises(TypeError):
@@ -46,16 +64,17 @@ def test_EnsembleImplant():
 # and thus already tested
 # but we'll test it again just to make sure
 def test_ensemble_cortivis():
-    cortivis0 = Cortivis(0)
-    cortivis1 = Cortivis(x=10000)
+    cortivis = Cortivis()
 
-    ensemble = EnsembleImplant([cortivis0, cortivis1])
+    ensemble = EnsembleImplant.from_coords(Cortivis,
+                                           locs=np.array([(0, 0),
+                                                          (10000, 0)]))
 
-    # check that positions are the same
-    npt.assert_equal(ensemble['0-1'].x, cortivis0['1'].x)
-    npt.assert_equal(ensemble['0-1'].y, cortivis0['1'].y)
-    npt.assert_equal(ensemble['1-1'].x, cortivis1['1'].x)
-    npt.assert_equal(ensemble['1-1'].y, cortivis1['1'].y)
+    # Each device keeps its own geometry, offset into the ensemble's frame:
+    npt.assert_equal(ensemble['0-1'].x, cortivis['1'].x)
+    npt.assert_equal(ensemble['0-1'].y, cortivis['1'].y)
+    npt.assert_equal(ensemble['1-1'].x, cortivis['1'].x + 10000)
+    npt.assert_equal(ensemble['1-1'].y, cortivis['1'].y)
 
 # test from_coords initialization (physical coords in um)
 def test_from_coords():
@@ -67,21 +86,14 @@ def test_from_coords():
 
     locs = np.array([(0,0), (10000,0), (0, 10000)])
 
-    c0 = Cortivis(x=0,y=0)
-    c1 = Cortivis(x=10000,y=0)
-    c2 = Cortivis(x=0, y=10000)
+    device = Cortivis()
     ensemble = EnsembleImplant.from_coords(Cortivis, locs=locs)
 
-    # check that positions are the same
-    npt.assert_equal(ensemble['0-1'].x, c0['1'].x)
-    npt.assert_equal(ensemble['0-1'].y, c0['1'].y)
-    npt.assert_equal(ensemble['0-1'].z, c0['1'].z)
-    npt.assert_equal(ensemble['1-1'].x, c1['1'].x)
-    npt.assert_equal(ensemble['1-1'].y, c1['1'].y)
-    npt.assert_equal(ensemble['1-1'].z, c1['1'].z)
-    npt.assert_equal(ensemble['2-1'].x, c2['1'].x)
-    npt.assert_equal(ensemble['2-1'].y, c2['1'].y)
-    npt.assert_equal(ensemble['2-1'].z, c2['1'].z)
+    # Every device is the same hardware, shifted to its own location:
+    for i, (dx, dy) in enumerate(locs):
+        npt.assert_equal(ensemble[f'{i}-1'].x, device['1'].x + dx)
+        npt.assert_equal(ensemble[f'{i}-1'].y, device['1'].y + dy)
+        npt.assert_equal(ensemble[f'{i}-1'].z, device['1'].z)
 
 # test from_cortical_map initialization (vf coords in dva)
 def test_from_cortical_map():
@@ -94,29 +106,22 @@ def test_from_cortical_map():
     dva_list = [(x,y) for x,y in zip(dva_x, dva_y)]
     dva_locs = np.array(dva_list)
 
-    c0 = Cortivis(x=2000, y=2000)
-    c1 = Cortivis(x=10000, y=0)
-    c2 = Cortivis(x=5000, y=5000)
+    device = Cortivis()
 
     # use dva coords to create ensemble
     ensemble = EnsembleImplant.from_cortical_map(Cortivis, visual_field_map,
                                                  dva_locs)
 
-    # check that positions are approx. the same
-    npt.assert_approx_equal(ensemble['0-1'].x, c0['1'].x, 5)
-    npt.assert_approx_equal(ensemble['0-1'].y, c0['1'].y, 5)
-    npt.assert_approx_equal(ensemble['0-1'].z, c0['1'].z, 5)
-    npt.assert_approx_equal(ensemble['1-1'].x, c1['1'].x, 5)
-    npt.assert_approx_equal(ensemble['1-1'].y, c1['1'].y, 5)
-    npt.assert_approx_equal(ensemble['1-1'].z, c1['1'].z, 5)
-    npt.assert_approx_equal(ensemble['2-1'].x, c2['1'].x, 5)
-    npt.assert_approx_equal(ensemble['2-1'].y, c2['1'].y, 5)
-    npt.assert_approx_equal(ensemble['2-1'].z, c2['1'].z, 5)
+    # The dva locations round-trip back to the physical ones they came from:
+    for i, (dx, dy) in enumerate(locs):
+        npt.assert_approx_equal(ensemble[f'{i}-1'].x, device['1'].x + dx, 5)
+        npt.assert_approx_equal(ensemble[f'{i}-1'].y, device['1'].y + dy, 5)
+        npt.assert_approx_equal(ensemble[f'{i}-1'].z, device['1'].z, 5)
 
 
 def test_prepare_stim_merges_per_implant_input():
     """A dict keyed by implant gives each constituent its own source"""
-    ensemble = EnsembleImplant([Orion(), Orion(x=-35000)])
+    ensemble = _orion_pair()
     npt.assert_equal(ensemble.prepare_stim(None), None)
     npt.assert_equal(ensemble.prepare_stim({}), None)
     # A key left out contributes zeros, but the rest still merge:
@@ -160,7 +165,7 @@ def test_prepare_stim_merges_per_implant_input():
     npt.assert_equal(np.all(np.diff(stim.time) > 0.95 * DT), True)
 
     # with cortivis and orion
-    mixed = EnsembleImplant([Orion(), Cortivis(x=10000)])
+    mixed = EnsembleImplant([Orion(), _shifted(Cortivis, 10000, 0)])
     npt.assert_equal(
         mixed.prepare_stim({0: np.ones(60), 1: np.ones(96) * 2}).data.shape,
         (156, 1))
@@ -177,15 +182,14 @@ def test_prepare_stim_merged_goes_through_the_ensemble_pipeline():
     The children prepare their own halves, but what the ensemble delivers is
     still the ensemble's to preprocess and to check.
     """
-    ensemble = EnsembleImplant([Orion(), Orion(x=-35000)],
-                               preprocess=lambda s: s * -2)
+    ensemble = _orion_pair(preprocess=lambda s: s * -2)
     stim = ensemble.prepare_stim({0: np.ones(60), 1: np.ones(60) * 2})
     npt.assert_almost_equal(stim.data[:60], -2)
     npt.assert_almost_equal(stim.data[60:], -4)
 
     # ... and an ensemble-level safety check still refuses what it should,
     # even though neither child enforces charge balance of its own:
-    unsafe = EnsembleImplant([Orion(), Orion(x=-35000)], safe_mode=True)
+    unsafe = _orion_pair(safe_mode=True)
     with pytest.raises(ValueError, match='charge-balanced'):
         unsafe.prepare_stim({0: {'96': MonophasicPulse(20, 0.45)}})
 

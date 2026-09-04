@@ -96,6 +96,17 @@ Models
 * ``find_threshold`` has been removed; threshold searches belong at the
   experiment level rather than in the model API (:pull:`862`).
 
+* Named implants no longer take ``x``/``y``: their electrodes describe the
+  device about its own ``(0, 0)`` origin, and where it is implanted is the
+  spatial model's ``implant_pos``. ``rot`` stays on the implant as local
+  orientation, and per-electrode ``z`` stays local geometry, with
+  ``implant_z`` supplying the global depth. The cortical defaults that
+  encoded a placement (``Cortivis(x=20000, y=-5000)``,
+  ``ICVP``/``Orion(x=15000)``) are gone; pass e.g.
+  ``implant_pos=(20, -5) * mm`` to the model instead. ``Electrode``,
+  ``ElectrodeGrid`` and Neuralink threads keep ``x``/``y``/``z``, which are
+  local geometry there (:pull:`N`).
+
 * New ``location_noise`` parameter displaces each electrode's phosphene by a
   fixed, subject-specific offset in the visual field (dva) rather than at the
   location the ``visual_field_map`` gives it. Requires a 2D, invertible map

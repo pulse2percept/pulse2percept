@@ -543,10 +543,10 @@ def test_Raster_reads_coordinates_in_microns():
     # `min_spacing` is documented in microns, which is what `coordinates()`
     # returns, and Argus II has a 575 um pitch:
     npt.assert_allclose(raster.min_spacing, np.sqrt(5) * 575, rtol=1e-12)
-    # Moving the implant does not change the pattern or the spacing:
-    moved = CheckerboardRaster(5).bind(ArgusII(x=15 * mm, y=-0.5 * mm))
-    npt.assert_allclose(moved.min_spacing, raster.min_spacing, rtol=1e-12)
-    npt.assert_array_equal(moved.groups(implant.electrode_names),
+    # Rotating the device does not change the pattern or the spacing:
+    turned = CheckerboardRaster(5).bind(ArgusII(rot=30))
+    npt.assert_allclose(turned.min_spacing, raster.min_spacing, rtol=1e-12)
+    npt.assert_array_equal(turned.groups(implant.electrode_names),
                            raster.groups(implant.electrode_names))
     # Both entry points accept an implant or its array, and refuse anything
     # that cannot say where its electrodes are:

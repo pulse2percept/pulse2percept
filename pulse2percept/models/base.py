@@ -366,6 +366,55 @@ def _blend_meridian(resp, grid, meridian, width):
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
+def _dva_pos_to_tissue(model, value):
+    """Resolve a visual field ``implant_pos`` to a tissue position.
+
+    Forward mapping only: nothing here needs the map to be invertible.
+
+    Parameters
+    ----------
+    value : (x, y)
+        Visual field position of the implant's local origin, in dva.
+
+    Returns
+    -------
+    np.ndarray
+        Tissue position ``(x, y)``, in microns.
+    """
+    visual_field_map = getattr(model, 'visual_field_map', None)
+    if visual_field_map is None:
+        raise ValueError("'implant_pos' is resolved through "
+                         "'visual_field_map', which is not set yet.")
+    xy = np.asarray(as_value(value, dva, 'implant_pos'),
+                    dtype=np.float64).ravel()
+    if xy.size != 2 or not np.all(np.isfinite(xy)):
+        raise ValueError(f"'implant_pos' must be a finite (x, y) pair, "
+                         f"not {value}.")
+    if visual_field_map.ndim != 2:
+        raise NotImplementedError(
+            f"A visual field position places an implant on a 2D sheet, "
+            f"and {type(visual_field_map).__name__} is "
+            f"{visual_field_map.ndim}D. Give 'implant_pos' as a physical "
+            f"position instead.")
+    regions = list(visual_field_map.from_dva())
+    if len(regions) != 1:
+        # One visual field location has several tissue images, and
+        # choosing between them is a pose question this does not answer.
+        raise NotImplementedError(
+            f"{type(visual_field_map).__name__} maps one visual field "
+            f"location onto {regions}, so 'implant_pos' in dva does not "
+            f"say where the implant goes. Give a physical position "
+            f"instead.")
+    placed = visual_field_map.from_dva()[regions[0]](xy[0], xy[1])
+    placed = np.asarray(placed, dtype=np.float64).ravel()[:2]
+    if not np.all(np.isfinite(placed)):
+        raise ValueError(
+            f"{type(visual_field_map).__name__} does not map "
+            f"'implant_pos' {tuple(xy)} dva onto tissue.")
+    return np.asarray(Quantity(placed, visual_field_map.tissue_unit
+                               ).to_value(um), dtype=float)
+
+
 def _placement_shift(model, unit):
     """Return the rigid ``(dx, dy, dz)`` that places the implant, in ``unit``.
 
@@ -377,7 +426,7 @@ def _placement_shift(model, unit):
     if has_units(pos) and not _length_valued(pos):
         # A visual field position, resolved here rather than when it was
         # assigned: the model's `visual_field_map` may be replaced afterwards.
-        xy = model._dva_pos_to_tissue(pos)
+        xy = _dva_pos_to_tissue(model, pos)
     else:
         xy = np.asarray(as_value(pos, um, 'implant_pos'), dtype=float).ravel()
     if xy.size != 2 or not np.all(np.isfinite(xy)):
@@ -653,8 +702,10 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def _electrode_coords(self, electrode_array, stim, electrodes=None):
         """Return stimulus electrode coordinates in ``space_unit``.
 
-        Coordinates follow ``stim.electrodes`` order and are returned as
-        contiguous float32 arrays for the numerical kernels.
+        The implant's own coordinates, placed by ``implant_pos`` and
+        ``implant_z`` (see `_placed_coords`). They follow ``stim.electrodes``
+        order and are returned as contiguous float32 arrays for the numerical
+        kernels.
 
         Parameters
         ----------
@@ -673,8 +724,8 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         """
         if electrodes is None:
             electrodes = stim.electrodes
-        xyz = electrode_array.coordinates(self.space_unit,
-                                          electrodes=electrodes)
+        xyz = _placed_coords(self, electrode_array, self.space_unit,
+                             electrodes)
         return tuple(np.ascontiguousarray(xyz[:, i], dtype=np.float32)
                      for i in range(3))
 
@@ -744,15 +795,16 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     implant_pos : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits in the modeled
-        tissue. Given in dva, it is resolved once through
-        ``visual_field_map``; given as a physical length, it is taken as a
-        tissue position directly, and is stored that way either
-        way. Defaults to the tissue origin. The whole array is translated
-        rigidly, so device geometry (pitch, layout, local rotation) is
-        unchanged and the implant object itself is never mutated. A dva
-        position needs a 2D map with a single region; place an implant on
-        anything else by physical position. Separate from ``location_noise``,
-        which perturbs individual phosphene locations afterwards.
+        tissue. A physical position is used as given; a position in dva names
+        a retinotopic location and is resolved through ``visual_field_map``
+        at prediction time, so replacing the map moves the implant to that
+        location's new tissue representation. Defaults to the tissue origin.
+        The whole array is translated rigidly, so device geometry (pitch,
+        layout, local rotation) is unchanged and the implant object itself is
+        never mutated. A dva position needs a 2D map with a single region;
+        place an implant on anything else by physical position. Separate from
+        ``location_noise``, which perturbs individual phosphene locations
+        afterwards.
 
         .. versionadded:: 0.11.0
 
@@ -940,54 +992,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         # visual field's, so the two end points can come back swapped:
         return tuple(sorted((float(lo_dva), float(hi_dva))))
 
-    def _dva_pos_to_tissue(self, value):
-        """Resolve a visual-field ``implant_pos`` to a tissue position.
-
-        Forward mapping only: nothing here needs the map to be invertible.
-
-        Parameters
-        ----------
-        value : (x, y)
-            Visual field position of the implant's local origin, in dva.
-
-        Returns
-        -------
-        np.ndarray
-            Tissue position ``(x, y)``, in microns.
-        """
-        visual_field_map = getattr(self, 'visual_field_map', None)
-        if visual_field_map is None:
-            raise ValueError("'implant_pos' is resolved through "
-                             "'visual_field_map', which is not set yet.")
-        xy = np.asarray(as_value(value, dva, 'implant_pos'),
-                        dtype=np.float64).ravel()
-        if xy.size != 2 or not np.all(np.isfinite(xy)):
-            raise ValueError(f"'implant_pos' must be a finite (x, y) pair, "
-                             f"not {value}.")
-        if visual_field_map.ndim != 2:
-            raise NotImplementedError(
-                f"A visual field position places an implant on a 2D sheet, "
-                f"and {type(visual_field_map).__name__} is "
-                f"{visual_field_map.ndim}D. Give 'implant_pos' as a physical "
-                f"position instead.")
-        regions = list(visual_field_map.from_dva())
-        if len(regions) != 1:
-            # One visual field location has several tissue images, and
-            # choosing between them is a pose question this does not answer.
-            raise NotImplementedError(
-                f"{type(visual_field_map).__name__} maps one visual field "
-                f"location onto {regions}, so 'implant_pos' in dva does not "
-                f"say where the implant goes. Give a physical position "
-                f"instead.")
-        placed = visual_field_map.from_dva()[regions[0]](xy[0], xy[1])
-        placed = np.asarray(placed, dtype=np.float64).ravel()[:2]
-        if not np.all(np.isfinite(placed)):
-            raise ValueError(
-                f"{type(visual_field_map).__name__} does not map "
-                f"'implant_pos' {tuple(xy)} dva onto tissue.")
-        return np.asarray(Quantity(placed, visual_field_map.tissue_unit
-                                   ).to_value(um), dtype=float)
-
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
@@ -1120,9 +1124,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if electrodes is None:
             electrodes = stim.electrodes
-        xyz = tuple(np.ascontiguousarray(c, dtype=np.float32)
-                    for c in _placed_coords(self, electrode_array,
-                                            self.space_unit, electrodes).T)
+        xyz = super()._electrode_coords(electrode_array, stim, electrodes)
         offsets = _electrode_offsets(self, electrodes)
         if offsets is None:
             return xyz

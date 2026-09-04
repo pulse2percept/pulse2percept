@@ -4,7 +4,6 @@ import numpy as np
 from .. import Implant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
-from ...units import as_value, um
 from ...utils.constants import UM_PER_MM
 
 
@@ -19,16 +18,13 @@ class Orion(Implant):
     
     .. note::
 
-        By default the implant is in right hemisphere, use negative x-values to shift it to left hemisphere
+        The electrodes describe the device in its own frame, centered on
+        ``(0, 0)``. Where it is implanted is the spatial model's
+        ``implant_pos``, e.g. ``implant_pos=(20, -5) * mm`` for the right
+        hemisphere, or a visual field position in dva.
     
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        ``z`` can either be a list with 35 entries or a scalar that is applied
-        to all electrodes.
-        May be given as unitful quantities (e.g. ``Orion(x=15 * mm)``); see
-        :py:mod:`pulse2percept.units`.
     rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -42,7 +38,7 @@ class Orion(Implant):
     
     Examples
     --------
-    Create an Orion array, by default centered 15mm to the right of fovea in V1:
+    Create an Orion array in its own coordinate frame:
 
     >>> from pulse2percept.implants.cortex import Orion
     >>> Orion() # doctest: +NORMALIZE_WHITESPACE
@@ -54,26 +50,20 @@ class Orion(Implant):
     >>> orion = Orion()
     >>> orion['96'] # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='96', radius=1000.0,
-                  x=3450.0, y=-9640.928378532848, z=0.0)
+                  x=-11550.0, y=-9640.928378532848, z=0.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
     placement = 'epicortical'
 
-    def __init__(self, x=15000, y=0, z=0, rot=0, preprocess=False, safe_mode=False):
-
-        # This one inspects `z` itself before handing the geometry to
-        # ElectrodeGrid, so it cannot rely on the grid to normalize for it:
-        z = as_value(z, um, 'z')
-        if not np.isclose(z, 0):
-            raise NotImplementedError
+    def __init__(self, rot=0, preprocess=False, safe_mode=False):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
         self.shape = (10, 7)
         # The row offset is published in millimeters; coordinates are microns:
         spacing = (4200, np.sqrt(3**2-2.1**2) * UM_PER_MM)
         self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, x=x, y=y, z=z, rot=rot, names=('A', '-1'),
+            self.shape, spacing, rot=rot, names=('A', '-1'),
             grid_type='hex', radius=1000, electrode_type=DiskElectrode)
         for e in ['A1', 'F7', 'G7', 'H6', 'H7', 'I6', 'I7', 'J5', 'J6', 'J7']:
             self.electrode_array.remove_electrode(e)

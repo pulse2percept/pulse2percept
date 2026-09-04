@@ -4,11 +4,9 @@ import numpy.testing as npt
 
 from pulse2percept.implants.cortex.icvp import ICVP
 
-@pytest.mark.parametrize('x', (-100, 200))
-@pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
-def test_icvp(x, y, rot):
-    icvp = ICVP(x, y, rot=rot)
+def test_icvp(rot):
+    icvp = ICVP(rot=rot)
     non_rot_icvp = ICVP(0)
 
     n_elec = 18
@@ -34,8 +32,8 @@ def test_icvp(x, y, rot):
     xy = R @ xy
     # Then off-set: Make sure first electrode is placed
     # correctly
-    npt.assert_almost_equal(icvp['11'].x, xy[0] + x, decimal=2)
-    npt.assert_almost_equal(icvp['11'].y, xy[1] + y, decimal=2)
+    npt.assert_almost_equal(icvp['11'].x, xy[0], decimal=2)
+    npt.assert_almost_equal(icvp['11'].y, xy[1], decimal=2)
 
     for electrode in icvp.electrode_array.electrode_objects:
         npt.assert_almost_equal(electrode.radius, radius)

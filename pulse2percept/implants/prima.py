@@ -135,7 +135,7 @@ def _pixel_size_um(pixel_size, supported, cls_name):
                      f"Supported pixel sizes (um): {sizes}.")
 
 
-def _device_frame(electrode_array, center):
+def _device_frame(electrode_array, center=(0, 0)):
     """Return coordinates in the unrotated device frame."""
     rot = np.radians(electrode_array.rot)
     c, s = np.cos(rot), np.sin(rot)
@@ -144,7 +144,7 @@ def _device_frame(electrode_array, center):
             @ np.array([[c, -s], [s, c]]))
 
 
-def _recenter(electrode_array, center):
+def _recenter(electrode_array, center=(0, 0)):
     """Center a trimmed array on ``center``."""
     xy = _device_frame(electrode_array, center)
     off = -0.5 * (xy.min(axis=0) + xy.max(axis=0))
@@ -156,7 +156,7 @@ def _recenter(electrode_array, center):
         elec.y += dy
 
 
-def _trim_to_disc(electrode_array, n_pixels, center):
+def _trim_to_disc(electrode_array, n_pixels, center=(0, 0)):
     """Keep the ``n_pixels`` lattice sites nearest ``center``."""
     xy = _device_frame(electrode_array, center)
     # Round to keep ties stable under rotation:
@@ -167,7 +167,7 @@ def _trim_to_disc(electrode_array, n_pixels, center):
         electrode_array.remove_electrode(name)
 
 
-def _trim_to_axial_mask(electrode_array, spans, center):
+def _trim_to_axial_mask(electrode_array, spans, center=(0, 0)):
     """Trim a grid to an axial-coordinate mask."""
     cols = max(spans) - min(spans) + 1
     keep = {i * cols + j for i, j in _axial_rows(spans)}
@@ -178,7 +178,7 @@ def _trim_to_axial_mask(electrode_array, spans, center):
     _recenter(electrode_array, center)
 
 
-def _plot_substrate(ax, center, rot, radius=None, side=None):
+def _plot_substrate(ax, rot, radius=None, side=None, center=(0, 0)):
     """Draw the implant substrate."""
     if ax is None:
         ax = plt.gca()
@@ -296,15 +296,12 @@ class PRIMAPivotal(Implant):
     
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 378 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of 378 entries
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
@@ -341,8 +338,7 @@ class PRIMAPivotal(Implant):
        modeled.
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
-                 '_substrate_center')
+    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
 
     placement = 'subretinal'
     technology = 'photovoltaic'
@@ -351,7 +347,7 @@ class PRIMAPivotal(Implant):
     #: The device is illuminated, not driven by a current source.
     stimulus_unit = mW / mm ** 2
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=-100, rot=0, eye='RE', preprocess=False,
                  safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.spacing = 100  # um, nearest-neighbor center-to-center
         self.pixel_width = 100  # um, flat-to-flat
@@ -370,15 +366,12 @@ class PRIMAPivotal(Implant):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
-        # Center the substrate at the requested position:
-        self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
-
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, self.spacing, x=x, y=y, z=zarr, rot=rot,
+            self.shape, self.spacing, z=zarr, rot=rot,
             grid_type='hex', orientation='vertical',
             electrode_type=PhotovoltaicPixel, radius=elec_radius,
             apothem=self.pixel_width / 2)
@@ -493,8 +486,8 @@ class PRIMAPivotal(Implant):
         
         .. versionadded:: 0.11.0
         """
-        ax, substrate = _plot_substrate(ax, self._substrate_center,
-                                        self.electrode_array.rot, side=2000)
+        ax, substrate = _plot_substrate(ax, self.electrode_array.rot,
+                                        side=2000)
         drawn = list(ax.collections)
         ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
                           stim=stim, stim_cmap=stim_cmap)
@@ -520,15 +513,12 @@ class Lorach2015Array(Implant):
     
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 142 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of 142 entries
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
@@ -550,13 +540,12 @@ class Lorach2015Array(Implant):
        when plotted.
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap',
-                 '_substrate_center')
+    __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
 
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=-100, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
         self.spacing = 75  # um, nearest-neighbor center-to-center
         self.pixel_width = 70  # um, flat-to-flat
@@ -572,15 +561,12 @@ class Lorach2015Array(Implant):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
-        # Center the substrate at the requested position:
-        self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
-
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, self.spacing, x=x, y=y, z=zarr, rot=rot,
+            self.shape, self.spacing, z=zarr, rot=rot,
             grid_type='hex', orientation='vertical',
             electrode_type=PhotovoltaicPixel, radius=elec_radius,
             apothem=self.pixel_width / 2)
@@ -613,8 +599,8 @@ class Lorach2015Array(Implant):
         
         .. versionadded:: 0.11.0
         """
-        ax, substrate = _plot_substrate(ax, self._substrate_center,
-                                        self.electrode_array.rot, radius=500)
+        ax, substrate = _plot_substrate(
+            ax, self.electrode_array.rot, radius=500)
         drawn = list(ax.collections)
         ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
                           stim=stim, stim_cmap=stim_cmap)
@@ -645,15 +631,14 @@ class Ho2019FlatArray(Implant):
     ----------
     pixel_size : {55, 40}
         Pixel width (um), which selects the device variant.
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` may be a scalar or one value per pixel.
-        May be given as unitful quantities; see :py:mod:`pulse2percept.units`.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of them
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate system.
@@ -677,13 +662,12 @@ class Ho2019FlatArray(Implant):
        ``gap`` is 0.
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('pixel_size', 'shape', 'spacing', 'pixel_width', 'gap',
-                 '_substrate_center')
+    __slots__ = ('pixel_size', 'shape', 'spacing', 'pixel_width', 'gap')
 
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, pixel_size, x=0, y=0, z=-100, rot=0, eye='RE',
+    def __init__(self, pixel_size, z=-100, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HO2019_VARIANTS,
                                          'Ho2019FlatArray')
@@ -700,24 +684,19 @@ class Ho2019FlatArray(Implant):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
-        # Center the substrate at the requested position:
-        self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
-
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, self.spacing, x=x, y=y, z=zarr, rot=rot,
+            self.shape, self.spacing, z=zarr, rot=rot,
             grid_type='hex', orientation='vertical',
             electrode_type=PhotovoltaicPixel, radius=spec['elec_radius'],
             apothem=self.pixel_width / 2)
         if spec['spans'] is not None:
-            _trim_to_axial_mask(self.electrode_array, spec['spans'],
-                                self._substrate_center)
+            _trim_to_axial_mask(self.electrode_array, spec['spans'])
         else:
-            _trim_to_disc(self.electrode_array, spec['n_pixels'],
-                          self._substrate_center)
+            _trim_to_disc(self.electrode_array, spec['n_pixels'])
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -734,8 +713,8 @@ class Ho2019FlatArray(Implant):
         
         .. versionadded:: 0.11.0
         """
-        ax, substrate = _plot_substrate(ax, self._substrate_center,
-                                        self.electrode_array.rot, radius=500)
+        ax, substrate = _plot_substrate(
+            ax, self.electrode_array.rot, radius=500)
         drawn = list(ax.collections)
         ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
                           stim=stim, stim_cmap=stim_cmap)
@@ -769,15 +748,14 @@ class Huang2021Array(Implant):
     ----------
     pixel_size : {55, 40, 30, 20}
         Pixel width (um), which selects the device variant.
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` may be a scalar or one value per exposed pixel.
-        May be given as unitful quantities; see :py:mod:`pulse2percept.units`.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of them
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate system.
@@ -802,12 +780,12 @@ class Huang2021Array(Implant):
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('pixel_size', 'n_total_pixels', 'shape', 'spacing',
-                 'pixel_width', 'gap', '_substrate_center')
+                 'pixel_width', 'gap')
 
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, pixel_size, x=0, y=0, z=-100, rot=0, eye='RE',
+    def __init__(self, pixel_size, z=-100, rot=0, eye='RE',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HUANG2021_AXIAL_SPANS,
                                          'Huang2021Array')
@@ -827,20 +805,16 @@ class Huang2021Array(Implant):
         # per-electrode list of heights never reaches the grid at all -- it is
         # written onto the electrodes further down:
         z = as_value(z, um, 'z')
-        # Center the substrate at the requested position:
-        self._substrate_center = (as_value(x, um, 'x'), as_value(y, um, 'y'))
-
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = -100 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, self.spacing, x=x, y=y, z=zarr, rot=rot,
+            self.shape, self.spacing, z=zarr, rot=rot,
             grid_type='hex', orientation='vertical',
             electrode_type=PhotovoltaicPixel, radius=elec_radius,
             apothem=self.pixel_width / 2)
-        _trim_to_axial_mask(self.electrode_array, spans,
-                            self._substrate_center)
+        _trim_to_axial_mask(self.electrode_array, spans)
 
         if overwrite_z:
             z_arr = np.asarray(z).flatten()
@@ -857,8 +831,8 @@ class Huang2021Array(Implant):
         
         .. versionadded:: 0.11.0
         """
-        ax, substrate = _plot_substrate(ax, self._substrate_center,
-                                        self.electrode_array.rot, radius=750)
+        ax, substrate = _plot_substrate(
+            ax, self.electrode_array.rot, radius=750)
         drawn = list(ax.collections)
         ax = super().plot(annotate=annotate, autoscale=autoscale, ax=ax,
                           stim=stim, stim_cmap=stim_cmap)
@@ -885,9 +859,9 @@ class PRIMA55(Ho2019FlatArray):
     """
     __slots__ = ()
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=-100, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
-        super().__init__(55, x=x, y=y, z=z, rot=rot, eye=eye,
+        super().__init__(55, z=z, rot=rot, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)
 
 
@@ -905,9 +879,9 @@ class PRIMA40(Ho2019FlatArray):
     """
     __slots__ = ()
 
-    def __init__(self, x=0, y=0, z=-100, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=-100, rot=0, eye='RE', preprocess=False,
                  safe_mode=False):
-        super().__init__(40, x=x, y=y, z=z, rot=rot, eye=eye,
+        super().__init__(40, z=z, rot=rot, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)
 
 

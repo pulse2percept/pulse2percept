@@ -155,10 +155,10 @@ def test_every_spelling_builds_the_same_object():
           lambda e: e.x, 'DiskElectrode.x')
     _same(lambda r: DiskElectrode(0, 0, 0, r), length, lengths,
           lambda e: e.radius, 'DiskElectrode.radius')
-    _same(lambda x: ArgusII(x=x), length, lengths,
+    _same(lambda z: ArgusII(z=z), length, lengths,
           lambda i: np.array([[e.x, e.y, e.z]
                               for e in i.electrode_array.electrode_objects]),
-          'ArgusII.x')
+          'ArgusII.z')
     _same(lambda sp: ElectrodeGrid((2, 3), sp), length, lengths,
           lambda g: np.array([[e.x, e.y] for e in g.electrode_objects]),
           'ElectrodeGrid.spacing')
@@ -193,8 +193,8 @@ def test_every_spelling_builds_the_same_object():
           lambda xy: np.asarray(xy, dtype=float), 'Watson2014Map.dva_to_ret')
 
     # --- And a whole pipeline, spelled unitfully end to end ---------------
-    imp_bare = ArgusII(x=575)
-    imp_unit = ArgusII(x=0.575 * mm)
+    imp_bare = ArgusII(z=575)
+    imp_unit = ArgusII(z=0.575 * mm)
     bare = Model(spatial=ScoreboardSpatial(imp_bare, rho=575,
                                            xrange=(-8, 8), yrange=(-8, 8),
                                            step=2),
@@ -257,7 +257,7 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         DiskElectrode(2 * dva, 0, 0, 100)
     with pytest.raises(DimensionMismatchError):
-        ArgusII(x=2 * dva)
+        ArgusII(z=2 * dva)
     with pytest.raises(DimensionMismatchError):
         Watson2014Map().ret_to_dva(2 * dva, 2 * dva)
 
@@ -296,7 +296,7 @@ def test_the_whole_rejection_matrix():
     # A bare number is never rejected, anywhere. That is the other half of the
     # contract, and the reason none of the above needs a deprecation cycle:
     for build in (lambda: DiskElectrode(575, 0, 0, 100),
-                  lambda: ArgusII(x=575),
+                  lambda: ArgusII(z=575),
                   lambda: Grid2D((-2, 2), (-2, 2)),
                   lambda: BiphasicPulse(50, 0.45),
                   lambda: Implant(ArgusII().electrode_array, max_current=20),

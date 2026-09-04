@@ -5,11 +5,9 @@ import numpy.testing as npt
 from pulse2percept.implants.cortex.orion import Orion
 
 
-@pytest.mark.parametrize('x', (-100, 200))
-@pytest.mark.parametrize('y', (-200, 400))
 @pytest.mark.parametrize('rot', (-45, 60))
-def test_orion(x, y, rot):
-    orion = Orion(x, y, rot=rot)
+def test_orion(rot):
+    orion = Orion(rot=rot)
     non_rot_orion = Orion(0)
 
     n_elec = 60
@@ -32,8 +30,8 @@ def test_orion(x, y, rot):
     xy = R @ xy
     # Then off-set: Make sure first electrode is placed
     # correctly
-    npt.assert_almost_equal(orion['55'].x, xy[0] + x, decimal=2)
-    npt.assert_almost_equal(orion['55'].y, xy[1] + y, decimal=2)
+    npt.assert_almost_equal(orion['55'].x, xy[0], decimal=2)
+    npt.assert_almost_equal(orion['55'].y, xy[1], decimal=2)
 
     # Make sure the radius is correct
     for electrode in orion.electrode_array.electrode_objects:

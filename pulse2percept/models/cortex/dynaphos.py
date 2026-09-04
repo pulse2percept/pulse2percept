@@ -105,6 +105,20 @@ class DynaphosModel(BaseModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
+    implant_pos : (x, y) or Quantity, optional
+        Tissue position of the implant's local ``(0, 0)`` origin. A dva
+        position names the cortical representation of that visual field
+        location and is resolved through ``visual_field_map``; a physical one
+        is used as given. Defaults to the tissue origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_z : float or Quantity, optional
+        Depth the implant is placed at (um), added to every electrode's local
+        ``z``.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -144,6 +158,7 @@ class DynaphosModel(BaseModel):
                  xrange=(-5, 5), yrange=(-5, 5), step=0.25,
                  grid_type='rect', visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_pos=(0, 0), implant_z=0,
                  location_noise=None,
                  verbose=True):
             _check_implant(implant)
@@ -160,6 +175,7 @@ class DynaphosModel(BaseModel):
                     Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
                     if visual_field_map is None else visual_field_map),
                 n_gray=n_gray, noise=noise,
+                implant_pos=implant_pos, implant_z=implant_z,
                 location_noise=location_noise, verbose=verbose,
                 regions=['v1'] if regions is None else regions)
 

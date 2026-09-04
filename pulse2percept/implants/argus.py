@@ -55,15 +55,14 @@ class ArgusI(Implant):
 
     Parameters
     ----------
-    x/y/z : double
-        3D location of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 16 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of 16 entries
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -86,13 +85,13 @@ class ArgusI(Implant):
     the retina, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import ArgusI
-    >>> ArgusI(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> ArgusI(z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     ArgusI(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
            safe_mode=False, shape=(4, 4))
 
     Get access to electrode 'B1', either by name or by row/column index:
 
-    >>> argus = ArgusI(x=0, y=0, z=100, rot=0)
+    >>> argus = ArgusI(z=100, rot=0)
     >>> argus['B1']  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='B1', radius=250.0,
                   x=-400.0, y=-1200.0, z=100.0)
@@ -107,7 +106,7 @@ class ArgusI(Implant):
     placement = 'epiretinal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
                  safe_mode=False, use_legacy_names=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -125,7 +124,7 @@ class ArgusI(Implant):
                              'L7', 'L3', 'M5', 'M1']
         names = old_names if use_legacy_names else ('1', 'A')
         self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, x=x, y=y, z=z, rot=rot,
+            self.shape, spacing, z=z, rot=rot,
             electrode_type=DiskElectrode, radius=r_arr, names=names)
 
         # Set left/right eye:
@@ -195,15 +194,14 @@ class ArgusII(Implant):
 
     Parameters
     ----------
-    x/y/z : double
-        3D location of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 60 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array plane, i.e. local device
+        geometry: a scalar applies to every electrode, a list of 60 entries
+        gives each its own. Positive values move an electrode away from
+        the retina into the vitreous humor. Where the device sits is set
+        by the model's ``implant_pos`` and ``implant_z``, not here.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
     rot : float or Quantity
         Rotation angle of the array (deg). Positive values denote
         counter-clock-wise (CCW) rotations in the retinal coordinate
@@ -246,14 +244,14 @@ class ArgusII(Implant):
     the retina, rotated counter-clockwise by 5 degrees:
 
     >>> from pulse2percept.implants import ArgusII
-    >>> ArgusII(x=0, y=0, z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> ArgusII(z=100, rot=5)  # doctest: +NORMALIZE_WHITESPACE
     ArgusII(electrode_array=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
             preprocess=True, raster=SequentialRaster, safe_mode=False,
             shape=(6, 10))
 
     Get access to electrode 'E7', either by name or by row/column index:
 
-    >>> argus = ArgusII(x=0, y=0, z=100, rot=0)
+    >>> argus = ArgusII(z=100, rot=0)
     >>> argus['E7']  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='E7', radius=112.5,
                   x=862.5, y=862.5, z=100.0)
@@ -275,7 +273,7 @@ class ArgusII(Implant):
     placement = 'epiretinal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
                  safe_mode=False, encoder=_DEVICE_DEFAULT,
                  raster=_DEVICE_DEFAULT, thresholds=None):
         self.safe_mode = safe_mode
@@ -285,7 +283,7 @@ class ArgusII(Implant):
         spacing = 575.0
         names = ('A', '1')
         self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, x=x, y=y, z=z, radius=r, rot=rot,
+            self.shape, spacing, z=z, radius=r, rot=rot,
             names=names, electrode_type=DiskElectrode)
 
         # Built per instance rather than shared between them: a raster binds to

@@ -23,7 +23,7 @@ from pulse2percept.models import (AxonMapModel, BiphasicAxonMapModel,
 from pulse2percept.models.cortex import DynaphosModel
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    ImageStimulus, VideoStimulus)
-from pulse2percept.units import dva, xTh
+from pulse2percept.units import dva, mm, xTh
 from pulse2percept.vision import Scene, Scotoma
 
 GRID = dict(xrange=(-8, 8), yrange=(-6, 6), step=1)
@@ -195,7 +195,8 @@ def test_biphasic_axon_map_prediction_is_unchanged():
 
 
 def test_dynaphos_prediction_is_unchanged():
-    model = DynaphosModel(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3),
+    model = DynaphosModel(implant=Cortivis(), implant_pos=(20, -5) * mm,
+                          xrange=(-3, 3), yrange=(-3, 3),
                           step=1, dt=20).build()
     percept = model.predict_percept(
         {'11': BiphasicPulseTrain(300, 100, 0.17, stim_dur=100)})
@@ -240,7 +241,7 @@ def test_rebinding_the_implant_invalidates_the_build():
     npt.assert_equal(model.is_built, True)
     here = model.predict_percept({'C5': 30})
 
-    model.implant = ArgusII(x=2000)
+    model.implant = ArgusII(rot=30)
     npt.assert_equal(model.is_built, False)
     model.build()
     there = model.predict_percept({'C5': 30})
