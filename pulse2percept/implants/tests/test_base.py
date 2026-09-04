@@ -514,12 +514,12 @@ def test_implant_geometry_units():
 
 
 def test_implant_rot_units():
-    """`rot` is an ordinary angle; the grid does the conversion for everyone"""
-    bare = implants.ArgusII(rot=45).electrode_array.coordinates()
+    """`rot` is an ordinary angle; the grid does the conversion"""
+    bare = GridImplant((6, 10), 575.0, rot=45).electrode_array.coordinates()
     for rot in (45 * deg, np.pi / 4 * rad):
         npt.assert_allclose(
-            implants.ArgusII(rot=rot).electrode_array.coordinates(), bare,
-            rtol=1e-12)
+            GridImplant((6, 10), 575.0, rot=rot).electrode_array.coordinates(),
+            bare, rtol=1e-12)
 
 
 def test_implant_per_electrode_z_units():
@@ -541,11 +541,8 @@ def test_implant_dimension_errors():
     for cls in (implants.ArgusII, implants.PRIMAPivotal, implants.BVT24):
         with pytest.raises(DimensionMismatchError):
             cls(z=10 * uA)
-        with pytest.raises(DimensionMismatchError):
-            cls(rot=5 * dva)
-    for cls in (cortex.Orion, cortex.Cortivis, cortex.ICVP):
-        with pytest.raises(DimensionMismatchError):
-            cls(rot=5 * dva)
+    with pytest.raises(DimensionMismatchError):
+        GridImplant((2, 2), 400, rot=5 * dva)
     with pytest.raises(DimensionMismatchError):
         implants.RectangleImplant(spacing=2 * dva)
     with pytest.raises(DimensionMismatchError):
@@ -1251,18 +1248,21 @@ def test_a_named_implant_is_built_around_its_own_origin(implant_type):
 
 
 def test_model_side_placement_reproduces_an_old_absolute_position():
-    """What `ArgusII(x=..., y=..., z=...)` used to build, `implant_pos` does"""
-    implant = implants.ArgusII(rot=-28.4)
-    model = ScoreboardSpatial(implant, implant_pos=(-1331, -850) * um,
-                              implant_z=100 * um, xrange=(-5, 5),
-                              yrange=(-5, 5), step=1)
+    """What `ArgusII(x=..., y=..., z=...)` used to build, placement does"""
+    implant = implants.ArgusII()
+    rot = -28.4
+    model = ScoreboardSpatial(implant, implant_position=(-1331, -850) * um,
+                              implant_rotation=rot, implant_depth=100 * um,
+                              xrange=(-5, 5), yrange=(-5, 5), step=1)
     stim = implant.prepare_stim({'A1': 1})
     placed = np.column_stack(
         model._electrode_coords(implant.electrode_array, stim,
                                 electrodes=implant.electrode_names))
     local = implant.electrode_array.coordinates()
-    npt.assert_almost_equal(placed[:, :2], local[:, :2] + [-1331, -850],
-                            decimal=3)
+    th = np.deg2rad(rot)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    npt.assert_almost_equal(placed[:, :2],
+                            (R @ local[:, :2].T).T + [-1331, -850], decimal=3)
     npt.assert_almost_equal(placed[:, 2], local[:, 2] + 100, decimal=3)
     # The device is untouched, so the placement is entirely the model's:
     npt.assert_array_equal(implant.electrode_array.coordinates(), local)
@@ -1282,7 +1282,7 @@ def test_one_implant_serves_two_models_at_different_depths():
         return np.asarray(model._electrode_coords(implant.electrode_array,
                                                   stim)[2], dtype=float)
 
-    shallow, deep = z_of(implant_z=0), z_of(implant_z=150 * um)
+    shallow, deep = z_of(implant_depth=0), z_of(implant_depth=150 * um)
     npt.assert_almost_equal(shallow, local[:, 2], decimal=3)
     npt.assert_almost_equal(deep - shallow, 150, decimal=3)
     # Non-planarity is device geometry and is not flattened by placement:

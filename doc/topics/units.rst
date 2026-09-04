@@ -101,9 +101,9 @@ each other freely, and bare numbers still mean degrees:
     from pulse2percept.implants import ArgusII
     from pulse2percept.units import deg, rad
 
-    ArgusII(rot=45)              # degrees, as before
-    ArgusII(rot=45 * deg)        # equivalent
-    ArgusII(rot=np.pi / 4 * rad) # equivalent
+    ElectrodeGrid((6, 10), 575, rot=45)              # degrees, as before
+    ElectrodeGrid((6, 10), 575, rot=45 * deg)        # equivalent
+    ElectrodeGrid((6, 10), 575, rot=np.pi / 4 * rad) # equivalent
 
 ``dva`` is deliberately a different dimension: it describes coordinates or
 extent in the visual field, whereas ``deg`` and ``rad`` describe geometric

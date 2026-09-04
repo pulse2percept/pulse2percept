@@ -8,7 +8,7 @@ from ..base import (BaseModel, _check_implant, _electrode_offsets,
                     _require_stim_dimension)
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
-from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA, um
+from ...units import (A, Quantity, as_value, deg, dva, Hz, mm, ms, uA, um)
 from ...utils import cart2pol
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
@@ -105,14 +105,20 @@ class DynaphosModel(BaseModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits. A bare pair or a
         length is a cortical position in microns; ``(6, -2) * dva`` names the
         representation of that visual field location.
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's local
         ``z``.
 
@@ -157,7 +163,8 @@ class DynaphosModel(BaseModel):
                  xrange=(-5, 5), yrange=(-5, 5), step=0.25,
                  grid_type='rect', visual_field_map=None, n_gray=None,
                  noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True):
             _check_implant(implant)
@@ -174,7 +181,9 @@ class DynaphosModel(BaseModel):
                     Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
                     if visual_field_map is None else visual_field_map),
                 n_gray=n_gray, noise=noise,
-                implant_pos=implant_pos, implant_z=implant_z,
+                implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
                 location_noise=location_noise, verbose=verbose,
                 regions=['v1'] if regions is None else regions)
 
@@ -218,10 +227,11 @@ class DynaphosModel(BaseModel):
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
                 'noise': None,
-                # Tissue position of the implant's local origin, and its
-                # depth (um):
-                'implant_pos': (0, 0),
-                'implant_z': 0,
+                # Tissue position of the implant's local origin, its
+                # rotation (deg) and its depth (um):
+                'implant_position': (0, 0),
+                'implant_rotation': 0,
+                'implant_depth': 0,
                 # Subject-specific phosphene displacement (dva):
                 'location_noise': None,
                 # True: print status messages, 0: silent
@@ -268,7 +278,8 @@ class DynaphosModel(BaseModel):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
-            'implant_z': um,
+            'implant_rotation': deg,
+            'implant_depth': um,
             'location_noise': dva,
             'dt': ms,
             # Decay constants, both converted to seconds where they are used:

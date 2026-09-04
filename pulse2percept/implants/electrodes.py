@@ -48,7 +48,7 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     x/y/z : double
         Location of the electrode (um) in the array's own coordinate frame.
         ``z`` is height above the array plane; where the array is implanted is
-        the model's ``implant_pos`` and ``implant_z``.
+        the model's ``implant_position`` and ``implant_depth``.
     name : str, optional
         Electrode name
     activated : bool

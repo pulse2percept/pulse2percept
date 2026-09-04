@@ -94,16 +94,19 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 # location.
 #
 # Consulting [Beyeler2019]_ tells us that the prosthesis was roughly implanted
-# at ``(-1331, -850)`` um, rotated by -28.4 degrees. Rotation is the device's
-# own orientation, so the implant takes it; the position is where the surgeon
-# put the array, which this figure applies to the electrode coordinates it
-# draws. (A model would say the same thing with ``implant_pos``.)
+# at ``(-1331, -850)`` um, rotated by -28.4 degrees. Both are placement, which
+# a model states as ``implant_position`` and ``implant_rotation``; this figure
+# draws in retinal coordinates, so it applies the same transform itself.
 
+import numpy as np
 from pulse2percept.implants import ArgusII
-argus = ArgusII(rot=-28.4, eye='RE')
+argus = ArgusII(eye='RE')
+th = np.deg2rad(-28.4)
+cos, sin = np.cos(th), np.sin(th)
 for electrode in argus.electrode_objects:
-    electrode.x -= 1331
-    electrode.y -= 850
+    x, y = electrode.x, electrode.y
+    electrode.x = cos * x - sin * y - 1331
+    electrode.y = sin * x + cos * y - 850
 
 ###############################################################################
 # For now, let's focus on the data from Subject 2:

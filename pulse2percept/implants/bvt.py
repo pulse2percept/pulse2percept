@@ -1,12 +1,11 @@
 """:py:class:`~pulse2percept.implants.BVT24`, 
    :py:class:`~pulse2percept.implants.BVT44`"""
 import numpy as np
-from skimage.transform import SimilarityTransform
 
 from .base import Implant
 from .electrodes import DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
-from ..units import as_value, deg, um
+from ..units import as_value, um
 
 
 class BVT24(Implant):
@@ -15,9 +14,9 @@ class BVT24(Implant):
     This class creates a 24-channel suprachoroidal retinal prosthesis
     [Layton2014]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
-    The center of the array is located at (x,y,z), given in microns, and the
-    array is rotated counter-clockwise by rotation angle ``rot``, given in 
-    degrees.
+    Electrode coordinates are given in the array's own frame, centered on
+    ``(0, 0)``. Where the array is implanted is set by the model's
+    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
 
     The array consists of:
 
@@ -46,13 +45,9 @@ class BVT24(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 35 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -69,7 +64,7 @@ class BVT24(Implant):
     placement = 'suprachoroidal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='RE', preprocess=False,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -79,7 +74,6 @@ class BVT24(Implant):
         # This implant lays out its own electrodes rather than handing the
         # geometry to an ElectrodeGrid, so it normalizes for itself:
         z = as_value(z, um, 'z')
-        rot = as_value(rot, deg, 'rot')
 
         # the positions of the electrodes 1-20, 21a-21m, R1-R2
         x_arr = np.array([1275.0, 850.0, 1275.0, 850.0, 1275.0,
@@ -123,11 +117,6 @@ class BVT24(Implant):
                       'C21k', 'C21l', 'C21m'])
         names.extend(['R1', 'R2'])
 
-        # Local in-plane orientation only; where the device sits is the
-        # model's business:
-        tf = SimilarityTransform(rotation=np.deg2rad(rot))
-        x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
-
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.electrode_array.add_electrode(name, DiskElectrode(x, y, z, r))
 
@@ -141,8 +130,8 @@ class BVT44(Implant):
     Consortium and commercialized by Bionic Vision Technologies (BVT).
 
     The array's own ``(0, 0)`` origin lies at the center of electrodes D4,
-    D5, C4 and E4, and the array is rotated counter-clockwise by rotation
-    angle ``rot``, given in degrees.
+    D5, C4 and E4. Where the array is implanted is set by the model's
+    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
 
     The array consists of:
 
@@ -164,13 +153,9 @@ class BVT44(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 35 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -186,7 +171,7 @@ class BVT44(Implant):
     placement = 'suprachoroidal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, z=0, rot=0, eye='LE', preprocess=False,
+    def __init__(self, z=0, eye='LE', preprocess=False,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -196,7 +181,6 @@ class BVT44(Implant):
         # Placed by hand, like BVT24, once the hex grid has supplied the
         # in-array positions:
         z = as_value(z, um, 'z')
-        rot = as_value(rot, deg, 'rot')
 
         # The 44 stimulating electrodes are arranged in a hex grid; two return
         # electrodes are added as well:
@@ -220,11 +204,6 @@ class BVT44(Implant):
         # the position of the electrodes 1-20, 21a-21m, R1-R2 for left eye
         if eye == 'LE':
             x_arr = np.negative(x_arr)
-
-        # Local in-plane orientation only; where the device sits is the
-        # model's business:
-        tf = SimilarityTransform(rotation=np.deg2rad(rot))
-        x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.electrode_array.add_electrode(name, DiskElectrode(x, y, z, r))

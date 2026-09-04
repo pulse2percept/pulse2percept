@@ -147,11 +147,10 @@ ax.set_title('Predicted percept')
 # A major prediction of the axon map model is that the percept changes
 # depending on the location of the implant. You can convince yourself of that
 # by re-running the model on an implant shifted and rotated across the retina.
-# Rotation belongs to the device; where it sits on the retina is the model's
-# ``implant_pos``:
+# Where the device sits and how it is turned are both the model's:
 
-model.implant = ArgusII(rot=-45)
-model.spatial.implant_pos = (-50, 50) * um
+model.spatial.implant_position = (-50, 50) * um
+model.spatial.implant_rotation = -45
 model.plot()
 model.implant.plot()
 

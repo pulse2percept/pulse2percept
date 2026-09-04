@@ -28,13 +28,9 @@ class IMIE(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 35 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -51,7 +47,7 @@ class IMIE(Implant):
     placement = 'epiretinal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, eye='RE', preprocess=True,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -61,7 +57,7 @@ class IMIE(Implant):
         e_spacing = 350.0  # um
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, e_spacing, z=z, rot=rot,
+            self.shape, e_spacing, z=z,
             electrode_type=DiskElectrode, radius=elec_radius)
         
         # Set left/right eye:

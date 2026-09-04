@@ -13,10 +13,10 @@ class AlphaIMS(Implant):
     """Alpha-IMS
 
     This class creates an Alpha-IMS array with 1500 photovoltaic pixels (each
-    50um in diameter) as described in [Stingl2013]_, and places it in the
-    subretinal space, such that the center of the array is located at (x,y,z),
-    given in microns, and the array is rotated by rotation angle ``rot``,
-    given in degrees.
+    50um in diameter) as described in [Stingl2013]_. Electrode coordinates
+    are given in the array's own frame, centered on ``(0, 0)``. Where the
+    array is implanted in the subretinal space is set by the model's
+    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
 
     The device consists of 1500 50um-wide square pixels, arranged on a 39x39
     rectangular grid with 72um pixel pitch.
@@ -37,13 +37,9 @@ class AlphaIMS(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 1500 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -55,17 +51,17 @@ class AlphaIMS(Implant):
 
     Examples
     --------
-    Create an Alpha-IMS array, rotated counter-clockwise by 5 degrees:
+    Create an Alpha-IMS array:
 
     >>> from pulse2percept.implants import AlphaIMS
-    >>> AlphaIMS(rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> AlphaIMS()  # doctest: +NORMALIZE_WHITESPACE
     AlphaIMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
              safe_mode=False, shape=(39, 39))
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
 
-    >>> alpha_ims = AlphaIMS(rot=0)
+    >>> alpha_ims = AlphaIMS()
     >>> alpha_ims['A3']  # doctest: +NORMALIZE_WHITESPACE
     SquareElectrode(activated=True, name='A3', side_length=50.0,
                     x=-1224.0, y=-1368.0, z=0.0)
@@ -79,7 +75,7 @@ class AlphaIMS(Implant):
 
     placement = 'subretinal'
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, eye='RE', preprocess=True,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -100,7 +96,7 @@ class AlphaIMS(Implant):
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = 0.0 if overwrite_z else z
         self.electrode_array = ElectrodeGrid(
-            self.shape, e_spacing, z=zarr, rot=rot,
+            self.shape, e_spacing, z=zarr,
             electrode_type=SquareElectrode, side_length=elec_width)
 
         # Unfortunately, in the left eye the labeling of columns is reversed...
@@ -150,10 +146,10 @@ class AlphaAMS(Implant):
     """Alpha-AMS
 
     This class creates an Alpha-AMS array with 1600 photovoltaic pixels (each
-    30um in diameter) as described in [Stingl2017]_, and places it in the
-    subretinal space, such that the center of the array is located at (x,y,z),
-    given in microns, and the array is rotated by rotation angle ``rot``,
-    given in degrees.
+    30um in diameter) as described in [Stingl2017]_. Electrode coordinates
+    are given in the array's own frame, centered on ``(0, 0)``. Where the
+    array is implanted in the subretinal space is set by the model's
+    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
 
     The device consists of 1600 30um-wide round pixels, arranged on a 40x40
     rectangular grid with 70um pixel pitch.
@@ -174,13 +170,9 @@ class AlphaAMS(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 1600 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -192,17 +184,17 @@ class AlphaAMS(Implant):
 
     Examples
     --------
-    Create an AlphaAMS array, rotated counter-clockwise by 5 degrees:
+    Create an AlphaAMS array:
 
     >>> from pulse2percept.implants import AlphaAMS
-    >>> AlphaAMS(rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> AlphaAMS()  # doctest: +NORMALIZE_WHITESPACE
     AlphaAMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
              safe_mode=False, shape=(40, 40))
 
     Get access to the third electrode in the top row (by name or by row/column
     index):
 
-    >>> alpha_ims = AlphaAMS(rot=0)
+    >>> alpha_ims = AlphaAMS()
     >>> alpha_ims['A3']  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='A3', radius=15.0,
                   x=-1225.0, y=-1365.0, z=0.0)
@@ -216,7 +208,7 @@ class AlphaAMS(Implant):
 
     placement = 'subretinal'
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, eye='RE', preprocess=True,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -226,7 +218,7 @@ class AlphaAMS(Implant):
         e_spacing = 70.0  # um
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, e_spacing, z=z, rot=rot,
+            self.shape, e_spacing, z=z,
             electrode_type=DiskElectrode, radius=elec_radius)
 
         # Set left/right eye:

@@ -195,7 +195,7 @@ def test_biphasic_axon_map_prediction_is_unchanged():
 
 
 def test_dynaphos_prediction_is_unchanged():
-    model = DynaphosModel(implant=Cortivis(), implant_pos=(20, -5) * mm,
+    model = DynaphosModel(implant=Cortivis(), implant_position=(20, -5) * mm,
                           xrange=(-3, 3), yrange=(-3, 3),
                           step=1, dt=20).build()
     percept = model.predict_percept(
@@ -241,7 +241,7 @@ def test_rebinding_the_implant_invalidates_the_build():
     npt.assert_equal(model.is_built, True)
     here = model.predict_percept({'C5': 30})
 
-    model.implant = ArgusII(rot=30)
+    model.implant = ArgusII(eye='LE')
     npt.assert_equal(model.is_built, False)
     model.build()
     there = model.predict_percept({'C5': 30})

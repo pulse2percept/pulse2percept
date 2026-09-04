@@ -15,8 +15,8 @@ from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
 from ..topography import Curcio1990Map, Grid2D, RetinalMap
-from ..units import (DimensionMismatchError, Quantity, Unit, as_value, dva,
-                     ms, um, uA)
+from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
+                     dva, ms, um, uA)
 from ..units.base import has_units
 from ..vision import Scene
 from ..vision.scene import _gaze_points
@@ -367,30 +367,30 @@ def _blend_meridian(resp, grid, meridian, width):
 
 
 def _dva_pos_to_tissue(model, value):
-    """Return the tissue position, in um, of a dva ``implant_pos``.
+    """Return the tissue position, in um, of a dva ``implant_position``.
 
     Forward mapping only; the map need not be invertible.
     """
     visual_field_map = getattr(model, 'visual_field_map', None)
     if visual_field_map is None:
-        raise ValueError("'implant_pos' is resolved through "
+        raise ValueError("'implant_position' is resolved through "
                          "'visual_field_map', which is not set yet.")
-    xy = np.asarray(as_value(value, dva, 'implant_pos'),
+    xy = np.asarray(as_value(value, dva, 'implant_position'),
                     dtype=np.float64).ravel()
     if xy.size != 2 or not np.all(np.isfinite(xy)):
-        raise ValueError(f"'implant_pos' must be a finite (x, y) pair, "
+        raise ValueError(f"'implant_position' must be a finite (x, y) pair, "
                          f"not {value}.")
     if visual_field_map.ndim != 2:
         raise NotImplementedError(
             f"A visual field position places an implant on a 2D sheet, "
             f"and {type(visual_field_map).__name__} is "
-            f"{visual_field_map.ndim}D. Give 'implant_pos' as a physical "
+            f"{visual_field_map.ndim}D. Give 'implant_position' as a physical "
             f"position instead.")
     regions = list(visual_field_map.from_dva())
     if len(regions) != 1:
         raise NotImplementedError(
             f"{type(visual_field_map).__name__} maps one visual field "
-            f"location onto {regions}, so 'implant_pos' in dva does not "
+            f"location onto {regions}, so 'implant_position' in dva does not "
             f"say where the implant goes. Give a physical position "
             f"instead.")
     placed = visual_field_map.from_dva()[regions[0]](xy[0], xy[1])
@@ -398,9 +398,18 @@ def _dva_pos_to_tissue(model, value):
     if not np.all(np.isfinite(placed)):
         raise ValueError(
             f"{type(visual_field_map).__name__} does not map "
-            f"'implant_pos' {tuple(xy)} dva onto tissue.")
+            f"'implant_position' {tuple(xy)} dva onto tissue.")
     return np.asarray(Quantity(placed, visual_field_map.tissue_unit
                                ).to_value(um), dtype=float)
+
+
+def _placement_depth(model):
+    """Return ``implant_depth`` in um."""
+    depth = float(as_value(getattr(model, 'implant_depth', 0), um,
+                           'implant_depth'))
+    if not np.isfinite(depth):
+        raise ValueError(f"'implant_depth' must be finite, not {depth}.")
+    return depth
 
 
 def _placement_shift(model, unit):
@@ -409,34 +418,54 @@ def _placement_shift(model, unit):
     Reads model parameters only, so a subset of electrodes cannot change where
     the implant sits. Returns None for an implant at the tissue origin.
     """
-    pos = getattr(model, 'implant_pos', (0, 0))
+    pos = getattr(model, 'implant_position', (0, 0))
     if has_units(pos) and not _length_valued(pos):
         # Resolved here, not at assignment: `visual_field_map` may change.
         xy = _dva_pos_to_tissue(model, pos)
     else:
-        xy = np.asarray(as_value(pos, um, 'implant_pos'), dtype=float).ravel()
+        xy = np.asarray(as_value(pos, um, 'implant_position'),
+                        dtype=float).ravel()
     if xy.size != 2 or not np.all(np.isfinite(xy)):
-        raise ValueError(f"'implant_pos' must be a finite (x, y) pair, not "
-                         f"{pos}.")
-    depth = float(as_value(getattr(model, 'implant_z', 0), um, 'implant_z'))
-    if not np.isfinite(depth):
-        raise ValueError(f"'implant_z' must be finite, not {depth}.")
+        raise ValueError(f"'implant_position' must be a finite (x, y) pair, "
+                         f"not {pos}.")
+    depth = _placement_depth(model)
     shift = np.array([xy[0], xy[1], depth], dtype=float)
     if not np.any(shift):
         return None
     return np.asarray(Quantity(shift, um).to_value(unit), dtype=float)
 
 
+def _placement_rotation(model):
+    """Return ``implant_rotation`` in radians, or None where it is zero."""
+    rot = float(as_value(getattr(model, 'implant_rotation', 0), deg,
+                         'implant_rotation'))
+    if not np.isfinite(rot):
+        raise ValueError(f"'implant_rotation' must be finite, not {rot}.")
+    if rot == 0:
+        return None
+    return np.deg2rad(rot)
+
+
 def _placed_coords(model, electrode_array, unit, electrodes=None):
     """Electrode coordinates in ``unit``, placed by the model.
 
-    The implant is never mutated.
+    Rotates the array about its own origin, then translates it. The implant is
+    never mutated.
     """
     xyz = electrode_array.coordinates(unit, electrodes=electrodes)
+    theta = _placement_rotation(model)
     shift = _placement_shift(model, unit)
-    if shift is None:
+    if theta is None and shift is None:
         return xyz
-    return xyz + shift
+    xyz = xyz.copy()
+    if theta is not None:
+        cos, sin = np.cos(theta), np.sin(theta)
+        x, y = xyz[:, 0].copy(), xyz[:, 1].copy()
+        xyz[:, 0] = cos * x - sin * y
+        xyz[:, 1] = sin * x + cos * y
+    if shift is not None:
+        xyz += shift
+    return xyz
 
 
 def _location_noise_sigma(model):
@@ -586,7 +615,7 @@ def _warn_rho_vs_pitch(model):
 def _warn_ignores_z(model, electrode_array):
     """Warn when a model ignores nonzero electrode ``z`` coordinates.
 
-    Reads placed coordinates, so ``implant_z`` counts as depth.
+    Reads placed coordinates, so ``implant_depth`` counts as depth.
     """
     if np.allclose(_placed_coords(model, electrode_array,
                                   model.space_unit)[:, 2], 0):
@@ -691,19 +720,19 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def _normalize_param_value(self, name, value):
         """Normalize a parameter to its stored unit.
 
-        ``implant_pos`` is stored as given, since its unit decides whether it
-        names a tissue position or a visual field one.
+        ``implant_position`` is stored as given, since its unit decides
+        whether it names a tissue position or a visual field one.
         """
-        if name == 'implant_pos':
+        if name == 'implant_position':
             return value
         return super()._normalize_param_value(name, value)
 
     def _electrode_coords(self, electrode_array, stim, electrodes=None):
         """Return stimulus electrode coordinates in ``space_unit``.
 
-        The implant's coordinates placed by ``implant_pos`` and ``implant_z``,
-        in ``stim.electrodes`` order, as contiguous float32 arrays for the
-        numerical kernels.
+        The implant's coordinates placed by ``implant_position``,
+        ``implant_rotation`` and ``implant_depth``, in ``stim.electrodes``
+        order, as contiguous float32 arrays for the numerical kernels.
 
         Parameters
         ----------
@@ -791,7 +820,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. versionadded:: 0.11.0
 
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits, defaulting to the
         tissue origin. The unit decides how it is read: a bare pair or a
         length is a tissue position in microns, whereas ``(6, -2) * dva``
@@ -804,7 +833,14 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin rather than its
+        centroid. Applied before ``implant_position``.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's local
         ``z``. Only models that read ``z``, such as
         :py:class:`~pulse2percept.models.Nanduri2012Model`, respond to it.
@@ -985,8 +1021,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
-            'implant_pos': (0, 0),  # um, or dva if given unitfully
-            'implant_z': 0,  # um
+            'implant_position': (0, 0),  # um, or dva if given unitfully
+            'implant_rotation': 0,  # deg
+            'implant_depth': 0,  # um
             'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
             'step': 0.25,  # dva
@@ -1017,9 +1054,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # The simulated patch of visual field is specified in degrees of
             # visual angle; the visual field map turns those into tissue
             # coordinates when the grid is built:
-            # `implant_pos` is not listed: its unit is what distinguishes a
-            # tissue position from a visual field one.
-            'implant_z': um,
+            # `implant_position` is not listed: its unit is what
+            # distinguishes a tissue position from a visual field one.
+            'implant_rotation': deg,
+            'implant_depth': um,
             'xrange': dva,
             'yrange': dva,
             'step': dva,

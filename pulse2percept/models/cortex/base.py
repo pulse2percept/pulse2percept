@@ -70,7 +70,7 @@ class CortexSpatial(SpatialModel):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits. A bare pair or
         a length is a cortical position in microns; ``(6, -2) * dva``
         names the representation of that visual field location, which
@@ -78,7 +78,13 @@ class CortexSpatial(SpatialModel):
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's
         local ``z``.
 
@@ -305,7 +311,7 @@ class ScoreboardSpatial(CortexSpatial):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits. A bare pair or
         a length is a cortical position in microns; ``(6, -2) * dva``
         names the representation of that visual field location, which
@@ -313,7 +319,13 @@ class ScoreboardSpatial(CortexSpatial):
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's
         local ``z``.
 
@@ -344,7 +356,8 @@ class ScoreboardSpatial(CortexSpatial):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -354,7 +367,9 @@ class ScoreboardSpatial(CortexSpatial):
             min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
             n_gray=n_gray, noise=noise,
-            implant_pos=implant_pos, implant_z=implant_z,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
             ndim=[2, 3] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -503,7 +518,7 @@ class ScoreboardModel(Model):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits. A bare pair or
         a length is a cortical position in microns; ``(6, -2) * dva``
         names the representation of that visual field location, which
@@ -511,7 +526,13 @@ class ScoreboardModel(Model):
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's
         local ``z``.
 
@@ -542,7 +563,8 @@ class ScoreboardModel(Model):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -554,7 +576,9 @@ class ScoreboardModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
-                implant_pos=implant_pos, implant_z=implant_z,
+                implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
                 location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)

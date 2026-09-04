@@ -112,13 +112,16 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
         try:
             specs = data.iloc[0]
             implant_type = ArgusI if specs.implant_type_str == 'ArgusI' else ArgusII
-            argus = implant_type(rot=specs['implant_rot'])
+            argus = implant_type()
             # The dataset records where each subject's array was implanted;
             # the implant itself describes the device about its own origin,
             # and this figure is drawn in retinal coordinates.
+            th = np.deg2rad(specs['implant_rot'])
+            cos, sin = np.cos(th), np.sin(th)
             for elec in argus.electrode_objects:
-                elec.x += specs['implant_x']
-                elec.y += specs['implant_y']
+                x, y = elec.x, elec.y
+                elec.x = cos * x - sin * y + specs['implant_x']
+                elec.y = sin * x + cos * y + specs['implant_y']
         except (KeyError, AttributeError):
             raise ValueError('If "argus" is not given, "data" must contain '
                              'columns "implant_type_str", "implant_x", '

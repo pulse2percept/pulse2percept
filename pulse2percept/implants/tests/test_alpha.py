@@ -6,15 +6,14 @@ from pulse2percept.implants import AlphaIMS, AlphaAMS
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
-@pytest.mark.parametrize('rot', (-45, 60))
-def test_AlphaIMS(ztype, rot):
+def test_AlphaIMS(ztype):
     # Height `h` can either be a float or a list
     if ztype == 'float':
-        alpha = AlphaIMS(z=-100, rot=rot)
+        alpha = AlphaIMS(z=-100)
         for e in alpha.electrode_objects:
             npt.assert_almost_equal(e.z, -100)
     else:
-        alpha = AlphaIMS(z=np.arange(1500), rot=rot)
+        alpha = AlphaIMS(z=np.arange(1500))
         for i, e in enumerate(alpha.electrode_objects):
             npt.assert_almost_equal(e.z, i)
 
@@ -26,15 +25,6 @@ def test_AlphaIMS(ztype, rot):
     # 18.5 *spacing - spacing/2 for middle coordinate if (0,0) is upper-left
     # corner
     xy = np.array([-1368, -1368]).T
-
-    # Rotate
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-
-    # Then off-set: Make sure first electrode is placed
-    # correctly
     npt.assert_almost_equal(alpha['A1'].x, xy[0])
     npt.assert_almost_equal(alpha['A1'].y, xy[1])
 
@@ -49,9 +39,8 @@ def test_AlphaIMS(ztype, rot):
         npt.assert_equal(alpha[e].side_length, 50)
 
 
-# The checks below don't depend on x/y/rot/ztype, so they live outside the
-# parametrized test above: running them once covers the same code as running
-# them for all 16 parameter combinations.
+# The checks below don't depend on ztype, so they live outside the
+# parametrized test above.
 def test_AlphaIMS_indexing():
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
@@ -79,14 +68,6 @@ def test_AlphaIMS_eye():
     npt.assert_equal(alpha_le['A1'].x > alpha_le['AE37'].x, True)
     npt.assert_almost_equal(alpha_le['A37'].y, alpha_le['A1'].y)
 
-    # In both left and right eyes, rotation with positive angle should be
-    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['A1', 'A37']):
-        before = AlphaIMS(eye=eye)
-        after = AlphaIMS(eye=eye, rot=10)
-        npt.assert_equal(after[el].x > before[el].x, True)
-        npt.assert_equal(after[el].y > before[el].y, True)
-
     # Invalid eye string:
     with pytest.raises(TypeError):
         AlphaIMS(eye=[1, 2])
@@ -95,15 +76,14 @@ def test_AlphaIMS_eye():
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
-@pytest.mark.parametrize('rot', (-45, 60))
-def test_AlphaAMS(ztype, rot):
+def test_AlphaAMS(ztype):
     # Height `h` can either be a float or a list
     if ztype == 'float':
-        alpha = AlphaAMS(z=-100, rot=rot)
+        alpha = AlphaAMS(z=-100)
         for e in alpha.electrode_objects:
             npt.assert_almost_equal(e.z, -100)
     else:
-        alpha = AlphaAMS(z=np.arange(1600), rot=rot)
+        alpha = AlphaAMS(z=np.arange(1600))
         for i, e in enumerate(alpha.electrode_objects):
             npt.assert_almost_equal(e.z, i)
 
@@ -111,14 +91,8 @@ def test_AlphaAMS(ztype, rot):
     npt.assert_equal(hasattr(alpha, '__slots__'), True)
     npt.assert_equal(hasattr(alpha, '__dict__'), False)
 
-    # Rotate coordinates of first electrode:
-    rot_rad = np.deg2rad(rot)
+    # Coordinates of first electrode, in the device's own frame
     xy = np.array([-1365, -1365]).T
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-    # Then off-set: Make sure first electrode is placed
-    # correctly
     npt.assert_almost_equal(alpha['A1'].x, xy[0])
     npt.assert_almost_equal(alpha['A1'].y, xy[1])
 
@@ -133,7 +107,7 @@ def test_AlphaAMS(ztype, rot):
         npt.assert_equal(alpha[e].radius, 15)
 
 
-# As above: independent of x/y/rot/ztype, so run once rather than 16 times.
+# As above: independent of ztype, so run once rather than twice.
 def test_AlphaAMS_indexing():
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
@@ -160,14 +134,6 @@ def test_AlphaAMS_eye():
     alpha_le = AlphaAMS(eye='LE')
     npt.assert_equal(alpha_le['A1'].x > alpha_le['AE40'].x, True)
     npt.assert_almost_equal(alpha_le['A40'].y, alpha_le['A1'].y)
-
-    # In both left and right eyes, rotation with positive angle should be
-    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['A1', 'A40']):
-        before = AlphaAMS(eye=eye)
-        after = AlphaAMS(eye=eye, rot=10)
-        npt.assert_equal(after[el].x > before[el].x, True)
-        npt.assert_equal(after[el].y > before[el].y, True)
 
     # Invalid eye string:
     with pytest.raises(TypeError):

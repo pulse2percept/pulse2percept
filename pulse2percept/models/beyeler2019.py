@@ -139,14 +139,20 @@ class ScoreboardSpatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits. A bare pair or
         a length is a tissue position in microns; ``(6, -2) * dva`` is a
         visual field location, resolved through ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's
         local ``z``.
 
@@ -176,7 +182,8 @@ class ScoreboardSpatial(SpatialModel):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
@@ -186,7 +193,9 @@ class ScoreboardSpatial(SpatialModel):
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
-            implant_pos=implant_pos, implant_z=implant_z,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -291,14 +300,20 @@ class ScoreboardModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits. A bare pair or
         a length is a tissue position in microns; ``(6, -2) * dva`` is a
         visual field location, resolved through ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's
         local ``z``.
 
@@ -325,7 +340,8 @@ class ScoreboardModel(Model):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
@@ -335,7 +351,9 @@ class ScoreboardModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
-                implant_pos=implant_pos, implant_z=implant_z,
+                implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
                 location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)
@@ -423,14 +441,20 @@ class AxonMapSpatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits. A bare pair or
         a length is a tissue position in microns; ``(6, -2) * dva`` is a
         visual field location, resolved through ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's
         local ``z``.
 
@@ -486,7 +510,8 @@ class AxonMapSpatial(SpatialModel):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -500,7 +525,9 @@ class AxonMapSpatial(SpatialModel):
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
-            implant_pos=implant_pos, implant_z=implant_z,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
             axons_range=axons_range, n_ax_segments=n_ax_segments,
             ax_segments_range=ax_segments_range,
@@ -1192,14 +1219,20 @@ class AxonMapModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
-    implant_pos : (x, y) or Quantity, optional
+    implant_position : (x, y) or Quantity, optional
         Where the implant's local ``(0, 0)`` origin sits. A bare pair or
         a length is a tissue position in microns; ``(6, -2) * dva`` is a
         visual field location, resolved through ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
-    implant_z : float or Quantity, optional
+    implant_rotation : float or Quantity, optional
+        Angle (deg) the implant is rotated by in the tissue plane, positive
+        counter-clockwise, about its own local origin.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
         Depth (um) the implant is placed at, added to every electrode's
         local ``z``.
 
@@ -1255,7 +1288,8 @@ class AxonMapModel(Model):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -1270,7 +1304,9 @@ class AxonMapModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
-                implant_pos=implant_pos, implant_z=implant_z,
+                implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
                 location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
                 axons_range=axons_range, n_ax_segments=n_ax_segments,
                 ax_segments_range=ax_segments_range,

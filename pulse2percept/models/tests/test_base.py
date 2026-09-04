@@ -2092,7 +2092,8 @@ def test_cortical_location_noise_moves_the_phosphene():
     implant = Cortivis()
     electrode = implant.electrode_names[10]
     offset = 1.0 * _latents(len(implant.electrode_names), 3)[10]
-    kwargs = dict(implant_pos=(20, -5) * mm, xrange=(-6, 6), yrange=(-6, 6),
+    kwargs = dict(implant_position=(20, -5) * mm,
+                  xrange=(-6, 6), yrange=(-6, 6),
                   step=0.05)
     plain = CortexScoreboardSpatial(implant, **kwargs).build()
     np.random.seed(3)

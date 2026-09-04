@@ -11,22 +11,18 @@ class Orion(Implant):
     """Create a Orion array
     
     Electrode coordinates are given in the array's own frame, with the
-    center of its base at ``(0, 0)`` and rotated by ``rot``. Where the
-    array is implanted is set by the model's ``implant_pos``.
+    center of its base at ``(0, 0)``. Where the array is implanted is set
+    by the model's ``implant_position`` and ``implant_rotation``.
 
     Orion contains 60 electrodes in a hex shaped grid inspired by Argus II.
     
     .. note::
 
-        Implant the array with the model's ``implant_pos``, e.g.
-        ``implant_pos=(20, -5) * mm`` for the right hemisphere.
+        Implant the array with the model's ``implant_position``, e.g.
+        ``implant_position=(20, -5) * mm`` for the right hemisphere.
     
     Parameters
     ----------
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
         preprocessing method whenever a stimulus is prepared, or a custom
@@ -54,14 +50,14 @@ class Orion(Implant):
     __slots__ = ('shape',)
     placement = 'epicortical'
 
-    def __init__(self, rot=0, preprocess=False, safe_mode=False):
+    def __init__(self, preprocess=False, safe_mode=False):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
         self.shape = (10, 7)
         # The row offset is published in millimeters; coordinates are microns:
         spacing = (4200, np.sqrt(3**2-2.1**2) * UM_PER_MM)
         self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, rot=rot, names=('A', '-1'),
+            self.shape, spacing, names=('A', '-1'),
             grid_type='hex', radius=1000, electrode_type=DiskElectrode)
         for e in ['A1', 'F7', 'G7', 'H6', 'H7', 'I6', 'I7', 'J5', 'J6', 'J7']:
             self.electrode_array.remove_electrode(e)

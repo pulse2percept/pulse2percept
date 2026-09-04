@@ -20,8 +20,8 @@ class ArgusI(Implant):
     """Create an Argus I array
 
     Electrode coordinates are given in the array's own frame, centered on
-    ``(0, 0)`` and rotated by ``rot``. Where the array is implanted is set by
-    the model's ``implant_pos`` and ``implant_z``.
+    ``(0, 0)``. Where the array is implanted is set by the model's
+    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
 
     Argus I is a modified cochlear implant containing 16 electrodes in a 4x4
     array with a center-to-center separation of 800 um, and two electrode
@@ -57,13 +57,9 @@ class ArgusI(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 16 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity, optional
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -78,16 +74,16 @@ class ArgusI(Implant):
 
     Examples
     --------
-    Create an Argus I array, rotated counter-clockwise by 5 degrees:
+    Create an Argus I array:
 
     >>> from pulse2percept.implants import ArgusI
-    >>> ArgusI(rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> ArgusI()  # doctest: +NORMALIZE_WHITESPACE
     ArgusI(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
            safe_mode=False, shape=(4, 4))
 
     Get access to electrode 'B1', either by name or by row/column index:
 
-    >>> argus = ArgusI(rot=0)
+    >>> argus = ArgusI()
     >>> argus['B1']  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='B1', radius=250.0,
                   x=-400.0, y=-1200.0, z=0.0)
@@ -102,7 +98,7 @@ class ArgusI(Implant):
     placement = 'epiretinal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, eye='RE', preprocess=True,
                  safe_mode=False, use_legacy_names=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -120,7 +116,7 @@ class ArgusI(Implant):
                              'L7', 'L3', 'M5', 'M1']
         names = old_names if use_legacy_names else ('1', 'A')
         self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, z=z, rot=rot,
+            self.shape, spacing, z=z,
             electrode_type=DiskElectrode, radius=r_arr, names=names)
 
         # Set left/right eye:
@@ -157,8 +153,8 @@ class ArgusII(Implant):
     """Create an Argus II array
 
     Electrode coordinates are given in the array's own frame, centered on
-    ``(0, 0)`` and rotated by ``rot``. Where the array is implanted is set by
-    the model's ``implant_pos`` and ``implant_z``.
+    ``(0, 0)``. Where the array is implanted is set by the model's
+    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
 
     Argus II contains 60 electrodes of 225 um diameter arranged in a 6 x 10
     grid (575 um center-to-center separation) [Yue2020]_.
@@ -192,13 +188,9 @@ class ArgusII(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 60 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -233,17 +225,17 @@ class ArgusII(Implant):
 
     Examples
     --------
-    Create an Argus II array, rotated counter-clockwise by 5 degrees:
+    Create an Argus II array:
 
     >>> from pulse2percept.implants import ArgusII
-    >>> ArgusII(rot=5)  # doctest: +NORMALIZE_WHITESPACE
+    >>> ArgusII()  # doctest: +NORMALIZE_WHITESPACE
     ArgusII(electrode_array=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
             preprocess=True, raster=SequentialRaster, safe_mode=False,
             shape=(6, 10))
 
     Get access to electrode 'E7', either by name or by row/column index:
 
-    >>> argus = ArgusII(rot=0)
+    >>> argus = ArgusII()
     >>> argus['E7']  # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='E7', radius=112.5,
                   x=862.5, y=862.5, z=0.0)
@@ -265,7 +257,7 @@ class ArgusII(Implant):
     placement = 'epiretinal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, eye='RE', preprocess=True,
                  safe_mode=False, encoder=_DEVICE_DEFAULT,
                  raster=_DEVICE_DEFAULT, thresholds=None):
         self.safe_mode = safe_mode
@@ -275,7 +267,7 @@ class ArgusII(Implant):
         spacing = 575.0
         names = ('A', '1')
         self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, z=z, radius=r, rot=rot,
+            self.shape, spacing, z=z, radius=r,
             names=names, electrode_type=DiskElectrode)
 
         # Built per instance rather than shared between them: a raster binds to

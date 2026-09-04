@@ -13,7 +13,7 @@ def _placed(implant_type, x, y):
     """One device of an ensemble, positioned in the ensemble's own frame.
 
     An ensemble is one implant, so where its devices sit relative to each
-    other is local geometry rather than the model-side ``implant_pos``. A
+    other is local geometry rather than the model-side ``implant_position``. A
     geometry primitive such as a Neuralink thread takes ``x``/``y`` in its own
     constructor; a named device is translated after construction.
     """

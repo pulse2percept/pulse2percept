@@ -96,18 +96,18 @@ Models
 * ``find_threshold`` has been removed; threshold searches belong at the
   experiment level rather than in the model API (:pull:`862`).
 
-* Named implants no longer take ``x``/``y``: their electrodes describe the
-  device about its own ``(0, 0)`` origin, and where it is implanted is the
-  model's ``implant_pos``. ``rot`` stays on the implant as local
-  orientation. The cortical defaults that encoded a placement
+* Named implants no longer take ``x``/``y``/``rot``: their electrodes
+  describe the device about its own ``(0, 0)`` origin in its canonical
+  orientation, and where it is implanted is the model's ``implant_position``
+  and ``implant_rotation``. The cortical defaults that encoded a placement
   (``Cortivis(x=20000, y=-5000)``, ``ICVP``/``Orion(x=15000)``) are gone;
-  pass e.g. ``implant_pos=(20, -5) * mm`` to the model instead. ``Electrode``,
-  ``ElectrodeGrid`` and Neuralink threads keep ``x``/``y``/``z``, which are
-  local geometry there (:pull:`N`).
+  pass e.g. ``implant_position=(20, -5) * mm`` to the model instead.
+  ``Electrode``, ``ElectrodeGrid``, ``GridImplant`` and Neuralink threads keep
+  ``x``/``y``/``z``/``rot``, which are local geometry there (:pull:`N`).
 
 * Flat named retinal arrays now default to ``z=0``: the ``z=-100`` that
   Alpha-IMS and the PRIMA family used to carry was electrode-retina distance,
-  which is placement and belongs in ``implant_z``. Per-electrode ``z`` remains
+  which is placement and belongs in ``implant_depth``. Per-electrode ``z`` remains
   available for real non-planarity, and fixed shank depths (CORTIVIS
   -1500 um, ICVP -650/-850 um) stay device geometry (:pull:`N`).
 
@@ -121,11 +121,12 @@ Models
   location the ``visual_field_map`` gives it. Requires a 2D, invertible map
   (:pull:`881`).
 
-* New ``implant_pos`` and ``implant_z`` parameters place an implant in the
-  modeled tissue: ``implant_pos`` says where its local ``(0, 0)`` origin
-  sits, in dva (resolved through ``visual_field_map``) or as a physical
-  position, and ``implant_z`` sets the depth. Both translate the array
-  rigidly and leave the implant itself unchanged (:pull:`N`).
+* New ``implant_position``, ``implant_rotation`` and ``implant_depth``
+  parameters place an implant in the modeled tissue: ``implant_position`` says
+  where its local ``(0, 0)`` origin sits, in dva (resolved through
+  ``visual_field_map``) or as a physical position, ``implant_rotation`` turns
+  the array about that origin, and ``implant_depth`` sets the depth. The
+  transform is rigid and leaves the implant itself unchanged (:pull:`N`).
 
 
 Residual vision

@@ -36,8 +36,8 @@ fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 # Argus I and II are typically implanted at a 30-45deg angle. For illustrative
 # purpose, also show the map of fiber bundles in the optic fiber layer -- an
 # axon map is grown for a particular eye, so each model names its implant:
-for axis, implant, title in [(ax[0], ArgusI(rot=-30), 'Argus I'),
-                             (ax[1], ArgusII(rot=-30), 'Argus II')]:
+for axis, implant, title in [(ax[0], ArgusI(), 'Argus I'),
+                             (ax[1], ArgusII(), 'Argus II')]:
     AxonMapModel(implant=implant).plot(ax=axis)
     implant.plot(ax=axis, annotate=title == 'Argus I')
     axis.set_title(title)

@@ -107,14 +107,20 @@ class Nanduri2012Spatial(SpatialModel):
         noise : float, int, or None, optional
             Salt-and-pepper noise applied to each percept frame. An integer gives
             the number of affected pixels; a float in [0, 1] gives their fraction.
-        implant_pos : (x, y) or Quantity, optional
+        implant_position : (x, y) or Quantity, optional
             Where the implant's local ``(0, 0)`` origin sits. A bare pair or
             a length is a tissue position in microns; ``(6, -2) * dva`` is a
             visual field location, resolved through ``visual_field_map``.
 
             .. versionadded:: 0.11.0
 
-        implant_z : float or Quantity, optional
+        implant_rotation : float or Quantity, optional
+            Angle (deg) the implant is rotated by in the tissue plane,
+            positive counter-clockwise, about its own local origin.
+
+            .. versionadded:: 0.11.0
+
+        implant_depth : float or Quantity, optional
             Depth (um) the implant is placed at, added to every electrode's
             local ``z``.
 
@@ -142,7 +148,8 @@ class Nanduri2012Spatial(SpatialModel):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -153,7 +160,9 @@ class Nanduri2012Spatial(SpatialModel):
             visual_field_map=(Curcio1990Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
-            implant_pos=implant_pos, implant_z=implant_z,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -385,14 +394,20 @@ class Nanduri2012Model(Model):
             gray-level quantization.
         noise : float, int, or None, optional
             Salt-and-pepper noise applied to each percept frame.
-        implant_pos : (x, y) or Quantity, optional
+        implant_position : (x, y) or Quantity, optional
             Where the implant's local ``(0, 0)`` origin sits. A bare pair or
             a length is a tissue position in microns; ``(6, -2) * dva`` is a
             visual field location, resolved through ``visual_field_map``.
 
             .. versionadded:: 0.11.0
 
-        implant_z : float or Quantity, optional
+        implant_rotation : float or Quantity, optional
+            Angle (deg) the implant is rotated by in the tissue plane,
+            positive counter-clockwise, about its own local origin.
+
+            .. versionadded:: 0.11.0
+
+        implant_depth : float or Quantity, optional
             Depth (um) the implant is placed at, added to every electrode's
             local ``z``.
 
@@ -451,7 +466,8 @@ class Nanduri2012Model(Model):
                  grid_type='rect', min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
-                 implant_pos=(0, 0), implant_z=0,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, ndim=None, dt=0.005, tau1=0.42,
                  tau2=45.25, tau3=26.25, eps=8.73, asymptote=14.0, slope=3.0,
                  shift=16.0, scale_out=1.0, reduce='last', thresh_percept=0,
@@ -465,7 +481,9 @@ class Nanduri2012Model(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
-                implant_pos=implant_pos, implant_z=implant_z,
+                implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
                 location_noise=location_noise, ndim=ndim,
                 thresh_percept=thresh_percept, verbose=verbose,
                 n_threads=n_threads, n_jobs=n_jobs),

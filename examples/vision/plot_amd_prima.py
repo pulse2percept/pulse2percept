@@ -84,13 +84,14 @@ implant = PRIMAPivotal()
 # ``PRIMAPivotal()`` describes the device, not where it was implanted: its
 # electrodes are laid out about the array's own ``(0, 0)`` origin. Placing it
 # is the model's job, because the model is what holds the retinotopy.
-# ``implant_pos`` says where that origin sits, here the center of the lesion,
+# ``implant_position`` says where that origin sits, here the center of
+# the lesion,
 # and the whole array is translated rigidly, so the 100 um pixel pitch is
 # unchanged and the implant object itself is left alone. The default PRIMA
 # position is the fovea, which this eccentric lesion does not cover. The grid
 # is widened to take in where the array now sits.
 
-model = ScoreboardModel(implant=implant, implant_pos=center, rho=50,
+model = ScoreboardModel(implant=implant, implant_position=center, rho=50,
                         xrange=(0, 12), yrange=(-8, 4), step=0.05)
 
 ###############################################################################

@@ -203,11 +203,12 @@ def test_ScoreboardModel_predict_percept():
                      "not parameterized by this model", np.ones(60))
 
     # Model-side depth is depth too, even with a locally flat array:
-    placed = ScoreboardModel(implant=ArgusII(), implant_z=500 * um, step=0.55,
-                             rho=100)
+    placed = ScoreboardModel(implant=ArgusII(), implant_depth=500 * um,
+                             step=0.55, rho=100)
     placed.build()
     assert_warns_msg(UserWarning, placed.predict_percept,
-                     "ScoreboardSpatial does not model electrode-retina distance",
+                     "ScoreboardSpatial does not model "
+                     "electrode-retina distance",
                      np.ones(60))
     # ... and a flat implant placed at the tissue surface still says nothing:
     flat = ScoreboardModel(implant=ArgusII(), step=0.55, rho=100)

@@ -10,29 +10,19 @@ from pulse2percept.units import DimensionMismatchError, uA
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
-@pytest.mark.parametrize('rot', (-45, 60))
-def test_ArgusI(ztype, rot):
+def test_ArgusI(ztype):
     # Create an ArgusI and make sure location is correct
     # Height `z` can either be a float or a list
     z = 100 if ztype == 'float' else np.ones(16) * 20
 
-    argus = implants.ArgusI(z=z, rot=rot)
+    argus = implants.ArgusI(z=z)
 
     # Slots:
     npt.assert_equal(hasattr(argus, '__slots__'), True)
     npt.assert_equal(hasattr(argus, '__dict__'), False)
 
-    # Coordinates of first electrode
+    # Coordinates of first electrode, in the device's own frame
     xy = np.array([-1200, -1200]).T
-
-    # Rotate
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-
-    # Then off-set: Make sure first electrode is placed
-    # correctly
     npt.assert_almost_equal(argus['A1'].x, xy[0])
     npt.assert_almost_equal(argus['A1'].y, xy[1])
 
@@ -49,8 +39,7 @@ def test_ArgusI(ztype, rot):
         npt.assert_almost_equal(argus[e].radius, 250)
 
     # Check location of the tack
-    tack = np.matmul(R, [-2000, 0])
-    tack = tuple(tack + [x_center, y_center])
+    tack = tuple(np.array([-2000, 0]) + [x_center, y_center])
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
@@ -78,14 +67,6 @@ def test_ArgusI(ztype, rot):
     npt.assert_equal(argus_le['A1'].x > argus_le['D4'].x, True)
     npt.assert_almost_equal(argus_le['D1'].y, argus_le['A1'].y)
 
-    # In both left and right eyes, rotation with positive angle should be
-    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['A1', 'D1']):
-        before = implants.ArgusI(eye=eye)
-        after = implants.ArgusI(eye=eye, rot=10)
-        npt.assert_equal(after[el].x > before[el].x, True)
-        npt.assert_equal(after[el].y > before[el].y, True)
-
     # Check naming scheme
     argus = implants.ArgusI(use_legacy_names=False)
     npt.assert_equal(argus.electrode_names[15], 'D4')
@@ -107,28 +88,18 @@ def test_ArgusI(ztype, rot):
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))
-@pytest.mark.parametrize('rot', (-45, 60))
-def test_ArgusII(ztype, rot):
+def test_ArgusII(ztype):
     # Create an ArgusII and make sure location is correct
     # Height `h` can either be a float or a list
     z = 100 if ztype == 'float' else np.ones(60) * 20
-    argus = implants.ArgusII(z=z, rot=rot)
+    argus = implants.ArgusII(z=z)
 
     # Slots:
     npt.assert_equal(hasattr(argus, '__slots__'), True)
     npt.assert_equal(hasattr(argus, '__dict__'), False)
 
-    # Coordinates of first electrode
+    # Coordinates of first electrode, in the device's own frame
     xy = np.array([-2587.5, -1437.5]).T
-
-    # Rotate
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-
-    # Then off-set: Make sure first electrode is placed
-    # correctly
     npt.assert_almost_equal(argus['A1'].x, xy[0])
     npt.assert_almost_equal(argus['A1'].y, xy[1])
 
@@ -165,17 +136,6 @@ def test_ArgusII(ztype, rot):
     argus_le = implants.ArgusII(eye='LE')
     npt.assert_equal(argus_le['A1'].x > argus_le['A10'].x, True)
     npt.assert_almost_equal(argus_le['A10'].y, argus_le['A1'].y)
-
-    # In both left and right eyes, rotation with positive angle should be
-    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['F2', 'F10']):
-        # By default, electrode 'F1' in a left eye has the same coordinates as
-        # 'F10' in a right eye (because the columns are reversed). Thus both
-        # cases are testing an electrode with x>0, y>0:
-        before = implants.ArgusII(eye=eye)
-        after = implants.ArgusII(eye=eye, rot=20)
-        npt.assert_equal(after[el].x < before[el].x, True)
-        npt.assert_equal(after[el].y > before[el].y, True)
 
     # Prepare a stimulus via dict:
     stim = implants.ArgusII().prepare_stim({'B7': 13})

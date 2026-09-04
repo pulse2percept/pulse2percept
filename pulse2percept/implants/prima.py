@@ -225,8 +225,6 @@ class PhotovoltaicPixel(HexElectrode):
         Pixel orientation.
     
         .. versionadded:: 0.11.0
-    rot : double, optional
-        Rotation angle (deg, positive counter-clockwise).
     
         .. versionadded:: 0.11.0
     
@@ -294,12 +292,9 @@ class PRIMAPivotal(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 378 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity, optional
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -340,7 +335,7 @@ class PRIMAPivotal(Implant):
     #: The device is illuminated, not driven by a current source.
     stimulus_unit = mW / mm ** 2
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='RE', preprocess=False,
                  safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.spacing = 100  # um, nearest-neighbor center-to-center
         self.pixel_width = 100  # um, flat-to-flat
@@ -364,7 +359,7 @@ class PRIMAPivotal(Implant):
         zarr = 0 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, self.spacing, z=zarr, rot=rot,
+            self.shape, self.spacing, z=zarr,
             grid_type='hex', orientation='vertical',
             electrode_type=PhotovoltaicPixel, radius=elec_radius,
             apothem=self.pixel_width / 2)
@@ -509,12 +504,9 @@ class Lorach2015Array(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 142 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity, optional
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -536,7 +528,7 @@ class Lorach2015Array(Implant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='RE', preprocess=False,
                  safe_mode=False):
         self.spacing = 75  # um, nearest-neighbor center-to-center
         self.pixel_width = 70  # um, flat-to-flat
@@ -557,7 +549,7 @@ class Lorach2015Array(Implant):
         zarr = 0 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, self.spacing, z=zarr, rot=rot,
+            self.shape, self.spacing, z=zarr,
             grid_type='hex', orientation='vertical',
             electrode_type=PhotovoltaicPixel, radius=elec_radius,
             apothem=self.pixel_width / 2)
@@ -625,12 +617,9 @@ class Ho2019FlatArray(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of them gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity, optional
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -656,7 +645,7 @@ class Ho2019FlatArray(Implant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, pixel_size, z=0, rot=0, eye='RE',
+    def __init__(self, pixel_size, z=0, eye='RE',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HO2019_VARIANTS,
                                          'Ho2019FlatArray')
@@ -678,7 +667,7 @@ class Ho2019FlatArray(Implant):
         zarr = 0 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, self.spacing, z=zarr, rot=rot,
+            self.shape, self.spacing, z=zarr,
             grid_type='hex', orientation='vertical',
             electrode_type=PhotovoltaicPixel, radius=spec['elec_radius'],
             apothem=self.pixel_width / 2)
@@ -740,12 +729,9 @@ class Huang2021Array(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of them gives each its own.
-        Electrode-retina distance is the model's ``implant_z``.
+        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity, optional
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -772,7 +758,7 @@ class Huang2021Array(Implant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, pixel_size, z=0, rot=0, eye='RE',
+    def __init__(self, pixel_size, z=0, eye='RE',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HUANG2021_AXIAL_SPANS,
                                          'Huang2021Array')
@@ -797,7 +783,7 @@ class Huang2021Array(Implant):
         zarr = 0 if overwrite_z else z
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, self.spacing, z=zarr, rot=rot,
+            self.shape, self.spacing, z=zarr,
             grid_type='hex', orientation='vertical',
             electrode_type=PhotovoltaicPixel, radius=elec_radius,
             apothem=self.pixel_width / 2)
@@ -846,9 +832,9 @@ class PRIMA55(Ho2019FlatArray):
     """
     __slots__ = ()
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='RE', preprocess=False,
                  safe_mode=False):
-        super().__init__(55, z=z, rot=rot, eye=eye,
+        super().__init__(55, z=z, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)
 
 
@@ -866,9 +852,9 @@ class PRIMA40(Ho2019FlatArray):
     """
     __slots__ = ()
 
-    def __init__(self, z=0, rot=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='RE', preprocess=False,
                  safe_mode=False):
-        super().__init__(40, z=z, rot=rot, eye=eye,
+        super().__init__(40, z=z, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)
 
 

@@ -20,7 +20,7 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, dva,
                                  mA, mm, ms, s, uA, um)
 
 def test_DynaphosModel():
-    model = DynaphosModel(implant=Cortivis(), implant_pos=(20, -5) * mm,
+    model = DynaphosModel(implant=Cortivis(), implant_position=(20, -5) * mm,
                           xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
 
     npt.assert_equal(model.regions, ['v1'])
@@ -49,7 +49,7 @@ def test_DynaphosModel():
 def test_predict_spatial():
     # test that no current can spread between hemispheres
     implant = Orion()
-    model = DynaphosModel(implant=implant, implant_pos=(15, 0) * mm,
+    model = DynaphosModel(implant=implant, implant_position=(15, 0) * mm,
                           xrange=(-3, 3), yrange=(-3, 3),
                           step=0.5).build()
     source = {e: BiphasicPulseTrain(freq=300, amp=2000, phase_dur=0.17)
@@ -66,7 +66,7 @@ def test_predict_spatial_unsplit_map():
         split_map = False
 
     implant = Orion()
-    model = DynaphosModel(implant=implant, implant_pos=(15, 0) * mm,
+    model = DynaphosModel(implant=implant, implant_position=(15, 0) * mm,
                           xrange=(-3, 3), yrange=(-3, 3),
                           step=0.5, visual_field_map=UnsplitMap()).build()
     source = {e: BiphasicPulseTrain(freq=300, amp=2000, phase_dur=0.17)
@@ -116,7 +116,7 @@ def test_temporal_predict():
     npt.assert_equal(np.all(np.diff(bright_amp) >= 0), True)
 
     # Test that default models give expected values
-    orion = DynaphosModel(implant=Orion(), implant_pos=(15, 0) * mm,
+    orion = DynaphosModel(implant=Orion(), implant_position=(15, 0) * mm,
                           step=0.1, dt=20).build()
     percept = orion.predict_percept(
         {'55': BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)})
@@ -182,7 +182,7 @@ def test_DynaphosModel_units():
 
 def test_DynaphosModel_t_percept_units():
     """This model overrides `predict_percept`, so it normalizes for itself"""
-    model = DynaphosModel(implant=Cortivis(), implant_pos=(20, -5) * mm,
+    model = DynaphosModel(implant=Cortivis(), implant_position=(20, -5) * mm,
                           xrange=(-3, 3), yrange=(-3, 3), step=1).build()
     source = {'11': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)}
     bare = model.predict_percept(source, t_percept=[0, 20, 40])
@@ -204,7 +204,7 @@ def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
     """
     source = {'11': BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)}
     delivered = Cortivis().prepare_stim(source)
-    kwargs = dict(implant=Cortivis(), implant_pos=(20, -5) * mm,
+    kwargs = dict(implant=Cortivis(), implant_position=(20, -5) * mm,
                   xrange=(-2, 2), yrange=(-2, 2), step=1)
 
     # Coarser than a millisecond, which is the case the literal was written
@@ -371,16 +371,16 @@ def _brightest_dva(percept, grid):
 
 
 def test_dynaphos_places_an_implant_by_visual_field_position():
-    """A dva `implant_pos` names the cortical image of that location"""
+    """A dva `implant_position` names the cortical image of that location"""
     implant = Cortivis()
-    model = DynaphosModel(implant=implant, implant_pos=(6, -2) * dva)
+    model = DynaphosModel(implant=implant, implant_position=(6, -2) * dva)
     npt.assert_almost_equal(
         _placement_shift(model, um)[:2],
         model.visual_field_map.dva_to_v1(6.0, -2.0), decimal=2)
     # ... and it agrees with naming the same spot physically:
     physical = DynaphosModel(
         implant=implant,
-        implant_pos=model.visual_field_map.dva_to_v1(6.0, -2.0) * um)
+        implant_position=model.visual_field_map.dva_to_v1(6.0, -2.0) * um)
     npt.assert_almost_equal(_placement_shift(physical, um),
                             _placement_shift(model, um), decimal=2)
 
@@ -390,7 +390,8 @@ def test_location_noise():
     electrode = implant.electrode_names[10]
     source = {electrode: BiphasicPulseTrain(freq=300, amp=200,
                                             phase_dur=0.17)}
-    kwargs = dict(implant_pos=(20, -5) * mm, xrange=(-4, 4), yrange=(-4, 4),
+    kwargs = dict(implant_position=(20, -5) * mm,
+                  xrange=(-4, 4), yrange=(-4, 4),
                   step=0.05)
     plain = DynaphosModel(implant=implant, **kwargs).build()
     expected = plain.predict_percept(source).data
