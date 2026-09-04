@@ -103,7 +103,7 @@ Models
 
 * New ``implant_offset`` parameter places an implant in the visual field
   (dva), resolved through ``visual_field_map`` into one retinal translation
-  applied to every electrode; the implant itself is unchanged (:pull:`884`).
+  applied to every electrode; the implant itself is unchanged (:pull:`N`).
 
 
 Residual vision
@@ -112,6 +112,10 @@ Residual vision
 * :py:class:`~pulse2percept.vision.Scene` adds softened scotoma boundaries,
   optional inpainting, configurable backgrounds, and eccentricity rings in
   both static and animated views (:pull:`871`).
+
+* ``scotoma_fill='inpaint'`` is now refused when a prosthetic percept is
+  composed into the scotoma, where the fill acted as a brightness floor.
+  Native vision is unchanged (:pull:`N`).
 
 
 Plotting

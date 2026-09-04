@@ -23,6 +23,7 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    VideoStimulus)
 from pulse2percept.topography import Curcio1990Map, RetinalMap, Watson2014Map
 from pulse2percept.units import dva, ms, s
+from pulse2percept.utils import FreezeError
 from pulse2percept.vision import Scene, Scotoma
 
 #: A square scene laid out so that one pixel is exactly one degree and the
@@ -756,6 +757,14 @@ def test_implant_offset_translates_rather_than_warps_the_array():
                                                             after[:, 1]))
     moved = dva_after - dva_before
     npt.assert_equal(np.allclose(moved, moved[0], atol=1e-3), False)
+    # What *is* displaced by exactly the offset is the anchor: the center of
+    # the array's extent, not any individual electrode.
+    def anchor(coords):
+        xy = coords[:, :2]
+        return visual_field_map.ret_to_dva(*(0.5 * (xy.min(axis=0) +
+                                                    xy.max(axis=0))))
+    npt.assert_almost_equal(np.subtract(anchor(after), anchor(before)),
+                            (7, 2), decimal=3)
 
 
 def test_implant_offset_needs_an_invertible_retinal_map():
@@ -767,11 +776,17 @@ def test_implant_offset_needs_an_invertible_retinal_map():
                       implant_offset=(3, 0) * dva)
     with pytest.raises(NotImplementedError):
         _scene_stim(model, scene_of(), None)
-    # A cortical map cannot place an implant on the retina at all:
+
+
+def test_a_cortical_model_has_no_implant_offset():
+    """Placement resolves through a retinal map, which cortex does not have"""
+    with pytest.raises(TypeError):
+        CortexScoreboard(implant=implant_at(0, 0), implant_offset=(3, 0) * dva)
     cortex = CortexScoreboard(implant=implant_at(0, 0))
-    cortex.spatial.implant_offset = (3, 0) * dva
-    with pytest.raises(NotImplementedError):
-        cortex.predict_percept(ImageStimulus(np.ones((1, 1))))
+    npt.assert_equal('implant_offset' in cortex.spatial.get_default_params(),
+                     False)
+    with pytest.raises(FreezeError):
+        cortex.spatial.implant_offset = (3, 0) * dva
 
 
 def test_implant_offset_and_location_noise_stay_separate():

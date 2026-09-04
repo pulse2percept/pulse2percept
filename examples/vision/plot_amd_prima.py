@@ -81,12 +81,13 @@ scene = Scene(logo, fov=40 * dva, scotoma=scotoma, scotoma_fill=0,
 implant = PRIMAPivotal()
 
 ###############################################################################
-# ``PRIMAPivotal`` is built about the fovea, which is exactly where this
-# patient has no photoreceptors left to spare. ``implant_offset`` moves the
-# whole array into the lesion: it is a visual-field displacement, resolved
-# through the model's ``visual_field_map`` into a single retinal translation,
-# so the 100 um pixel pitch is unchanged and the implant object itself is
-# left alone. The grid is widened to cover where the array now sits.
+# ``PRIMAPivotal()`` is centered on the fovea, but this lesion is not, so the
+# default position would put the array outside the atrophy it is meant to
+# replace. ``implant_offset`` moves the whole array to the lesion center: it
+# is a visual-field displacement, resolved through the model's
+# ``visual_field_map`` into a single retinal translation, so the 100 um pixel
+# pitch is unchanged and the implant object itself is left alone. The grid is
+# widened to cover where the array now sits.
 
 model = ScoreboardModel(implant=implant, implant_offset=center, rho=50,
                         xrange=(0, 12), yrange=(-8, 4), step=0.05)

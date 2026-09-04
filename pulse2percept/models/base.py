@@ -383,8 +383,11 @@ def _implant_translation(model, unit):
             f"implant_offset places an implant in the visual field, which "
             f"requires an invertible retinal map. This model's "
             f"visual_field_map is a {type(vfmap).__name__}.")
-    coords = model.implant.electrode_array.coordinates(vfmap.tissue_unit)
-    anchor = coords[:, :2].mean(axis=0)
+    xy = model.implant.electrode_array.coordinates(vfmap.tissue_unit)[:, :2]
+    # The midpoint of the array's extent, which is where `ElectrodeGrid` puts
+    # its own center: a trimmed lattice (PRIMA) would move a centroid even
+    # though the substrate has not moved.
+    anchor = 0.5 * (xy.min(axis=0) + xy.max(axis=0))
     try:
         x_dva, y_dva = vfmap.ret_to_dva(float(anchor[0]), float(anchor[1]))
     except NotImplementedError:

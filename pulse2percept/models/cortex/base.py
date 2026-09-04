@@ -142,6 +142,9 @@ class CortexSpatial(SpatialModel):
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(CortexSpatial, self).get_default_params()
+        # `implant_offset` is resolved through a retinal map, which a cortical
+        # model does not have:
+        base_params.pop('implant_offset', None)
         params = {
                     'xrange' : (-5, 5),
                     'yrange' : (-5, 5),
