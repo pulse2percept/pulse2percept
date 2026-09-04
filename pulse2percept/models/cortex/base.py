@@ -2,8 +2,8 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, 
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import (Model, SpatialModel, _blend_meridian, _thread_params,
-                    _warn_rho_vs_pitch)
+from ..base import (Model, SpatialModel, _blend_meridian,
+                    _draw_placed_implant, _thread_params, _warn_rho_vs_pitch)
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...units import DimensionMismatchError, dva, um
@@ -172,7 +172,7 @@ class CortexSpatial(SpatialModel):
         return {**base_params, **params}
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
-             figsize=None, fc=None, **kwargs):
+             figsize=None, fc=None, show_implant=False, **kwargs):
         """Plot the model
 
         Parameters
@@ -199,6 +199,13 @@ class CortexSpatial(SpatialModel):
         fc : matplotlib color, optional
             Face color for the grid cells. If None, will use the default
             matplotlib color cycle.
+        show_implant : bool, optional
+            Whether to draw the implant where the model places it. Rotation
+            and position are applied to the device's own geometry; use
+            ``model.implant.plot()`` for the unplaced device. Requires tissue
+            coordinates (``use_dva=False``).
+
+            .. versionadded:: 0.11.0
         kwargs : dict, optional
             Additional keyword arguments are passed on to Grid2D.plot()
         
@@ -207,6 +214,13 @@ class CortexSpatial(SpatialModel):
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
+        if show_implant and use_dva:
+            raise NotImplementedError(
+                "An implant is placed in tissue, and a nonlinear "
+                "'visual_field_map' does not carry its electrode bodies or "
+                "substrate to the visual field as a rigid transform. Plot "
+                "with use_dva=False, or plot the device on its own with "
+                "'model.implant.plot()'.")
         if style is None:
             style = 'hull' if use_dva else 'scatter'
         # Model must be built to access cortical coordinates
@@ -216,6 +230,8 @@ class CortexSpatial(SpatialModel):
                             ax=ax, figsize=figsize, fc=fc, 
                             zorder=ZORDER['background'], 
                             legend=True if not use_dva else False)
+        if show_implant:
+            _draw_placed_implant(self, ax, autoscale=autoscale)
         if use_dva:
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')

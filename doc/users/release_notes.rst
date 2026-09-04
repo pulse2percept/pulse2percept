@@ -131,6 +131,13 @@ Models
   only the default identity placement; build the implant in the map's own
   frame instead (:pull:`N`).
 
+* New ``model.plot(show_implant=True)`` draws the implant where the model
+  places it, replacing the ``model.plot(); implant.plot()`` idiom.
+  ``implant.plot()`` keeps its meaning: the device in its own coordinate
+  frame, unaffected by any model. Visual field coordinates
+  (``use_dva=True``) are not supported, since a nonlinear map does not carry
+  electrode bodies rigidly (:pull:`N`).
+
 
 Residual vision
 ~~~~~~~~~~~~~~~

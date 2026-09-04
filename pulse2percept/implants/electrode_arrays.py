@@ -204,7 +204,7 @@ class ElectrodeArray(PrettyPrint):
             self.__getitem__(electrode).activated = False
 
     def plot(self, annotate=False, autoscale=True, ax=None, color_stim=None, cmap='OrRd'):
-        """Plot the electrode array
+        """Plot the electrode array in its own coordinate frame
 
         Parameters
         ----------

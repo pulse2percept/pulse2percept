@@ -3,9 +3,10 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import (BaseModel, _check_implant, _electrode_offsets,
-                    _latent_offsets, _location_noise_sigma, _require_placed,
-                    _require_stim_dimension)
+from ..base import (BaseModel, _check_implant, _draw_placed_implant,
+                    _electrode_offsets, _latent_offsets,
+                    _location_noise_sigma, _require_placed,
+                    _require_stim_dimension, _validate_placement)
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
 from ...units import (A, Quantity, as_value, deg, dva, Hz, mm, ms, uA, um)
@@ -324,6 +325,7 @@ class DynaphosModel(BaseModel):
             raise ValueError(f"Pulse (dur={self.p_dur*2:.2f} ms) does not fit into "
                             f"pulse train window (dur={window_dur:.2f} "
                             f"ms)")
+        _validate_placement(self)
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
@@ -566,7 +568,7 @@ class DynaphosModel(BaseModel):
                        metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
-             figsize=None, fc=None):
+             figsize=None, fc=None, show_implant=False):
         """Plot the model
         Parameters
         ----------
@@ -589,11 +591,25 @@ class DynaphosModel(BaseModel):
             (if exists) or create a new Axes object.
         figsize : (float, float), optional
             Desired (width, height) of the figure in inches
+        show_implant : bool, optional
+            Whether to draw the implant where the model places it. Rotation
+            and position are applied to the device's own geometry; use
+            ``model.implant.plot()`` for the unplaced device. Requires tissue
+            coordinates (``use_dva=False``).
+
+            .. versionadded:: 0.11.0
         Returns
         -------
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
+        if show_implant and use_dva:
+            raise NotImplementedError(
+                "An implant is placed in tissue, and a nonlinear "
+                "'visual_field_map' does not carry its electrode bodies or "
+                "substrate to the visual field as a rigid transform. Plot "
+                "with use_dva=False, or plot the device on its own with "
+                "'model.implant.plot()'.")
         if style is None:
             style = 'hull' if use_dva else 'scatter'
         # Model must be built to access cortical coordinates
@@ -603,6 +619,8 @@ class DynaphosModel(BaseModel):
                             ax=ax, figsize=figsize, fc=fc, 
                             zorder=ZORDER['background'], 
                             legend=True if not use_dva else False)
+        if show_implant:
+            _draw_placed_implant(self, ax, autoscale=autoscale)
         if use_dva:
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')

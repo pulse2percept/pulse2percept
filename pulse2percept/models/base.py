@@ -7,6 +7,9 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 import numpy as np
 import multiprocessing
+from matplotlib.collections import Collection
+from matplotlib.patches import Patch
+from matplotlib.transforms import Affine2D
 from scipy.ndimage import gaussian_filter1d
 from scipy.spatial import cKDTree
 
@@ -470,6 +473,71 @@ def _placement_rotation(model):
     if _tissue_map_ndim(model) != 2:
         _refuse_3d_placement(model, 'implant_rotation')
     return np.deg2rad(rot)
+
+
+def _artist_extent(artists):
+    """Return ``(x0, y0, x1, y1)`` covering the artists' paths, or None."""
+    xy = [path.vertices for artist in artists
+          for path in _artist_paths(artist) if len(path.vertices)]
+    if not xy:
+        return None
+    xy = np.vstack(xy)
+    return (xy[:, 0].min(), xy[:, 1].min(), xy[:, 0].max(), xy[:, 1].max())
+
+
+def _artist_paths(artist):
+    """Return an artist's paths in data coordinates."""
+    if isinstance(artist, Collection):
+        return artist.get_paths()
+    if isinstance(artist, Patch):
+        return [artist.get_path().transformed(artist.get_patch_transform())]
+    return []
+
+
+def _draw_placed_implant(model, ax, autoscale=True):
+    """Draw the model's implant where the model places it, in tissue units.
+
+    Reuses ``Implant.plot`` and applies one affine transform (rotation about
+    the device origin, then translation) to the artists it added, so electrode
+    bodies, substrates and labels all move with the device. The implant is
+    never mutated.
+    """
+    kinds = ('collections', 'patches', 'texts')
+    before = {kind: {id(a) for a in getattr(ax, kind)} for kind in kinds}
+    # `Axes.add_collection`/`add_patch` grow `dataLim` in the device frame,
+    # which is the wrong frame; the transformed extent is added below.
+    datalim = ax.dataLim.get_points().copy()
+    model.implant.plot(ax=ax, autoscale=False)
+    drawn = [a for kind in kinds for a in getattr(ax, kind)
+             if id(a) not in before[kind]]
+    ax.dataLim.set_points(datalim)
+
+    theta = _placement_rotation(model) or 0.0
+    shift = _placement_shift(model, um)
+    dx, dy = (0.0, 0.0) if shift is None else (shift[0], shift[1])
+    transform = Affine2D().rotate(theta).translate(dx, dy)
+    for artist in drawn:
+        artist.set_transform(transform + ax.transData)
+
+    extent = _artist_extent(drawn)
+    if extent is not None:
+        x0, y0, x1, y1 = extent
+        corners = transform.transform(
+            [(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+        ax.update_datalim(corners)
+        if autoscale:
+            ax.autoscale_view()
+    return ax
+
+
+def _validate_placement(model):
+    """Raise where the current pose is not supported by the current map.
+
+    The pose is otherwise resolved lazily, at prediction time, since
+    ``visual_field_map`` can be reassigned after construction.
+    """
+    _placement_rotation(model)
+    _placement_shift(model, um)
 
 
 def _placed_coords(model, electrode_array, unit, electrodes=None):
@@ -1130,8 +1198,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def build(self, **build_params):
         """Build the spatial model.
 
-        Applies any supplied parameters, validates the implant and visual-field
-        map, builds the sampling grid, then runs ``_build``.
+        Applies any supplied parameters, validates the implant, visual-field
+        map and implant placement, builds the sampling grid, then runs
+        ``_build``.
 
         Parameters
         ----------
@@ -1147,6 +1216,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if self.visual_field_map.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
                              f"visual field map has {self.visual_field_map.ndim} dimensions.")
+        _validate_placement(self)
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
@@ -1318,7 +1388,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                        metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
 
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
-             figsize=None):
+             figsize=None, show_implant=False):
         """Plot the model
 
         Parameters
@@ -1341,12 +1411,26 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             (if exists) or create a new Axes object.
         figsize : (float, float), optional
             Desired (width, height) of the figure in inches
+        show_implant : bool, optional
+            Whether to draw the implant where the model places it. Rotation
+            and position are applied to the device's own geometry; use
+            ``model.implant.plot()`` for the unplaced device. Requires tissue
+            coordinates (``use_dva=False``).
+
+            .. versionadded:: 0.11.0
 
         Returns
         -------
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
+        if show_implant and use_dva:
+            raise NotImplementedError(
+                "An implant is placed in tissue, and a nonlinear "
+                "'visual_field_map' does not carry its electrode bodies or "
+                "substrate to the visual field as a rigid transform. Plot "
+                "with use_dva=False, or plot the device on its own with "
+                "'model.implant.plot()'.")
         if not self.is_built:
             self.build()
 
@@ -1355,6 +1439,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         ax = self.grid.plot(autoscale=autoscale, ax=ax, style=style, zorder=zorder,
                             figsize=figsize, use_dva=use_dva)
 
+        if show_implant:
+            _draw_placed_implant(self, ax, autoscale=autoscale)
         if use_dva:
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')

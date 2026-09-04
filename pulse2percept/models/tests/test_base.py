@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import time
 
 from pulse2percept.implants import (ArgusI, ArgusII, DiskElectrode,
-                                    ElectrodeArray, Implant)
+                                    ElectrodeArray, Implant, SquareElectrode)
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    BostonTrain, ImageStimulus, LogoBVL,
@@ -2154,6 +2154,127 @@ def test_location_noise_rejects_3d_maps():
                                 **kwargs).build()
 
 
+def _square_implant():
+    """Two square electrodes on the local +x axis, one at the origin
+
+    Square bodies are asymmetric under rotation, so a plot that only moves
+    electrode centers reads back differently from one that turns the device.
+    """
+    return Implant(ElectrodeArray({'A1': SquareElectrode(0, 0, 0, 200),
+                                   'A2': SquareElectrode(600, 0, 0, 200)}))
+
+
+def _square_model(**params):
+    return ScoreboardSpatial(_square_implant(), rho=200, xrange=(-4, 4),
+                             yrange=(-4, 4), step=0.5, **params)
+
+
+def _drawn_bodies(ax):
+    """Electrode-body vertices in data coordinates, as drawn"""
+    collection = ax.collections[-1]
+    to_data = ax.transData.inverted()
+    return np.array([to_data.transform(
+        collection.get_transform().transform(path.vertices))
+        for path in collection.get_paths()])
+
+
+def _rotate(xy, deg_ccw):
+    th = np.deg2rad(deg_ccw)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    return (R @ np.asarray(xy).reshape(-1, 2).T).T.reshape(np.shape(xy))
+
+
+def test_implant_plot_is_the_device_frame_whatever_the_model_does():
+    """`implant.plot()` knows nothing about placement"""
+    implant = _square_implant()
+    local = implant.electrode_array.coordinates()
+    with plt.ioff():
+        fig, (ax0, ax1, ax2) = plt.subplots(1, 3)
+        implant.plot(ax=ax0)
+        # The same implant, in two models placed differently:
+        _square_model(implant_position=(3000, 0) * um).implant.plot(ax=ax1)
+        _square_model(implant_position=(0, -2000) * um,
+                      implant_rotation=45).implant.plot(ax=ax2)
+        alone = _drawn_bodies(ax0)
+        npt.assert_almost_equal(_drawn_bodies(ax1), alone)
+        npt.assert_almost_equal(_drawn_bodies(ax2), alone)
+        plt.close(fig)
+    npt.assert_array_equal(implant.electrode_array.coordinates(), local)
+
+
+def test_show_implant_draws_the_device_where_the_model_places_it():
+    """Position moves the whole device, origin electrode included"""
+    model = _square_model(implant_position=(1500, -700) * um)
+    local = model.implant.electrode_array.coordinates()
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        model.implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        npt.assert_almost_equal(_drawn_bodies(ax1),
+                                _drawn_bodies(ax0) + [1500, -700])
+        plt.close(fig)
+    # Plotting a placed implant does not place the implant:
+    npt.assert_array_equal(model.implant.electrode_array.coordinates(), local)
+
+
+def test_show_implant_rotates_the_device_not_just_the_centers():
+    """Square bodies turn with the array, about the device origin"""
+    model = _square_model(implant_rotation=30)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        model.implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        drawn, local = _drawn_bodies(ax1), _drawn_bodies(ax0)
+        npt.assert_almost_equal(drawn, _rotate(local, 30))
+        # The corners moved, so this is not a translation of the bodies:
+        centered = local - local.mean(axis=1, keepdims=True)
+        npt.assert_equal(
+            np.allclose(drawn - drawn.mean(axis=1, keepdims=True), centered),
+            False)
+        plt.close(fig)
+
+
+def test_show_implant_rotates_before_translating():
+    """The device frame is turned, then placed"""
+    model = _square_model(implant_rotation=90,
+                          implant_position=(1000, 0) * um)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        model.implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        local, drawn = _drawn_bodies(ax0), _drawn_bodies(ax1)
+        npt.assert_almost_equal(drawn, _rotate(local, 90) + [1000, 0])
+        # Translating first would swing the array onto +y instead:
+        npt.assert_equal(np.allclose(drawn, _rotate(local + [1000, 0], 90)),
+                         False)
+        plt.close(fig)
+
+
+def test_show_implant_refuses_visual_field_coordinates():
+    """A nonlinear retinotopy does not carry electrode bodies rigidly"""
+    model = _square_model(implant_position=(1500, 0) * um)
+    with plt.ioff():
+        fig = plt.figure()
+        with pytest.raises(NotImplementedError):
+            model.plot(use_dva=True, show_implant=True)
+        plt.close(fig)
+
+
+def test_show_implant_works_on_a_cortical_model():
+    model = CortexScoreboardSpatial(_square_implant(), rho=400,
+                                    implant_position=(20, -5) * mm,
+                                    xrange=(-4, 4), yrange=(-4, 4), step=0.5)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        model.implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        npt.assert_almost_equal(_drawn_bodies(ax1),
+                                _drawn_bodies(ax0) + [20000, -5000])
+        with pytest.raises(NotImplementedError):
+            model.plot(ax=ax1, use_dva=True, show_implant=True)
+        plt.close(fig)
+
+
 def _slab_model(**params):
     """A cortical scoreboard on a 3D map, with two electrodes 560 um apart"""
     return CortexScoreboardSpatial(
@@ -2192,7 +2313,11 @@ def test_identity_placement_is_allowed_on_a_3d_map():
 ])
 def test_placement_is_refused_on_a_3d_map(params):
     """`z` in a 3D tissue frame is an axis, not depth along the normal"""
-    model = _slab_model(**params).build()
+    with pytest.raises(NotImplementedError):
+        _slab_model(**params).build()
+    # A pose set after the build is caught at prediction time too:
+    model = _slab_model().build()
+    model.set_params(**params)
     implant = model.implant
     stim = implant.prepare_stim({implant.electrode_names[0]: 1})
     with pytest.raises(NotImplementedError):
