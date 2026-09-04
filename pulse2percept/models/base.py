@@ -367,19 +367,9 @@ def _blend_meridian(resp, grid, meridian, width):
 
 
 def _dva_pos_to_tissue(model, value):
-    """Resolve a visual field ``implant_pos`` to a tissue position.
+    """Return the tissue position, in um, of a dva ``implant_pos``.
 
-    Forward mapping only: nothing here needs the map to be invertible.
-
-    Parameters
-    ----------
-    value : (x, y)
-        Visual field position of the implant's local origin, in dva.
-
-    Returns
-    -------
-    np.ndarray
-        Tissue position ``(x, y)``, in microns.
+    Forward mapping only; the map need not be invertible.
     """
     visual_field_map = getattr(model, 'visual_field_map', None)
     if visual_field_map is None:
@@ -398,8 +388,6 @@ def _dva_pos_to_tissue(model, value):
             f"position instead.")
     regions = list(visual_field_map.from_dva())
     if len(regions) != 1:
-        # One visual field location has several tissue images, and
-        # choosing between them is a pose question this does not answer.
         raise NotImplementedError(
             f"{type(visual_field_map).__name__} maps one visual field "
             f"location onto {regions}, so 'implant_pos' in dva does not "
@@ -418,14 +406,12 @@ def _dva_pos_to_tissue(model, value):
 def _placement_shift(model, unit):
     """Return the rigid ``(dx, dy, dz)`` that places the implant, in ``unit``.
 
-    Reads model parameters only, so asking for a subset of electrodes cannot
-    change where the implant sits. Returns None for an implant left at the
-    tissue origin.
+    Reads model parameters only, so a subset of electrodes cannot change where
+    the implant sits. Returns None for an implant at the tissue origin.
     """
     pos = getattr(model, 'implant_pos', (0, 0))
     if has_units(pos) and not _length_valued(pos):
-        # A visual field position, resolved here rather than when it was
-        # assigned: the model's `visual_field_map` may be replaced afterwards.
+        # Resolved here, not at assignment: `visual_field_map` may change.
         xy = _dva_pos_to_tissue(model, pos)
     else:
         xy = np.asarray(as_value(pos, um, 'implant_pos'), dtype=float).ravel()
@@ -442,10 +428,9 @@ def _placement_shift(model, unit):
 
 
 def _placed_coords(model, electrode_array, unit, electrodes=None):
-    """Electrode coordinates in ``unit``, placed by the model
+    """Electrode coordinates in ``unit``, placed by the model.
 
-    The implant's own electrodes are never moved, so the same implant stays
-    reusable across models, maps and placements.
+    The implant is never mutated.
     """
     xyz = electrode_array.coordinates(unit, electrodes=electrodes)
     shift = _placement_shift(model, unit)
@@ -601,8 +586,7 @@ def _warn_rho_vs_pitch(model):
 def _warn_ignores_z(model, electrode_array):
     """Warn when a model ignores nonzero electrode ``z`` coordinates.
 
-    Reads the placed coordinates, so ``implant_z`` counts as depth just as a
-    per-electrode ``z`` does.
+    Reads placed coordinates, so ``implant_z`` counts as depth.
     """
     if np.allclose(_placed_coords(model, electrode_array,
                                   model.space_unit)[:, 2], 0):
@@ -707,8 +691,8 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def _normalize_param_value(self, name, value):
         """Normalize a parameter to its stored unit.
 
-        ``implant_pos`` is stored as given: whether it is a tissue position or
-        a visual field one decides how `_placement_shift` reads it.
+        ``implant_pos`` is stored as given, since its unit decides whether it
+        names a tissue position or a visual field one.
         """
         if name == 'implant_pos':
             return value
@@ -717,10 +701,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def _electrode_coords(self, electrode_array, stim, electrodes=None):
         """Return stimulus electrode coordinates in ``space_unit``.
 
-        The implant's own coordinates, placed by ``implant_pos`` and
-        ``implant_z`` (see `_placed_coords`). They follow ``stim.electrodes``
-        order and are returned as contiguous float32 arrays for the numerical
-        kernels.
+        The implant's coordinates placed by ``implant_pos`` and ``implant_z``,
+        in ``stim.electrodes`` order, as contiguous float32 arrays for the
+        numerical kernels.
 
         Parameters
         ----------
@@ -809,25 +792,21 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         .. versionadded:: 0.11.0
 
     implant_pos : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits in the modeled
-        tissue. A physical position is used as given; a position in dva names
-        a retinotopic location and is resolved through ``visual_field_map``
-        at prediction time, so replacing the map moves the implant to that
-        location's new tissue representation. Defaults to the tissue origin.
-        The whole array is translated rigidly, so device geometry (pitch,
-        layout, local rotation) is unchanged and the implant object itself is
-        never mutated. A dva position needs a 2D map with a single region;
-        place an implant on anything else by physical position. Separate from
+        Where the implant's local ``(0, 0)`` origin sits, defaulting to the
+        tissue origin. The unit decides how it is read: a bare pair or a
+        length is a tissue position in microns, whereas ``(6, -2) * dva``
+        names a visual field location and is resolved through
+        ``visual_field_map`` at prediction time. A dva position requires a 2D
+        map with a single region. The array is translated rigidly, so device
+        geometry is unchanged and the implant is never mutated. Distinct from
         ``location_noise``, which perturbs individual phosphene locations
         afterwards.
 
         .. versionadded:: 0.11.0
 
     implant_z : float or Quantity, optional
-        Depth at which the implant is placed, in microns, added to every
-        electrode's ``z``. Per-electrode ``z`` on the implant stays local
-        geometry (non-planarity, electrode-specific heights); this is the
-        global placement depth. Only models that read ``z``, such as
+        Depth (um) the implant is placed at, added to every electrode's local
+        ``z``. Only models that read ``z``, such as
         :py:class:`~pulse2percept.models.Nanduri2012Model`, respond to it.
 
         .. versionadded:: 0.11.0
@@ -1006,9 +985,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
         params = {
-            # Where the implant's local origin sits, and how deep. A bare
-            # pair is a tissue position; see `_placement_shift`.
-            'implant_pos': (0, 0),  # um
+            'implant_pos': (0, 0),  # um, or dva if given unitfully
             'implant_z': 0,  # um
             'xrange': (-15, 15),  # dva
             'yrange': (-15, 15),  # dva
@@ -1040,9 +1017,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # The simulated patch of visual field is specified in degrees of
             # visual angle; the visual field map turns those into tissue
             # coordinates when the grid is built:
-            # `implant_pos` accepts either a tissue position or a visual
-            # field one, so it is stored as given and resolved at prediction
-            # time; see `_placement_shift`.
+            # `implant_pos` is not listed: its unit is what distinguishes a
+            # tissue position from a visual field one.
             'implant_z': um,
             'xrange': dva,
             'yrange': dva,
@@ -1127,11 +1103,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                           region=None):
         """Return the electrode coordinates the spatial kernel is given.
 
-        These are the implant's own coordinates placed by ``implant_pos``
-        and ``implant_z`` (see `_placed_coords`) and, with ``location_noise``
-        set, further displaced in the visual field (see `_displaced_coords`).
-        ``region`` names the visual field map region to displace through, and
-        defaults to the only one the map has.
+        Placed coordinates, further displaced in the visual field where
+        ``location_noise`` is set. ``region`` names the visual field map
+        region to displace through, and defaults to the map's only one.
         """
         if electrodes is None:
             electrodes = stim.electrodes

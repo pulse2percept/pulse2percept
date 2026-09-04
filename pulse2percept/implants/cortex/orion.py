@@ -10,18 +10,16 @@ from ...utils.constants import UM_PER_MM
 class Orion(Implant):
     """Create a Orion array
     
-    This function creates a Orion array and places it on the visual cortex
-    such that the center of the base of the array is at 3D location (x,y,z) given
-    in microns, and the array is rotated by angle ``rot``, given in degrees.
+    Electrode coordinates are given in the array's own frame, with the
+    center of its base at ``(0, 0)`` and rotated by ``rot``. Where the
+    array is implanted is set by the model's ``implant_pos``.
 
     Orion contains 60 electrodes in a hex shaped grid inspired by Argus II.
     
     .. note::
 
-        The electrodes describe the device in its own frame, centered on
-        ``(0, 0)``. Where it is implanted is the spatial model's
-        ``implant_pos``, e.g. ``implant_pos=(20, -5) * mm`` for the right
-        hemisphere, or a visual field position in dva.
+        Implant the array with the model's ``implant_pos``, e.g.
+        ``implant_pos=(20, -5) * mm`` for the right hemisphere.
     
     Parameters
     ----------

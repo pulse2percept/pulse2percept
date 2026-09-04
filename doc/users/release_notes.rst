@@ -98,7 +98,7 @@ Models
 
 * Named implants no longer take ``x``/``y``: their electrodes describe the
   device about its own ``(0, 0)`` origin, and where it is implanted is the
-  spatial model's ``implant_pos``. ``rot`` stays on the implant as local
+  model's ``implant_pos``. ``rot`` stays on the implant as local
   orientation. The cortical defaults that encoded a placement
   (``Cortivis(x=20000, y=-5000)``, ``ICVP``/``Orion(x=15000)``) are gone;
   pass e.g. ``implant_pos=(20, -5) * mm`` to the model instead. ``Electrode``,

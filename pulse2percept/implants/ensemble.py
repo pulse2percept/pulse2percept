@@ -12,12 +12,10 @@ from ..units import DimensionMismatchError, as_value, dva, um
 def _placed(implant_type, x, y):
     """One device of an ensemble, positioned in the ensemble's own frame.
 
-    An ensemble is itself a single implant, so where its devices sit relative
-    to one another is local geometry, unlike the model-side ``implant_pos``
-    that places the ensemble as a whole. A device whose own constructor takes
-    ``x``/``y`` is a geometry primitive (a Neuralink thread, say) and is built
-    there; a named device describes hardware about its own origin, so it is
-    translated after the fact.
+    An ensemble is one implant, so where its devices sit relative to each
+    other is local geometry rather than the model-side ``implant_pos``. A
+    geometry primitive such as a Neuralink thread takes ``x``/``y`` in its own
+    constructor; a named device is translated after construction.
     """
     params = signature(implant_type).parameters
     if 'x' in params and 'y' in params:

@@ -106,15 +106,14 @@ class DynaphosModel(BaseModel):
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
     implant_pos : (x, y) or Quantity, optional
-        Tissue position of the implant's local ``(0, 0)`` origin. A dva
-        position names the cortical representation of that visual field
-        location and is resolved through ``visual_field_map``; a physical one
-        is used as given. Defaults to the tissue origin.
+        Where the implant's local ``(0, 0)`` origin sits. A bare pair or a
+        length is a cortical position in microns; ``(6, -2) * dva`` names the
+        representation of that visual field location.
 
         .. versionadded:: 0.11.0
 
     implant_z : float or Quantity, optional
-        Depth the implant is placed at (um), added to every electrode's local
+        Depth (um) the implant is placed at, added to every electrode's local
         ``z``.
 
         .. versionadded:: 0.11.0

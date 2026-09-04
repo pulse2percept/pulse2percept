@@ -71,17 +71,16 @@ class CortexSpatial(SpatialModel):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     implant_pos : (x, y) or Quantity, optional
-        Tissue position of the implant's local ``(0, 0)`` origin. A
-        dva position names the cortical representation of that visual
-        field location and is resolved through ``visual_field_map``,
-        which must map it onto a single region; a physical position is
-        used as given. Defaults to the tissue origin.
+        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
+        a length is a cortical position in microns; ``(6, -2) * dva``
+        names the representation of that visual field location, which
+        ``visual_field_map`` must map onto a single region.
 
         .. versionadded:: 0.11.0
 
     implant_z : float or Quantity, optional
-        Depth the implant is placed at (um), added to every
-        electrode's local ``z``.
+        Depth (um) the implant is placed at, added to every electrode's
+        local ``z``.
 
         .. versionadded:: 0.11.0
 
@@ -307,17 +306,16 @@ class ScoreboardSpatial(CortexSpatial):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     implant_pos : (x, y) or Quantity, optional
-        Tissue position of the implant's local ``(0, 0)`` origin. A
-        dva position names the cortical representation of that visual
-        field location and is resolved through ``visual_field_map``,
-        which must map it onto a single region; a physical position is
-        used as given. Defaults to the tissue origin.
+        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
+        a length is a cortical position in microns; ``(6, -2) * dva``
+        names the representation of that visual field location, which
+        ``visual_field_map`` must map onto a single region.
 
         .. versionadded:: 0.11.0
 
     implant_z : float or Quantity, optional
-        Depth the implant is placed at (um), added to every
-        electrode's local ``z``.
+        Depth (um) the implant is placed at, added to every electrode's
+        local ``z``.
 
         .. versionadded:: 0.11.0
 
@@ -506,17 +504,16 @@ class ScoreboardModel(Model):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     implant_pos : (x, y) or Quantity, optional
-        Tissue position of the implant's local ``(0, 0)`` origin. A
-        dva position names the cortical representation of that visual
-        field location and is resolved through ``visual_field_map``,
-        which must map it onto a single region; a physical position is
-        used as given. Defaults to the tissue origin.
+        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
+        a length is a cortical position in microns; ``(6, -2) * dva``
+        names the representation of that visual field location, which
+        ``visual_field_map`` must map onto a single region.
 
         .. versionadded:: 0.11.0
 
     implant_z : float or Quantity, optional
-        Depth the implant is placed at (um), added to every
-        electrode's local ``z``.
+        Depth (um) the implant is placed at, added to every electrode's
+        local ``z``.
 
         .. versionadded:: 0.11.0
 

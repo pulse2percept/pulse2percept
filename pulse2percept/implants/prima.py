@@ -213,12 +213,7 @@ class PhotovoltaicPixel(HexElectrode):
     Parameters
     ----------
     x/y/z : double
-        3D location of the electrode.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
+        Location of the pixel (um) in the array's own coordinate frame.
     radius : double
         Radius (um) of the active electrode.
     apothem : double
@@ -297,11 +292,9 @@ class PRIMAPivotal(Implant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array plane, i.e. local device
-        geometry: a scalar applies to every electrode, a list of 378 entries
-        gives each its own. Positive values move an electrode away from
-        the retina into the vitreous humor. Where the device sits is set
-        by the model's ``implant_pos`` and ``implant_z``, not here.
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 378 entries gives each its own.
+        Electrode-retina distance is the model's ``implant_z``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
@@ -514,11 +507,9 @@ class Lorach2015Array(Implant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array plane, i.e. local device
-        geometry: a scalar applies to every electrode, a list of 142 entries
-        gives each its own. Positive values move an electrode away from
-        the retina into the vitreous humor. Where the device sits is set
-        by the model's ``implant_pos`` and ``implant_z``, not here.
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 142 entries gives each its own.
+        Electrode-retina distance is the model's ``implant_z``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
@@ -632,11 +623,9 @@ class Ho2019FlatArray(Implant):
     pixel_size : {55, 40}
         Pixel width (um), which selects the device variant.
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array plane, i.e. local device
-        geometry: a scalar applies to every electrode, a list of them
-        gives each its own. Positive values move an electrode away from
-        the retina into the vitreous humor. Where the device sits is set
-        by the model's ``implant_pos`` and ``implant_z``, not here.
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of them gives each its own.
+        Electrode-retina distance is the model's ``implant_z``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
@@ -749,11 +738,9 @@ class Huang2021Array(Implant):
     pixel_size : {55, 40, 30, 20}
         Pixel width (um), which selects the device variant.
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array plane, i.e. local device
-        geometry: a scalar applies to every electrode, a list of them
-        gives each its own. Positive values move an electrode away from
-        the retina into the vitreous humor. Where the device sits is set
-        by the model's ``implant_pos`` and ``implant_z``, not here.
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of them gives each its own.
+        Electrode-retina distance is the model's ``implant_z``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional

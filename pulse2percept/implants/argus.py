@@ -17,12 +17,11 @@ _DEVICE_DEFAULT = object()
 
 
 class ArgusI(Implant):
-    """Create an Argus I array on the retina
+    """Create an Argus I array
 
-    This function creates an Argus I array and places it on the retina
-    such that the center of the array is located at 3D location (x,y,z),
-    given in microns, and the array is rotated by rotation angle ``rot``,
-    given in degrees.
+    Electrode coordinates are given in the array's own frame, centered on
+    ``(0, 0)`` and rotated by ``rot``. Where the array is implanted is set by
+    the model's ``implant_pos`` and ``implant_z``.
 
     Argus I is a modified cochlear implant containing 16 electrodes in a 4x4
     array with a center-to-center separation of 800 um, and two electrode
@@ -56,11 +55,9 @@ class ArgusI(Implant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array plane, i.e. local device
-        geometry: a scalar applies to every electrode, a list of 16 entries
-        gives each its own. Positive values move an electrode away from
-        the retina into the vitreous humor. Where the device sits is set
-        by the model's ``implant_pos`` and ``implant_z``, not here.
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 16 entries gives each its own.
+        Electrode-retina distance is the model's ``implant_z``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity, optional
@@ -157,12 +154,11 @@ class ArgusI(Implant):
 
 
 class ArgusII(Implant):
-    """Create an Argus II array on the retina
+    """Create an Argus II array
 
-    This function creates an Argus II array and places it on the retina
-    such that the center of the array is located at (x,y,z), given in
-    microns, and the array is rotated by rotation angle ``rot``, given in
-    degrees.
+    Electrode coordinates are given in the array's own frame, centered on
+    ``(0, 0)`` and rotated by ``rot``. Where the array is implanted is set by
+    the model's ``implant_pos`` and ``implant_z``.
 
     Argus II contains 60 electrodes of 225 um diameter arranged in a 6 x 10
     grid (575 um center-to-center separation) [Yue2020]_.
@@ -194,11 +190,9 @@ class ArgusII(Implant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array plane, i.e. local device
-        geometry: a scalar applies to every electrode, a list of 60 entries
-        gives each its own. Positive values move an electrode away from
-        the retina into the vitreous humor. Where the device sits is set
-        by the model's ``implant_pos`` and ``implant_z``, not here.
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 60 entries gives each its own.
+        Electrode-retina distance is the model's ``implant_z``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity

@@ -403,15 +403,15 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_pos : (x, y) or Quantity, optional
-        Tissue position of the implant's local ``(0, 0)`` origin.
-        A dva position is resolved through ``visual_field_map``; a
-        physical one is used as given. Defaults to the tissue origin.
+        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
+        a length is a tissue position in microns; ``(6, -2) * dva`` is a
+        visual field location, resolved through ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
     implant_z : float or Quantity, optional
-        Depth the implant is placed at (um), added to every
-        electrode's local ``z``.
+        Depth (um) the implant is placed at, added to every electrode's
+        local ``z``.
 
         .. versionadded:: 0.11.0
 
@@ -785,15 +785,15 @@ class BiphasicAxonMapModel(Model):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_pos : (x, y) or Quantity, optional
-        Tissue position of the implant's local ``(0, 0)`` origin.
-        A dva position is resolved through ``visual_field_map``; a
-        physical one is used as given. Defaults to the tissue origin.
+        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
+        a length is a tissue position in microns; ``(6, -2) * dva`` is a
+        visual field location, resolved through ``visual_field_map``.
 
         .. versionadded:: 0.11.0
 
     implant_z : float or Quantity, optional
-        Depth the implant is placed at (um), added to every
-        electrode's local ``z``.
+        Depth (um) the implant is placed at, added to every electrode's
+        local ``z``.
 
         .. versionadded:: 0.11.0
 

@@ -35,11 +35,9 @@ class AlphaIMS(Implant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array plane, i.e. local device
-        geometry: a scalar applies to every electrode, a list of 1500 entries
-        gives each its own. Positive values move an electrode away from
-        the retina into the vitreous humor. Where the device sits is set
-        by the model's ``implant_pos`` and ``implant_z``, not here.
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 1500 entries gives each its own.
+        Electrode-retina distance is the model's ``implant_z``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity
@@ -174,11 +172,9 @@ class AlphaAMS(Implant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array plane, i.e. local device
-        geometry: a scalar applies to every electrode, a list of 1600 entries
-        gives each its own. Positive values move an electrode away from
-        the retina into the vitreous humor. Where the device sits is set
-        by the model's ``implant_pos`` and ``implant_z``, not here.
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 1600 entries gives each its own.
+        Electrode-retina distance is the model's ``implant_z``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     rot : float or Quantity

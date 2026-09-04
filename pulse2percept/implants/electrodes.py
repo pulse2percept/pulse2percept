@@ -46,12 +46,9 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     Parameters
     ----------
     x/y/z : double
-        3D location of the electrode (um).
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the right visual field.
-        Positive ``y`` values move the electrode into the left visual field.
-        Positive ``z`` values move the electrode either into the cortex or
-        into the vitreos humor.
+        Location of the electrode (um) in the array's own coordinate frame.
+        ``z`` is height above the array plane; where the array is implanted is
+        the model's ``implant_pos`` and ``implant_z``.
     name : str, optional
         Electrode name
     activated : bool
@@ -185,8 +182,7 @@ class PointSource(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location of the electrode.
-        The coordinate system is centered over the fovea.
+        Location of the electrode (um) in the array's own coordinate frame.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
@@ -261,8 +257,7 @@ class DiskElectrode(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location of the electrode.
-        The coordinate system is centered over the fovea.
+        Location of the electrode (um) in the array's own coordinate frame.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
@@ -371,8 +366,7 @@ class SquareElectrode(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location of the electrode.
-        The coordinate system is centered over the fovea.
+        Location of the electrode (um) in the array's own coordinate frame.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
@@ -432,8 +426,7 @@ class HexElectrode(Electrode):
     Parameters
     ----------
     x/y/z : double
-        3D location of the electrode.
-        The coordinate system is centered over the fovea.
+        Location of the electrode (um) in the array's own coordinate frame.
         Positive ``x`` values move the electrode into the nasal retina.
         Positive ``y`` values move the electrode into the superior retina.
         Positive ``z`` values move the electrode away from the retina into the
