@@ -112,11 +112,10 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
         identical organization (i.e., must contain columns 'subject', 'image',
         'xrange', and 'yrange').
     argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
-        Either an Argus I or Argus II implant. If None, the data is expected to
-        contain additional columns: "implant_type_str", "implant_x",
-        "implant_y", and "implant_rot", which together define the type and
-        position of the implant. "implant_type_str" must be either "ArgusI" or
-        "ArgusII".
+        Either an Argus I or Argus II implant. If None, the data must contain
+        an "implant_type_str" column naming the device, either "ArgusI" or
+        "ArgusII". Where it was implanted comes from ``implant_position`` and
+        ``implant_rotation`` below.
     scale : float
         Scaling factor to apply to the phosphenes
     axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
@@ -128,13 +127,13 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
     implant_position : (x, y) or Quantity, optional
         Where the array's local ``(0, 0)`` origin sits on the retina (um),
         as a model's ``implant_position``. Defaults to the dataset's
-        "implant_x"/"implant_y" columns, or the fovea.
+        "implant_x"/"implant_y" columns where present, else the fovea.
 
         .. versionadded:: 0.11.0
     implant_rotation : float or Quantity, optional
         Angle (deg) the array is turned by, counter-clockwise about that
         origin, as a model's ``implant_rotation``. Defaults to the dataset's
-        "implant_rot" column, or 0.
+        "implant_rot" column where present, else 0.
 
         .. versionadded:: 0.11.0
     """
@@ -160,8 +159,7 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
             argus = implant_type()
         except (KeyError, AttributeError):
             raise ValueError('If "argus" is not given, "data" must contain '
-                             'columns "implant_type_str", "implant_x", '
-                             '"implant_y", and "implant_rot".')
+                             'an "implant_type_str" column.')
     if not isinstance(argus, (ArgusI, ArgusII)):
         raise TypeError(f'"argus" must be an Argus I or Argus II implant, '
                         f'not {type(argus)}.')

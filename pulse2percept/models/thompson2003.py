@@ -290,8 +290,8 @@ class Thompson2003Model(Model):
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
                 implant_position=implant_position,
-            implant_rotation=implant_rotation,
-            implant_depth=implant_depth,
+                implant_rotation=implant_rotation,
+                implant_depth=implant_depth,
                 location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)

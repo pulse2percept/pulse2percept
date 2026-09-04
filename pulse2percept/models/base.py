@@ -533,8 +533,9 @@ def _draw_placed_implant(model, ax, autoscale=True):
 def _validate_placement(model):
     """Raise where the current pose is not supported by the current map.
 
-    The pose is otherwise resolved lazily, at prediction time, since
-    ``visual_field_map`` can be reassigned after construction.
+    The pose is otherwise resolved lazily, against whichever
+    ``visual_field_map`` is set when it is needed, since that map can be
+    reassigned after construction.
     """
     _placement_rotation(model)
     _placement_shift(model, um)
@@ -919,11 +920,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         defaulting to the tissue origin. The unit decides how it is read: a
         bare pair or a length is a tissue position in microns, whereas
         ``(6, -2) * dva`` names a visual field location and is resolved
-        through ``visual_field_map`` at prediction time. A dva position
-        requires a map with a single region. The array is translated rigidly,
-        so device geometry is unchanged and the implant is never mutated.
-        Distinct from ``location_noise``, which perturbs individual phosphene
-        locations afterwards.
+        against ``visual_field_map`` when the pose is needed, at build and
+        prediction time. A dva position requires a map with a single region.
+        The array is translated rigidly, so device geometry is unchanged and
+        the implant is never mutated. Distinct from ``location_noise``, which
+        perturbs individual phosphene locations afterwards.
 
         .. versionadded:: 0.11.0
 
