@@ -92,10 +92,9 @@ stimulation itself is of interest:
 Retinal implants
 ----------------
 
-Retinal implants are centered on the fovea and store distances to the
-neuronal targets in microns.
-Positive ``x`` points toward nasal retina, positive ``y`` toward superior
-retina, and positive ``z`` away from the retina into the vitreous. ``eye``
+Retinal implants describe their electrodes in microns, about the device's
+own ``(0, 0)`` origin. Where the array is implanted is the model's
+``implant_position``, ``implant_rotation`` and ``implant_depth``; ``eye``
 handles left- versus right-eye geometry where needed.
 
 PRIMA

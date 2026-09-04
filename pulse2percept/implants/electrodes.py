@@ -183,10 +183,6 @@ class PointSource(Electrode):
     ----------
     x/y/z : double
         Location of the electrode (um) in the array's own coordinate frame.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
     name : str, optional
         Electrode name
     activated : bool
@@ -258,10 +254,6 @@ class DiskElectrode(Electrode):
     ----------
     x/y/z : double
         Location of the electrode (um) in the array's own coordinate frame.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
     radius : double
         Disk radius (um) in the x,y plane
     name : str, optional
@@ -367,10 +359,6 @@ class SquareElectrode(Electrode):
     ----------
     x/y/z : double
         Location of the electrode (um) in the array's own coordinate frame.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
     side_length : double
         Side length (um) of the square
     name : str, optional
@@ -427,10 +415,6 @@ class HexElectrode(Electrode):
     ----------
     x/y/z : double
         Location of the electrode (um) in the array's own coordinate frame.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
     apothem : double
         Apothem (um) of the hexagon. The flat-to-flat width is
         ``2 * apothem``.

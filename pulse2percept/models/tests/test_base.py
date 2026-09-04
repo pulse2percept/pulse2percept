@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 import time
 
 from pulse2percept.implants import (ArgusI, ArgusII, DiskElectrode,
-                                    ElectrodeArray, Implant, SquareElectrode)
+                                    ElectrodeArray, Implant, PRIMAPivotal,
+                                    SquareElectrode)
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    BostonTrain, ImageStimulus, LogoBVL,
@@ -2257,6 +2258,58 @@ def test_show_implant_refuses_visual_field_coordinates():
         fig = plt.figure()
         with pytest.raises(NotImplementedError):
             model.plot(use_dva=True, show_implant=True)
+        plt.close(fig)
+
+
+def _drawn_substrate(ax):
+    """The last patch's vertices in data coordinates, as drawn"""
+    patch = ax.patches[-1]
+    local = patch.get_path().transformed(patch.get_patch_transform())
+    return ax.transData.inverted().transform(
+        patch.get_transform().transform(local.vertices))
+
+
+def test_show_implant_works_on_the_axon_map_plot():
+    """`AxonMapSpatial.plot` draws its own anatomical window"""
+    implant = _square_implant()
+    model = AxonMapSpatial(implant, rho=200, xrange=(-4, 4), yrange=(-4, 4),
+                           step=0.5, implant_position=(1200, -400) * um,
+                           implant_rotation=15)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True, annotate=False)
+        npt.assert_almost_equal(
+            _drawn_bodies(ax1), _rotate(_drawn_bodies(ax0), 15) + [1200, -400])
+        # The +/-5 mm axon window is the frame this plot is about:
+        npt.assert_array_less(ax1.get_xlim()[1] - ax1.get_xlim()[0], 1e5)
+        with pytest.raises(NotImplementedError):
+            model.plot(ax=ax1, use_dva=True, show_implant=True)
+        plt.close(fig)
+
+
+def test_show_implant_carries_the_prima_substrate_with_its_pixels():
+    """The substrate is a Patch, not part of the pixels' Collection"""
+    implant = PRIMAPivotal()
+    model = ScoreboardSpatial(implant, rho=50, xrange=(-4, 4),
+                              yrange=(-4, 4), step=0.5,
+                              implant_position=(2000, -1000) * um,
+                              implant_rotation=30)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        expected = _rotate(_drawn_substrate(ax0), 30) + [2000, -1000]
+        npt.assert_almost_equal(_drawn_substrate(ax1), expected)
+        # The die still surrounds every pixel it is supposed to hold:
+        collection = ax1.collections[-1]
+        to_data = ax1.transData.inverted()
+        pixels = to_data.transform(collection.get_transform().transform(
+            np.vstack([p.vertices for p in collection.get_paths()])))
+        corners = expected[:4]
+        npt.assert_almost_equal(corners.mean(axis=0), (2000, -1000))
+        npt.assert_array_less(np.abs(_rotate(pixels - [2000, -1000], -30)),
+                              1000)
         plt.close(fig)
 
 

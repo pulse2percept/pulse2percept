@@ -94,19 +94,17 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 # location.
 #
 # Consulting [Beyeler2019]_ tells us that the prosthesis was roughly implanted
-# at ``(-1331, -850)`` um, rotated by -28.4 degrees. Both are placement, which
-# a model states as ``implant_position`` and ``implant_rotation``; this figure
-# draws in retinal coordinates, so it applies the same transform itself.
+# at ``(-1331, -850)`` um, rotated by -28.4 degrees. Both are placement, so
+# they belong to whatever reads the device: a model's ``implant_position`` and
+# ``implant_rotation``, or the same two arguments to the plotting functions.
+# The dataset carries them too, which is why the first plot below needs
+# neither.
 
-import numpy as np
 from pulse2percept.implants import ArgusII
+from pulse2percept.units import um
 argus = ArgusII(eye='RE')
-th = np.deg2rad(-28.4)
-cos, sin = np.cos(th), np.sin(th)
-for electrode in argus.electrode_objects:
-    x, y = electrode.x, electrode.y
-    electrode.x = cos * x - sin * y - 1331
-    electrode.y = sin * x + cos * y - 850
+implant_position = (-1331, -850) * um
+implant_rotation = -28.4
 
 ###############################################################################
 # For now, let's focus on the data from Subject 2:
@@ -150,6 +148,8 @@ plot_argus_phosphenes(data, argus, axon_map=model)
 
 import numpy as np
 model = AxonMapModel(implant=argus, rho=315, lam=500, loc_od=(16.2, 1.38),
+                     implant_position=implant_position,
+                     implant_rotation=implant_rotation,
                      xrange=(-30, 30), yrange=(-22.5, 22.5),
                      thresh_percept=1 / np.sqrt(np.e))
 
@@ -185,7 +185,9 @@ percepts.play()
 from pulse2percept.plotting import plot_argus_simulated_phosphenes
 fig, (ax_data, ax_sim) = plt.subplots(ncols=2, figsize=(15, 5))
 plot_argus_phosphenes(data, argus, scale=0.75, ax=ax_data)
-plot_argus_simulated_phosphenes(percepts, argus, scale=1.25, ax=ax_sim)
+plot_argus_simulated_phosphenes(percepts, argus, scale=1.25, ax=ax_sim,
+                                implant_position=implant_position,
+                                implant_rotation=implant_rotation)
 ax_data.set_title('Ground-truth phosphenes')
 ax_sim.set_title('Simulated phosphenes')
 

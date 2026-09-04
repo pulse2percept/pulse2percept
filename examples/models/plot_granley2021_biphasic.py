@@ -85,8 +85,7 @@ model.build()
 ##############################################################################
 # You can visualize the location of the implant and the axon map
 
-model.plot()
-implant.plot()
+model.plot(show_implant=True)
 plt.show()
 
 

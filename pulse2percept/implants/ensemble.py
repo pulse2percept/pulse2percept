@@ -1,6 +1,4 @@
 """:py:class:`~pulse2percept.implants.EnsembleImplant`"""
-from inspect import signature
-
 import numpy as np
 from .base import Implant
 from .electrodes import Electrode
@@ -9,28 +7,26 @@ from ..stimuli._merge import unique_time_points
 from ..stimuli.base import _describe_unit
 from ..units import DimensionMismatchError, as_value, dva, um
 
-def _placed(implant_type, x, y):
-    """One device of an ensemble, positioned in the ensemble's own frame.
-
-    An ensemble is one implant, so where its devices sit relative to each
-    other is local geometry rather than the model-side ``implant_position``. A
-    geometry primitive such as a Neuralink thread takes ``x``/``y`` in its own
-    constructor; a named device is translated after construction.
-    """
-    params = signature(implant_type).parameters
-    if 'x' in params and 'y' in params:
-        return implant_type(x=x, y=y)
-    implant = implant_type()
-    for elec in implant.electrode_array.electrode_objects:
-        elec.x += x
-        elec.y += y
-    return implant
-
 
 class EnsembleImplant(Implant):
     
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_implants', '_electrode_array', 'safe_mode', 'preprocess')
+
+    @staticmethod
+    def _placed(implant_type, x, y):
+        """One device of an ensemble, translated into the ensemble's frame.
+
+        An ensemble is one implant, so where its devices sit relative to each
+        other is local geometry rather than the model-side
+        ``implant_position``. Subclasses whose constituents are anchored at a
+        point they store, such as a Neuralink thread, override this.
+        """
+        implant = implant_type()
+        for elec in implant.electrode_array.electrode_objects:
+            elec.x += x
+            elec.y += y
+        return implant
 
     @classmethod
     def from_cortical_map(cls, implant_type, visual_field_map, locs=None,
@@ -182,7 +178,7 @@ class EnsembleImplant(Implant):
             xlocs = locs[:, 0]
             ylocs = locs[:, 1]
 
-        implant_list = [_placed(implant_type, x, y)
+        implant_list = [cls._placed(implant_type, x, y)
                         for x, y in zip(xlocs, ylocs)]
         
         return cls(implant_list)

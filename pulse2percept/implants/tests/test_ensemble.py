@@ -4,12 +4,14 @@ import numpy.testing as npt
 from pulse2percept.units import DimensionMismatchError, mm, ms, um
 from pulse2percept.units import dva
 import pytest
-from pulse2percept.implants import (EnsembleImplant, PointSource, Implant)
+from pulse2percept.implants import (EnsembleImplant, GridImplant, Implant,
+                                    PointSource)
 from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography import Polimeni2006Map
 from pulse2percept.models.cortex.base import ScoreboardModel
 from pulse2percept.stimuli import BiphasicPulseTrain, MonophasicPulse
 from pulse2percept.utils.constants import DT
+
 
 def _shifted(implant_type, dx, dy):
     """A device translated inside the ensemble's own coordinate frame
@@ -94,6 +96,30 @@ def test_from_coords():
         npt.assert_equal(ensemble[f'{i}-1'].x, device['1'].x + dx)
         npt.assert_equal(ensemble[f'{i}-1'].y, device['1'].y + dy)
         npt.assert_equal(ensemble[f'{i}-1'].z, device['1'].z)
+
+
+class _Grid2x2(GridImplant):
+    """A constituent whose constructor happens to expose `x`/`y`"""
+
+    def __init__(self, x=0, y=0):
+        super().__init__((2, 2), 400, x=x, y=y)
+
+
+def test_from_coords_translates_every_kind_of_constituent():
+    """Placement in an ensemble does not depend on a constructor's spelling"""
+    locs = np.array([(0, 0), (10000, -4000)])
+    for implant_type in (Cortivis, _Grid2x2):
+        device = implant_type()
+        name = device.electrode_names[0]
+        ensemble = EnsembleImplant.from_coords(implant_type, locs=locs)
+        for i, (dx, dy) in enumerate(locs):
+            npt.assert_almost_equal(ensemble[f'{i}-{name}'].x,
+                                    device[name].x + dx)
+            npt.assert_almost_equal(ensemble[f'{i}-{name}'].y,
+                                    device[name].y + dy)
+        # And the prototype device is untouched:
+        npt.assert_almost_equal(device[name].x, implant_type()[name].x)
+
 
 # test from_cortical_map initialization (vf coords in dva)
 def test_from_cortical_map():

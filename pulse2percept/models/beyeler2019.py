@@ -15,8 +15,8 @@ from ..topography import Watson2014Map
 from ..implants import ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
-from .base import (_blend_meridian, _thread_params, _warn_ignores_z,
-                   _warn_rho_vs_pitch)
+from .base import (_blend_meridian, _draw_placed_implant, _thread_params,
+                   _warn_ignores_z, _warn_rho_vs_pitch)
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)        
 
@@ -1033,7 +1033,7 @@ class AxonMapSpatial(SpatialModel):
         return blended
 
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
-             ax=None, figsize=None):
+             ax=None, figsize=None, show_implant=False):
         """Plot the axon map.
 
         Parameters
@@ -1050,11 +1050,25 @@ class AxonMapSpatial(SpatialModel):
             Axes to draw on. Defaults to the current axes.
         figsize : (float, float), optional
             Figure size in inches.
+        show_implant : bool, optional
+            Whether to draw the implant where the model places it. Rotation
+            and position are applied to the device's own geometry; use
+            ``model.implant.plot()`` for the unplaced device. Requires retinal
+            coordinates (``use_dva=False``).
+
+            .. versionadded:: 0.11.0
 
         Returns
         -------
         ax : matplotlib.axes.Axes
             Axes containing the plot."""
+        if show_implant and use_dva:
+            raise NotImplementedError(
+                "An implant is placed in tissue, and a nonlinear "
+                "'visual_field_map' does not carry its electrode bodies or "
+                "substrate to the visual field as a rigid transform. Plot "
+                "with use_dva=False, or plot the device on its own with "
+                "'model.implant.plot()'.")
         if ax is None:
             ax = plt.gca()
         if figsize is not None:
@@ -1115,6 +1129,10 @@ class AxonMapSpatial(SpatialModel):
         if self.is_built:
             self.grid.plot(ax=ax, style=style, zorder=ZORDER['background'] + 2,
                            use_dva=use_dva)
+        if show_implant:
+            # The window below is the anatomical frame this plot is about, so
+            # the implant does not get to rescale it:
+            _draw_placed_implant(self, ax, autoscale=False)
         ax.set_xlabel(f'x ({units})')
         ax.set_ylabel(f'y ({units})')
         if autoscale:

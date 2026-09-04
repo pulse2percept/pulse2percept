@@ -39,9 +39,9 @@ A model predicts what a *particular* device produces, so the first step is to
 specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
 
 In the following, we will use an
-:py:class:`~pulse2percept.implants.ArgusII` implant. By default, the implant
-will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
-meridian (rot=0):
+:py:class:`~pulse2percept.implants.ArgusII` implant. A device describes its
+electrodes about its own ``(0, 0)`` origin; where a model implants it is
+``implant_position`` and ``implant_rotation``, both zero by default:
 
 """
 # sphinx_gallery_thumbnail_number = 2
@@ -110,10 +110,9 @@ print(model)
 # your choosing, or want to inspect the built axon map first.
 #
 # You can inspect the location of the implant with respect to the underlying
-# nerve fiber bundles using the built-in plot methods:
+# nerve fiber bundles with ``show_implant``:
 
-model.plot()
-implant.plot()
+model.plot(show_implant=True)
 
 
 ##############################################################################
@@ -151,8 +150,7 @@ ax.set_title('Predicted percept')
 
 model.spatial.implant_position = (-50, 50) * um
 model.spatial.implant_rotation = -45
-model.plot()
-model.implant.plot()
+model.plot(show_implant=True)
 
 ##############################################################################
 # The resulting percepts should look very different from the previous example.

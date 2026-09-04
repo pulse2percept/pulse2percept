@@ -36,7 +36,7 @@ We can also specify:
 
 Let's say we want to create a 2x3 rectangular grid of
 :py:class:`~pulse2percept.implants.PointSource` objects, each electrode spaced
-500 microns apart, and the whole grid should be centered over the fovea:
+500 microns apart, and the whole grid centered on its own origin:
 
 """
 # sphinx_gallery_thumbnail_number = 3
@@ -132,8 +132,7 @@ offset_grid = ElectrodeGrid((11, 13), 500, grid_type='hex', x=-600, y=200,
 # the grid belongs to:
 from pulse2percept.implants import Implant
 
-AxonMapModel(implant=Implant(offset_grid)).plot()
-offset_grid.plot()
+AxonMapModel(implant=Implant(offset_grid)).plot(show_implant=True)
 
 ##############################################################################
 # From a grid to an implant

@@ -291,9 +291,8 @@ def test_dynaphos_reads_the_clock_before_compression():
 
 def _ensemble_of_two_clocks():
     """Two implants driven at different frequencies, and their merged input"""
-    ensemble = EnsembleImplant.from_coords(Orion,
-                                          locs=np.array([(0, 0),
-                                                         (-35000, 0)]))
+    ensemble = EnsembleImplant.from_coords(
+        Orion, locs=np.array([(0, 0), (-35000, 0)]))
     names = Orion().electrode_names
     source = {0: {e: BiphasicPulseTrain(50, 300, 0.45, stim_dur=100)
                   for e in names},

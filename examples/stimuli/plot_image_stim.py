@@ -180,8 +180,7 @@ model = p2p.models.ScoreboardModel(implant=implant, xrange=(-7, 7),
 model.build()
 
 # Show the visual field we're simulating (dashed lines) atop the implant:
-model.plot()
-implant.plot()
+model.plot(show_implant=True)
 
 ##############################################################################
 # Since :py:class:`~pulse2percept.implants.AlphaAMS` is a 2D electrode grid,
