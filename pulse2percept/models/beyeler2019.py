@@ -136,9 +136,6 @@ class ScoreboardSpatial(SpatialModel):
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
-    noise : float, int, or None, optional
-        Salt-and-pepper noise applied to each percept frame. An integer gives
-        the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -177,7 +174,7 @@ class ScoreboardSpatial(SpatialModel):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None,
+                 n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None, verbose=True, ndim=None,
@@ -188,7 +185,7 @@ class ScoreboardSpatial(SpatialModel):
             min_current_spread=min_current_spread,
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
-            n_gray=n_gray, noise=noise,
+            n_gray=n_gray,
             implant_position=implant_position,
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
@@ -293,9 +290,6 @@ class ScoreboardModel(Model):
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
-    noise : float, int, or None, optional
-        Salt-and-pepper noise applied to each percept frame. An integer gives
-        the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -331,7 +325,7 @@ class ScoreboardModel(Model):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None,
+                 n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None, verbose=True, ndim=None,
@@ -342,7 +336,7 @@ class ScoreboardModel(Model):
                 grid_type=grid_type, thresh_percept=thresh_percept,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise,
+                n_gray=n_gray,
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
@@ -430,9 +424,6 @@ class AxonMapSpatial(SpatialModel):
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
-    noise : float, int, or None, optional
-        Salt-and-pepper noise applied to each percept frame. An integer gives
-        the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -497,7 +488,7 @@ class AxonMapSpatial(SpatialModel):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None,
+                 n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
@@ -512,7 +503,7 @@ class AxonMapSpatial(SpatialModel):
             min_current_spread=min_current_spread,
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
-            n_gray=n_gray, noise=noise,
+            n_gray=n_gray,
             implant_position=implant_position,
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
@@ -1218,9 +1209,6 @@ class AxonMapModel(Model):
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
-    noise : float, int, or None, optional
-        Salt-and-pepper noise applied to each percept frame. An integer gives
-        the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -1285,7 +1273,7 @@ class AxonMapModel(Model):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None,
+                 n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
@@ -1301,7 +1289,7 @@ class AxonMapModel(Model):
                 thresh_percept=thresh_percept,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise,
+                n_gray=n_gray,
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,

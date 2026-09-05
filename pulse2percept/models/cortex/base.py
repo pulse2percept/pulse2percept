@@ -65,11 +65,6 @@ class CortexSpatial(SpatialModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-    noise : float or int, optional
-        Adds salt-and-pepper noise to each percept frame. An integer will be
-        interpreted as the number of pixels to subject to noise in each frame.
-        A float between 0 and 1 will be interpreted as a ratio of pixels to
-        subject to noise in each frame.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -313,11 +308,6 @@ class ScoreboardSpatial(CortexSpatial):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-    noise : float or int, optional
-        Adds salt-and-pepper noise to each percept frame. An integer will be
-        interpreted as the number of pixels to subject to noise in each frame.
-        A float between 0 and 1 will be interpreted as a ratio of pixels to
-        subject to noise in each frame.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -357,7 +347,6 @@ class ScoreboardSpatial(CortexSpatial):
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
-                 noise=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
@@ -368,7 +357,7 @@ class ScoreboardSpatial(CortexSpatial):
             step=step, grid_type=grid_type, thresh_percept=thresh_percept,
             min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
-            n_gray=n_gray, noise=noise,
+            n_gray=n_gray,
             implant_position=implant_position,
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
@@ -515,11 +504,6 @@ class ScoreboardModel(Model):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
-    noise : float or int, optional
-        Adds salt-and-pepper noise to each percept frame. An integer will be
-        interpreted as the number of pixels to subject to noise in each frame.
-        A float between 0 and 1 will be interpreted as a ratio of pixels to
-        subject to noise in each frame.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -559,7 +543,6 @@ class ScoreboardModel(Model):
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
-                 noise=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
@@ -572,7 +555,7 @@ class ScoreboardModel(Model):
                 thresh_percept=thresh_percept,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise,
+                n_gray=n_gray,
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,

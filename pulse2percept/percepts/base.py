@@ -15,7 +15,7 @@ from skimage.color import rgb2gray, rgba2rgb
 from skimage.transform import resize
 
 from ..units import DimensionMismatchError, Hz, Quantity, Unit, as_value, ms
-from ..utils import Data, HTMLAnimation, frame_interval, sample
+from ..utils import Data, HTMLAnimation, frame_interval
 from ..utils.animation import _frame_timeline
 from ..utils.array import _interp_rows, _slice_times
 from ..utils.constants import VIDEO_BLOCK_SIZE
@@ -228,10 +228,6 @@ class Percept(Data):
     n_gray : int, optional
         Number of gray levels. If specified, k-means clustering is used to
         reduce the percept to ``n_gray`` levels. Not available for RGB.
-    noise : float or int, optional
-        Amount of salt-and-pepper noise per frame. Integers specify a number
-        of pixels; floats in [0, 1] specify a fraction of pixels. Not available
-        for RGB.
     time_unit : :py:class:`~pulse2percept.units.Unit`, optional
         Unit in which ``time`` is stored.
 
@@ -245,10 +241,9 @@ class Percept(Data):
     spatial dimension: ``space`` still describes ``(Y, X)``, and a frame comes
     out as ``(Y, X)`` or ``(Y, X, 3)``.
 
-    ``n_gray``, ``noise``, ``argmax``, ``max``, and the ``vmin``/``vmax``
-    display range are defined on perceived brightness and raise a
-    ``ValueError`` for an RGB percept, which already carries its own display
-    values. Reducing three channels to one number -- to rank pixels or pick a
+    ``n_gray``, ``argmax``, ``max``, and the ``vmin``/``vmax`` display range
+    are defined on perceived brightness and raise a ``ValueError`` for an RGB
+    percept, which already carries its own display values. Reducing three channels to one number -- to rank pixels or pick a
     brightest frame -- would have to choose a color metric, and a metric the
     models never produced is a decision for the caller, not for this class.
     ``percept.data`` is always there for the plain numerical answer.
@@ -274,7 +269,7 @@ class Percept(Data):
     """
 
     def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
-                 noise=None, time_unit=ms):
+                 time_unit=ms):
         # import at runtime to avoid circular import
         from ..topography import Grid2D
         if not isinstance(time_unit, Unit):
@@ -311,23 +306,6 @@ class Percept(Data):
             data = np.asarray(data, dtype=np.float32)
             centroids, labels = kmeans2(data.ravel(), n_gray, minit='points')
             data = centroids[labels].reshape(data.shape)
-        # Add salt-and-pepper noise if requested:
-        if noise is not None:
-            if is_rgb:
-                raise _reject_rgb('noise', ' Salt and pepper are the darkest '
-                                           'and brightest values a percept '
-                                           'takes, which RGB does not define.')
-            n_pixels = np.prod(data.shape[:2])
-            vmin, vmax = data.min(), data.max()
-            for t in range(data.shape[2]):
-                idx_noise = sample(np.arange(n_pixels), k=noise)
-                n_noise = len(idx_noise)
-                xi, yi = np.unravel_index(idx_noise[:n_noise//2],
-                                          data.shape[:2])
-                data[xi, yi, t] = vmin
-                xi, yi = np.unravel_index(idx_noise[n_noise//2:n_noise],
-                                          data.shape[:2])
-                data[xi, yi, t] = vmax
         time = as_value(time, self._time_unit, 'time')
         if time is not None:
             time = np.array([time]).flatten()

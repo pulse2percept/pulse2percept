@@ -399,9 +399,6 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
-    noise : float, int, or None, optional
-        Salt-and-pepper noise applied to each percept frame. An integer gives
-        the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -468,7 +465,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None,
+                 n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
@@ -483,7 +480,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             step=step, grid_type=grid_type, thresh_percept=thresh_percept,
             min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
-            n_gray=n_gray, noise=noise,
+            n_gray=n_gray,
             implant_position=implant_position,
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
@@ -616,7 +613,7 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         resp = self._postprocess_spatial(resp)
         return Percept(resp, space=self.grid, time=t_percept,
                        time_unit=self.time_unit, metadata={'stim': stim},
-                       n_gray=self.n_gray, noise=self.noise)
+                       n_gray=self.n_gray)
 
     def _combine_temporal(self, percept, temporal, stim, t_percept):
         """Apply a normalized temporal response to the spatial percept."""
@@ -786,9 +783,6 @@ class BiphasicAxonMapModel(Model):
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
-    noise : float, int, or None, optional
-        Salt-and-pepper noise applied to each percept frame. An integer gives
-        the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
 
@@ -879,7 +873,7 @@ class BiphasicAxonMapModel(Model):
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None,
+                 n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
@@ -896,7 +890,7 @@ class BiphasicAxonMapModel(Model):
                 thresh_percept=thresh_percept,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise,
+                n_gray=n_gray,
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,

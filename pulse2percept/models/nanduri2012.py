@@ -104,9 +104,6 @@ class Nanduri2012Spatial(SpatialModel):
         n_gray : int or None, optional
             Number of gray levels in the returned percept. ``None`` disables
             gray-level quantization.
-        noise : float, int, or None, optional
-            Salt-and-pepper noise applied to each percept frame. An integer gives
-            the number of affected pixels; a float in [0, 1] gives their fraction.
         implant_position : (x, y) or Quantity, optional
             Where the implant's local ``(0, 0)`` origin sits. A bare pair or
             a length is a tissue position in microns; ``(6, -2) * dva`` is a
@@ -147,7 +144,6 @@ class Nanduri2012Spatial(SpatialModel):
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
-                 noise=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
@@ -159,7 +155,7 @@ class Nanduri2012Spatial(SpatialModel):
             min_current_spread=min_current_spread,
             visual_field_map=(Curcio1990Map() if visual_field_map is None else
                               visual_field_map),
-            n_gray=n_gray, noise=noise,
+            n_gray=n_gray,
             implant_position=implant_position,
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
@@ -392,8 +388,6 @@ class Nanduri2012Model(Model):
         n_gray : int or None, optional
             Number of gray levels in the returned percept. ``None`` disables
             gray-level quantization.
-        noise : float, int, or None, optional
-            Salt-and-pepper noise applied to each percept frame.
         implant_position : (x, y) or Quantity, optional
             Where the implant's local ``(0, 0)`` origin sits. A bare pair or
             a length is a tissue position in microns; ``(6, -2) * dva`` is a
@@ -465,7 +459,7 @@ class Nanduri2012Model(Model):
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rect', min_current_spread=1e-8,
                  visual_field_map=None,
-                 n_gray=None, noise=None,
+                 n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None, ndim=None, dt=0.005, tau1=0.42,
@@ -480,7 +474,7 @@ class Nanduri2012Model(Model):
                 yrange=yrange, step=step, grid_type=grid_type,
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
-                n_gray=n_gray, noise=noise,
+                n_gray=n_gray,
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,

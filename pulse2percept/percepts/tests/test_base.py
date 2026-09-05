@@ -73,17 +73,6 @@ def test_Percept():
     with pytest.raises(ValueError):
         Percept(ndarray, n_gray=-3)
 
-    # Noise:
-    data = np.arange(100, dtype=float).reshape((5, 5, 4))
-    npt.assert_almost_equal(Percept(data, noise=0).data, data)
-    npt.assert_almost_equal(Percept(data, noise=0.0).data, data)
-    for noise in [0.5, 1.0]:
-        percept = Percept(data, noise=noise)
-        n_white = sum(np.isclose(percept.data.ravel(), 99.0))
-        n_black = sum(np.isclose(percept.data.ravel(), 0.0))
-        npt.assert_equal(abs(n_white - 0.5 * noise * data.size) <= 2, True)
-        npt.assert_equal(abs(n_black - 0.5 * noise * data.size) <= 2, True)
-
 
 def test_Percept__iter__():
     ndarray = np.zeros((2, 4, 3))
@@ -1112,10 +1101,9 @@ def test_Percept_rgb_save_movie_roundtrip(tmp_path):
 
 def test_Percept_rgb_rejects_brightness_operations():
     data = np.random.rand(4, 6, 3, 2)
-    for kwargs in ({'n_gray': 4}, {'noise': 0.5}):
-        with pytest.raises(ValueError):
-            Percept(data, **kwargs)
-    # Both remain available for a brightness percept:
+    with pytest.raises(ValueError):
+        Percept(data, n_gray=4)
+    # Still available for a brightness percept:
     npt.assert_equal(len(np.unique(Percept(np.random.rand(4, 6, 2),
                                            n_gray=4).data)), 4)
 

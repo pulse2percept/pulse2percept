@@ -941,9 +941,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
-    noise : float, int, or None, optional
-        Salt-and-pepper noise applied to each percept frame. An integer gives
-        the number of affected pixels; a float in [0, 1] gives their fraction.
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in
         dva. Requires an invertible 2D ``visual_field_map``. Moving the effective
@@ -1099,7 +1096,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'min_current_spread': 1e-8,
             'visual_field_map': Curcio1990Map(),
             'n_gray': None,
-            'noise': None,
             'location_noise': None,  # dva
             'verbose': True,
             'ndim' : [2],
@@ -1345,7 +1341,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
-                       metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
+                       metadata={'stim': stim}, n_gray=self.n_gray)
 
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
              figsize=None, show_implant=False):
