@@ -528,7 +528,7 @@ class Implant(PrettyPrint):
         Parameters
         ----------
         annotate : bool, optional
-            Whether to scale the axes view to the data
+            Flag whether to label electrodes in the implant.
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         ax : matplotlib.axes._subplots.AxesSubplot, optional

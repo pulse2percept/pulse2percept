@@ -54,6 +54,10 @@ def test_plot_argus_phosphenes():
     # If no implant given, the dataframe must name the device:
     with pytest.raises(ValueError):
         plot_argus_phosphenes(df, ax=ax)
+    # ...and it must name a device that exists:
+    df['implant_type_str'] = 'Arguz'
+    with pytest.raises(ValueError):
+        plot_argus_phosphenes(df, ax=ax)
     df['implant_type_str'] = 'ArgusII'
     # That column alone is enough; the placement ones are optional:
     plot_argus_phosphenes(df, ax=ax)
@@ -96,6 +100,30 @@ def test_argus_placement_never_moves_the_implant():
     npt.assert_equal(_argus_pose(df.drop(columns=['implant_x', 'implant_y',
                                                   'implant_rot']),
                                  None, None), ((0.0, 0.0), 0.0))
+    # Position and rotation fall back independently:
+    xy, rot = _argus_pose(df.drop(columns=['implant_rot']), None, None)
+    npt.assert_almost_equal(xy, (-1331, -850))
+    npt.assert_almost_equal(rot, 0.0)
+    xy, rot = _argus_pose(df.drop(columns=['implant_x', 'implant_y']),
+                          None, None)
+    npt.assert_almost_equal(xy, (0.0, 0.0))
+    npt.assert_almost_equal(rot, -28.4)
+
+
+def test_argus_plot_does_not_flip_the_electrode_constants():
+    """A left eye flips a copy, so plots do not depend on call history"""
+    from pulse2percept.plotting import argus as argus_mod
+    px1 = argus_mod.PX_ARGUS1.copy()
+    px2 = argus_mod.PX_ARGUS2.copy()
+    df = pd.DataFrame([
+        {'subject': 'S1', 'electrode': 'A1', 'image': np.random.rand(10, 10),
+         'xrange': (-10, 10), 'yrange': (-10, 10)},
+    ])
+    _, ax = plt.subplots()
+    for implant in (ArgusI(eye='LE'), ArgusII(eye='LE'), ArgusII(eye='LE')):
+        plot_argus_phosphenes(df, implant, ax=ax)
+        npt.assert_array_equal(argus_mod.PX_ARGUS1, px1)
+        npt.assert_array_equal(argus_mod.PX_ARGUS2, px2)
 
 
 # Parametrize over the class, not over instances: arguments to `parametrize`

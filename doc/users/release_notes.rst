@@ -116,7 +116,7 @@ Models
   ``EnsembleImplant([Orion(), Orion(x=-35000)])`` is replaced by
   :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords`.
   ``Electrode``, ``ElectrodeGrid``, ``GridImplant`` and Neuralink threads keep
-  ``x``/``y``/``z``/``rot``, which are local geometry there (:pull:`N`).
+  ``x``/``y``/``z``/``rot``, which are local geometry there (:pull:`884`).
 
 * New ``location_noise`` parameter displaces each electrode's phosphene by a
   fixed, subject-specific offset in the visual field (dva) rather than at the
@@ -130,7 +130,7 @@ Models
   does not carry electrode bodies rigidly.
   :py:func:`~pulse2percept.plotting.plot_argus_phosphenes` and
   :py:func:`~pulse2percept.plotting.plot_argus_simulated_phosphenes` gain
-  matching ``implant_position``/``implant_rotation`` arguments (:pull:`N`).
+  matching ``implant_position``/``implant_rotation`` arguments (:pull:`884`).
 
 
 Residual vision
@@ -142,7 +142,7 @@ Residual vision
 
 * ``scotoma_fill='inpaint'`` is now refused when a prosthetic percept is
   composed into the scotoma, where the fill acted as a brightness floor.
-  Native vision is unchanged (:pull:`N`).
+  Native vision is unchanged (:pull:`884`).
 
 
 Plotting

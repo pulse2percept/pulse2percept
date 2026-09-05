@@ -225,6 +225,9 @@ class PhotovoltaicPixel(HexElectrode):
         Pixel orientation.
     
         .. versionadded:: 0.11.0
+    rot : double, optional
+        Rotation angle (deg, positive counter-clockwise) of the pixel body
+        about its own center.
     
         .. versionadded:: 0.11.0
     

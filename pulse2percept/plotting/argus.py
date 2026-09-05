@@ -73,17 +73,21 @@ def _argus_pose(data, implant_position, implant_rotation):
     Explicit arguments win; otherwise the Beyeler2019 placement columns are
     used, and failing those the array is drawn about the fovea.
     """
-    cols = ('implant_x', 'implant_y', 'implant_rot')
-    specs = data.iloc[0] if all(c in data.columns for c in cols) else None
-    if implant_position is None:
-        xy = (0.0, 0.0) if specs is None else (specs['implant_x'],
-                                               specs['implant_y'])
-    else:
+    # Position and rotation fall back independently: a dataset may record one
+    # without the other.
+    specs = data.iloc[0]
+    if implant_position is not None:
         xy = as_value(implant_position, um, 'implant_position')
-    if implant_rotation is None:
-        rot = 0.0 if specs is None else specs['implant_rot']
+    elif {'implant_x', 'implant_y'} <= set(data.columns):
+        xy = (specs['implant_x'], specs['implant_y'])
     else:
+        xy = (0.0, 0.0)
+    if implant_rotation is not None:
         rot = as_value(implant_rotation, deg, 'implant_rotation')
+    elif 'implant_rot' in data.columns:
+        rot = specs['implant_rot']
+    else:
+        rot = 0.0
     return np.asarray(xy, dtype=float).ravel(), float(rot)
 
 
@@ -154,12 +158,18 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
     if argus is None:
         # Implant not given, must first be created from data columns:
         try:
-            implant_type = (ArgusI if data.iloc[0].implant_type_str == 'ArgusI'
-                            else ArgusII)
-            argus = implant_type()
+            implant_type_str = data.iloc[0].implant_type_str
         except (KeyError, AttributeError):
             raise ValueError('If "argus" is not given, "data" must contain '
                              'an "implant_type_str" column.')
+        if implant_type_str == 'ArgusI':
+            argus = ArgusI()
+        elif implant_type_str == 'ArgusII':
+            argus = ArgusII()
+        else:
+            raise ValueError(f'Unknown "implant_type_str" '
+                             f'"{implant_type_str}": must be "ArgusI" or '
+                             f'"ArgusII".')
     if not isinstance(argus, (ArgusI, ArgusII)):
         raise TypeError(f'"argus" must be an Argus I or Argus II implant, '
                         f'not {type(argus)}.')
@@ -169,11 +179,12 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
     implant_xy, implant_rot = _argus_pose(data, implant_position,
                                           implant_rotation)
     placed = _placed_electrodes(argus, implant_xy, implant_rot)
+    # Copy: the left-eye branch below flips these in place.
     if isinstance(argus, ArgusI):
-        px_argus = PX_ARGUS1
+        px_argus = PX_ARGUS1.copy()
         img_argus = imread(PATH_ARGUS1)
     else:
-        px_argus = PX_ARGUS2
+        px_argus = PX_ARGUS2.copy()
         img_argus = imread(PATH_ARGUS2)
     if ax is None:
         ax = plt.gca()
