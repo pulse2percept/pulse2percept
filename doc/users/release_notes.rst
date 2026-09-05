@@ -87,6 +87,11 @@ Models
   component attributes: spatial and temporal parameters are accessed through
   ``model.spatial`` and ``model.temporal`` (:pull:`879`).
 
+* New :py:class:`~pulse2percept.models.BiphasicScoreboardModel` and
+  :py:class:`~pulse2percept.models.BiphasicScoreboardSpatial` apply the
+  [Granley2021]_ brightness and size scaling to round, electrode-centered
+  phosphenes, without the axonal streak (:pull:`886`).
+
 * :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
   photovoltaic drive, and
   :py:class:`~pulse2percept.models.BiphasicAxonMapModel` can predict directly

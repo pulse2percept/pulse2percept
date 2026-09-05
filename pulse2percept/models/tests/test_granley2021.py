@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import copy
+import warnings
 
 import numpy as np
 import pytest
@@ -14,9 +15,11 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    Stimulus, VideoStimulus)
 from pulse2percept.models import (AlphaTemporal, AxonMapSpatial,
                                   BiphasicAxonMapModel,
-                                  BiphasicAxonMapSpatial, FadingTemporal,
+                                  BiphasicAxonMapSpatial,
+                                  BiphasicScoreboardModel,
+                                  BiphasicScoreboardSpatial, FadingTemporal,
                                   Horsager2009Temporal, Model,
-                                  Nanduri2012Temporal)
+                                  Nanduri2012Temporal, ScoreboardModel)
 from pulse2percept.models.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
@@ -1060,3 +1063,226 @@ def test_BiphasicAxonMapSpatial_composite_reads_an_encoded_image(temporal_cls):
     npt.assert_equal(percept.data.shape[-1] > 1, True)
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
     npt.assert_equal(np.any(percept.data), True)
+
+
+# -----------------------------------------------------------------------------
+# BiphasicScoreboardSpatial / BiphasicScoreboardModel
+# -----------------------------------------------------------------------------
+
+_SB_GRID = dict(xrange=(-6, 6), yrange=(-6, 6), step=0.25, rho=200,
+                verbose=False)
+
+_SB_CLASSES = [BiphasicScoreboardModel, BiphasicScoreboardSpatial]
+
+
+def _scoreboard(model_cls=BiphasicScoreboardModel, implant=None, **kwargs):
+    return model_cls(implant=ArgusII() if implant is None else implant,
+                     **{**_SB_GRID, **kwargs}).build()
+
+
+def _train(freq=20, amp=1, pdur=0.45):
+    return {'C5': BiphasicPulseTrain(freq, amp * xTh, pdur)}
+
+
+def _frame(percept):
+    """The single representative frame this model predicts."""
+    return percept.data[..., 0]
+
+
+def _effective_width(frame):
+    """Sum over peak: the width of a Gaussian, independent of its height."""
+    return frame.sum() / frame.max()
+
+
+@pytest.mark.parametrize('model_cls', _SB_CLASSES)
+def test_BiphasicScoreboard_amplitude_brightens_and_broadens(model_cls):
+    model = _scoreboard(model_cls)
+    weak = _frame(model.predict_percept(_train(amp=1)))
+    strong = _frame(model.predict_percept(_train(amp=2)))
+    npt.assert_array_less(weak.max(), strong.max())
+    npt.assert_array_less(_effective_width(weak), _effective_width(strong))
+
+
+@pytest.mark.parametrize('model_cls', _SB_CLASSES)
+def test_BiphasicScoreboard_frequency_brightens_only(model_cls):
+    # The default size model does not read frequency, so a faster train is
+    # brighter at exactly the same width:
+    model = _scoreboard(model_cls)
+    slow = _frame(model.predict_percept(_train(freq=20)))
+    fast = _frame(model.predict_percept(_train(freq=40)))
+    npt.assert_array_less(slow.max(), fast.max())
+    npt.assert_almost_equal(_effective_width(slow), _effective_width(fast),
+                            decimal=4)
+
+
+def test_BiphasicScoreboard_is_the_analytical_gaussian():
+    freq, amp, pdur, rho = 20, 1.5, 0.45, 200
+    # No cutoff, so the kernel sums the untruncated Gaussian:
+    model = _scoreboard(rho=rho, min_current_spread=0)
+    got = _frame(model.predict_percept(_train(freq, amp, pdur)))
+
+    spatial = model.spatial
+    f_bright = DefaultBrightModel()(freq, amp, pdur)
+    f_size = DefaultSizeModel(rho)(freq, amp, pdur)
+    stim = model.implant.prepare_stim(_train(freq, amp, pdur))
+    x, y, _ = spatial._electrode_coords(model.implant.electrode_array, stim,
+                                        electrodes=['C5'])
+    r2 = (spatial.grid.ret.x - x[0]) ** 2 + (spatial.grid.ret.y - y[0]) ** 2
+    want = f_bright * np.exp(-r2 / (2 * rho ** 2 * f_size))
+    npt.assert_allclose(got, want, rtol=1e-5, atol=1e-6 * want.max())
+
+
+@pytest.mark.parametrize('model_cls', _SB_CLASSES)
+def test_BiphasicScoreboard_uncalibrated_current_raises(model_cls):
+    model = _scoreboard(model_cls)
+    current = {'C5': BiphasicPulseTrain(20, 30 * uA, 0.45)}
+    with pytest.raises(ValueError) as err:
+        model.predict_percept(current)
+    npt.assert_equal('threshold' in str(err.value), True)
+    # The same current is fine once the implant says what threshold it is:
+    calibrated = _scoreboard(model_cls, implant=ArgusII(thresholds=30 * uA))
+    npt.assert_array_almost_equal(calibrated.predict_percept(current).data,
+                                  model.predict_percept(_train(amp=1)).data)
+
+
+@pytest.mark.parametrize('model_cls', _SB_CLASSES)
+def test_BiphasicScoreboard_reads_an_encoded_image(model_cls):
+    model = _scoreboard(model_cls, implant=ArgusII(thresholds=80 * uA), step=1)
+    with _no_pulse_train_rendering():
+        percept = model.predict_percept(LogoBVL())
+    npt.assert_equal(np.any(percept.data), True)
+    # Asking for threshold multiples up front needs no measured threshold:
+    relative = _scoreboard(
+        model_cls, step=1,
+        implant=ArgusII(encoder=AmplitudeEncoder(
+            amp_range=(0 * xTh, 0.625 * xTh), freq=6 * Hz)))
+    with _no_pulse_train_rendering():
+        npt.assert_array_almost_equal(relative.predict_percept(LogoBVL()).data,
+                                      percept.data)
+
+
+@pytest.mark.parametrize('model_cls', _SB_CLASSES)
+@pytest.mark.parametrize('build_stim', [
+    lambda: {'C5': 30},
+    lambda: np.full(60, 30.0),
+    lambda: {'C5': Stimulus([[0, 30, 30, 0]], time=[0, 1, 99, 100])},
+    lambda: {'C5': MonophasicPulse(-30, 0.45, stim_dur=100)},
+    lambda: {'C5': BiphasicPulseTrain(20, 30, 0.45, delay_dur=1,
+                                      stim_dur=100)},
+])
+def test_BiphasicScoreboard_rejects_unstructured_stimuli(model_cls,
+                                                         build_stim):
+    # An amplitude or a waveform alone does not say which pulse delivered it
+    model = _scoreboard(model_cls, implant=ArgusII(thresholds=30 * uA), step=1)
+    with pytest.raises(TypeError):
+        model.predict_percept(build_stim())
+
+
+@pytest.mark.parametrize('model_cls', _SB_CLASSES)
+def test_BiphasicScoreboard_rejects_normalized_drive(model_cls):
+    # ScoreboardSpatial visualizes photovoltaic drive; this model cannot,
+    # because normalized drive names no pulse:
+    from pulse2percept.implants import PRIMAPivotal
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        model = model_cls(implant=PRIMAPivotal(), rho=200, step=0.5,
+                          xrange=(-2, 2), yrange=(-2, 2), verbose=False)
+        with pytest.raises(DimensionMismatchError):
+            model.predict_percept(LogoBVL())
+
+
+@pytest.mark.parametrize('model_cls', _SB_CLASSES)
+def test_BiphasicScoreboard_zero_stimulation_is_zero(model_cls):
+    model = _scoreboard(model_cls, step=1)
+    with _no_pulse_train_rendering():
+        percept = model.predict_percept(
+            {e: BiphasicPulseTrain(20, 0 * xTh, 0.45) for e in ('C5', 'A2')})
+    npt.assert_almost_equal(percept.data, 0)
+    # One driven electrode among zeros predicts from that one alone:
+    with _no_pulse_train_rendering():
+        mixed = model.predict_percept(
+            {'C5': BiphasicPulseTrain(20, 0 * xTh, 0.45),
+             'A2': BiphasicPulseTrain(20, 1 * xTh, 0.45)}).data
+    only = model.predict_percept(
+        {'A2': BiphasicPulseTrain(20, 1 * xTh, 0.45)}).data
+    npt.assert_array_almost_equal(mixed, only)
+
+
+def test_BiphasicScoreboard_reduces_to_ScoreboardModel():
+    # With every effect factor at 1, this model *is* the scoreboard model
+    electrodes = ('A2', 'C5', 'F8')
+    biphasic = BiphasicScoreboardModel(implant=ArgusII(), **_SB_GRID)
+    for attr in ('bright_model', 'size_model'):
+        setattr(biphasic.spatial, attr,
+                lambda freq, amp, pdur: np.ones_like(np.asarray(amp,
+                                                                dtype=float)))
+    biphasic.build()
+    got = biphasic.predict_percept(
+        {e: BiphasicPulseTrain(20, 1 * xTh, 0.45) for e in electrodes}).data
+
+    plain = ScoreboardModel(implant=ArgusII(), **_SB_GRID).build()
+    unit = np.zeros(ArgusII().n_electrodes)
+    names = list(ArgusII().electrode_names)
+    for e in electrodes:
+        unit[names.index(e)] = 1.0
+    want = plain.predict_percept(unit).data
+    npt.assert_allclose(got, want, rtol=1e-5, atol=1e-6 * np.abs(want).max())
+
+
+@pytest.mark.parametrize('attr', ('bright_model', 'size_model'))
+def test_BiphasicScoreboard_rejects_bad_effects(attr):
+    model = _scoreboard(step=1)
+    setattr(model.spatial, attr, lambda freq, amp, pdur: np.full_like(
+        np.asarray(amp, dtype=float), np.nan))
+    with pytest.raises(ValueError, match=attr):
+        model.predict_percept(_train())
+    if attr == 'size_model':
+        # `F_size` sits in an exponent denominator:
+        setattr(model.spatial, attr,
+                lambda freq, amp, pdur: np.zeros_like(amp))
+        with pytest.raises(ValueError, match=attr):
+            model.predict_percept(_train())
+    setattr(model.spatial, attr, lambda freq, amp, pdur: np.ones_like(amp))
+    npt.assert_equal(np.any(model.predict_percept(_train()).data), True)
+
+
+def test_BiphasicScoreboard_rho_reaches_the_size_model():
+    model = BiphasicScoreboardSpatial(implant=ArgusII(), **_SB_GRID)
+    npt.assert_almost_equal(model.size_model.rho, 200)
+    model.rho = 0.3 * mm
+    npt.assert_almost_equal(model.rho, 300)
+    npt.assert_almost_equal(model.size_model.rho, 300)
+
+
+@pytest.mark.parametrize('temporal_cls', _TEMPORALS)
+def test_BiphasicScoreboardSpatial_with_temporal_model(temporal_cls):
+    temporal = temporal_cls()
+    grid = dict(xrange=(-3, 3), yrange=(-2, 2), step=1, rho=200, verbose=False)
+    composite = Model(spatial=BiphasicScoreboardSpatial(implant=ArgusII(),
+                                                        **grid),
+                      temporal=temporal).build()
+    granley = BiphasicScoreboardModel(implant=ArgusII(), **grid).build()
+    source = {'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
+                                       stim_dur=_STIM_DUR)}
+    percept = composite.predict_percept(source,
+                                        t_percept=_every_dt(temporal))
+    npt.assert_equal(np.all(np.isfinite(percept.data)), True)
+    # The temporal envelope peaks at exactly the Granley spatial percept:
+    npt.assert_array_almost_equal(percept.max(axis='frames'),
+                                  granley.predict_percept(source).data[..., 0])
+
+
+def test_ScoreboardModel_is_unchanged():
+    # Regression: adding BiphasicScoreboardModel must not move the plain
+    # scoreboard. Reference values were generated before it existed.
+    model = ScoreboardModel(implant=ArgusII(), xrange=(-8, 8), yrange=(-6, 6),
+                            step=1, rho=200, verbose=False).build()
+    stim = np.zeros(ArgusII().n_electrodes)
+    names = list(ArgusII().electrode_names)
+    for electrode, amp in (('A2', 20.0), ('C5', 30.0), ('F8', 40.0)):
+        stim[names.index(electrode)] = amp
+    data = model.predict_percept(stim).data
+    npt.assert_equal(data.shape, (13, 17, 1))
+    npt.assert_allclose(data.sum(), 297.30609130859375, rtol=1e-5)
+    npt.assert_allclose(data.max(), 33.0367317199707, rtol=1e-5)
+    npt.assert_allclose((data ** 2).sum(), 4960.07763671875, rtol=1e-5)
