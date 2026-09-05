@@ -19,9 +19,7 @@ _DEVICE_DEFAULT = object()
 class ArgusI(Implant):
     """Create an Argus I array
 
-    Electrode coordinates are given in the array's own frame, centered on
-    ``(0, 0)``. Where the array is implanted is set by the model's
-    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
+    Electrode coordinates are device-local, centered on ``(0, 0)``.
 
     Argus I is a modified cochlear implant containing 16 electrodes in a 4x4
     array with a center-to-center separation of 800 um, and two electrode
@@ -57,7 +55,6 @@ class ArgusI(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 16 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional
@@ -152,9 +149,7 @@ class ArgusI(Implant):
 class ArgusII(Implant):
     """Create an Argus II array
 
-    Electrode coordinates are given in the array's own frame, centered on
-    ``(0, 0)``. Where the array is implanted is set by the model's
-    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
+    Electrode coordinates are device-local, centered on ``(0, 0)``.
 
     Argus II contains 60 electrodes of 225 um diameter arranged in a 6 x 10
     grid (575 um center-to-center separation) [Yue2020]_.
@@ -188,7 +183,6 @@ class ArgusII(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 60 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional

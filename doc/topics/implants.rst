@@ -92,10 +92,10 @@ stimulation itself is of interest:
 Retinal implants
 ----------------
 
-Retinal implants describe their electrodes in microns, about the device's
-own ``(0, 0)`` origin. Where the array is implanted is the model's
-``implant_position``, ``implant_rotation`` and ``implant_depth``; ``eye``
-handles left- versus right-eye geometry where needed.
+Retinal implants use device-local electrode coordinates in microns.
+Placement is specified on the model with ``implant_position``,
+``implant_rotation`` and ``implant_depth``; ``eye`` handles left- versus
+right-eye geometry where needed.
 
 PRIMA
 ^^^^^

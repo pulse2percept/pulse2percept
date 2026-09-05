@@ -403,21 +403,17 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a tissue position in microns; ``(6, -2) * dva`` is a
-        visual field location, resolved through ``visual_field_map``.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 
@@ -794,21 +790,17 @@ class BiphasicAxonMapModel(Model):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a tissue position in microns; ``(6, -2) * dva`` is a
-        visual field location, resolved through ``visual_field_map``.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 

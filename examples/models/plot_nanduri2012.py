@@ -50,7 +50,7 @@ stim.plot(time=(0, 60))
 # For the purpose of this exercise, we will create an
 # :py:class:`~pulse2percept.implants.ElectrodeArray` consisting of a single
 # :py:class:`~pulse2percept.implants.DiskElectrode` with radius=260um at the
-# array's own origin, which an unplaced model reads as the fovea:
+# array's local origin:
 
 from pulse2percept.implants import DiskElectrode, ElectrodeArray
 electrode_array = ElectrodeArray(DiskElectrode(0, 0, 0, 260))

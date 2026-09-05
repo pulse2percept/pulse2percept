@@ -68,7 +68,7 @@ def test_plot_argus_phosphenes():
 
 
 def test_argus_placement_never_moves_the_implant():
-    """Placement is read from the data or the arguments, not written back"""
+    """Argus plotting does not mutate implant coordinates."""
     from pulse2percept.plotting.argus import _argus_pose, _placed_electrodes
     df = pd.DataFrame([
         {'subject': 'S1', 'electrode': 'A1', 'image': np.random.rand(10, 10),
@@ -111,7 +111,7 @@ def test_argus_placement_never_moves_the_implant():
 
 
 def test_argus_plot_does_not_flip_the_electrode_constants():
-    """A left eye flips a copy, so plots do not depend on call history"""
+    """Left-eye plotting does not mutate module-level pixel coordinates."""
     from pulse2percept.plotting import argus as argus_mod
     px1 = argus_mod.PX_ARGUS1.copy()
     px2 = argus_mod.PX_ARGUS2.copy()

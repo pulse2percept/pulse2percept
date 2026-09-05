@@ -71,22 +71,17 @@ class CortexSpatial(SpatialModel):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a cortical position in microns; ``(6, -2) * dva``
-        names the representation of that visual field location, which
-        ``visual_field_map`` must map onto a single region.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 
@@ -200,10 +195,8 @@ class CortexSpatial(SpatialModel):
             Face color for the grid cells. If None, will use the default
             matplotlib color cycle.
         show_implant : bool, optional
-            Whether to draw the implant where the model places it. Rotation
-            and position are applied to the device's own geometry; use
-            ``model.implant.plot()`` for the unplaced device. Requires tissue
-            coordinates (``use_dva=False``).
+            Draw the implant at its model-side placement. Requires
+            ``use_dva=False``.
 
             .. versionadded:: 0.11.0
         kwargs : dict, optional
@@ -216,11 +209,9 @@ class CortexSpatial(SpatialModel):
         """
         if show_implant and use_dva:
             raise NotImplementedError(
-                "An implant is placed in tissue, and a nonlinear "
-                "'visual_field_map' does not carry its electrode bodies or "
-                "substrate to the visual field as a rigid transform. Plot "
-                "with use_dva=False, or plot the device on its own with "
-                "'model.implant.plot()'.")
+                "show_implant=True is only supported in tissue coordinates; "
+                "a nonlinear visual_field_map does not transform device "
+                "geometry rigidly.")
         if style is None:
             style = 'hull' if use_dva else 'scatter'
         # Model must be built to access cortical coordinates
@@ -328,22 +319,17 @@ class ScoreboardSpatial(CortexSpatial):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a cortical position in microns; ``(6, -2) * dva``
-        names the representation of that visual field location, which
-        ``visual_field_map`` must map onto a single region.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 
@@ -535,22 +521,17 @@ class ScoreboardModel(Model):
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a cortical position in microns; ``(6, -2) * dva``
-        names the representation of that visual field location, which
-        ``visual_field_map`` must map onto a single region.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 

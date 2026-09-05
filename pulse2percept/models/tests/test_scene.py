@@ -691,11 +691,7 @@ def test_a_bound_implant_survives_a_deepcopy():
 
 
 def offset_implant(input_frame='eye'):
-    """Three electrodes whose centroid is nowhere near the local origin
-
-    Placement anchors on the array's own ``(0, 0)``, so an array that is not
-    centered on it reads back the difference.
-    """
+    """Three electrodes with a noncentral device-local origin."""
     array = ElectrodeArray([PointSource(0, 0, 0), PointSource(280, 0, 0),
                             PointSource(560, 0, 0)])
     return Implant(array, scene_input_frame=input_frame,

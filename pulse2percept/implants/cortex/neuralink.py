@@ -382,10 +382,7 @@ class Neuralink(EnsembleImplant):
     
     @staticmethod
     def _placed(implant_type, x, y):
-        """A thread is anchored at the ``(x, y)`` it stores, so build it there
-
-        .. versionadded:: 0.11.0
-        """
+        """Instantiate a thread at the requested anchor."""
         return implant_type(x=x, y=y)
 
     @classmethod

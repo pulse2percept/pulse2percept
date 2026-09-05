@@ -15,13 +15,7 @@ class EnsembleImplant(Implant):
 
     @staticmethod
     def _placed(implant_type, x, y):
-        """One device of an ensemble, translated into the ensemble's frame.
-
-        An ensemble is one implant, so where its devices sit relative to each
-        other is local geometry rather than the model-side
-        ``implant_position``. Subclasses whose constituents are anchored at a
-        point they store, such as a Neuralink thread, override this.
-        """
+        """Instantiate one constituent at ``(x, y)`` in ensemble coordinates."""
         implant = implant_type()
         for elec in implant.electrode_array.electrode_objects:
             elec.x += x

@@ -8,9 +8,8 @@ from ..electrode_arrays import ElectrodeGrid
 class Cortivis(Implant):
     """Create a Cortivis array
     
-    Electrode coordinates are given in the array's own frame, with the
-    center of its base at ``(0, 0)``. Where the array is implanted is set
-    by the model's ``implant_position`` and ``implant_rotation``.
+    Electrode coordinates are device-local, with the base centered at
+    ``(0, 0)``.
 
     Cortivis is a Utah electrode array containing 96 electrodes in a 10x10 array
     with 400 um spacing, and electrode diameter of 80 um at the base

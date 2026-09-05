@@ -167,8 +167,6 @@ for ax, noise, title in zip(
 # cortical implant and retinotopic map are unchanged; only the predicted
 # phosphene locations differ:
 
-# The device describes its own geometry about ``(0, 0)``; ``implant_position``
-# below says where it was implanted.
 implant_cortex = p2p.implants.cortex.Cortivis()
 implant_position = (20, -5) * p2p.units.mm
 cortex_coords = implant_cortex.electrode_array.coordinates(p2p.units.um)

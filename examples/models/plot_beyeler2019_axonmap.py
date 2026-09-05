@@ -38,10 +38,9 @@ Choosing an implant
 A model predicts what a *particular* device produces, so the first step is to
 specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
 
-In the following, we will use an
-:py:class:`~pulse2percept.implants.ArgusII` implant. A device describes its
-electrodes about its own ``(0, 0)`` origin; where a model implants it is
-``implant_position`` and ``implant_rotation``, both zero by default:
+In the following, we use an
+:py:class:`~pulse2percept.implants.ArgusII` in its canonical device-local
+frame:
 
 """
 # sphinx_gallery_thumbnail_number = 2
@@ -143,10 +142,8 @@ ax = percept.plot()
 ax.set_title('Predicted percept')
 
 ##############################################################################
-# A major prediction of the axon map model is that the percept changes
-# depending on the location of the implant. You can convince yourself of that
-# by re-running the model on an implant shifted and rotated across the retina.
-# Where the device sits and how it is turned are both the model's:
+# A major prediction of the axon map model is that percept shape depends
+# on implant placement. Position and rotation are model parameters:
 
 model.spatial.implant_position = (-50, 50) * um
 model.spatial.implant_rotation = -45

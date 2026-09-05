@@ -28,7 +28,6 @@ class IMIE(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 35 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional

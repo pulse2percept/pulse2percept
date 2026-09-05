@@ -31,9 +31,7 @@ from pulse2percept.units import dva
 from pulse2percept.vision import Scene, Scotoma
 
 ###############################################################################
-# Geographic atrophy is rarely a circle centered on the fovea. The same center
-# is used twice below: once for the lesion, and once to place the implant
-# inside it.
+# Use the same eccentric center for the lesion and implant:
 
 center = (6, -2) * dva
 scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=center)
@@ -64,11 +62,8 @@ filled_in.plot(gaze=(0, 0) * dva, rings=True)
 plt.title('Native vision alone, with filling-in')
 
 ###############################################################################
-# ``'inpaint'`` cannot be combined with a prosthetic percept: the inpainted
-# scene would act as a brightness floor inside the scotoma, so an
-# unstimulated electrode could never read dark, and how filling-in interacts
-# with prosthetic vision is not modeled here. The scenes below therefore use
-# a numeric fill, and black is the honest choice for what the device draws on.
+# Filling-in is not modeled together with prosthetic vision, so use a
+# numeric scotoma fill for the remaining simulations.
 
 scene = Scene(logo, fov=40 * dva, scotoma=scotoma, scotoma_fill=0,
               background=1)
@@ -81,15 +76,8 @@ scene = Scene(logo, fov=40 * dva, scotoma=scotoma, scotoma_fill=0,
 implant = PRIMAPivotal()
 
 ###############################################################################
-# ``PRIMAPivotal()`` describes the device, not where it was implanted: its
-# electrodes are laid out about the array's own ``(0, 0)`` origin. Placing it
-# is the model's job, because the model is what holds the retinotopy.
-# ``implant_position`` says where that origin sits, here the center of
-# the lesion,
-# and the whole array is translated rigidly, so the 100 um pixel pitch is
-# unchanged and the implant object itself is left alone. The default PRIMA
-# position is the fovea, which this eccentric lesion does not cover. The grid
-# is widened to take in where the array now sits.
+# Place the device-local origin at the lesion center and widen the simulated
+# field to include the eccentric implant.
 
 model = ScoreboardModel(implant=implant, implant_position=center, rho=50,
                         xrange=(0, 12), yrange=(-8, 4), step=0.05)

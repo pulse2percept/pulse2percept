@@ -68,13 +68,7 @@ PX_ARGUS2 = np.array([
 
 
 def _argus_pose(data, implant_position, implant_rotation):
-    """Return the (x, y) um and rotation deg the array is drawn at.
-
-    Explicit arguments win; otherwise the Beyeler2019 placement columns are
-    used, and failing those the array is drawn about the fovea.
-    """
-    # Position and rotation fall back independently: a dataset may record one
-    # without the other.
+    """Return implant position (um) and rotation (deg) for plotting."""
     specs = data.iloc[0]
     if implant_position is not None:
         xy = as_value(implant_position, um, 'implant_position')
@@ -92,11 +86,7 @@ def _argus_pose(data, implant_position, implant_rotation):
 
 
 def _placed_electrodes(argus, xy, rot):
-    """Map electrode name to its placed (x, y) in microns.
-
-    Rotation about the device origin, then translation, as a model would do
-    it. The implant is not modified.
-    """
+    """Return electrode positions after rotation and translation."""
     transform = SimilarityTransform(rotation=np.deg2rad(rot), translation=xy)
     local = np.array([[e.x, e.y] for e in argus.electrode_objects])
     return dict(zip(argus.electrode_names, transform(local)))
@@ -129,15 +119,13 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
     ax : axis
         Matplotlib axis
     implant_position : (x, y) or Quantity, optional
-        Where the array's local ``(0, 0)`` origin sits on the retina (um),
-        as a model's ``implant_position``. Defaults to the dataset's
-        "implant_x"/"implant_y" columns where present, else the fovea.
+        Position of the device-local origin on the retina (um). Defaults to
+        the dataset's "implant_x"/"implant_y" columns where present, else 0.
 
         .. versionadded:: 0.11.0
     implant_rotation : float or Quantity, optional
-        Angle (deg) the array is turned by, counter-clockwise about that
-        origin, as a model's ``implant_rotation``. Defaults to the dataset's
-        "implant_rot" column where present, else 0.
+        Array rotation (deg), positive counter-clockwise. Defaults to the
+        dataset's "implant_rot" column where present, else 0.
 
         .. versionadded:: 0.11.0
     """
@@ -173,9 +161,6 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
     if not isinstance(argus, (ArgusI, ArgusII)):
         raise TypeError(f'"argus" must be an Argus I or Argus II implant, '
                         f'not {type(argus)}.')
-    # The dataset records where each subject's array was implanted; the device
-    # describes itself about its own origin, and this figure is drawn in
-    # retinal coordinates.
     implant_xy, implant_rot = _argus_pose(data, implant_position,
                                           implant_rotation)
     placed = _placed_electrodes(argus, implant_xy, implant_rot)
@@ -318,13 +303,11 @@ def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0,
     ax : axis
         Matplotlib axis
     implant_position : (x, y) or Quantity, optional
-        Where the array's local ``(0, 0)`` origin sits on the retina (um).
-        Defaults to the fovea; pass the placement the percepts were predicted
-        with.
+        Position of the device-local origin on the retina (um). Defaults to 0.
 
         .. versionadded:: 0.11.0
     implant_rotation : float or Quantity, optional
-        Angle (deg) the array is turned by about that origin. Defaults to 0.
+        Array rotation (deg), positive counter-clockwise. Defaults to 0.
 
         .. versionadded:: 0.11.0
 

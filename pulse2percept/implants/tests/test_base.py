@@ -1236,7 +1236,7 @@ def test_a_named_implant_has_no_whole_device_placement(implant_type):
 
 @pytest.mark.parametrize('implant_type', NAMED_IMPLANTS)
 def test_a_named_implant_is_built_around_its_own_origin(implant_type):
-    """Local geometry, so the array straddles (0, 0) in x and y"""
+    """Named implant footprints include the device-local origin."""
     xy = implant_type().electrode_array.coordinates()[:, :2]
     # BVT's return electrodes sit far off to one side, so the bounding box is
     # not the landmark; what every device shares is that its own origin lies
@@ -1248,7 +1248,7 @@ def test_a_named_implant_is_built_around_its_own_origin(implant_type):
 
 
 def test_model_side_placement_reproduces_an_old_absolute_position():
-    """What `ArgusII(x=..., y=..., z=...)` used to build, placement does"""
+    """Model-side placement reproduces the former Argus II pose."""
     implant = implants.ArgusII()
     rot = -28.4
     model = ScoreboardSpatial(implant, implant_position=(-1331, -850) * um,
@@ -1269,7 +1269,7 @@ def test_model_side_placement_reproduces_an_old_absolute_position():
 
 
 def test_one_implant_serves_two_models_at_different_depths():
-    """Local z differences survive the global placement depth"""
+    """Placement depth preserves local z differences."""
     array = ElectrodeArray([PointSource(0, 0, 0), PointSource(200, 0, 40),
                             PointSource(400, 0, -25)])
     implant = Implant(array)
@@ -1291,7 +1291,7 @@ def test_one_implant_serves_two_models_at_different_depths():
 
 
 def test_a_flat_named_array_is_flat_in_its_own_frame():
-    """Electrode-retina distance is placement, so it is not baked into z"""
+    """Flat named retinal arrays use z=0 in their local frame."""
     for implant_type in (implants.AlphaIMS, implants.AlphaAMS,
                          implants.ArgusI, implants.ArgusII, implants.BVT24,
                          implants.BVT44, implants.IMIE,

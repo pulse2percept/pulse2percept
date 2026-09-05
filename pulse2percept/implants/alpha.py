@@ -14,9 +14,7 @@ class AlphaIMS(Implant):
 
     This class creates an Alpha-IMS array with 1500 photovoltaic pixels (each
     50um in diameter) as described in [Stingl2013]_. Electrode coordinates
-    are given in the array's own frame, centered on ``(0, 0)``. Where the
-    array is implanted in the subretinal space is set by the model's
-    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
+    are device-local, centered on ``(0, 0)``.
 
     The device consists of 1500 50um-wide square pixels, arranged on a 39x39
     rectangular grid with 72um pixel pitch.
@@ -37,7 +35,6 @@ class AlphaIMS(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 1500 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional
@@ -147,9 +144,7 @@ class AlphaAMS(Implant):
 
     This class creates an Alpha-AMS array with 1600 photovoltaic pixels (each
     30um in diameter) as described in [Stingl2017]_. Electrode coordinates
-    are given in the array's own frame, centered on ``(0, 0)``. Where the
-    array is implanted in the subretinal space is set by the model's
-    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
+    are device-local, centered on ``(0, 0)``.
 
     The device consists of 1600 30um-wide round pixels, arranged on a 40x40
     rectangular grid with 70um pixel pitch.
@@ -170,7 +165,6 @@ class AlphaAMS(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 1600 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional

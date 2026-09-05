@@ -14,9 +14,7 @@ class BVT24(Implant):
     This class creates a 24-channel suprachoroidal retinal prosthesis
     [Layton2014]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
-    Electrode coordinates are given in the array's own frame, centered on
-    ``(0, 0)``. Where the array is implanted is set by the model's
-    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
+    Electrode coordinates are device-local, centered on ``(0, 0)``.
 
     The array consists of:
 
@@ -45,7 +43,6 @@ class BVT24(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 35 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional
@@ -129,9 +126,8 @@ class BVT44(Implant):
     [Petoe2021]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
 
-    The array's own ``(0, 0)`` origin lies at the center of electrodes D4,
-    D5, C4 and E4. Where the array is implanted is set by the model's
-    ``implant_position``, ``implant_rotation`` and ``implant_depth``.
+    The device-local origin lies at the center of electrodes D4, D5, C4
+    and E4.
 
     The array consists of:
 
@@ -153,7 +149,6 @@ class BVT44(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 35 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional

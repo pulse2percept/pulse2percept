@@ -376,18 +376,14 @@ def _tissue_map_ndim(model):
 
 
 def _refuse_3d_placement(model, name):
-    """Raise for a nontrivial pose on a map that is not a 2D tissue sheet."""
+    """Reject model-side placement on a 3D tissue map."""
     visual_field_map = model.visual_field_map
     raise NotImplementedError(
-        f"'{name}' is a pose in a 2D tissue plane, and "
-        f"{type(visual_field_map).__name__} is {visual_field_map.ndim}D: its "
-        f"third coordinate is an axis of the tissue frame rather than depth "
-        f"along the local surface normal, so there is no plane to pose the "
-        f"device in. Placing a device in such a map needs a full 3D pose "
-        f"defined against that normal, which pulse2percept does not model "
-        f"yet. Build the implant in the map's own frame, as "
-        f"Neuralink.from_neuropythy does, and leave the placement at "
-        f"identity.")
+        f"'{name}' requires a 2D tissue map; "
+        f"{type(visual_field_map).__name__} is {visual_field_map.ndim}D, and "
+        f"its third coordinate is not depth along a local surface normal. "
+        f"Build the implant in the map's 3D frame and leave model-side "
+        f"placement at identity.")
 
 
 def _dva_pos_to_tissue(model, value):
@@ -433,11 +429,7 @@ def _placement_depth(model):
 
 
 def _placement_shift(model, unit):
-    """Return the rigid ``(dx, dy, dz)`` that places the implant, in ``unit``.
-
-    Reads model parameters only, so a subset of electrodes cannot change where
-    the implant sits. Returns None for an implant at the tissue origin.
-    """
+    """Return model-side implant translation in ``unit``, or None at identity."""
     pos = getattr(model, 'implant_position', (0, 0))
     is_2d = _tissue_map_ndim(model) == 2
     if has_units(pos) and not _length_valued(pos):
@@ -495,17 +487,11 @@ def _artist_paths(artist):
 
 
 def _draw_placed_implant(model, ax, autoscale=True):
-    """Draw the model's implant where the model places it, in tissue units.
-
-    Reuses ``Implant.plot`` and applies one affine transform (rotation about
-    the device origin, then translation) to the artists it added, so electrode
-    bodies, substrates and labels all move with the device. The implant is
-    never mutated.
-    """
+    """Draw the implant at its model-side 2D placement."""
     kinds = ('collections', 'patches', 'texts')
     before = {kind: {id(a) for a in getattr(ax, kind)} for kind in kinds}
-    # `Axes.add_collection`/`add_patch` grow `dataLim` in the device frame,
-    # which is the wrong frame; the transformed extent is added below.
+    # Matplotlib updates dataLim before the placement transform; restore it
+    # here and add the transformed extent below.
     datalim = ax.dataLim.get_points().copy()
     model.implant.plot(ax=ax, autoscale=False)
     drawn = [a for kind in kinds for a in getattr(ax, kind)
@@ -531,22 +517,13 @@ def _draw_placed_implant(model, ax, autoscale=True):
 
 
 def _validate_placement(model):
-    """Raise where the current pose is not supported by the current map.
-
-    The pose is otherwise resolved lazily, against whichever
-    ``visual_field_map`` is set when it is needed, since that map can be
-    reassigned after construction.
-    """
+    """Validate placement against the current visual-field map."""
     _placement_rotation(model)
     _placement_shift(model, um)
 
 
 def _placed_coords(model, electrode_array, unit, electrodes=None):
-    """Electrode coordinates in ``unit``, placed by the model.
-
-    Rotates the array about its own origin, then translates it. The implant is
-    never mutated.
-    """
+    """Return coordinates after model-side rotation and translation."""
     xyz = electrode_array.coordinates(unit, electrodes=electrodes)
     theta = _placement_rotation(model)
     shift = _placement_shift(model, unit)
@@ -813,21 +790,16 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         return Quantity(t, self.time_unit).to_value(stim.time_unit)
 
     def _normalize_param_value(self, name, value):
-        """Normalize a parameter to its stored unit.
-
-        ``implant_position`` is stored as given, since its unit decides
-        whether it names a tissue position or a visual field one.
-        """
+        """Normalize a parameter to its stored unit."""
         if name == 'implant_position':
             return value
         return super()._normalize_param_value(name, value)
 
     def _electrode_coords(self, electrode_array, stim, electrodes=None):
-        """Return stimulus electrode coordinates in ``space_unit``.
+        """Return placed electrode coordinates in ``space_unit``.
 
-        The implant's coordinates placed by ``implant_position``,
-        ``implant_rotation`` and ``implant_depth``, in ``stim.electrodes``
-        order, as contiguous float32 arrays for the numerical kernels.
+        Coordinates follow ``stim.electrodes`` order and are returned as
+        contiguous float32 arrays for the numerical kernels.
 
         Parameters
         ----------
@@ -916,43 +888,31 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         .. versionadded:: 0.11.0
 
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits in the tissue plane,
-        defaulting to the tissue origin. The unit decides how it is read: a
-        bare pair or a length is a tissue position in microns, whereas
-        ``(6, -2) * dva`` names a visual field location and is resolved
-        against ``visual_field_map`` when the pose is needed, at build and
-        prediction time. A dva position requires a map with a single region.
-        The array is translated rigidly, so device geometry is unchanged and
-        the implant is never mutated. Distinct from ``location_noise``, which
-        perturbs individual phosphene locations afterwards.
+        Position of the device-local origin. A bare pair or length is a tissue
+        position in microns; a dva position is resolved through a single-region
+        ``visual_field_map``. Placement is rigid and distinct from
+        ``location_noise``.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by within the tissue plane,
-        positive counter-clockwise, about its own local origin rather than its
-        centroid. Applied before ``implant_position``.
+        In-plane rotation (deg), positive counter-clockwise about the
+        device-local origin. Applied before ``implant_position``.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) of the implant along the tissue plane's normal,
-        carried by the electrodes' local ``z``. Positive is away from the
-        tissue, e.g. epiretinal electrode-retina distance. Only models that
-        read ``z``, such as
-        :py:class:`~pulse2percept.models.Nanduri2012Model`, respond to it.
+        Signed offset (um) along the tissue-plane normal; positive is away from
+        the tissue. Only models that use electrode ``z`` respond to it.
 
         .. versionadded:: 0.11.0
 
     .. note::
 
-        Placement is a pose in a 2D tissue plane. A 3D ``visual_field_map``
-        such as :py:class:`~pulse2percept.topography.NeuropythyMap` has no
-        such plane -- its third coordinate is an axis of the tissue frame, not
-        depth along the local surface normal -- so it accepts only the default
-        identity placement, and an implant is instead built in the map's own
-        frame (see
-        :py:meth:`~pulse2percept.implants.cortex.Neuralink.from_neuropythy`).
+        These parameters define a 2D tissue-plane pose. A 3D
+        ``visual_field_map`` such as ``NeuropythyMap`` accepts only identity
+        model-side placement; construct the implant directly in the map's 3D
+        frame instead.
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. On retinal
@@ -1248,11 +1208,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     def _electrode_coords(self, electrode_array, stim, electrodes=None,
                           region=None):
-        """Return the electrode coordinates the spatial kernel is given.
+        """Return coordinates used by the spatial kernel.
 
-        Placed coordinates, further displaced in the visual field where
-        ``location_noise`` is set. ``region`` names the visual field map
-        region to displace through, and defaults to the map's only one.
+        ``location_noise`` is applied after implant placement. ``region``
+        selects the visual-field-map region used for that displacement.
         """
         if electrodes is None:
             electrodes = stim.electrodes
@@ -1413,10 +1372,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         figsize : (float, float), optional
             Desired (width, height) of the figure in inches
         show_implant : bool, optional
-            Whether to draw the implant where the model places it. Rotation
-            and position are applied to the device's own geometry; use
-            ``model.implant.plot()`` for the unplaced device. Requires tissue
-            coordinates (``use_dva=False``).
+            Draw the implant at its model-side placement. Requires
+            ``use_dva=False``.
 
             .. versionadded:: 0.11.0
 
@@ -1427,11 +1384,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if show_implant and use_dva:
             raise NotImplementedError(
-                "An implant is placed in tissue, and a nonlinear "
-                "'visual_field_map' does not carry its electrode bodies or "
-                "substrate to the visual field as a rigid transform. Plot "
-                "with use_dva=False, or plot the device on its own with "
-                "'model.implant.plot()'.")
+                "show_implant=True is only supported in tissue coordinates; "
+                "a nonlinear visual_field_map does not transform device "
+                "geometry rigidly.")
         if not self.is_built:
             self.build()
 

@@ -226,8 +226,7 @@ class PhotovoltaicPixel(HexElectrode):
     
         .. versionadded:: 0.11.0
     rot : double, optional
-        Rotation angle (deg, positive counter-clockwise) of the pixel body
-        about its own center.
+        Local pixel rotation (deg, positive counter-clockwise).
     
         .. versionadded:: 0.11.0
     
@@ -295,7 +294,6 @@ class PRIMAPivotal(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 378 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional
@@ -507,7 +505,6 @@ class Lorach2015Array(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of 142 entries gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional
@@ -620,7 +617,6 @@ class Ho2019FlatArray(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of them gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional
@@ -732,7 +728,6 @@ class Huang2021Array(Implant):
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
         applies to every electrode, a list of them gives each its own.
-        Electrode-retina distance is the model's ``implant_depth``.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'RE', 'LE'}, optional

@@ -33,11 +33,8 @@ from pulse2percept.models import AxonMapModel
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 
-# Argus I and II are typically implanted at a 30-45deg angle. The device
-# describes itself upright; the surgical angle is the model's
-# ``implant_rotation``. For illustrative purpose, also show the map of fiber
-# bundles in the optic fiber layer -- an axon map is grown for a particular
-# eye, so each model names its implant:
+# Argus I and II are typically implanted at a 30-45deg angle. Show each
+# device at -30deg on its eye-specific axon map:
 for axis, implant, title in [(ax[0], ArgusI(), 'Argus I'),
                              (ax[1], ArgusII(), 'Argus II')]:
     model = AxonMapModel(implant=implant, implant_rotation=-30)

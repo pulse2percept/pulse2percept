@@ -9,9 +9,8 @@ from ..electrode_arrays import ElectrodeGrid
 class ICVP(Implant):
     """Create an ICVP array
 
-    Electrode coordinates are given in the array's own frame, with the
-    center of its base at ``(0, 0)``. Where the array is implanted is set
-    by the model's ``implant_position`` and ``implant_rotation``.
+    Electrode coordinates are device-local, with the base centered at
+    ``(0, 0)``.
 
     ICVP (Intracortical Visual Prosthesis Project) is an electrode array containing 
     16 Parylene-insulated (and 2 uninsulated reference and counter) iridium shaft

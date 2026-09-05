@@ -10,9 +10,8 @@ from ...utils.constants import UM_PER_MM
 class Orion(Implant):
     """Create a Orion array
     
-    Electrode coordinates are given in the array's own frame, with the
-    center of its base at ``(0, 0)``. Where the array is implanted is set
-    by the model's ``implant_position`` and ``implant_rotation``.
+    Electrode coordinates are device-local, with the base centered at
+    ``(0, 0)``.
 
     Orion contains 60 electrodes in a hex shaped grid inspired by Argus II.
     

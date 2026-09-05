@@ -399,7 +399,7 @@ def test_inpainting_works_in_color_and_stays_a_display_intensity():
 
 
 def test_an_inpainted_scene_refuses_to_compose_a_prosthetic_percept():
-    """Filling-in as a brightness floor would hide every dark electrode"""
+    """Inpainted scenes refuse prosthetic composition."""
     rgb = np.stack([np.tile(np.linspace(0.1, 0.9, 31), (31, 1)),
                     np.tile(np.linspace(0.9, 0.2, 31), (31, 1)).T,
                     np.full((31, 31), 0.4)], axis=-1)

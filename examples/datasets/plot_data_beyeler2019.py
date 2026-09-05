@@ -93,12 +93,8 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 # :py:class:`~pulse2percept.implants.ArgusII` object implanted at the correct
 # location.
 #
-# Consulting [Beyeler2019]_ tells us that the prosthesis was roughly implanted
-# at ``(-1331, -850)`` um, rotated by -28.4 degrees. Both are placement, so
-# they belong to whatever reads the device: a model's ``implant_position`` and
-# ``implant_rotation``, or the same two arguments to the plotting functions.
-# The dataset carries them too, which is why the first plot below needs
-# neither.
+# [Beyeler2019]_ reports an implant position of ``(-1331, -850)`` um
+# and a rotation of -28.4 degrees:
 
 from pulse2percept.implants import ArgusII
 from pulse2percept.units import um

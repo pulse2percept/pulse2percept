@@ -140,21 +140,17 @@ class ScoreboardSpatial(SpatialModel):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a tissue position in microns; ``(6, -2) * dva`` is a
-        visual field location, resolved through ``visual_field_map``.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 
@@ -301,21 +297,17 @@ class ScoreboardModel(Model):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a tissue position in microns; ``(6, -2) * dva`` is a
-        visual field location, resolved through ``visual_field_map``.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 
@@ -442,21 +434,17 @@ class AxonMapSpatial(SpatialModel):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a tissue position in microns; ``(6, -2) * dva`` is a
-        visual field location, resolved through ``visual_field_map``.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 
@@ -1051,10 +1039,8 @@ class AxonMapSpatial(SpatialModel):
         figsize : (float, float), optional
             Figure size in inches.
         show_implant : bool, optional
-            Whether to draw the implant where the model places it. Rotation
-            and position are applied to the device's own geometry; use
-            ``model.implant.plot()`` for the unplaced device. Requires retinal
-            coordinates (``use_dva=False``).
+            Draw the implant at its model-side placement. Requires
+            ``use_dva=False``.
 
             .. versionadded:: 0.11.0
 
@@ -1064,11 +1050,9 @@ class AxonMapSpatial(SpatialModel):
             Axes containing the plot."""
         if show_implant and use_dva:
             raise NotImplementedError(
-                "An implant is placed in tissue, and a nonlinear "
-                "'visual_field_map' does not carry its electrode bodies or "
-                "substrate to the visual field as a rigid transform. Plot "
-                "with use_dva=False, or plot the device on its own with "
-                "'model.implant.plot()'.")
+                "show_implant=True is only supported in tissue coordinates; "
+                "a nonlinear visual_field_map does not transform device "
+                "geometry rigidly.")
         if ax is None:
             ax = plt.gca()
         if figsize is not None:
@@ -1238,21 +1222,17 @@ class AxonMapModel(Model):
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
     implant_position : (x, y) or Quantity, optional
-        Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-        a length is a tissue position in microns; ``(6, -2) * dva`` is a
-        visual field location, resolved through ``visual_field_map``.
+        Position of the device-local origin, in tissue coordinates or dva.
 
         .. versionadded:: 0.11.0
 
     implant_rotation : float or Quantity, optional
-        Angle (deg) the implant is rotated by in the tissue plane, positive
-        counter-clockwise, about its own local origin.
+        In-plane rotation (deg), positive counter-clockwise.
 
         .. versionadded:: 0.11.0
 
     implant_depth : float or Quantity, optional
-        Signed offset (um) along the tissue plane's normal, carried by
-        the electrodes' local ``z``. Requires a 2D ``visual_field_map``.
+        Signed offset (um) along the normal of a 2D tissue map.
 
         .. versionadded:: 0.11.0
 

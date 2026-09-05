@@ -96,41 +96,25 @@ Models
 * ``find_threshold`` has been removed; threshold searches belong at the
   experiment level rather than in the model API (:pull:`862`).
 
-* Placement moved from the implant to the model. Named implants no longer
-  take ``x``/``y``/``rot``: they describe the device about its own ``(0, 0)``
-  origin in its canonical orientation, and the new ``implant_position``,
-  ``implant_rotation`` and ``implant_depth`` model parameters say where it
-  is implanted. ``implant_position`` accepts a physical position or a visual
-  field one in dva (resolved through ``visual_field_map``),
-  ``implant_rotation`` turns the array about that origin, and
-  ``implant_depth`` offsets it along the tissue plane's normal. The transform
-  is rigid and never mutates the implant, and it is a 2D pose, so a 3D map
-  such as ``NeuropythyMap`` takes only the default identity placement; build
-  the implant in the map's own frame instead. Consequences: flat named retinal
-  arrays default to ``z=0``, since the ``z=-100`` Alpha-IMS and the PRIMA
-  family carried was electrode-retina distance (per-electrode ``z`` remains
-  for real non-planarity, as do fixed shank depths such as CORTIVIS -1500 um
-  and ICVP -650/-850 um); the cortical placement defaults
-  (``Cortivis(x=20000, y=-5000)``, ``ICVP``/``Orion(x=15000)``) are gone, so
-  pass e.g. ``implant_position=(20, -5) * mm``; and
-  ``EnsembleImplant([Orion(), Orion(x=-35000)])`` is replaced by
-  :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords`.
-  ``Electrode``, ``ElectrodeGrid``, ``GridImplant`` and Neuralink threads keep
-  ``x``/``y``/``z``/``rot``, which are local geometry there (:pull:`884`).
+* Implant placement moved from named implants to models. Named implants
+  now use device-local coordinates; use ``implant_position``,
+  ``implant_rotation`` and ``implant_depth`` to place them in tissue.
+  ``implant_position`` may also be given in dva for a single-region 2D field
+  map. 3D maps such as ``NeuropythyMap`` support only identity model-side
+  placement. Named retinal arrays now default to ``z=0``; fixed device
+  geometry such as shank depth remains on the implant.
+  :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords` replaces
+  positioning named implants through their constructors (:pull:`884`).
 
 * New ``location_noise`` parameter displaces each electrode's phosphene by a
   fixed, subject-specific offset in the visual field (dva) rather than at the
   location the ``visual_field_map`` gives it. Requires a 2D, invertible map
   (:pull:`881`).
 
-* ``implant.plot()`` now means the device in its own coordinate frame, and
-  ``model.plot(show_implant=True)`` draws it where the model places it,
-  replacing the ``model.plot(); implant.plot()`` idiom. Visual field
-  coordinates (``use_dva=True``) are not supported, since a nonlinear map
-  does not carry electrode bodies rigidly.
-  :py:func:`~pulse2percept.plotting.plot_argus_phosphenes` and
-  :py:func:`~pulse2percept.plotting.plot_argus_simulated_phosphenes` gain
-  matching ``implant_position``/``implant_rotation`` arguments (:pull:`884`).
+* ``implant.plot()`` shows device-local geometry;
+  ``model.plot(show_implant=True)`` shows model-side placement. The Argus
+  phosphene plotting helpers likewise accept ``implant_position`` and
+  ``implant_rotation`` (:pull:`884`).
 
 
 Residual vision
@@ -140,9 +124,8 @@ Residual vision
   optional inpainting, configurable backgrounds, and eccentricity rings in
   both static and animated views (:pull:`871`).
 
-* ``scotoma_fill='inpaint'`` is now refused when a prosthetic percept is
-  composed into the scotoma, where the fill acted as a brightness floor.
-  Native vision is unchanged (:pull:`884`).
+* Prosthetic composition now rejects ``scotoma_fill='inpaint'``, whose
+  interaction with prosthetic brightness is not modeled (:pull:`884`).
 
 
 Plotting

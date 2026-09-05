@@ -38,11 +38,9 @@ Choosing an implant
 A model predicts what a *particular* device produces, so the first step is to
 specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
 
-In the following, we will use a
-:py:class:`~pulse2percept.implants.Lorach2015Array` implant. A device
-describes its electrodes about its own ``(0, 0)`` origin; where a model
-implants it is ``implant_position`` and ``implant_rotation``, both zero by
-default.
+In the following, we use a
+:py:class:`~pulse2percept.implants.Lorach2015Array` in its canonical
+device-local frame.
 
 Creating the model
 ------------------

@@ -518,17 +518,14 @@ class Implant(PrettyPrint):
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
-        """Plot the device in its own coordinate frame
+        """Plot the device in its local coordinate frame.
 
-        Shows the hardware as built, about its local ``(0, 0)`` origin. Where
-        a model implants it (``implant_position``, ``implant_rotation``,
-        ``implant_depth``) is not applied here; ``model.plot(
-        show_implant=True)`` draws the placed device.
+        Use ``model.plot(show_implant=True)`` to show model-side placement.
 
         Parameters
         ----------
         annotate : bool, optional
-            Flag whether to label electrodes in the implant.
+            Whether to label electrodes.
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         ax : matplotlib.axes._subplots.AxesSubplot, optional

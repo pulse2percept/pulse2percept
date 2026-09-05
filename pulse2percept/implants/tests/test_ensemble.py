@@ -14,11 +14,7 @@ from pulse2percept.utils.constants import DT
 
 
 def _shifted(implant_type, dx, dy):
-    """A device translated inside the ensemble's own coordinate frame
-
-    Named implants describe hardware about their own origin; where several of
-    them sit relative to one another is the ensemble's geometry.
-    """
+    """Return a constituent translated in ensemble coordinates."""
     implant = implant_type()
     for elec in implant.electrode_array.electrode_objects:
         elec.x += dx
@@ -27,7 +23,7 @@ def _shifted(implant_type, dx, dy):
 
 
 def _orion_pair(**kwargs):
-    """Two Orions side by side, the way an ensemble would be built"""
+    """Return two Orion arrays side by side."""
     return EnsembleImplant([Orion(), _shifted(Orion, -35000, 0)], **kwargs)
 
 
