@@ -47,6 +47,9 @@ Available models
      - :py:class:`~pulse2percept.models.AxonMapModel`
      - spatial
    * - [Granley2021]_
+     - :py:class:`~pulse2percept.models.BiphasicScoreboardModel`
+     - spatiotemporal
+   * - [Granley2021]_
      - :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
      - spatiotemporal
    * - [vanderGrinten2023]_
@@ -57,11 +60,29 @@ Cortical stimulation also has
 :py:class:`~pulse2percept.models.cortex.ScoreboardModel`, a spatial baseline
 that maps cortical electrode locations through cortical retinotopy.
 
-Which model to use depends on the scientific question. The scoreboard model is
-a simple local baseline. The axon-map model adds retinal nerve-fiber effects
-for epiretinal stimulation. Published temporal and spatiotemporal models add
-assumptions specific to their experiments and should be chosen when those
-assumptions are relevant.
+Which model to use depends on the scientific question. For retinal
+stimulation, the three main choices differ in what they claim to predict:
+
+:py:class:`~pulse2percept.models.ScoreboardModel`
+    Simple geometric baseline. One Gaussian blob per electrode at a fixed
+    ``rho``, scaled by amplitude. Answers where stimulation lands, not what a
+    phosphene looks like: brightness follows amplitude, but phosphene size
+    never changes with the pulse.
+
+:py:class:`~pulse2percept.models.BiphasicScoreboardModel`
+    Focal phosphenes with pulse-dependent appearance. Same round blobs, but
+    brightness depends on pulse amplitude and frequency, and size depends on
+    amplitude; phase duration affects both through threshold scaling
+    [Granley2021]_. Requires a described biphasic pulse train rather than a
+    bare amplitude.
+
+:py:class:`~pulse2percept.models.BiphasicAxonMapModel`
+    Pulse-dependent appearance *plus* axonal streaks. Adds the elongation
+    along retinal nerve fiber bundles that epiretinal subjects report, whose
+    length also follows phase duration.
+
+Published temporal and spatiotemporal models add assumptions specific to their
+experiments and should be chosen when those assumptions are relevant.
 
 Basic usage
 -----------
