@@ -3,36 +3,16 @@ import pytest
 import numpy.testing as npt
 from pulse2percept.implants.base import Implant
 from pulse2percept.implants.bvt import BVT24, BVT44
-from pulse2percept.units import DimensionMismatchError, deg, dva, rad
 
 
-@pytest.mark.parametrize('x', (-100, 200))
-@pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('rot', (-45, 60))
 @pytest.mark.parametrize('eye', ('LE', 'RE'))
-def test_BVT24(x, y, rot, eye):
+def test_BVT24(eye):
     # Create a BVT24 and make sure location is correct
-    bva = BVT24(x=x, y=y, rot=rot, eye=eye)
+    bva = BVT24(eye=eye)
 
     # Slots:
     npt.assert_equal(hasattr(bva, '__slots__'), True)
     npt.assert_equal(hasattr(bva, '__dict__'), False)
-
-    # Make sure rotation + translation is applied correctly:
-    bva0 = BVT24(eye=eye)  # centered
-    xy = np.array([bva0['C1'].x, bva0['C1'].y]).T
-    xy2 = np.array([bva0['C21m'].x, bva0['C21m'].y]).T
-    # Rotate:
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-    xy2 = np.matmul(R, xy2)
-    # Translate:
-    npt.assert_almost_equal(bva['C1'].x, xy[0] + x)
-    npt.assert_almost_equal(bva['C1'].y, xy[1] + y)
-    npt.assert_almost_equal(bva['C21m'].x, xy2[0] + x)
-    npt.assert_almost_equal(bva['C21m'].y, xy2[1] + y)
 
     # Check radii of electrodes
     for e in ['C1', 'C5', 'C8', 'C15', 'C20']:
@@ -42,21 +22,19 @@ def test_BVT24(x, y, rot, eye):
     for e in ['R1', 'R2']:
         npt.assert_almost_equal(bva[e].radius, 1000.0)
 
-    # Check the center is still at (x,y)
+    # The array is centered on the device's own origin
     y_center = (bva['C8'].y + bva['C13'].y) / 2
-    npt.assert_almost_equal(y_center, y)
+    npt.assert_almost_equal(y_center, 0)
     x_center = (bva['C8'].x + bva['C13'].x) / 2
-    npt.assert_almost_equal(x_center, x)
+    npt.assert_almost_equal(x_center, 0)
 
     # Right-eye implant:
-    xc, yc = -500, -500
-    bva_re = BVT24(eye='RE', x=xc, y=yc)
+    bva_re = BVT24(eye='RE')
     npt.assert_equal(bva_re['C1'].x > bva_re['C6'].x, True)
     npt.assert_equal(bva_re['C1'].y, bva_re['C1'].y)
 
     # Left-eye implant:
-    xc, yc = -500, -500
-    bva_le = BVT24(eye='LE', x=xc, y=yc)
+    bva_le = BVT24(eye='LE')
     npt.assert_equal(bva_le['C1'].x < bva_le['C6'].x, True)
     npt.assert_equal(bva_le['C1'].y, bva_le['C1'].y)
 
@@ -75,33 +53,14 @@ def test_BVT24_stim():
     npt.assert_almost_equal(stim.data, 1)
 
 
-@pytest.mark.parametrize('x', (-100, 200))
-@pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('rot', (-45, 60))
 @pytest.mark.parametrize('eye', ('LE', 'RE'))
-def test_BVT44(x, y, rot, eye):
+def test_BVT44(eye):
     # Create a BVT44 and make sure location is correct
-    bva = BVT44(x=x, y=y, rot=rot, eye=eye)
+    bva = BVT44(eye=eye)
 
     # Slots:
     npt.assert_equal(hasattr(bva, '__slots__'), True)
     npt.assert_equal(hasattr(bva, '__dict__'), False)
-
-    # Make sure array is rotated + translated correctly:
-    bva0 = BVT44(eye=eye)
-    xy = np.array([bva0['A1'].x, bva0['A1'].y]).T
-    xy2 = np.array([bva0['G6'].x, bva0['G6'].y]).T
-    # Rotate:
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-    xy2 = np.matmul(R, xy2)
-    # Translate:
-    npt.assert_almost_equal(bva['A1'].x, xy[0] + x)
-    npt.assert_almost_equal(bva['A1'].y, xy[1] + y)
-    npt.assert_almost_equal(bva['G6'].x, xy2[0] + x)
-    npt.assert_almost_equal(bva['G6'].y, xy2[1] + y)
 
     # Check radii of electrodes
     for e in ['A1', 'A5', 'B3', 'C5', 'D2']:
@@ -109,19 +68,17 @@ def test_BVT44(x, y, rot, eye):
     for e in ['R1', 'R2']:
         npt.assert_almost_equal(bva[e].radius, 1000.0)
 
-    # Check the center is still at (x,y)
-    npt.assert_almost_equal((bva['D4'].x + bva['D5'].x) / 2.0, x)
-    npt.assert_almost_equal((bva['E4'].y + bva['C4'].y) / 2.0, y)
+    # The array is centered on the device's own origin
+    npt.assert_almost_equal((bva['D4'].x + bva['D5'].x) / 2.0, 0)
+    npt.assert_almost_equal((bva['E4'].y + bva['C4'].y) / 2.0, 0)
 
     # Right-eye implant:
-    xc, yc = -500, -500
-    bva_re = BVT44(eye='RE', x=xc, y=yc)
+    bva_re = BVT44(eye='RE')
     npt.assert_equal(bva_re['A6'].x > bva_re['A1'].x, True)
     npt.assert_equal(bva_re['A6'].y, bva_re['A1'].y)
 
     # Left-eye implant:
-    xc, yc = -500, -500
-    bva_le = BVT44(eye='LE', x=xc, y=yc)
+    bva_le = BVT44(eye='LE')
     npt.assert_equal(bva_le['A6'].x < bva_le['A1'].x, True)
     npt.assert_equal(bva_le['A6'].y, bva_le['A1'].y)
 
@@ -141,12 +98,7 @@ def test_BVT44_stim():
 
 
 @pytest.mark.parametrize('cls', (BVT24, BVT44))
-def test_BVT_rot_units(cls):
-    """BVT lays out its own electrodes, so it owns this conversion"""
-    bare = cls(rot=30).electrode_array.coordinates()
-    for rot in (30 * deg, np.pi / 6 * rad):
-        npt.assert_allclose(cls(rot=rot).electrode_array.coordinates(), bare,
-                            rtol=1e-12)
-    # Visual angle is a different dimension and is refused:
-    with pytest.raises(DimensionMismatchError):
-        cls(rot=30 * dva)
+def test_BVT_rejects_rot(cls):
+    """Orientation in tissue is the model's `implant_rotation`"""
+    with pytest.raises(TypeError):
+        cls(rot=30)

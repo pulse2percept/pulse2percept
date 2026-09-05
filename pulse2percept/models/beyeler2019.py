@@ -15,8 +15,8 @@ from ..topography import Watson2014Map
 from ..implants import ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
-from .base import (_blend_meridian, _thread_params, _warn_ignores_z,
-                   _warn_rho_vs_pitch)
+from .base import (_blend_meridian, _draw_placed_implant, _thread_params,
+                   _warn_ignores_z, _warn_rho_vs_pitch)
 from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)        
 
@@ -139,6 +139,21 @@ class ScoreboardSpatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -163,6 +178,8 @@ class ScoreboardSpatial(SpatialModel):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
@@ -172,6 +189,9 @@ class ScoreboardSpatial(SpatialModel):
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -276,6 +296,21 @@ class ScoreboardModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -297,6 +332,8 @@ class ScoreboardModel(Model):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, verbose=True, ndim=None,
                  n_threads=None, n_jobs=None):
         super().__init__(
@@ -306,6 +343,9 @@ class ScoreboardModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
+                implant_position=implant_position,
+                implant_rotation=implant_rotation,
+                implant_depth=implant_depth,
                 location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)
@@ -393,6 +433,21 @@ class AxonMapSpatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -443,6 +498,8 @@ class AxonMapSpatial(SpatialModel):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -456,6 +513,9 @@ class AxonMapSpatial(SpatialModel):
             visual_field_map=(Watson2014Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
             axons_range=axons_range, n_ax_segments=n_ax_segments,
             ax_segments_range=ax_segments_range,
@@ -961,7 +1021,7 @@ class AxonMapSpatial(SpatialModel):
         return blended
 
     def plot(self, use_dva=False, style='hull', annotate=True, autoscale=True,
-             ax=None, figsize=None):
+             ax=None, figsize=None, show_implant=False):
         """Plot the axon map.
 
         Parameters
@@ -978,11 +1038,21 @@ class AxonMapSpatial(SpatialModel):
             Axes to draw on. Defaults to the current axes.
         figsize : (float, float), optional
             Figure size in inches.
+        show_implant : bool, optional
+            Draw the implant at its model-side placement. Requires
+            ``use_dva=False``.
+
+            .. versionadded:: 0.11.0
 
         Returns
         -------
         ax : matplotlib.axes.Axes
             Axes containing the plot."""
+        if show_implant and use_dva:
+            raise NotImplementedError(
+                "show_implant=True is only supported in tissue coordinates; "
+                "a nonlinear visual_field_map does not transform device "
+                "geometry rigidly.")
         if ax is None:
             ax = plt.gca()
         if figsize is not None:
@@ -1043,6 +1113,10 @@ class AxonMapSpatial(SpatialModel):
         if self.is_built:
             self.grid.plot(ax=ax, style=style, zorder=ZORDER['background'] + 2,
                            use_dva=use_dva)
+        if show_implant:
+            # The window below is the anatomical frame this plot is about, so
+            # the implant does not get to rescale it:
+            _draw_placed_implant(self, ax, autoscale=False)
         ax.set_xlabel(f'x ({units})')
         ax.set_ylabel(f'y ({units})')
         if autoscale:
@@ -1147,6 +1221,21 @@ class AxonMapModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -1197,6 +1286,8 @@ class AxonMapModel(Model):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -1211,6 +1302,9 @@ class AxonMapModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
+                implant_position=implant_position,
+                implant_rotation=implant_rotation,
+                implant_depth=implant_depth,
                 location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
                 axons_range=axons_range, n_ax_segments=n_ax_segments,
                 ax_segments_range=ax_segments_range,

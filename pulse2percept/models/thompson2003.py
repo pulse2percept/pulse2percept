@@ -91,6 +91,21 @@ class Thompson2003Spatial(SpatialModel):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -115,6 +130,8 @@ class Thompson2003Spatial(SpatialModel):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -125,6 +142,9 @@ class Thompson2003Spatial(SpatialModel):
             visual_field_map=(Curcio1990Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray, noise=noise,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
             ndim=[2] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -210,6 +230,21 @@ class Thompson2003Model(Model):
         gray-level quantization.
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -234,6 +269,8 @@ class Thompson2003Model(Model):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -244,6 +281,9 @@ class Thompson2003Model(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
+                implant_position=implant_position,
+                implant_rotation=implant_rotation,
+                implant_depth=implant_depth,
                 location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)

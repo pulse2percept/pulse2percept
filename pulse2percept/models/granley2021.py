@@ -402,6 +402,21 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -454,6 +469,8 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -467,6 +484,9 @@ class BiphasicAxonMapSpatial(AxonMapSpatial):
             min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
             n_gray=n_gray, noise=noise,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
             axons_range=axons_range, n_ax_segments=n_ax_segments,
             ax_segments_range=ax_segments_range,
@@ -769,6 +789,21 @@ class BiphasicAxonMapModel(Model):
     noise : float, int, or None, optional
         Salt-and-pepper noise applied to each percept frame. An integer gives
         the number of affected pixels; a float in [0, 1] gives their fraction.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -845,6 +880,8 @@ class BiphasicAxonMapModel(Model):
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
                  n_gray=None, noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
@@ -860,6 +897,9 @@ class BiphasicAxonMapModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
+                implant_position=implant_position,
+                implant_rotation=implant_rotation,
+                implant_depth=implant_depth,
                 location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
                 axons_range=axons_range, n_ax_segments=n_ax_segments,
                 ax_segments_range=ax_segments_range,

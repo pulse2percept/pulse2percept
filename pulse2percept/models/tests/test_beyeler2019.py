@@ -21,7 +21,7 @@ from pulse2percept.models.beyeler2019 import _AXON_CACHE_VERSION
 from pulse2percept.models._beyeler2019 import fast_axon_map
 from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
 from pulse2percept.units import (DimensionMismatchError, deg,
-                                 dimensionless, dva, mW, mm, rad)
+                                 dimensionless, dva, mW, mm, rad, um)
 from pulse2percept.utils.testing import assert_warns_msg
 
 # Building an axon map writes a cache to a relative path; keep it in a
@@ -201,6 +201,21 @@ def test_ScoreboardModel_predict_percept():
                      np.ones(60))
     assert_warns_msg(UserWarning, raised.predict_percept,
                      "not parameterized by this model", np.ones(60))
+
+    # Model-side depth is depth too, even with a locally flat array:
+    placed = ScoreboardModel(implant=ArgusII(), implant_depth=500 * um,
+                             step=0.55, rho=100)
+    placed.build()
+    assert_warns_msg(UserWarning, placed.predict_percept,
+                     "ScoreboardSpatial does not model "
+                     "electrode-retina distance",
+                     np.ones(60))
+    # ... and a flat implant placed at the tissue surface still says nothing:
+    flat = ScoreboardModel(implant=ArgusII(), step=0.55, rho=100)
+    flat.build()
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', UserWarning)
+        flat.predict_percept(np.ones(60))
 
 
 def test_AxonMapSpatial():

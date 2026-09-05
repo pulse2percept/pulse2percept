@@ -31,9 +31,10 @@ from pulse2percept.units import dva
 from pulse2percept.vision import Scene, Scotoma
 
 ###############################################################################
-# Geographic atrophy is rarely a circle centered on the fovea:
+# Use the same eccentric center for the lesion and implant:
 
-scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=(6, -2) * dva)
+center = (6, -2) * dva
+scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=center)
 
 ###############################################################################
 # ``scotoma_fill`` determines what a user inside the scotoma sees.
@@ -53,11 +54,19 @@ scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=(6, -2) * dva)
 # the default black. ``rings=True`` adds 5-degree rings about the
 # fovea; they are drawn on top and change nothing about the scene.
 
-scene = Scene(LogoBVL(resize=(240, 300)), fov=40 * dva, scotoma=scotoma,
-              scotoma_fill='inpaint', background=1)
+logo = LogoBVL(resize=(240, 300))
+filled_in = Scene(logo, fov=40 * dva, scotoma=scotoma,
+                  scotoma_fill='inpaint', background=1)
 
-scene.plot(gaze=(0, 0) * dva, rings=True)
-plt.title('Native vision alone')
+filled_in.plot(gaze=(0, 0) * dva, rings=True)
+plt.title('Native vision alone, with filling-in')
+
+###############################################################################
+# Filling-in is not modeled together with prosthetic vision, so use a
+# numeric scotoma fill for the remaining simulations.
+
+scene = Scene(logo, fov=40 * dva, scotoma=scotoma, scotoma_fill=0,
+              background=1)
 
 ###############################################################################
 
@@ -67,9 +76,11 @@ plt.title('Native vision alone')
 implant = PRIMAPivotal()
 
 ###############################################################################
+# Place the device-local origin at the lesion center and widen the simulated
+# field to include the eccentric implant.
 
-model = ScoreboardModel(implant=implant, rho=50, xrange=(-6, 6),
-                        yrange=(-6, 6), step=0.05)
+model = ScoreboardModel(implant=implant, implant_position=center, rho=50,
+                        xrange=(0, 12), yrange=(-8, 4), step=0.05)
 
 ###############################################################################
 # The scene is trial input, like any other stimulus:
@@ -80,6 +91,8 @@ percept.plot()
 plt.title('Native vision with a PRIMA percept in the scotoma')
 
 ###############################################################################
+# The lesion is eye-centered and the implant is on the retina, so both travel
+# together when the eye moves:
 
 percept = model.predict_percept(scene, gaze=(8, -4) * dva, vmax=2)
 

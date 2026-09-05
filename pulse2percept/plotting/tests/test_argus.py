@@ -3,6 +3,7 @@ from pulse2percept.plotting import (plot_argus_phosphenes,
 from pulse2percept.implants import ArgusI, ArgusII, AlphaAMS
 from pulse2percept.models import (AxonMapModel, AxonMapSpatial,
                                   ScoreboardModel)
+from pulse2percept.units import deg, um
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -50,14 +51,79 @@ def test_plot_argus_phosphenes():
                               axon_map=ScoreboardModel(ArgusI()))
     # Manual subject selection
     plot_argus_phosphenes(df[df.electrode == 'B2'], ArgusI(), ax=ax)
-    # If no implant given, dataframe must have additional columns:
+    # If no implant given, the dataframe must name the device:
+    with pytest.raises(ValueError):
+        plot_argus_phosphenes(df, ax=ax)
+    # ...and it must name a device that exists:
+    df['implant_type_str'] = 'Arguz'
     with pytest.raises(ValueError):
         plot_argus_phosphenes(df, ax=ax)
     df['implant_type_str'] = 'ArgusII'
+    # That column alone is enough; the placement ones are optional:
+    plot_argus_phosphenes(df, ax=ax)
     df['implant_x'] = 0
     df['implant_y'] = 0
     df['implant_rot'] = 0
     plot_argus_phosphenes(df, ax=ax)
+
+
+def test_argus_placement_never_moves_the_implant():
+    """Argus plotting does not mutate implant coordinates."""
+    from pulse2percept.plotting.argus import _argus_pose, _placed_electrodes
+    df = pd.DataFrame([
+        {'subject': 'S1', 'electrode': 'A1', 'image': np.random.rand(10, 10),
+         'xrange': (-10, 10), 'yrange': (-10, 10),
+         'implant_type_str': 'ArgusII', 'implant_x': -1331,
+         'implant_y': -850, 'implant_rot': -28.4},
+    ])
+    argus = ArgusII()
+    local = argus.electrode_array.coordinates()
+    _, ax = plt.subplots()
+    plot_argus_phosphenes(df, argus, ax=ax)
+    npt.assert_array_equal(argus.electrode_array.coordinates(), local)
+
+    # The dataset columns are what got used:
+    xy, rot = _argus_pose(df, None, None)
+    npt.assert_almost_equal(xy, (-1331, -850))
+    npt.assert_almost_equal(rot, -28.4)
+    th = np.deg2rad(rot)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    placed = _placed_electrodes(argus, xy, rot)
+    npt.assert_almost_equal(np.array(list(placed.values())),
+                            (R @ local[:, :2].T).T + xy)
+
+    # Explicit arguments win over them, in model units:
+    xy, rot = _argus_pose(df, (100, 200) * um, 10 * deg)
+    npt.assert_almost_equal(xy, (100, 200))
+    npt.assert_almost_equal(rot, 10)
+    # ...and without either, the array is drawn about the fovea:
+    npt.assert_equal(_argus_pose(df.drop(columns=['implant_x', 'implant_y',
+                                                  'implant_rot']),
+                                 None, None), ((0.0, 0.0), 0.0))
+    # Position and rotation fall back independently:
+    xy, rot = _argus_pose(df.drop(columns=['implant_rot']), None, None)
+    npt.assert_almost_equal(xy, (-1331, -850))
+    npt.assert_almost_equal(rot, 0.0)
+    xy, rot = _argus_pose(df.drop(columns=['implant_x', 'implant_y']),
+                          None, None)
+    npt.assert_almost_equal(xy, (0.0, 0.0))
+    npt.assert_almost_equal(rot, -28.4)
+
+
+def test_argus_plot_does_not_flip_the_electrode_constants():
+    """Left-eye plotting does not mutate module-level pixel coordinates."""
+    from pulse2percept.plotting import argus as argus_mod
+    px1 = argus_mod.PX_ARGUS1.copy()
+    px2 = argus_mod.PX_ARGUS2.copy()
+    df = pd.DataFrame([
+        {'subject': 'S1', 'electrode': 'A1', 'image': np.random.rand(10, 10),
+         'xrange': (-10, 10), 'yrange': (-10, 10)},
+    ])
+    _, ax = plt.subplots()
+    for implant in (ArgusI(eye='LE'), ArgusII(eye='LE'), ArgusII(eye='LE')):
+        plot_argus_phosphenes(df, implant, ax=ax)
+        npt.assert_array_equal(argus_mod.PX_ARGUS1, px1)
+        npt.assert_array_equal(argus_mod.PX_ARGUS2, px2)
 
 
 # Parametrize over the class, not over instances: arguments to `parametrize`

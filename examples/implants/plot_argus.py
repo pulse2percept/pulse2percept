@@ -69,8 +69,7 @@ model.build()
 ###############################################################################
 # We can visualize where the implant sits on the axon map as follows:
 
-model.plot()
-implant.plot()
+model.plot(show_implant=True)
 
 ###############################################################################
 # We then need to choose a stimulus to run through the model:

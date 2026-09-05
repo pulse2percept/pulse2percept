@@ -2,8 +2,8 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, 
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import (Model, SpatialModel, _blend_meridian, _thread_params,
-                    _warn_rho_vs_pitch)
+from ..base import (Model, SpatialModel, _blend_meridian,
+                    _draw_placed_implant, _thread_params, _warn_rho_vs_pitch)
 from ...topography import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...units import DimensionMismatchError, dva, um
@@ -70,6 +70,21 @@ class CortexSpatial(SpatialModel):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -152,7 +167,7 @@ class CortexSpatial(SpatialModel):
         return {**base_params, **params}
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
-             figsize=None, fc=None, **kwargs):
+             figsize=None, fc=None, show_implant=False, **kwargs):
         """Plot the model
 
         Parameters
@@ -179,6 +194,11 @@ class CortexSpatial(SpatialModel):
         fc : matplotlib color, optional
             Face color for the grid cells. If None, will use the default
             matplotlib color cycle.
+        show_implant : bool, optional
+            Draw the implant at its model-side placement. Requires
+            ``use_dva=False``.
+
+            .. versionadded:: 0.11.0
         kwargs : dict, optional
             Additional keyword arguments are passed on to Grid2D.plot()
         
@@ -187,6 +207,11 @@ class CortexSpatial(SpatialModel):
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
+        if show_implant and use_dva:
+            raise NotImplementedError(
+                "show_implant=True is only supported in tissue coordinates; "
+                "a nonlinear visual_field_map does not transform device "
+                "geometry rigidly.")
         if style is None:
             style = 'hull' if use_dva else 'scatter'
         # Model must be built to access cortical coordinates
@@ -196,6 +221,8 @@ class CortexSpatial(SpatialModel):
                             ax=ax, figsize=figsize, fc=fc, 
                             zorder=ZORDER['background'], 
                             legend=True if not use_dva else False)
+        if show_implant:
+            _draw_placed_implant(self, ax, autoscale=autoscale)
         if use_dva:
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')
@@ -291,6 +318,21 @@ class ScoreboardSpatial(CortexSpatial):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -316,6 +358,8 @@ class ScoreboardSpatial(CortexSpatial):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -325,6 +369,9 @@ class ScoreboardSpatial(CortexSpatial):
             min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
             n_gray=n_gray, noise=noise,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
             ndim=[2, 3] if ndim is None else ndim,
             **_thread_params(n_threads, n_jobs))
@@ -473,6 +520,21 @@ class ScoreboardModel(Model):
         interpreted as the number of pixels to subject to noise in each frame.
         A float between 0 and 1 will be interpreted as a ratio of pixels to
         subject to noise in each frame.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -498,6 +560,8 @@ class ScoreboardModel(Model):
                  grid_type='rect', thresh_percept=0,
                  min_current_spread=1e-8, visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True, ndim=None, n_threads=None, n_jobs=None):
         super().__init__(
@@ -509,6 +573,9 @@ class ScoreboardModel(Model):
                 min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray, noise=noise,
+                implant_position=implant_position,
+                implant_rotation=implant_rotation,
+                implant_depth=implant_depth,
                 location_noise=location_noise, verbose=verbose, ndim=ndim,
                 n_threads=n_threads, n_jobs=n_jobs),
             temporal=None)

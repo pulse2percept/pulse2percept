@@ -91,8 +91,7 @@ model.build()
 # You can inspect the location of the implant with respect to the visual
 # cortex using the built-in plot methods:
 
-model.plot()
-implant.plot()
+model.plot(show_implant=True)
 
 ##############################################################################
 # By default, the plots will be added to the current Axes object.

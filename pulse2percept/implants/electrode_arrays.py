@@ -204,7 +204,7 @@ class ElectrodeArray(PrettyPrint):
             self.__getitem__(electrode).activated = False
 
     def plot(self, annotate=False, autoscale=True, ax=None, color_stim=None, cmap='OrRd'):
-        """Plot the electrode array
+        """Plot the electrode array in its own coordinate frame
 
         Parameters
         ----------
@@ -426,16 +426,12 @@ class ElectrodeGrid(ElectrodeArray):
         ``'vertical'`` staggers alternate columns. Hexagonal electrode bodies
         follow the grid orientation.
     x/y/z : double
-        3D location (um) of the center of the grid.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
+        Location (um) of the center of the grid within the array it belongs
+        to. ``z`` is height above the array plane.
     rot : double, optional
-        Rotation of the grid in degrees (positive angle: counter-clockwise
-        rotation on the retinal surface). A plain angle, not a unitful one:
-        ``dva`` means visual angle, which is a different thing.
+        Rotation of the grid in degrees (positive angle: counter-clockwise).
+        A plain angle, not a unitful one: ``dva`` means visual angle, which is
+        a different thing.
     names: (name_rows, name_cols), each of which either 'A' or '1'
         Naming convention for rows and columns, respectively.
         If 'A', rows or columns will be labeled alphabetically: A-Z, AA-AZ,

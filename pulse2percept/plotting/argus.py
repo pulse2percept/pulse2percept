@@ -14,6 +14,7 @@ from matplotlib import patches
 
 from ..implants import ArgusI, ArgusII
 from ..models import AxonMapModel
+from ..units import as_value, deg, um
 from ..utils import scale_image, center_image
 from ..utils.constants import ZORDER
 from ..topography import Watson2014Map
@@ -66,8 +67,34 @@ PX_ARGUS2 = np.array([
 ])
 
 
+def _argus_pose(data, implant_position, implant_rotation):
+    """Return implant position (um) and rotation (deg) for plotting."""
+    specs = data.iloc[0]
+    if implant_position is not None:
+        xy = as_value(implant_position, um, 'implant_position')
+    elif {'implant_x', 'implant_y'} <= set(data.columns):
+        xy = (specs['implant_x'], specs['implant_y'])
+    else:
+        xy = (0.0, 0.0)
+    if implant_rotation is not None:
+        rot = as_value(implant_rotation, deg, 'implant_rotation')
+    elif 'implant_rot' in data.columns:
+        rot = specs['implant_rot']
+    else:
+        rot = 0.0
+    return np.asarray(xy, dtype=float).ravel(), float(rot)
+
+
+def _placed_electrodes(argus, xy, rot):
+    """Return electrode positions after rotation and translation."""
+    transform = SimilarityTransform(rotation=np.deg2rad(rot), translation=xy)
+    local = np.array([[e.x, e.y] for e in argus.electrode_objects])
+    return dict(zip(argus.electrode_names, transform(local)))
+
+
 def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
-                          show_fovea=True, ax=None):
+                          show_fovea=True, ax=None, implant_position=None,
+                          implant_rotation=None):
     """Plots phosphenes centered over the corresponding electrodes
 
     .. versionadded:: 0.7
@@ -79,11 +106,10 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
         identical organization (i.e., must contain columns 'subject', 'image',
         'xrange', and 'yrange').
     argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
-        Either an Argus I or Argus II implant. If None, the data is expected to
-        contain additional columns: "implant_type_str", "implant_x",
-        "implant_y", and "implant_rot", which together define the type and
-        position of the implant. "implant_type_str" must be either "ArgusI" or
-        "ArgusII".
+        Either an Argus I or Argus II implant. If None, the data must contain
+        an "implant_type_str" column naming the device, either "ArgusI" or
+        "ArgusII". Where it was implanted comes from ``implant_position`` and
+        ``implant_rotation`` below.
     scale : float
         Scaling factor to apply to the phosphenes
     axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
@@ -92,6 +118,16 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
         Whether to indicate the location of the fovea with a square
     ax : axis
         Matplotlib axis
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin on the retina (um). Defaults to
+        the dataset's "implant_x"/"implant_y" columns where present, else 0.
+
+        .. versionadded:: 0.11.0
+    implant_rotation : float or Quantity, optional
+        Array rotation (deg), positive counter-clockwise. Defaults to the
+        dataset's "implant_rot" column where present, else 0.
+
+        .. versionadded:: 0.11.0
     """
     if not isinstance(data, pd.DataFrame):
         raise TypeError(f'"data" must be a Pandas DataFrame, not '
@@ -110,22 +146,30 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
     if argus is None:
         # Implant not given, must first be created from data columns:
         try:
-            specs = data.iloc[0]
-            implant_type = ArgusI if specs.implant_type_str == 'ArgusI' else ArgusII
-            argus = implant_type(x=specs['implant_x'], y=specs['implant_y'],
-                                 rot=specs['implant_rot'])
+            implant_type_str = data.iloc[0].implant_type_str
         except (KeyError, AttributeError):
             raise ValueError('If "argus" is not given, "data" must contain '
-                             'columns "implant_type_str", "implant_x", '
-                             '"implant_y", and "implant_rot".')
+                             'an "implant_type_str" column.')
+        if implant_type_str == 'ArgusI':
+            argus = ArgusI()
+        elif implant_type_str == 'ArgusII':
+            argus = ArgusII()
+        else:
+            raise ValueError(f'Unknown "implant_type_str" '
+                             f'"{implant_type_str}": must be "ArgusI" or '
+                             f'"ArgusII".')
     if not isinstance(argus, (ArgusI, ArgusII)):
         raise TypeError(f'"argus" must be an Argus I or Argus II implant, '
                         f'not {type(argus)}.')
+    implant_xy, implant_rot = _argus_pose(data, implant_position,
+                                          implant_rotation)
+    placed = _placed_electrodes(argus, implant_xy, implant_rot)
+    # Copy: the left-eye branch below flips these in place.
     if isinstance(argus, ArgusI):
-        px_argus = PX_ARGUS1
+        px_argus = PX_ARGUS1.copy()
         img_argus = imread(PATH_ARGUS1)
     else:
-        px_argus = PX_ARGUS2
+        px_argus = PX_ARGUS2.copy()
         img_argus = imread(PATH_ARGUS2)
     if ax is None:
         ax = plt.gca()
@@ -140,8 +184,7 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
 
     # Add some padding to the output image so the array is not cut off:
     pad = 2000  # microns
-    x_el = [e.x for e in argus.electrode_objects]
-    y_el = [e.y for e in argus.electrode_objects]
+    x_el, y_el = np.array(list(placed.values())).T
     x_min, y_min = Watson2014Map().ret_to_dva(np.min(x_el) - pad, np.min(y_el) - pad)
     x_max, y_max = Watson2014Map().ret_to_dva(np.max(x_el) + pad, np.max(y_el) + pad)
 
@@ -158,8 +201,8 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
             out_shape = data.image.values[0].shape
         except IndexError:
             out_shape = (768, 1024)
-    for xy, e in zip(px_argus, argus.electrode_objects):
-        x_dva, y_dva = Watson2014Map().ret_to_dva(e.x, e.y)
+    for xy, (x_ret, y_ret) in zip(px_argus, placed.values()):
+        x_dva, y_dva = Watson2014Map().ret_to_dva(x_ret, y_ret)
         x_out = (x_dva - x_min) / (x_max - x_min) * (out_shape[1] - 1)
         y_out = (y_dva - y_min) / (y_max - y_min) * (out_shape[0] - 1)
         pts_in.append(xy)
@@ -181,8 +224,7 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
     all_imgs = np.zeros(out_shape)
     num_imgs = data.groupby('electrode')['image'].count()
     for _, row in data.iterrows():
-        e_pos = Watson2014Map().ret_to_dva(argus[row['electrode']].x,
-                                      argus[row['electrode']].y)
+        e_pos = Watson2014Map().ret_to_dva(*placed[row['electrode']])
         align_center = dva2out(e_pos)[0]
         img_drawing = scale_image(row['image'], scale)
         img_drawing = center_image(img_drawing, loc=align_center)
@@ -216,6 +258,8 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
         # parameters without pointing the caller's model somewhere else:
         spatial = copy(axon_map.spatial)
         spatial.implant = argus
+        spatial.implant_position = implant_xy * um
+        spatial.implant_rotation = implant_rot * deg
         spatial._correct_loc_od()
         axon_bundles = spatial.grow_axon_bundles(n_bundles=100, prune=False)
         # Draw axon pathways:
@@ -235,8 +279,10 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
     return ax
 
 
-def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0, axon_map=None,
-                                    show_fovea=True, ax=None):
+def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0,
+                                    axon_map=None, show_fovea=True, ax=None,
+                                    implant_position=None,
+                                    implant_rotation=None):
     """Plots simulated phosphenes centered over the corresponding electrodes
 
     .. versionadded:: 0.7
@@ -256,6 +302,14 @@ def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0, axon_map=None,
         Whether to indicate the location of the fovea with a square
     ax : axis
         Matplotlib axis
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin on the retina (um). Defaults to 0.
+
+        .. versionadded:: 0.11.0
+    implant_rotation : float or Quantity, optional
+        Array rotation (deg), positive counter-clockwise. Defaults to 0.
+
+        .. versionadded:: 0.11.0
 
     """
     stim = percepts.metadata['stim']
@@ -273,4 +327,6 @@ def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0, axon_map=None,
             'yrange': (percepts.ydva.min(), percepts.ydva.max())
         })
     plot_argus_phosphenes(pd.DataFrame(df), argus, scale=scale, ax=ax,
-                          axon_map=axon_map, show_fovea=show_fovea)
+                          axon_map=axon_map, show_fovea=show_fovea,
+                          implant_position=implant_position,
+                          implant_rotation=implant_rotation)

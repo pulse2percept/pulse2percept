@@ -1,12 +1,11 @@
 """:py:class:`~pulse2percept.implants.BVT24`, 
    :py:class:`~pulse2percept.implants.BVT44`"""
 import numpy as np
-from skimage.transform import SimilarityTransform
 
 from .base import Implant
 from .electrodes import DiskElectrode
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
-from ..units import as_value, deg, um
+from ..units import as_value, um
 
 
 class BVT24(Implant):
@@ -15,9 +14,7 @@ class BVT24(Implant):
     This class creates a 24-channel suprachoroidal retinal prosthesis
     [Layton2014]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
-    The center of the array is located at (x,y,z), given in microns, and the
-    array is rotated counter-clockwise by rotation angle ``rot``, given in 
-    degrees.
+    Electrode coordinates are device-local, centered on ``(0, 0)``.
 
     The array consists of:
 
@@ -31,8 +28,8 @@ class BVT24(Implant):
     -   2 return electrodes with 2000um diameter (Electrodes R1, R2)
 
     Electrodes C21a-m are typically being ganged to provide an external
-    ring for common ground. The center of the array is assumed to lie
-    between Electrodes C7, C8, C9, and C13.
+    ring for common ground. The array's own ``(0, 0)`` origin is assumed to
+    lie between Electrodes C7, C8, C9, and C13.
 
     .. note::
 
@@ -43,21 +40,11 @@ class BVT24(Implant):
 
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 35 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 35 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -74,7 +61,8 @@ class BVT24(Implant):
     placement = 'suprachoroidal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='RE', preprocess=False, safe_mode=False):
+    def __init__(self, z=0, eye='RE', preprocess=False,
+                 safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -82,10 +70,7 @@ class BVT24(Implant):
         n_elecs = 35
         # This implant lays out its own electrodes rather than handing the
         # geometry to an ElectrodeGrid, so it normalizes for itself:
-        x = as_value(x, um, 'x')
-        y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
-        rot = as_value(rot, deg, 'rot')
 
         # the positions of the electrodes 1-20, 21a-21m, R1-R2
         x_arr = np.array([1275.0, 850.0, 1275.0, 850.0, 1275.0,
@@ -129,10 +114,6 @@ class BVT24(Implant):
                       'C21k', 'C21l', 'C21m'])
         names.extend(['R1', 'R2'])
 
-        # Rotate the grid and center at (x,y):
-        tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
-        x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
-
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.electrode_array.add_electrode(name, DiskElectrode(x, y, z, r))
 
@@ -145,9 +126,8 @@ class BVT44(Implant):
     [Petoe2021]_, which was developed by the Bionic Vision Australia
     Consortium and commercialized by Bionic Vision Technologies (BVT).
 
-    The center of the array (x,y,z) is located at the center of electrodes
-    D4, D5, C4, and E4, and the  array is rotated counter-clockwise by rotation
-    angle ``rot``, given in degrees.
+    The device-local origin lies at the center of electrodes D4, D5, C4
+    and E4.
 
     The array consists of:
 
@@ -166,21 +146,11 @@ class BVT44(Implant):
 
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        The coordinate system is centered over the fovea.
-        Positive ``x`` values move the electrode into the nasal retina.
-        Positive ``y`` values move the electrode into the superior retina.
-        Positive ``z`` values move the electrode away from the retina into the
-        vitreous humor (sometimes called electrode-retina distance).
-        ``z`` can either be a list with 35 entries or a scalar that is applied
-        to all electrodes.
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 35 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     eye : {'RE', 'LE'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -196,7 +166,8 @@ class BVT44(Implant):
     placement = 'suprachoroidal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, x=0, y=0, z=0, rot=0, eye='LE', preprocess=False, safe_mode=False):
+    def __init__(self, z=0, eye='LE', preprocess=False,
+                 safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -204,10 +175,7 @@ class BVT44(Implant):
         n_elecs = 46
         # Placed by hand, like BVT24, once the hex grid has supplied the
         # in-array positions:
-        x = as_value(x, um, 'x')
-        y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
-        rot = as_value(rot, deg, 'rot')
 
         # The 44 stimulating electrodes are arranged in a hex grid; two return
         # electrodes are added as well:
@@ -231,10 +199,6 @@ class BVT44(Implant):
         # the position of the electrodes 1-20, 21a-21m, R1-R2 for left eye
         if eye == 'LE':
             x_arr = np.negative(x_arr)
-
-        # Rotate the grid and center at (x,y):
-        tf = SimilarityTransform(rotation=np.deg2rad(rot), translation=[x, y])
-        x_arr, y_arr = tf(np.vstack([x_arr.ravel(), y_arr.ravel()]).T).T
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):
             self.electrode_array.add_electrode(name, DiskElectrode(x, y, z, r))

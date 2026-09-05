@@ -93,11 +93,14 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 # :py:class:`~pulse2percept.implants.ArgusII` object implanted at the correct
 # location.
 #
-# Consulting [Beyeler2019]_ tells us that the prosthesis was roughly implanted
-# in the following location:
+# [Beyeler2019]_ reports an implant position of ``(-1331, -850)`` um
+# and a rotation of -28.4 degrees:
 
 from pulse2percept.implants import ArgusII
-argus = ArgusII(x=-1331, y=-850, rot=-28.4, eye='RE')
+from pulse2percept.units import um
+argus = ArgusII(eye='RE')
+implant_position = (-1331, -850) * um
+implant_rotation = -28.4
 
 ###############################################################################
 # For now, let's focus on the data from Subject 2:
@@ -141,6 +144,8 @@ plot_argus_phosphenes(data, argus, axon_map=model)
 
 import numpy as np
 model = AxonMapModel(implant=argus, rho=315, lam=500, loc_od=(16.2, 1.38),
+                     implant_position=implant_position,
+                     implant_rotation=implant_rotation,
                      xrange=(-30, 30), yrange=(-22.5, 22.5),
                      thresh_percept=1 / np.sqrt(np.e))
 
@@ -176,7 +181,9 @@ percepts.play()
 from pulse2percept.plotting import plot_argus_simulated_phosphenes
 fig, (ax_data, ax_sim) = plt.subplots(ncols=2, figsize=(15, 5))
 plot_argus_phosphenes(data, argus, scale=0.75, ax=ax_data)
-plot_argus_simulated_phosphenes(percepts, argus, scale=1.25, ax=ax_sim)
+plot_argus_simulated_phosphenes(percepts, argus, scale=1.25, ax=ax_sim,
+                                implant_position=implant_position,
+                                implant_rotation=implant_rotation)
 ax_data.set_title('Ground-truth phosphenes')
 ax_sim.set_title('Simulated phosphenes')
 

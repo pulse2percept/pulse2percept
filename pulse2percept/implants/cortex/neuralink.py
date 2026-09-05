@@ -380,6 +380,11 @@ class Neuralink(EnsembleImplant):
                                             orient=direction, orient_mode='rot')
         return cls(threads)
     
+    @staticmethod
+    def _placed(implant_type, x, y):
+        """Instantiate a thread at the requested anchor."""
+        return implant_type(x=x, y=y)
+
     @classmethod
     def from_cortical_map(cls, implant_type, visual_field_map, locs=None,
                           xrange=None,

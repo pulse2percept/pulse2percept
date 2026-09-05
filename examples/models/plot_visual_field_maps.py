@@ -86,6 +86,7 @@ visual_field_map = p2p.topography.Polimeni2006Map(
     regions=['v1', 'v2', 'v3'])
 model = p2p.models.cortex.ScoreboardModel(
     implant=p2p.implants.cortex.Orion(),
+    implant_position=(15, 0) * p2p.units.mm,
     visual_field_map=visual_field_map,
 )
 model.build()
@@ -167,12 +168,13 @@ for ax, noise, title in zip(
 # phosphene locations differ:
 
 implant_cortex = p2p.implants.cortex.Cortivis()
+implant_position = (20, -5) * p2p.units.mm
 cortex_coords = implant_cortex.electrode_array.coordinates(p2p.units.um)
 stim_cortex = {
     electrode: 100
     for electrode, (x, y) in zip(implant_cortex.electrode_names,
                                  cortex_coords[:, :2])
-    if round(x) in (18600, 20200, 21400) and round(y) in (-6400, -4800, -3600)
+    if round(x) in (-1400, 200, 1400) and round(y) in (-1400, 200, 1400)
 }
 
 fig, axes = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(9, 4))
@@ -183,6 +185,7 @@ for ax, noise, title in zip(
     np.random.seed(2)
     model = p2p.models.cortex.ScoreboardModel(
         implant=implant_cortex,
+        implant_position=implant_position,
         regions=['v1'],
         rho=300,
         xrange=(-4, 0.5),

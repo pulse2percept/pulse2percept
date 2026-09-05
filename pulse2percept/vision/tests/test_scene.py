@@ -398,17 +398,23 @@ def test_inpainting_works_in_color_and_stays_a_display_intensity():
     npt.assert_almost_equal(native[..., 2, 0], 0.5, decimal=6)
 
 
-def test_a_zero_percept_composes_to_plain_inpainted_native_vision():
-    """`_compose` and `_native_rgb` fill the scotoma the same way"""
+def test_an_inpainted_scene_refuses_to_compose_a_prosthetic_percept():
+    """Inpainted scenes refuse prosthetic composition."""
     rgb = np.stack([np.tile(np.linspace(0.1, 0.9, 31), (31, 1)),
                     np.tile(np.linspace(0.9, 0.2, 31), (31, 1)).T,
                     np.full((31, 31), 0.4)], axis=-1)
     scene = Scene(ImageStimulus(rgb), fov=(31, 31), scotoma=Scotoma.circle(4),
                   scotoma_fill='inpaint')
-    # No phosphene anywhere, so the lost region is the fill and nothing else:
     dark = Percept(np.zeros((31, 31, 1)), space=scene._grid())
-    npt.assert_almost_equal(scene._compose(dark, vmax=1).data,
-                            scene._native_rgb(), decimal=6)
+    with pytest.raises(ValueError):
+        scene._compose(dark, vmax=1)
+    # The same scene with a numeric fill composes, and native vision is
+    # unaffected either way:
+    numeric = Scene(ImageStimulus(rgb), fov=(31, 31),
+                    scotoma=Scotoma.circle(4), scotoma_fill=0.0)
+    npt.assert_equal(numeric._compose(dark, vmax=1).data.shape,
+                     (31, 31, 3, 1))
+    npt.assert_equal(np.all(np.isfinite(scene._native_rgb())), True)
 
 
 def test_inpainting_ignores_the_blend():

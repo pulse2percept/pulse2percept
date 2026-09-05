@@ -38,10 +38,9 @@ Choosing an implant
 A model predicts what a *particular* device produces, so the first step is to
 specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
 
-In the following, we will use an
-:py:class:`~pulse2percept.implants.ArgusII` implant. By default, the implant
-will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
-meridian (rot=0):
+In the following, we use an
+:py:class:`~pulse2percept.implants.ArgusII` in its canonical device-local
+frame:
 
 """
 # sphinx_gallery_thumbnail_number = 2
@@ -49,6 +48,7 @@ meridian (rot=0):
 import numpy as np
 from pulse2percept.implants import ArgusII
 from pulse2percept.models import AxonMapModel
+from pulse2percept.units import um
 
 implant = ArgusII()
 
@@ -109,10 +109,9 @@ print(model)
 # your choosing, or want to inspect the built axon map first.
 #
 # You can inspect the location of the implant with respect to the underlying
-# nerve fiber bundles using the built-in plot methods:
+# nerve fiber bundles with ``show_implant``:
 
-model.plot()
-implant.plot()
+model.plot(show_implant=True)
 
 
 ##############################################################################
@@ -143,13 +142,12 @@ ax = percept.plot()
 ax.set_title('Predicted percept')
 
 ##############################################################################
-# A major prediction of the axon map model is that the percept changes
-# depending on the location of the implant. You can convince yourself of that
-# by re-running the model on an implant shifted and rotated across the retina:
+# A major prediction of the axon map model is that percept shape depends
+# on implant placement. Position and rotation are model parameters:
 
-model.implant = ArgusII(x=-50, y=50, rot=-45)
-model.plot()
-model.implant.plot()
+model.spatial.implant_position = (-50, 50) * um
+model.spatial.implant_rotation = -45
+model.plot(show_implant=True)
 
 ##############################################################################
 # The resulting percepts should look very different from the previous example.

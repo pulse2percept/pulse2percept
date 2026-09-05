@@ -3,12 +3,13 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import (BaseModel, _check_implant, _electrode_offsets,
-                    _latent_offsets, _location_noise_sigma, _require_placed,
-                    _require_stim_dimension)
+from ..base import (BaseModel, _check_implant, _draw_placed_implant,
+                    _electrode_offsets, _latent_offsets,
+                    _location_noise_sigma, _require_placed,
+                    _require_stim_dimension, _validate_placement)
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
-from ...units import A, Quantity, as_value, dva, Hz, mm, ms, uA
+from ...units import (A, Quantity, as_value, deg, dva, Hz, mm, ms, uA, um)
 from ...utils import cart2pol
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
 from ...topography import Polimeni2006Map
@@ -105,6 +106,21 @@ class DynaphosModel(BaseModel):
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
         ``n_gray`` bins. If None, no compression is performed.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
     location_noise : float or None, optional
         Standard deviation of fixed electrode-specific phosphene offsets, in dva.
         Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
@@ -144,6 +160,8 @@ class DynaphosModel(BaseModel):
                  xrange=(-5, 5), yrange=(-5, 5), step=0.25,
                  grid_type='rect', visual_field_map=None, n_gray=None,
                  noise=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
                  location_noise=None,
                  verbose=True):
             _check_implant(implant)
@@ -160,6 +178,9 @@ class DynaphosModel(BaseModel):
                     Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
                     if visual_field_map is None else visual_field_map),
                 n_gray=n_gray, noise=noise,
+                implant_position=implant_position,
+                implant_rotation=implant_rotation,
+                implant_depth=implant_depth,
                 location_noise=location_noise, verbose=verbose,
                 regions=['v1'] if regions is None else regions)
 
@@ -203,6 +224,11 @@ class DynaphosModel(BaseModel):
                 'n_gray': None,
                 # Salt-and-pepper noise on the output:
                 'noise': None,
+                # Tissue position of the implant's local origin, its
+                # rotation (deg) and its depth (um):
+                'implant_position': (0, 0),
+                'implant_rotation': 0,
+                'implant_depth': 0,
                 # Subject-specific phosphene displacement (dva):
                 'location_noise': None,
                 # True: print status messages, 0: silent
@@ -249,6 +275,8 @@ class DynaphosModel(BaseModel):
             'xrange': dva,
             'yrange': dva,
             'step': dva,
+            'implant_rotation': deg,
+            'implant_depth': um,
             'location_noise': dva,
             'dt': ms,
             # Decay constants, both converted to seconds where they are used:
@@ -293,6 +321,7 @@ class DynaphosModel(BaseModel):
             raise ValueError(f"Pulse (dur={self.p_dur*2:.2f} ms) does not fit into "
                             f"pulse train window (dur={window_dur:.2f} "
                             f"ms)")
+        _validate_placement(self)
         # Build the spatial grid:
         self.grid = Grid2D(self.xrange, self.yrange, step=self.step,
                            grid_type=self.grid_type)
@@ -535,7 +564,7 @@ class DynaphosModel(BaseModel):
                        metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
-             figsize=None, fc=None):
+             figsize=None, fc=None, show_implant=False):
         """Plot the model
         Parameters
         ----------
@@ -558,11 +587,21 @@ class DynaphosModel(BaseModel):
             (if exists) or create a new Axes object.
         figsize : (float, float), optional
             Desired (width, height) of the figure in inches
+        show_implant : bool, optional
+            Draw the implant at its model-side placement. Requires
+            ``use_dva=False``.
+
+            .. versionadded:: 0.11.0
         Returns
         -------
         ax : ``matplotlib.axes.Axes``
             Returns the axis object of the plot
         """
+        if show_implant and use_dva:
+            raise NotImplementedError(
+                "show_implant=True is only supported in tissue coordinates; "
+                "a nonlinear visual_field_map does not transform device "
+                "geometry rigidly.")
         if style is None:
             style = 'hull' if use_dva else 'scatter'
         # Model must be built to access cortical coordinates
@@ -572,6 +611,8 @@ class DynaphosModel(BaseModel):
                             ax=ax, figsize=figsize, fc=fc, 
                             zorder=ZORDER['background'], 
                             legend=True if not use_dva else False)
+        if show_implant:
+            _draw_placed_implant(self, ax, autoscale=autoscale)
         if use_dva:
             ax.set_xlabel('x (dva)')
             ax.set_ylabel('y (dva)')

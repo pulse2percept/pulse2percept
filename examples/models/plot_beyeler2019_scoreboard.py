@@ -38,10 +38,9 @@ Choosing an implant
 A model predicts what a *particular* device produces, so the first step is to
 specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
 
-In the following, we will use a
-:py:class:`~pulse2percept.implants.Lorach2015Array` implant. By default, the implant
-will be centered over the fovea (at x=0, y=0) and aligned with the horizontal
-meridian (rot=0).
+In the following, we use a
+:py:class:`~pulse2percept.implants.Lorach2015Array` in its canonical
+device-local frame.
 
 Creating the model
 ------------------
@@ -114,8 +113,7 @@ model.build()
 # We can visualize the implant and verify that we are simulating the correct
 # patch of retina as follows:
 
-model.plot()
-implant.plot()
+model.plot(show_implant=True)
 
 ##############################################################################
 # The gray window indicates the extent of the grid, built from the values

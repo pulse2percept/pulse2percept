@@ -9,6 +9,7 @@ from pulse2percept.models import ScoreboardSpatial as BeyelerScoreboard
 from pulse2percept.implants.cortex import Cortivis, Orion, LinearEdgeThread
 from pulse2percept.implants import ArgusII
 from pulse2percept.topography import Polimeni2006Map
+from pulse2percept.units import mm
 from pulse2percept.percepts import Percept
 from pulse2percept.topography import Watson2014Map
 
@@ -25,7 +26,9 @@ def _spatial(model):
 def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # ScoreboardSpatial automatically sets `regions`
     visual_field_map = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=0.1, visual_field_map=visual_field_map).build()
+    model = ModelClass(implant=Cortivis(), implant_position=(20, -5) * mm,
+                       xrange=(-3, 3), yrange=(-3, 3), step=0.1,
+                       visual_field_map=visual_field_map).build()
     spatial = _spatial(model)
     npt.assert_equal(spatial.regions, regions)
     npt.assert_equal(spatial.visual_field_map.regions, regions)
@@ -41,7 +44,9 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
 
     # Converting ret <=> dva
     visual_field_map = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(implant=Cortivis(), xrange=(-3, 3), yrange=(-3, 3), step=1, visual_field_map=visual_field_map).build()
+    model = ModelClass(implant=Cortivis(), implant_position=(20, -5) * mm,
+                       xrange=(-3, 3), yrange=(-3, 3), step=1,
+                       visual_field_map=visual_field_map).build()
     spatial = _spatial(model)
     npt.assert_equal(isinstance(spatial.visual_field_map, Polimeni2006Map),
                      True)
@@ -88,8 +93,9 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     [['v1'], ['v2'], ['v3'], ['v1', 'v2'], ['v2', 'v3'], ['v1', 'v3'], ['v1', 'v2', 'v3']])
 def test_predict_spatial(ModelClass, regions):
     # test that no current can spread between hemispheres
-    implant = Orion(x=15000)
-    model = ModelClass(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
+    implant = Orion()
+    model = ModelClass(implant=implant, implant_position=(15, 0) * mm,
+                       xrange=(-3, 3), yrange=(-3, 3),
                        step=0.5, rho=100000, regions=regions).build()
     percept = model.predict_percept({e: 5 for e in implant.electrode_names})
     half = percept.shape[1] // 2
@@ -98,7 +104,8 @@ def test_predict_spatial(ModelClass, regions):
 
     # implant only in v1, shouldnt change with v2/v3
     visual_field_map = Polimeni2006Map(k=15, a=0.5, b=90)
-    model = ModelClass(implant=Cortivis(x=30000, y=0, rot=0), xrange=(-5, 0),
+    model = ModelClass(implant=Cortivis(), implant_position=(30, 0) * mm,
+                       xrange=(-5, 0),
                        yrange=(-3, 3), step=0.1, rho=400,
                        visual_field_map=visual_field_map).build()
     elecs = [79, 49, 19, 80, 50, 20, 90, 61, 31, 2, 72, 42, 12, 83, 53, 23, 93, 64, 34, 5, 75, 45, 15, 86, 56, 26, 96, 67, 37, 8, 68, 38]
@@ -116,7 +123,8 @@ def test_predict_spatial(ModelClass, regions):
     if 'v1' in regions:
         # make sure cortical representation is flipped
         visual_field_map = Polimeni2006Map(k=15, a=0.5, b=90)
-        model = ModelClass(implant=Orion(x=30000, y=0, rot=0),
+        model = ModelClass(implant=Orion(),
+                           implant_position=(30, 0) * mm,
                            xrange=(-5, 0), yrange=(-3, 3), step=0.1, rho=400,
                            visual_field_map=visual_field_map).build()
         percept = model.predict_percept({'40': 1, '94': 5})
@@ -128,8 +136,9 @@ def test_predict_spatial(ModelClass, regions):
 @pytest.mark.parametrize('regions', [['v1', 'v2'], ['v1', 'v3'], ['v2', 'v3']])
 def test_predict_spatial_regionsum(ModelClass,regions):
     print(regions)
-    implant = Orion(x=10000, y=10000)
-    grid = dict(implant=implant, xrange=(-3, 3), yrange=(-3, 3), step=0.1,
+    implant = Orion()
+    grid = dict(implant=implant, implant_position=(10, 10) * mm,
+                xrange=(-3, 3), yrange=(-3, 3), step=0.1,
                 rho=10000)
     model1 = ModelClass(regions=regions[0], **grid).build()
     model2 = ModelClass(regions=regions[1], **grid).build()
@@ -231,9 +240,10 @@ def test_CortexSpatial_meridian_blend(ModelClass):
                           rho=800, **params).build()
 
     # Close to the midline, so the phosphenes land on the vertical meridian
-    implant = Cortivis(x=5000)
+    implant = Cortivis()
     source = {e: 1 for e in implant.electrode_names}
-    plain = make(implant=implant, meridian_blend=0)
+    plain = make(implant=implant, implant_position=(5, 0) * mm,
+                 meridian_blend=0)
     unblended = plain.predict_percept(source).data
     npt.assert_array_less(0, unblended.max())
 
@@ -274,8 +284,9 @@ def test_CortexSpatial_meridian_blend(ModelClass):
 def test_CortexSpatial_meridian_blend_reapplies_threshold():
     # Blending pulls brightness across the meridian, which could otherwise
     # lift a point that `thresh_percept` had zeroed back off zero.
-    implant = Cortivis(x=5000)
-    model = ScoreboardModel(implant=implant, xrange=(-5, 5), yrange=(-5, 5),
+    implant = Cortivis()
+    model = ScoreboardModel(implant=implant, implant_position=(5, 0) * mm,
+                            xrange=(-5, 5), yrange=(-5, 5),
                             step=0.2, rho=800, meridian_blend=0.5,
                             thresh_percept=0.1).build()
     data = model.predict_percept(

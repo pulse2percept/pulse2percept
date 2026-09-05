@@ -4,15 +4,11 @@ import numpy.testing as npt
 
 from pulse2percept import implants
 
-@pytest.mark.parametrize('x', (-100, 200))
-@pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('rot', (-45, 60))
 @pytest.mark.parametrize('eye', ('LE', 'RE'))
-def test_IMIE(x, y, rot, eye):
+def test_IMIE(eye):
     # Create an IMIE and make sure location is correct
 
-    imie = implants.IMIE(x, y, rot=rot, eye = eye)
-    imie0 = implants.IMIE(eye = eye)
+    imie = implants.IMIE(eye=eye)
     # Slots:
     npt.assert_equal(hasattr(imie, '__slots__'), True)
     npt.assert_equal(hasattr(imie, '__dict__'), False)
@@ -20,25 +16,11 @@ def test_IMIE(x, y, rot, eye):
     # Check if there is 256 electrodes in the array
     npt.assert_equal(len(imie.electrode_array.electrodes), 256)
 
-    # Coordinates of electrode 'N3'
-    xy = np.array([imie0['N3'].x, imie0['N3'].y]).T
-
-    # Rotate
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-
-    # Then off-set: Make sure electrode N3 is placed
-    # correctly
-    npt.assert_almost_equal(imie['N3'].x, xy[0] + x)
-    npt.assert_almost_equal(imie['N3'].y, xy[1] + y)
-
-    # Make sure array center is still (x,y)
+    # The array is centered on the device's own origin
     y_center = imie['H10'].y + (imie['G10'].y - imie['H10'].y) / 2
-    npt.assert_almost_equal(y_center, y)
+    npt.assert_almost_equal(y_center, 0)
     x_center = imie['H10'].x + (imie['G10'].x - imie['H10'].x) / 2
-    npt.assert_almost_equal(x_center, x)
+    npt.assert_almost_equal(x_center, 0)
 
     # Make sure the center to center pitch is correct
     npt.assert_almost_equal((imie['L1'].x - imie['K1'].x) ** 2 + 
@@ -56,29 +38,20 @@ def test_IMIE(x, y, rot, eye):
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
-        implants.IMIE(x=-100, y=10, z=np.zeros(5))
+        implants.IMIE(z=np.zeros(5))
     with pytest.raises(ValueError):
-        implants.IMIE(x=-100, y=10, z=[1, 2, 3])
+        implants.IMIE(z=[1, 2, 3])
 
     # Right-eye implant:
-    xc, yc = 500, -500
-    imie_re = implants.IMIE(eye='RE', x=xc, y=yc)
+    imie_re = implants.IMIE(eye='RE')
     npt.assert_equal(imie_re['A4'].x > imie_re['A3'].x, True)
     npt.assert_almost_equal(imie_re['A4'].y, imie_re['A3'].y)
 
     # need to adjust for reflection about y-axis
     # Left-eye implant:
-    imie_le = implants.IMIE(eye='LE', x=xc, y=yc)
+    imie_le = implants.IMIE(eye='LE')
     npt.assert_equal(imie_le['A3'].x > imie_le['A4'].x, True)
     npt.assert_almost_equal(imie_le['A3'].y, imie_le['A4'].y)
-
-    # In both left and right eyes, rotation with positive angle should be
-    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['L5', 'L17']):
-        before = implants.IMIE(eye=eye)
-        after = implants.IMIE(eye=eye, rot=10)
-        npt.assert_equal(after[el].x < before[el].x, True)
-        npt.assert_equal(after[el].y > before[el].y, True)
 
 def test_IMIE_stim():
     # Prepare a stimulus via dict:

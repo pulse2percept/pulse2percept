@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 import time
 
 from pulse2percept.implants import (ArgusI, ArgusII, DiskElectrode,
-                                    ElectrodeArray, Implant)
+                                    ElectrodeArray, Implant, PRIMAPivotal,
+                                    SquareElectrode)
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    BostonTrain, ImageStimulus, LogoBVL,
@@ -29,7 +30,7 @@ from pulse2percept.models.cortex import (DynaphosModel,
                                          CortexScoreboardModel,
                                          ScoreboardSpatial as
                                          CortexScoreboardSpatial)
-from pulse2percept.units import (DimensionMismatchError, Quantity,
+from pulse2percept.units import (DimensionMismatchError, Quantity, deg,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
                                  us)
 from pulse2percept.utils import FreezeError, frame_interval
@@ -2092,7 +2093,9 @@ def test_cortical_location_noise_moves_the_phosphene():
     implant = Cortivis()
     electrode = implant.electrode_names[10]
     offset = 1.0 * _latents(len(implant.electrode_names), 3)[10]
-    kwargs = dict(xrange=(-6, 6), yrange=(-6, 6), step=0.05)
+    kwargs = dict(implant_position=(20, -5) * mm,
+                  xrange=(-6, 6), yrange=(-6, 6),
+                  step=0.05)
     plain = CortexScoreboardSpatial(implant, **kwargs).build()
     np.random.seed(3)
     moved = CortexScoreboardSpatial(implant, location_noise=1.0,
@@ -2150,6 +2153,228 @@ def test_location_noise_rejects_3d_maps():
     with pytest.raises(NotImplementedError):
         CortexScoreboardSpatial(_implant_at([(560, 0)]), location_noise=1.0,
                                 **kwargs).build()
+
+
+def _square_implant():
+    """Two square electrodes on the local +x axis, one at the origin
+
+    Square bodies are asymmetric under rotation, so a plot that only moves
+    electrode centers reads back differently from one that turns the device.
+    """
+    return Implant(ElectrodeArray({'A1': SquareElectrode(0, 0, 0, 200),
+                                   'A2': SquareElectrode(600, 0, 0, 200)}))
+
+
+def _square_model(**params):
+    return ScoreboardSpatial(_square_implant(), rho=200, xrange=(-4, 4),
+                             yrange=(-4, 4), step=0.5, **params)
+
+
+def _drawn_bodies(ax):
+    """Electrode-body vertices in data coordinates, as drawn"""
+    collection = ax.collections[-1]
+    to_data = ax.transData.inverted()
+    return np.array([to_data.transform(
+        collection.get_transform().transform(path.vertices))
+        for path in collection.get_paths()])
+
+
+def _rotate(xy, deg_ccw):
+    th = np.deg2rad(deg_ccw)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    return (R @ np.asarray(xy).reshape(-1, 2).T).T.reshape(np.shape(xy))
+
+
+def test_implant_plot_is_the_device_frame_whatever_the_model_does():
+    """`implant.plot()` knows nothing about placement"""
+    implant = _square_implant()
+    local = implant.electrode_array.coordinates()
+    with plt.ioff():
+        fig, (ax0, ax1, ax2) = plt.subplots(1, 3)
+        implant.plot(ax=ax0)
+        # The same implant, in two models placed differently:
+        _square_model(implant_position=(3000, 0) * um).implant.plot(ax=ax1)
+        _square_model(implant_position=(0, -2000) * um,
+                      implant_rotation=45).implant.plot(ax=ax2)
+        alone = _drawn_bodies(ax0)
+        npt.assert_almost_equal(_drawn_bodies(ax1), alone)
+        npt.assert_almost_equal(_drawn_bodies(ax2), alone)
+        plt.close(fig)
+    npt.assert_array_equal(implant.electrode_array.coordinates(), local)
+
+
+def test_show_implant_draws_the_device_where_the_model_places_it():
+    """Position moves the whole device, origin electrode included"""
+    model = _square_model(implant_position=(1500, -700) * um)
+    local = model.implant.electrode_array.coordinates()
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        model.implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        npt.assert_almost_equal(_drawn_bodies(ax1),
+                                _drawn_bodies(ax0) + [1500, -700])
+        plt.close(fig)
+    # Plotting a placed implant does not place the implant:
+    npt.assert_array_equal(model.implant.electrode_array.coordinates(), local)
+
+
+def test_show_implant_rotates_the_device_not_just_the_centers():
+    """Square bodies turn with the array, about the device origin"""
+    model = _square_model(implant_rotation=30)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        model.implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        drawn, local = _drawn_bodies(ax1), _drawn_bodies(ax0)
+        npt.assert_almost_equal(drawn, _rotate(local, 30))
+        # The corners moved, so this is not a translation of the bodies:
+        centered = local - local.mean(axis=1, keepdims=True)
+        npt.assert_equal(
+            np.allclose(drawn - drawn.mean(axis=1, keepdims=True), centered),
+            False)
+        plt.close(fig)
+
+
+def test_show_implant_rotates_before_translating():
+    """The device frame is turned, then placed"""
+    model = _square_model(implant_rotation=90,
+                          implant_position=(1000, 0) * um)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        model.implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        local, drawn = _drawn_bodies(ax0), _drawn_bodies(ax1)
+        npt.assert_almost_equal(drawn, _rotate(local, 90) + [1000, 0])
+        # Translating first would swing the array onto +y instead:
+        npt.assert_equal(np.allclose(drawn, _rotate(local + [1000, 0], 90)),
+                         False)
+        plt.close(fig)
+
+
+def test_show_implant_refuses_visual_field_coordinates():
+    """A nonlinear retinotopy does not carry electrode bodies rigidly"""
+    model = _square_model(implant_position=(1500, 0) * um)
+    with plt.ioff():
+        fig = plt.figure()
+        with pytest.raises(NotImplementedError):
+            model.plot(use_dva=True, show_implant=True)
+        plt.close(fig)
+
+
+def _drawn_substrate(ax):
+    """The last patch's vertices in data coordinates, as drawn"""
+    patch = ax.patches[-1]
+    local = patch.get_path().transformed(patch.get_patch_transform())
+    return ax.transData.inverted().transform(
+        patch.get_transform().transform(local.vertices))
+
+
+def test_show_implant_works_on_the_axon_map_plot():
+    """`AxonMapSpatial.plot` draws its own anatomical window"""
+    implant = _square_implant()
+    model = AxonMapSpatial(implant, rho=200, xrange=(-4, 4), yrange=(-4, 4),
+                           step=0.5, implant_position=(1200, -400) * um,
+                           implant_rotation=15)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True, annotate=False)
+        npt.assert_almost_equal(
+            _drawn_bodies(ax1), _rotate(_drawn_bodies(ax0), 15) + [1200, -400])
+        # The +/-5 mm axon window is the frame this plot is about:
+        npt.assert_array_less(ax1.get_xlim()[1] - ax1.get_xlim()[0], 1e5)
+        with pytest.raises(NotImplementedError):
+            model.plot(ax=ax1, use_dva=True, show_implant=True)
+        plt.close(fig)
+
+
+def test_show_implant_carries_the_prima_substrate_with_its_pixels():
+    """The substrate is a Patch, not part of the pixels' Collection"""
+    implant = PRIMAPivotal()
+    model = ScoreboardSpatial(implant, rho=50, xrange=(-4, 4),
+                              yrange=(-4, 4), step=0.5,
+                              implant_position=(2000, -1000) * um,
+                              implant_rotation=30)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        expected = _rotate(_drawn_substrate(ax0), 30) + [2000, -1000]
+        npt.assert_almost_equal(_drawn_substrate(ax1), expected)
+        # The die still surrounds every pixel it is supposed to hold:
+        collection = ax1.collections[-1]
+        to_data = ax1.transData.inverted()
+        pixels = to_data.transform(collection.get_transform().transform(
+            np.vstack([p.vertices for p in collection.get_paths()])))
+        corners = expected[:4]
+        npt.assert_almost_equal(corners.mean(axis=0), (2000, -1000))
+        npt.assert_array_less(np.abs(_rotate(pixels - [2000, -1000], -30)),
+                              1000)
+        plt.close(fig)
+
+
+def test_show_implant_works_on_a_cortical_model():
+    model = CortexScoreboardSpatial(_square_implant(), rho=400,
+                                    implant_position=(20, -5) * mm,
+                                    xrange=(-4, 4), yrange=(-4, 4), step=0.5)
+    with plt.ioff():
+        fig, (ax0, ax1) = plt.subplots(1, 2)
+        model.implant.plot(ax=ax0)
+        model.plot(ax=ax1, show_implant=True)
+        npt.assert_almost_equal(_drawn_bodies(ax1),
+                                _drawn_bodies(ax0) + [20000, -5000])
+        with pytest.raises(NotImplementedError):
+            model.plot(ax=ax1, use_dva=True, show_implant=True)
+        plt.close(fig)
+
+
+def _slab_model(**params):
+    """A cortical scoreboard on a 3D map, with two electrodes 560 um apart"""
+    return CortexScoreboardSpatial(
+        _implant_at([(0, 0), (560, 0)]), visual_field_map=_Slab3DMap(),
+        regions=['v1'], rho=400, xrange=(-10, 10), yrange=(-10, 10),
+        step=0.5, **params)
+
+
+def test_identity_placement_is_allowed_on_a_3d_map():
+    """Implants built in the map's own frame keep working"""
+    model = _slab_model().build()
+    implant = model.implant
+    stim = implant.prepare_stim({name: 1 for name in implant.electrode_names})
+    placed = np.column_stack(
+        model._electrode_coords(implant.electrode_array, stim))
+    npt.assert_almost_equal(placed, implant.electrode_array.coordinates(),
+                            decimal=3)
+    # Spelling the identity out changes nothing:
+    same = _slab_model(implant_position=(0, 0) * um, implant_rotation=0,
+                       implant_depth=0).build()
+    npt.assert_almost_equal(
+        np.column_stack(same._electrode_coords(implant.electrode_array, stim)),
+        placed, decimal=6)
+
+
+@pytest.mark.parametrize('params', [
+    {'implant_position': (100, 0)},
+    {'implant_position': (100, 0) * um},
+    {'implant_position': (1, 0) * dva},
+    # Even the visual field origin names a cortical location, not the origin:
+    {'implant_position': (0, 0) * dva},
+    {'implant_rotation': 15},
+    {'implant_rotation': 15 * deg},
+    {'implant_depth': 100},
+    {'implant_depth': 100 * um},
+])
+def test_placement_is_refused_on_a_3d_map(params):
+    """`z` in a 3D tissue frame is an axis, not depth along the normal"""
+    with pytest.raises(NotImplementedError):
+        _slab_model(**params).build()
+    # A pose set after the build is caught at prediction time too:
+    model = _slab_model().build()
+    model.set_params(**params)
+    implant = model.implant
+    stim = implant.prepare_stim({implant.electrode_names[0]: 1})
+    with pytest.raises(NotImplementedError):
+        model._electrode_coords(implant.electrode_array, stim)
 
 
 def test_location_noise_matches_integer_electrode_names():

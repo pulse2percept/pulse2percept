@@ -96,10 +96,25 @@ Models
 * ``find_threshold`` has been removed; threshold searches belong at the
   experiment level rather than in the model API (:pull:`862`).
 
+* Implant placement moved from named implants to models. Named implants
+  now use device-local coordinates; use ``implant_position``,
+  ``implant_rotation`` and ``implant_depth`` to place them in tissue.
+  ``implant_position`` may also be given in dva for a single-region 2D field
+  map. 3D maps such as ``NeuropythyMap`` support only identity model-side
+  placement. Named retinal arrays now default to ``z=0``; fixed device
+  geometry such as shank depth remains on the implant.
+  :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords` replaces
+  positioning named implants through their constructors (:pull:`884`).
+
 * New ``location_noise`` parameter displaces each electrode's phosphene by a
   fixed, subject-specific offset in the visual field (dva) rather than at the
   location the ``visual_field_map`` gives it. Requires a 2D, invertible map
   (:pull:`881`).
+
+* ``implant.plot()`` shows device-local geometry;
+  ``model.plot(show_implant=True)`` shows model-side placement. The Argus
+  phosphene plotting helpers likewise accept ``implant_position`` and
+  ``implant_rotation`` (:pull:`884`).
 
 
 Residual vision
@@ -108,6 +123,9 @@ Residual vision
 * :py:class:`~pulse2percept.vision.Scene` adds softened scotoma boundaries,
   optional inpainting, configurable backgrounds, and eccentricity rings in
   both static and animated views (:pull:`871`).
+
+* Prosthetic composition now rejects ``scotoma_fill='inpaint'``, whose
+  interaction with prosthetic brightness is not modeled (:pull:`884`).
 
 
 Plotting

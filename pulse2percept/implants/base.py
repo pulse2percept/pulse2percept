@@ -518,12 +518,14 @@ class Implant(PrettyPrint):
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
-        """Plot
+        """Plot the device in its local coordinate frame.
+
+        Use ``model.plot(show_implant=True)`` to show model-side placement.
 
         Parameters
         ----------
         annotate : bool, optional
-            Whether to scale the axes view to the data
+            Whether to label electrodes.
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         ax : matplotlib.axes._subplots.AxesSubplot, optional
@@ -795,7 +797,7 @@ class GridImplant(Implant):
     spacing : double or (x_spacing, y_spacing)
         Electrode-to-electrode spacing (um).
     x/y/z : double, optional
-        3D location (um) of the center of the grid.
+        Location (um) of the center of the grid in the implant's own frame.
     rot : double, optional
         Rotation of the grid in degrees (positive angle: counter-clockwise).
     names : (name_rows, name_cols), optional

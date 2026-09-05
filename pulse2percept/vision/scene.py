@@ -297,7 +297,8 @@ class Scene(PrettyPrint):
         Gray level to fill the scotoma with (in [0, 1]). Default (0)  black.
         ``'inpaint'`` instead fills the scotoma in from the vision around it
         using :py:func:`skimage.restoration.inpaint_biharmonic` (ignoring
-        ``scotoma_blend``).
+        ``scotoma_blend``). ``'inpaint'`` is unavailable when composing a
+        prosthetic percept because that interaction is not modeled.
     background : float or (r, g, b), optional
         Gray level or RGB value to use for transparent pixels. Defaults to
         black.
@@ -369,7 +370,10 @@ class Scene(PrettyPrint):
 
     @property
     def scotoma_fill(self):
-        """The display intensity complete loss shows as, or ``'inpaint'``"""
+        """The display intensity complete loss shows as, or ``'inpaint'``
+
+        Prosthetic composition requires a numeric fill.
+        """
         return self._scotoma_fill
 
     @property
@@ -590,6 +594,11 @@ class Scene(PrettyPrint):
 
     def _compose(self, prosthetic, vmax, vmin=0, gaze=None):
         """Native vision with a prosthetic percept painted into the loss"""
+        if self._scotoma_fill == _INPAINT:
+            raise ValueError(
+                f"scotoma_fill={_INPAINT!r} cannot be combined with a "
+                f"prosthetic percept because their interaction is not modeled. "
+                f"Use a numeric 'scotoma_fill' for prosthetic composition.")
         if not isinstance(prosthetic, Percept):
             raise TypeError(f"'prosthetic' must be a Percept, not "
                             f"{type(prosthetic)}.")

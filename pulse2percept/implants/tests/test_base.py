@@ -1,5 +1,7 @@
 import numpy as np
 import collections as coll
+from functools import partial
+from inspect import signature
 import pytest
 import numpy.testing as npt
 from pulse2percept import implants
@@ -20,7 +22,7 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, FrequencyEncoder,
                                    MonophasicPulse)
 from pulse2percept.implants import (ArgusII, DiskElectrode)
-from pulse2percept.models import ScoreboardModel
+from pulse2percept.models import ScoreboardModel, ScoreboardSpatial
 
 
 class PhotovoltaicArray(Implant):
@@ -480,14 +482,10 @@ def test_implant_geometry_units():
     to normalize inside the grid.
     """
     cases = [
-        (implants.ArgusI, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 100 * um},
-         {'x': 1000, 'y': -500, 'z': 100}),
-        (implants.ArgusII, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 100 * um},
-         {'x': 1000, 'y': -500, 'z': 100}),
-        (implants.AlphaIMS, {'x': 0.2 * mm, 'z': -0.1 * mm},
-         {'x': 200, 'z': -100}),
-        (implants.AlphaAMS, {'x': 0.2 * mm, 'z': -0.1 * mm},
-         {'x': 200, 'z': -100}),
+        (implants.ArgusI, {'z': 100 * um}, {'z': 100}),
+        (implants.ArgusII, {'z': 100 * um}, {'z': 100}),
+        (implants.AlphaIMS, {'z': -0.1 * mm}, {'z': -100}),
+        (implants.AlphaAMS, {'z': -0.1 * mm}, {'z': -100}),
         (implants.PRIMAPivotal, {'z': -0.1 * mm}, {'z': -100}),
         (implants.Lorach2015Array, {'z': -0.1 * mm}, {'z': -100}),
         (implants.Ho2019FlatArray, {'pixel_size': 55 * um, 'z': -0.1 * mm},
@@ -496,18 +494,12 @@ def test_implant_geometry_units():
          {'pixel_size': 40, 'z': -100}),
         (implants.Huang2021Array, {'pixel_size': 0.03 * mm, 'z': -0.1 * mm},
          {'pixel_size': 30, 'z': -100}),
-        (implants.BVT24, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 50 * um},
-         {'x': 1000, 'y': -500, 'z': 50}),
-        (implants.BVT44, {'x': 1 * mm, 'y': -0.5 * mm, 'z': 50 * um},
-         {'x': 1000, 'y': -500, 'z': 50}),
-        (implants.IMIE, {'x': 1 * mm, 'z': 100 * um}, {'x': 1000, 'z': 100}),
+        (implants.BVT24, {'z': 50 * um}, {'z': 50}),
+        (implants.BVT44, {'z': 50 * um}, {'z': 50}),
+        (implants.IMIE, {'z': 100 * um}, {'z': 100}),
         (implants.RectangleImplant,
          {'x': 1 * mm, 'spacing': 0.4 * mm, 'r': 75 * um},
          {'x': 1000, 'spacing': 400., 'r': 75.}),
-        (cortex.Orion, {'x': 15 * mm}, {'x': 15000}),
-        (cortex.Cortivis, {'x': 20 * mm, 'y': -5 * mm}, {'x': 20000,
-                                                         'y': -5000}),
-        (cortex.ICVP, {'x': 15 * mm}, {'x': 15000}),
     ]
     for cls, unitful, bare in cases:
         coords = cls(**unitful).electrode_array.coordinates()
@@ -515,25 +507,19 @@ def test_implant_geometry_units():
                             rtol=1e-12, err_msg=cls.__name__)
         # Plain numbers all the way down, whatever went in:
         npt.assert_equal(coords.dtype, np.float64)
-    # Orion is the documented default: 15 mm to the right of the fovea:
-    npt.assert_allclose(cortex.Orion(x=15 * mm).electrode_array.coordinates(),
-                        cortex.Orion().electrode_array.coordinates(),
-                        rtol=1e-12)
     # A conversion that does not land on a round number is no different:
     npt.assert_allclose(
-        implants.ArgusII(x=0.8625 * mm,
-                         z=0.0417 * mm).electrode_array.coordinates(),
-        implants.ArgusII(x=862.5,
-                         z=41.7).electrode_array.coordinates(), rtol=1e-12)
+        implants.ArgusII(z=0.0417 * mm).electrode_array.coordinates(),
+        implants.ArgusII(z=41.7).electrode_array.coordinates(), rtol=1e-12)
 
 
 def test_implant_rot_units():
-    """`rot` is an ordinary angle; the grid does the conversion for everyone"""
-    bare = implants.ArgusII(rot=45).electrode_array.coordinates()
+    """`rot` is an ordinary angle; the grid does the conversion"""
+    bare = GridImplant((6, 10), 575.0, rot=45).electrode_array.coordinates()
     for rot in (45 * deg, np.pi / 4 * rad):
         npt.assert_allclose(
-            implants.ArgusII(rot=rot).electrode_array.coordinates(), bare,
-            rtol=1e-12)
+            GridImplant((6, 10), 575.0, rot=rot).electrode_array.coordinates(),
+            bare, rtol=1e-12)
 
 
 def test_implant_per_electrode_z_units():
@@ -552,14 +538,11 @@ def test_implant_per_electrode_z_units():
 
 
 def test_implant_dimension_errors():
-    for cls in (implants.ArgusII, implants.PRIMAPivotal, implants.BVT24,
-                cortex.Orion, cortex.Cortivis, cortex.ICVP):
-        with pytest.raises(DimensionMismatchError):
-            cls(x=5 * ms)
+    for cls in (implants.ArgusII, implants.PRIMAPivotal, implants.BVT24):
         with pytest.raises(DimensionMismatchError):
             cls(z=10 * uA)
-        with pytest.raises(DimensionMismatchError):
-            cls(rot=5 * dva)
+    with pytest.raises(DimensionMismatchError):
+        GridImplant((2, 2), 400, rot=5 * dva)
     with pytest.raises(DimensionMismatchError):
         implants.RectangleImplant(spacing=2 * dva)
     with pytest.raises(DimensionMismatchError):
@@ -1226,3 +1209,100 @@ def test_Implant_is_a_container():
         implant[60]
     with pytest.raises(TypeError):
         implant[1.2]
+
+
+#: Every named device, which must describe hardware about its own origin.
+NAMED_IMPLANTS = [
+    implants.ArgusI, implants.ArgusII, implants.AlphaIMS, implants.AlphaAMS,
+    implants.BVT24, implants.BVT44, implants.IMIE, implants.PRIMAPivotal,
+    implants.Lorach2015Array, partial(implants.Ho2019FlatArray, 55),
+    partial(implants.Huang2021Array, 55), cortex.Cortivis, cortex.ICVP,
+    cortex.Orion,
+]
+
+
+def _name_of(implant_type):
+    return getattr(implant_type, '__name__', repr(implant_type))
+
+
+@pytest.mark.parametrize('implant_type', NAMED_IMPLANTS)
+def test_a_named_implant_has_no_whole_device_placement(implant_type):
+    """Where a device sits is the model's business, not the device's"""
+    params = signature(implant_type).parameters
+    for name in ('x', 'y'):
+        npt.assert_equal(name in params, False,
+                         err_msg=f'{_name_of(implant_type)}.{name}')
+
+
+@pytest.mark.parametrize('implant_type', NAMED_IMPLANTS)
+def test_a_named_implant_is_built_around_its_own_origin(implant_type):
+    """Named implant footprints include the device-local origin."""
+    xy = implant_type().electrode_array.coordinates()[:, :2]
+    # BVT's return electrodes sit far off to one side, so the bounding box is
+    # not the landmark; what every device shares is that its own origin lies
+    # inside the footprint rather than thousands of microns away from it.
+    npt.assert_array_less(xy.min(axis=0), 1e-9,
+                          err_msg=_name_of(implant_type))
+    npt.assert_array_less(-1e-9, xy.max(axis=0),
+                          err_msg=_name_of(implant_type))
+
+
+def test_model_side_placement_reproduces_an_old_absolute_position():
+    """Model-side placement reproduces the former Argus II pose."""
+    implant = implants.ArgusII()
+    rot = -28.4
+    model = ScoreboardSpatial(implant, implant_position=(-1331, -850) * um,
+                              implant_rotation=rot, implant_depth=100 * um,
+                              xrange=(-5, 5), yrange=(-5, 5), step=1)
+    stim = implant.prepare_stim({'A1': 1})
+    placed = np.column_stack(
+        model._electrode_coords(implant.electrode_array, stim,
+                                electrodes=implant.electrode_names))
+    local = implant.electrode_array.coordinates()
+    th = np.deg2rad(rot)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    npt.assert_almost_equal(placed[:, :2],
+                            (R @ local[:, :2].T).T + [-1331, -850], decimal=3)
+    npt.assert_almost_equal(placed[:, 2], local[:, 2] + 100, decimal=3)
+    # The device is untouched, so the placement is entirely the model's:
+    npt.assert_array_equal(implant.electrode_array.coordinates(), local)
+
+
+def test_one_implant_serves_two_models_at_different_depths():
+    """Placement depth preserves local z differences."""
+    array = ElectrodeArray([PointSource(0, 0, 0), PointSource(200, 0, 40),
+                            PointSource(400, 0, -25)])
+    implant = Implant(array)
+    stim = implant.prepare_stim({name: 1 for name in implant.electrode_names})
+    local = implant.electrode_array.coordinates()
+
+    def z_of(**params):
+        model = ScoreboardSpatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                  step=1, **params)
+        return np.asarray(model._electrode_coords(implant.electrode_array,
+                                                  stim)[2], dtype=float)
+
+    shallow, deep = z_of(implant_depth=0), z_of(implant_depth=150 * um)
+    npt.assert_almost_equal(shallow, local[:, 2], decimal=3)
+    npt.assert_almost_equal(deep - shallow, 150, decimal=3)
+    # Non-planarity is device geometry and is not flattened by placement:
+    npt.assert_almost_equal(np.diff(deep), np.diff(local[:, 2]), decimal=3)
+    npt.assert_array_equal(implant.electrode_array.coordinates(), local)
+
+
+def test_a_flat_named_array_is_flat_in_its_own_frame():
+    """Flat named retinal arrays use z=0 in their local frame."""
+    for implant_type in (implants.AlphaIMS, implants.AlphaAMS,
+                         implants.ArgusI, implants.ArgusII, implants.BVT24,
+                         implants.BVT44, implants.IMIE,
+                         implants.PRIMAPivotal, implants.Lorach2015Array,
+                         partial(implants.Ho2019FlatArray, 55),
+                         partial(implants.Huang2021Array, 55)):
+        z = implant_type().electrode_array.coordinates()[:, 2]
+        npt.assert_almost_equal(z, 0, decimal=9,
+                                err_msg=_name_of(implant_type))
+    # Fixed shank lengths are real device geometry and stay:
+    for implant_type, depths in [(cortex.Cortivis, {-1500.0}),
+                                 (cortex.ICVP, {-650.0, -850.0})]:
+        z = implant_type().electrode_array.coordinates()[:, 2]
+        npt.assert_equal(set(np.round(z, 6)), depths)

@@ -4,15 +4,13 @@ import numpy as np
 from ..base import Implant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
-from ...units import as_value, um
 
 
 class ICVP(Implant):
     """Create an ICVP array
 
-    This function creates a ICVP array and places it on the visual cortex
-    such that the center of the base of the array is at 3D location (x,y,z) given
-    in microns, and the array is rotated by angle ``rot``, given in degrees.
+    Electrode coordinates are device-local, with the base centered at
+    ``(0, 0)``.
 
     ICVP (Intracortical Visual Prosthesis Project) is an electrode array containing 
     16 Parylene-insulated (and 2 uninsulated reference and counter) iridium shaft
@@ -22,20 +20,11 @@ class ICVP(Implant):
 
     .. note::
 
-        By default the implant is in right hemisphere, use negative x-values to shift it to left hemisphere
+        Implant the array with the model's ``implant_position``, e.g.
+        ``implant_position=(20, -5) * mm`` for the right hemisphere.
     
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        ``z`` can either be a list with 35 entries or a scalar that is applied
-        to all electrodes.
-        May be given as unitful quantities (e.g. ``ICVP(x=15 * mm)``); see
-        :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
         preprocessing method whenever a stimulus is prepared, or a custom
@@ -45,7 +34,7 @@ class ICVP(Implant):
 
     Examples
     --------
-    Create an ICVP array, by default centered 15mm to the right of fovea in V1:
+    Create an ICVP array in its own coordinate frame:
 
     >>> from pulse2percept.implants.cortex import Orion
     >>> ICVP() # doctest: +NORMALIZE_WHITESPACE
@@ -57,7 +46,7 @@ class ICVP(Implant):
     >>> icvp = ICVP()
     >>> icvp['11'] # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='11', radius=50.0,
-                  x=15173.205080756888, y=100.0, z=-650.0)
+                  x=173.2050807568877, y=100.0, z=-650.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
@@ -73,11 +62,7 @@ class ICVP(Implant):
 
     placement = 'intracortical'
 
-    def __init__(self, x=15000, y=0, z=0, rot=0, preprocess=False, safe_mode=False):
-        # Inspected, broadcast and offset here, before the grid ever sees it:
-        z = as_value(z, um, 'z')
-        if not np.isclose(z, 0):
-            raise NotImplementedError
+    def __init__(self, preprocess=False, safe_mode=False):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
         self.shape = (5, 4)
@@ -92,18 +77,14 @@ class ICVP(Implant):
         )
         names = np.rot90(names).flatten()
 
-        if not isinstance(z, (list, np.ndarray)):
-            z = np.full(20, z, dtype=float)
-
-        # These electrodes have a shaft length of 650 microns, the rest are 650 microns
+        # These electrodes have a shaft length of 650 microns, the rest 850.
+        # Shank length is device geometry rather than placement:
         length_650 = {'9', '2', '6', '11', '15', '4', '8', '13'}
-
-        # account for depth of shanks
-        z_offset = [650 if name in length_650 else 850 for name in names]
-        z -= z_offset
+        z = -np.array([650 if name in length_650 else 850 for name in names],
+                      dtype=float)
 
         self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
+            self.shape, spacing, z=z, names=names,
             grid_type='hex', orientation='vertical', radius=50,
             electrode_type=DiskElectrode
         )

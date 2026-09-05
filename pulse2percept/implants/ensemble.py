@@ -7,10 +7,20 @@ from ..stimuli._merge import unique_time_points
 from ..stimuli.base import _describe_unit
 from ..units import DimensionMismatchError, as_value, dva, um
 
+
 class EnsembleImplant(Implant):
     
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_implants', '_electrode_array', 'safe_mode', 'preprocess')
+
+    @staticmethod
+    def _placed(implant_type, x, y):
+        """Instantiate one constituent at ``(x, y)`` in ensemble coordinates."""
+        implant = implant_type()
+        for elec in implant.electrode_array.electrode_objects:
+            elec.x += x
+            elec.y += y
+        return implant
 
     @classmethod
     def from_cortical_map(cls, implant_type, visual_field_map, locs=None,
@@ -162,7 +172,8 @@ class EnsembleImplant(Implant):
             xlocs = locs[:, 0]
             ylocs = locs[:, 1]
 
-        implant_list = [implant_type(x=x, y=y) for x,y in zip(xlocs, ylocs)]
+        implant_list = [cls._placed(implant_type, x, y)
+                        for x, y in zip(xlocs, ylocs)]
         
         return cls(implant_list)
 
@@ -250,7 +261,8 @@ class EnsembleImplant(Implant):
         >>> import numpy as np
         >>> from pulse2percept.implants import EnsembleImplant
         >>> from pulse2percept.implants.cortex import Orion
-        >>> ensemble = EnsembleImplant([Orion(), Orion(x=-35000)])
+        >>> ensemble = EnsembleImplant.from_coords(
+        ...     Orion, locs=np.array([(0, 0), (-35000, 0)]))
         >>> ensemble.prepare_stim({0: np.ones(60),
         ...                        1: 2 * np.ones(60)}).data.shape
         (120, 1)

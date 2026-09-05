@@ -4,14 +4,12 @@ import numpy as np
 from ..base import Implant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
-from ...units import as_value, um
 
 class Cortivis(Implant):
     """Create a Cortivis array
     
-    This function creates a Cortivis array and places it on the visual cortex
-    such that the center of the base of the array is at 3D location (x,y,z) given
-    in microns, and the array is rotated by angle ``rot``, given in degrees.
+    Electrode coordinates are device-local, with the base centered at
+    ``(0, 0)``.
 
     Cortivis is a Utah electrode array containing 96 electrodes in a 10x10 array
     with 400 um spacing, and electrode diameter of 80 um at the base
@@ -19,20 +17,11 @@ class Cortivis(Implant):
     
     .. note::
 
-        By default the implant is in right hemisphere, use negative x-values to shift it to left hemisphere
+        Implant the array with the model's ``implant_position``, e.g.
+        ``implant_position=(20, -5) * mm`` for the right hemisphere.
     
     Parameters
     ----------
-    x/y/z : double
-        3D location (um) of the center of the electrode array.
-        ``z`` can either be a list with 35 entries or a scalar that is applied
-        to all electrodes.
-        May be given as unitful quantities (e.g. ``Cortivis(x=20 * mm)``); see
-        :py:mod:`pulse2percept.units`.
-    rot : float or Quantity
-        Rotation angle of the array (deg). Positive values denote
-        counter-clock-wise (CCW) rotations in the retinal coordinate
-        system.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
         preprocessing method whenever a stimulus is prepared, or a custom
@@ -42,7 +31,7 @@ class Cortivis(Implant):
 
     Examples
     --------
-    Create an Cortivis array, by default centered 20mm to the right of fovea in V1:
+    Create a Cortivis array in its own coordinate frame:
 
     >>> from pulse2percept.implants.cortex import Cortivis
     >>> Cortivis() # doctest: +NORMALIZE_WHITESPACE
@@ -54,7 +43,7 @@ class Cortivis(Implant):
     >>> cortivis = Cortivis()
     >>> cortivis['11'] # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='11', radius=40.0,
-                  x=21400.0, y=-6000.0, z=-1500.0)
+                  x=1400.0, y=-1000.0, z=-1500.0)
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape',)
@@ -63,11 +52,7 @@ class Cortivis(Implant):
     # depth of shanks: 1.5mm
     placement = 'intracortical'
 
-    def __init__(self, x=20000, y=-5000, z=0, rot=0, preprocess=False, safe_mode=False):
-        # Inspected and offset here, before the grid ever sees it:
-        z = as_value(z, um, 'z')
-        if not np.isclose(z, 0):
-            raise NotImplementedError
+    def __init__(self, preprocess=False, safe_mode=False):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
         self.shape = (10, 10)
@@ -79,10 +64,10 @@ class Cortivis(Implant):
         names = np.array(names).reshape((10, 10))
         names = np.swapaxes(names, 0, 1)[:, ::-1].reshape(100)
 
-        # Account for depth of shanks
-        z -= 1500
+        # Shank depth, which is device geometry rather than placement:
+        z = -1500
         self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
+            self.shape, spacing, z=z, names=names,
             grid_type='rect', radius=40, electrode_type=DiskElectrode)
         for e in ['01', '02', '03', '04']:
             self.electrode_array.remove_electrode(e)
