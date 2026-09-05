@@ -127,13 +127,6 @@ class DynaphosModel(BaseModel):
         
         .. versionadded:: 0.11.0
 
-    noise : float or int, optional
-        Adds salt-and-pepper noise to each percept frame. An integer will be
-        interpreted as the number of pixels to subject to noise in each 
-        frame. A float between 0 and 1 will be interpreted as a ratio of 
-        pixels to subject to noise in each frame.
-
-        
     .. important::
     
         Changing a model parameter outside the constructor (e.g., by directly
@@ -159,7 +152,6 @@ class DynaphosModel(BaseModel):
                  a50=1.057631326853325e-07, freq=300, p_dur=0.170,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.25,
                  grid_type='rect', visual_field_map=None, n_gray=None,
-                 noise=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
@@ -177,7 +169,7 @@ class DynaphosModel(BaseModel):
                 visual_field_map=(
                     Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
                     if visual_field_map is None else visual_field_map),
-                n_gray=n_gray, noise=noise,
+                n_gray=n_gray,
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
@@ -222,8 +214,6 @@ class DynaphosModel(BaseModel):
                                                     alpha1=0.95),
                 # Number of gray levels to use in the percept:
                 'n_gray': None,
-                # Salt-and-pepper noise on the output:
-                'noise': None,
                 # Tissue position of the implant's local origin, its
                 # rotation (deg) and its depth (um):
                 'implant_position': (0, 0),
@@ -561,7 +551,7 @@ class DynaphosModel(BaseModel):
         return Percept(resp.reshape(list(self.grid.x.shape) + [t_percept.size]),
                        space=self.grid, time=t_percept,
                        time_unit=self.time_unit,
-                       metadata={'stim': stim}, n_gray=self.n_gray, noise=self.noise)
+                       metadata={'stim': stim}, n_gray=self.n_gray)
 
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
              figsize=None, fc=None, show_implant=False):

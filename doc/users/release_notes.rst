@@ -106,6 +106,9 @@ Models
   :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords` replaces
   positioning named implants through their constructors (:pull:`884`).
 
+* The generic ``noise`` parameter has been removed from
+  :py:class:`~pulse2percept.percepts.Percept` and all models (:pull:`885`).
+
 * New ``location_noise`` parameter displaces each electrode's phosphene by a
   fixed, subject-specific offset in the visual field (dva) rather than at the
   location the ``visual_field_map`` gives it. Requires a 2D, invertible map
@@ -145,7 +148,7 @@ Bug fixes
 * Corrected PRIMA-family pixel dimensions and layouts (:pull:`865`).
 
 * :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` now respects
-  ``n_gray`` and ``noise`` and preserves the full stimulus in percept metadata
+  ``n_gray`` and preserves the full stimulus in percept metadata
   (:pull:`869`).
 
 

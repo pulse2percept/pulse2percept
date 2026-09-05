@@ -1048,17 +1048,6 @@ def test_BiphasicAxonMap_n_gray(model_cls):
     npt.assert_equal(np.unique(quantized.data).size, 2)
 
 
-@pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
-                                       BiphasicAxonMapSpatial])
-def test_BiphasicAxonMap_noise(model_cls):
-    source = {'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)}
-    model = model_cls(implant=ArgusII(), xrange=(-4, 4), yrange=(-4, 4),
-                      step=1, n_ax_segments=30, noise=1.0).build()
-    frame = model.predict_percept(source).data[..., 0]
-    # noise=1 leaves only salt and pepper values
-    npt.assert_equal(np.unique(frame).size, 2)
-
-
 @pytest.mark.parametrize('temporal_cls', _TEMPORALS)
 def test_BiphasicAxonMapSpatial_composite_reads_an_encoded_image(temporal_cls):
     # `_envelope_dur` reads stim_dur through the same helper, so a composite

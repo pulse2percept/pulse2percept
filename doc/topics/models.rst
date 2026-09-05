@@ -292,10 +292,10 @@ RGB values are display intensities and must be finite and lie in ``[0, 1]``;
 anything else raises at construction rather than saturating quietly later. The
 RGB axis is not a spatial dimension: ``space`` still describes ``(Y, X)``.
 
-Operations defined on perceived brightness -- ``n_gray``, ``noise``,
-``argmax``, ``max``, and the ``vmin``/``vmax`` display range -- raise a
-``ValueError`` for an RGB percept rather than inventing a conversion from
-color to brightness. Ranking three channels by one number would have to pick a
+Operations defined on perceived brightness (i.e., ``n_gray``, ``argmax``,
+``max``, ``vmin``, ``vmax``) raise a ``ValueError`` for an RGB
+percept rather than inventing a conversion from color to brightness. 
+Ranking three channels by one number would have to pick a
 color metric, which is also why a multi-frame RGB percept has no brightest
 frame to ``plot()``; animate it with ``play()`` instead. ``percept.data`` is
 always available for the plain numerical answer.
