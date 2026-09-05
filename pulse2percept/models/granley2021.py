@@ -404,7 +404,6 @@ class _BiphasicSpatialMixin:
                             dtype=np.float32)
         else:
             resp = np.zeros(list(self.grid.x.shape) + [n_time])
-            # The representative Granley percept occupies the first frame.
             resp[:, :, 0] = self._predict_spatial(
                 self.implant.electrode_array, stim).reshape(self.grid.x.shape)
         # Apply the same spatial postprocessing as the generic path.
@@ -496,7 +495,8 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
     calibration is available.
 
     Encoded still images use the device-resolved amplitude, phase duration, and
-    frequency; exact pulse-onset timing is ignored. Videos are not supported.
+    frequency; exact pulse-onset timing and interphase duration are ignored. 
+    Videos are not supported.
 
     Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
     Their arguments are frequency, amplitude in multiples of threshold, and phase
@@ -754,6 +754,9 @@ class BiphasicAxonMapModel(Model):
     Encoded still images use the device-resolved amplitude, phase duration, and
     frequency; exact pulse-onset timing is ignored. Videos are not supported.
 
+    Interphase duration is accepted but ignored: the effect models read only
+    amplitude, frequency, and phase duration.
+
     Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
     Their arguments are frequency, amplitude in multiples of threshold, and phase
     duration.
@@ -959,56 +962,13 @@ class BiphasicAxonMapModel(Model):
 class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
     r"""Biphasic scoreboard model (spatial module only).
 
-    Extends :py:class:`~pulse2percept.models.ScoreboardSpatial` with the
-    stimulus-dependent brightness and size scaling of [Granley2021]_, but
-    without the axonal streak term of
-    :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial`: phosphenes stay
-    round and centered on the electrode. The model returns one representative
-    spatial percept for the full biphasic pulse train.
-
-    Stimuli must describe the cathodic-first pulse train they deliver, rather
-    than only its samples: either retained
-    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
-    image encoded with the standard biphasic encoder pulse (see
-    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Amplitude may be
-    given in multiples of perceptual threshold
-    (:py:data:`~pulse2percept.units.xTh`) or as current when a threshold
-    calibration is available. A bare amplitude or a raw waveform is rejected,
-    because neither states the frequency and phase duration the effect models
-    read.
-
-    Encoded still images use the device-resolved amplitude, phase duration, and
-    frequency; exact pulse-onset timing is ignored. Videos are not supported.
-
-    Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
-    Their arguments are frequency, amplitude in multiples of threshold, and phase
-    duration.
-
-    When paired with a temporal model, this spatial prediction is treated as the
-    peak percept and multiplied by a normalized temporal response.
-
-    The spatial response is
-
-    .. math::
-
-        I(x, y) =
-        \sum_{e \in E}
-        F_{\mathrm{bright}}
-        \exp\left(
-            -\frac{(x-x_e)^2 + (y-y_e)^2}{2 \rho^2 F_{\mathrm{size}}}
-        \right),
-
-    so the effective spatial scale is
-    :math:`\rho_{\mathrm{eff}} = \rho \sqrt{F_{\mathrm{size}}}`.
-
-    .. note::
-
-        The brightness and size functions are the empirical fits of
-        [Granley2021]_ (Eqs. 4-5, fit to their source datasets), but this
-        focal combination -- those functions without the axonal streak term --
-        is not the model that paper validated. Part of a phosphene's extent
-        there comes from axonal activation, so ``rho`` alone carries the
-        apparent size here.
+    Spatial component of
+    :py:class:`~pulse2percept.models.BiphasicScoreboardModel`, for pairing
+    with a temporal model in a :py:class:`~pulse2percept.models.Model`. The
+    stimulus contract, effect models, spatial response, and validation caveat
+    are described there. In a composite model this spatial prediction is
+    treated as the peak percept and multiplied by a normalized temporal
+    response.
 
     Parameters
     ----------
@@ -1141,9 +1101,7 @@ class BiphasicScoreboardModel(Model):
     stimulus-dependent brightness and size scaling of [Granley2021]_, but
     without the axonal streak term of
     :py:class:`~pulse2percept.models.BiphasicAxonMapModel`: phosphenes stay
-    round and centered on the electrode. Use it when phosphene brightness and
-    size should follow the pulse train but elongation along nerve fiber bundles
-    is not wanted.
+    round and centered on the electrode.
 
     Stimuli must describe the cathodic-first pulse train they deliver, rather
     than only its samples: either retained
@@ -1154,11 +1112,13 @@ class BiphasicScoreboardModel(Model):
     provide a threshold calibration for current-valued amplitudes. Threshold is
     the 50%-detection current for a train at the same frequency and 0.45 ms
     phase duration [Granley2021]_; the model applies its own phase-duration
-    correction. A bare amplitude or a raw waveform is rejected, because neither
-    states the frequency and phase duration the effect models read.
+    correction. Bare amplitudes and raw waveforms are rejected.
 
     Encoded still images use the device-resolved amplitude, phase duration, and
     frequency; exact pulse-onset timing is ignored. Videos are not supported.
+
+    Interphase duration is accepted but ignored: the effect models read only
+    amplitude, frequency, and phase duration.
 
     Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
     Their arguments are frequency, amplitude in multiples of threshold, and phase
@@ -1181,11 +1141,12 @@ class BiphasicScoreboardModel(Model):
     .. note::
 
         The brightness and size functions are the empirical fits of
-        [Granley2021]_ (Eqs. 4-5, fit to their source datasets), but this
-        focal combination -- those functions without the axonal streak term --
-        is not the model that paper validated. Part of a phosphene's extent
-        there comes from axonal activation, so ``rho`` alone carries the
-        apparent size here.
+        [Granley2021]_ (Eqs. 4-5), but this focal combination -- those fits
+        without the axonal streak term -- is not the model that paper
+        validated. [Granley2021]_ assumes an *epiretinal* implant and treats
+        axonal activation as part of phosphene shape, so here ``rho`` alone
+        carries the apparent size. The underlying psychophysics
+        ([Nanduri2012]_, [Weitz2015]_) is likewise epiretinal.
 
     Parameters
     ----------

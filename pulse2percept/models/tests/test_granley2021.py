@@ -1132,6 +1132,43 @@ def test_BiphasicScoreboard_is_the_analytical_gaussian():
     npt.assert_allclose(got, want, rtol=1e-5, atol=1e-6 * want.max())
 
 
+def test_BiphasicScoreboard_pairs_pulses_with_their_own_electrode():
+    # Two electrodes at different amplitudes and phase durations, supplied in
+    # reverse implant order: `_elec_params` and `_electrode_coords` must agree
+    # on which condition belongs to which coordinate. Getting this wrong is
+    # invisible in a percept but scientifically wrong.
+    rho, freq = 200, 20
+    conditions = [('F10', 3.0, 0.9), ('A1', 1.0, 0.25)]
+    names = list(ArgusII().electrode_names)
+    npt.assert_array_less(names.index(conditions[1][0]),
+                          names.index(conditions[0][0]))
+    model = _scoreboard(rho=rho, min_current_spread=0, xrange=(-8, 8),
+                        yrange=(-6, 6), step=0.5)
+    source = {name: BiphasicPulseTrain(freq, amp * xTh, pdur)
+              for name, amp, pdur in conditions}
+    got = _frame(model.predict_percept(source))
+
+    spatial = model.spatial
+    stim = model.implant.prepare_stim(source)
+
+    def gaussian(name, amp, pdur):
+        x, y, _ = spatial._electrode_coords(model.implant.electrode_array,
+                                            stim, electrodes=[name])
+        r2 = ((spatial.grid.ret.x - x[0]) ** 2 +
+              (spatial.grid.ret.y - y[0]) ** 2)
+        f_size = DefaultSizeModel(rho)(freq, amp, pdur)
+        return DefaultBrightModel()(freq, amp, pdur) * np.exp(
+            -r2 / (2 * rho ** 2 * f_size))
+
+    want = sum(gaussian(*condition) for condition in conditions)
+    npt.assert_allclose(got, want, rtol=1e-5, atol=1e-6 * want.max())
+    # Attaching each condition to the other electrode is a different percept,
+    # so the assertion above is actually discriminating:
+    swapped = sum(gaussian(name, amp, pdur)
+                  for (name, _, _), (_, amp, pdur) in zip(conditions,
+                                                          conditions[::-1]))
+    npt.assert_array_less(0.1 * want.max(), np.abs(got - swapped).max())
+
 @pytest.mark.parametrize('model_cls', _SB_CLASSES)
 def test_BiphasicScoreboard_uncalibrated_current_raises(model_cls):
     model = _scoreboard(model_cls)

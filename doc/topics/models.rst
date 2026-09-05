@@ -46,7 +46,7 @@ Available models
    * - [Beyeler2019]_
      - :py:class:`~pulse2percept.models.AxonMapModel`
      - spatial
-   * - [Granley2021]_
+   * - derived from [Granley2021]_
      - :py:class:`~pulse2percept.models.BiphasicScoreboardModel`
      - spatiotemporal
    * - [Granley2021]_
@@ -61,28 +61,22 @@ Cortical stimulation also has
 that maps cortical electrode locations through cortical retinotopy.
 
 Which model to use depends on the scientific question. For retinal
-stimulation, the three main choices differ in what they claim to predict:
+stimulation, the three main choices differ in what they model:
 
 :py:class:`~pulse2percept.models.ScoreboardModel`
-    Simple geometric baseline. One Gaussian blob per electrode at a fixed
-    ``rho``, scaled by amplitude. Answers where stimulation lands, not what a
-    phosphene looks like: brightness follows amplitude, but phosphene size
-    never changes with the pulse.
+    Fixed-width Gaussian per electrode; amplitude scales brightness.
 
 :py:class:`~pulse2percept.models.BiphasicScoreboardModel`
-    Focal phosphenes with pulse-dependent appearance. Same round blobs, but
-    brightness depends on pulse amplitude and frequency, and size depends on
-    amplitude; phase duration affects both through threshold scaling
-    [Granley2021]_. Requires a described biphasic pulse train rather than a
-    bare amplitude.
+    Adds [Granley2021]_-derived pulse-dependent brightness and width.
+    Requires a described biphasic pulse train rather than a bare
+    amplitude.
 
 :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
-    Pulse-dependent appearance *plus* axonal streaks. Adds the elongation
-    along retinal nerve fiber bundles that epiretinal subjects report, whose
-    length also follows phase duration.
+    Additionally models axonal elongation, whose length follows phase
+    duration [Granley2021]_.
 
-Published temporal and spatiotemporal models add assumptions specific to their
-experiments and should be chosen when those assumptions are relevant.
+The published models add assumptions specific to their experiments and
+should be chosen when those assumptions are relevant.
 
 Basic usage
 -----------
