@@ -71,9 +71,10 @@ stimulation, the three main choices differ in what they claim to predict:
 
 :py:class:`~pulse2percept.models.BiphasicScoreboardModel`
     Focal phosphenes with pulse-dependent appearance. Same round blobs, but
-    their brightness and size follow pulse amplitude, frequency, and phase
-    duration [Granley2021]_. Requires a described biphasic pulse train rather
-    than a bare amplitude.
+    brightness depends on pulse amplitude and frequency, and size depends on
+    amplitude; phase duration affects both through threshold scaling
+    [Granley2021]_. Requires a described biphasic pulse train rather than a
+    bare amplitude.
 
 :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
     Pulse-dependent appearance *plus* axonal streaks. Adds the elongation

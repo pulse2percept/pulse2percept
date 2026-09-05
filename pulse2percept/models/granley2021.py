@@ -257,35 +257,54 @@ def _amp_factor(electrode, amp, unit, thresholds):
     return amp / threshold
 
 
+#: The pulse-train contract [Granley2021]_ was derived from.
+_PULSE_CONTRACT = ("All stimuli must be cathodic-first BiphasicPulseTrains "
+                   "with no delay dur")
+
+
 def _pulse_train_params(stim, thresholds=None):
-    """Return Granley pulse parameters for each active electrode."""
+    """Return Granley pulse parameters for each electrode that delivers pulses.
+
+    Electrodes at zero amplitude, and trains that deliver no pulse at all
+    (``freq <= 0``, or ``n_pulses=0``), are dropped rather than handed to the
+    effect models: a train with no pulse in it stimulates nothing, whatever
+    amplitude its pulse would have had."""
     described = getattr(stim, '_biphasic_params', None)
     if described is not None:
         encoded = described()
         if encoded is None:
             raise TypeError(
-                "All stimuli must be BiphasicPulseTrains with no delay dur. "
-                "This one was encoded with a 'pulse' shape of its own, whose "
-                "phase duration this model cannot read off.")
-        return [(electrode, freq,
-                 _amp_factor(electrode, amp, stim.unit, thresholds),
-                 phase_dur, stim_dur)
-                for electrode, freq, amp, phase_dur, stim_dur in encoded]
+                f"{_PULSE_CONTRACT}. This one was encoded with a 'pulse' "
+                f"shape of its own, whose phase duration this model cannot "
+                f"read off.")
+        # The encoder already drops electrodes at zero amplitude or 0 Hz.
+        params = []
+        for (electrode, freq, amp, phase_dur, stim_dur,
+             cathodic_first) in encoded:
+            if not cathodic_first:
+                raise TypeError(f"{_PULSE_CONTRACT} (Failing electrode: "
+                                f"{electrode})")
+            params.append((electrode, freq,
+                           _amp_factor(electrode, amp, stim.unit, thresholds),
+                           phase_dur, stim_dur))
+        return params
     sources = stim._structured_sources()
     if sources is None:
         # Preserve the historical zero-stimulus result; this is the only case
         # that requires rendering a waveform.
         if not np.any(stim.data):
             return []
-        raise TypeError("All stimuli must be BiphasicPulseTrains with no "
-                        "delay dur")
+        raise TypeError(_PULSE_CONTRACT)
     params = []
     for electrode, source in sources:
         # Require the exact pulse-train contract used to derive the model.
-        if type(source) is not BiphasicPulseTrain or source.delay_dur != 0:
-            raise TypeError(f"All stimuli must be BiphasicPulseTrains with "
-                            f"no delay dur (Failing electrode: {electrode})")
-        if source.amp == 0:
+        if (type(source) is not BiphasicPulseTrain or
+                source.delay_dur != 0 or not source.cathodic_first):
+            raise TypeError(f"{_PULSE_CONTRACT} (Failing electrode: "
+                            f"{electrode})")
+        # `n_pulses == 0` is how BiphasicPulseTrain represents a train that
+        # delivers nothing (`freq <= 0`, or an explicit `n_pulses=0`):
+        if source.amp == 0 or source.n_pulses == 0:
             continue
         if source.amp_factor is None:
             raise ValueError(_NO_THRESHOLD_MSG.format(electrode=electrode,
@@ -333,14 +352,27 @@ class _BiphasicSpatialMixin:
                          dtype=np.float32).reshape((-1, 3)))
 
     def _effect_factors(self, name, elec_params, positive=False):
-        """Return per-electrode factors from the effect model ``name``.
+        """Return one factor per active electrode from effect model ``name``.
+
+        A scalar return (an effect model that ignores its arguments) is
+        broadcast to every active electrode. Any other length is an error:
+        the kernels index this array once per electrode with bounds checking
+        disabled, so a short array would read past its end.
 
         ``positive`` additionally rejects factors <= 0, for a factor that
         appears in an exponent denominator."""
+        n_el = len(elec_params)
         factors = np.array(getattr(self, name)(elec_params[:, 0],
                                                elec_params[:, 1],
                                                elec_params[:, 2]),
                            dtype=np.float32).reshape((-1))
+        if factors.size == 1:
+            factors = np.full(n_el, factors[0], dtype=np.float32)
+        elif factors.size != n_el:
+            raise ValueError(f"{type(self).__name__}.{name} returned "
+                             f"{factors.size} scaling factors for {n_el} "
+                             f"active electrode(s). Return one factor per "
+                             f"electrode, or a scalar for all of them.")
         # Reject values that would make the kernel's exponent non-finite.
         if not np.all(np.isfinite(factors)):
             raise ValueError(f"{type(self).__name__}.{name} returned a "
@@ -454,8 +486,8 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
     [Granley2021]_. The model returns one representative spatial percept for the
     full biphasic pulse train.
 
-    Stimuli must describe the pulse train they deliver, rather than only its
-    samples: either retained
+    Stimuli must describe the cathodic-first pulse train they deliver, rather
+    than only its samples: either retained
     :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
     image encoded with the standard biphasic encoder pulse (see
     :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Amplitude may be
@@ -708,8 +740,8 @@ class BiphasicAxonMapModel(Model):
     [Granley2021]_. The model returns one representative percept for the full
     biphasic pulse train.
 
-    Stimuli must describe the pulse train they deliver, rather than only its
-    samples: either retained
+    Stimuli must describe the cathodic-first pulse train they deliver, rather
+    than only its samples: either retained
     :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
     image encoded with the standard biphasic encoder pulse (see
     :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Give amplitude in
@@ -934,8 +966,8 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
     round and centered on the electrode. The model returns one representative
     spatial percept for the full biphasic pulse train.
 
-    Stimuli must describe the pulse train they deliver, rather than only its
-    samples: either retained
+    Stimuli must describe the cathodic-first pulse train they deliver, rather
+    than only its samples: either retained
     :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
     image encoded with the standard biphasic encoder pulse (see
     :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Amplitude may be
@@ -971,11 +1003,12 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
 
     .. note::
 
-        The brightness and size coefficients of [Granley2021]_ were fit within
-        the axon-map model, where part of a phosphene's extent comes from
-        axonal activation. Reused here without that term, they describe how
-        pulse parameters *change* a phosphene rather than reproducing the
-        published fits.
+        The brightness and size functions are the empirical fits of
+        [Granley2021]_ (Eqs. 4-5, fit to their source datasets), but this
+        focal combination -- those functions without the axonal streak term --
+        is not the model that paper validated. Part of a phosphene's extent
+        there comes from axonal activation, so ``rho`` alone carries the
+        apparent size here.
 
     Parameters
     ----------
@@ -1112,8 +1145,8 @@ class BiphasicScoreboardModel(Model):
     size should follow the pulse train but elongation along nerve fiber bundles
     is not wanted.
 
-    Stimuli must describe the pulse train they deliver, rather than only its
-    samples: either retained
+    Stimuli must describe the cathodic-first pulse train they deliver, rather
+    than only its samples: either retained
     :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
     image encoded with the standard biphasic encoder pulse (see
     :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Give amplitude in
@@ -1147,11 +1180,12 @@ class BiphasicScoreboardModel(Model):
 
     .. note::
 
-        The brightness and size coefficients of [Granley2021]_ were fit within
-        the axon-map model, where part of a phosphene's extent comes from
-        axonal activation. Reused here without that term, they describe how
-        pulse parameters *change* a phosphene rather than reproducing the
-        published fits.
+        The brightness and size functions are the empirical fits of
+        [Granley2021]_ (Eqs. 4-5, fit to their source datasets), but this
+        focal combination -- those functions without the axonal streak term --
+        is not the model that paper validated. Part of a phosphene's extent
+        there comes from axonal activation, so ``rho`` alone carries the
+        apparent size here.
 
     Parameters
     ----------

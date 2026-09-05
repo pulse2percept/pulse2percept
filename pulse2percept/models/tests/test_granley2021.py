@@ -1286,3 +1286,90 @@ def test_ScoreboardModel_is_unchanged():
     npt.assert_allclose(data.sum(), 297.30609130859375, rtol=1e-5)
     npt.assert_allclose(data.max(), 33.0367317199707, rtol=1e-5)
     npt.assert_allclose((data ** 2).sum(), 4960.07763671875, rtol=1e-5)
+
+
+# -----------------------------------------------------------------------------
+# The pulse-train contract, shared by both Granley spatial models
+# -----------------------------------------------------------------------------
+
+#: The Granley models and the grid each one is cheap to build on.
+_GRANLEY = [(BiphasicAxonMapModel, dict(_GRID)),
+            (BiphasicAxonMapSpatial, dict(_GRID)),
+            (BiphasicScoreboardModel, dict(xrange=(-3, 3), yrange=(-2, 2),
+                                           step=1)),
+            (BiphasicScoreboardSpatial, dict(xrange=(-3, 3), yrange=(-2, 2),
+                                             step=1))]
+
+
+@pytest.mark.parametrize('model_cls, grid', _GRANLEY)
+@pytest.mark.parametrize('effect', ('bright_model', 'size_model'))
+def test_Granley_effect_model_may_return_a_scalar(model_cls, grid, effect):
+    # A custom effect model that ignores its arguments returns one number.
+    # The kernels index one factor per electrode with bounds checking off, so
+    # that number has to be broadcast rather than passed through as length 1.
+    model = model_cls(implant=ArgusII(), verbose=False, **grid).build()
+    source = {e: BiphasicPulseTrain(20, 1 * xTh, 0.45)
+              for e in ('A2', 'C5', 'F8')}
+    spatial = _spatial(model)
+    setattr(spatial, effect, lambda freq, amp, pdur: 1.0)
+    scalar = model.predict_percept(source).data
+    # Broadcasting is what an explicit per-electrode array would have done:
+    setattr(spatial, effect,
+            lambda freq, amp, pdur: np.ones_like(np.asarray(amp, dtype=float)))
+    npt.assert_array_equal(scalar, model.predict_percept(source).data)
+
+
+@pytest.mark.parametrize('model_cls, grid', _GRANLEY)
+def test_Granley_effect_model_length_must_match(model_cls, grid):
+    # Anything but a scalar or one factor per electrode would be read out of
+    # bounds by the kernel:
+    model = model_cls(implant=ArgusII(), verbose=False, **grid).build()
+    source = {e: BiphasicPulseTrain(20, 1 * xTh, 0.45)
+              for e in ('A2', 'C5', 'F8')}
+    _spatial(model).bright_model = lambda freq, amp, pdur: np.ones(2)
+    with pytest.raises(ValueError, match='bright_model'):
+        model.predict_percept(source)
+
+
+@pytest.mark.parametrize('model_cls, grid', _GRANLEY)
+@pytest.mark.parametrize('build_train', [
+    lambda: BiphasicPulseTrain(0, 1 * xTh, 0.45, stim_dur=100),
+    lambda: BiphasicPulseTrain(20, 1 * xTh, 0.45, n_pulses=0, stim_dur=100),
+])
+def test_Granley_a_train_without_pulses_is_dark(model_cls, grid, build_train):
+    # `freq=0` and `n_pulses=0` both deliver nothing, whatever amplitude the
+    # pulse would have had, so the brightness model must not see them:
+    model = model_cls(implant=ArgusII(), verbose=False, **grid).build()
+    train = build_train()
+    npt.assert_equal(train.n_pulses, 0)
+    npt.assert_almost_equal(model.predict_percept({'C5': train}).data, 0)
+    # A silent electrode alongside a driven one changes nothing:
+    driven = BiphasicPulseTrain(20, 1 * xTh, 0.45, stim_dur=100)
+    npt.assert_array_almost_equal(
+        model.predict_percept({'C5': build_train(), 'A2': driven}).data,
+        model.predict_percept({'A2': driven}).data)
+
+
+@pytest.mark.parametrize('model_cls, grid', _GRANLEY)
+def test_Granley_rejects_anodic_first_trains(model_cls, grid):
+    # [Granley2021]_ scoped the model to cathodic-first pulse trains
+    model = model_cls(implant=ArgusII(), verbose=False, **grid).build()
+    with pytest.raises(TypeError, match='cathodic-first'):
+        model.predict_percept(
+            {'C5': BiphasicPulseTrain(20, 1 * xTh, 0.45,
+                                      cathodic_first=False)})
+
+
+@pytest.mark.parametrize('model_cls, grid', _GRANLEY)
+def test_Granley_rejects_an_anodic_first_encoder(model_cls, grid):
+    # The encoded-image path reads the same contract as a retained train
+    def encoded(cathodic_first):
+        implant = ArgusII(encoder=AmplitudeEncoder(
+            amp_range=(0 * xTh, 2 * xTh), cathodic_first=cathodic_first))
+        return model_cls(implant=implant, verbose=False, **grid).build()
+
+    with pytest.raises(TypeError, match='cathodic-first'):
+        encoded(False).predict_percept(LogoBVL())
+    # The default polarity still predicts:
+    npt.assert_equal(
+        np.any(encoded(True).predict_percept(LogoBVL()).data), True)

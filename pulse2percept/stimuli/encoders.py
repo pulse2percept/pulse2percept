@@ -70,11 +70,13 @@ class _EncodedStimulus(Stimulus):
 
     __slots__ = ('_amp', '_ticks', '_sched', '_onsets', '_frames',
                  '_pulse_ticks', '_pulse_vals', '_total', '_freq',
-                 '_frame_time', '_frame_dur', '_time', '_phase_dur')
+                 '_frame_time', '_frame_dur', '_time', '_phase_dur',
+                 '_cathodic_first')
 
     def __init__(self, electrodes, amp, ticks, sched, onsets, frames,
                  pulse_ticks, pulse_vals, total, freq, frame_time,
-                 frame_dur, cycle, amp_unit=uA, phase_dur=None):
+                 frame_dur, cycle, amp_unit=uA, phase_dur=None,
+                 cathodic_first=True):
         self._amp = self._own(amp, amp.dtype)
         self._ticks = self._own(ticks, ticks.dtype)
         self._sched = self._own(sched, sched.dtype)
@@ -88,6 +90,7 @@ class _EncodedStimulus(Stimulus):
         self._frame_time = self._own(frame_time, frame_time.dtype)
         self._frame_dur = float(frame_dur)
         self._phase_dur = None if phase_dur is None else float(phase_dur)
+        self._cathodic_first = bool(cathodic_first)
         # Built lazily without rendering the waveform:
         self._time = None
         self._defer(electrodes, unit=amp_unit)
@@ -126,14 +129,17 @@ class _EncodedStimulus(Stimulus):
             self._frame_time, self._frame_dur,
             self.metadata['encoder']['cycle'],
             amp_unit=self.unit if amp_unit is None else amp_unit,
-            phase_dur=self._phase_dur)
+            phase_dur=self._phase_dur,
+            cathodic_first=self._cathodic_first)
         rebuilt.metadata['user'] = deepcopy(self.metadata.get('user'))
         return rebuilt
 
     def _biphasic_params(self):
         """Return one realized biphasic condition per driven electrode.
-        
-        Returns None for custom pulses and rejects multi-frame schedules.
+
+        Each entry is ``(electrode, freq, amp, phase_dur, stim_dur,
+        cathodic_first)``. Returns None for custom pulses and rejects
+        multi-frame schedules.
         """
         if self._phase_dur is None:
             return None
@@ -143,7 +149,8 @@ class _EncodedStimulus(Stimulus):
                 f"different pulse train on each frame, so it has no single "
                 f"(freq, amp, phase_dur) per electrode. Encode a still image, "
                 f"or drive the electrodes with BiphasicPulseTrain objects.")
-        return [(name, float(f), float(a), self._phase_dur, self._total)
+        return [(name, float(f), float(a), self._phase_dur, self._total,
+                 self._cathodic_first)
                 for name, a, f in zip(self.electrodes, self._amp[:, 0],
                                       self._freq[:, 0])
                 if a != 0 and f > 0]
@@ -828,7 +835,8 @@ class StimulusEncoder(Encoder):
             electrodes, amp, ticks, sched, onsets, frames, pulse_ticks,
             pulse_vals, total, realized, frame_time, frame_dur,
             None if cycle is None else cycle * DT, amp_unit=self.amp_unit,
-            phase_dur=None if self.pulse is not None else self.phase_dur)
+            phase_dur=None if self.pulse is not None else self.phase_dur,
+            cathodic_first=self.cathodic_first)
 
     def _modulation(self, source, implant=None):
         """What the source asks each electrode for, frame by frame
