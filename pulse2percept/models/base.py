@@ -18,7 +18,6 @@ from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
 from ..topography import Grid2D
-from ..topography.retina import RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
                      dva, ms, um, uA)
 from ..units.base import has_units
@@ -273,19 +272,13 @@ def _device_scene(scene, implant):
 def _scene_stim(model, scene, gaze):
     """Prepare electrode stimulation sampled from a scene."""
     if not model.has_space:
-        raise ValueError("A scene is registered against the retina, which "
-                         "needs a spatial model. This model has only a "
-                         "temporal one.")
+        raise ValueError("Registering a scene against an implant needs a "
+                         "spatial model. This model has only a temporal one.")
     implant = model.implant
     spatial = model.spatial
-    visual_field_map = getattr(spatial, 'visual_field_map', None)
-    if not isinstance(visual_field_map, RetinalMap):
-        raise ValueError(
-            f"A scene reaches the electrodes through the model's "
-            f"'visual_field_map', which has to say where on the retina each "
-            f"degree of visual angle lands. This model's is a "
-            f"{type(visual_field_map).__name__}; "
-            f"registering a scene against a cortical map is not implemented.")
+    # Up here rather than next to its use below: a model that cannot register
+    # a scene at all is refused before the scene is preprocessed.
+    x_vf, y_vf = spatial._scene_sampling_points()
     if implant.encoder is None:
         raise ValueError(
             "A scene is a picture, and there is no principled default for "
@@ -293,9 +286,6 @@ def _scene_stim(model, scene, gaze):
             "'encoder' (e.g. an AmplitudeEncoder, or a PRIMAEncoder for a "
             "photovoltaic device) to say how.")
     device_scene = _device_scene(scene, implant)
-    xy = _placed_coords(spatial, implant.electrode_array,
-                        visual_field_map.tissue_unit)[:, :2].T
-    x_vf, y_vf = visual_field_map.ret_to_dva(*xy)
     frame = implant.scene_input_frame
     if frame not in ('eye', 'head'):
         # Validate class defaults as well as instance overrides:
@@ -1161,6 +1151,21 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def _postprocess_spatial(self, resp):
         """Hook for spatial-model postprocessing."""
         return resp
+
+    def _scene_sampling_points(self):
+        """Return placed electrode positions in dva, for sampling a scene.
+
+        Where an electrode lands in the visual field follows from the tissue
+        a model stimulates, so only a subclass that models one can answer.
+
+        Returns
+        -------
+        x, y : tuple of ndarray
+            Visual field coordinates in dva, in electrode-array order.
+        """
+        raise NotImplementedError(
+            f"Scene-to-electrode registration is not implemented for "
+            f"{type(self).__name__}.")
 
     def predict_percept(self, source, t_percept=None):
         """Predict the spatial response.

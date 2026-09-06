@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.models.retina.RetinalSpatial`"""
 import numpy as np
 
-from ..base import SpatialModel, _length_valued
+from ..base import SpatialModel, _length_valued, _placed_coords
 from ...topography.retina import Curcio1990Map, RetinalMap
 from ...units import DimensionMismatchError, as_value
 
@@ -72,6 +72,22 @@ class RetinalSpatial(SpatialModel):
         """Return a dictionary of default values for all model parameters"""
         return {**super().get_default_params(),
                 'visual_field_map': Curcio1990Map()}
+
+    def _scene_sampling_points(self):
+        """Return placed electrode positions in dva, through retinotopy.
+
+        See :py:meth:`~pulse2percept.models.SpatialModel`.
+        """
+        visual_field_map = self.visual_field_map
+        if not isinstance(visual_field_map, RetinalMap):
+            raise ValueError(
+                f"A scene reaches the electrodes through the model's "
+                f"'visual_field_map', which has to say where on the retina "
+                f"each degree of visual angle lands. This model's is a "
+                f"{type(visual_field_map).__name__}.")
+        xy = _placed_coords(self, self.implant.electrode_array,
+                            visual_field_map.tissue_unit)[:, :2].T
+        return visual_field_map.ret_to_dva(*xy)
 
     def _normalize_param_value(self, name, value):
         """Normalize a parameter to its stored unit.

@@ -13,7 +13,7 @@ import pytest
 
 from pulse2percept.implants import (ElectrodeArray, ElectrodeGrid,
                                     Implant, PointSource)
-from pulse2percept.models import FadingTemporal, Model
+from pulse2percept.models import FadingTemporal, Model, SpatialModel
 from pulse2percept.models.retina import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.models.base import _placement_shift, _scene_stim
 from pulse2percept.models.cortex import ScoreboardModel as CortexScoreboard
@@ -364,24 +364,73 @@ def test_scene_preprocessing_must_preserve_the_frame_clock():
                             [0.8, 0.2], decimal=3)
 
 
-def test_a_scene_needs_an_encoder_and_a_retina():
+def test_a_scene_needs_an_encoder_and_a_spatial_model():
     """Both failures name what is missing rather than dying downstream"""
     scene = scene_of()
     with pytest.raises(ValueError) as excinfo:
         model_for(implant_at(0, 0, encoder=False)).predict_percept(scene)
     npt.assert_equal('encoder' in str(excinfo.value), True)
-    # A cortical model has no retinotopy to follow an electrode out along:
-    cortical = CortexScoreboard(implant=implant_at(0, 0), rho=200,
-                                xrange=(-3, 3), yrange=(-3, 3),
-                                step=1).build()
-    with pytest.raises(ValueError) as excinfo:
-        cortical.predict_percept(scene)
-    npt.assert_equal('visual_field_map' in str(excinfo.value), True)
-    # ... and neither has a temporal-only model:
+    # A temporal-only model has no electrodes to place in the scene:
     from pulse2percept.models.retina import Nanduri2012Temporal
     temporal = Model(temporal=Nanduri2012Temporal()).build()
     with pytest.raises(ValueError):
         temporal.predict_percept(scene)
+
+
+class BareSpatial(SpatialModel):
+    """A spatial model on the anatomy-neutral base"""
+
+    def get_default_params(self):
+        return {**super().get_default_params(),
+                'visual_field_map': Curcio1990Map()}
+
+    def _predict_spatial(self, electrode_array, stim):
+        n_time = 1 if stim.time is None else stim.time.size
+        return np.zeros((self.grid.x.size, n_time), dtype=np.float32)
+
+
+def test_scene_registration_is_a_spatial_model_capability():
+    """`models.base` refuses through the model, not by naming its anatomy
+
+    Sampling a scene needs to know where an electrode lands in the visual
+    field, which only a model of some tissue can say. A model that does not
+    implement `_scene_sampling_points` refuses by name, and nothing in
+    `models.base` inspects what kind of model it is.
+    """
+    scene = scene_of()
+    # A cortical model has no retinotopy to follow an electrode out along:
+    cortical = CortexScoreboard(implant=implant_at(0, 0), rho=200,
+                                xrange=(-3, 3), yrange=(-3, 3),
+                                step=1).build()
+    with pytest.raises(NotImplementedError) as excinfo:
+        cortical.predict_percept(scene)
+    npt.assert_equal('ScoreboardSpatial' in str(excinfo.value), True)
+    # ... and neither does a bare spatial model:
+    bare = Model(spatial=BareSpatial(implant_at(0, 0), xrange=(-3, 3),
+                                     yrange=(-3, 3), step=1)).build()
+    with pytest.raises(NotImplementedError) as excinfo:
+        bare.predict_percept(scene)
+    npt.assert_equal('BareSpatial' in str(excinfo.value), True)
+    # A retinal model handed a map with no retinotopy says which one it is:
+    retinal = model_for(implant_at(0, 0))
+    retinal.spatial.visual_field_map = Polimeni2006Map()
+    with pytest.raises(ValueError) as excinfo:
+        retinal.predict_percept(scene)
+    npt.assert_equal('visual_field_map' in str(excinfo.value), True)
+
+
+def test_scene_sampling_points_are_the_registration_the_model_uses():
+    """The hook reports exactly the coordinates the sampling path uses"""
+    x_dva = 4.0
+    visual_field_map = Curcio1990Map()
+    implant = implant_at(*visual_field_map.dva_to_ret(x_dva, 0.0))
+    model = model_for(implant, visual_field_map=visual_field_map)
+    x_vf, y_vf = model.spatial._scene_sampling_points()
+    npt.assert_almost_equal(x_vf, [x_dva])
+    npt.assert_almost_equal(y_vf, [0.0])
+    # Same numbers the encoder saw, read back off the gray level it sampled:
+    npt.assert_almost_equal(seen_by(model, scene_of()).ravel(),
+                            [ramp_at(x_dva)], decimal=3)
 
 
 def test_an_unbuilt_model_builds_itself_before_it_samples_anything():

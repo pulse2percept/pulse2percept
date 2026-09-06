@@ -302,9 +302,12 @@ stimulation belongs to the encoder. Pixel values and channels may change, but
 spatial shape and frame timing must remain unchanged because ``fov`` and the
 frame clock refer to the original scene.
 
-Scene registration currently requires a retinal ``visual_field_map`` and an
-implant ``encoder``. A cortical ``visual_field_map`` or a missing encoder
-raises ``ValueError``.
+Scene registration is a spatial-model capability: a model has to say where in
+the visual field each of its electrodes lands. Only retinal models
+(:py:class:`~pulse2percept.models.retina.RetinalSpatial`) implement it, through
+their retinotopy; any other spatial model raises ``NotImplementedError``. A
+retinal model given a non-retinotopic ``visual_field_map``, or an implant
+without an ``encoder``, raises ``ValueError``.
 
 Residual vision
 ~~~~~~~~~~~~~~~

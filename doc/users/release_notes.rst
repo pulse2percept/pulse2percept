@@ -107,10 +107,13 @@ Models
 
 * New :py:class:`~pulse2percept.models.retina.RetinalSpatial` owns the retinal
   half of the old :py:class:`~pulse2percept.models.SpatialModel`: the default
-  retinotopic map, and reading a physical retinal extent as shorthand for
-  ``xrange``/``yrange``. :py:class:`~pulse2percept.models.SpatialModel` is now
-  anatomy-neutral and raises if built without a ``visual_field_map``
-  (:pull:`888`).
+  retinotopic map, reading a physical retinal extent as shorthand for
+  ``xrange``/``yrange``, and registering a scene against the electrodes.
+  :py:class:`~pulse2percept.models.SpatialModel` is now anatomy-neutral: it
+  raises if built without a ``visual_field_map``, and predicting from a
+  :py:class:`~pulse2percept.vision.Scene` on a model that does not implement
+  the registration (a cortical one, for now) raises ``NotImplementedError``
+  rather than ``ValueError`` (:pull:`888`).
 
 * Model constructors now expose their supported parameters explicitly instead
   of accepting arbitrary ``**params``. Composite models no longer forward
