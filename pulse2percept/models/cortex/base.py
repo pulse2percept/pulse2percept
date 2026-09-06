@@ -307,7 +307,7 @@ class ScoreboardSpatial(CortexSpatial):
         meridian. Default: 0.1. Set to 0 to disable.
 
         .. versionadded:: 0.10.0
-    visual_field_map : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
@@ -511,7 +511,7 @@ class ScoreboardModel(Model):
         meridian. Default: 0.1. Set to 0 to disable.
 
         .. versionadded:: 0.10.0
-    visual_field_map : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
         By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
