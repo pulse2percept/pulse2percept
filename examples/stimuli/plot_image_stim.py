@@ -175,8 +175,8 @@ from pulse2percept.implants import AlphaAMS
 implant = AlphaAMS()
 
 # Simulate only what we need (14x14 deg sampled at 0.1 deg):
-model = p2p.models.ScoreboardModel(implant=implant, xrange=(-7, 7),
-                                   yrange=(-7, 7), step=0.1)
+model = p2p.models.retina.ScoreboardModel(implant=implant, xrange=(-7, 7),
+                                          yrange=(-7, 7), step=0.1)
 model.build()
 
 # Show the visual field we're simulating (dashed lines) atop the implant:
@@ -212,14 +212,14 @@ stim_gray = logo_gray.resize(implant.shape).encode()
 #    ``preprocess`` method.
 #
 # Then the stimulus can be passed to the model's
-# :py:meth:`~pulse2percept.models.ScoreboardModel.predict_percept` method:
+# :py:meth:`~pulse2percept.models.retina.ScoreboardModel.predict_percept` method:
 
 percept_gray = model.predict_percept(stim_gray)
 
 ##############################################################################
 # .. note ::
 #
-#     :py:class:`~pulse2percept.models.ScoreboardModel` has no temporal
+#     :py:class:`~pulse2percept.models.retina.ScoreboardModel` has no temporal
 #     component, so it reports the instantaneous brightness of each frame of
 #     the pulse train. :py:meth:`~pulse2percept.percepts.Percept.plot` shows
 #     the brightest of them.
@@ -317,16 +317,16 @@ stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
 # ---------------------------------------------------
 #
 # Now, if we passed the new stimulus to
-# :py:class:`~pulse2percept.models.ScoreboardModel`, it would simply apply the
+# :py:class:`~pulse2percept.models.retina.ScoreboardModel`, it would simply apply the
 # model (in space) to every time point in the stimulus.
 # To get a proper temporal response, we need to extend the scoreboard model
 # with a proper temporal model, such as
-# :py:class:`~pulse2percept.models.Horsager2009Temporal`:
+# :py:class:`~pulse2percept.models.retina.Horsager2009Temporal`:
 
 model = p2p.models.Model(
-    p2p.models.ScoreboardSpatial(implant, xrange=(-7, 7), yrange=(-7, 7),
-                                 step=0.1, rho=50),
-    p2p.models.Horsager2009Temporal())
+    p2p.models.retina.ScoreboardSpatial(implant, xrange=(-7, 7), yrange=(-7, 7),
+                                        step=0.1, rho=50),
+    p2p.models.retina.Horsager2009Temporal())
 
 ##############################################################################
 # .. note::

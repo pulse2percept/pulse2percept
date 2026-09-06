@@ -697,7 +697,7 @@ class Implant(PrettyPrint):
 
         A :py:class:`~pulse2percept.implants.Implant` can be implanted
         either in a left eye ('LE') or right eye ('RE'). Models such as
-        :py:class:`~pulse2percept.models.AxonMapModel` will treat left and
+        :py:class:`~pulse2percept.models.retina.AxonMapModel` will treat left and
         right eyes differently (for example, adjusting the location of the
         optic disc).
 

@@ -40,7 +40,7 @@ Let's say we want to create a 2x3 rectangular grid of
 
 """
 # sphinx_gallery_thumbnail_number = 3
-from pulse2percept.models import AxonMapModel
+from pulse2percept.models.retina import AxonMapModel
 from numpy import pi
 from pulse2percept.implants import DiskElectrode
 from pulse2percept.implants import ElectrodeGrid

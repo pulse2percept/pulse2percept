@@ -125,12 +125,12 @@ plot_argus_phosphenes(data, argus)
 # eye.
 #
 # To see how the phosphene drawings line up with the NFBs, we can also pass an
-# :py:class:`~pulse2percept.models.AxonMapModel` to the function.
+# :py:class:`~pulse2percept.models.retina.AxonMapModel` to the function.
 # Of course, we need to make sure that we use the correct dimensions. Subject
 # S2 had their optic disc center located 16.2 deg nasally, 1.38 deg superior
 # from the fovea:
 
-from pulse2percept.models import AxonMapModel
+from pulse2percept.models.retina import AxonMapModel
 model = AxonMapModel(argus, loc_od=(16.2, 1.38))
 plot_argus_phosphenes(data, argus, axon_map=model)
 
@@ -138,7 +138,7 @@ plot_argus_phosphenes(data, argus, axon_map=model)
 # Predicting phosphene shape
 # --------------------------
 #
-# In addition, the :py:class:`~pulse2percept.models.AxonMapModel` is well
+# In addition, the :py:class:`~pulse2percept.models.retina.AxonMapModel` is well
 # suited to predict the shape of individual phosphenes. Using the values given
 # in [Beyeler2019]_, we can tailor the axon map parameters to Subject 2:
 
@@ -167,7 +167,7 @@ stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
 
 ###############################################################################
 # Using the model's
-# :py:func:`~pulse2percept.models.AxonMapModel.predict_percept`, we then get
+# :py:func:`~pulse2percept.models.retina.AxonMapModel.predict_percept`, we then get
 # a Percept object where each frame is the percept generated from activating
 # a single electrode:
 

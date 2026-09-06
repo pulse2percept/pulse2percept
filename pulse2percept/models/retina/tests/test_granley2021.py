@@ -13,14 +13,14 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    BiphasicPulse, BiphasicPulseTrain,
                                    ImageStimulus, LogoBVL, MonophasicPulse,
                                    Stimulus, VideoStimulus)
-from pulse2percept.models import (AlphaTemporal, AxonMapSpatial,
-                                  BiphasicAxonMapModel,
-                                  BiphasicAxonMapSpatial,
-                                  BiphasicScoreboardModel,
-                                  BiphasicScoreboardSpatial, FadingTemporal,
-                                  Horsager2009Temporal, Model,
-                                  Nanduri2012Temporal, ScoreboardModel)
-from pulse2percept.models.granley2021 import DefaultBrightModel, \
+from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
+from pulse2percept.models.retina import (AxonMapSpatial, BiphasicAxonMapModel,
+                                         BiphasicAxonMapSpatial,
+                                         BiphasicScoreboardModel,
+                                         BiphasicScoreboardSpatial,
+                                         Horsager2009Temporal,
+                                         Nanduri2012Temporal, ScoreboardModel)
+from pulse2percept.models.retina.granley2021 import DefaultBrightModel, \
     DefaultSizeModel, DefaultStreakModel
 from pulse2percept.units import (DimensionMismatchError, Hz, Quantity,
                                  dimensionless, mm, ms, s, uA, um,
@@ -513,7 +513,7 @@ def test_BiphasicAxonMapModel_rejects_nonfinite_effects(attr, bad):
 
 def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
     # With every effect factor at 1, this model *is* the axon map model
-    from pulse2percept.models import AxonMapModel
+    from pulse2percept.models.retina import AxonMapModel
 
     kwargs = {'xrange': (-8, 8), 'yrange': (-8, 8), 'step': 0.5,
               'rho': 200, 'lam': 800, 'verbose': False}

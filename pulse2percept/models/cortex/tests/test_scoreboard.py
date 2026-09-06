@@ -5,7 +5,7 @@ import copy
 import matplotlib.pyplot as plt
 
 from pulse2percept.models.cortex import ScoreboardModel, ScoreboardSpatial
-from pulse2percept.models import ScoreboardSpatial as BeyelerScoreboard
+from pulse2percept.models.retina import ScoreboardSpatial as BeyelerScoreboard
 from pulse2percept.implants.cortex import Cortivis, Orion, LinearEdgeThread
 from pulse2percept.implants import ArgusII
 from pulse2percept.topography.cortex import Polimeni2006Map

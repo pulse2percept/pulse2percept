@@ -1,19 +1,19 @@
-""":py:class:`~pulse2percept.models.Thompson2003Model`,
-   :py:class:`~pulse2percept.models.Thompson2003Spatial` [Thompson2003]_"""
+""":py:class:`~pulse2percept.models.retina.Thompson2003Model`,
+   :py:class:`~pulse2percept.models.retina.Thompson2003Spatial` [Thompson2003]_"""
 
 import numpy as np
 import copy
-from ..utils import sample
-from ..topography.retina import Curcio1990Map
-from ..units import um
-from ..models import Model, SpatialModel
-from .base import _thread_params, _warn_ignores_z
+from ...utils import sample
+from ...topography.retina import Curcio1990Map
+from ...units import um
+from ..base import Model, _thread_params, _warn_ignores_z
+from .base import RetinalSpatial
 from ._thompson2003 import fast_thompson2003
 
 import warnings
 
 
-class Thompson2003Spatial(SpatialModel):
+class Thompson2003Spatial(RetinalSpatial):
     r"""Spatial model of [Thompson2003]_.
 
     Models each electrode as a circular phosphene with uniform brightness
@@ -43,7 +43,7 @@ class Thompson2003Spatial(SpatialModel):
     ``z`` coordinates are ignored.
 
     Use this class to combine the spatial model with a temporal model. Use
-    :py:class:`~pulse2percept.models.Thompson2003Model` for the standalone
+    :py:class:`~pulse2percept.models.retina.Thompson2003Model` for the standalone
     spatial model.
 
     Parameters
@@ -181,7 +181,7 @@ class Thompson2003Spatial(SpatialModel):
 class Thompson2003Model(Model):
     r"""Standalone spatial model of [Thompson2003]_.
 
-    Uses :py:class:`~pulse2percept.models.Thompson2003Spatial` without a
+    Uses :py:class:`~pulse2percept.models.retina.Thompson2003Spatial` without a
     temporal component. See that class for the top-hat disk equation and
     dropout model.
 

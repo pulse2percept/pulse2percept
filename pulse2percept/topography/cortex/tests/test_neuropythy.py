@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from pulse2percept.implants import ArgusII, EnsembleImplant
 from pulse2percept.implants.cortex import Neuralink
-from pulse2percept.models import ScoreboardModel as BeyelerScoreboard
+from pulse2percept.models.retina import ScoreboardModel as BeyelerScoreboard
 from pulse2percept.models.cortex import ScoreboardModel
 from pulse2percept.topography.cortex import CorticalMap, NeuropythyMap
 from pulse2percept.units import DimensionMismatchError, dva, mm, um

@@ -119,7 +119,7 @@ implant = p2p.implants.ArgusII(
 # described by a :py:class:`~pulse2percept.models.Model` object, such as the
 # axon map model:
 
-model = p2p.models.AxonMapModel(implant=implant)
+model = p2p.models.retina.AxonMapModel(implant=implant)
 # One percept frame per video frame: a spatial model reads the modulation the
 # encoder asked for, not the pulse train realizing it.
 percept = model.predict_percept(video)

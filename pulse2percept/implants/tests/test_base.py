@@ -22,7 +22,7 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, FrequencyEncoder,
                                    MonophasicPulse)
 from pulse2percept.implants import (ArgusII, DiskElectrode)
-from pulse2percept.models import ScoreboardModel, ScoreboardSpatial
+from pulse2percept.models.retina import ScoreboardModel, ScoreboardSpatial
 
 
 class PhotovoltaicArray(Implant):

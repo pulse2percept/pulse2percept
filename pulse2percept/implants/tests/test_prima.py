@@ -20,7 +20,7 @@ from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
                                    Stimulus)
 from pulse2percept.units import DimensionMismatchError, deg, mW, mm, um, xTh
 from pulse2percept.utils.constants import ZORDER
-from pulse2percept.models import ScoreboardModel
+from pulse2percept.models.retina import ScoreboardModel
 
 def test_PhotovoltaicPixel():
     electrode = PhotovoltaicPixel(0, 1, 2, 3, 4)

@@ -29,7 +29,7 @@ grid (575 um center-to-center separation) [Yue2020]_.
 
 import matplotlib.pyplot as plt
 from pulse2percept.implants import *
-from pulse2percept.models import AxonMapModel
+from pulse2percept.models.retina import AxonMapModel
 
 fig, ax = plt.subplots(ncols=2, figsize=(10, 6))
 

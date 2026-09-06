@@ -1,17 +1,17 @@
-""":py:class:`~pulse2percept.models.BiphasicAxonMapModel`,
-   :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial`,
-   :py:class:`~pulse2percept.models.BiphasicScoreboardModel`,
-   :py:class:`~pulse2percept.models.BiphasicScoreboardSpatial`
+""":py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`,
+   :py:class:`~pulse2percept.models.retina.BiphasicAxonMapSpatial`,
+   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`,
+   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial`
    [Granley2021]_"""
 import numpy as np
 from copy import deepcopy
 
-from . import AxonMapSpatial, Model, ScoreboardSpatial
-from ..implants import ElectrodeArray
-from ..stimuli import BiphasicPulseTrain, Stimulus
-from ..percepts import Percept
-from ..units import as_value, um, xTh
-from .base import BaseModel, _require_stim_dimension, _warn_ignores_z
+from ...implants import ElectrodeArray
+from ...stimuli import BiphasicPulseTrain, Stimulus
+from ...percepts import Percept
+from ...units import as_value, um, xTh
+from ..base import BaseModel, Model, _require_stim_dimension, _warn_ignores_z
+from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
 from ._granley2021 import (fast_biphasic_axon_map,
                            fast_biphasic_scoreboard)
 
@@ -480,7 +480,7 @@ class _BiphasicSpatialMixin:
 class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
     r"""Biphasic axon-map model of [Granley2021]_ (spatial module only).
 
-    Extends :py:class:`~pulse2percept.models.AxonMapSpatial` with the
+    Extends :py:class:`~pulse2percept.models.retina.AxonMapSpatial` with the
     stimulus-dependent brightness, size, and streak-length scaling of
     [Granley2021]_. The model returns one representative spatial percept for the
     full biphasic pulse train.
@@ -735,7 +735,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
 class BiphasicAxonMapModel(Model):
     r"""Biphasic axon-map model of [Granley2021]_.
 
-    Extends :py:class:`~pulse2percept.models.AxonMapModel` with the
+    Extends :py:class:`~pulse2percept.models.retina.AxonMapModel` with the
     stimulus-dependent brightness, size, and streak-length scaling of
     [Granley2021]_. The model returns one representative percept for the full
     biphasic pulse train.
@@ -908,7 +908,7 @@ class BiphasicAxonMapModel(Model):
         import pulse2percept as p2p
 
         implant = p2p.implants.ArgusII(thresholds=80 * p2p.units.uA)
-        model = p2p.models.BiphasicAxonMapModel(implant=implant)
+        model = p2p.models.retina.BiphasicAxonMapModel(implant=implant)
         percept = model.predict_percept(p2p.stimuli.LogoBVL())
 
     An encoder that asks for threshold multiples in the first place needs no
@@ -919,7 +919,7 @@ class BiphasicAxonMapModel(Model):
         encoder = p2p.stimuli.AmplitudeEncoder(
             amp_range=(0 * p2p.units.xTh, 3 * p2p.units.xTh))
         implant = p2p.implants.ArgusII(encoder=encoder)
-        model = p2p.models.BiphasicAxonMapModel(implant=implant)
+        model = p2p.models.retina.BiphasicAxonMapModel(implant=implant)
         percept = model.predict_percept(p2p.stimuli.LogoBVL())
     """
 
@@ -963,7 +963,7 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
     r"""Biphasic scoreboard model (spatial module only).
 
     Spatial component of
-    :py:class:`~pulse2percept.models.BiphasicScoreboardModel`, for pairing
+    :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`, for pairing
     with a temporal model in a :py:class:`~pulse2percept.models.Model`. The
     stimulus contract, effect models, spatial response, and validation caveat
     are described there. In a composite model this spatial prediction is
@@ -1097,10 +1097,10 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
 class BiphasicScoreboardModel(Model):
     r"""Biphasic scoreboard model.
 
-    Extends :py:class:`~pulse2percept.models.ScoreboardModel` with the
+    Extends :py:class:`~pulse2percept.models.retina.ScoreboardModel` with the
     stimulus-dependent brightness and size scaling of [Granley2021]_, but
     without the axonal streak term of
-    :py:class:`~pulse2percept.models.BiphasicAxonMapModel`: phosphenes stay
+    :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`: phosphenes stay
     round and centered on the electrode.
 
     Stimuli must describe the cathodic-first pulse train they deliver, rather
@@ -1220,7 +1220,7 @@ class BiphasicScoreboardModel(Model):
 
         import pulse2percept as p2p
 
-        model = p2p.models.BiphasicScoreboardModel(p2p.implants.ArgusII())
+        model = p2p.models.retina.BiphasicScoreboardModel(p2p.implants.ArgusII())
         train = p2p.stimuli.BiphasicPulseTrain(20, 2 * p2p.units.xTh, 0.45)
         percept = model.predict_percept({'C5': train})
 
@@ -1230,7 +1230,7 @@ class BiphasicScoreboardModel(Model):
     .. code-block:: python
 
         implant = p2p.implants.ArgusII(thresholds=80 * p2p.units.uA)
-        model = p2p.models.BiphasicScoreboardModel(implant=implant)
+        model = p2p.models.retina.BiphasicScoreboardModel(implant=implant)
         percept = model.predict_percept(p2p.stimuli.LogoBVL())
     """
 

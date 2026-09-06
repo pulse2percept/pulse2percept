@@ -27,7 +27,7 @@ Attach an encoder to an implant, then hand it an image or video:
         freq=20,
     )
 
-    model = p2p.models.ScoreboardModel(implant=implant)
+    model = p2p.models.retina.ScoreboardModel(implant=implant)
     percept = model.predict_percept(p2p.stimuli.BostonTrain())
 
 Dimensionless input is encoded when the implant prepares it. Electrical stimuli
@@ -121,7 +121,7 @@ For example:
 
 .. code-block:: python
 
-    model = p2p.models.ScoreboardModel(implant=implant)
+    model = p2p.models.retina.ScoreboardModel(implant=implant)
     percept = model.predict_percept(p2p.stimuli.LogoBVL())
 
 Here ``ScoreboardModel`` visualizes implant geometry and optical drive. It does

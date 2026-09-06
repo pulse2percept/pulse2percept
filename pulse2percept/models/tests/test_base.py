@@ -18,12 +18,13 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    BostonTrain, ImageStimulus, LogoBVL,
                                    Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
-from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
-                                  BiphasicAxonMapModel, FadingTemporal,
-                                  Horsager2009Model, Model, Nanduri2012Model,
-                                  ScoreboardModel, ScoreboardSpatial,
-                                  SpatialModel, TemporalModel,
-                                  Thompson2003Model)
+from pulse2percept.models import (BaseModel, FadingTemporal, Model,
+                                  SpatialModel, TemporalModel)
+from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
+                                         BiphasicAxonMapModel,
+                                         Horsager2009Model, Nanduri2012Model,
+                                         ScoreboardModel, ScoreboardSpatial,
+                                         Thompson2003Model)
 from pulse2percept.models.base import _blend_meridian
 from pulse2percept.models.cortex import (DynaphosModel,
                                          ScoreboardModel as
@@ -308,9 +309,11 @@ def test_SpatialModel_plot():
     model = ValidSpatialModel(ArgusI(), xrange=(-20.5, 20.5),
                               yrange=(-16.1, 16.1))
     model.build()
-    ax = model.plot(use_dva=True)
+    # A fresh axes each time: `plot` autoscales onto the current one, so a
+    # figure left over from another test would widen these limits.
+    ax = model.plot(use_dva=True, ax=plt.subplots()[1])
     npt.assert_almost_equal(ax.get_xlim(), (-22.55, 22.55))
-    ax = model.plot(use_dva=False)
+    ax = model.plot(use_dva=False, ax=plt.subplots()[1])
     npt.assert_almost_equal(ax.get_xlim(), (-6122.87, 6122.87), decimal=2)
     npt.assert_almost_equal(ax.get_ylim(), (-4808.7, 4808.7), decimal=2)
 
@@ -1279,7 +1282,9 @@ class RecordingSpatial(SpatialModel):
     space_unit = um
 
     def get_default_params(self):
-        return {**super().get_default_params(), 'seen': None}
+        # `SpatialModel` is anatomy-neutral and supplies no map of its own:
+        return {**super().get_default_params(), 'seen': None,
+                'visual_field_map': Curcio1990Map()}
 
     def _predict_spatial(self, electrode_array, stim):
         x, y, z = self._electrode_coords(electrode_array, stim)
@@ -1810,7 +1815,8 @@ def test_models_accept_read_only_stimulus_data():
     # stimulus stores it read-only. A memoryview that is not declared `const`
     # rejects such an array outright ("buffer source array is read-only"),
     # which is a failure no numerical test would catch on its own.
-    from pulse2percept.models import Nanduri2012Spatial, Nanduri2012Temporal
+    from pulse2percept.models.retina import (Nanduri2012Spatial,
+                                             Nanduri2012Temporal)
     implant = ArgusII()
     source = {'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=20)}
     stim = implant.prepare_stim(source)

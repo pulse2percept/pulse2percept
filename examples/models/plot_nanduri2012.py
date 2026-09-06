@@ -5,7 +5,7 @@ Nanduri et al. (2012): Frequency vs. amplitude modulation
 ===============================================================================
 
 This example shows how to use the
-:py:class:`~pulse2percept.models.Nanduri2012Model`.
+:py:class:`~pulse2percept.models.retina.Nanduri2012Model`.
 
 The model introduced in [Nanduri2012]_ assumes that electrical stimulation
 leads to percepts that quickly increase in brightness (over the time course
@@ -78,16 +78,16 @@ implant = Implant(electrode_array)
 #
 # In the following, we will run the Nanduri model on a single pixel, (0, 0):
 
-from pulse2percept.models import Nanduri2012Model
+from pulse2percept.models.retina import Nanduri2012Model
 model = Nanduri2012Model(implant=implant, xrange=(0, 0), yrange=(0, 0))
 
 ###############################################################################
 # .. note::
 #
 #     You can also directly instantiate
-#     :py:class:`~pulse2percept.models.Nanduri2012Temporal` and pass a stimulus
+#     :py:class:`~pulse2percept.models.retina.Nanduri2012Temporal` and pass a stimulus
 #     to it. However, please note that there might be subtle differences; e.g.,
-#     :py:class:`~pulse2percept.models.Nanduri2012Model` will pass the stimulus
+#     :py:class:`~pulse2percept.models.retina.Nanduri2012Model` will pass the stimulus
 #     through the spatial model first.
 #
 # The input to the model is the stimulus (usually a pulse train), which the

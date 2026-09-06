@@ -97,10 +97,10 @@ stim.play()
 # Psychophsyics stimuli can be passed to an implant and combined with a model.
 # To demonstrate, we will pass a ``GratingStimululus`` to an
 # :py:class:`~pulse2percept.implants.ArgusII` implant and use the
-# :py:class:`~pulse2percept.models.AxonMapModel` [Beyeler2019]_ to interpret it:
+# :py:class:`~pulse2percept.models.retina.AxonMapModel` [Beyeler2019]_ to interpret it:
 
 from pulse2percept.implants import ArgusII
-from pulse2percept.models import AxonMapModel
+from pulse2percept.models.retina import AxonMapModel
 
 implant = ArgusII()
 model = AxonMapModel(implant=implant)

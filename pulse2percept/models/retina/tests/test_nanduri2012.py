@@ -7,8 +7,8 @@ from pulse2percept.implants import (DiskElectrode, PointSource, ElectrodeArray,
                                     Implant, ArgusI)
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.percepts import Percept
-from pulse2percept.models import (Nanduri2012Model, Nanduri2012Spatial,
-                                  Nanduri2012Temporal)
+from pulse2percept.models.retina import (Nanduri2012Model, Nanduri2012Spatial,
+                                         Nanduri2012Temporal)
 from pulse2percept.utils import FreezeError
 
 

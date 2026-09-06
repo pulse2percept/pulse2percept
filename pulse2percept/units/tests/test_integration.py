@@ -15,8 +15,8 @@ import pytest
 from pulse2percept.implants import (ArgusII, DiskElectrode, ElectrodeGrid,
                                     EnsembleImplant, Implant)
 from pulse2percept.implants.cortex import Cortivis
-from pulse2percept.models import (AlphaTemporal, AxonMapSpatial,
-                                  FadingTemporal, Model, ScoreboardSpatial)
+from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
+from pulse2percept.models.retina import AxonMapSpatial, ScoreboardSpatial
 from pulse2percept.models.cortex import (ScoreboardSpatial as
                                          CortexScoreboardSpatial)
 from pulse2percept.percepts import Percept

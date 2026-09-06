@@ -25,7 +25,7 @@ Four objects capture that situation:
 import matplotlib.pyplot as plt
 
 from pulse2percept.implants import PRIMAPivotal
-from pulse2percept.models import ScoreboardModel
+from pulse2percept.models.retina import ScoreboardModel
 from pulse2percept.stimuli import LogoBVL
 from pulse2percept.units import dva
 from pulse2percept.vision import Scene, Scotoma

@@ -17,7 +17,7 @@ Highlights
   .. code-block:: python
 
       implant = p2p.implants.ArgusII()
-      model = p2p.models.AxonMapModel(implant)
+      model = p2p.models.retina.AxonMapModel(implant)
       percept = model.predict_percept(stim)
 
 * New :py:mod:`pulse2percept.vision` module with
@@ -82,19 +82,49 @@ Implants
 Models
 ~~~~~~
 
+* Models moved into anatomical subpackages:
+  :py:mod:`pulse2percept.models` now holds only the abstract model classes and
+  the generic temporal models, with the models themselves under
+  ``models.retina`` and ``models.cortex``. The old flat paths were removed,
+  not deprecated (:pull:`888`):
+
+  .. code-block:: python
+
+      # before
+      from pulse2percept.models import AxonMapModel
+      p2p.models.Nanduri2012Model(implant)
+
+      # v0.11
+      from pulse2percept.models.retina import AxonMapModel
+      p2p.models.retina.Nanduri2012Model(implant)
+
+  Implementation modules moved with them, so
+  ``pulse2percept.models.beyeler2019`` is now
+  ``pulse2percept.models.retina.beyeler2019``. The cortical scoreboard moved
+  out of ``models.cortex.base`` into ``models.cortex.scoreboard``, and both
+  scoreboards now share the same Gaussian spread kernels in
+  ``pulse2percept.models._scoreboard``.
+
+* New :py:class:`~pulse2percept.models.retina.RetinalSpatial` owns the retinal
+  half of the old :py:class:`~pulse2percept.models.SpatialModel`: the default
+  retinotopic map, and reading a physical retinal extent as shorthand for
+  ``xrange``/``yrange``. :py:class:`~pulse2percept.models.SpatialModel` is now
+  anatomy-neutral and raises if built without a ``visual_field_map``
+  (:pull:`888`).
+
 * Model constructors now expose their supported parameters explicitly instead
   of accepting arbitrary ``**params``. Composite models no longer forward
   component attributes: spatial and temporal parameters are accessed through
   ``model.spatial`` and ``model.temporal`` (:pull:`879`).
 
-* New :py:class:`~pulse2percept.models.BiphasicScoreboardModel` and
-  :py:class:`~pulse2percept.models.BiphasicScoreboardSpatial` apply the
+* New :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` and
+  :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` apply the
   [Granley2021]_ brightness and size fits to round, electrode-centered
   phosphenes, without the axonal streak (:pull:`886`).
 
-* :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
+* :py:class:`~pulse2percept.models.retina.ScoreboardSpatial` can consume normalized
   photovoltaic drive, and
-  :py:class:`~pulse2percept.models.BiphasicAxonMapModel` can predict directly
+  :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel` can predict directly
   from still images encoded with the standard biphasic pipeline
   (:pull:`868`, :pull:`869`).
 
@@ -175,7 +205,7 @@ Bug fixes
 
 * Corrected PRIMA-family pixel dimensions and layouts (:pull:`865`).
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` now respects
+* :py:class:`~pulse2percept.models.retina.BiphasicAxonMapSpatial` now respects
   ``n_gray`` and preserves the full stimulus in percept metadata
   (:pull:`869`).
 
@@ -236,11 +266,11 @@ API changes:
   selected output intervals. :py:class:`~pulse2percept.models.FadingTemporal`
   now responds only to cathodic current (:pull:`818`)
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` now distinguishes
+* :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel` now distinguishes
   physical current from threshold-relative amplitude via the new ``xTh`` unit
   (:pull:`848`)
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` can now be composed
+* :py:class:`~pulse2percept.models.retina.BiphasicAxonMapSpatial` can now be composed
   with temporal models using a space-time-separable approximation (:pull:`847`)
 
 * Model parameter ``xystep`` was renamed to ``step`` and ``axlambda`` to
@@ -280,9 +310,9 @@ Highlights:
    pulse2percept no longer downgrades NumPy in environments that ship it, such
    as Google Colab (:pull:`635`, :pull:`736`)
 *  Removed the jax engine and ``predict_percept_batched`` from
-   :py:class:`~pulse2percept.models.BiphasicAxonMapModel`; the ``engine``
+   :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`; the ``engine``
    argument of the effect models and the ``pad`` argument of
-   :py:meth:`~pulse2percept.models.AxonMapSpatial.calc_axon_sensitivity` are
+   :py:meth:`~pulse2percept.models.retina.AxonMapSpatial.calc_axon_sensitivity` are
    deprecated, and will be removed in v0.10.0 (:pull:`788`)
 *  Removed the ``model_selection`` module (:pull:`685`) and support for the
    joblib and dask parallel backends (:pull:`686`); the ``engine`` and
@@ -328,9 +358,9 @@ Highlights:
 
 *  New implants: :py:class:`~pulse2percept.implants.BVT44` [Petoe2021]_
    (:pull:`465`)
-*  New models: :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
+*  New models: :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
    [Granley2021]_ (:pull:`398`) and
-   :py:class:`~pulse2percept.models.Thompson2003Model` [Thompson2003]_
+   :py:class:`~pulse2percept.models.retina.Thompson2003Model` [Thompson2003]_
    (:pull:`448`)
 *  New datasets: :py:func:`~pulse2percept.datasets.load_greenwald2009`
    [Greenwald2009]_ (:pull:`459`) and
@@ -349,7 +379,7 @@ Highlights:
 *  Add :py:class:`~pulse2percept.models.FadingTemporal`, a generic phosphene fading model (:pull:`378`)
 *  Various implant usability and speed upgrades (:pull:`375`, :pull:`382`, :pull:`383`, :pull:`386`)
 *  Various stimulus usability and speed upgrades (:pull:`382`, :pull:`383`, :pull:`384`, :pull:`385`)
-*  Improve documentation and usability of various :py:class:`~pulse2percept.models.AxonMapModel` methods (:pull:`370`)
+*  Improve documentation and usability of various :py:class:`~pulse2percept.models.retina.AxonMapModel` methods (:pull:`370`)
 
 v0.7.0 Implants (2021-04-04)
 ============================
@@ -371,7 +401,7 @@ Highlights:
 *  New datasets: :py:class:`~pulse2percept.datasets.load_nanduri2012`
    (:pull:`250`)
 *  New model selection subpackage (:pull:`311`)
-*  100x speedup of building :py:class:`~pulse2percept.models.AxonMapModel` (:pull:`331`)
+*  100x speedup of building :py:class:`~pulse2percept.models.retina.AxonMapModel` (:pull:`331`)
 *  OpenMP support (:pull:`260`)
 *  Python 3.9 support (:pull:`348`)
 *  Various usability upgrades
@@ -384,10 +414,10 @@ Highlights:
 
 *   New API (:pull:`96`, :pull:`174`, :pull:`178`)
 *   New implants: :py:class:`~pulse2percept.implants.BVA24` (:pull:`161`)
-*   New models: :py:class:`~pulse2percept.models.ScoreboardModel` (:pull:`96`),
-    :py:class:`~pulse2percept.models.AxonMapModel` (:pull:`96`),
-    :py:class:`~pulse2percept.models.Nanduri2012Model` (:pull:`168`),
-    :py:class:`~pulse2percept.models.Horsager2009Model` (:pull:`180`)
+*   New models: :py:class:`~pulse2percept.models.retina.ScoreboardModel` (:pull:`96`),
+    :py:class:`~pulse2percept.models.retina.AxonMapModel` (:pull:`96`),
+    :py:class:`~pulse2percept.models.retina.Nanduri2012Model` (:pull:`168`),
+    :py:class:`~pulse2percept.models.retina.Horsager2009Model` (:pull:`180`)
 *   New stimuli: :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`,
     :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulse`,
     :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`

@@ -145,7 +145,7 @@ for ax, noise, title in zip(
         [None, 1],
         ['Canonical locations', 'Subject-specific locations']):
     np.random.seed(1)
-    model = p2p.models.ScoreboardModel(
+    model = p2p.models.retina.ScoreboardModel(
         implant=implant,
         xrange=(-12, 2),
         yrange=(-7, 7),
@@ -210,7 +210,7 @@ for ax, noise, title in zip(
         [None, 0.3],
         ['Canonical locations', 'Subject-specific locations']):
     np.random.seed(3)
-    model = p2p.models.ScoreboardModel(
+    model = p2p.models.retina.ScoreboardModel(
         implant=implant,
         xrange=(-6, 6),
         yrange=(-6, 6),

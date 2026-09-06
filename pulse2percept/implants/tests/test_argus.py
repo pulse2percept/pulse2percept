@@ -4,7 +4,7 @@ import numpy.testing as npt
 
 from pulse2percept import implants
 from pulse2percept.implants import SequentialRaster
-from pulse2percept.models import AxonMapModel
+from pulse2percept.models.retina import AxonMapModel
 from pulse2percept.stimuli import AmplitudeEncoder, BostonTrain, LogoBVL
 from pulse2percept.units import DimensionMismatchError, uA
 

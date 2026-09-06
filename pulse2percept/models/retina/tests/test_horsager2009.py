@@ -8,7 +8,7 @@ from pulse2percept.implants import Implant, PointSource
 from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
                                    Stimulus)
 from pulse2percept.percepts import Percept
-from pulse2percept.models import Horsager2009Model, Horsager2009Temporal
+from pulse2percept.models.retina import Horsager2009Model, Horsager2009Temporal
 from pulse2percept.utils import FreezeError
 
 

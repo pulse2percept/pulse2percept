@@ -1,5 +1,5 @@
-""":py:class:`~pulse2percept.models.AxonMapModel`,
-   :py:class:`~pulse2percept.models.AxonMapSpatial` [Beyeler2019]_"""
+""":py:class:`~pulse2percept.models.retina.AxonMapModel`,
+   :py:class:`~pulse2percept.models.retina.AxonMapSpatial` [Beyeler2019]_"""
 
 import os
 import numpy as np
@@ -9,16 +9,17 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
-from ..units import deg, dimensionless, dva, um
-from ..utils.constants import UM_PER_MM, ZORDER
-from ..topography.retina import Watson2014Map
-from ..implants import ElectrodeArray
-from ..stimuli import Stimulus
-from ..models import Model, SpatialModel
-from .base import (_blend_meridian, _draw_placed_implant, _thread_params,
-                   _warn_ignores_z, _warn_rho_vs_pitch)
-from ._beyeler2019 import (fast_scoreboard, fast_axon_map, fast_jansonius,
-                           fast_find_closest_axon)        
+from ...units import deg, dimensionless, dva, um
+from ...utils.constants import UM_PER_MM, ZORDER
+from ...topography.retina import Watson2014Map
+from ...implants import ElectrodeArray
+from ...stimuli import Stimulus
+from ..base import (Model, _blend_meridian, _draw_placed_implant,
+                    _thread_params, _warn_ignores_z, _warn_rho_vs_pitch)
+from .._scoreboard import fast_scoreboard
+from .base import RetinalSpatial
+from ._beyeler2019 import (fast_axon_map, fast_jansonius,
+                           fast_find_closest_axon)
 
 import warnings
 
@@ -67,11 +68,11 @@ def _flatten_bundles(bundles):
     return flat, np.concatenate(([0], np.cumsum(lens))), bundle_id
 
 
-class ScoreboardSpatial(SpatialModel):
+class ScoreboardSpatial(RetinalSpatial):
     r"""Scoreboard model of [Beyeler2019]_ (spatial module only).
 
     Models each electrode's percept as a circular Gaussian. Use
-    :py:class:`~pulse2percept.models.ScoreboardModel` for a standalone model.
+    :py:class:`~pulse2percept.models.retina.ScoreboardModel` for a standalone model.
 
     The spatial response is modeled as a Gaussian centered on each electrode:
 
@@ -99,7 +100,7 @@ class ScoreboardSpatial(SpatialModel):
         phosphene size. Doubling amplitude doubles brightness and leaves the
         phosphene exactly as wide, which is not what [Nanduri2012]_
         reports. Use
-        :py:class:`~pulse2percept.models.BiphasicScoreboardSpatial` for
+        :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` for
         pulse-dependent brightness and size.
 
     Parameters
@@ -233,7 +234,7 @@ class ScoreboardModel(Model):
     r"""Scoreboard model of [Beyeler2019]_.
 
     Models each electrode's percept as a circular Gaussian. Use
-    :py:class:`~pulse2percept.models.ScoreboardSpatial` to combine this spatial
+    :py:class:`~pulse2percept.models.retina.ScoreboardSpatial` to combine this spatial
     model with a temporal model.
 
     The spatial response is modeled as a Gaussian centered on each electrode:
@@ -262,7 +263,7 @@ class ScoreboardModel(Model):
         phosphene size. Doubling amplitude doubles brightness and leaves the
         phosphene exactly as wide, which is not what [Nanduri2012]_
         reports. Use
-        :py:class:`~pulse2percept.models.BiphasicScoreboardModel` for
+        :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` for
         pulse-dependent brightness and size.
 
     Parameters
@@ -363,11 +364,11 @@ class ScoreboardModel(Model):
             temporal=None)
 
 
-class AxonMapSpatial(SpatialModel):
+class AxonMapSpatial(RetinalSpatial):
     r"""Axon map model of [Beyeler2019]_ (spatial module only).
 
     Models percepts as activation spread along retinal nerve fiber bundle
-    trajectories. Use :py:class:`~pulse2percept.models.AxonMapModel` for a
+    trajectories. Use :py:class:`~pulse2percept.models.retina.AxonMapModel` for a
     standalone model.
 
     The spatial response extends the scoreboard model by allowing activation
@@ -1152,7 +1153,7 @@ class AxonMapModel(Model):
     r"""Axon map model of [Beyeler2019]_.
 
     Models percepts as activation spread along retinal nerve fiber bundle
-    trajectories. Use :py:class:`~pulse2percept.models.AxonMapSpatial` to
+    trajectories. Use :py:class:`~pulse2percept.models.retina.AxonMapSpatial` to
     combine this spatial model with a temporal model.
 
     The spatial response extends the scoreboard model by allowing activation

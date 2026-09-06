@@ -8,7 +8,7 @@ from pulse2percept.implants import (EnsembleImplant, GridImplant, Implant,
                                     PointSource)
 from pulse2percept.implants.cortex import Cortivis, Orion
 from pulse2percept.topography.cortex import Polimeni2006Map
-from pulse2percept.models.cortex.base import ScoreboardModel
+from pulse2percept.models.cortex import ScoreboardModel
 from pulse2percept.stimuli import BiphasicPulseTrain, MonophasicPulse
 from pulse2percept.utils.constants import DT
 

@@ -1,8 +1,8 @@
-""":py:class:`~pulse2percept.models.Horsager2009Model`,
-   :py:class:`~pulse2percept.models.Horsager2009Temporal` [Horsager2009]_"""
+""":py:class:`~pulse2percept.models.retina.Horsager2009Model`,
+   :py:class:`~pulse2percept.models.retina.Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
-from .base import Model, TemporalModel, _thread_params
-from ..units import ms
+from ..base import Model, TemporalModel, _thread_params
+from ...units import ms
 from ._horsager2009 import temporal_fast
 
 
@@ -51,7 +51,7 @@ class Horsager2009Temporal(TemporalModel):
     and :math:`B(t)` is the predicted brightness.
 
     Use this class to combine the temporal model with a spatial model. Use
-    :py:class:`~pulse2percept.models.Horsager2009Model` for the standalone
+    :py:class:`~pulse2percept.models.retina.Horsager2009Model` for the standalone
     temporal model.
 
     Parameters
@@ -135,7 +135,7 @@ class Horsager2009Temporal(TemporalModel):
 class Horsager2009Model(Model):
     """Standalone temporal model of [Horsager2009]_.
 
-    Uses :py:class:`~pulse2percept.models.Horsager2009Temporal` without a
+    Uses :py:class:`~pulse2percept.models.retina.Horsager2009Temporal` without a
     spatial component. See that class for the model equations. Use
     ``Horsager2009Temporal`` instead when combining the temporal cascade with
     a spatial model.

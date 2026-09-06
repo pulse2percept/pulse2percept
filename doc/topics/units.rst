@@ -114,7 +114,7 @@ positions; it does not make ``dva`` interchangeable with geometric angle.
 Threshold-relative amplitude
 ----------------------------
 
-Some models (e.g., :py:class:`~pulse2percept.models.BiphasicAxonMapModel`)
+Some models (e.g., :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`)
 operate on ``xTh``, which means a multiple of perceptual threshold, rather
 than raw current.
 

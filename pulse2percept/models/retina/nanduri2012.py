@@ -1,13 +1,14 @@
-""":py:class:`~pulse2percept.models.Nanduri2012Model`, 
-   :py:class:`~pulse2percept.models.Nanduri2012Spatial`, 
-   :py:class:`~pulse2percept.models.Nanduri2012Temporal` [Nanduri2012]_"""
+""":py:class:`~pulse2percept.models.retina.Nanduri2012Model`, 
+   :py:class:`~pulse2percept.models.retina.Nanduri2012Spatial`, 
+   :py:class:`~pulse2percept.models.retina.Nanduri2012Temporal` [Nanduri2012]_"""
 import numpy as np
-from .base import Model, SpatialModel, TemporalModel, _thread_params
+from ..base import Model, TemporalModel, _thread_params
 from ._nanduri2012 import spatial_fast, temporal_fast
-from ..implants import ElectrodeArray, DiskElectrode
-from ..stimuli import Stimulus
-from ..topography.retina import Curcio1990Map
-from ..units import ms
+from .base import RetinalSpatial
+from ...implants import ElectrodeArray, DiskElectrode
+from ...stimuli import Stimulus
+from ...topography.retina import Curcio1990Map
+from ...units import ms
 
 
 def _require_disk_electrodes(electrodes):
@@ -17,7 +18,7 @@ def _require_disk_electrodes(electrodes):
                         "DiskElectrode arrays.")
 
 
-class Nanduri2012Spatial(SpatialModel):
+class Nanduri2012Spatial(RetinalSpatial):
     r"""Spatial response model of [Nanduri2012]_.
 
         Models retinal activation as the sum of current spread from disk
@@ -59,7 +60,7 @@ class Nanduri2012Spatial(SpatialModel):
         supported because the model depends explicitly on electrode radius.
 
         Use this class for the spatial component alone. Use
-        :py:class:`~pulse2percept.models.Nanduri2012Model` for the combined
+        :py:class:`~pulse2percept.models.retina.Nanduri2012Model` for the combined
         spatial-temporal model.
 
         Parameters
@@ -251,7 +252,7 @@ class Nanduri2012Temporal(TemporalModel):
         and the predicted brightness is ``scale_out`` :math:`\times B(t)`.
 
         Positive current drives the model. Use this class for the temporal
-        component alone. Use :py:class:`~pulse2percept.models.Nanduri2012Model`
+        component alone. Use :py:class:`~pulse2percept.models.retina.Nanduri2012Model`
         for the combined spatial-temporal model.
 
         Parameters
@@ -350,8 +351,8 @@ class Nanduri2012Temporal(TemporalModel):
 class Nanduri2012Model(Model):
     r"""Combined spatial-temporal model of [Nanduri2012]_.
 
-        Combines :py:class:`~pulse2percept.models.Nanduri2012Spatial` with
-        :py:class:`~pulse2percept.models.Nanduri2012Temporal`. See those classes
+        Combines :py:class:`~pulse2percept.models.retina.Nanduri2012Spatial` with
+        :py:class:`~pulse2percept.models.retina.Nanduri2012Temporal`. See those classes
         for the spatial current-spread equation and temporal cascade.
 
         Parameters

@@ -1,18 +1,24 @@
-"""
-Computational models of the prosthetic vision, such as phosphene and neural response models. Cortical models are in the cortex submodule.
+"""Computational models of prosthetic vision
 
+The root namespace holds only anatomy-neutral model machinery: the abstract
+base classes a model is assembled from, and temporal models that are not tied
+to a particular stimulation site. Models of a specific target live in the
+subpackage for the tissue they stimulate ---
+:py:mod:`~pulse2percept.models.retina` and
+:py:mod:`~pulse2percept.models.cortex`.
+
+.. versionchanged:: 0.11.0
+
+    Retinal models are no longer exported here; import them from
+    ``models.retina``.
 
 .. autosummary::
     :toctree: _api
 
-    cortex
     base
     temporal
-    thompson2003
-    horsager2009
-    nanduri2012
-    beyeler2019
-    granley2021
+    retina
+    cortex
 
 .. seealso::
 
@@ -21,39 +27,17 @@ Computational models of the prosthetic vision, such as phosphene and neural resp
 """
 from .base import BaseModel, Model, SpatialModel, TemporalModel
 from .temporal import AlphaTemporal, FadingTemporal
-from .beyeler2019 import (ScoreboardModel, ScoreboardSpatial, AxonMapSpatial,
-                          AxonMapModel)
-from .horsager2009 import Horsager2009Model, Horsager2009Temporal
-from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
-                          Nanduri2012Temporal)
-from .granley2021 import (BiphasicAxonMapModel, BiphasicAxonMapSpatial,
-                          BiphasicScoreboardModel,
-                          BiphasicScoreboardSpatial)
-from .thompson2003 import Thompson2003Model, Thompson2003Spatial
 
 from . import cortex
+from . import retina
 
 __all__ = [
     'AlphaTemporal',
-    'AxonMapModel',
-    'AxonMapSpatial',
     'BaseModel',
-    'cortex',
     'FadingTemporal',
-    'Horsager2009Model',
-    'Horsager2009Temporal',
     'Model',
-    'Nanduri2012Model',
-    'Nanduri2012Spatial',
-    'Nanduri2012Temporal',
-    'BiphasicAxonMapModel',
-    'BiphasicAxonMapSpatial',
-    'BiphasicScoreboardModel',
-    'BiphasicScoreboardSpatial',
-    'ScoreboardModel',
-    'ScoreboardSpatial',
     'SpatialModel',
     'TemporalModel',
-    'Thompson2003Model',
-    'Thompson2003Spatial',
+    'cortex',
+    'retina',
 ]

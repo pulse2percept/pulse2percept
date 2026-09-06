@@ -5,7 +5,7 @@ Beyeler et al. (2019): Axonal streaks with the axon map model
 ============================================================================
 
 This example shows how to apply the
-:py:class:`~pulse2percept.models.AxonMapModel` to an
+:py:class:`~pulse2percept.models.retina.AxonMapModel` to an
 :py:class:`~pulse2percept.implants.ArgusII` implant.
 
 The axon map model assumes that electrical stimulation leads to percepts that
@@ -47,7 +47,7 @@ frame:
 
 import numpy as np
 from pulse2percept.implants import ArgusII
-from pulse2percept.models import AxonMapModel
+from pulse2percept.models.retina import AxonMapModel
 from pulse2percept.units import um
 
 implant = ArgusII()
@@ -57,7 +57,7 @@ implant = ArgusII()
 # ------------------
 #
 # The second step is to instantiate the
-# :py:class:`~pulse2percept.models.AxonMapModel` class, bound to that implant.
+# :py:class:`~pulse2percept.models.retina.AxonMapModel` class, bound to that implant.
 # The two most important parameters to set are ``rho`` and ``lam`` from
 # the equation above (here set to 150 micrometers and 500 micrometers,
 # respectively):
@@ -171,7 +171,7 @@ ax.set_title('Predicted percept')
 
 ##############################################################################
 # You can also use the axon map model to imitate
-# :py:class:`~pulse2percept.models.ScoreboardModel` by setting lambda to a small
+# :py:class:`~pulse2percept.models.retina.ScoreboardModel` by setting lambda to a small
 # value.
 # However, you may have to increase the number of axons and number of segments
 # per axon to get a smooth percept out:
@@ -186,4 +186,4 @@ ax.set_title('Predicted percept')
 # This is of course not very computationally efficient, because the model is
 # still performing all the axon map calculations.
 # In this case, you might be better off using
-# :py:class:`~pulse2percept.models.ScoreboardModel`.
+# :py:class:`~pulse2percept.models.retina.ScoreboardModel`.

@@ -13,8 +13,8 @@ import pytest
 
 from pulse2percept.implants import (ElectrodeArray, ElectrodeGrid,
                                     Implant, PointSource)
-from pulse2percept.models import (FadingTemporal, Model, ScoreboardModel,
-                                  ScoreboardSpatial)
+from pulse2percept.models import FadingTemporal, Model
+from pulse2percept.models.retina import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.models.base import _placement_shift, _scene_stim
 from pulse2percept.models.cortex import ScoreboardModel as CortexScoreboard
 from pulse2percept.percepts import Percept
@@ -378,7 +378,7 @@ def test_a_scene_needs_an_encoder_and_a_retina():
         cortical.predict_percept(scene)
     npt.assert_equal('visual_field_map' in str(excinfo.value), True)
     # ... and neither has a temporal-only model:
-    from pulse2percept.models import Nanduri2012Temporal
+    from pulse2percept.models.retina import Nanduri2012Temporal
     temporal = Model(temporal=Nanduri2012Temporal()).build()
     with pytest.raises(ValueError):
         temporal.predict_percept(scene)

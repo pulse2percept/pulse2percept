@@ -4,13 +4,15 @@
     :toctree: _api
 
     base
+    scoreboard
     dynaphos
 
 .. seealso::
 
     *  :ref:`Basic Concepts > Computational Models <topics-models>`
 """
-from .base import ScoreboardModel, ScoreboardSpatial, CortexSpatial
+from .base import CortexSpatial
+from .scoreboard import ScoreboardModel, ScoreboardSpatial
 from .dynaphos import DynaphosModel
 
 __all__ = [

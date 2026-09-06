@@ -20,7 +20,7 @@ grid (575 um center-to-center separation) [Yue2020]_.
 Some researchers therefore assumed that the stimulation of a grid of
 electrodes on the retina would lead to the perception of a grid of luminous
 dots ("phosphenes").
-We refer to this as the :py:class:`~pulse2percept.models.ScoreboardModel`
+We refer to this as the :py:class:`~pulse2percept.models.retina.ScoreboardModel`
 of prosthetic vision.
 However, a growing body of evidence has shown that retinal implant users often
 report seeing distorted phosphenes and require extensive rehabilitative training 
@@ -50,7 +50,7 @@ fig.tight_layout()
 
 ###############################################################################
 # These phosphene shapes can be simulated with the
-# :py:class:`~pulse2percept.models.AxonMapModel`, which was developed to fit
+# :py:class:`~pulse2percept.models.retina.AxonMapModel`, which was developed to fit
 # behavioral data (see [Beyeler2019]_ for details).
 #
 # Boston Train sequence
@@ -62,8 +62,8 @@ fig.tight_layout()
 # in degrees of visual angle):
 
 implant = p2p.implants.ArgusII()
-model = p2p.models.AxonMapModel(implant=implant, rho=400, lam=200,
-                                xrange=(-12, 12), yrange=(-8, 8))
+model = p2p.models.retina.AxonMapModel(implant=implant, rho=400, lam=200,
+                                       xrange=(-12, 12), yrange=(-8, 8))
 model.build()
 
 ###############################################################################

@@ -15,10 +15,10 @@ from pulse2percept.implants import ArgusI, ArgusII, PRIMAPivotal
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (ImageStimulus, LogoBVL, Stimulus,
                                    VideoStimulus)
-from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
-                                  ScoreboardSpatial, ScoreboardModel)
-from pulse2percept.models.beyeler2019 import _AXON_CACHE_VERSION
-from pulse2percept.models._beyeler2019 import fast_axon_map
+from pulse2percept.models.retina import (AxonMapSpatial, AxonMapModel,
+                                         ScoreboardSpatial, ScoreboardModel)
+from pulse2percept.models.retina.beyeler2019 import _AXON_CACHE_VERSION
+from pulse2percept.models.retina._beyeler2019 import fast_axon_map
 from pulse2percept.topography.retina import (Watson2014Map,
                                              Watson2014DisplaceMap)
 from pulse2percept.units import (DimensionMismatchError, deg,
@@ -508,7 +508,7 @@ def test_AxonMapModel_find_closest_axon_respects_n_threads(monkeypatch,
     here would let ``AxonMapModel(implant=ArgusII(), n_threads=1).build()`` fan out over every
     core anyway.
     """
-    from pulse2percept.models import beyeler2019
+    from pulse2percept.models.retina import beyeler2019
 
     seen = []
 

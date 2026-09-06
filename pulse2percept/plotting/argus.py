@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 
 from ..implants import ArgusI, ArgusII
-from ..models import AxonMapModel
+from ..models.retina import AxonMapModel
 from ..units import as_value, deg, um
 from ..utils import scale_image, center_image
 from ..utils.constants import ZORDER
@@ -112,7 +112,7 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
         ``implant_rotation`` below.
     scale : float
         Scaling factor to apply to the phosphenes
-    axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
+    axon_map : :py:class:`~pulse2percept.models.retina.AxonMapModel`
         An instance of the axon map model to use for visualization.
     show_fovea : bool
         Whether to indicate the location of the fovea with a square
@@ -296,7 +296,7 @@ def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0,
         Either an Argus I or Argus II implant
     scale : float
         Scaling factor to apply to the phosphenes
-    axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
+    axon_map : :py:class:`~pulse2percept.models.retina.AxonMapModel`
         An instance of the axon map model to use for visualization.
     show_fovea : bool
         Whether to indicate the location of the fovea with a square

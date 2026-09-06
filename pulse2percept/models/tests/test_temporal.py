@@ -4,8 +4,8 @@ import warnings
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.models import (AlphaTemporal, FadingTemporal,
-                                  Nanduri2012Temporal)
+from pulse2percept.models import AlphaTemporal, FadingTemporal
+from pulse2percept.models.retina import Nanduri2012Temporal
 from pulse2percept.models._temporal import alpha_fast, fading_fast
 from pulse2percept.stimuli import (Stimulus, MonophasicPulse, BiphasicPulse,
                                    BiphasicPulseTrain)
