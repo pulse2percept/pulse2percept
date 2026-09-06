@@ -21,8 +21,9 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, ImageStimulus,
                                    VideoStimulus)
-from pulse2percept.topography import (Curcio1990Map, Polimeni2006Map,
-                                      RetinalMap, Watson2014Map)
+from pulse2percept.topography.cortex import Polimeni2006Map
+from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
+                                             Watson2014Map)
 from pulse2percept.units import deg, dva, ms, s, um
 from pulse2percept.vision import Scene, Scotoma
 

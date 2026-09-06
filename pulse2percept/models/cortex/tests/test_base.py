@@ -8,10 +8,10 @@ from pulse2percept.models.cortex import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.models import ScoreboardSpatial as BeyelerScoreboard
 from pulse2percept.implants.cortex import Cortivis, Orion, LinearEdgeThread
 from pulse2percept.implants import ArgusII
-from pulse2percept.topography import Polimeni2006Map
+from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.units import mm
 from pulse2percept.percepts import Percept
-from pulse2percept.topography import Watson2014Map
+from pulse2percept.topography.retina import Watson2014Map
 
 
 def _spatial(model):

@@ -18,7 +18,7 @@ First, make sure neuropythy is installed, which can be done with
 Creating a Neuropythy visual field map
 --------------------------------------
 
-:py:class:`~pulse2percept.topography.NeuropythyMap` requires a subject parameter,
+:py:class:`~pulse2percept.topography.cortex.NeuropythyMap` requires a subject parameter,
 which can be either:
 
 *  'fsaverage' (the average of freesurfer subjects)
@@ -40,14 +40,14 @@ from your predownloaded directory.
 
 .. code-block:: python
 
-    nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
+    nmap = p2p.topography.cortex.NeuropythyMap(subject='fsaverage', regions=['v1'])
 
 NeuropythyMap provides a number of methods to transform visual field coordinates
 into cortical coordinates:
 
-*  :py:meth:`~pulse2percept.topography.NeuropythyMap.dva_to_v1`
-*  :py:meth:`~pulse2percept.topography.NeuropythyMap.dva_to_v2`
-*  :py:meth:`~pulse2percept.topography.NeuropythyMap.dva_to_v3`
+*  :py:meth:`~pulse2percept.topography.cortex.NeuropythyMap.dva_to_v1`
+*  :py:meth:`~pulse2percept.topography.cortex.NeuropythyMap.dva_to_v2`
+*  :py:meth:`~pulse2percept.topography.cortex.NeuropythyMap.dva_to_v3`
 
 In contrast to other visual field maps, you may also specify a cortical surface
 that the visual field coordinates should be mapped to. By default, the cortical
@@ -88,7 +88,7 @@ Lets use all three regions and plot the result (note it can get a little messy):
 
 .. code-block:: python
 
-    nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1', 'v2', 'v3'])
+    nmap = p2p.topography.cortex.NeuropythyMap(subject='fsaverage', regions=['v1', 'v2', 'v3'])
     model = p2p.models.cortex.ScoreboardModel(p2p.implants.cortex.Cortivis(),
                                               xrange=(-20, 20), yrange=(-20, 20), step=0.5,
                                               visual_field_map=nmap, regions=['v1', 'v2', 'v3'])
@@ -121,7 +121,7 @@ Lets place a Neuralink implant across the right hemisphere of the cortex:
 
 .. code-block:: python
 
-    nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
+    nmap = p2p.topography.cortex.NeuropythyMap(subject='fsaverage', regions=['v1'])
     xrange, yrange = (-4, 0), (-4, 4)
     nlink = p2p.implants.cortex.Neuralink.from_neuropythy(
         nmap, xrange=xrange, yrange=yrange, step=1, rand_insertion_angle=0
@@ -145,7 +145,7 @@ electrode on each thread, using the scoreboard model:
 
 .. code-block:: python
 
-    nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'], jitter_boundary=True)
+    nmap = p2p.topography.cortex.NeuropythyMap(subject='fsaverage', regions=['v1'], jitter_boundary=True)
     xrange, yrange = (-15, 15), (-15, 15)
     nlink = p2p.implants.cortex.Neuralink.from_neuropythy(
         nmap, xrange=xrange, yrange=yrange, step=3, rand_insertion_angle=0

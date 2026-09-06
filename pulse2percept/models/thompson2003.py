@@ -4,7 +4,7 @@
 import numpy as np
 import copy
 from ..utils import sample
-from ..topography import Curcio1990Map
+from ..topography.retina import Curcio1990Map
 from ..units import um
 from ..models import Model, SpatialModel
 from .base import _thread_params, _warn_ignores_z
@@ -84,7 +84,7 @@ class Thompson2003Spatial(SpatialModel):
         by ``Thompson2003Spatial``.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Curcio1990Map`.
+        to :py:class:`~pulse2percept.topography.retina.Curcio1990Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -220,7 +220,7 @@ class Thompson2003Model(Model):
         spatial model.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Curcio1990Map`.
+        to :py:class:`~pulse2percept.topography.retina.Curcio1990Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.

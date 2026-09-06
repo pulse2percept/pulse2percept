@@ -17,7 +17,7 @@ from ..models import AxonMapModel
 from ..units import as_value, deg, um
 from ..utils import scale_image, center_image
 from ..utils.constants import ZORDER
-from ..topography import Watson2014Map
+from ..topography.retina import Watson2014Map
 
 PATH_ARGUS1 = join(dirname(__file__), 'data', 'argus1.png')
 PATH_ARGUS2 = join(dirname(__file__), 'data', 'argus2.png')

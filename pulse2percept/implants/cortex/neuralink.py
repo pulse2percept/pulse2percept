@@ -276,7 +276,7 @@ class Neuralink(EnsembleImplant):
 
         Parameters
         ----------
-        visual_field_map : p2p.topography.NeuropythyMap
+        visual_field_map : p2p.topography.cortex.NeuropythyMap
             Visual field map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations (dva) to create threads at. Not
@@ -309,10 +309,11 @@ class Neuralink(EnsembleImplant):
            :py:mod:`pulse2percept.units`.
         """
         # import at runtime to avoid circular imports
-        from ...topography import NeuropythyMap, Grid2D
+        from ...topography import Grid2D
+        from ...topography.cortex import NeuropythyMap
         if not isinstance(visual_field_map, NeuropythyMap):
             raise TypeError("visual_field_map must be a "
-                            "p2p.topography.NeuropythyMap")
+                            "p2p.topography.cortex.NeuropythyMap")
 
         # Where in the *visual field* each thread goes; `visual_field_map`
         # turns that into a place on the cortical surface below:
@@ -398,7 +399,7 @@ class Neuralink(EnsembleImplant):
         ----------
         implant_type : p2p.implants.Implant
             Type of implant to create. Currently only NeuralinkThread is supported.
-        visual_field_map : p2p.topography.CorticalMap
+        visual_field_map : p2p.topography.cortex.CorticalMap
             Cortical map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations to create threads at. Not
@@ -417,7 +418,7 @@ class Neuralink(EnsembleImplant):
         """
         if not issubclass(implant_type, NeuralinkThread):
             raise TypeError("implant_type must be a subclass of NeuralinkThread")
-        from ...topography import NeuropythyMap
+        from ...topography.cortex import NeuropythyMap
         if not isinstance(visual_field_map, NeuropythyMap):
             return super().from_cortical_map(implant_type, visual_field_map, locs=locs, xrange=xrange,
                                              yrange=yrange, step=step, region=region)

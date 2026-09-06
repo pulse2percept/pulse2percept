@@ -549,9 +549,9 @@ pulse2percept uses
 retinal or cortical coordinates and visual-field coordinates.
 
 For retinal models, available mappings include
-:py:class:`~pulse2percept.topography.Curcio1990Map`,
-:py:class:`~pulse2percept.topography.Watson2014Map`, and
-:py:class:`~pulse2percept.topography.Watson2014DisplaceMap`.
+:py:class:`~pulse2percept.topography.retina.Curcio1990Map`,
+:py:class:`~pulse2percept.topography.retina.Watson2014Map`, and
+:py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap`.
 
 You can also implement your own
 :py:class:`~pulse2percept.topography.VisualFieldMap`.

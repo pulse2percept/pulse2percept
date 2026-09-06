@@ -578,7 +578,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
         Set to 0 to disable.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -834,7 +834,7 @@ class BiphasicAxonMapModel(Model):
         Set to 0 to disable.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -1009,7 +1009,7 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
         Set to 0 to disable.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -1187,7 +1187,7 @@ class BiphasicScoreboardModel(Model):
         Set to 0 to disable.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.

@@ -1,11 +1,11 @@
-""":py:class:`~pulse2percept.topography.NeuropythyMap`"""
+""":py:class:`~pulse2percept.topography.cortex.NeuropythyMap`"""
 import numpy as np
 import os
 from scipy.spatial import cKDTree
 
-from .cortex import CorticalMap
-from ..units import um
-from ..utils.constants import UM_PER_MM
+from .base import CorticalMap
+from ...units import um
+from ...utils.constants import UM_PER_MM
 
 class NeuropythyMap(CorticalMap):
 

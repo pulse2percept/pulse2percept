@@ -11,7 +11,7 @@ from matplotlib.patches import Ellipse
 
 from ..units import deg, dimensionless, dva, um
 from ..utils.constants import UM_PER_MM, ZORDER
-from ..topography import Watson2014Map
+from ..topography.retina import Watson2014Map
 from ..implants import ElectrodeArray
 from ..stimuli import Stimulus
 from ..models import Model, SpatialModel
@@ -141,7 +141,7 @@ class ScoreboardSpatial(SpatialModel):
         be skipped at a grid point. Set to 0 to disable the cutoff.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -304,7 +304,7 @@ class ScoreboardModel(Model):
         be skipped at a grid point. Set to 0 to disable the cutoff.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -438,7 +438,7 @@ class AxonMapSpatial(SpatialModel):
         be skipped at an axon segment. Set to 0 to disable the cutoff.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -1223,7 +1223,7 @@ class AxonMapModel(Model):
         be skipped at an axon segment. Set to 0 to disable the cutoff.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.Watson2014Map`.
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.

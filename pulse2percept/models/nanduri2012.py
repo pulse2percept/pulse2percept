@@ -6,7 +6,7 @@ from .base import Model, SpatialModel, TemporalModel, _thread_params
 from ._nanduri2012 import spatial_fast, temporal_fast
 from ..implants import ElectrodeArray, DiskElectrode
 from ..stimuli import Stimulus
-from ..topography import Curcio1990Map
+from ..topography.retina import Curcio1990Map
 from ..units import ms
 
 
@@ -100,7 +100,7 @@ class Nanduri2012Spatial(SpatialModel):
             by ``Nanduri2012Spatial``.
         visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
             Retinotopic map between visual-field and retinal coordinates. Defaults
-            to :py:class:`~pulse2percept.topography.Curcio1990Map`.
+            to :py:class:`~pulse2percept.topography.retina.Curcio1990Map`.
         n_gray : int or None, optional
             Number of gray levels in the returned percept. ``None`` disables
             gray-level quantization.
@@ -384,7 +384,7 @@ class Nanduri2012Model(Model):
             Sampling lattice used for the visual-field grid.
         visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
             Retinotopic map between visual-field and retinal coordinates. Defaults
-            to :py:class:`~pulse2percept.topography.Curcio1990Map`.
+            to :py:class:`~pulse2percept.topography.retina.Curcio1990Map`.
         n_gray : int or None, optional
             Number of gray levels in the returned percept. ``None`` disables
             gray-level quantization.

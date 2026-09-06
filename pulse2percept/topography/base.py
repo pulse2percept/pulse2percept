@@ -556,7 +556,7 @@ class Grid2D(PrettyPrint):
             ax.plot_trisurf()
         """
         # avoid circular import
-        from .neuropythy import NeuropythyMap
+        from .cortex.neuropythy import NeuropythyMap
         # 'c' is passed to the plotting call explicitly (as `color`), so it
         # must not also be forwarded through **kwargs:
         fig_kwargs = ['figsize', 'c']

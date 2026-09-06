@@ -11,8 +11,9 @@ from matplotlib.patches import Ellipse
 from pulse2percept.implants import Implant
 from pulse2percept.implants.cortex import (EllipsoidElectrode, LinearEdgeThread,
                                            NeuralinkThread, Neuralink, Cortivis)
-from pulse2percept.topography import Grid2D, NeuropythyMap, Polimeni2006Map
-from pulse2percept.topography.cortex import CorticalMap
+from pulse2percept.topography import Grid2D
+from pulse2percept.topography.cortex import (CorticalMap, NeuropythyMap,
+                                             Polimeni2006Map)
 
 
 class StubNeuropythyMap(NeuropythyMap):
@@ -417,7 +418,7 @@ def test_plot3d_surfaces():
 def test_Neuralink_from_neuropythy_requires_neuropythy_map():
     # The visual_field_map must be a NeuropythyMap; this guard runs before any
     # dataset is touched, so it is testable without neuropythy installed:
-    from pulse2percept.topography import Watson2014Map
+    from pulse2percept.topography.retina import Watson2014Map
     with pytest.raises(TypeError):
         Neuralink.from_neuropythy(Watson2014Map())
     with pytest.raises(TypeError):

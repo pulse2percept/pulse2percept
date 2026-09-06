@@ -125,6 +125,29 @@ Models
   ``implant_rotation`` (:pull:`884`).
 
 
+Topography
+~~~~~~~~~~
+
+* Visual field maps moved into anatomical subpackages:
+  :py:mod:`pulse2percept.topography` now holds only
+  :py:class:`~pulse2percept.topography.Grid2D` and
+  :py:class:`~pulse2percept.topography.VisualFieldMap`, with the maps
+  themselves under ``topography.retina`` and ``topography.cortex``. The old
+  flat paths were removed, not deprecated (:pull:`887`):
+
+  .. code-block:: python
+
+      # before
+      p2p.topography.Watson2014Map()
+      p2p.topography.Polimeni2006Map()
+      p2p.topography.NeuropythyMap()
+
+      # v0.11
+      p2p.topography.retina.Watson2014Map()
+      p2p.topography.cortex.Polimeni2006Map()
+      p2p.topography.cortex.NeuropythyMap()
+
+
 Residual vision
 ~~~~~~~~~~~~~~~
 
@@ -285,8 +308,8 @@ Highlights:
 *  Cortical models: :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
    (:pull:`533`), :py:class:`~pulse2percept.models.cortex.DynaphosModel`
    [vanderGrinten2023]_ (:pull:`547`)
-*  Cortical maps: :py:class:`~pulse2percept.topography.Polimeni2006Map`
-   (:pull:`509`), :py:class:`~pulse2percept.topography.NeuropythyMap` 
+*  Cortical maps: :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`
+   (:pull:`509`), :py:class:`~pulse2percept.topography.cortex.NeuropythyMap` 
    (:pull:`597`)
 *  Other new implants: :py:class:`~pulse2percept.implants.IMIE` [Xu2021]_
    (:pull:`492`), :py:class:`~pulse2percept.implants.EnsembleImplant` 

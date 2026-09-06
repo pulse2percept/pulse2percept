@@ -78,7 +78,7 @@ visual-field and tissue coordinates:
 
 .. code-block:: python
 
-    from pulse2percept.topography import Watson2014Map
+    from pulse2percept.topography.retina import Watson2014Map
     from pulse2percept.units import dva
 
     x_um, y_um = Watson2014Map().dva_to_ret(2 * dva, 3 * dva)

@@ -23,7 +23,9 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, ImageStimulus,
                                    Stimulus)
-from pulse2percept.topography import Grid2D, Polimeni2006Map, Watson2014Map
+from pulse2percept.topography import Grid2D
+from pulse2percept.topography.cortex import Polimeni2006Map
+from pulse2percept.topography.retina import Watson2014Map
 from pulse2percept.units import (DimensionMismatchError, Quantity, Unit, cm,
                                  dimensionless, dva, mA, mm, ms, nA, s, uA, um,
                                  us)

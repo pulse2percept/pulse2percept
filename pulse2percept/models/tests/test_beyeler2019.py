@@ -19,7 +19,8 @@ from pulse2percept.models import (AxonMapSpatial, AxonMapModel,
                                   ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.models.beyeler2019 import _AXON_CACHE_VERSION
 from pulse2percept.models._beyeler2019 import fast_axon_map
-from pulse2percept.topography import Watson2014Map, Watson2014DisplaceMap
+from pulse2percept.topography.retina import (Watson2014Map,
+                                             Watson2014DisplaceMap)
 from pulse2percept.units import (DimensionMismatchError, deg,
                                  dimensionless, dva, mW, mm, rad, um)
 from pulse2percept.utils.testing import assert_warns_msg

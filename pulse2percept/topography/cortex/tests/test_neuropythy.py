@@ -1,4 +1,4 @@
-"""Tests for :class:`~pulse2percept.topography.NeuropythyMap`.
+"""Tests for :class:`~pulse2percept.topography.cortex.NeuropythyMap`.
 
 Most behavior is tested against a deterministic toy cortex. Slow tests use one
 shared ``fsaverage`` map to exercise the real Neuropythy pipeline.
@@ -13,7 +13,7 @@ from pulse2percept.implants import ArgusII, EnsembleImplant
 from pulse2percept.implants.cortex import Neuralink
 from pulse2percept.models import ScoreboardModel as BeyelerScoreboard
 from pulse2percept.models.cortex import ScoreboardModel
-from pulse2percept.topography import CorticalMap, NeuropythyMap
+from pulse2percept.topography.cortex import CorticalMap, NeuropythyMap
 from pulse2percept.units import DimensionMismatchError, dva, mm, um
 
 

@@ -34,7 +34,7 @@ class EnsembleImplant(Implant):
 
         Parameters
         ----------
-        visual_field_map : p2p.topography.CorticalMap
+        visual_field_map : p2p.topography.cortex.CorticalMap
             Visual field map to create implant from.
         implant_type : type
             Type of implant to create for the ensemble. Must subclass
@@ -62,10 +62,11 @@ class EnsembleImplant(Implant):
            :py:meth:`from_coords`, which places implants by their physical
            position in microns. See :py:mod:`pulse2percept.units`.
         """
-        from ..topography import CorticalMap, Grid2D
+        from ..topography import Grid2D
+        from ..topography.cortex import CorticalMap
         if not isinstance(visual_field_map, CorticalMap):
             raise TypeError("visual_field_map must be a "
-                            "p2p.topography.CorticalMap")
+                            "p2p.topography.cortex.CorticalMap")
         if not issubclass(implant_type, Implant):
             raise TypeError("implant_type must be a sub-type of Implant")
 

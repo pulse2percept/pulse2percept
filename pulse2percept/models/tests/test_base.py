@@ -34,10 +34,11 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, deg,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
                                  us)
 from pulse2percept.utils import FreezeError, frame_interval
-from pulse2percept.topography import (Curcio1990Map, Grid2D,
-                                      Polimeni2006Map, RetinalMap,
-                                      VisualFieldMap, Watson2014DisplaceMap,
-                                      Watson2014Map)
+from pulse2percept.topography import Grid2D, VisualFieldMap
+from pulse2percept.topography.cortex import Polimeni2006Map
+from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
+                                             Watson2014DisplaceMap,
+                                             Watson2014Map)
 
 
 class ValidBaseModel(BaseModel):

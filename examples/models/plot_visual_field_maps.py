@@ -8,22 +8,22 @@ A :py:class:`~pulse2percept.topography.VisualFieldMap` describes how locations
 in the visual field map onto retinal or cortical tissue. pulse2percept includes
 several built-in maps.
 
-Retinal maps derive from :py:class:`~pulse2percept.topography.RetinalMap`
+Retinal maps derive from :py:class:`~pulse2percept.topography.retina.RetinalMap`
 and include:
 
-* :py:class:`~pulse2percept.topography.Curcio1990Map`, which uses a linear
+* :py:class:`~pulse2percept.topography.retina.Curcio1990Map`, which uses a linear
   retinal scaling of 280 microns per degree of visual angle (dva).
-* :py:class:`~pulse2percept.topography.Watson2014Map`, which uses the nonlinear
+* :py:class:`~pulse2percept.topography.retina.Watson2014Map`, which uses the nonlinear
   retinal magnification model from [Watson2014]_.
-* :py:class:`~pulse2percept.topography.Watson2014DisplaceMap`, which also
+* :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap`, which also
   accounts for retinal ganglion-cell displacement near the fovea.
 
-Cortical maps derive from :py:class:`~pulse2percept.topography.CorticalMap`
+Cortical maps derive from :py:class:`~pulse2percept.topography.cortex.CorticalMap`
 and include:
 
-* :py:class:`~pulse2percept.topography.Polimeni2006Map`, which maps the visual
+* :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, which maps the visual
   field onto V1, V2, and V3 using the wedge-dipole model from [Polimeni2006]_.
-* :py:class:`~pulse2percept.topography.NeuropythyMap`, which uses Neuropythy to
+* :py:class:`~pulse2percept.topography.cortex.NeuropythyMap`, which uses Neuropythy to
   estimate subject-specific cortical maps from MRI data [Benson2018]_.
 
 Retinal visual field maps
@@ -53,9 +53,9 @@ plt.axis('square')
 # different under the available retinal maps:
 
 transforms = [
-    p2p.topography.Curcio1990Map(),
-    p2p.topography.Watson2014Map(),
-    p2p.topography.Watson2014DisplaceMap(),
+    p2p.topography.retina.Curcio1990Map(),
+    p2p.topography.retina.Watson2014Map(),
+    p2p.topography.retina.Watson2014DisplaceMap(),
 ]
 
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
@@ -76,13 +76,13 @@ for ax, transform in zip(axes, transforms):
 # --------------------------
 #
 # Cortical models use a
-# :py:class:`~pulse2percept.topography.CorticalMap`. The standard choice is
-# :py:class:`~pulse2percept.topography.Polimeni2006Map`, which maps the visual
+# :py:class:`~pulse2percept.topography.cortex.CorticalMap`. The standard choice is
+# :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, which maps the visual
 # field onto V1, V2, and V3:
 
 fig, axes = plt.subplots(ncols=2, figsize=(9, 4))
 
-visual_field_map = p2p.topography.Polimeni2006Map(
+visual_field_map = p2p.topography.cortex.Polimeni2006Map(
     regions=['v1', 'v2', 'v3'])
 model = p2p.models.cortex.ScoreboardModel(
     implant=p2p.implants.cortex.Orion(),
@@ -103,7 +103,7 @@ plt.show()
 # ``alpha2``, and ``alpha3`` for V1--V3. The defaults come from
 # [Polimeni2006]_, but cortical retinotopy varies substantially across people.
 # When subject-specific anatomy is available,
-# :py:class:`~pulse2percept.topography.NeuropythyMap` can provide an
+# :py:class:`~pulse2percept.topography.cortex.NeuropythyMap` can provide an
 # individualized mapping.
 #
 # Subject-specific phosphene locations
@@ -149,7 +149,7 @@ for ax, noise, title in zip(
         implant=implant,
         xrange=(-12, 2),
         yrange=(-7, 7),
-        visual_field_map=p2p.topography.Curcio1990Map(),
+        visual_field_map=p2p.topography.retina.Curcio1990Map(),
         location_noise=noise,
     )
     model.predict_percept(stim).plot(ax=ax)
@@ -214,7 +214,7 @@ for ax, noise, title in zip(
         implant=implant,
         xrange=(-6, 6),
         yrange=(-6, 6),
-        visual_field_map=p2p.topography.Watson2014Map(),
+        visual_field_map=p2p.topography.retina.Watson2014Map(),
         location_noise=noise,
     )
     model.predict_percept(stim).plot(ax=ax)
@@ -234,13 +234,13 @@ for ax, noise, title in zip(
 # ----------------------------------
 #
 # Custom retinal maps subclass
-# :py:class:`~pulse2percept.topography.RetinalMap` and implement ``dva_to_ret``.
+# :py:class:`~pulse2percept.topography.retina.RetinalMap` and implement ``dva_to_ret``.
 # An inverse ``ret_to_dva`` should also be provided when the mapping can be
 # inverted. For example:
 #
 # .. code-block:: python
 #
-#     class MyVisualFieldMap(p2p.topography.RetinalMap):
+#     class MyVisualFieldMap(p2p.topography.retina.RetinalMap):
 #
 #         def dva_to_ret(self, xdva, ydva):
 #             return xdva, ydva

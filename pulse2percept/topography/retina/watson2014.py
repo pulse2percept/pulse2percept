@@ -1,58 +1,12 @@
-""":py:class:`~pulse2percept.topography.RetinalMap`, 
-   :py:class:`~pulse2percept.topography.Curcio1990Map`,
-   :py:class:`~pulse2percept.topography.Watson2014Map`,
-   :py:class:`~pulse2percept.topography.Watson2014DisplaceMap`
+""":py:class:`~pulse2percept.topography.retina.Watson2014Map`,
+   :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap`
 """
 import numpy as np
-from abc import abstractmethod
 import scipy.stats as spst
 
-from .base import VisualFieldMap
-from ..units import Quantity, mm, um
-from ..utils.geometry import cart2pol, pol2cart
-
-
-class RetinalMap(VisualFieldMap):
-    """ Template class for retinal visual field maps, which only have 1 region."""
-    split_map = False
-    regions = ['ret']
-    def __init__(self, **params):
-        super().__init__(**params)
-
-    def from_dva(self):
-        return {'ret' : self.dva_to_ret}
-    
-    def to_dva(self):
-        return {'ret' : self.ret_to_dva}
-    
-    @abstractmethod
-    def dva_to_ret(self, x, y):
-        """Convert degrees of visual angle (dva) to retinal coords (um)"""
-        raise NotImplementedError
-        
-    def ret_to_dva(self, x, y):
-        """Convert retinal coords (um) to degrees of visual angle (dva)"""
-        raise NotImplementedError
-
-
-class Curcio1990Map(RetinalMap):
-    """Converts between visual angle and retinal eccentricity [Curcio1990]_"""
-
-    def dva_to_ret(self, xdva, ydva):
-        """Convert degrees of visual angle (dva) to retinal eccentricity (um)
-
-        Assumes that one degree of visual angle is equal to 280 um on the
-        retina [Curcio1990]_.
-        """
-        return 280.0 * xdva, -280.0 * ydva
-
-    def ret_to_dva(self, xret, yret):
-        """Convert retinal eccentricity (um) to degrees of visual angle (dva)
-
-        Assumes that one degree of visual angle is equal to 280 um on the
-        retina [Curcio1990]_
-        """
-        return xret / 280.0, -yret / 280.0
+from .base import RetinalMap
+from ...units import Quantity, mm, um
+from ...utils.geometry import cart2pol, pol2cart
 
 
 class Watson2014Map(RetinalMap):

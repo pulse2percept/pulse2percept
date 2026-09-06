@@ -4,7 +4,7 @@
 
 from ..base import (Model, SpatialModel, _blend_meridian,
                     _draw_placed_implant, _thread_params, _warn_rho_vs_pitch)
-from ...topography import Polimeni2006Map
+from ...topography.cortex import Polimeni2006Map
 from .._beyeler2019 import fast_scoreboard, fast_scoreboard_3d
 from ...units import DimensionMismatchError, dva, um
 from ...utils.constants import UM_PER_MM, ZORDER
@@ -59,7 +59,7 @@ class CortexSpatial(SpatialModel):
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
+        By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
         used.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means
@@ -310,7 +310,7 @@ class ScoreboardSpatial(CortexSpatial):
     visual_field_map : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
+        By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
         used.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means
@@ -514,7 +514,7 @@ class ScoreboardModel(Model):
     visual_field_map : :py:class:`~pulse2percept.topography..VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
+        By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
         used.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means

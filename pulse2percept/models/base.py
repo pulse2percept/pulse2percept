@@ -17,7 +17,8 @@ from ..implants import Implant
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
-from ..topography import Curcio1990Map, Grid2D, RetinalMap
+from ..topography import Grid2D
+from ..topography.retina import Curcio1990Map, RetinalMap
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
                      dva, ms, um, uA)
 from ..units.base import has_units
