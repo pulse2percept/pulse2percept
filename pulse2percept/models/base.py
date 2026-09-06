@@ -666,22 +666,6 @@ def _warn_rho_vs_pitch(model):
         f"driven.")
 
 
-def _warn_ignores_z(model, electrode_array):
-    """Warn when a model ignores nonzero electrode ``z`` coordinates.
-
-    Reads placed coordinates, so ``implant_depth`` counts as depth.
-    """
-    if np.allclose(_placed_coords(model, electrode_array,
-                                  model.space_unit)[:, 2], 0):
-        return
-    warnings.warn(
-        f"{type(model).__name__} does not model electrode-retina distance: "
-        f"nonzero z values do not change its response. In a real implant, "
-        f"distance is expected to affect stimulation threshold and spatial "
-        f"recruitment, but that relationship is not parameterized by this "
-        f"model.")
-
-
 class BaseModel(Parametrized, metaclass=ABCMeta):
     """Abstract base class for computational models.
 

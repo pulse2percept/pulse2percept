@@ -10,7 +10,8 @@ from ...implants import ElectrodeArray
 from ...stimuli import BiphasicPulseTrain, Stimulus
 from ...percepts import Percept
 from ...units import as_value, um, xTh
-from ..base import BaseModel, Model, _require_stim_dimension, _warn_ignores_z
+from ..base import BaseModel, Model, _require_stim_dimension
+from .base import _warn_ignores_z
 from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
 from ._granley2021 import (fast_biphasic_axon_map,
                            fast_biphasic_scoreboard)

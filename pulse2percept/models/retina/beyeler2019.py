@@ -15,9 +15,9 @@ from ...topography.retina import Watson2014Map
 from ...implants import ElectrodeArray
 from ...stimuli import Stimulus
 from ..base import (Model, _blend_meridian, _draw_placed_implant,
-                    _thread_params, _warn_ignores_z, _warn_rho_vs_pitch)
+                    _thread_params, _warn_rho_vs_pitch)
 from .._scoreboard import fast_scoreboard
-from .base import RetinalSpatial
+from .base import RetinalSpatial, _warn_ignores_z
 from ._beyeler2019 import (fast_axon_map, fast_jansonius,
                            fast_find_closest_axon)
 

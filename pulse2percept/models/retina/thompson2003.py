@@ -6,8 +6,8 @@ import copy
 from ...utils import sample
 from ...topography.retina import Curcio1990Map
 from ...units import um
-from ..base import Model, _thread_params, _warn_ignores_z
-from .base import RetinalSpatial
+from ..base import Model, _thread_params
+from .base import RetinalSpatial, _warn_ignores_z
 from ._thompson2003 import fast_thompson2003
 
 import warnings
