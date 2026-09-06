@@ -93,6 +93,15 @@ class ScoreboardSpatial(SpatialModel):
     optical drive. In that case, Scoreboard visualizes the stimulation pattern;
     it does not model the retinal response.
 
+    .. warning::
+
+        ``rho`` is fixed: this model does not predict pulse-dependent
+        phosphene size. Doubling amplitude doubles brightness and leaves the
+        phosphene exactly as wide, which is not what [Nanduri2012]_
+        reports. Use
+        :py:class:`~pulse2percept.models.BiphasicScoreboardSpatial` for
+        pulse-dependent brightness and size.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -246,6 +255,15 @@ class ScoreboardModel(Model):
         :py:class:`~pulse2percept.stimuli.PRIMAEncoder` instead provides
         normalized optical drive. In that case, Scoreboard visualizes the
         stimulation pattern; it does not model the retinal response.
+
+    .. warning::
+
+        ``rho`` is fixed: this model does not predict pulse-dependent
+        phosphene size. Doubling amplitude doubles brightness and leaves the
+        phosphene exactly as wide, which is not what [Nanduri2012]_
+        reports. Use
+        :py:class:`~pulse2percept.models.BiphasicScoreboardModel` for
+        pulse-dependent brightness and size.
 
     Parameters
     ----------

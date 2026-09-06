@@ -168,3 +168,104 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
             px_bright = 0.0
         bright[idx_space] = px_bright  # Py overhead
     return np.asarray(bright)
+
+
+@cython.boundscheck(False)
+@cdivision(True)
+cpdef fast_biphasic_scoreboard(const float32[::1] amp_el,
+                               const float32[::1] bright_model_el,
+                               const float32[::1] size_model_el,
+                               const float32[::1] xel,
+                               const float32[::1] yel,
+                               const float32[::1] xgrid,
+                               const float32[::1] ygrid,
+                               float32 rho,
+                               float32 thresh_percept,
+                               float32 cutoff_r2,
+                               uint32 n_threads):
+    """Fast spatial response of the biphasic scoreboard model
+
+    Predicts one representative percept for the whole pulse train. Each
+    electrode contributes ``F_bright * exp(-r^2 / (2 rho^2 F_size))``, i.e. the
+    same ``F_bright``/``F_size`` semantics as :func:`fast_biphasic_axon_map`
+    without the axonal streak term.
+
+    ``F_size`` is finite and strictly positive: the default size model clamps
+    it to ``min_rho ** 2 / rho ** 2``, and ``_predict_spatial`` rejects a
+    custom model that returns anything else.
+
+    Parameters
+    ----------
+    amp_el : 1D float32 array
+        Amplitudes (as a factor of threshold) per electrode. Only used to skip
+        electrodes that are not driven.
+    bright_model_el, size_model_el : 1D float32 array
+        Factors by which to scale brightness and rho (size), per electrode.
+    xel, yel : 1D float32 array
+        An array of x or y coordinates for each electrode (microns)
+    xgrid, ygrid : 1D float32 array
+        An array of x or y coordinates at which to calculate the spatial
+        response (microns)
+    rho : float32
+        Baseline exponential decay constant (microns) for the current spread,
+        before ``F_size`` scaling.
+    thresh_percept : float32
+        Spatial responses smaller than ``thresh_percept`` will be set to zero
+    cutoff_r2 : float32
+        Squared distance (microns^2) at which an electrode of unscaled size
+        stops contributing; scaled per electrode by its ``F_size``. Pass
+        ``inf`` to sum over every electrode. See ``min_current_spread`` on the
+        model for how this is derived.
+    n_threads : uint32
+        Number of CPU threads to use during parallelization using OpenMP.
+
+    Return Value
+    -----------------
+    Array with shape (n_points) representing the brightest frame of the percept
+    """
+    cdef:
+        index_t idx_el, idx_space
+        index_t n_el, n_space
+        float32[::1] bright
+        float32[::1] neg_inv_2rho2, cutoff_el
+        cnp.uint8_t[::1] active
+        float32 px_bright, xdiff, ydiff, r2
+
+    n_el = xel.shape[0]
+    n_space = len(xgrid)
+    if n_threads < 1:  # `num_threads(0)` is not conforming OpenMP
+        n_threads = 1
+
+    bright = np.zeros((n_space), dtype=np.float32)  # Py overhead
+
+    # Everything that depends only on the electrode is worked out once here,
+    # rather than once for every (grid point, electrode) pair:
+    size_np = np.asarray(size_model_el, dtype=np.float32)
+    neg_inv_2rho2 = (-1.0 / (2.0 * rho * rho * size_np)).astype(np.float32)
+    cutoff_el = (cutoff_r2 * size_np).astype(np.float32)
+    active = (np.abs(np.asarray(amp_el, dtype=np.float32)) >
+              0).astype(np.uint8)
+
+    # Parallel loop over all pixels to be rendered. `guided` rather than
+    # `static`: with the cutoff above, how many electrodes reach a given grid
+    # point varies, so equal-sized chunks are not equal-sized work.
+    for idx_space in prange(n_space, schedule='guided', nogil=True,
+                            num_threads=n_threads):
+        if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):
+            continue
+        px_bright = 0.0
+        for idx_el in range(n_el):
+            if active[idx_el] == 0:
+                continue
+            xdiff = xgrid[idx_space] - xel[idx_el]
+            ydiff = ygrid[idx_space] - yel[idx_el]
+            r2 = xdiff * xdiff + ydiff * ydiff
+            # `SpatialModel._cutoff_r2`, widened by this electrode's `F_size`:
+            if r2 > cutoff_el[idx_el]:
+                continue
+            px_bright = (px_bright + bright_model_el[idx_el] *
+                         c_exp(r2 * neg_inv_2rho2[idx_el]))
+        if c_abs(px_bright) < thresh_percept:
+            px_bright = 0.0
+        bright[idx_space] = px_bright  # Py overhead
+    return np.asarray(bright)

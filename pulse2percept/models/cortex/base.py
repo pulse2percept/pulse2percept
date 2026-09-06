@@ -259,6 +259,14 @@ class ScoreboardSpatial(CortexSpatial):
         Use :py:class:`~pulse2percept.models.cortex.ScoreboardModel` if you want a
         a standalone model.
 
+    .. warning::
+
+        ``rho`` is fixed: this model does not predict pulse-dependent
+        phosphene size. Doubling amplitude doubles brightness and leaves the
+        phosphene exactly as wide. Use
+        :py:class:`~pulse2percept.models.cortex.DynaphosModel` for a cortical
+        model whose phosphene size follows the stimulus current.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -454,6 +462,14 @@ class ScoreboardModel(Model):
         Use this class if you want a standalone model.
         Use :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial` if you want
         to combine the spatial model with a temporal model.
+
+    .. warning::
+
+        ``rho`` is fixed: this model does not predict pulse-dependent
+        phosphene size. Doubling amplitude doubles brightness and leaves the
+        phosphene exactly as wide. Use
+        :py:class:`~pulse2percept.models.cortex.DynaphosModel` for a cortical
+        model whose phosphene size follows the stimulus current.
 
     Parameters
     ----------

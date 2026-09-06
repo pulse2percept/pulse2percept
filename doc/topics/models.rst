@@ -46,6 +46,9 @@ Available models
    * - [Beyeler2019]_
      - :py:class:`~pulse2percept.models.AxonMapModel`
      - spatial
+   * - derived from [Granley2021]_
+     - :py:class:`~pulse2percept.models.BiphasicScoreboardModel`
+     - spatiotemporal
    * - [Granley2021]_
      - :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
      - spatiotemporal
@@ -57,11 +60,23 @@ Cortical stimulation also has
 :py:class:`~pulse2percept.models.cortex.ScoreboardModel`, a spatial baseline
 that maps cortical electrode locations through cortical retinotopy.
 
-Which model to use depends on the scientific question. The scoreboard model is
-a simple local baseline. The axon-map model adds retinal nerve-fiber effects
-for epiretinal stimulation. Published temporal and spatiotemporal models add
-assumptions specific to their experiments and should be chosen when those
-assumptions are relevant.
+Which model to use depends on the scientific question. For retinal
+stimulation, the three main choices differ in what they model:
+
+:py:class:`~pulse2percept.models.ScoreboardModel`
+    Fixed-width Gaussian per electrode; amplitude scales brightness.
+
+:py:class:`~pulse2percept.models.BiphasicScoreboardModel`
+    Adds [Granley2021]_-derived pulse-dependent brightness and width.
+    Requires a described biphasic pulse train rather than a bare
+    amplitude.
+
+:py:class:`~pulse2percept.models.BiphasicAxonMapModel`
+    Additionally models axonal elongation, whose length follows phase
+    duration [Granley2021]_.
+
+The published models add assumptions specific to their experiments and
+should be chosen when those assumptions are relevant.
 
 Basic usage
 -----------
