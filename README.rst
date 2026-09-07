@@ -45,7 +45,7 @@ vision.
 .. _pulse2percept: https://github.com/pulse2percept/pulse2percept
 .. _retinal and cortical implants: https://en.wikipedia.org/wiki/Visual_prosthesis
 
-.. image:: https://raw.githubusercontent.com/pulse2percept/pulse2percept/master/doc/_static/boston-train-combined.gif
+.. image:: https://raw.githubusercontent.com/pulse2percept/pulse2percept/master/doc/_static/logo-percept-combined.png
    :align: center
    :alt: Input stimulus and predicted percept
 

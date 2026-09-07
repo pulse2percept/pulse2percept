@@ -79,9 +79,9 @@ Stimuli and encoding
   returns it as a :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
 
 * The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
-  along with their asset files, because their original provenance and
-  licensing could not be verified. There is no replacement loader
-  (:pull:`889`).
+  along with their asset files and the README banner derived from them,
+  because their original provenance and licensing could not be verified.
+  There is no replacement loader (:pull:`889`).
 
 
 Implants

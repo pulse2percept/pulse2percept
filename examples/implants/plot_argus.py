@@ -56,8 +56,8 @@ fig.tight_layout()
 # :py:class:`~pulse2percept.models.retina.AxonMapModel`, which was developed to fit
 # behavioral data (see [Beyeler2019]_ for details).
 #
-# Boston Train sequence
-# ---------------------
+# Simulating a camera feed
+# ------------------------
 #
 # To simulate the vision provided by Argus II, we first need to set up a new
 # axon map model. We can specify phosphene size (``rho``) and elongation
