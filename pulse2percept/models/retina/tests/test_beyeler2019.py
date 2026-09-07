@@ -1072,7 +1072,7 @@ def test_axon_map_needs_an_implant_with_an_eye():
     with pytest.raises(TypeError) as excinfo:
         model.build()
     npt.assert_equal('RetinalImplant' in str(excinfo.value), True)
-    # Reading the property says the same thing, and so does `is_built`:
+    # Reading the property says the same thing:
     with pytest.raises(TypeError):
         model.spatial.eye
     # Wrapping the same array in a RetinalImplant is all it takes:
