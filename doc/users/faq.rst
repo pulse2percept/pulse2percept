@@ -60,7 +60,7 @@ A typical workflow looks roughly like this::
 What is the simplest simulation I can run?
 -------------------------------------------
 
-The :py:class:`~pulse2percept.models.ScoreboardModel` is a good place to start
+The :py:class:`~pulse2percept.models.retina.ScoreboardModel` is a good place to start
 for retinal stimulation. It assumes that each stimulated electrode produces a
 localized blob of light.
 
@@ -69,8 +69,8 @@ and predict the resulting percept:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
-    from pulse2percept.models import ScoreboardModel
+    from pulse2percept.implants.retina import ArgusII
+    from pulse2percept.models.retina import ScoreboardModel
 
     model = ScoreboardModel(implant=ArgusII())
 
@@ -158,9 +158,9 @@ temporal component as well.
 Once you have made those choices, consider which biological mechanisms the
 model needs to capture. For retinal stimulation, for example:
 
-* :py:class:`~pulse2percept.models.ScoreboardModel` assumes localized,
+* :py:class:`~pulse2percept.models.retina.ScoreboardModel` assumes localized,
   electrode-centered activation and provides a useful simple baseline.
-* :py:class:`~pulse2percept.models.AxonMapModel` additionally models activation
+* :py:class:`~pulse2percept.models.retina.AxonMapModel` additionally models activation
   of retinal ganglion cell axons and can therefore predict elongated
   phosphenes.
 * Other retinal models capture temporal or spatiotemporal effects of
@@ -196,14 +196,14 @@ For example, the Axon Map model has two particularly important parameters:
     generally produce longer axonal streaks.
 
 The current software defaults for
-:py:class:`~pulse2percept.models.AxonMapModel` are ``rho=200`` microns and
+:py:class:`~pulse2percept.models.retina.AxonMapModel` are ``rho=200`` microns and
 ``lam=500`` microns. These values make the model usable out of the box; they
 should not be interpreted as universal values for every implant user.
 In fact, every real prosthesis user has their onw ``rho`` and ``lam`` values
 that best represent how "streaky" or "blobby" their vision appears
 [Beyeler2019]_.
 
-Likewise, the :py:class:`~pulse2percept.models.ScoreboardModel` has a ``rho``
+Likewise, the :py:class:`~pulse2percept.models.retina.ScoreboardModel` has a ``rho``
 parameter controlling the spatial extent of its electrode-centered blobs. Its
 meaning is related to ``rho`` in the Axon Map model, but the two models make
 different assumptions about how activation spreads through the retina.
@@ -232,8 +232,8 @@ Model parameters can usually be passed when the model is created:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
-    from pulse2percept.models import AxonMapModel
+    from pulse2percept.implants.retina import ArgusII
+    from pulse2percept.models.retina import AxonMapModel
     from pulse2percept.units import um
 
     model = AxonMapModel(ArgusII(), rho=250 * um, lam=700 * um)
@@ -271,8 +271,8 @@ For example:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
-    from pulse2percept.models import AxonMapModel
+    from pulse2percept.implants.retina import ArgusII
+    from pulse2percept.models.retina import AxonMapModel
 
     model = AxonMapModel(
         ArgusII(),
@@ -319,7 +319,7 @@ Most pulse2percept simulations involve four objects, plus an optional encoder:
 :py:class:`~pulse2percept.implants.Implant`
     Describes the prosthetic device, including its electrode array, placement,
     and input/encoding pipeline. Specific devices such as
-    :py:class:`~pulse2percept.implants.ArgusII` are subclasses of this object.
+    :py:class:`~pulse2percept.implants.retina.ArgusII` are subclasses of this object.
 
 :py:class:`~pulse2percept.models.Model`
     A forward model that predicts a neural response or visual percept from the
@@ -368,7 +368,7 @@ frequency.
 
 Devices whose video processing is known carry an encoder of their own, in
 which case handing the model an image encodes it for you.
-:py:class:`~pulse2percept.implants.ArgusII` is one of them. Assign a different
+:py:class:`~pulse2percept.implants.retina.ArgusII` is one of them. Assign a different
 encoder to ``implant.encoder`` to say how the encoding should be done, or
 ``None`` to switch it off.
 
@@ -393,8 +393,9 @@ For example:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
-    from pulse2percept.models import Model, ScoreboardSpatial, FadingTemporal
+    from pulse2percept.implants.retina import ArgusII
+    from pulse2percept.models import Model, FadingTemporal
+    from pulse2percept.models.retina import ScoreboardSpatial
 
     model = Model(
         spatial=ScoreboardSpatial(ArgusII()),
@@ -500,14 +501,14 @@ For example:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
-    from pulse2percept.models import ScoreboardModel
+    from pulse2percept.implants.retina import ArgusII
+    from pulse2percept.models.retina import ScoreboardModel
     from pulse2percept.stimuli import BostonTrain
 
     model = ScoreboardModel(implant=ArgusII())
     percept = model.predict_percept(BostonTrain())
 
-:py:class:`~pulse2percept.implants.ArgusII` comes with an encoder of its own,
+:py:class:`~pulse2percept.implants.retina.ArgusII` comes with an encoder of its own,
 so the video is encoded for you. To say how, give the implant a different one:
 
 .. code-block:: python
@@ -549,9 +550,9 @@ pulse2percept uses
 retinal or cortical coordinates and visual-field coordinates.
 
 For retinal models, available mappings include
-:py:class:`~pulse2percept.topography.Curcio1990Map`,
-:py:class:`~pulse2percept.topography.Watson2014Map`, and
-:py:class:`~pulse2percept.topography.Watson2014DisplaceMap`.
+:py:class:`~pulse2percept.topography.retina.Curcio1990Map`,
+:py:class:`~pulse2percept.topography.retina.Watson2014Map`, and
+:py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap`.
 
 You can also implement your own
 :py:class:`~pulse2percept.topography.VisualFieldMap`.
@@ -651,12 +652,12 @@ Where should I go after my first simulation?
 
 A useful progression is:
 
-#. Try a simple :py:class:`~pulse2percept.models.ScoreboardModel` simulation
+#. Try a simple :py:class:`~pulse2percept.models.retina.ScoreboardModel` simulation
    and inspect the result with ``plot()``.
 #. Change the stimulated electrode or current and see what changes.
 #. Compare the same stimulation under
-   :py:class:`~pulse2percept.models.ScoreboardModel` and
-   :py:class:`~pulse2percept.models.AxonMapModel`.
+   :py:class:`~pulse2percept.models.retina.ScoreboardModel` and
+   :py:class:`~pulse2percept.models.retina.AxonMapModel`.
 #. Change ``rho`` and ``lam`` deliberately and inspect their effects.
 #. Change ``step`` and the simulated field of view so you understand the
    difference between numerical sampling and model behavior.

@@ -5,10 +5,11 @@ from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 
 from pulse2percept.models import BaseModel
-from pulse2percept.topography import (VisualFieldMap, RetinalMap,
-                                 CorticalMap, Grid2D, Polimeni2006Map,
-                                 Watson2014Map, Watson2014DisplaceMap,
-                                 Curcio1990Map)
+from pulse2percept.topography import Grid2D, VisualFieldMap
+from pulse2percept.topography.cortex import CorticalMap, Polimeni2006Map
+from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
+                                             Watson2014DisplaceMap,
+                                             Watson2014Map)
 from pulse2percept.utils import Parametrized
 from pulse2percept.topography.base import _rectangular_mesh
 from pulse2percept.units import (DimensionMismatchError, Quantity, dva, mm,

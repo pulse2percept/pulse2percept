@@ -131,7 +131,7 @@ class ElectrodeArray(PrettyPrint):
 
         Examples
         --------
-        >>> from pulse2percept.implants import ArgusII
+        >>> from pulse2percept.implants.retina import ArgusII
         >>> from pulse2percept.units import mm
         >>> ArgusII().electrode_array.coordinates(mm)[0]
         array([-2.5875, -1.4375,  0.    ])

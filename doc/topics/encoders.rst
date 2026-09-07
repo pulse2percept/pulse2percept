@@ -21,13 +21,13 @@ Attach an encoder to an implant, then hand it an image or video:
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     implant.encoder = p2p.stimuli.AmplitudeEncoder(
         amp_range=(0, 50),
         freq=20,
     )
 
-    model = p2p.models.ScoreboardModel(implant=implant)
+    model = p2p.models.retina.ScoreboardModel(implant=implant)
     percept = model.predict_percept(p2p.stimuli.BostonTrain())
 
 Dimensionless input is encoded when the implant prepares it. Electrical stimuli
@@ -95,13 +95,13 @@ Optical encoding
 
 .. versionadded:: 0.11.0
 
-:py:class:`~pulse2percept.implants.PRIMAPivotal` is illuminated by an
+:py:class:`~pulse2percept.implants.retina.PRIMAPivotal` is illuminated by an
 880 nm projector. :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps image
 intensity to pulse duration and returns irradiance in ``mW/mm^2``:
 
 .. code-block:: python
 
-    implant = p2p.implants.PRIMAPivotal()
+    implant = p2p.implants.retina.PRIMAPivotal()
     stim = implant.prepare_stim(p2p.stimuli.LogoBVL())
     stim.unit  # mW/mm^2
 
@@ -121,7 +121,7 @@ For example:
 
 .. code-block:: python
 
-    model = p2p.models.ScoreboardModel(implant=implant)
+    model = p2p.models.retina.ScoreboardModel(implant=implant)
     percept = model.predict_percept(p2p.stimuli.LogoBVL())
 
 Here ``ScoreboardModel`` visualizes implant geometry and optical drive. It does
@@ -133,7 +133,7 @@ Device constraints
 An implant's :py:class:`~pulse2percept.implants.Raster` determines which
 electrodes may pulse together; see :ref:`topics-rasters`. PRIMA uses no raster;
 all 378 pixels may be illuminated at once. With ``safe_mode=True``,
-:py:class:`~pulse2percept.implants.PRIMAPivotal` checks the documented projector
+:py:class:`~pulse2percept.implants.retina.PRIMAPivotal` checks the documented projector
 settings (3.5 mW/mm^2, 30 Hz, 0.7--9.8 ms ON durations, and duty cycle <= 0.294).
 This is not a biological safety check or a demonstrated hardware maximum.
 

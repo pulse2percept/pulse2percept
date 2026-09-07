@@ -80,7 +80,7 @@ plt.show()
 #
 # .. code-block:: python
 #
-#     nmap = p2p.topography.NeuropythyMap(subject='fsaverage', regions=['v1'])
+#     nmap = p2p.topography.cortex.NeuropythyMap(subject='fsaverage', regions=['v1'])
 #     xrange, yrange = (-6, 0), (-5, 5)
 #     nlink = Neuralink.from_neuropythy(
 #         nmap, xrange=xrange, yrange=yrange, step=2, rand_insertion_angle=0

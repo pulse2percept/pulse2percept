@@ -5,17 +5,17 @@ Granley et al. (2021): Effects of Biphasic Pulse Parameters with the BiphasicAxo
 =========================================================================================
 
 This example shows how to use the
-:py:class:`~pulse2percept.models.BiphasicAxonMapModel` to model the effects of 
+:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel` to model the effects of 
 biphasic pulse train parameters phosphene appearance in an epiretinal
-implant such as :py:class:`~pulse2percept.implants.ArgusII`. 
+implant such as :py:class:`~pulse2percept.implants.retina.ArgusII`. 
 
 Biphasic pulse trains are a commonly used type of stimulus in visual prostheses. 
-This model enhances the :py:class:`~pulse2percept.models.AxonMapModel` to reflect
+This model enhances the :py:class:`~pulse2percept.models.retina.AxonMapModel` to reflect
 the effects of the amplitude, frequency, and pulse duration on threshold,
 phosphene size, brightness, and streak length, according to previous
 psychophysical and electrophysiological studies.
 
-The :py:class:`~pulse2percept.models.BiphasicAxonMapModel` shares the same underlying 
+The :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel` shares the same underlying 
 assumptions as the axon map model. Namely, an axon's sensitivity to electrical stimulation
 is assumed to decay exponentially with...
 
@@ -45,8 +45,8 @@ with the exception that all stimuli are required to be :py:class:`~pulse2percept
 
 import matplotlib.pyplot as plt
 import numpy as np
-from pulse2percept.implants import ArgusII
-from pulse2percept.models import BiphasicAxonMapModel
+from pulse2percept.implants.retina import ArgusII
+from pulse2percept.models.retina import BiphasicAxonMapModel
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.units import uA, xTh
 
@@ -69,7 +69,7 @@ print(model)
 # later in this example.
 #
 # The rest of the parameters are shared with 
-# :py:class:`~pulse2percept.models.AxonMapModel`. For full details on these 
+# :py:class:`~pulse2percept.models.retina.AxonMapModel`. For full details on these 
 # parameters, see the Axon Map Tutorial
 #
 #

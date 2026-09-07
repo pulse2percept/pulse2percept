@@ -10,14 +10,14 @@ The scenarios below are the reference workloads for the library's main purpose
 -- predicting a percept from a stimulus, an implant and a phosphene model. The
 first two correspond to these one-liners::
 
-    implant = p2p.implants.ArgusII()
-    p2p.models.AxonMapModel(implant=implant, yrange=(-8, 8),
-                            xrange=(-12, 12)).predict_percept(
+    implant = p2p.implants.retina.ArgusII()
+    p2p.models.retina.AxonMapModel(implant=implant, yrange=(-8, 8),
+                                   xrange=(-12, 12)).predict_percept(
         as_current(implant, p2p.stimuli.LogoBVL()))
 
-    p2p.models.ScoreboardModel(implant=p2p.implants.PRIMAPivotal(),
-                               yrange=(-4, 4), xrange=(-4, 4), rho=50,
-                               step=0.1).predict_percept(
+    p2p.models.retina.ScoreboardModel(implant=p2p.implants.retina.PRIMAPivotal(),
+                                      yrange=(-4, 4), xrange=(-4, 4), rho=50,
+                                      step=0.1).predict_percept(
         p2p.stimuli.LogoBVL().invert())
 
 The PRIMA scenario runs its optical encoder directly. Electrical scenarios
@@ -171,22 +171,20 @@ SCENARIOS = [
     Scenario(
         id='argus2_axonmap_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL(),
-        implant=p2p.implants.ArgusII,
+        implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda **kwargs: p2p.models.AxonMapModel(xrange=(-12, 12),
-                                                       yrange=(-8, 8),
-                                                       **kwargs),
+        model=lambda **kwargs: p2p.models.retina.AxonMapModel(xrange=(-12, 12),
+                                                              yrange=(-8, 8),
+                                                              **kwargs),
         caches_axons=True,
     ),
     Scenario(
         # Benchmark the image-to-optical encoding path for PRIMA.
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
-        implant=p2p.implants.PRIMAPivotal,
-        model=lambda **kwargs: p2p.models.ScoreboardModel(xrange=(-4, 4),
-                                                          yrange=(-4, 4),
-                                                          rho=50, step=0.1,
-                                                          **kwargs),
+        implant=p2p.implants.retina.PRIMAPivotal,
+        model=lambda **kwargs: p2p.models.retina.ScoreboardModel(
+            xrange=(-4, 4), yrange=(-4, 4), rho=50, step=0.1, **kwargs),
     ),
     # Granley 2021. Its stimulus is a pulse train rather than an image because
     # the model reads amplitude, frequency and pulse duration off each
@@ -194,10 +192,10 @@ SCENARIOS = [
     # is a multiple of threshold, unlike every other scenario here.
     Scenario(
         id='argus2_biphasic_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.ArgusII,
+        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII,
                                       amp=20 * p2p.units.xTh),
-        implant=p2p.implants.ArgusII,
-        model=lambda **kwargs: p2p.models.BiphasicAxonMapModel(
+        implant=p2p.implants.retina.ArgusII,
+        model=lambda **kwargs: p2p.models.retina.BiphasicAxonMapModel(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
         caches_axons=True,
     ),
@@ -207,9 +205,9 @@ SCENARIOS = [
     # spatial -> temporal handoff in Model.
     Scenario(
         id='argus2_nanduri2012_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
-        implant=p2p.implants.ArgusII,
-        model=lambda **kwargs: p2p.models.Nanduri2012Model(
+        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
+        implant=p2p.implants.retina.ArgusII,
+        model=lambda **kwargs: p2p.models.retina.Nanduri2012Model(
             xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
     ),
     # Horsager 2009: a temporal-only model, so predict_percept returns one
@@ -217,9 +215,9 @@ SCENARIOS = [
     # reaches _horsager2009.
     Scenario(
         id='argus2_horsager2009_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
-        implant=p2p.implants.ArgusII,
-        model=lambda **kwargs: p2p.models.Horsager2009Model(**kwargs),
+        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
+        implant=p2p.implants.retina.ArgusII,
+        model=lambda **kwargs: p2p.models.retina.Horsager2009Model(**kwargs),
         binds_implant=False,
         plottable=False,
     ),
@@ -228,9 +226,9 @@ SCENARIOS = [
     Scenario(
         id='argus2_thompson2003_logobvl',
         stimulus=lambda: p2p.stimuli.LogoBVL(),
-        implant=p2p.implants.ArgusII,
+        implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda **kwargs: p2p.models.Thompson2003Model(
+        model=lambda **kwargs: p2p.models.retina.Thompson2003Model(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
     ),
     # A composed Model, which is how a user combines a spatial and a temporal
@@ -238,14 +236,13 @@ SCENARIOS = [
     # kernel that FadingTemporal and friends share.
     Scenario(
         id='argus2_scoreboard_fading_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.ArgusII),
-        implant=p2p.implants.ArgusII,
+        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
+        implant=p2p.implants.retina.ArgusII,
         # `Model` takes components, not parameters, so `verbose`/`n_threads`
         # go to the components that own them.
         model=lambda implant, **kwargs: p2p.models.Model(
-            spatial=p2p.models.ScoreboardSpatial(implant, xrange=(-4, 4),
-                                                 yrange=(-4, 4), step=0.5,
-                                                 **kwargs),
+            spatial=p2p.models.retina.ScoreboardSpatial(
+                implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
             temporal=p2p.models.FadingTemporal(**kwargs)),
     ),
     # A 94-frame video: the spatial model runs once per frame, so a single
@@ -254,11 +251,11 @@ SCENARIOS = [
     Scenario(
         id='argus2_axonmap_bostontrain',
         stimulus=lambda: p2p.stimuli.BostonTrain().rgb2gray(),
-        implant=p2p.implants.ArgusII,
+        implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda **kwargs: p2p.models.AxonMapModel(xrange=(-12, 12),
-                                                       yrange=(-8, 8),
-                                                       **kwargs),
+        model=lambda **kwargs: p2p.models.retina.AxonMapModel(xrange=(-12, 12),
+                                                              yrange=(-8, 8),
+                                                              **kwargs),
         caches_axons=True,
         slow=True,
     ),

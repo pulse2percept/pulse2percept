@@ -1,13 +1,13 @@
 """:py:class:`~pulse2percept.implants.cortex.Orion`"""
 import numpy as np
 
-from .. import Implant
+from .base import CorticalImplant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 from ...utils.constants import UM_PER_MM
 
 
-class Orion(Implant):
+class Orion(CorticalImplant):
     """Create a Orion array
     
     Electrode coordinates are device-local, with the base centered at
@@ -28,6 +28,9 @@ class Orion(Implant):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
+    hemisphere : 'LH', 'RH' or None, optional
+        Which hemisphere the device is implanted in. Metadata: it does not
+        move the array, which the model's ``implant_position`` places.
     
     Examples
     --------
@@ -49,9 +52,10 @@ class Orion(Implant):
     __slots__ = ('shape',)
     placement = 'epicortical'
 
-    def __init__(self, preprocess=False, safe_mode=False):
+    def __init__(self, preprocess=False, safe_mode=False, hemisphere=None):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+        self.hemisphere = hemisphere
         self.shape = (10, 7)
         # The row offset is published in millimeters; coordinates are microns:
         spacing = (4200, np.sqrt(3**2-2.1**2) * UM_PER_MM)

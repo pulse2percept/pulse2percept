@@ -1,0 +1,296 @@
+""":py:class:`~pulse2percept.implants.retina.ArgusI`,
+   :py:class:`~pulse2percept.implants.retina.ArgusII`"""
+import numpy as np
+from collections import OrderedDict
+
+from .base import RetinalImplant
+from ..electrodes import DiskElectrode
+from ..electrode_arrays import ElectrodeGrid
+from ..rasters import SequentialRaster
+from ...stimuli import AmplitudeEncoder
+from ...units import Hz, ms
+
+# Distinguishes "the caller said nothing", which gets the device's own default,
+# from an explicit None, which switches the feature off. A plain None default
+# could not tell the two apart:
+_DEVICE_DEFAULT = object()
+
+
+class ArgusI(RetinalImplant):
+    """Create an Argus I array
+
+    Electrode coordinates are device-local, centered on ``(0, 0)``.
+
+    Argus I is a modified cochlear implant containing 16 electrodes in a 4x4
+    array with a center-to-center separation of 800 um, and two electrode
+    diameters (250 um and 500 um) arranged in a checkerboard pattern
+    [Yue2020]_.
+
+    The array is oriented in the visual field as shown in Fig. 1 of
+    [Horsager2009]_; that is, if placed in (0,0), the top two rows will lie in
+    the lower retina (upper visual field):
+
+    .. raw:: html
+
+        <pre>
+          -->x    A1 B1 C1 D1                     260 520 260 520
+          |       A2 B2 C2 D2   where electrode   520 260 520 260
+          v       A3 B3 C3 D3   diameters are:    260 520 260 520
+           y      A4 B4 C4 D4                     520 260 520 260
+        </pre>
+
+    Electrode order is: A1, B1, C1, D1, A2, B2, ..., D4.
+
+    If ``use_legacy_names`` is True, electrode order is: L6, L2, M8, M4, ...
+
+    An electrode can be addressed by name, row/column index, or integer index
+    (into the flattened array).
+
+    .. note::
+
+        Column order is reversed in a left-eye implant.
+
+    Parameters
+    ----------
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 16 entries gives each its own.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
+    eye : {'RE', 'LE'}, optional
+        Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a stimulus is prepared, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
+    use_legacy_names : bool, optional
+        If True, uses L/M based electrode names from older papers (e.g., L6,
+        L2) instead of A1-A16.
+
+    Examples
+    --------
+    Create an Argus I array:
+
+    >>> from pulse2percept.implants.retina import ArgusI
+    >>> ArgusI()  # doctest: +NORMALIZE_WHITESPACE
+    ArgusI(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
+           safe_mode=False, shape=(4, 4))
+
+    Get access to electrode 'B1', either by name or by row/column index:
+
+    >>> argus = ArgusI()
+    >>> argus['B1']  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='B1', radius=250.0,
+                  x=-400.0, y=-1200.0, z=0.0)
+    >>> argus[0, 1]  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='B1', radius=250.0,
+                  x=-400.0, y=-1200.0, z=0.0)
+
+    """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape',)
+
+    placement = 'epiretinal'
+    _default_scene_input_frame = 'head'
+
+    def __init__(self, z=0, eye='RE', preprocess=True,
+                 safe_mode=False, use_legacy_names=False):
+        self.eye = eye
+        self.preprocess = preprocess
+        self.safe_mode = safe_mode
+        self.shape = (4, 4)
+        r_arr = np.array([250, 500, 250, 500]) / 2.0
+        r_arr = np.concatenate((r_arr, r_arr[::-1], r_arr, r_arr[::-1]),
+                               axis=0)
+        spacing = 800.0
+
+        # In older papers, Argus I electrodes go by L and M:
+        old_names = names = ['L6', 'L2', 'M8', 'M4',
+                             'L5', 'L1', 'M7', 'M3',
+                             'L8', 'L4', 'M6', 'M2',
+                             'L7', 'L3', 'M5', 'M1']
+        names = old_names if use_legacy_names else ('1', 'A')
+        self.electrode_array = ElectrodeGrid(
+            self.shape, spacing, z=z,
+            electrode_type=DiskElectrode, radius=r_arr, names=names)
+
+        # Unfortunately, in the left eye the labeling of columns is reversed...
+        if self.eye == 'LE':
+            # FIXME: Would be better to have more flexibility in the naming
+            # convention. This is a quick-and-dirty fix:
+            names = self.electrode_array.electrode_names
+            objects = self.electrode_array.electrode_objects
+            names = np.array(names).reshape(self.electrode_array.shape)
+            # Reverse column names:
+            for row in range(self.electrode_array.shape[0]):
+                names[row] = names[row][::-1]
+            # Build a new ordered dict:
+            electrodes = OrderedDict()
+            for name, obj in zip(names.ravel(), objects):
+                electrodes.update({name: obj})
+            # Assign the new ordered dict to electrode_array:
+            self.electrode_array._electrodes = electrodes
+
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        params.update({'shape': self.shape})
+        return params
+
+
+class ArgusII(RetinalImplant):
+    """Create an Argus II array
+
+    Electrode coordinates are device-local, centered on ``(0, 0)``.
+
+    Argus II contains 60 electrodes of 225 um diameter arranged in a 6 x 10
+    grid (575 um center-to-center separation) [Yue2020]_.
+
+    The array is oriented upright in the visual field, such that an
+    array with center (0,0) has the top three rows lie in the lower
+    retina (upper visual field), as shown below:
+
+    .. raw:: html
+
+        <pre>
+                  A1 A2 A3 A4 A5 A6 A7 A8 A9 A10
+          -- x    B1 B2 B3 B4 B5 B6 B7 B8 B9 B10
+          |       C1 C2 C3 C4 C5 C6 C7 C8 C9 C10
+          v       D1 D2 D3 D4 D5 D6 D7 D8 D9 D10
+           y      E1 E2 E3 E4 E5 E6 E7 E8 E9 E10
+                  F1 F2 F3 F4 F5 F6 F7 F8 F9 F10
+        </pre>
+
+    Electrode order is: A1, A2, ..., A10, B1, B2, ..., F10.
+
+    An electrode can be addressed by name, row/column index, or integer index
+    (into the flattened array).
+
+    .. note::
+
+        Column order is reversed in a left-eye implant.
+
+    Parameters
+    ----------
+    z : float, list, or Quantity, optional
+        Electrode height (um) above the array's own plane: a scalar
+        applies to every electrode, a list of 60 entries gives each its own.
+        May be given as unitful quantities (e.g. ``z=100 * um``); see
+        :py:mod:`pulse2percept.units`.
+    eye : {'RE', 'LE'}, optional
+        Eye in which array is implanted.
+    preprocess : bool or callable, optional
+        Either True/False to indicate whether to execute the implant's default
+        preprocessing method whenever a stimulus is prepared, or a custom
+        function (callable).
+    safe_mode : bool, optional
+        If safe mode is enabled, only charge-balanced stimuli are allowed.
+    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
+        How the device turns a picture into stimulation. Defaults to a fresh
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz, which is
+        the rate Argus II runs its video at. Pass ``encoder=None`` to switch
+        automatic encoding off, so that an image or video input is refused
+        rather than encoded.
+
+        .. versionadded:: 0.10.0
+    raster : :py:class:`~pulse2percept.implants.Raster`, optional
+        How the stimulator takes turns between electrodes. Defaults to a fresh
+        :py:class:`~pulse2percept.implants.SequentialRaster` of six groups
+        2 ms apart, i.e. one row of ten electrodes at a time. Pass
+        ``raster=None`` to drive every electrode at once.
+
+        .. versionadded:: 0.10.0
+    thresholds : float, Quantity, or dict, optional
+        Perceptual threshold current (uA) of the participant this device is
+        modeling, used to calibrate threshold-relative (``xTh``) stimuli. A
+        scalar applies to every electrode; a dict calibrates the named
+        electrodes only. See
+        :py:attr:`~pulse2percept.implants.Implant.thresholds`.
+
+        .. versionadded:: 0.11.0
+
+    Examples
+    --------
+    Create an Argus II array:
+
+    >>> from pulse2percept.implants.retina import ArgusII
+    >>> ArgusII()  # doctest: +NORMALIZE_WHITESPACE
+    ArgusII(electrode_array=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
+            preprocess=True, raster=SequentialRaster, safe_mode=False,
+            shape=(6, 10))
+
+    Get access to electrode 'E7', either by name or by row/column index:
+
+    >>> argus = ArgusII()
+    >>> argus['E7']  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='E7', radius=112.5,
+                  x=862.5, y=862.5, z=0.0)
+    >>> argus[4, 6]  # doctest: +NORMALIZE_WHITESPACE
+    DiskElectrode(activated=True, name='E7', radius=112.5,
+                  x=862.5, y=862.5, z=0.0)
+
+    Because the device brings its own encoder, a picture can be presented
+    directly and comes back as current:
+
+    >>> from pulse2percept.stimuli import LogoBVL
+    >>> ArgusII().prepare_stim(LogoBVL()).unit
+    uA
+
+    """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ('shape',)
+
+    placement = 'epiretinal'
+    _default_scene_input_frame = 'head'
+
+    def __init__(self, z=0, eye='RE', preprocess=True,
+                 safe_mode=False, encoder=_DEVICE_DEFAULT,
+                 raster=_DEVICE_DEFAULT, thresholds=None):
+        self.safe_mode = safe_mode
+        self.preprocess = preprocess
+        self.shape = (6, 10)
+        r = 225.0 / 2.0
+        spacing = 575.0
+        names = ('A', '1')
+        self.electrode_array = ElectrodeGrid(
+            self.shape, spacing, z=z, radius=r,
+            names=names, electrode_type=DiskElectrode)
+
+        # Built per instance rather than shared between them: a raster binds to
+        # the implant it schedules, and an encoder is a mutable object the
+        # caller may go on to tweak.
+        self.encoder = (AmplitudeEncoder(freq=6 * Hz)
+                        if encoder is _DEVICE_DEFAULT else encoder)
+        self.raster = (SequentialRaster(6, group_dur=2 * ms)
+                       if raster is _DEVICE_DEFAULT else raster)
+
+        # Set left/right eye:
+        self.eye = eye
+        # Unfortunately, in the left eye the labeling of columns is reversed...
+        if self.eye == 'LE':
+            # TODO: Would be better to have more flexibility in the naming
+            # convention. This is a quick-and-dirty fix:
+            names = self.electrode_array.electrode_names
+            objects = self.electrode_array.electrode_objects
+            names = np.array(names).reshape(self.electrode_array.shape)
+            # Reverse column names:
+            for row in range(self.electrode_array.shape[0]):
+                names[row] = names[row][::-1]
+            # Build a new ordered dict:
+            electrodes = OrderedDict()
+            for name, obj in zip(names.ravel(), objects):
+                electrodes.update({name: obj})
+            # Assign the new ordered dict to electrode_array:
+            self.electrode_array._electrodes = electrodes
+
+        # Set after left-eye electrode renaming:
+        self.thresholds = thresholds
+
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
+                       'preprocess': self.preprocess})
+        return params

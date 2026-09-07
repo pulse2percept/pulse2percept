@@ -17,7 +17,7 @@ from ..implants import Implant
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
-from ..topography import Curcio1990Map, Grid2D, RetinalMap
+from ..topography import Grid2D
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
                      dva, ms, um, uA)
 from ..units.base import has_units
@@ -155,15 +155,6 @@ def _frame_clock(stim, dt, unit=ms):
     return ends * dt, start * dt
 
 
-def _visual_field_map_first(params):
-    """Apply ``visual_field_map`` before parameters whose units need it."""
-    if 'visual_field_map' not in params:
-        return params
-    return {'visual_field_map': params['visual_field_map'],
-            **{key: val for key, val in params.items()
-               if key != 'visual_field_map'}}
-
-
 def _length_valued(value):
     """Return whether a value or pair contains a physical length."""
     values = value if isinstance(value, (list, tuple)) else [value]
@@ -281,19 +272,13 @@ def _device_scene(scene, implant):
 def _scene_stim(model, scene, gaze):
     """Prepare electrode stimulation sampled from a scene."""
     if not model.has_space:
-        raise ValueError("A scene is registered against the retina, which "
-                         "needs a spatial model. This model has only a "
-                         "temporal one.")
+        raise ValueError("Registering a scene against an implant needs a "
+                         "spatial model. This model has only a temporal one.")
     implant = model.implant
     spatial = model.spatial
-    visual_field_map = getattr(spatial, 'visual_field_map', None)
-    if not isinstance(visual_field_map, RetinalMap):
-        raise ValueError(
-            f"A scene reaches the electrodes through the model's "
-            f"'visual_field_map', which has to say where on the retina each "
-            f"degree of visual angle lands. This model's is a "
-            f"{type(visual_field_map).__name__}; "
-            f"registering a scene against a cortical map is not implemented.")
+    # Up here rather than next to its use below: a model that cannot register
+    # a scene at all is refused before the scene is preprocessed.
+    x_vf, y_vf = spatial._scene_sampling_points()
     if implant.encoder is None:
         raise ValueError(
             "A scene is a picture, and there is no principled default for "
@@ -301,9 +286,6 @@ def _scene_stim(model, scene, gaze):
             "'encoder' (e.g. an AmplitudeEncoder, or a PRIMAEncoder for a "
             "photovoltaic device) to say how.")
     device_scene = _device_scene(scene, implant)
-    xy = _placed_coords(spatial, implant.electrode_array,
-                        visual_field_map.tissue_unit)[:, :2].T
-    x_vf, y_vf = visual_field_map.ret_to_dva(*xy)
     frame = implant.scene_input_frame
     if frame not in ('eye', 'head'):
         # Validate class defaults as well as instance overrides:
@@ -684,22 +666,6 @@ def _warn_rho_vs_pitch(model):
         f"driven.")
 
 
-def _warn_ignores_z(model, electrode_array):
-    """Warn when a model ignores nonzero electrode ``z`` coordinates.
-
-    Reads placed coordinates, so ``implant_depth`` counts as depth.
-    """
-    if np.allclose(_placed_coords(model, electrode_array,
-                                  model.space_unit)[:, 2], 0):
-        return
-    warnings.warn(
-        f"{type(model).__name__} does not model electrode-retina distance: "
-        f"nonzero z values do not change its response. In a real implant, "
-        f"distance is expected to affect stimulation threshold and spatial "
-        f"recruitment, but that relationship is not parameterized by this "
-        f"model.")
-
-
 class BaseModel(Parametrized, metaclass=ABCMeta):
     """Abstract base class for computational models.
 
@@ -915,13 +881,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         frame instead.
 
     xrange : (float, float) or Quantity, optional
-        Horizontal visual-field extent in degrees of visual angle. On retinal
-        maps, a physical retinal extent may be given instead and is resolved
-        through ``visual_field_map``.
+        Horizontal visual-field extent in degrees of visual angle.
     yrange : (float, float) or Quantity, optional
-        Vertical visual-field extent in degrees of visual angle. On retinal
-        maps, a physical retinal extent may be given instead and is resolved
-        through ``visual_field_map``.
+        Vertical visual-field extent in degrees of visual angle.
     step : float, (float, float), or Quantity, optional
         Grid spacing in degrees of visual angle. A pair specifies separate x
         and y spacing.
@@ -937,7 +899,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Fraction of peak Gaussian current spread below which an electrode may
         be skipped at a grid point. Set to 0 to disable the cutoff.
     visual_field_map : VisualFieldMap, optional
-        Retinotopic map between visual-field and tissue coordinates.
+        Map between visual-field and tissue coordinates. ``None`` until an
+        anatomy-specific subclass such as
+        :py:class:`~pulse2percept.models.retina.RetinalSpatial` supplies one;
+        building without a map raises.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -961,13 +926,16 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
     Notes
     -----
-    ``xrange`` and ``yrange`` always describe the simulated visual field and
-    are stored in degrees of visual angle. A retinal length is only shorthand
-    for selecting that extent through ``visual_field_map``; the resulting grid
-    is still uniformly sampled in visual angle. ``step`` therefore only accepts
-    angular spacing.
+    ``xrange``, ``yrange`` and ``step`` describe the simulated visual field and
+    are stored in degrees of visual angle. This class is anatomy-neutral: it
+    supplies no default ``visual_field_map`` and reads no physical length as a
+    visual-field extent.
 
     .. versionadded:: 0.6
+
+    .. versionchanged:: 0.11.0
+        Retinal defaults and the physical-extent shorthand moved to
+        :py:class:`~pulse2percept.models.retina.RetinalSpatial`.
     """
 
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
@@ -976,10 +944,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def __init__(self, implant, **params):
         _check_implant(implant)
         self._implant = implant
-        # `visual_field_map` first: `xrange`/`yrange` may be given as a retinal
-        # extent, which is resolved through the map as it is assigned. See
-        # `_visual_field_map_first`.
-        super().__init__(**_visual_field_map_first(params))
+        super().__init__(**params)
         self.grid = None
         self._location_noise_z = None
 
@@ -1008,79 +973,21 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             self._location_noise_z = None
         self._implant = implant
 
-    def set_params(self, **params):
-        """Set the parameters of this model
-
-        ``visual_field_map`` is applied before the other parameters, so that a
-        retinal extent given for ``xrange``/``yrange`` in the same call is
-        resolved through the map the caller asked for. See
-        ``_visual_field_map_first``.
-        """
-        super().set_params(**_visual_field_map_first(params))
-
     def _normalize_param_value(self, name, value):
         """Normalize a parameter to its stored unit.
 
-        Physical ``xrange`` and ``yrange`` values are resolved through ``visual_field_map``;
-        other unitful parameters use the generic conversion.
+        A visual-field extent given as a physical length is refused here:
+        resolving one requires a map between tissue distance and visual angle,
+        which is anatomy-specific. See
+        :py:class:`~pulse2percept.models.retina.RetinalSpatial`.
         """
         if name in ('xrange', 'yrange') and _length_valued(value):
-            return self._retinal_range_to_dva(name, value)
-        return super()._normalize_param_value(name, value)
-
-    def _retinal_range_to_dva(self, name, value):
-        """Resolve a retinal extent to a visual-field range.
-
-        ``xrange`` is converted along the horizontal retinal meridian and
-        ``yrange`` along the vertical meridian. The result is stored in degrees
-        of visual angle and is not reinterpreted if ``visual_field_map``
-        changes later.
-
-        Parameters
-        ----------
-        name : {'xrange', 'yrange'}
-            Range being assigned.
-        value : (min, max)
-            Retinal extent.
-
-        Returns
-        -------
-        tuple of float
-            Visual-field extent in increasing order.
-        """
-        visual_field_map = getattr(self, 'visual_field_map', None)
-        if not isinstance(visual_field_map, RetinalMap):
             raise DimensionMismatchError(
                 f"'{name}' is a visual field extent, measured in degrees of "
                 f"visual angle. A physical length is shorthand for one only "
-                f"on a retinal map, and this model's visual_field_map is a "
-                f"{type(visual_field_map).__name__}. Specify '{name}' in "
-                f"dva instead.")
-        # In the unit the map's tissue side is measured in, which is what its
-        # inverse transform below expects:
-        extent = np.asarray(as_value(value, visual_field_map.tissue_unit,
-                                     name),
-                            dtype=np.float64).ravel()
-        if extent.size != 2:
-            raise ValueError(f"'{name}' must be a (min, max) pair, not "
-                             f"{value}.")
-        lo, hi = extent
-        try:
-            if name == 'xrange':
-                lo_dva, _ = visual_field_map.ret_to_dva(lo, 0)
-                hi_dva, _ = visual_field_map.ret_to_dva(hi, 0)
-            else:
-                _, lo_dva = visual_field_map.ret_to_dva(0, lo)
-                _, hi_dva = visual_field_map.ret_to_dva(0, hi)
-        except NotImplementedError:
-            raise NotImplementedError(
-                f"This visual field map "
-                f"({type(visual_field_map).__name__}) cannot infer a visual "
-                f"field range from retinal distance. Specify "
-                f"'{name}' in dva instead.") from None
-        # Sorted, because the retinal y axis points the opposite way from the
-        # visual field's, so the two end points can come back swapped:
-        return tuple(sorted((float(lo_dva), float(hi_dva))))
+                f"on a retinal model, and {type(self).__name__} is not one. "
+                f"Specify '{name}' in dva instead.")
+        return super()._normalize_param_value(name, value)
 
     def get_default_params(self):
         """Return a dictionary of default values for all model parameters"""
@@ -1094,7 +1001,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'grid_type': 'rect',
             'thresh_percept': 0,
             'min_current_spread': 1e-8,
-            'visual_field_map': Curcio1990Map(),
+            'visual_field_map': None,
             'n_gray': None,
             'location_noise': None,  # dva
             'verbose': True,
@@ -1106,12 +1013,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         return params
 
     def get_param_units(self):
-        """Return a dict of the units that parameters are stored in
-
-        ``xrange`` and ``yrange`` additionally accept a retinal extent, which
-        is not a unit conversion and so does not appear here; see
-        ``_retinal_range_to_dva``.
-        """
+        """Return a dict of the units that parameters are stored in"""
         return {
             **super().get_param_units(),
             # The simulated patch of visual field is specified in degrees of
@@ -1170,6 +1072,12 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         # See `BaseModel.build`:
         self.set_params(**build_params)
+        if self.visual_field_map is None:
+            raise ValueError(
+                f"{type(self).__name__} has no 'visual_field_map'. A spatial "
+                f"model needs one to place electrodes in the visual field: "
+                f"pass one, or subclass an anatomy-specific base such as "
+                f"RetinalSpatial or CortexSpatial, which supply a default.")
         if self.visual_field_map.ndim not in self.ndim:
             raise ValueError(f"Model expects one of {self.ndim} dimensions, but "
                              f"visual field map has {self.visual_field_map.ndim} dimensions.")
@@ -1227,6 +1135,21 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def _postprocess_spatial(self, resp):
         """Hook for spatial-model postprocessing."""
         return resp
+
+    def _scene_sampling_points(self):
+        """Return placed electrode positions in dva, for sampling a scene.
+
+        Where an electrode lands in the visual field follows from the tissue
+        a model stimulates, so only a subclass that models one can answer.
+
+        Returns
+        -------
+        x, y : tuple of ndarray
+            Visual field coordinates in dva, in electrode-array order.
+        """
+        raise NotImplementedError(
+            f"Scene-to-electrode registration is not implemented for "
+            f"{type(self).__name__}.")
 
     def predict_percept(self, source, t_percept=None):
         """Predict the spatial response.
@@ -1350,7 +1273,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Parameters
         ----------
         use_dva : bool, optional
-            Uses degrees of visual angle (dva) if True, else retinal
+            Uses degrees of visual angle (dva) if True, else tissue
             coordinates (microns)
         style : {'hull', 'scatter', 'cell'}, optional
             Grid plotting style:

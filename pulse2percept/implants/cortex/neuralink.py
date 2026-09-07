@@ -6,7 +6,8 @@ import numpy as np
 from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
 
-from ..ensemble import EnsembleImplant
+from .base import _validate_hemisphere
+from ..ensemble import EnsembleImplant, _resolve_region
 from ..electrodes import Electrode
 from ..electrode_arrays import ElectrodeArray
 from ..base import Implant
@@ -276,7 +277,7 @@ class Neuralink(EnsembleImplant):
 
         Parameters
         ----------
-        visual_field_map : p2p.topography.NeuropythyMap
+        visual_field_map : p2p.topography.cortex.NeuropythyMap
             Visual field map to create implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations (dva) to create threads at. Not
@@ -309,10 +310,11 @@ class Neuralink(EnsembleImplant):
            :py:mod:`pulse2percept.units`.
         """
         # import at runtime to avoid circular imports
-        from ...topography import NeuropythyMap, Grid2D
+        from ...topography import Grid2D
+        from ...topography.cortex import NeuropythyMap
         if not isinstance(visual_field_map, NeuropythyMap):
             raise TypeError("visual_field_map must be a "
-                            "p2p.topography.NeuropythyMap")
+                            "p2p.topography.cortex.NeuropythyMap")
 
         # Where in the *visual field* each thread goes; `visual_field_map`
         # turns that into a place on the cortical surface below:
@@ -386,20 +388,32 @@ class Neuralink(EnsembleImplant):
         return implant_type(x=x, y=y)
 
     @classmethod
-    def from_cortical_map(cls, implant_type, visual_field_map, locs=None,
-                          xrange=None,
-                          yrange=None, step=None, region='v1'):
+    def from_visual_field_map(cls, implant_type, visual_field_map, locs=None,
+                              xrange=None,
+                              yrange=None, step=None, region=None):
         """
-        Override of parent class from cortical map method.
-        Uses from_neuropythy instead of from_cortical_map if the provided
-        visual_field_map is a NeuropythyMap.
+        Override of the generic ensemble factory.
+
+        A :py:class:`~pulse2percept.topography.cortex.NeuropythyMap` is handed
+        to :py:meth:`from_neuropythy`, which inserts each thread along the
+        cortical surface normal; any other 2D cortical map goes through the
+        generic implementation.
+
+        Only a :py:class:`~pulse2percept.topography.cortex.CorticalMap` is
+        accepted. The generic factory takes any 2D map, but the tissue
+        coordinates a retinal map returns are also microns, so placing threads
+        by one would produce a valid-looking implant sitting nowhere in
+        cortex.
+
+        .. versionadded:: 0.11.0
+            Replaces ``from_cortical_map``.
 
         Parameters
         ----------
         implant_type : p2p.implants.Implant
             Type of implant to create. Currently only NeuralinkThread is supported.
-        visual_field_map : p2p.topography.CorticalMap
-            Cortical map to create implant from.
+        visual_field_map : p2p.topography.cortex.CorticalMap
+            Cortical visual field map to create the implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations to create threads at. Not
             needed if using xrange, yrange, and step.
@@ -408,7 +422,8 @@ class Neuralink(EnsembleImplant):
         step : float or (x_step, y_step), optional
             Spacing between threads.
         region : str, optional
-            Region of cortex to create implant in.
+            Region of cortex to create implant in. Required unless the map has
+            exactly one region.
 
         Returns
         -------
@@ -417,16 +432,51 @@ class Neuralink(EnsembleImplant):
         """
         if not issubclass(implant_type, NeuralinkThread):
             raise TypeError("implant_type must be a subclass of NeuralinkThread")
-        from ...topography import NeuropythyMap
+        from ...topography.cortex import CorticalMap, NeuropythyMap
+        # A retinal map also returns microns, so nothing downstream would
+        # notice threads being placed by one:
+        if not isinstance(visual_field_map, CorticalMap):
+            raise TypeError(f"Neuralink is a cortical implant, so "
+                            f"'visual_field_map' must be a "
+                            f"p2p.topography.cortex.CorticalMap, not "
+                            f"{type(visual_field_map).__name__}.")
         if not isinstance(visual_field_map, NeuropythyMap):
-            return super().from_cortical_map(implant_type, visual_field_map, locs=locs, xrange=xrange,
-                                             yrange=yrange, step=step, region=region)
+            return super().from_visual_field_map(
+                implant_type, visual_field_map, locs=locs, xrange=xrange,
+                yrange=yrange, step=step, region=region)
+        # A 3D map is what `from_neuropythy` is for, so only the region
+        # still needs resolving:
+        region = _resolve_region(visual_field_map, region, ndim=3)
         return cls.from_neuropythy(visual_field_map, locs=locs, xrange=xrange, yrange=yrange,
                                     step=step, region=region, Thread=implant_type)
 
-    
+    @property
+    def hemisphere(self):
+        """Implanted hemisphere
 
-    def __init__(self, threads, preprocess=False, safe_mode=False):
+        'LH', 'RH', or None if unspecified. Metadata: thread coordinates and
+        the model's ``implant_position`` place the implant, not this
+        attribute.
+
+        .. versionadded:: 0.11.0
+        """
+        return getattr(self, '_hemisphere', None)
+
+    @hemisphere.setter
+    def hemisphere(self, hemisphere):
+        """Hemisphere setter (called upon ``self.hemisphere = hemisphere``)"""
+        self._hemisphere = _validate_hemisphere(hemisphere)
+
+    def _pprint_params(self):
+        """Return dict of class attributes to pretty-print"""
+        params = super()._pprint_params()
+        # Omitted when unspecified, which is the default:
+        if self.hemisphere is not None:
+            params['hemisphere'] = self.hemisphere
+        return params
+
+    def __init__(self, threads, preprocess=False, safe_mode=False,
+                 hemisphere=None):
         """
         Neuralink implant, consisting of one or more 
         :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`s.
@@ -446,7 +496,11 @@ class Neuralink(EnsembleImplant):
             function (callable).
         safe_mode : bool, optional
             If safe mode is enabled, only charge-balanced stimuli are allowed.
+        hemisphere : 'LH', 'RH' or None, optional
+            Which hemisphere the implant sits in. Metadata: thread
+            coordinates place the implant, not this attribute.
         """
+        self.hemisphere = hemisphere
         if isinstance(threads, dict):
             for key, thread in threads.items():
                 if not isinstance(thread, NeuralinkThread):

@@ -12,12 +12,12 @@ from skimage.transform import (estimate_transform as img_transform,
 import matplotlib.pyplot as plt
 from matplotlib import patches
 
-from ..implants import ArgusI, ArgusII
-from ..models import AxonMapModel
+from ..implants.retina import ArgusI, ArgusII
+from ..models.retina import AxonMapModel
 from ..units import as_value, deg, um
 from ..utils import scale_image, center_image
 from ..utils.constants import ZORDER
-from ..topography import Watson2014Map
+from ..topography.retina import Watson2014Map
 
 PATH_ARGUS1 = join(dirname(__file__), 'data', 'argus1.png')
 PATH_ARGUS2 = join(dirname(__file__), 'data', 'argus2.png')
@@ -105,14 +105,15 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
         The Beyeler2019 dataset, a subset thereof, or a DataFrame with
         identical organization (i.e., must contain columns 'subject', 'image',
         'xrange', and 'yrange').
-    argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
+    argus : :py:class:`~pulse2percept.implants.retina.ArgusI` or
+            :py:class:`~pulse2percept.implants.retina.ArgusII`
         Either an Argus I or Argus II implant. If None, the data must contain
         an "implant_type_str" column naming the device, either "ArgusI" or
         "ArgusII". Where it was implanted comes from ``implant_position`` and
         ``implant_rotation`` below.
     scale : float
         Scaling factor to apply to the phosphenes
-    axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
+    axon_map : :py:class:`~pulse2percept.models.retina.AxonMapModel`
         An instance of the axon map model to use for visualization.
     show_fovea : bool
         Whether to indicate the location of the fovea with a square
@@ -292,11 +293,12 @@ def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0,
     percepts : :py:class:`~pulse2percept.percepts.Percept`
         A Percept object containing multiple frames, where each frame is the
         percept produced by activating a single electrode.
-    argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
+    argus : :py:class:`~pulse2percept.implants.retina.ArgusI` or
+            :py:class:`~pulse2percept.implants.retina.ArgusII`
         Either an Argus I or Argus II implant
     scale : float
         Scaling factor to apply to the phosphenes
-    axon_map : :py:class:`~pulse2percept.models.AxonMapModel`
+    axon_map : :py:class:`~pulse2percept.models.retina.AxonMapModel`
         An instance of the axon map model to use for visualization.
     show_fovea : bool
         Whether to indicate the location of the fovea with a square

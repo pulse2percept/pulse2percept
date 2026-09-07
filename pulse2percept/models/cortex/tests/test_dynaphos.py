@@ -10,7 +10,7 @@ from pulse2percept.models.base import _placement_shift
 from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
                                     EnsembleImplant, Implant)
 from pulse2percept.implants.cortex import Cortivis, Orion
-from pulse2percept.topography import Polimeni2006Map
+from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulseTrain,

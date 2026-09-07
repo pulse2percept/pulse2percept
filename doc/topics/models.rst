@@ -19,6 +19,16 @@ a temporal component, or both:
 Available models
 ----------------
 
+Models are grouped by the tissue they stimulate. The root
+:py:mod:`pulse2percept.models` namespace holds only the abstract classes a
+model is assembled from and temporal models that are not tied to a stimulation
+site; models of a particular target live in
+:py:mod:`pulse2percept.models.retina` and
+:py:mod:`pulse2percept.models.cortex`.
+
+Generic model components
+~~~~~~~~~~~~~~~~~~~~~~~~
+
 .. list-table::
    :header-rows: 1
 
@@ -31,52 +41,92 @@ Available models
    * - generic
      - :py:class:`~pulse2percept.models.AlphaTemporal`
      - temporal
+
+Both describe how one location's response decays after a pulse, without
+committing to where that location is. They are the temporal half of a
+:py:class:`~pulse2percept.models.Model` whose spatial half may be retinal or
+cortical.
+
+Retinal stimulation
+~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+
+   * - Reference
+     - Model
+     - Type
    * - [Thompson2003]_
-     - :py:class:`~pulse2percept.models.Thompson2003Model`
+     - :py:class:`~pulse2percept.models.retina.Thompson2003Model`
      - spatial
    * - [Horsager2009]_
-     - :py:class:`~pulse2percept.models.Horsager2009Model`
+     - :py:class:`~pulse2percept.models.retina.Horsager2009Model`
      - temporal
    * - [Nanduri2012]_
-     - :py:class:`~pulse2percept.models.Nanduri2012Model`
+     - :py:class:`~pulse2percept.models.retina.Nanduri2012Model`
      - spatial + temporal
    * - [Beyeler2019]_
-     - :py:class:`~pulse2percept.models.ScoreboardModel`
+     - :py:class:`~pulse2percept.models.retina.ScoreboardModel`
      - spatial
    * - [Beyeler2019]_
-     - :py:class:`~pulse2percept.models.AxonMapModel`
+     - :py:class:`~pulse2percept.models.retina.AxonMapModel`
      - spatial
    * - derived from [Granley2021]_
-     - :py:class:`~pulse2percept.models.BiphasicScoreboardModel`
+     - :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`
      - spatiotemporal
    * - [Granley2021]_
-     - :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
-     - spatiotemporal
-   * - [vanderGrinten2023]_
-     - :py:class:`~pulse2percept.models.cortex.DynaphosModel`
+     - :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
      - spatiotemporal
 
-Cortical stimulation also has
-:py:class:`~pulse2percept.models.cortex.ScoreboardModel`, a spatial baseline
-that maps cortical electrode locations through cortical retinotopy.
+Every retinal spatial model derives from
+:py:class:`~pulse2percept.models.retina.RetinalSpatial`, which places
+electrodes through a retinotopic map and accepts a physical retinal extent as
+shorthand for ``xrange``/``yrange``.
 
-Which model to use depends on the scientific question. For retinal
-stimulation, the three main choices differ in what they model:
+Which one to use depends on the scientific question. The three main choices
+differ in what they model:
 
-:py:class:`~pulse2percept.models.ScoreboardModel`
+:py:class:`~pulse2percept.models.retina.ScoreboardModel`
     Fixed-width Gaussian per electrode; amplitude scales brightness.
 
-:py:class:`~pulse2percept.models.BiphasicScoreboardModel`
+:py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`
     Adds [Granley2021]_-derived pulse-dependent brightness and width.
     Requires a described biphasic pulse train rather than a bare
     amplitude.
 
-:py:class:`~pulse2percept.models.BiphasicAxonMapModel`
+:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
     Additionally models axonal elongation, whose length follows phase
     duration [Granley2021]_.
 
 The published models add assumptions specific to their experiments and
 should be chosen when those assumptions are relevant.
+
+Cortical stimulation
+~~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+
+   * - Reference
+     - Model
+     - Type
+   * - [Beyeler2019]_, adapted
+     - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+     - spatial
+   * - [vanderGrinten2023]_
+     - :py:class:`~pulse2percept.models.cortex.DynaphosModel`
+     - spatiotemporal
+
+Cortical spatial models derive from
+:py:class:`~pulse2percept.models.cortex.CortexSpatial`, which simulates one or
+more visual areas ('v1', 'v2', 'v3') and maps them through cortical
+retinotopy. The cortical
+:py:class:`~pulse2percept.models.cortex.ScoreboardModel` is a spatial baseline:
+it spreads current in cortex rather than in the retina, so phosphene size in
+the visual field follows cortical magnification.
+:py:class:`~pulse2percept.models.cortex.DynaphosModel` adds the temporal
+dynamics of the [vanderGrinten2023]_ phosphene model, including charge
+accumulation and a stimulation threshold.
 
 Basic usage
 -----------
@@ -88,8 +138,8 @@ predict a percept from a stimulus.
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII()
-    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
+    implant = p2p.implants.retina.ArgusII()
+    model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
     percept = model.predict_percept({'A8': 30})
 
 The result of ``predict_percept`` is a
@@ -127,7 +177,7 @@ invalidates the affected component, which is rebuilt when needed:
 
 .. code-block:: python
 
-    model = p2p.models.AxonMapModel(implant=implant)
+    model = p2p.models.retina.AxonMapModel(implant=implant)
 
     # Builds automatically:
     percept = model.predict_percept(stim)
@@ -143,9 +193,9 @@ you build a component, use ``model.spatial.build(rho=250)``.
 Electrode-retina distance
 -------------------------
 
-:py:class:`~pulse2percept.models.ScoreboardModel`,
-:py:class:`~pulse2percept.models.AxonMapModel` and
-:py:class:`~pulse2percept.models.Thompson2003Model` use electrode ``x`` and
+:py:class:`~pulse2percept.models.retina.ScoreboardModel`,
+:py:class:`~pulse2percept.models.retina.AxonMapModel` and
+:py:class:`~pulse2percept.models.retina.Thompson2003Model` use electrode ``x`` and
 ``y`` coordinates only. Nonzero ``z`` values therefore do not affect their
 output and produce a warning.
 
@@ -173,10 +223,10 @@ what someone is *looking at* instead, give the model a
 
     scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva)
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
 
-    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
+    model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
     percept = model.predict_percept(scene, gaze=(0, 0) * dva)
 
 Scene prediction separates four responsibilities:
@@ -226,7 +276,7 @@ tracking, which shifts the camera ROI with gaze:
 
 .. code-block:: python
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     implant.scene_input_frame = 'eye'
 
 The sampled values are passed to ``implant.encoder``, which maps gray levels
@@ -252,9 +302,12 @@ stimulation belongs to the encoder. Pixel values and channels may change, but
 spatial shape and frame timing must remain unchanged because ``fov`` and the
 frame clock refer to the original scene.
 
-Scene registration currently requires a retinal ``visual_field_map`` and an
-implant ``encoder``. A cortical ``visual_field_map`` or a missing encoder
-raises ``ValueError``.
+Scene registration is a spatial-model capability: a model has to say where in
+the visual field each of its electrodes lands. Only retinal models
+(:py:class:`~pulse2percept.models.retina.RetinalSpatial`) implement it, through
+their retinotopy; any other spatial model raises ``NotImplementedError``. A
+retinal model given a non-retinotopic ``visual_field_map``, or an implant
+without an ``encoder``, raises ``ValueError``.
 
 Residual vision
 ~~~~~~~~~~~~~~~
@@ -268,7 +321,7 @@ lost region, and the prosthetic percept inside it -- as a single RGB
 
     scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva,
                              scotoma=p2p.vision.Scotoma.circle(8 * dva))
-    model = p2p.models.ScoreboardModel(implant=implant, rho=200)
+    model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
 
     percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=50)
 
@@ -323,7 +376,7 @@ parameters:
 
 .. code-block:: python
 
-    model = p2p.models.AxonMapModel(
+    model = p2p.models.retina.AxonMapModel(
         implant,
         rho=300,
         lam=500,
@@ -335,7 +388,7 @@ Classes ending in ``Spatial`` or ``Temporal`` are components, and
 
 .. code-block:: python
 
-    spatial = p2p.models.AxonMapSpatial(
+    spatial = p2p.models.retina.AxonMapSpatial(
         implant,
         rho=300,
         lam=500,

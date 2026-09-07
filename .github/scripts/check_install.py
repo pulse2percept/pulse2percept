@@ -164,8 +164,8 @@ def check_model_builds() -> list[str]:
     """The install is only useful if a model actually builds."""
     print("\nBuilding a model:")
     try:
-        from pulse2percept.implants import ArgusII
-        from pulse2percept.models import ScoreboardModel
+        from pulse2percept.implants.retina import ArgusII
+        from pulse2percept.models.retina import ScoreboardModel
 
         # This runs against released versions too, and 0.10.0 renamed the
         # grid spacing parameter `xystep` -> `step`. Inspect the constructor

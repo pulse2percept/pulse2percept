@@ -10,20 +10,22 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 import time
 
-from pulse2percept.implants import (ArgusI, ArgusII, DiskElectrode,
-                                    ElectrodeArray, Implant, PRIMAPivotal,
+from pulse2percept.implants import (DiskElectrode, ElectrodeArray, Implant,
                                     SquareElectrode)
+from pulse2percept.implants.retina import (ArgusI, ArgusII, PRIMAPivotal,
+                                           RetinalImplant)
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    BostonTrain, ImageStimulus, LogoBVL,
                                    Stimulus, VideoStimulus)
 from pulse2percept.percepts import Percept
-from pulse2percept.models import (AxonMapModel, AxonMapSpatial, BaseModel,
-                                  BiphasicAxonMapModel, FadingTemporal,
-                                  Horsager2009Model, Model, Nanduri2012Model,
-                                  ScoreboardModel, ScoreboardSpatial,
-                                  SpatialModel, TemporalModel,
-                                  Thompson2003Model)
+from pulse2percept.models import (BaseModel, FadingTemporal, Model,
+                                  SpatialModel, TemporalModel)
+from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
+                                         BiphasicAxonMapModel,
+                                         Horsager2009Model, Nanduri2012Model,
+                                         ScoreboardModel, ScoreboardSpatial,
+                                         Thompson2003Model)
 from pulse2percept.models.base import _blend_meridian
 from pulse2percept.models.cortex import (DynaphosModel,
                                          ScoreboardModel as
@@ -34,10 +36,11 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, deg,
                                  dimensionless, dva, mA, mm, ms, s, uA, um,
                                  us)
 from pulse2percept.utils import FreezeError, frame_interval
-from pulse2percept.topography import (Curcio1990Map, Grid2D,
-                                      Polimeni2006Map, RetinalMap,
-                                      VisualFieldMap, Watson2014DisplaceMap,
-                                      Watson2014Map)
+from pulse2percept.topography import Grid2D, VisualFieldMap
+from pulse2percept.topography.cortex import Polimeni2006Map
+from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
+                                             Watson2014DisplaceMap,
+                                             Watson2014Map)
 
 
 class ValidBaseModel(BaseModel):
@@ -307,9 +310,11 @@ def test_SpatialModel_plot():
     model = ValidSpatialModel(ArgusI(), xrange=(-20.5, 20.5),
                               yrange=(-16.1, 16.1))
     model.build()
-    ax = model.plot(use_dva=True)
+    # A fresh axes each time: `plot` autoscales onto the current one, so a
+    # figure left over from another test would widen these limits.
+    ax = model.plot(use_dva=True, ax=plt.subplots()[1])
     npt.assert_almost_equal(ax.get_xlim(), (-22.55, 22.55))
-    ax = model.plot(use_dva=False)
+    ax = model.plot(use_dva=False, ax=plt.subplots()[1])
     npt.assert_almost_equal(ax.get_xlim(), (-6122.87, 6122.87), decimal=2)
     npt.assert_almost_equal(ax.get_ylim(), (-4808.7, 4808.7), decimal=2)
 
@@ -1278,7 +1283,9 @@ class RecordingSpatial(SpatialModel):
     space_unit = um
 
     def get_default_params(self):
-        return {**super().get_default_params(), 'seen': None}
+        # `SpatialModel` is anatomy-neutral and supplies no map of its own:
+        return {**super().get_default_params(), 'seen': None,
+                'visual_field_map': Curcio1990Map()}
 
     def _predict_spatial(self, electrode_array, stim):
         x, y, z = self._electrode_coords(electrode_array, stim)
@@ -1809,7 +1816,8 @@ def test_models_accept_read_only_stimulus_data():
     # stimulus stores it read-only. A memoryview that is not declared `const`
     # rejects such an array outright ("buffer source array is read-only"),
     # which is a failure no numerical test would catch on its own.
-    from pulse2percept.models import Nanduri2012Spatial, Nanduri2012Temporal
+    from pulse2percept.models.retina import (Nanduri2012Spatial,
+                                             Nanduri2012Temporal)
     implant = ArgusII()
     source = {'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=20)}
     stim = implant.prepare_stim(source)
@@ -1918,9 +1926,9 @@ def test_SpatialModel_visual_field_map_is_the_canonical_name():
 
 
 
-def _implant_at(coords):
+def _implant_at(coords, cls=Implant):
     """A disk-electrode implant at the given tissue coordinates (um)"""
-    return Implant(ElectrodeArray(
+    return cls(ElectrodeArray(
         {f'A{i}': DiskElectrode(x, y, 0, 100)
          for i, (x, y) in enumerate(coords)}))
 
@@ -2083,8 +2091,9 @@ def test_location_noise_keeps_the_axon_map_kernel_joint():
     offsets = model._location_noise_z[rows]
     x_ret, y_ret = vfmap.dva_to_ret(x_dva + offsets[:, 0],
                                     y_dva + offsets[:, 1])
-    displaced = AxonMapSpatial(_implant_at(list(zip(x_ret, y_ret))),
-                               **kwargs).build()
+    displaced = AxonMapSpatial(
+        _implant_at(list(zip(x_ret, y_ret)), cls=RetinalImplant),
+        **kwargs).build()
     npt.assert_allclose(displaced.predict_percept({'A0': 1, 'A1': 1}).data,
                         joint, atol=1e-5)
 
@@ -2155,14 +2164,14 @@ def test_location_noise_rejects_3d_maps():
                                 **kwargs).build()
 
 
-def _square_implant():
+def _square_implant(cls=Implant):
     """Two square electrodes on the local +x axis, one at the origin
 
     Square bodies are asymmetric under rotation, so a plot that only moves
     electrode centers reads back differently from one that turns the device.
     """
-    return Implant(ElectrodeArray({'A1': SquareElectrode(0, 0, 0, 200),
-                                   'A2': SquareElectrode(600, 0, 0, 200)}))
+    return cls(ElectrodeArray({'A1': SquareElectrode(0, 0, 0, 200),
+                               'A2': SquareElectrode(600, 0, 0, 200)}))
 
 
 def _square_model(**params):
@@ -2271,7 +2280,7 @@ def _drawn_substrate(ax):
 
 def test_show_implant_works_on_the_axon_map_plot():
     """`AxonMapSpatial.plot` draws its own anatomical window"""
-    implant = _square_implant()
+    implant = _square_implant(cls=RetinalImplant)
     model = AxonMapSpatial(implant, rho=200, xrange=(-4, 4), yrange=(-4, 4),
                            step=0.5, implant_position=(1200, -400) * um,
                            implant_rotation=15)

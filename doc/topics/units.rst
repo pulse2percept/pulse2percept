@@ -78,7 +78,7 @@ visual-field and tissue coordinates:
 
 .. code-block:: python
 
-    from pulse2percept.topography import Watson2014Map
+    from pulse2percept.topography.retina import Watson2014Map
     from pulse2percept.units import dva
 
     x_um, y_um = Watson2014Map().dva_to_ret(2 * dva, 3 * dva)
@@ -98,7 +98,7 @@ each other freely, and bare numbers still mean degrees:
 .. code-block:: python
 
     import numpy as np
-    from pulse2percept.implants import ArgusII
+    from pulse2percept.implants.retina import ArgusII
     from pulse2percept.units import deg, rad
 
     ElectrodeGrid((6, 10), 575, rot=45)              # degrees, as before
@@ -114,7 +114,7 @@ positions; it does not make ``dva`` interchangeable with geometric angle.
 Threshold-relative amplitude
 ----------------------------
 
-Some models (e.g., :py:class:`~pulse2percept.models.BiphasicAxonMapModel`)
+Some models (e.g., :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`)
 operate on ``xTh``, which means a multiple of perceptual threshold, rather
 than raw current.
 

@@ -120,9 +120,9 @@ def plot_stimulus_percept(stim, percept, axes=None, figsize=None,
     >>> matplotlib.use('Agg')
     >>> import pulse2percept as p2p
     >>> stim = p2p.stimuli.LogoUCSB(resize=(24, 32))
-    >>> model = p2p.models.ScoreboardModel(p2p.implants.ArgusII(),
-    ...                                    xrange=(-4, 4), yrange=(-4, 4),
-    ...                                    step=0.5)
+    >>> model = p2p.models.retina.ScoreboardModel(
+    ...     p2p.implants.retina.ArgusII(), xrange=(-4, 4), yrange=(-4, 4),
+    ...     step=0.5)
     >>> percept = model.predict_percept(stim)
     >>> axes = p2p.plotting.plot_stimulus_percept(stim, percept)
     >>> [ax.get_title() for ax in axes]

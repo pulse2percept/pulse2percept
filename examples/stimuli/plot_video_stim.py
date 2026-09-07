@@ -108,7 +108,7 @@ video.resize((40, 40)).rotate(10).invert().filter('median').play()
 # whatever video it is handed. Here we replace Argus II's own 6 Hz encoder
 # with a 30 Hz one, so that every frame of this 30 fps video gets a pulse:
 
-implant = p2p.implants.ArgusII(
+implant = p2p.implants.retina.ArgusII(
     encoder=p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50), freq=30))
 
 # ``implant.prepare_stim(video)`` is the current the device would deliver, if
@@ -119,7 +119,7 @@ implant = p2p.implants.ArgusII(
 # described by a :py:class:`~pulse2percept.models.Model` object, such as the
 # axon map model:
 
-model = p2p.models.AxonMapModel(implant=implant)
+model = p2p.models.retina.AxonMapModel(implant=implant)
 # One percept frame per video frame: a spatial model reads the modulation the
 # encoder asked for, not the pulse train realizing it.
 percept = model.predict_percept(video)

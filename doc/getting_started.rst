@@ -20,8 +20,8 @@ For example:
     import pulse2percept as p2p
     from pulse2percept.units import Hz, ms, uA
 
-    implant = p2p.implants.ArgusII()
-    model = p2p.models.AxonMapModel(implant=implant)
+    implant = p2p.implants.retina.ArgusII()
+    model = p2p.models.retina.AxonMapModel(implant=implant)
 
     stim = {'A5': p2p.stimuli.BiphasicPulseTrain(
         freq=20 * Hz,
@@ -57,13 +57,13 @@ easiest way is to give the implant an encoder:
 
 .. code-block:: python
 
-    implant = p2p.implants.ArgusII(
+    implant = p2p.implants.retina.ArgusII(
         encoder=p2p.stimuli.AmplitudeEncoder(
             amp_range=(0, 50 * uA),
             freq=20 * Hz,
         )
     )
-    model = p2p.models.AxonMapModel(implant=implant)
+    model = p2p.models.retina.AxonMapModel(implant=implant)
 
     percept = model.predict_percept(p2p.stimuli.BostonTrain())
     percept.play()
@@ -76,7 +76,7 @@ invalidates the affected build state, which is rebuilt on the next prediction:
 
 .. code-block:: python
 
-    model = p2p.models.AxonMapModel(implant=implant)
+    model = p2p.models.retina.AxonMapModel(implant=implant)
 
     # Builds automatically:
     percept = model.predict_percept(stim)

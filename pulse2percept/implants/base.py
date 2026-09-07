@@ -1,13 +1,11 @@
 """:py:class:`~pulse2percept.implants.Implant`,
-   :py:class:`~pulse2percept.implants.GridImplant`,
-   :py:class:`~pulse2percept.implants.RectangleImplant`"""
+   :py:class:`~pulse2percept.implants.GridImplant`"""
 import numpy as np
 from copy import deepcopy
-from collections import OrderedDict
 from scipy.interpolate import RegularGridInterpolator
 from skimage.color import rgb2gray
 
-from .electrodes import Electrode, DiskElectrode, PointSource
+from .electrodes import Electrode, PointSource
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
 from ..stimuli import (BiphasicPulseTrain, Encoder, Stimulus, ImageStimulus,
@@ -16,7 +14,7 @@ from ..stimuli.base import _describe_unit
 from ..stimuli.encoders import _EncodedStimulus
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
-from ..utils import PrettyPrint, deprecated
+from ..utils import PrettyPrint
 from ..utils.deprecation import _deprecated_names
 
 
@@ -27,14 +25,24 @@ class Implant(PrettyPrint):
     pipeline that turns what is presented to the device into the stimulation
     its electrodes deliver (see
     :py:meth:`~pulse2percept.implants.Implant.prepare_stim`). This is the base
-    class for implants such as :py:class:`~pulse2percept.implants.ArgusII` and
-    :py:class:`~pulse2percept.implants.AlphaIMS`.
+    class for implants such as
+    :py:class:`~pulse2percept.implants.retina.ArgusII` and
+    :py:class:`~pulse2percept.implants.cortex.Orion`.
+
+    The generic base carries no anatomical laterality. Use
+    :py:class:`~pulse2percept.implants.retina.RetinalImplant` (``eye``) or
+    :py:class:`~pulse2percept.implants.cortex.CorticalImplant`
+    (``hemisphere``) for a device with a stimulation target.
 
     .. versionadded:: 0.6
 
     .. versionchanged:: 0.11.0
         Renamed from ``ProsthesisSystem``, which stays available as a
         deprecated alias until 0.12.0.
+
+    .. versionchanged:: 0.11.0
+        No longer takes ``eye``, which moved to
+        :py:class:`~pulse2percept.implants.retina.RetinalImplant`.
 
     .. versionchanged:: 0.11.0
         An implant no longer stores a stimulus. ``implant.stim = source``
@@ -46,10 +54,7 @@ class Implant(PrettyPrint):
     ----------
     electrode_array : :py:class:`~pulse2percept.implants.ElectrodeArray` or
                       :py:class:`~pulse2percept.implants.Electrode`
-        The electrode array used to deliver electrical stimuli to the retina.
-    eye : 'LE' or 'RE'
-        A string indicating whether the system is implanted in the left ('LE')
-        or right eye ('RE')
+        The electrode array used to deliver stimuli to the target tissue.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
         preprocessing method whenever a stimulus is prepared, or a custom
@@ -102,16 +107,16 @@ class Implant(PrettyPrint):
 
     Examples
     --------
-    A system in the left eye made from a single
+    A system made from a single
     :py:class:`~pulse2percept.implants.DiskElectrode` with radius
     radius=100um sitting at x=200um, y=-50um, z=10um:
 
     >>> from pulse2percept.implants import DiskElectrode, Implant
-    >>> implant = Implant(DiskElectrode(200, -50, 10, 100), eye='LE')
+    >>> implant = Implant(DiskElectrode(200, -50, 10, 100))
 
     """
     # Frozen class: User cannot add more class attributes
-    __slots__ = ('_electrode_array', '_eye', 'safe_mode', 'preprocess',
+    __slots__ = ('_electrode_array', 'safe_mode', 'preprocess',
                  '_encoder', '_raster', '_max_current', '_thresholds',
                  '_scene_input_frame')
 
@@ -136,11 +141,10 @@ class Implant(PrettyPrint):
     #: head-fixed-camera system override it.
     _default_scene_input_frame = 'eye'
 
-    def __init__(self, electrode_array, eye='RE', preprocess=False,
+    def __init__(self, electrode_array, preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
                  thresholds=None, scene_input_frame=None):
         self.electrode_array = electrode_array
-        self.eye = eye
         self.safe_mode = safe_mode
         self.preprocess = preprocess
         self.scene_input_frame = scene_input_frame
@@ -157,8 +161,6 @@ class Implant(PrettyPrint):
             'safe_mode': self.safe_mode,
             'preprocess': self.preprocess
         }
-        if hasattr(self, "eye"):
-            params['eye'] = self.eye
         if self.encoder is not None:
             params['encoder'] = self.encoder
         if self.raster is not None:
@@ -628,7 +630,7 @@ class Implant(PrettyPrint):
 
         Stimulate Electrode B7 in Argus II with 13 uA:
 
-        >>> from pulse2percept.implants import ArgusII
+        >>> from pulse2percept.implants.retina import ArgusII
         >>> stim = ArgusII().prepare_stim({'B7': 13})
 
         Argus II includes an encoder, so it can prepare an image directly:
@@ -690,36 +692,6 @@ class Implant(PrettyPrint):
         # Run safety checks on the calibrated delivered stimulus:
         self.check_stim(stim)
         return stim
-
-    @property
-    def eye(self):
-        """Implanted eye
-
-        A :py:class:`~pulse2percept.implants.Implant` can be implanted
-        either in a left eye ('LE') or right eye ('RE'). Models such as
-        :py:class:`~pulse2percept.models.AxonMapModel` will treat left and
-        right eyes differently (for example, adjusting the location of the
-        optic disc).
-
-        Examples
-        --------
-        Implant Argus II in a left eye:
-
-        >>> from pulse2percept.implants import ArgusII
-        >>> implant = ArgusII(eye='LE')
-        """
-        return self._eye
-
-    @eye.setter
-    def eye(self, eye):
-        """Eye setter (called upon `self.eye = eye`)"""
-        if not isinstance(eye, str):
-            raise TypeError(f"'eye' must be a string, not {type(eye)}.")
-        eye = eye.upper()
-        if eye != 'LE' and eye != 'RE':
-            raise ValueError(f"'eye' must be either 'LE' or 'RE', not "
-                             f"{eye}.")
-        self._eye = eye
 
     @property
     def n_electrodes(self):
@@ -788,6 +760,12 @@ class GridImplant(Implant):
 
         implant = Implant(ElectrodeGrid(shape=(10, 10), spacing=500))
 
+    Anatomy-neutral, like :py:class:`~pulse2percept.implants.Implant`: for a
+    grid with a stimulation target, hand the
+    :py:class:`~pulse2percept.implants.ElectrodeGrid` to
+    :py:class:`~pulse2percept.implants.retina.RetinalImplant` or
+    :py:class:`~pulse2percept.implants.cortex.CorticalImplant` instead.
+
     .. versionadded:: 0.11.0
 
     Parameters
@@ -810,10 +788,6 @@ class GridImplant(Implant):
         :py:class:`~pulse2percept.implants.ElectrodeGrid`.
     electrode_type : :py:class:`~pulse2percept.implants.Electrode`, optional
         A valid Electrode class.
-    eye : 'LE' or 'RE', optional
-        The eye in which the implant is implanted. Device metadata: unlike
-        :py:class:`~pulse2percept.implants.RectangleImplant`, the geometry and
-        the electrode names are the same in either eye.
     preprocess : bool or callable, optional
         Whether to preprocess a stimulus whenever one is prepared.
     safe_mode : bool, optional
@@ -857,96 +831,17 @@ class GridImplant(Implant):
 
     def __init__(self, shape, spacing, x=0, y=0, z=0, rot=0, names=('A', '1'),
                  grid_type='rect', orientation='horizontal',
-                 electrode_type=PointSource, eye='RE', preprocess=False,
+                 electrode_type=PointSource, preprocess=False,
                  safe_mode=False, encoder=None, raster=None, max_current=None,
                  scene_input_frame=None, **electrode_params):
         electrode_array = ElectrodeGrid(
             shape, spacing, x=x, y=y, z=z, rot=rot, names=names,
             grid_type=grid_type, orientation=orientation,
             electrode_type=electrode_type, **electrode_params)
-        super().__init__(electrode_array, eye=eye, preprocess=preprocess,
+        super().__init__(electrode_array, preprocess=preprocess,
                          safe_mode=safe_mode, encoder=encoder, raster=raster,
                          max_current=max_current,
                          scene_input_frame=scene_input_frame)
-
-
-@deprecated(alt_func='GridImplant', deprecated_version='0.11.0',
-            removed_version='0.12.0',
-            extra_msg='Not a drop-in replacement: pass '
-                      '``electrode_type=DiskElectrode, radius=75, '
-                      'preprocess=True`` to keep these defaults, and note '
-                      'that a left-eye grid keeps the column names of a '
-                      'right-eye one.')
-class RectangleImplant(Implant):
-    """ A generic rectangular implant
-
-    .. deprecated:: 0.11.0
-
-        Use :py:class:`~pulse2percept.implants.GridImplant` instead, although
-        that is not a drop-in replacement. Pass
-        ``electrode_type=DiskElectrode, radius=75`` to keep the old geometry
-        and ``preprocess=True`` to keep preprocessing.
-        Also note that left and right eyes have the same column names (no
-        automatic flipping).
-
-    Parameters
-    ----------
-    x, y, z : float, optional
-        The x, y, z coordinates (um) of the center of the implant
-    rot : float or Quantity, optional
-        The rotation of the implant in degrees
-    shape : tuple, optional
-        The number of rows and columns in the implant
-    r : float, optional
-        The electrode radius (um)
-    spacing : float, optional
-        The distance (um) between electrodes in the implant
-    eye : str, optional
-        The eye in which the implant is implanted
-    preprocess : bool, optional
-        Whether to preprocess the stimulus
-    safe_mode : bool, optional
-        Whether to enforce charge balance
-
-    """
-    def __init__(self, x=0, y=0, z=0, rot=0, shape=(15, 15), r=150./2, spacing=400., eye='RE',
-                 preprocess=True, safe_mode=False):
-        self.safe_mode = safe_mode
-        self.preprocess = preprocess
-        self.shape = shape
-        names = ('A', '1')
-        self.electrode_array = ElectrodeGrid(
-            self.shape, spacing, x=x, y=y, z=z, radius=r, rot=rot,
-            names=names, electrode_type=DiskElectrode)
-
-        # Set left/right eye:
-        if not isinstance(eye, str):
-            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
-        if eye != 'LE' and eye != 'RE':
-            raise ValueError("'eye' must be either 'LE' or 'RE'.")
-        self.eye = eye
-        # Unfortunately, in the left eye the labeling of columns is reversed...
-        if eye == 'LE':
-            # TODO: Would be better to have more flexibility in the naming
-            # convention. This is a quick-and-dirty fix:
-            names = self.electrode_array.electrode_names
-            objects = self.electrode_array.electrode_objects
-            names = np.array(names).reshape(self.electrode_array.shape)
-            # Reverse column names:
-            for row in range(self.electrode_array.shape[0]):
-                names[row] = names[row][::-1]
-            # Build a new ordered dict:
-            electrodes = OrderedDict()
-            for name, obj in zip(names.ravel(), objects):
-                electrodes.update({name: obj})
-            # Assign the new ordered dict to electrode_array:
-            self.electrode_array._electrodes = electrodes
-    def _pprint_params(self):
-        """Return dict of class attributes to pretty-print"""
-        params = super()._pprint_params()
-        params.update({'shape': self.shape, 'safe_mode': self.safe_mode,
-                       'preprocess': self.preprocess})
-        return params
 
 
 # ``ProsthesisSystem`` was renamed to ``Implant`` in 0.11.0. It resolves to the

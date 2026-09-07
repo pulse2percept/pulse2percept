@@ -20,9 +20,11 @@ import numpy.testing as npt
 import pytest
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants import (ArgusII, CustomRaster, DiskElectrode,
+from pulse2percept.implants import (CustomRaster, DiskElectrode,
                                     ElectrodeArray, Implant)
-from pulse2percept.models import FadingTemporal, Model, ScoreboardSpatial
+from pulse2percept.implants.retina import ArgusII
+from pulse2percept.models import FadingTemporal, Model
+from pulse2percept.models.retina import ScoreboardSpatial
 from pulse2percept.stimuli import (AmplitudeEncoder, BostonTrain,
                                    FrequencyEncoder, ImageStimulus,
                                    Stimulus)

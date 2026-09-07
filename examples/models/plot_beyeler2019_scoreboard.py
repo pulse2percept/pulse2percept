@@ -5,8 +5,8 @@ Beyeler et al. (2019): Focal percepts with the scoreboard model
 ============================================================================
 
 This example shows how to apply the
-:py:class:`~pulse2percept.models.ScoreboardModel` to a
-:py:class:`~pulse2percept.implants.Lorach2015Array` implant.
+:py:class:`~pulse2percept.models.retina.ScoreboardModel` to a
+:py:class:`~pulse2percept.implants.retina.Lorach2015Array` implant.
 
 The scoreboard model is a standard baseline model of retinal prosthesis
 stimulation, which assumes that electrical stimulation leads to the percept
@@ -28,7 +28,7 @@ where :math:`\\rho` is the spatial decay constant.
     incidental stimulation of retinal nerve fiber bundles leads to elongated,
     'streaky' percepts.
 
-    In that case, use :py:class:`~pulse2percept.models.AxonMapModel` instead.
+    In that case, use :py:class:`~pulse2percept.models.retina.AxonMapModel` instead.
 
 The scoreboard model can be instantiated and run in three simple steps.
 
@@ -39,14 +39,14 @@ A model predicts what a *particular* device produces, so the first step is to
 specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
 
 In the following, we use a
-:py:class:`~pulse2percept.implants.Lorach2015Array` in its canonical
+:py:class:`~pulse2percept.implants.retina.Lorach2015Array` in its canonical
 device-local frame.
 
 Creating the model
 ------------------
 
 The second step is to instantiate the
-:py:class:`~pulse2percept.models.ScoreboardModel` class, bound to that
+:py:class:`~pulse2percept.models.retina.ScoreboardModel` class, bound to that
 implant.
 
 The model simulates a patch of the visual field specified by ``xrange`` and
@@ -65,8 +65,8 @@ and sample it at 0.05deg resolution:
 """
 # sphinx_gallery_thumbnail_number = 2
 
-from pulse2percept.implants import Lorach2015Array
-from pulse2percept.models import ScoreboardModel
+from pulse2percept.implants.retina import Lorach2015Array
+from pulse2percept.models.retina import ScoreboardModel
 
 implant = Lorach2015Array()
 model = ScoreboardModel(implant=implant, xrange=(-3, 3), yrange=(-3, 3),

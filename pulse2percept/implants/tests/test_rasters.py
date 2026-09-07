@@ -5,11 +5,11 @@ import numpy.testing as npt
 import pytest
 from scipy.spatial import cKDTree
 
-from pulse2percept.implants import (AlphaIMS, ArgusII, BVT24,
-                                    CheckerboardRaster, CustomRaster,
-                                    ElectrodeGrid, PRIMAPivotal,
-                                    Implant, Raster,
+from pulse2percept.implants import (CheckerboardRaster, CustomRaster,
+                                    ElectrodeGrid, Implant, Raster,
                                     SequentialRaster)
+from pulse2percept.implants.retina import (AlphaIMS, ArgusII, BVT24,
+                                           PRIMAPivotal)
 from pulse2percept.implants import rasters
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
                                  mm, uA, us)

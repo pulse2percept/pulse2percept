@@ -5,7 +5,7 @@ Thompson et al. (2003): Circular phosphenes
 ===============================================================================
 
 This example shows how to use the
-:py:class:`~pulse2percept.models.Thompson2003Model`.
+:py:class:`~pulse2percept.models.retina.Thompson2003Model`.
 
 The model introduced in [Thompson2003]_ assumes that electrical stimulation
 leads to circular percepts with discrete gray levels.
@@ -21,9 +21,10 @@ import numpy as np
 import pulse2percept as p2p
 
 # A model predicts what a particular device produces, so it is bound to one.
-# Here we will use an :py:class:`~pulse2percept.implants.ArgusII` implant:
-implant = p2p.implants.ArgusII()
-model = p2p.models.Thompson2003Model(implant=implant, step=0.2, dropout=0.1)
+# Here we will use an :py:class:`~pulse2percept.implants.retina.ArgusII`
+# implant:
+implant = p2p.implants.retina.ArgusII()
+model = p2p.models.retina.Thompson2003Model(implant=implant, step=0.2, dropout=0.1)
 
 ###############################################################################
 # We are ready to predict percepts; the model builds itself on the first call.

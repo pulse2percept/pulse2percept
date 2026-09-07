@@ -3,12 +3,13 @@
 Simulating PRIMA: from image to optical drive
 ===============================================================================
 
-:class:`~pulse2percept.implants.PRIMAPivotal` models the 378-pixel array used
+:class:`~pulse2percept.implants.retina.PRIMAPivotal` models the 378-pixel
+array used
 in the PRIMAvera trial [Holz2025]_. PRIMA uses 880 nm illumination rather than
 injected current, with image intensity encoded by pulse duration.
 
 This example shows image preprocessing, optical drive on the array, and a
-:class:`~pulse2percept.models.ScoreboardModel` visualization. The Scoreboard
+:class:`~pulse2percept.models.retina.ScoreboardModel` visualization. The Scoreboard
 output is not a PRIMA retinal-response model.
 """
 # sphinx_gallery_thumbnail_number = 2
@@ -18,7 +19,7 @@ import numpy as np
 from skimage.morphology import binary_dilation, disk
 import pulse2percept as p2p
 
-implant = p2p.implants.PRIMAPivotal()
+implant = p2p.implants.retina.PRIMAPivotal()
 encoder = implant.encoder
 
 ###############################################################################
@@ -65,7 +66,7 @@ sources = [
     ('Edge-enhanced', edges),
 ]
 
-model = p2p.models.ScoreboardModel(
+model = p2p.models.retina.ScoreboardModel(
     implant=implant,
     rho=100,
     xrange=(-4, 4),

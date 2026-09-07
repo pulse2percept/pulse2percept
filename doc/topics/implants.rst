@@ -7,15 +7,30 @@ Visual Prostheses
 An implant describes the device: its electrodes, their geometry and location,
 and how a source stimulus becomes the current those electrodes deliver.
 
+Generic device machinery lives at the root of
+:py:mod:`pulse2percept.implants`; devices live under the anatomical target
+they stimulate, which is also where laterality lives:
+
+.. code-block:: text
+
+    Electrode / ElectrodeArray
+            |
+    generic Implant pipeline        (p2p.implants)
+            |
+    retina.RetinalImplant  -> eye          ('LE', 'RE')
+    cortex.CorticalImplant -> hemisphere   ('LH', 'RH', None)
+
+So a device is constructed from its own namespace,
+``p2p.implants.retina.ArgusII()`` or ``p2p.implants.cortex.Orion()``, while
+electrodes, arrays, rasters and
+:py:class:`~pulse2percept.implants.EnsembleImplant` stay at the root.
+
 All implants derive from
 :py:class:`~pulse2percept.implants.Implant`. The attributes used most
 often are:
 
 ``electrode_array``
     The :py:class:`~pulse2percept.implants.ElectrodeArray`.
-
-``eye``
-    for retinal systems: the implanted eye
 
 ``placement``
     Where the device sits relative to the tissue it stimulates
@@ -56,7 +71,7 @@ directly:
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
 
     implant['A8']
     implant[0]
@@ -92,10 +107,15 @@ stimulation itself is of interest:
 Retinal implants
 ----------------
 
-Retinal implants use device-local electrode coordinates in microns.
-Placement is specified on the model with ``implant_position``,
-``implant_rotation`` and ``implant_depth``; ``eye`` handles left- versus
-right-eye geometry where needed.
+Retinal implants derive from
+:py:class:`~pulse2percept.implants.retina.RetinalImplant` and use device-local
+electrode coordinates in microns. Placement is specified on the model with
+``implant_position``, ``implant_rotation`` and ``implant_depth``.
+
+``eye`` (``'LE'`` or ``'RE'``, default ``'RE'``) records the implanted eye and
+is read by the models: :py:class:`~pulse2percept.models.retina.AxonMapModel`
+puts the optic disc on the side the eye calls for. Some devices also reverse
+their column names in the left eye; see each class's API documentation.
 
 PRIMA
 ^^^^^
@@ -104,7 +124,7 @@ PRIMA is a subretinal photovoltaic prosthesis developed at Stanford. Pixium
 Vision developed the clinical system; Science Corporation acquired Pixium's
 PRIMA assets and intellectual property in 2024.
 
-:py:class:`~pulse2percept.implants.PRIMAPivotal` models the 378-pixel device
+:py:class:`~pulse2percept.implants.retina.PRIMAPivotal` models the 378-pixel device
 used in the pivotal PRIMAvera trial [Holz2026]_. The same 100 um configuration
 was used in the earlier first-in-human study [Palanker2020]_.
 For a hexagonal array, the row spacing is ``spacing * sqrt(3) / 2``.
@@ -118,14 +138,14 @@ the literature. The plots below use the same physical scale:
     import pulse2percept as p2p
 
     implants = [
-        ('PRIMAPivotal()', p2p.implants.PRIMAPivotal()),
-        ('Lorach2015Array()', p2p.implants.Lorach2015Array()),
-        ('Ho2019FlatArray(55)', p2p.implants.Ho2019FlatArray(55)),
-        ('Ho2019FlatArray(40)', p2p.implants.Ho2019FlatArray(40)),
-        ('Huang2021Array(55)', p2p.implants.Huang2021Array(55)),
-        ('Huang2021Array(40)', p2p.implants.Huang2021Array(40)),
-        ('Huang2021Array(30)', p2p.implants.Huang2021Array(30)),
-        ('Huang2021Array(20)', p2p.implants.Huang2021Array(20)),
+        ('PRIMAPivotal()', p2p.implants.retina.PRIMAPivotal()),
+        ('Lorach2015Array()', p2p.implants.retina.Lorach2015Array()),
+        ('Ho2019FlatArray(55)', p2p.implants.retina.Ho2019FlatArray(55)),
+        ('Ho2019FlatArray(40)', p2p.implants.retina.Ho2019FlatArray(40)),
+        ('Huang2021Array(55)', p2p.implants.retina.Huang2021Array(55)),
+        ('Huang2021Array(40)', p2p.implants.retina.Huang2021Array(40)),
+        ('Huang2021Array(30)', p2p.implants.retina.Huang2021Array(30)),
+        ('Huang2021Array(20)', p2p.implants.retina.Huang2021Array(20)),
     ]
 
     fig, axes = plt.subplots(2, 4, figsize=(12, 6), sharex=True, sharey=True)
@@ -141,11 +161,11 @@ the literature. The plots below use the same physical scale:
 
     fig.tight_layout()
 
-:py:class:`~pulse2percept.implants.PRIMAPivotal` is based on the pivotal
+:py:class:`~pulse2percept.implants.retina.PRIMAPivotal` is based on the pivotal
 PRIMAvera device [Holz2026]_, also used in the earlier first-in-human study
-[Palanker2020]_. :py:class:`~pulse2percept.implants.Lorach2015Array`,
-:py:class:`~pulse2percept.implants.Ho2019FlatArray`, and
-:py:class:`~pulse2percept.implants.Huang2021Array` model the research arrays
+[Palanker2020]_. :py:class:`~pulse2percept.implants.retina.Lorach2015Array`,
+:py:class:`~pulse2percept.implants.retina.Ho2019FlatArray`, and
+:py:class:`~pulse2percept.implants.retina.Huang2021Array` model the research arrays
 described in [Lorach2015]_, [Ho2019]_, and [Huang2021]_, respectively.
 
 .. list-table::
@@ -189,12 +209,12 @@ described in [Lorach2015]_, [Ho2019]_, and [Huang2021]_, respectively.
      - 20 um wide/spacing, 8 um active
      - 1.5 mm
 
-The F55 layout of :py:class:`~pulse2percept.implants.Ho2019FlatArray` is
+The F55 layout of :py:class:`~pulse2percept.implants.retina.Ho2019FlatArray` is
 reconstructed from Fig. 2(a) of [Ho2019]_. The F40 outline was not published,
 so ``Ho2019FlatArray(40)`` uses the 502 lattice sites nearest the substrate
 center.
 
-For :py:class:`~pulse2percept.implants.Huang2021Array`, the photovoltaic
+For :py:class:`~pulse2percept.implants.retina.Huang2021Array`, the photovoltaic
 cell ("pixel") count includes only exposed, stimulating pixels.
 The fabricated arrays included more cells than were exposed for
 stimulation, which were used for the common return electrode.
@@ -209,8 +229,8 @@ see the v0.11 release notes for the corresponding canonical names.
 Argus
 ^^^^^
 
-:py:class:`~pulse2percept.implants.ArgusI` and
-:py:class:`~pulse2percept.implants.ArgusII` model the epiretinal Argus
+:py:class:`~pulse2percept.implants.retina.ArgusI` and
+:py:class:`~pulse2percept.implants.retina.ArgusII` model the epiretinal Argus
 prostheses. Argus I has 16 electrodes in a 4 x 4 array; Argus II has 60
 electrodes in a 6 x 10 array.
 
@@ -224,7 +244,7 @@ by 2 ms. Thus visual stimuli can be passed directly to
 
 .. code-block:: python
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     stim = implant.prepare_stim(image)
 
 Both defaults can be overridden. Passing ``encoder=None`` disables automatic
@@ -233,27 +253,27 @@ default sequential raster:
 
 .. code-block:: python
 
-    implant = p2p.implants.ArgusII(encoder=None, raster=None)
+    implant = p2p.implants.retina.ArgusII(encoder=None, raster=None)
 
 Alpha IMS and AMS
 ^^^^^^^^^^^^^^^^^
 
-:py:class:`~pulse2percept.implants.AlphaIMS` and
-:py:class:`~pulse2percept.implants.AlphaAMS` model the subretinal Alpha
+:py:class:`~pulse2percept.implants.retina.AlphaIMS` and
+:py:class:`~pulse2percept.implants.retina.AlphaAMS` model the subretinal Alpha
 microphotodiode arrays.
 
 Suprachoroidal implants
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-:py:class:`~pulse2percept.implants.BVT24` and
-:py:class:`~pulse2percept.implants.BVT44` model first- and second-generation
+:py:class:`~pulse2percept.implants.retina.BVT24` and
+:py:class:`~pulse2percept.implants.retina.BVT44` model first- and second-generation
 suprachoroidal arrays. The class names are pulse2percept identifiers rather
 than official product names.
 
 Other retinal implants
 ^^^^^^^^^^^^^^^^^^^^^^
 
-:py:class:`~pulse2percept.implants.IMIE` models the epiretinal IMIE array.
+:py:class:`~pulse2percept.implants.retina.IMIE` models the epiretinal IMIE array.
 
 These classes are research-software representations based on published device
 descriptions, not manufacturer-validated simulators. See each class's API
@@ -282,6 +302,15 @@ Cortical implants use physical cortical coordinates. A cortical model combines
 those coordinates with a
 :py:class:`~pulse2percept.topography.VisualFieldMap` to place stimulation in
 the visual field.
+
+Ordinary cortical devices derive from
+:py:class:`~pulse2percept.implants.cortex.CorticalImplant` and take
+``hemisphere`` (``'LH'``, ``'RH'``, or ``None`` if unspecified);
+:py:class:`~pulse2percept.implants.cortex.Neuralink` is an ensemble of threads
+and offers the same attribute. In v0.11 ``hemisphere`` is device metadata
+only: the electrode coordinates and the model's ``implant_position`` remain
+what places the array, and recording a hemisphere neither reflects the
+geometry nor overrides it.
 
 Custom implants
 ---------------
@@ -327,5 +356,44 @@ from individual electrodes:
     electrode_array = ElectrodeArray(...)
     implant = Implant(electrode_array)
 
+:py:class:`~pulse2percept.implants.GridImplant` and
+:py:class:`~pulse2percept.implants.Implant` are anatomy-neutral and carry
+neither ``eye`` nor ``hemisphere``. A custom array that a retinal or cortical
+model should read as sitting on one side goes to the target-specific class
+instead:
+
+.. code-block:: python
+
+    from pulse2percept.implants import ElectrodeGrid
+    from pulse2percept.implants.retina import RetinalImplant
+    from pulse2percept.implants.cortex import CorticalImplant
+
+    array = ElectrodeGrid(shape=(10, 10), spacing=500)
+    retinal = RetinalImplant(array, eye='RE')
+    cortical = CorticalImplant(array, hemisphere='RH')
+
 :py:class:`~pulse2percept.implants.EnsembleImplant` combines multiple implants
-into one system.
+into one system. Its
+:py:meth:`~pulse2percept.implants.EnsembleImplant.from_visual_field_map`
+places one constituent per visual field location, through any 2D
+:py:class:`~pulse2percept.topography.VisualFieldMap`.
+
+Migrating from v0.10
+--------------------
+
+* Retinal devices moved out of the root namespace: ``p2p.implants.ArgusII()``
+  becomes ``p2p.implants.retina.ArgusII()``. There is no forwarding alias.
+  Electrodes, arrays, rasters and ensembles stay at the root, so a mixed
+  import becomes two.
+* ``eye`` moved off :py:class:`~pulse2percept.implants.Implant` and
+  :py:class:`~pulse2percept.implants.GridImplant` onto
+  :py:class:`~pulse2percept.implants.retina.RetinalImplant`. Wrap an
+  :py:class:`~pulse2percept.implants.ElectrodeGrid` in a ``RetinalImplant``
+  where a custom grid relied on the old implicit ``eye='RE'``;
+  :py:class:`~pulse2percept.models.retina.AxonMapModel` requires one.
+* ``EnsembleImplant.from_cortical_map`` became
+  :py:meth:`~pulse2percept.implants.EnsembleImplant.from_visual_field_map`,
+  which takes any 2D visual field map. ``region`` now defaults to the map's
+  only region rather than to ``'v1'``, so a multi-region map needs it stated.
+* ``RectangleImplant``, deprecated in v0.11, was removed; use
+  :py:class:`~pulse2percept.implants.GridImplant`.

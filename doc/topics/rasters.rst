@@ -20,7 +20,7 @@ Rasters are attached to an implant:
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     implant.raster = p2p.implants.CheckerboardRaster(n_groups=5)
     implant.encoder = p2p.stimuli.AmplitudeEncoder(
         amp_range=(0, 50),

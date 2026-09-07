@@ -8,20 +8,22 @@ import inspect
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.implants.cortex import Orion
-from pulse2percept.models import (AlphaTemporal, AxonMapModel, AxonMapSpatial,
-                                  BiphasicAxonMapModel,
-                                  BiphasicAxonMapSpatial,
-                                  BiphasicScoreboardModel,
-                                  BiphasicScoreboardSpatial, FadingTemporal,
-                                  Horsager2009Model, Horsager2009Temporal,
-                                  Nanduri2012Model, Nanduri2012Spatial,
-                                  Nanduri2012Temporal, ScoreboardModel,
-                                  ScoreboardSpatial, Thompson2003Model,
-                                  Thompson2003Spatial)
+from pulse2percept.models import AlphaTemporal, FadingTemporal
+from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
+                                         BiphasicAxonMapModel,
+                                         BiphasicAxonMapSpatial,
+                                         BiphasicScoreboardModel,
+                                         BiphasicScoreboardSpatial,
+                                         Horsager2009Model,
+                                         Horsager2009Temporal,
+                                         Nanduri2012Model, Nanduri2012Spatial,
+                                         Nanduri2012Temporal, ScoreboardModel,
+                                         ScoreboardSpatial, Thompson2003Model,
+                                         Thompson2003Spatial)
 from pulse2percept.models import cortex
-from pulse2percept.models.granley2021 import (DefaultBrightModel,
+from pulse2percept.models.retina.granley2021 import (DefaultBrightModel,
                                               DefaultSizeModel,
                                               DefaultStreakModel)
 
@@ -67,10 +69,14 @@ EFFECT_ARG = {DefaultSizeModel: 'rho', DefaultStreakModel: 'lam'}
 ALL_MODELS = IMPLANT_MODELS + STANDALONE_MODELS + EFFECT_MODELS
 
 
+#: Models that stimulate cortex, and so need a cortical implant.
+CORTICAL_MODELS = {cortex.ScoreboardSpatial, cortex.ScoreboardModel,
+                   cortex.DynaphosModel}
+
+
 def _implant_for(cls):
     """Return an implant this model can be bound to."""
-    return Orion() if cls.__module__.startswith('pulse2percept.models.cortex') \
-        else ArgusII()
+    return Orion() if cls in CORTICAL_MODELS else ArgusII()
 
 
 def _construct(cls, **params):

@@ -15,11 +15,12 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import ArgusII, GridImplant
+from pulse2percept.implants import GridImplant
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.implants.cortex import Cortivis
-from pulse2percept.models import (AxonMapModel, BiphasicAxonMapModel,
-                                  FadingTemporal, Model, ScoreboardModel,
-                                  ScoreboardSpatial)
+from pulse2percept.models import FadingTemporal, Model
+from pulse2percept.models.retina import (AxonMapModel, BiphasicAxonMapModel,
+                                         ScoreboardModel, ScoreboardSpatial)
 from pulse2percept.models.cortex import DynaphosModel
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    ImageStimulus, VideoStimulus)

@@ -10,7 +10,7 @@ import numpy.testing as npt
 import pytest
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulse,
                                    AsymmetricBiphasicPulseTrain,

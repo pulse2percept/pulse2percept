@@ -90,13 +90,14 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 # For this we can use :py:func:`~pulse2percept.plotting.plot_argus_phosphenes` from
 # the :py:mod:`~pulse2percept.plotting` module.
 # In addition to the ``data`` matrix, the function will also want an
-# :py:class:`~pulse2percept.implants.ArgusII` object implanted at the correct
+# :py:class:`~pulse2percept.implants.retina.ArgusII` object implanted at the
+# correct
 # location.
 #
 # [Beyeler2019]_ reports an implant position of ``(-1331, -850)`` um
 # and a rotation of -28.4 degrees:
 
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.units import um
 argus = ArgusII(eye='RE')
 implant_position = (-1331, -850) * um
@@ -125,12 +126,12 @@ plot_argus_phosphenes(data, argus)
 # eye.
 #
 # To see how the phosphene drawings line up with the NFBs, we can also pass an
-# :py:class:`~pulse2percept.models.AxonMapModel` to the function.
+# :py:class:`~pulse2percept.models.retina.AxonMapModel` to the function.
 # Of course, we need to make sure that we use the correct dimensions. Subject
 # S2 had their optic disc center located 16.2 deg nasally, 1.38 deg superior
 # from the fovea:
 
-from pulse2percept.models import AxonMapModel
+from pulse2percept.models.retina import AxonMapModel
 model = AxonMapModel(argus, loc_od=(16.2, 1.38))
 plot_argus_phosphenes(data, argus, axon_map=model)
 
@@ -138,7 +139,7 @@ plot_argus_phosphenes(data, argus, axon_map=model)
 # Predicting phosphene shape
 # --------------------------
 #
-# In addition, the :py:class:`~pulse2percept.models.AxonMapModel` is well
+# In addition, the :py:class:`~pulse2percept.models.retina.AxonMapModel` is well
 # suited to predict the shape of individual phosphenes. Using the values given
 # in [Beyeler2019]_, we can tailor the axon map parameters to Subject 2:
 
@@ -167,7 +168,7 @@ stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
 
 ###############################################################################
 # Using the model's
-# :py:func:`~pulse2percept.models.AxonMapModel.predict_percept`, we then get
+# :py:func:`~pulse2percept.models.retina.AxonMapModel.predict_percept`, we then get
 # a Percept object where each frame is the percept generated from activating
 # a single electrode:
 

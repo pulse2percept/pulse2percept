@@ -11,8 +11,10 @@ from matplotlib.patches import Ellipse
 from pulse2percept.implants import Implant
 from pulse2percept.implants.cortex import (EllipsoidElectrode, LinearEdgeThread,
                                            NeuralinkThread, Neuralink, Cortivis)
-from pulse2percept.topography import Grid2D, NeuropythyMap, Polimeni2006Map
-from pulse2percept.topography.cortex import CorticalMap
+from pulse2percept.topography import Grid2D
+from pulse2percept.topography.cortex import (CorticalMap, NeuropythyMap,
+                                             Polimeni2006Map)
+from pulse2percept.topography.retina import Curcio1990Map, Watson2014Map
 
 
 class StubNeuropythyMap(NeuropythyMap):
@@ -417,7 +419,7 @@ def test_plot3d_surfaces():
 def test_Neuralink_from_neuropythy_requires_neuropythy_map():
     # The visual_field_map must be a NeuropythyMap; this guard runs before any
     # dataset is touched, so it is testable without neuropythy installed:
-    from pulse2percept.topography import Watson2014Map
+    from pulse2percept.topography.retina import Watson2014Map
     with pytest.raises(TypeError):
         Neuralink.from_neuropythy(Watson2014Map())
     with pytest.raises(TypeError):
@@ -562,20 +564,22 @@ def test_Neuralink_from_neuropythy_surface_mismatch():
                                   locs=np.array([[1., 1.], [-1., -1.]]))
 
 
-def test_Neuralink_from_cortical_map_requires_thread():
+def test_Neuralink_from_visual_field_map_requires_thread():
     # Only NeuralinkThreads can go into a Neuralink:
     for implant_type in (Cortivis, Implant):
         with pytest.raises(TypeError):
-            Neuralink.from_cortical_map(implant_type, Polimeni2006Map())
+            Neuralink.from_visual_field_map(implant_type, Polimeni2006Map())
 
 
-def test_Neuralink_from_cortical_map_non_neuropythy():
-    # A plain CorticalMap falls through to EnsembleImplant.from_cortical_map,
-    # which just centers a thread on each cortical location:
+def test_Neuralink_from_visual_field_map_non_neuropythy():
+    # A plain CorticalMap falls through to
+    # EnsembleImplant.from_visual_field_map, which just centers a thread on
+    # each cortical location:
     visual_field_map = Polimeni2006Map()
-    nlink = Neuralink.from_cortical_map(LinearEdgeThread, visual_field_map,
-                                        xrange=(-1, 1), yrange=(0, 0),
-                                        step=1)
+    nlink = Neuralink.from_visual_field_map(LinearEdgeThread,
+                                            visual_field_map,
+                                            xrange=(-1, 1), yrange=(0, 0),
+                                            step=1)
     npt.assert_equal(isinstance(nlink, Neuralink), True)
     xc, yc = visual_field_map.dva_to_v1(np.array([-1., 0., 1.]),
                                         np.array([0., 0., 0.]))
@@ -588,12 +592,27 @@ def test_Neuralink_from_cortical_map_non_neuropythy():
         npt.assert_almost_equal(thread.direction, [0, 0, 1])
 
 
-def test_Neuralink_from_cortical_map_neuropythy():
+def test_Neuralink_from_visual_field_map_rejects_a_retinal_map():
+    """A cortical device will not place its threads by a retinal map
+
+    The generic ensemble factory takes any 2D map, and a retinal map returns
+    microns just like a cortical one, so nothing downstream would notice the
+    threads landing nowhere in cortex.
+    """
+    for visual_field_map in (Curcio1990Map(), Watson2014Map()):
+        with pytest.raises(TypeError) as excinfo:
+            Neuralink.from_visual_field_map(LinearEdgeThread, visual_field_map,
+                                            xrange=(-1, 1), yrange=(0, 0),
+                                            step=1)
+        npt.assert_equal('CorticalMap' in str(excinfo.value), True)
+
+
+def test_Neuralink_from_visual_field_map_neuropythy():
     # A NeuropythyMap is instead routed to from_neuropythy, which knows about
     # the third dimension and the insertion angle:
     locs = np.array([[1., 2.], [-2., 1.]])
-    nlink = Neuralink.from_cortical_map(LinearEdgeThread, StubNeuropythyMap(),
-                                        locs=locs)
+    nlink = Neuralink.from_visual_field_map(LinearEdgeThread,
+                                            StubNeuropythyMap(), locs=locs)
     points, directions = stub_map_expected(locs)
     npt.assert_equal(list(nlink.implants.keys()), ['A', 'B'])
     npt.assert_almost_equal([[t.x, t.y, t.z] for t in nlink.implants.values()],

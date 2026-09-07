@@ -13,7 +13,7 @@ for the functionality that every electrode array should have.
 First and foremost, an :py:class:`~pulse2percept.implants.ElectrodeArray`
 contains a collection of :py:class:`~pulse2percept.implants.Electrode` objects,
 and new electrodes can be added via the
-:py:func:`~pulse2percept.implants.ElectrodeArray.add_electrodes` method.
+:py:meth:`~pulse2percept.implants.ElectrodeArray.add_electrode` method.
 
 In addition, individual electrodes in the array can be accessed by indexing
 using either their pre-assigned names (a string) or their place in the array
@@ -41,7 +41,7 @@ a child of :py:class:`~pulse2percept.implants.ElectrodeArray`:
 #
 # The constructor then has the job of creating all electrodes in the array
 # and placing them at the appropriate location; for example, by using the
-# :py:func:`~pulse2percept.implants.ElectrodeArray.add_electrodes` method.
+# :py:meth:`~pulse2percept.implants.ElectrodeArray.add_electrode` method.
 #
 # The constructor of the class should accept a number of arguments:
 #

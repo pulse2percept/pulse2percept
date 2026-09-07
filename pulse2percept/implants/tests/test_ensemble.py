@@ -7,8 +7,10 @@ import pytest
 from pulse2percept.implants import (EnsembleImplant, GridImplant, Implant,
                                     PointSource)
 from pulse2percept.implants.cortex import Cortivis, Orion
-from pulse2percept.topography import Polimeni2006Map
-from pulse2percept.models.cortex.base import ScoreboardModel
+from pulse2percept.implants.retina import ArgusI
+from pulse2percept.topography.cortex import Polimeni2006Map
+from pulse2percept.topography.retina import Curcio1990Map
+from pulse2percept.models.cortex import ScoreboardModel
 from pulse2percept.stimuli import BiphasicPulseTrain, MonophasicPulse
 from pulse2percept.utils.constants import DT
 
@@ -117,8 +119,8 @@ def test_from_coords_translates_every_kind_of_constituent():
         npt.assert_almost_equal(device[name].x, implant_type()[name].x)
 
 
-# test from_cortical_map initialization (vf coords in dva)
-def test_from_cortical_map():
+# test from_visual_field_map initialization (vf coords in dva)
+def test_from_visual_field_map():
     visual_field_map = Polimeni2006Map()
 
     locs = np.array([(2000,2000), (10000,0), (5000, 5000)]).astype(np.float64)
@@ -131,14 +133,46 @@ def test_from_cortical_map():
     device = Cortivis()
 
     # use dva coords to create ensemble
-    ensemble = EnsembleImplant.from_cortical_map(Cortivis, visual_field_map,
-                                                 dva_locs)
+    ensemble = EnsembleImplant.from_visual_field_map(
+        Cortivis, visual_field_map, dva_locs)
 
     # The dva locations round-trip back to the physical ones they came from:
     for i, (dx, dy) in enumerate(locs):
         npt.assert_approx_equal(ensemble[f'{i}-1'].x, device['1'].x + dx, 5)
         npt.assert_approx_equal(ensemble[f'{i}-1'].y, device['1'].y + dy, 5)
         npt.assert_approx_equal(ensemble[f'{i}-1'].z, device['1'].z, 5)
+
+
+def test_from_visual_field_map_works_for_a_retinal_map():
+    """The generic factory is not cortex-only
+
+    ``from_cortical_map`` took a CorticalMap; the operation it performs --
+    transform dva through one region of a map, then place a constituent at the
+    resulting tissue coordinates -- needs nothing cortical. A retinal map has
+    a single region, so ``region`` can be left out.
+    """
+    visual_field_map = Curcio1990Map()
+    locs = np.array([[-2., 0.], [0., 0.], [3., 1.]])
+    ensemble = EnsembleImplant.from_visual_field_map(ArgusI, visual_field_map,
+                                                     locs=locs)
+    npt.assert_equal(len(ensemble.implants), 3)
+    device = ArgusI()
+    x_ret, y_ret = visual_field_map.dva_to_ret(locs[:, 0].copy(),
+                                               locs[:, 1].copy())
+    for i, (dx, dy) in enumerate(zip(x_ret, y_ret)):
+        npt.assert_almost_equal(ensemble[f'{i}-A1'].x, device['A1'].x + dx)
+        npt.assert_almost_equal(ensemble[f'{i}-A1'].y, device['A1'].y + dy)
+        npt.assert_almost_equal(ensemble[f'{i}-A1'].z, device['A1'].z)
+    # Retinal microns, not the degrees the factory was handed:
+    ranged = EnsembleImplant.from_visual_field_map(
+        ArgusI, visual_field_map, xrange=(-2, 2), yrange=(0, 0), step=2)
+    npt.assert_equal(len(ranged.implants), 3)
+    npt.assert_allclose(
+        ranged.electrode_array.coordinates(),
+        EnsembleImplant.from_visual_field_map(
+            ArgusI, visual_field_map, xrange=(-2 * dva, 2 * dva),
+            yrange=(0 * dva, 0 * dva),
+            step=2 * dva).electrode_array.coordinates(), rtol=1e-12)
 
 
 def test_prepare_stim_merges_per_implant_input():
@@ -245,8 +279,8 @@ def test_EnsembleImplant_from_coords_needs_a_specification():
     """Locations or a complete grid, but never a guessed physical default
 
     There is no universal physical equivalent of the ``(-3, 3)`` dva that
-    `from_cortical_map` defaults to: how far a degree reaches depends on the
-    visual field map.
+    `from_visual_field_map` defaults to: how far a degree reaches depends on
+    the visual field map.
     """
     with pytest.raises(ValueError):
         EnsembleImplant.from_coords(Cortivis)
@@ -262,21 +296,21 @@ def test_EnsembleImplant_from_coords_needs_a_specification():
             EnsembleImplant.from_coords(Cortivis, **kwargs)
 
 
-def test_EnsembleImplant_from_cortical_map_units():
-    """`from_cortical_map` places implants by visual field location (dva)"""
-    bare = EnsembleImplant.from_cortical_map(
+def test_EnsembleImplant_from_visual_field_map_units():
+    """`from_visual_field_map` places implants by visual field location"""
+    bare = EnsembleImplant.from_visual_field_map(
         Cortivis, Polimeni2006Map(), xrange=(-2, 2), yrange=(0, 0), step=2)
-    unitful = EnsembleImplant.from_cortical_map(
+    unitful = EnsembleImplant.from_visual_field_map(
         Cortivis, Polimeni2006Map(), xrange=(-2 * dva, 2 * dva),
         yrange=(0 * dva, 0 * dva), step=2 * dva)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
     # Locations, too:
     locs = np.array([[-2.0, 0.0], [2.0, 0.0]])
-    unitful = EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
-                                                locs=locs * dva)
-    bare = EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
-                                             locs=locs)
+    unitful = EnsembleImplant.from_visual_field_map(
+        Cortivis, Polimeni2006Map(), locs=locs * dva)
+    bare = EnsembleImplant.from_visual_field_map(
+        Cortivis, Polimeni2006Map(), locs=locs)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
     # These are degrees, not microns: the whole point of the map is that the
@@ -284,7 +318,7 @@ def test_EnsembleImplant_from_cortical_map_units():
     for kwargs in ({'xrange': (-2 * mm, 2 * mm)}, {'step': 2 * um},
                    {'locs': locs * um}):
         with pytest.raises(DimensionMismatchError):
-            EnsembleImplant.from_cortical_map(
+            EnsembleImplant.from_visual_field_map(
                 Cortivis, Polimeni2006Map(),
                 **{'xrange': (-2, 2), 'yrange': (0, 0), 'step': 2, **kwargs})
 
@@ -305,7 +339,7 @@ def test_EnsembleImplant_from_coords_is_physical():
     npt.assert_allclose(ranged.electrode_array.coordinates(),
                         listed.electrode_array.coordinates(), rtol=1e-12)
     # A micron range is fine here and a dva one is not -- the mirror image of
-    # `from_cortical_map`:
+    # `from_visual_field_map`:
     npt.assert_allclose(
         EnsembleImplant.from_coords(
             Cortivis, xrange=(-10 * mm, 10 * mm), yrange=(0, 0),

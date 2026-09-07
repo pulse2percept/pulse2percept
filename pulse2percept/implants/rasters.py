@@ -290,7 +290,8 @@ class SequentialRaster(Raster):
 
     Electrodes are assigned to groups by their position in the stimulus, which
     for an :py:class:`~pulse2percept.implants.ElectrodeGrid` runs row by row.
-    So on a 6x10 array such as :py:class:`~pulse2percept.implants.ArgusII`,
+    So on a 6x10 array such as
+    :py:class:`~pulse2percept.implants.retina.ArgusII`,
     ``SequentialRaster(6)`` puts each row in its own group -- a line raster.
 
     .. versionadded:: 0.10.0
@@ -311,7 +312,8 @@ class SequentialRaster(Raster):
     --------
     A line raster for Argus II, one row of ten electrodes at a time:
 
-    >>> from pulse2percept.implants import ArgusII, SequentialRaster
+    >>> from pulse2percept.implants import SequentialRaster
+    >>> from pulse2percept.implants.retina import ArgusII
     >>> implant = ArgusII()
     >>> implant.raster = SequentialRaster(6)
 
@@ -697,7 +699,8 @@ class CheckerboardRaster(Raster):
     --------
     Five groups of twelve on Argus II, as in [Kasowski2025]_:
 
-    >>> from pulse2percept.implants import ArgusII, CheckerboardRaster
+    >>> from pulse2percept.implants import CheckerboardRaster
+    >>> from pulse2percept.implants.retina import ArgusII
     >>> implant = ArgusII()
     >>> implant.raster = CheckerboardRaster(5)
     >>> implant.raster.n_groups
@@ -868,7 +871,8 @@ class CustomRaster(Raster):
     electrode has to be given a group too, or the current limit that the raster
     exists to respect could be violated without anyone noticing:
 
-    >>> from pulse2percept.implants import ArgusII, CustomRaster
+    >>> from pulse2percept.implants import CustomRaster
+    >>> from pulse2percept.implants.retina import ArgusII
     >>> corners = ['A1', 'A10', 'F1', 'F10']
     >>> rest = [e for e in ArgusII().electrode_names if e not in corners]
     >>> raster = CustomRaster([corners, rest])

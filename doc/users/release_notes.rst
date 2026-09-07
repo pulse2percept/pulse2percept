@@ -4,20 +4,43 @@
 Release Notes
 =============
 
-v0.11.0 Residual Vision (unreleased)
-====================================
+v0.11.0 Foundations (unreleased)
+================================
 
 Highlights
 ----------
 
-* **New backwards-incompatible model API:** models are now bound to their
-  implant and built automatically; ``predict_percept`` takes a stimulus
-  directly (:pull:`862`):
+* **New backwards-incompatible model API for implants, models, and
+  topography:** Anatomical components now live under explicit ``retina`` and
+  ``cortex`` namespaces; models are bound to their implant, build
+  automatically, and receive the stimulus directly in ``predict_percept``;
+  and implant placement is handled by the model rather than by modifying
+  named device geometry (:pull:`862`, :pull:`879`, :pull:`880`, :pull:`884`,
+  :pull:`887`).
+
+  A typical workflow changes from:
 
   .. code-block:: python
 
-      implant = p2p.implants.ArgusII()
-      model = p2p.models.AxonMapModel(implant)
+      # v0.10
+      implant = p2p.implants.ArgusII(x=1000, y=-500, rot=15)
+      model = p2p.models.AxonMapModel()
+      model.build()
+      percept = model.predict_percept(implant, stim)
+
+  to:
+
+  .. code-block:: python
+
+      # v0.11
+      implant = p2p.implants.retina.ArgusII()
+
+      model = p2p.models.retina.AxonMapModel(
+          implant,
+          implant_position=(1000, -500),
+          implant_rotation=15,
+      )
+
       percept = model.predict_percept(stim)
 
 * New :py:mod:`pulse2percept.vision` module with
@@ -27,8 +50,8 @@ Highlights
   :pull:`883`).
 
 * New photovoltaic stimulation pipeline for
-  :py:class:`~pulse2percept.implants.PRIMAPivotal`, from image encoding to
-  irradiance-based model input (:pull:`868`).
+  :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`, from image
+  encoding to irradiance-based model input (:pull:`868`).
 
 
 API changes and improvements
@@ -38,122 +61,137 @@ Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
 * New :py:class:`~pulse2percept.stimuli.Encoder` framework supports electrical
-  and non-electrical stimulation. New
+  and non-electrical stimulation. 
   :py:class:`~pulse2percept.stimuli.PRIMAEncoder` implements photovoltaic
-  image/video encoding, while
-  :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` supports threshold-based
-  amplitude ranges such as ``(0 * xTh, 3 * xTh)`` (:pull:`868`,
-  :pull:`869`).
-
-* Added optical power units (``W``, ``mW``, ``uW``), proper geometric-angle
-  units (``deg``, ``rad``), and ``pathlib.Path`` support for image and video
-  stimuli (:pull:`855`, :pull:`868`, :pull:`880`).
+  encoding, while :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` supports
+  threshold-relative amplitudes such as ``(0 * xTh, 3 * xTh)``. Optical power
+  units (``W``, ``mW``, ``uW``), geometric-angle units (``deg``, ``rad``), and
+  ``pathlib.Path`` input for image and video stimuli were also added
+  (:pull:`855`, :pull:`868`, :pull:`869`, :pull:`880`).
 
 
 Implants
 ~~~~~~~~
 
-* ``ProsthesisSystem`` is renamed
-  :py:class:`~pulse2percept.implants.Implant`; the old name remains as a
-  deprecated alias until 0.12.0 (:pull:`876`).
+* Implant classes were reorganized by anatomical target. Generic machinery
+remains in :py:mod:`pulse2percept.implants`; retinal and cortical devices
+moved to ``implants.retina`` and ``implants.cortex`` respectively
+(:pull:`887`).
+
+* ``eye`` now belongs to
+:py:class:`~pulse2percept.implants.retina.RetinalImplant`, and
+:py:class:`~pulse2percept.implants.cortex.CorticalImplant` adds optional
+``hemisphere`` metadata. Generic implants carry neither. Custom retinal
+arrays used with :py:class:`~pulse2percept.models.retina.AxonMapModel`
+therefore need to be wrapped in a ``RetinalImplant``.
+
+* ``ProsthesisSystem`` was renamed :py:class:`~pulse2percept.implants.Implant`;
+  the old name remains deprecated until v0.12.0. ``RectangleImplant`` was
+  removed in favor of :py:class:`~pulse2percept.implants.GridImplant`
+  (:pull:`859`, :pull:`876`).
+
+* Implant and electrode APIs were standardized: descriptive parameter names
+  replace abbreviations such as ``earray``, ``vfmap``, ``etype``, ``r``, and
+  ``a``; ``grid_type`` consistently uses ``'rect'`` / ``'hex'``; ``plot3D()``
+  becomes ``plot3d()``; and implants and electrode arrays follow normal
+  Python container conventions (:pull:`880`).
 
 * The PRIMA family was reorganized around the published devices:
-  ``PRIMA`` becomes :py:class:`~pulse2percept.implants.PRIMAPivotal`,
-  ``PRIMA75`` becomes :py:class:`~pulse2percept.implants.Lorach2015Array`,
-  and new :py:class:`~pulse2percept.implants.Ho2019FlatArray` and
-  :py:class:`~pulse2percept.implants.Huang2021Array` classes capture other
+  ``PRIMA`` becomes :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`,
+  ``PRIMA75`` becomes :py:class:`~pulse2percept.implants.retina.Lorach2015Array`,
+  and new :py:class:`~pulse2percept.implants.retina.Ho2019FlatArray` and
+  :py:class:`~pulse2percept.implants.retina.Huang2021Array` classes capture other
   photovoltaic designs. Device geometry and pixel dimensions were corrected
   accordingly (:pull:`865`).
 
-* :py:class:`~pulse2percept.implants.RectangleImplant` is deprecated in favor
-  of :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`).
+* :py:class:`~pulse2percept.implants.EnsembleImplant` can now be constructed
+  from physical coordinates with ``from_coords`` or from any 2D visual-field map
+  with ``from_visual_field_map``. The latter replaces ``from_cortical_map``;
+  multi-region maps require an explicit ``region`` (:pull:`884`, :pull:`887`).
 
-* Implant and electrode APIs were cleaned up for consistency: descriptive
-  names replace abbreviations such as ``earray``, ``vfmap``, ``etype``, ``r``,
-  and ``a``; ``grid_type`` now uses ``'rect'``/``'hex'`` throughout;
-  ``plot3D()`` becomes ``plot3d()``; and implants/electrode arrays follow
-  normal Python container behavior (:pull:`880`).
-
-* :py:class:`~pulse2percept.implants.Implant` now exposes device
-  ``placement``, ``technology``, and ``family`` metadata and supports
-  per-electrode thresholds (:pull:`865`, :pull:`869`).
+* Implants now expose ``placement``, ``technology``, and ``family`` metadata
+  and support per-electrode thresholds (:pull:`865`, :pull:`869`).
 
 
 Models
 ~~~~~~
 
-* Model constructors now expose their supported parameters explicitly instead
-  of accepting arbitrary ``**params``. Composite models no longer forward
-  component attributes: spatial and temporal parameters are accessed through
-  ``model.spatial`` and ``model.temporal`` (:pull:`879`).
+* Models were reorganized by anatomical target. Generic base and temporal models
+  remain in :py:mod:`pulse2percept.models`; retinal and cortical models moved to
+  ``models.retina`` and ``models.cortex`` (:pull:`887`).
 
-* New :py:class:`~pulse2percept.models.BiphasicScoreboardModel` and
-  :py:class:`~pulse2percept.models.BiphasicScoreboardSpatial` apply the
-  [Granley2021]_ brightness and size fits to round, electrode-centered
-  phosphenes, without the axonal streak (:pull:`886`).
+* The new :py:class:`~pulse2percept.models.retina.RetinalSpatial` contains
+  retina-specific behavior formerly embedded in the generic
+  :py:class:`~pulse2percept.models.SpatialModel`, including the default retinal
+  map, physical retinal extents, and scene registration. ``SpatialModel`` is now
+  anatomy-neutral.
 
-* :py:class:`~pulse2percept.models.ScoreboardSpatial` can consume normalized
-  photovoltaic drive, and
-  :py:class:`~pulse2percept.models.BiphasicAxonMapModel` can predict directly
-  from still images encoded with the standard biphasic pipeline
-  (:pull:`868`, :pull:`869`).
-
-* ``find_threshold`` has been removed; threshold searches belong at the
-  experiment level rather than in the model API (:pull:`862`).
-
-* Implant placement moved from named implants to models. Named implants
-  now use device-local coordinates; use ``implant_position``,
-  ``implant_rotation`` and ``implant_depth`` to place them in tissue.
-  ``implant_position`` may also be given in dva for a single-region 2D field
-  map. 3D maps such as ``NeuropythyMap`` support only identity model-side
-  placement. Named retinal arrays now default to ``z=0``; fixed device
-  geometry such as shank depth remains on the implant.
-  :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords` replaces
-  positioning named implants through their constructors (:pull:`884`).
-
-* The generic ``noise`` parameter has been removed from
-  :py:class:`~pulse2percept.percepts.Percept` and all models (:pull:`885`).
-
-* New ``location_noise`` parameter displaces each electrode's phosphene by a
-  fixed, subject-specific offset in the visual field (dva) rather than at the
-  location the ``visual_field_map`` gives it. Requires a 2D, invertible map
-  (:pull:`881`).
-
-* ``implant.plot()`` shows device-local geometry;
-  ``model.plot(show_implant=True)`` shows model-side placement. The Argus
-  phosphene plotting helpers likewise accept ``implant_position`` and
-  ``implant_rotation`` (:pull:`884`).
+* Model construction and placement were simplified. Models bind their implant,
+  expose supported constructor parameters explicitly, build on demand, and take
+  the stimulus directly in ``predict_percept``. Named device coordinates are
+  now device-local; ``implant_position``, ``implant_rotation``, and 
+  ``implant_depth`` place the implant in tissue. ``implant_position`` may also
+  be specified in dva for single-region 2D maps (:pull:`862`, :pull:`879`,
+  :pull:`884`). ``implant.plot()`` therefore shows device geometry, whereas
+  ``model.plot(show_implant=True)`` shows the placed implant.
+  
+* New :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` and
+  :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` apply the
+  [Granley2021]_ pulse-dependent brightness and size fits without axonal
+  streaks. Retinal scoreboard and axon-map models also support the new encoding
+  workflows (:pull:`868`, :pull:`869`, :pull:`886`). * New ``location_noise``
+  models fixed, electrode-specific uncertainty in phosphene location in
+  visual-field coordinates. The old generic ``noise`` parameter was removed
+  (:pull:`881`, :pull:`885`). * ``find_threshold`` was removed; threshold
+  estimation belongs at the experiment level rather than in the model API
+  (:pull:`862`).
 
 
-Residual vision
-~~~~~~~~~~~~~~~
+Topography
+~~~~~~~~~~
 
-* :py:class:`~pulse2percept.vision.Scene` adds softened scotoma boundaries,
-  optional inpainting, configurable backgrounds, and eccentricity rings in
-  both static and animated views (:pull:`871`).
+* Visual-field maps were reorganized by anatomical target. Generic
+  :py:class:`~pulse2percept.topography.Grid2D` and
+  :py:class:`~pulse2percept.topography.VisualFieldMap` remain at the package
+  root, while retinal maps moved to ``topography.retina`` and cortical maps to
+  ``topography.cortex`` (:pull:`887`).
 
-* Prosthetic composition now rejects ``scotoma_fill='inpaint'``, whose
-  interaction with prosthetic brightness is not modeled (:pull:`884`).
+  .. code-block:: python
+
+      # before
+      p2p.topography.Watson2014Map()
+      p2p.topography.Polimeni2006Map()
+
+      # v0.11
+      p2p.topography.retina.Watson2014Map()
+      p2p.topography.cortex.Polimeni2006Map()
 
 
-Plotting
-~~~~~~~~
+Scene and plotting
+~~~~~~~~~~~~~~~~~~
 
-* New :py:mod:`pulse2percept.plotting` module provides combined stimulus/percept
-  figures and animations. :py:mod:`pulse2percept.viz` is deprecated until
-  0.12.0 (:issue:`872`).
+* :py:class:`~pulse2percept.vision.Scene` supports softened scotoma boundaries,
+  configurable backgrounds, inpainting, eccentricity rings, and static or
+  animated visualization. Inpainting is intentionally unavailable when
+  composing prosthetic vision because its interaction with prosthetic
+  brightness is not modeled (:pull:`871`, :pull:`884`).
+
+* New :py:mod:`pulse2percept.plotting` module provides combined
+  stimulus/percept figures and animations. :py:mod:`pulse2percept.viz` is
+  deprecated until v0.12.0 (:issue:`872`).
 
 
 Bug fixes
 ---------
 
 * Fixed centering of single-row and single-column hexagonal
-  :py:class:`~pulse2percept.implants.ElectrodeGrid` instances (:pull:`859`).
+  :py:class:`~pulse2percept.implants.ElectrodeGrid` instances
+  (:pull:`859`).
 
 * Corrected PRIMA-family pixel dimensions and layouts (:pull:`865`).
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` now respects
-  ``n_gray`` and preserves the full stimulus in percept metadata
+* :py:class:`~pulse2percept.models.retina.BiphasicAxonMapSpatial` now respects
+  `n_gray` and preserves the full stimulus in percept metadata
   (:pull:`869`).
 
 
@@ -213,11 +251,11 @@ API changes:
   selected output intervals. :py:class:`~pulse2percept.models.FadingTemporal`
   now responds only to cathodic current (:pull:`818`)
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapModel` now distinguishes
+* :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel` now distinguishes
   physical current from threshold-relative amplitude via the new ``xTh`` unit
   (:pull:`848`)
 
-* :py:class:`~pulse2percept.models.BiphasicAxonMapSpatial` can now be composed
+* :py:class:`~pulse2percept.models.retina.BiphasicAxonMapSpatial` can now be composed
   with temporal models using a space-time-separable approximation (:pull:`847`)
 
 * Model parameter ``xystep`` was renamed to ``step`` and ``axlambda`` to
@@ -257,9 +295,9 @@ Highlights:
    pulse2percept no longer downgrades NumPy in environments that ship it, such
    as Google Colab (:pull:`635`, :pull:`736`)
 *  Removed the jax engine and ``predict_percept_batched`` from
-   :py:class:`~pulse2percept.models.BiphasicAxonMapModel`; the ``engine``
+   :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`; the ``engine``
    argument of the effect models and the ``pad`` argument of
-   :py:meth:`~pulse2percept.models.AxonMapSpatial.calc_axon_sensitivity` are
+   :py:meth:`~pulse2percept.models.retina.AxonMapSpatial.calc_axon_sensitivity` are
    deprecated, and will be removed in v0.10.0 (:pull:`788`)
 *  Removed the ``model_selection`` module (:pull:`685`) and support for the
    joblib and dask parallel backends (:pull:`686`); the ``engine`` and
@@ -285,13 +323,12 @@ Highlights:
 *  Cortical models: :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
    (:pull:`533`), :py:class:`~pulse2percept.models.cortex.DynaphosModel`
    [vanderGrinten2023]_ (:pull:`547`)
-*  Cortical maps: :py:class:`~pulse2percept.topography.Polimeni2006Map`
-   (:pull:`509`), :py:class:`~pulse2percept.topography.NeuropythyMap` 
+*  Cortical maps: :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`
+   (:pull:`509`), :py:class:`~pulse2percept.topography.cortex.NeuropythyMap` 
    (:pull:`597`)
-*  Other new implants: :py:class:`~pulse2percept.implants.IMIE` [Xu2021]_
+*  Other new implants: :py:class:`~pulse2percept.implants.retina.IMIE` [Xu2021]_
    (:pull:`492`), :py:class:`~pulse2percept.implants.EnsembleImplant` 
-   (:pull:`537`), :py:class:`~pulse2percept.implants.RectangleImplant`
-   (:pull:`631`)
+   (:pull:`537`), ``RectangleImplant`` (:pull:`631`)
 *  New datasets: :py:class:`~pulse2percept.datasets.fetch_han2021` 
    [Han2021]_ (:pull:`494`)
 *  Torch and CUDA support (:pull:`633`)
@@ -303,11 +340,11 @@ v0.8.0 Retina (2022-05-05)
 
 Highlights:
 
-*  New implants: :py:class:`~pulse2percept.implants.BVT44` [Petoe2021]_
+*  New implants: :py:class:`~pulse2percept.implants.retina.BVT44` [Petoe2021]_
    (:pull:`465`)
-*  New models: :py:class:`~pulse2percept.models.BiphasicAxonMapModel`
+*  New models: :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
    [Granley2021]_ (:pull:`398`) and
-   :py:class:`~pulse2percept.models.Thompson2003Model` [Thompson2003]_
+   :py:class:`~pulse2percept.models.retina.Thompson2003Model` [Thompson2003]_
    (:pull:`448`)
 *  New datasets: :py:func:`~pulse2percept.datasets.load_greenwald2009`
    [Greenwald2009]_ (:pull:`459`) and
@@ -326,20 +363,20 @@ Highlights:
 *  Add :py:class:`~pulse2percept.models.FadingTemporal`, a generic phosphene fading model (:pull:`378`)
 *  Various implant usability and speed upgrades (:pull:`375`, :pull:`382`, :pull:`383`, :pull:`386`)
 *  Various stimulus usability and speed upgrades (:pull:`382`, :pull:`383`, :pull:`384`, :pull:`385`)
-*  Improve documentation and usability of various :py:class:`~pulse2percept.models.AxonMapModel` methods (:pull:`370`)
+*  Improve documentation and usability of various :py:class:`~pulse2percept.models.retina.AxonMapModel` methods (:pull:`370`)
 
 v0.7.0 Implants (2021-04-04)
 ============================
 
 Highlights:
 
-*  New implants: :py:class:`~pulse2percept.implants.PRIMA`, 
-   :py:class:`~pulse2percept.implants.PRIMA75`,
-   :py:class:`~pulse2percept.implants.PRIMA55`, 
-   :py:class:`~pulse2percept.implants.PRIMA40` (:pull:`188`)
+*  New implants: :py:class:`~pulse2percept.implants.retina.PRIMA`, 
+   :py:class:`~pulse2percept.implants.retina.PRIMA75`,
+   :py:class:`~pulse2percept.implants.retina.PRIMA55`, 
+   :py:class:`~pulse2percept.implants.retina.PRIMA40` (:pull:`188`)
 *  New electrodes: :py:class:`~pulse2percept.implants.SquareElectrode`,
    :py:class:`~pulse2percept.implants.HexElectrode`,
-   :py:class:`~pulse2percept.implants.PhotovoltaicPixel` (:pull:`188`, 
+   :py:class:`~pulse2percept.implants.retina.PhotovoltaicPixel` (:pull:`188`, 
    :pull:`193`)
 *  New stimuli: :py:class:`~pulse2percept.stimuli.ImageStimulus` and
    :py:class:`~pulse2percept.stimuli.VideoStimulus` (:pull:`196`, :pull:`220`,
@@ -348,7 +385,7 @@ Highlights:
 *  New datasets: :py:class:`~pulse2percept.datasets.load_nanduri2012`
    (:pull:`250`)
 *  New model selection subpackage (:pull:`311`)
-*  100x speedup of building :py:class:`~pulse2percept.models.AxonMapModel` (:pull:`331`)
+*  100x speedup of building :py:class:`~pulse2percept.models.retina.AxonMapModel` (:pull:`331`)
 *  OpenMP support (:pull:`260`)
 *  Python 3.9 support (:pull:`348`)
 *  Various usability upgrades
@@ -360,11 +397,12 @@ v0.6.0 API (2020-05-05)
 Highlights:
 
 *   New API (:pull:`96`, :pull:`174`, :pull:`178`)
-*   New implants: :py:class:`~pulse2percept.implants.BVA24` (:pull:`161`)
-*   New models: :py:class:`~pulse2percept.models.ScoreboardModel` (:pull:`96`),
-    :py:class:`~pulse2percept.models.AxonMapModel` (:pull:`96`),
-    :py:class:`~pulse2percept.models.Nanduri2012Model` (:pull:`168`),
-    :py:class:`~pulse2percept.models.Horsager2009Model` (:pull:`180`)
+*   New implants: ``BVA24``, since renamed
+    :py:class:`~pulse2percept.implants.retina.BVT24` (:pull:`161`)
+*   New models: :py:class:`~pulse2percept.models.retina.ScoreboardModel` (:pull:`96`),
+    :py:class:`~pulse2percept.models.retina.AxonMapModel` (:pull:`96`),
+    :py:class:`~pulse2percept.models.retina.Nanduri2012Model` (:pull:`168`),
+    :py:class:`~pulse2percept.models.retina.Horsager2009Model` (:pull:`180`)
 *   New stimuli: :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`,
     :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulse`,
     :py:class:`~pulse2percept.stimuli.AsymmetricBiphasicPulseTrain`
@@ -397,7 +435,7 @@ v0.5.0 Community (2019-11-29)
 =============================
 
 *   New :py:mod:`pulse2percept.viz` module (:pull:`84`)
-*   Support for the :py:class:`~pulse2percept.implants.AlphaIMS` implant
+*   Support for the :py:class:`~pulse2percept.implants.retina.AlphaIMS` implant
     (:pull:`87`)
 *   Automated wheelhouse build (:pull:`130`)
 *   New contribution guidelines (:pull:`92`)

@@ -12,7 +12,7 @@ from ...stimuli import BiphasicPulseTrain
 from ...units import (A, Quantity, as_value, deg, dva, Hz, mm, ms, uA, um)
 from ...utils import cart2pol
 from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
-from ...topography import Polimeni2006Map
+from ...topography.cortex import Polimeni2006Map
 
 
 def _pulse_train_clocks(stim):
@@ -100,7 +100,7 @@ class DynaphosModel(BaseModel):
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides visual field mappings.
-        By default, :py:class:`~pulse2percept.topography.Polimeni2006Map` is
+        By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
         used.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means

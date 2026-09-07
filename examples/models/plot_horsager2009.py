@@ -5,7 +5,7 @@ Horsager et al. (2009): Predicting temporal sensitivity
 ===============================================================================
 
 This example shows how to use the
-:py:class:`~pulse2percept.models.Horsager2009Model`.
+:py:class:`~pulse2percept.models.retina.Horsager2009Model`.
 
 The model introduced in [Horsager2009]_ assumes that electrical stimulation
 leads to percepts that quickly increase in brightness (over the time course
@@ -62,7 +62,7 @@ pulse.plot(time=np.linspace(0, 10, num=10000))
 #
 # The model's response to this stimulus can be visualized as follows:
 
-from pulse2percept.models import Horsager2009Temporal
+from pulse2percept.models.retina import Horsager2009Temporal
 model = Horsager2009Temporal()
 model.build()
 
