@@ -245,6 +245,58 @@ is accepted.
     different tasks (bar direction vs. gap direction). Thresholds obtained
     with one are not numerically interchangeable with the other.
 
+:py:func:`~pulse2percept.stimuli.psychophysics.grating` and
+:py:func:`~pulse2percept.stimuli.psychophysics.bar` are parametrized in
+degrees of visual angle and physical time rather than in pixels and frames:
+
+.. code-block:: python
+
+    import numpy as np
+    from pulse2percept.units import Hz, s
+
+    # A static grating, one cycle every two degrees:
+    scene = psychophysics.grating(spatial_freq=0.5 / dva, fov=20 * dva)
+
+    # The same grating drifting rightwards at 2 Hz (i.e. 4 dva/s):
+    scene = psychophysics.grating(spatial_freq=0.5 / dva, temporal_freq=2 * Hz,
+                                  direction=0 * deg, fov=20 * dva,
+                                  time=np.arange(0, 1000, 20))
+
+``spatial_freq`` is in cycles/dva and ``temporal_freq`` in Hz, so the pattern
+drifts along ``direction`` at ``temporal_freq / spatial_freq`` dva/s.
+``shape`` sets the raster resolution only: a finer raster is the same grating
+drawn more finely. ``phase`` is the spatial phase at fixation and ``t = 0``,
+and ``contrast`` is a Michelson contrast around mean gray 0.5.
+
+:py:func:`~pulse2percept.stimuli.psychophysics.bar` draws a single bright bar
+perpendicular to its direction of motion, whose center sits at
+``offset + speed * t`` along the motion axis:
+
+.. code-block:: python
+
+    scene = psychophysics.bar(width=2 * dva, speed=20 * dva / s,
+                              offset=-10 * dva, edge_width=0.5 * dva,
+                              fov=20 * dva, time=np.arange(0, 1000, 20))
+
+``width`` and ``edge_width`` (the raised-cosine ramp on either side of the
+plateau) are angular sizes, and ``speed`` is in dva/s. A periodic array of
+bars is a grating, so ``bar`` draws only one.
+
+``time`` behaves the same way for both: ``None`` gives a static
+:py:class:`~pulse2percept.stimuli.ImageStimulus`, and an explicit array of
+sample times in milliseconds gives a
+:py:class:`~pulse2percept.stimuli.VideoStimulus`. There is no default frame
+rate, and temporal phase and bar position are computed from those timestamps,
+not from the frame index: two videos sampled on different grids agree exactly
+wherever they share a timestamp.
+
+.. note::
+    :py:class:`~pulse2percept.stimuli.GratingStimulus` and
+    :py:class:`~pulse2percept.stimuli.BarStimulus` are the deprecated
+    predecessors of these functions. They work in cycles/pixel, cycles/frame,
+    and pixels/frame on an implicit 50 Hz grid, and always produce a video.
+    They are unchanged in 0.11 and will be removed in 0.12.
+
 Plotting and time operations
 ----------------------------
 

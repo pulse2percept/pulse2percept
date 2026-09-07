@@ -104,6 +104,20 @@ Stimuli and encoding
   of a given stroke width, eccentricity, and bar orientation; both return a
   :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
 
+* New :py:func:`~pulse2percept.stimuli.psychophysics.grating` and
+  :py:func:`~pulse2percept.stimuli.psychophysics.bar` replace
+  ``GratingStimulus`` and ``BarStimulus``, in cycles/dva, Hz, dva, and dva/s
+  rather than cycles/pixel, cycles/frame, and pixels/frame. They return a
+  :py:class:`~pulse2percept.vision.Scene` whose source is an
+  ``ImageStimulus`` when ``time`` is None and a ``VideoStimulus`` otherwise;
+  ``time`` takes explicit sample times, and there is no default frame rate
+  (:issue:`499`, :pull:`890`).
+
+* ``GratingStimulus`` and ``BarStimulus`` are deprecated until v0.12.0. Their
+  units and temporal semantics are unchanged, so parameter values do not
+  carry over to the new generators; ``px_btw_bars`` has no counterpart, since
+  a periodic array of bars is a grating (:pull:`890`).
+
 * The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
   along with their asset files and the README banner derived from them,
   because their original provenance and licensing could not be verified. Use
