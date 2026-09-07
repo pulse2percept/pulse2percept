@@ -155,7 +155,7 @@ Where to go from here
 *  Check the `FAQ`_ for common questions.
 *  Request features or report bugs on the `Issue Tracker`_.
 
-.. _Getting Started: https://pulse2percept.readthedocs.io/en/latest/getting_started.html
+.. _Getting Started: https://pulse2percept.readthedocs.io/en/latest/examples/plot_getting_started.html
 .. _Example Gallery: https://pulse2percept.readthedocs.io/en/latest/examples/index.html
 .. _visual implants: https://pulse2percept.readthedocs.io/en/latest/topics/implants.html
 .. _electrical stimuli: https://pulse2percept.readthedocs.io/en/latest/topics/stimuli.html

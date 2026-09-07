@@ -7,7 +7,7 @@
 
    Overview <self>
    install
-   getting_started
+   Getting Started <examples/plot_getting_started>
    examples/index
 
 .. toctree::
@@ -64,7 +64,7 @@ Compatibility
 Where to go from here
 =====================
 
-*  Start with the :doc:`Getting Started <getting_started>` guide.
+*  Start with the :doc:`Getting Started <examples/plot_getting_started>` guide.
 *  Explore the :doc:`Example Gallery <examples/index>` for complete simulations and use cases.
 * Learn about :doc:`visual implants <topics/implants>`,
   :doc:`electrical stimuli <topics/stimuli>`, and our
