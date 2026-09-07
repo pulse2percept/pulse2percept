@@ -4,7 +4,7 @@ import numpy.testing as npt
 
 from pulse2percept.implants import retina, SequentialRaster
 from pulse2percept.models.retina import AxonMapModel
-from pulse2percept.stimuli import AmplitudeEncoder, BostonTrain, LogoBVL
+from pulse2percept.stimuli import AmplitudeEncoder, samples
 from pulse2percept.units import DimensionMismatchError, uA
 
 
@@ -178,14 +178,14 @@ def test_ArgusII_defaults():
     npt.assert_equal(retina.ArgusII(raster=None).encoder is None, False)
     # ... and switching the raster off really does stop the multiplexing: every
     # electrode then fires on the same schedule, at the same instant.
-    unrastered = retina.ArgusII(raster=None).prepare_stim(LogoBVL())
+    unrastered = retina.ArgusII(raster=None).prepare_stim(samples.logo_bvl())
     npt.assert_equal(unrastered.metadata['encoder']['cycle'], None)
     # There is an instant at which every electrode is at its own peak, so the
     # stimulator has to source the whole array at once:
     npt.assert_almost_equal(np.abs(unrastered.data).sum(axis=0).max(),
                             np.abs(unrastered.data).max(axis=1).sum(),
                             decimal=3)
-    rastered = retina.ArgusII().prepare_stim(LogoBVL())
+    rastered = retina.ArgusII().prepare_stim(samples.logo_bvl())
     npt.assert_array_less(np.abs(rastered.data).sum(axis=0).max(),
                           np.abs(unrastered.data).sum(axis=0).max())
     # ... and either can be replaced outright:
@@ -199,10 +199,10 @@ def test_ArgusII_defaults():
         retina.ArgusII(raster='line')
 
 
-def test_ArgusII_encodes_pictures_on_preparation():
+def test_ArgusII_encodes_pictures_on_preparation(camera_video):
     """The device's own defaults are what make `prepare_stim(picture)` work"""
     argus = retina.ArgusII()
-    stim = argus.prepare_stim(LogoBVL())
+    stim = argus.prepare_stim(samples.logo_bvl())
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.shape[0], argus.n_electrodes)
     npt.assert_equal(list(stim.electrodes), list(argus.electrode_names))
@@ -220,7 +220,7 @@ def test_ArgusII_encodes_pictures_on_preparation():
     # A video keeps its own frame clock, which is what a model reports at:
     with pytest.warns(UserWarning, match='deliver no pulse'):
         # 6 Hz against 29.97 fps: most frames carry no pulse of their own
-        stim = argus.prepare_stim(BostonTrain())
+        stim = argus.prepare_stim(camera_video)
     npt.assert_equal(stim.unit, uA)
     meta = stim.metadata['encoder']
     npt.assert_equal(meta['frame_time'].size, 94)
@@ -229,12 +229,12 @@ def test_ArgusII_encodes_pictures_on_preparation():
     # Without an encoder the very same picture is refused, since there is no
     # default mapping from a gray level onto an amplitude:
     with pytest.raises(DimensionMismatchError):
-        retina.ArgusII(encoder=None).prepare_stim(LogoBVL())
+        retina.ArgusII(encoder=None).prepare_stim(samples.logo_bvl())
 
     # And the whole point of it: a picture goes straight into a model, with no
     # encoding step for the caller to spell out.
     model = AxonMapModel(implant=argus, xrange=(-4, 4), yrange=(-3, 3), step=1,
                          rho=200, lam=100).build()
-    percept = model.predict_percept(LogoBVL())
+    percept = model.predict_percept(samples.logo_bvl())
     npt.assert_equal(percept.data.shape[:2], model.spatial.grid.x.shape)
     npt.assert_equal(np.any(percept.data > 0), True)

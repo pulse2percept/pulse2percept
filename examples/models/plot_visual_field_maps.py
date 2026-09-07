@@ -202,7 +202,7 @@ for ax, noise, title in zip(
 # without subject-specific phosphene locations:
 
 implant = p2p.implants.retina.AlphaAMS()
-stim = p2p.stimuli.LogoUCSB().encode(implant=implant)
+stim = p2p.stimuli.samples.logo_ucsb().encode(implant=implant)
 
 fig, axes = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(9, 4))
 for ax, noise, title in zip(

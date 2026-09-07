@@ -1,7 +1,7 @@
 """End-to-end tests you can check by hand
 
-The encoder tests in ``pulse2percept/stimuli/tests`` drive Argus II with
-``BostonTrain``, which exercises the plumbing but tells you nothing you could
+The encoder tests in ``pulse2percept/stimuli/tests`` drive Argus II with a
+camera clip, which exercises the plumbing but tells you nothing you could
 have predicted with a pencil. These tests run the whole pipeline -- image ->
 encoder -> implant -> model -> percept -- on a deliberately tiny setup where
 every number has a closed form:
@@ -25,9 +25,8 @@ from pulse2percept.implants import (CustomRaster, DiskElectrode,
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.models.retina import ScoreboardSpatial
-from pulse2percept.stimuli import (AmplitudeEncoder, BostonTrain,
-                                   FrequencyEncoder, ImageStimulus,
-                                   Stimulus)
+from pulse2percept.stimuli import (AmplitudeEncoder, FrequencyEncoder,
+                                   ImageStimulus, Stimulus)
 from pulse2percept.utils.constants import DT
 
 # Electrode names in the order `ElectrodeArray` keeps them, and their positions
@@ -289,11 +288,11 @@ def test_endtoend_raster_is_what_separates_the_groups():
     npt.assert_almost_equal(np.abs(rastered.data).sum(axis=0).max(), 50.0)
 
 
-def test_endtoend_slow_train_stays_lit_for_the_whole_video():
+def test_endtoend_slow_train_stays_lit_for_the_whole_video(camera_video):
     """A pulse rate well below the frame rate must not extinguish the percept.
 
     This is the case that crossed every layer at once and that none of the
-    per-layer tests caught. ``BostonTrain`` runs at 29.97 fps (33.365 ms per
+    per-layer tests caught. ``camera_video`` runs at 29.97 fps (33.365 ms per
     frame) and a 6 Hz train pulses every 166.67 ms, so the pulse cycle and the
     percept's own frame grid are incommensurate by 4.995 frames. Reporting a
     frame by sampling instants out of it therefore walks slowly through the
@@ -307,13 +306,13 @@ def test_endtoend_slow_train_stays_lit_for_the_whole_video():
     peak it reached is what stops the report from depending on sampling phase.
     """
     # Argus II's own defaults: an amplitude encoder at 6 Hz, and a six-group
-    # raster. So the whole setup is `ArgusII().prepare_stim(BostonTrain())`.
+    # raster. So the whole setup is `ArgusII().prepare_stim(video)`.
     implant = ArgusII()
     with pytest.warns(UserWarning, match='deliver no pulse'):
         # 6 Hz against 29.97 fps: most frames carry no pulse of their own, and
         # the encoder says so. That is a property of the stimulus, not a reason
         # for the percept to go dark:
-        delivered = implant.prepare_stim(BostonTrain())
+        delivered = implant.prepare_stim(camera_video)
     # The encoder schedules pulses across the whole video, not just its start.
     # The last of the six raster groups takes its turn 5 x 2 = 10 ms behind the
     # first, which is what puts the final pulse past the 3000.5 ms that an
@@ -325,7 +324,7 @@ def test_endtoend_slow_train_stays_lit_for_the_whole_video():
                                             yrange=(-8, 8), step=1),
                   temporal=FadingTemporal(tau=100)).build()
     with pytest.warns(UserWarning, match='deliver no pulse'):
-        percept = model.predict_percept(BostonTrain())
+        percept = model.predict_percept(camera_video)
     # One percept frame per video frame, covering the whole video:
     npt.assert_equal(percept.data.shape[-1], 94)
     npt.assert_array_less(3000, percept.time[-1])

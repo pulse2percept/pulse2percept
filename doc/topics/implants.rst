@@ -90,7 +90,7 @@ source into stimulation the device can deliver:
 .. code-block:: python
 
     delivered = implant.prepare_stim({'A8': 30})
-    delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
+    delivered = implant.prepare_stim(p2p.stimuli.VideoStimulus('movie.mp4'))
 
 Preparation includes preprocessing, image/video encoding, resampling onto the
 electrode array, raster scheduling, threshold calibration, and safety checks.

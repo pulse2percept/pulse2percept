@@ -16,7 +16,7 @@ from pulse2percept.implants.retina import (ArgusII, PhotovoltaicPixel,
                                            Ho2019FlatArray, Huang2021Array,
                                            PRIMA, PRIMA75, PRIMA55, PRIMA40)
 from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
-                                   ImageStimulus, LogoBVL, PRIMAEncoder,
+                                   ImageStimulus, PRIMAEncoder, samples,
                                    Stimulus)
 from pulse2percept.units import DimensionMismatchError, deg, mW, mm, um, xTh
 from pulse2percept.utils.constants import ZORDER
@@ -542,7 +542,7 @@ def test_PRIMA40_reshape_stim():
     # old approach runs out of memory easily. A picture is not a stimulus an
     # implant can deliver, so the sampling is exercised where an encoder
     # reaches it:
-    Ho2019FlatArray(40).reshape_stim(LogoBVL())
+    Ho2019FlatArray(40).reshape_stim(samples.logo_bvl())
 
 
 @pytest.mark.parametrize('implant_type, offset', [
@@ -589,7 +589,7 @@ def test_PRIMAPivotal_is_stimulated_optically():
     implant.encoder.threshold = 0.9
     npt.assert_almost_equal(PRIMAPivotal().encoder.threshold, 0.5)
 
-    stim = implant.prepare_stim(LogoBVL())
+    stim = implant.prepare_stim(samples.logo_bvl())
     npt.assert_equal(stim.unit, mW / mm ** 2)
     npt.assert_equal(stim.shape[0], 378)
     npt.assert_almost_equal(stim.data.max(), 3.5)
@@ -597,7 +597,7 @@ def test_PRIMAPivotal_is_stimulated_optically():
 
     # Disabling the encoder rejects image input.
     with pytest.raises(DimensionMismatchError):
-        PRIMAPivotal(encoder=None).prepare_stim(LogoBVL())
+        PRIMAPivotal(encoder=None).prepare_stim(samples.logo_bvl())
     with pytest.raises(TypeError):
         PRIMAPivotal(encoder='binary')
 
@@ -625,7 +625,8 @@ def test_PRIMA_deprecated_alias_keeps_the_encoder():
     with pytest.deprecated_call():
         implant = PRIMA()
     npt.assert_equal(isinstance(implant.encoder, PRIMAEncoder), True)
-    npt.assert_equal(implant.prepare_stim(LogoBVL()).unit, mW / mm ** 2)
+    npt.assert_equal(implant.prepare_stim(samples.logo_bvl()).unit,
+                     mW / mm ** 2)
 
 
 def test_PRIMAPivotal_safe_mode_accepts_the_full_device():
@@ -637,7 +638,7 @@ def test_PRIMAPivotal_safe_mode_accepts_the_full_device():
     # All documented pulse-duration levels are valid.
     for pulse_dur in np.arange(1, 15) * 0.7:
         implant.encoder = PRIMAEncoder(pulse_dur=pulse_dur, grayscale=True)
-        implant.prepare_stim(LogoBVL())
+        implant.prepare_stim(samples.logo_bvl())
 
 
 @pytest.mark.parametrize('encoder, msg', [
@@ -652,18 +653,19 @@ def test_PRIMAPivotal_safe_mode_accepts_the_full_device():
 def test_PRIMAPivotal_safe_mode_rejects(encoder, msg):
     implant = PRIMAPivotal(safe_mode=True, encoder=encoder)
     with pytest.raises(ValueError) as excinfo:
-        implant.prepare_stim(LogoBVL())
+        implant.prepare_stim(samples.logo_bvl())
     npt.assert_equal(msg in str(excinfo.value), True)
     # The operating-envelope check is disabled when safe_mode=False.
     npt.assert_equal(
-        PRIMAPivotal(encoder=encoder).prepare_stim(LogoBVL()).unit,
+        PRIMAPivotal(encoder=encoder).prepare_stim(samples.logo_bvl()).unit,
         mW / mm ** 2)
 
 
 def test_PRIMAPivotal_safe_mode_reads_the_schedule_not_the_metadata():
     # Envelope checks use schedule state, not mutable metadata.
     implant = PRIMAPivotal(safe_mode=True)
-    stim = PRIMAPivotal(encoder=PRIMAEncoder(freq=60)).prepare_stim(LogoBVL())
+    stim = PRIMAPivotal(
+        encoder=PRIMAEncoder(freq=60)).prepare_stim(samples.logo_bvl())
     stim.metadata['encoder'] = {'frame_time': np.zeros(1), 'frame_dur': 500.0,
                                 'optical': {'wavelength': 880.0,
                                             'irradiance': 3.5, 'freq': 30.0,
@@ -676,7 +678,7 @@ def test_PRIMAPivotal_safe_mode_reads_the_schedule_not_the_metadata():
 
 def test_PRIMAPivotal_refuses_light_that_is_not_light():
     # Negative or nonfinite irradiance is invalid regardless of safe_mode.
-    stim = PRIMAPivotal().prepare_stim(LogoBVL())
+    stim = PRIMAPivotal().prepare_stim(samples.logo_bvl())
     # Negative scaling is rejected by the schedule.
     with pytest.raises(ValueError):
         stim * -1
@@ -701,7 +703,7 @@ def test_PRIMAPivotal_refuses_light_that_is_not_light():
 
 def test_PRIMAPivotal_safe_mode_needs_the_projector_settings():
     implant = PRIMAPivotal(safe_mode=True)
-    encoded = PRIMAPivotal().prepare_stim(LogoBVL())
+    encoded = PRIMAPivotal().prepare_stim(samples.logo_bvl())
     # Duty cycle cannot be checked after the projector schedule is lost.
     handmade = Stimulus(encoded)
     handmade.metadata = {'user': None}
@@ -718,4 +720,4 @@ def test_PRIMAPivotal_safe_mode_needs_the_projector_settings():
     implant = PRIMAPivotal()
     implant.max_current = 100
     with pytest.raises(DimensionMismatchError):
-        implant.prepare_stim(LogoBVL())
+        implant.prepare_stim(samples.logo_bvl())

@@ -11,7 +11,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulseTrain,
                                    BiphasicPulse, BiphasicPulseTrain,
-                                   ImageStimulus, LogoBVL, MonophasicPulse,
+                                   ImageStimulus, MonophasicPulse, samples,
                                    Stimulus, VideoStimulus)
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
 from pulse2percept.models.retina import (AxonMapSpatial, BiphasicAxonMapModel,
@@ -707,14 +707,14 @@ def _granley(implant, model_cls=BiphasicAxonMapModel):
 def test_BiphasicAxonMap_reads_an_encoded_image(model_cls):
     model = _granley(ArgusII(thresholds=80 * uA), model_cls)
     with _no_pulse_train_rendering():
-        percept = model.predict_percept(LogoBVL())
+        percept = model.predict_percept(samples.logo_bvl())
     npt.assert_equal(np.any(percept.data), True)
     relative = _granley(
         ArgusII(encoder=AmplitudeEncoder(amp_range=(0 * xTh, 0.625 * xTh),
                                          freq=6 * Hz)), model_cls)
     with _no_pulse_train_rendering():
-        npt.assert_array_almost_equal(relative.predict_percept(LogoBVL()).data,
-                                      percept.data)
+        npt.assert_array_almost_equal(
+            relative.predict_percept(samples.logo_bvl()).data, percept.data)
 
 
 @pytest.mark.parametrize('model_cls', [BiphasicAxonMapModel,
@@ -722,9 +722,9 @@ def test_BiphasicAxonMap_reads_an_encoded_image(model_cls):
 def test_BiphasicAxonMap_ignores_the_raster(model_cls):
     with _no_pulse_train_rendering():
         rastered = _granley(ArgusII(thresholds=80),
-                            model_cls).predict_percept(LogoBVL())
+                            model_cls).predict_percept(samples.logo_bvl())
         at_once = _granley(ArgusII(thresholds=80, raster=None),
-                           model_cls).predict_percept(LogoBVL())
+                           model_cls).predict_percept(samples.logo_bvl())
     npt.assert_array_equal(rastered.data, at_once.data)
 
 
@@ -736,15 +736,15 @@ def test_BiphasicAxonMap_reads_the_encoder_parameters(param, value):
     tweaked = _granley(ArgusII(thresholds=80,
                                encoder=AmplitudeEncoder(**{param: value})))
     with _no_pulse_train_rendering():
-        base = default.predict_percept(LogoBVL()).data
-        other = tweaked.predict_percept(LogoBVL()).data
+        base = default.predict_percept(samples.logo_bvl()).data
+        other = tweaked.predict_percept(samples.logo_bvl()).data
     npt.assert_equal(np.allclose(base, other), False)
 
 
 def test_BiphasicAxonMap_encoded_current_still_needs_a_threshold():
     model = _granley(ArgusII())
     with pytest.raises(ValueError) as err:
-        model.predict_percept(LogoBVL())
+        model.predict_percept(samples.logo_bvl())
     npt.assert_equal('threshold' in str(err.value), True)
 
 
@@ -760,14 +760,14 @@ def test_BiphasicAxonMap_rejects_a_custom_encoder_pulse():
     encoder = AmplitudeEncoder(pulse=BiphasicPulse(1, 0.2), amp_range=(0, 50))
     model = _granley(ArgusII(thresholds=80, encoder=encoder))
     with pytest.raises(TypeError) as err:
-        model.predict_percept(LogoBVL())
+        model.predict_percept(samples.logo_bvl())
     npt.assert_equal('pulse' in str(err.value), True)
 
 
 def test_BiphasicAxonMap_encoded_extraction_is_lazy():
     # Reading the schedule's parameters must not expand it into samples:
     implant = ArgusII(thresholds=80)
-    stim = implant.prepare_stim(LogoBVL())
+    stim = implant.prepare_stim(samples.logo_bvl())
     _granley(implant).predict_percept(stim)
     npt.assert_equal(stim._Stimulus__stim['data'] is None, True)
 
@@ -1059,7 +1059,7 @@ def test_BiphasicAxonMapSpatial_composite_reads_an_encoded_image(temporal_cls):
     composite = Model(spatial=BiphasicAxonMapSpatial(implant=implant, **_GRID),
                       temporal=temporal_cls()).build()
     with _no_pulse_train_rendering():
-        percept = composite.predict_percept(LogoBVL())
+        percept = composite.predict_percept(samples.logo_bvl())
     npt.assert_equal(percept.data.shape[-1] > 1, True)
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
     npt.assert_equal(np.any(percept.data), True)
@@ -1186,7 +1186,7 @@ def test_BiphasicScoreboard_uncalibrated_current_raises(model_cls):
 def test_BiphasicScoreboard_reads_an_encoded_image(model_cls):
     model = _scoreboard(model_cls, implant=ArgusII(thresholds=80 * uA), step=1)
     with _no_pulse_train_rendering():
-        percept = model.predict_percept(LogoBVL())
+        percept = model.predict_percept(samples.logo_bvl())
     npt.assert_equal(np.any(percept.data), True)
     # Asking for threshold multiples up front needs no measured threshold:
     relative = _scoreboard(
@@ -1194,8 +1194,8 @@ def test_BiphasicScoreboard_reads_an_encoded_image(model_cls):
         implant=ArgusII(encoder=AmplitudeEncoder(
             amp_range=(0 * xTh, 0.625 * xTh), freq=6 * Hz)))
     with _no_pulse_train_rendering():
-        npt.assert_array_almost_equal(relative.predict_percept(LogoBVL()).data,
-                                      percept.data)
+        npt.assert_array_almost_equal(
+            relative.predict_percept(samples.logo_bvl()).data, percept.data)
 
 
 @pytest.mark.parametrize('model_cls', _SB_CLASSES)
@@ -1225,7 +1225,7 @@ def test_BiphasicScoreboard_rejects_normalized_drive(model_cls):
         model = model_cls(implant=PRIMAPivotal(), rho=200, step=0.5,
                           xrange=(-2, 2), yrange=(-2, 2), verbose=False)
         with pytest.raises(DimensionMismatchError):
-            model.predict_percept(LogoBVL())
+            model.predict_percept(samples.logo_bvl())
 
 
 @pytest.mark.parametrize('model_cls', _SB_CLASSES)
@@ -1406,7 +1406,7 @@ def test_Granley_rejects_an_anodic_first_encoder(model_cls, grid):
         return model_cls(implant=implant, verbose=False, **grid).build()
 
     with pytest.raises(TypeError, match='cathodic-first'):
-        encoded(False).predict_percept(LogoBVL())
+        encoded(False).predict_percept(samples.logo_bvl())
     # The default polarity still predicts:
     npt.assert_equal(
-        np.any(encoded(True).predict_percept(LogoBVL()).data), True)
+        np.any(encoded(True).predict_percept(samples.logo_bvl()).data), True)

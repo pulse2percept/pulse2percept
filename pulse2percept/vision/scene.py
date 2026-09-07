@@ -312,10 +312,11 @@ class Scene(PrettyPrint):
     --------
     A logo covering 40 degrees, seen with a central 16-degree scotoma:
 
-    >>> from pulse2percept.stimuli import LogoBVL
+    >>> from pulse2percept.stimuli import samples
     >>> from pulse2percept.units import dva
     >>> from pulse2percept.vision import Scene, Scotoma
-    >>> scene = Scene(LogoBVL(), fov=40 * dva, scotoma=Scotoma.circle(8 * dva))
+    >>> scene = Scene(samples.logo_bvl(), fov=40 * dva,
+    ...               scotoma=Scotoma.circle(8 * dva))
     >>> scene.fov
     (40.0, 32.0)
 

@@ -17,7 +17,7 @@ from pulse2percept.implants import (PointSource, ElectrodeArray,
                                     ElectrodeGrid, GridImplant, Implant)
 from pulse2percept.implants.retina import PhotovoltaicPixel
 from pulse2percept.stimuli import (Stimulus, ImageStimulus, VideoStimulus,
-                                   BostonTrain, LogoBVL)
+                                   samples)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, FrequencyEncoder,
                                    MonophasicPulse)
@@ -201,7 +201,7 @@ def test_Implant_reshape_stim(rot, gtype, n_frames):
 
     # Smoke test a large hex grid (old code results in MemoryError):
     implant = PhotovoltaicArray(r=2, spacing=40, rot=rot)
-    implant.reshape_stim(LogoBVL())
+    implant.reshape_stim(samples.logo_bvl())
 
 
 def test_Implant_deactivate():
@@ -508,7 +508,7 @@ def test_Implant_requires_an_electrical_stimulus():
     npt.assert_equal(Implant.stimulus_unit, uA)
 
     for source in (img, VideoStimulus(np.ones((6, 10, 3)) * 0.5,
-                                      time=[0, 20, 40]), BostonTrain()):
+                                      time=[0, 20, 40])):
         implant = ArgusII(encoder=None)
         with pytest.raises(DimensionMismatchError) as excinfo:
             implant.prepare_stim(source)

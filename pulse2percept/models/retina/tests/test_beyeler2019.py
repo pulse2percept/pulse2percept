@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.implants.retina import ArgusI, ArgusII, PRIMAPivotal
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import (ImageStimulus, LogoBVL, Stimulus,
+from pulse2percept.stimuli import (ImageStimulus, Stimulus, samples,
                                    VideoStimulus)
 from pulse2percept.models.retina import (AxonMapSpatial, AxonMapModel,
                                          ScoreboardSpatial, ScoreboardModel)
@@ -1140,13 +1140,13 @@ def test_scoreboard_visualizes_a_photovoltaic_implant():
         warnings.simplefilter('ignore', UserWarning)
         model = ScoreboardModel(implant=implant, rho=200, step=0.05,
                                 xrange=(-2, 2), yrange=(-2, 2))
-        percept = model.predict_percept(LogoBVL())
+        percept = model.predict_percept(samples.logo_bvl())
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, tuple(model.spatial.grid.x.shape) + (1,))
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
     npt.assert_equal(percept.data.max() > 0, True)
     # Delivered stimulation is optical; the spatial view is normalized.
-    delivered = implant.prepare_stim(LogoBVL())
+    delivered = implant.prepare_stim(samples.logo_bvl())
     npt.assert_equal(delivered.unit, mW / mm ** 2)
     npt.assert_equal(delivered._spatial_view().unit, dimensionless)
     # Dark input produces zero drive.
@@ -1185,7 +1185,7 @@ def test_scoreboard_refuses_a_bare_optical_waveform():
         warnings.simplefilter('ignore', UserWarning)
         model = ScoreboardModel(implant=implant, rho=200, step=0.5,
                                 xrange=(-2, 2), yrange=(-2, 2))
-    bare = Stimulus(implant.prepare_stim(LogoBVL()))
+    bare = Stimulus(implant.prepare_stim(samples.logo_bvl()))
     npt.assert_equal(bare._has_spatial_view, False)
     with pytest.raises(DimensionMismatchError) as excinfo:
         model.predict_percept(bare)

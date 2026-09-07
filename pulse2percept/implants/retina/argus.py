@@ -234,8 +234,8 @@ class ArgusII(RetinalImplant):
     Because the device brings its own encoder, a picture can be presented
     directly and comes back as current:
 
-    >>> from pulse2percept.stimuli import LogoBVL
-    >>> ArgusII().prepare_stim(LogoBVL()).unit
+    >>> from pulse2percept.stimuli import samples
+    >>> ArgusII().prepare_stim(samples.logo_bvl()).unit
     uA
 
     """

@@ -22,6 +22,7 @@ from .base import Stimulus, _adoptable
 from .names import ElectrodeNames
 from ..units import as_value, deg, dimensionless
 from ..utils import center_image, shift_image, scale_image, trim_image
+from ..utils.deprecation import deprecated
 from ..utils.images import _as_writable
 
 
@@ -817,6 +818,8 @@ class SnellenChart(ImageStimulus):
                                            compress=False)
 
 
+@deprecated(alt_func='pulse2percept.stimuli.samples.logo_bvl',
+            deprecated_version='0.11.0', removed_version='0.12.0')
 class LogoBVL(ImageStimulus):
     """Bionic Vision Lab (BVL) logo
 
@@ -861,6 +864,8 @@ class LogoBVL(ImageStimulus):
                                       compress=False)
 
 
+@deprecated(alt_func='pulse2percept.stimuli.samples.logo_ucsb',
+            deprecated_version='0.11.0', removed_version='0.12.0')
 class LogoUCSB(ImageStimulus):
     """UCSB logo
 

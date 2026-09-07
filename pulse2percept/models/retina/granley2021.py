@@ -910,7 +910,7 @@ class BiphasicAxonMapModel(Model):
 
         implant = p2p.implants.retina.ArgusII(thresholds=80 * p2p.units.uA)
         model = p2p.models.retina.BiphasicAxonMapModel(implant=implant)
-        percept = model.predict_percept(p2p.stimuli.LogoBVL())
+        percept = model.predict_percept(p2p.stimuli.samples.logo_bvl())
 
     An encoder that asks for threshold multiples in the first place needs no
     measured threshold:
@@ -921,7 +921,7 @@ class BiphasicAxonMapModel(Model):
             amp_range=(0 * p2p.units.xTh, 3 * p2p.units.xTh))
         implant = p2p.implants.retina.ArgusII(encoder=encoder)
         model = p2p.models.retina.BiphasicAxonMapModel(implant=implant)
-        percept = model.predict_percept(p2p.stimuli.LogoBVL())
+        percept = model.predict_percept(p2p.stimuli.samples.logo_bvl())
     """
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
@@ -1233,7 +1233,7 @@ class BiphasicScoreboardModel(Model):
 
         implant = p2p.implants.retina.ArgusII(thresholds=80 * p2p.units.uA)
         model = p2p.models.retina.BiphasicScoreboardModel(implant=implant)
-        percept = model.predict_percept(p2p.stimuli.LogoBVL())
+        percept = model.predict_percept(p2p.stimuli.samples.logo_bvl())
     """
 
     def __init__(self, implant, *, bright_model=None, size_model=None,

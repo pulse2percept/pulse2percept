@@ -69,6 +69,20 @@ Stimuli and encoding
   ``pathlib.Path`` input for image and video stimuli were also added
   (:pull:`855`, :pull:`868`, :pull:`869`, :pull:`880`).
 
+* New :py:mod:`pulse2percept.stimuli.samples` namespace collects the bundled
+  sample stimuli behind lowercase loaders (``samples.logo_bvl()``,
+  ``samples.logo_ucsb()``), which return plain ``ImageStimulus`` objects.
+  ``LogoBVL`` and ``LogoUCSB`` are deprecated until v0.12.0 (:pull:`889`).
+
+* New procedural :py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a
+  Landolt C of a given gap size, eccentricity, and gap orientation, and
+  returns it as a :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
+
+* The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
+  along with their asset files, because their original provenance and
+  licensing could not be verified. There is no replacement loader
+  (:pull:`889`).
+
 
 Implants
 ~~~~~~~~

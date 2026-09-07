@@ -21,9 +21,10 @@ Start with a logo, an implant, and a model:
 """
 # sphinx_gallery_thumbnail_number = 1
 
+import numpy as np
 import pulse2percept as p2p
 
-stim = p2p.stimuli.LogoUCSB(resize=(60, 80))
+stim = p2p.stimuli.samples.logo_ucsb(resize=(60, 80))
 model = p2p.models.retina.ScoreboardModel(p2p.implants.retina.ArgusII(),
                                           rho=200,
                                           xrange=(-14, 12), yrange=(-12, 12),
@@ -43,9 +44,14 @@ p2p.plotting.plot_stimulus_percept(stim, percept)
 #
 # The same works for a video, except that both panels now move. Predicting a
 # percept for every frame of a 30-Hz video is the expensive part here, so keep
-# the video small:
+# the video small -- a drifting pattern of light and dark patches:
 
-video = p2p.stimuli.BostonTrain(resize=(60, 80), as_gray=True)
+n_frames, rows, cols = 30, 60, 80
+x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
+y = np.cos(np.linspace(0, 3 * np.pi, rows))[:, np.newaxis, np.newaxis]
+phase = 2 * np.pi * np.arange(n_frames) / n_frames
+video = p2p.stimuli.VideoStimulus(0.5 + 0.5 * y * np.sin(x - phase),
+                                  metadata={'fps': 30})
 percept = model.predict_percept(video)
 
 ###############################################################################

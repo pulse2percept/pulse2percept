@@ -9,14 +9,15 @@ Generating a stimulus from a video
 Loading a video
 ----------------
 
-A video can be loaded as follows:
+A video can be loaded from a file as follows:
 
 .. code:: python
 
     stim = p2p.stimuli.videos.VideoStimulus("path-to-video.mp4")
 
-There is an example video that is pre-installed with pulse2percept. You can
-load it like this.
+It can also be built from a <height x width x frames> array, which is what we
+do here so that the example does not depend on a file: a drifting pattern of
+light and dark patches, at 30 fps.
 
 """
 # sphinx_gallery_thumbnail_number = 1
@@ -24,7 +25,13 @@ load it like this.
 import pulse2percept as p2p
 import numpy as np
 
-video = p2p.stimuli.BostonTrain(as_gray=True)
+# Without ``time``, the frame rate in the metadata says when each frame is up:
+n_frames, rows, cols = 30, 120, 160
+x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
+y = np.cos(np.linspace(0, 3 * np.pi, rows))[:, np.newaxis, np.newaxis]
+phase = 2 * np.pi * np.arange(n_frames) / n_frames
+video = p2p.stimuli.VideoStimulus(0.5 + 0.5 * y * np.sin(x - phase),
+                                  metadata={'fps': 30})
 print(video)
 
 ##############################################################################

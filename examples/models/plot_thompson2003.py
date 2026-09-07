@@ -63,11 +63,17 @@ fig.tight_layout()
 # See :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
 #
 # The pulse rate has to keep up with the frame rate, or some frames go by
-# without a pulse and are never seen; this video runs at 29.97 fps, so 30 Hz
-# it is. Asking for a percept at the video's own frame times then gives one
+# without a pulse and are never seen; this clip runs at 30 fps, so 30 Hz it
+# is. Asking for a percept at the video's own frame times then gives one
 # percept frame per video frame:
 
-video = p2p.stimuli.BostonTrain()
+# A drifting pattern of light and dark patches stands in for a camera feed:
+n_frames, rows, cols = 30, 120, 160
+x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
+y = np.cos(np.linspace(0, 3 * np.pi, rows))[:, np.newaxis, np.newaxis]
+phase = 2 * np.pi * np.arange(n_frames) / n_frames
+video = p2p.stimuli.VideoStimulus(0.5 + 0.5 * y * np.sin(x - phase),
+                                  metadata={'fps': 30})
 encoded = video.encode(implant=implant, freq=30)
 model.spatial.build(dropout=0.2)
 model.predict_percept(encoded, t_percept=video.time).play()

@@ -138,7 +138,7 @@ A video can also be processed one frame at a time. Iterating over a
 
 .. code-block:: python
 
-    video = p2p.stimuli.BostonTrain()
+    video = p2p.stimuli.VideoStimulus('movie.mp4')
 
     for frame in video:
         percept = model.predict_percept(frame)
@@ -146,6 +146,38 @@ A video can also be processed one frame at a time. Iterating over a
 Each call treats the frame as an independent still image. Pass the complete
 video to ``predict_percept`` instead when temporal dynamics across frames
 matter.
+
+Sample stimuli
+--------------
+
+:py:mod:`pulse2percept.stimuli.samples` bundles a few ready-made stimuli for
+demos, docs, and tests. They are ordinary ``ImageStimulus`` objects (or, for
+procedural optotypes, a :py:class:`~pulse2percept.vision.Scene`), and are
+reached through the module rather than the top-level namespace:
+
+.. code-block:: python
+
+    from pulse2percept.stimuli import samples
+
+    logo = samples.logo_bvl()
+    logo = samples.logo_ucsb()
+
+:py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a Landolt C at
+standard proportions (stroke width and inner/outer diameters of 1, 3, and 5
+gaps) and places it in the visual field:
+
+.. code-block:: python
+
+    from pulse2percept.units import deg, dva
+
+    scene = samples.landolt_c(gap=0.5 * dva, position=(5, 0) * dva,
+                              orientation=90 * deg, fov=15 * dva)
+
+``gap`` is the angular size of the critical feature, which is what an acuity
+task varies; ``position`` sets where the optotype sits in the visual field,
+and therefore its eccentricity, without changing that size. ``orientation``
+says where the opening points (0 right, 90 up, 180 left, 270 down), and
+``polarity`` chooses a black C on white (``'dark'``) or the reverse.
 
 Plotting and time operations
 ----------------------------

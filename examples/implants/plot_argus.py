@@ -40,6 +40,7 @@ wedges, and triangles [Beyeler2019]_:
 # sphinx_gallery_thumbnail_number = 1
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pulse2percept as p2p
 
 fig, axes = plt.subplots(ncols=3, figsize=(10, 3))
@@ -74,9 +75,16 @@ model.build()
 model.plot(show_implant=True)
 
 ###############################################################################
-# We then need to choose a stimulus to run through the model:
+# We then need to choose a stimulus to run through the model. A camera feed
+# stands in here as a drifting pattern of light and dark patches, at 30 fps:
 
-p2p.stimuli.BostonTrain().play()
+n_frames, rows, cols = 30, 120, 160
+x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
+y = np.cos(np.linspace(0, 3 * np.pi, rows))[:, np.newaxis, np.newaxis]
+phase = 2 * np.pi * np.arange(n_frames) / n_frames
+video = p2p.stimuli.VideoStimulus(0.5 + 0.5 * y * np.sin(x - phase),
+                                  metadata={'fps': 30})
+video.play()
 
 ###############################################################################
 # In real life, the Argus II camera would capture a video just like the above,
@@ -96,7 +104,6 @@ p2p.stimuli.BostonTrain().play()
 # their own: 6 Hz is the rate the real device runs at, and it is slower than
 # the video. Pass ``encoder=p2p.stimuli.AmplitudeEncoder(freq=30)`` to deliver
 # every frame instead.
-video = p2p.stimuli.BostonTrain()
 model.predict_percept(video).play()
 
 ###############################################################################
@@ -122,36 +129,6 @@ model.spatial.rho = 100
 model.spatial.lam = 1000
 model.predict_percept(video).play()
 
-
-###############################################################################
-# Girl Pool sequence
-# ------------------
-#
-# Another video shows a girl jumping into a swimming pool:
-
-p2p.stimuli.GirlPool().play()
-
-###############################################################################
-# Similar to the above video, we can convert it to grayscale and downscale it,
-# then feed it through the axon map model:
-
-video = p2p.stimuli.GirlPool()
-model.spatial.rho = 400
-model.spatial.lam = 200
-model.predict_percept(video).play()
-
-###############################################################################
-# Here is the same video with longer phosphenes:
-
-model.spatial.lam = 600
-model.predict_percept(video).play()
-
-###############################################################################
-# Here is the same video with thin and long phosphenes:
-
-model.spatial.rho = 100
-model.spatial.lam = 1000
-model.predict_percept(video).play()
 
 ###############################################################################
 # In reality, the vision provided by Argus II may be even worse for several

@@ -16,8 +16,8 @@ from pulse2percept.implants.retina import (ArgusI, ArgusII, PRIMAPivotal,
                                            RetinalImplant)
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
-                                   BostonTrain, ImageStimulus, LogoBVL,
-                                   Stimulus, VideoStimulus)
+                                   ImageStimulus, Stimulus, VideoStimulus,
+                                   samples)
 from pulse2percept.percepts import Percept
 from pulse2percept.models import (BaseModel, FadingTemporal, Model,
                                   SpatialModel, TemporalModel)
@@ -1530,7 +1530,7 @@ def test_TemporalModel_default_frame_rate_is_50Hz():
                         [0, 0.02], rtol=1e-9)
 
 
-def test_spatial_model_reads_modulation_not_pulses():
+def test_spatial_model_reads_modulation_not_pulses(camera_video):
     """Spatial models see modulation frames; temporal models see pulses.
 
     A pulse train says *when* current flows and a raster says which electrodes
@@ -1540,7 +1540,7 @@ def test_spatial_model_reads_modulation_not_pulses():
     as a sequence of raster slots rather than as the image. Argus II rasters
     six groups by default, which is exactly the case that showed it.
     """
-    logo = LogoBVL()
+    logo = samples.logo_bvl()
     implant = ArgusII()
     delivered = implant.prepare_stim(logo)
     spatial = ScoreboardSpatial(implant=implant, xrange=(-12, 12),
@@ -1569,8 +1569,8 @@ def test_spatial_model_reads_modulation_not_pulses():
 
     # A video reports one percept frame per *video* frame:
     with pytest.warns(UserWarning, match='deliver no pulse'):
-        n_frames = spatial.predict_percept(BostonTrain()).data.shape[-1]
-    npt.assert_equal(n_frames, 94)
+        n_frames = spatial.predict_percept(camera_video).data.shape[-1]
+    npt.assert_equal(n_frames, camera_video.vid_shape[-1])
 
     # A model with a temporal component is the opposite case: the pulses are
     # what it integrates, so it has to see them, and the spatial stage it is
@@ -1862,7 +1862,7 @@ def test_spatial_model_predicts_without_expanding_the_schedule(source):
     implant = ArgusII()
     spatial = ScoreboardSpatial(implant=implant, xrange=(-12, 12),
                                 yrange=(-8, 8), step=1).build()
-    picture = (LogoBVL() if source == 'image' else
+    picture = (samples.logo_bvl() if source == 'image' else
                VideoStimulus(np.random.default_rng(0).random((6, 10, 4)),
                              metadata={'fps': 20}))
     with warnings.catch_warnings():
@@ -1879,7 +1879,7 @@ def test_combined_model_still_integrates_the_delivered_pulses():
     # stage under it has to be handed them. That reading is unchanged, and the
     # implant it was asked of keeps its own schedule.
     implant = ArgusII()
-    delivered = implant.prepare_stim(LogoBVL())
+    delivered = implant.prepare_stim(samples.logo_bvl())
     seen = []
 
     class Recording(ScoreboardSpatial):
@@ -1892,7 +1892,7 @@ def test_combined_model_still_integrates_the_delivered_pulses():
     both = Model(spatial=Recording(implant, xrange=(-12, 12), yrange=(-8, 8),
                                    step=1),
                  temporal=FadingTemporal(tau=100)).build()
-    both.predict_percept(LogoBVL())
+    both.predict_percept(samples.logo_bvl())
     npt.assert_array_less(seen[-1], 0)
     # Stripping the modulation view happens on a stand-in, so the prepared
     # stimulus the caller holds keeps its schedule:
@@ -1901,7 +1901,7 @@ def test_combined_model_still_integrates_the_delivered_pulses():
 
 def test_deactivating_an_encoded_electrode_keeps_the_schedule():
     implant = ArgusII()
-    logo = LogoBVL()
+    logo = samples.logo_bvl()
     before = implant.prepare_stim(logo)._spatial_view()
     with _no_schedule_expansion():
         implant.deactivate(['A1', 'B2'])

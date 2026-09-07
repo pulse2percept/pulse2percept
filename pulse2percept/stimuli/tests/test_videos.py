@@ -1,5 +1,5 @@
 from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus,
-                                   VideoStimulus, BostonTrain, GirlPool)
+                                   VideoStimulus)
 from pulse2percept.stimuli.videos import _frame_index
 from pulse2percept.units import (DimensionMismatchError, Hz, kHz, deg, dva,
                                  ms, rad, s, uA)
@@ -541,7 +541,7 @@ def test_VideoStimulus_encode():
     with pytest.raises(TypeError):
         stim.encode(pulse={'invalid': 1})
     with pytest.raises(ValueError):
-        stim.encode(pulse=BostonTrain())
+        stim.encode(pulse=VideoStimulus(np.random.rand(4, 5, 6)))
 
 
 def test_VideoStimulus_apply(tmp_path):
@@ -743,44 +743,6 @@ def test_VideoStimulus_play_fmt():
                      video.play(fmt='png').to_jshtml(), False)
     with pytest.raises(ValueError):
         video.play(fmt='gif')
-
-
-def test_BostonTrain():
-    video = BostonTrain()
-    npt.assert_equal(video.vid_shape, (240, 426, 3, 94))
-    npt.assert_almost_equal(video.data.min(), 0)
-    npt.assert_almost_equal(video.data.max(), 1)
-
-    # Grayscale:
-    video = BostonTrain(as_gray=True)
-    npt.assert_equal(video.vid_shape, (240, 426, 94))
-    npt.assert_almost_equal(video.data.min(), 0)
-    npt.assert_almost_equal(video.data.max(), 1)
-
-    # Resize:
-    video = BostonTrain(resize=(32, 32))
-    npt.assert_equal(video.vid_shape, (32, 32, 3, 94))
-    npt.assert_almost_equal(video.data.min(), 0.0056, decimal=2)
-    npt.assert_almost_equal(video.data.max(), 0.9871, decimal=2)
-
-
-def test_GirlPool():
-    video = GirlPool()
-    npt.assert_equal(video.vid_shape, (240, 426, 3, 91))
-    npt.assert_almost_equal(video.data.min(), 0)
-    npt.assert_almost_equal(video.data.max(), 1)
-
-    # Grayscale:
-    video = GirlPool(as_gray=True)
-    npt.assert_equal(video.vid_shape, (240, 426, 91))
-    npt.assert_almost_equal(video.data.min(), 0)
-    npt.assert_almost_equal(video.data.max(), 0.9983, decimal=2)
-
-    # Resize:
-    video = GirlPool(resize=(32, 32))
-    npt.assert_equal(video.vid_shape, (32, 32, 3, 91))
-    npt.assert_almost_equal(video.data.min(), 0.0001, decimal=2)
-    npt.assert_almost_equal(video.data.max(), 0.9988, decimal=2)
 
 
 def test_VideoStimulus_data_is_contiguous(tmp_path):

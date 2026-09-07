@@ -974,15 +974,18 @@ class AmplitudeEncoder(StimulusEncoder):
     --------
     Encode a movie for Argus II, mapping gray levels onto 0-50 uA at 20 Hz:
 
+    >>> import numpy as np
     >>> import pulse2percept as p2p
+    >>> video = p2p.stimuli.VideoStimulus(np.random.rand(16, 20, 30),
+    ...                                   metadata={'fps': 20})
     >>> implant = p2p.implants.retina.ArgusII()
     >>> implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
-    >>> stim = implant.prepare_stim(p2p.stimuli.BostonTrain())
+    >>> stim = implant.prepare_stim(video)
 
     The same thing spelled out, for an implant that is not to keep the encoder:
 
     >>> encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
-    >>> stim = encoder.encode(p2p.stimuli.BostonTrain(), implant=implant)
+    >>> stim = encoder.encode(video, implant=implant)
 
     """
     __slots__ = ('amp_range', 'freq', 'amp_unit')
@@ -1059,8 +1062,8 @@ class FrequencyEncoder(StimulusEncoder):
        that amplitude modulation shares between all of them.
 
        ``clock`` is the lever that cuts that down, and it is physically
-       motivated: real stimulators have a time base. Encoding the 94-frame
-       ``BostonTrain`` for Argus II at frequencies in (0, 300] Hz:
+       motivated: real stimulators have a time base. Encoding a 94-frame
+       clip for Argus II at frequencies in (0, 300] Hz:
 
        =======================  ===========
        setting                  time points
@@ -1140,11 +1143,14 @@ frame_dur, stretch
     six-group 2 ms raster sweep does not fit into, so this device drives every
     electrode at once:
 
+    >>> import numpy as np
     >>> import pulse2percept as p2p
+    >>> video = p2p.stimuli.VideoStimulus(np.random.rand(16, 20, 30),
+    ...                                   metadata={'fps': 30})
     >>> implant = p2p.implants.retina.ArgusII(raster=None)
     >>> implant.encoder = p2p.stimuli.FrequencyEncoder(freq_range=(0, 300),
     ...                                                amp=50, clock=1)
-    >>> stim = implant.prepare_stim(p2p.stimuli.BostonTrain())
+    >>> stim = implant.prepare_stim(video)
 
     """
     __slots__ = ('freq_range', 'amp')
@@ -1402,8 +1408,8 @@ class PRIMAEncoder(Encoder):
     Examples
     --------
     >>> from pulse2percept.implants.retina import PRIMAPivotal
-    >>> from pulse2percept.stimuli import LogoBVL, PRIMAEncoder
-    >>> PRIMAEncoder().encode(LogoBVL(), implant=PRIMAPivotal()).unit
+    >>> from pulse2percept.stimuli import PRIMAEncoder, samples
+    >>> PRIMAEncoder().encode(samples.logo_bvl(), implant=PRIMAPivotal()).unit
     mW/mm^2
 
     """

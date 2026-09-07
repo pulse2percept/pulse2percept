@@ -28,20 +28,20 @@ Attach an encoder to an implant, then hand it an image or video:
     )
 
     model = p2p.models.retina.ScoreboardModel(implant=implant)
-    percept = model.predict_percept(p2p.stimuli.BostonTrain())
+    percept = model.predict_percept(p2p.stimuli.VideoStimulus('movie.mp4'))
 
 Dimensionless input is encoded when the implant prepares it. Electrical stimuli
 bypass the encoder. To see the pulses themselves:
 
 .. code-block:: python
 
-    delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
+    delivered = implant.prepare_stim(p2p.stimuli.VideoStimulus('movie.mp4'))
 
 Encoding can also be explicit:
 
 .. code-block:: python
 
-    source = p2p.stimuli.BostonTrain()
+    source = p2p.stimuli.VideoStimulus('movie.mp4')
     stim = implant.encoder.encode(source, implant=implant)
 
 Passing the implant samples the source at its electrode locations before pulse
@@ -102,7 +102,7 @@ intensity to pulse duration and returns irradiance in ``mW/mm^2``:
 .. code-block:: python
 
     implant = p2p.implants.retina.PRIMAPivotal()
-    stim = implant.prepare_stim(p2p.stimuli.LogoBVL())
+    stim = implant.prepare_stim(p2p.stimuli.samples.logo_bvl())
     stim.unit  # mW/mm^2
 
 At the default settings, the projector runs at 30 Hz and 3.5 mW/mm^2. It has
@@ -122,7 +122,7 @@ For example:
 .. code-block:: python
 
     model = p2p.models.retina.ScoreboardModel(implant=implant)
-    percept = model.predict_percept(p2p.stimuli.LogoBVL())
+    percept = model.predict_percept(p2p.stimuli.samples.logo_bvl())
 
 Here ``ScoreboardModel`` visualizes implant geometry and optical drive. It does
 not model photovoltaic transduction or retinal activation.
