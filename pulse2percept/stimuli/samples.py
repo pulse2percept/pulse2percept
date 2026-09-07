@@ -1,9 +1,11 @@
 """:py:func:`~pulse2percept.stimuli.samples.big_buck_bunny`,
    :py:func:`~pulse2percept.stimuli.samples.bvl_cake`,
+   :py:func:`~pulse2percept.stimuli.samples.cajal_retina`,
    :py:func:`~pulse2percept.stimuli.samples.landolt_c`,
    :py:func:`~pulse2percept.stimuli.samples.logo_bvl`,
    :py:func:`~pulse2percept.stimuli.samples.logo_ucsb`,
-   :py:func:`~pulse2percept.stimuli.samples.ucsb_surf`
+   :py:func:`~pulse2percept.stimuli.samples.ucsb_surf`,
+   :py:func:`~pulse2percept.stimuli.samples.zebrafish_retina`
 
 Sample stimuli bundled with pulse2percept, for demos, docs, and tests.
 
@@ -30,10 +32,12 @@ from ..units import as_value, deg, dva
 __all__ = [
     'big_buck_bunny',
     'bvl_cake',
+    'cajal_retina',
     'landolt_c',
     'logo_bvl',
     'logo_ucsb',
     'ucsb_surf',
+    'zebrafish_retina',
 ]
 
 #: Landolt-C proportions, in multiples of the gap width. The stroke width is
@@ -193,6 +197,73 @@ def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
                          metadata=meta, compress=False)
 
 
+#: Cajal died in 1934, so the drawing is out of copyright worldwide. See
+#: ``data/samples/README.rst``.
+_CAJAL_RETINA_CREDIT = {
+    'title': 'Cajal retina drawing',
+    'creator': u'Santiago Ramón y Cajal',
+    'credit': 'Wikimedia Commons',
+    'license': 'Public domain',
+}
+
+
+def cajal_retina(resize=None, electrodes=None, metadata=None, as_gray=False):
+    """Cajal's drawing of the retina
+
+    Load a 745x500x3 RGB scan of Santiago Ramón y Cajal's drawing of the
+    layered structure of the retina, as a high-contrast line-art image
+    stimulus.
+
+    The drawing is in the public domain and is therefore not covered by
+    pulse2percept's BSD license; ``metadata`` carries the attribution.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary. Keys given
+        here override the attribution defaults above.
+
+    as_gray : bool, optional
+        Flag whether to convert the image to grayscale.
+
+    Returns
+    -------
+    stim : :py:class:`~pulse2percept.stimuli.ImageStimulus`
+
+    Examples
+    --------
+    >>> from pulse2percept.stimuli import samples
+    >>> samples.cajal_retina().img_shape
+    (745, 500, 3)
+
+    """
+    meta = dict(_CAJAL_RETINA_CREDIT)
+    if isinstance(metadata, dict):
+        meta.update(metadata)
+    elif metadata is not None:
+        meta['user'] = metadata
+    return ImageStimulus(_sample_path('cajal-retina.jpg'), resize=resize,
+                         as_gray=as_gray, electrodes=electrodes,
+                         metadata=meta, compress=False)
+
+
 def logo_bvl(resize=None, electrodes=None, metadata=None, as_gray=False):
     """Bionic Vision Lab (BVL) logo
 
@@ -337,6 +408,74 @@ def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
     elif metadata is not None:
         meta['user'] = metadata
     return ImageStimulus(_sample_path('ucsb-surf.jpg'), resize=resize,
+                         as_gray=as_gray, electrodes=electrodes,
+                         metadata=meta, compress=False)
+
+
+#: The micrograph is CC BY 4.0, not BSD like the rest of pulse2percept, so its
+#: attribution travels with the stimulus. See ``data/samples/README.rst``.
+_ZEBRAFISH_RETINA_CREDIT = {
+    'title': 'Sunrise in the eye: zebrafish retina',
+    'creator': 'Dr Kara Cerveny & Dr Steve Wilson',
+    'credit': 'Wellcome Collection',
+    'license': 'CC BY 4.0',
+}
+
+
+def zebrafish_retina(resize=None, electrodes=None, metadata=None,
+                     as_gray=False):
+    """Zebrafish retina micrograph
+
+    Load a 544x760x3 RGB fluorescence micrograph of a zebrafish retina
+    ("Sunrise in the eye"), as a false-color image stimulus.
+
+    The micrograph is by Dr Kara Cerveny and Dr Steve Wilson, held by the
+    Wellcome Collection, and licensed CC BY 4.0 rather than under
+    pulse2percept's BSD license; ``metadata`` carries the attribution.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary. Keys given
+        here override the attribution defaults above.
+
+    as_gray : bool, optional
+        Flag whether to convert the image to grayscale.
+
+    Returns
+    -------
+    stim : :py:class:`~pulse2percept.stimuli.ImageStimulus`
+
+    Examples
+    --------
+    >>> from pulse2percept.stimuli import samples
+    >>> samples.zebrafish_retina().img_shape
+    (544, 760, 3)
+
+    """
+    meta = dict(_ZEBRAFISH_RETINA_CREDIT)
+    if isinstance(metadata, dict):
+        meta.update(metadata)
+    elif metadata is not None:
+        meta['user'] = metadata
+    return ImageStimulus(_sample_path('zebrafish-retina.jpg'), resize=resize,
                          as_gray=as_gray, electrodes=electrodes,
                          metadata=meta, compress=False)
 

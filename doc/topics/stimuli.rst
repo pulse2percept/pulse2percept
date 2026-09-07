@@ -164,12 +164,15 @@ rather than the top-level namespace:
     logo = samples.logo_ucsb()
     cake = samples.bvl_cake()
     surf = samples.ucsb_surf()
+    cajal = samples.cajal_retina()
+    zebrafish = samples.zebrafish_retina()
 
-The two photographs are naturalistic RGB stills: a cake decorated with the lab
-logo (495x435), and a frame of the UCSB coastline (476x845) from the National
-Library of Medicine video *Towards a Smart Bionic Eye*. See
-``pulse2percept/stimuli/data/samples/README.rst`` for the licensing of each
-bundled asset; it differs from file to file.
+The last four are RGB stills: a cake decorated with the lab logo (495x435), a
+frame of the UCSB coastline (476x845) from the National Library of Medicine
+video *Towards a Smart Bionic Eye*, Cajal's drawing of the retina (745x500),
+and a fluorescence micrograph of a zebrafish retina (544x760) from the
+Wellcome Collection. See ``pulse2percept/stimuli/data/samples/README.rst`` for
+the licensing of each bundled asset; it differs from file to file.
 
 :py:func:`~pulse2percept.stimuli.samples.big_buck_bunny` is the bundled
 naturalistic video, a 115-frame excerpt of *Big Buck Bunny* at 24 fps:

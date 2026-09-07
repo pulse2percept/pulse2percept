@@ -77,3 +77,33 @@ Frame of the UCSB coastline, 845x476 RGB.
 
 :py:func:`~pulse2percept.stimuli.samples.ucsb_surf` carries the attribution in
 ``metadata``.
+
+``cajal-retina.jpg``
+--------------------
+
+Santiago Ramón y Cajal's drawing of the layered structure of the retina,
+500x745 RGB.
+
+:License: Public domain. Cajal died in 1934, so the drawing is out of
+          copyright worldwide. This file is **not** covered by
+          pulse2percept's BSD license, but no permission is needed to use it.
+:Source: https://commons.wikimedia.org/wiki/File:Cajal_Retina.jpg
+:Modifications: None; the file is bundled as downloaded.
+
+``zebrafish-retina.jpg``
+------------------------
+
+*Sunrise in the eye: zebrafish retina*, a fluorescence micrograph, 760x544
+RGB.
+
+:License: Creative Commons Attribution 4.0 International
+          (https://creativecommons.org/licenses/by/4.0/)
+:Attribution: Dr Kara Cerveny & Dr Steve Wilson. Source: Wellcome Collection.
+:Source: https://wellcomecollection.org/works/tkeg5zqn/images?id=ca6k4v9j
+:Modifications: None; the file is bundled as downloaded.
+
+This micrograph remains under CC BY 4.0. It is **not** relicensed under
+pulse2percept's BSD license, and redistributing it -- including as part of a
+pulse2percept release -- requires the attribution above.
+:py:func:`~pulse2percept.stimuli.samples.zebrafish_retina` carries a short
+form of it in ``metadata``.

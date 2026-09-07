@@ -224,7 +224,9 @@ def test_landolt_c_invalid(kwargs, msg):
 
 @pytest.mark.parametrize('loader,shape', [
     (samples.bvl_cake, (495, 435, 3)),
+    (samples.cajal_retina, (745, 500, 3)),
     (samples.ucsb_surf, (476, 845, 3)),
+    (samples.zebrafish_retina, (544, 760, 3)),
 ])
 def test_samples_photos(loader, shape):
     stim = loader()
@@ -255,9 +257,17 @@ def test_samples_photo_metadata():
     npt.assert_equal(user.metadata['title'], 'frame')
     npt.assert_equal(user.metadata['credit'],
                      'Courtesy of the National Library of Medicine')
+    cajal = samples.cajal_retina(resize=(8, 8))
+    npt.assert_equal(cajal.metadata['creator'], u'Santiago Ramón y Cajal')
+    npt.assert_equal(cajal.metadata['license'], 'Public domain')
+    zebra = samples.zebrafish_retina(resize=(8, 8))
+    npt.assert_equal(zebra.metadata['title'],
+                     'Sunrise in the eye: zebrafish retina')
+    npt.assert_equal(zebra.metadata['credit'], 'Wellcome Collection')
+    npt.assert_equal(zebra.metadata['license'], 'CC BY 4.0')
 
 
 def test_samples_photos_not_top_level():
-    for name in ('bvl_cake', 'ucsb_surf'):
+    for name in ('bvl_cake', 'cajal_retina', 'ucsb_surf', 'zebrafish_retina'):
         npt.assert_equal(hasattr(samples, name), True)
         npt.assert_equal(hasattr(p2p.stimuli, name), False)
