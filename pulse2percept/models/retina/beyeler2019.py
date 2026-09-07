@@ -543,16 +543,27 @@ class AxonMapSpatial(RetinalSpatial):
     def eye(self):
         """Eye used by the axon map.
 
-        Taken from the bound implant.
+        Taken from the bound implant, which must therefore be a
+        :py:class:`~pulse2percept.implants.retina.RetinalImplant`: the optic
+        disc sits on the nasal side of the implanted eye, and a generic
+        implant does not say which eye that is.
 
         .. versionchanged:: 0.11.0
             ``eye`` is no longer a separate model parameter."""
+        if not hasattr(self.implant, 'eye'):
+            raise TypeError(
+                f"{type(self).__name__} mirrors the optic disc onto the "
+                f"implanted eye, so its implant must carry retinal "
+                f"laterality, which {type(self.implant).__name__} does not. "
+                f"Wrap a custom array in "
+                f"pulse2percept.implants.retina.RetinalImplant, e.g. "
+                f"RetinalImplant(ElectrodeGrid(...), eye='RE').")
         return self.implant.eye
 
     @property
     def is_built(self):
         """Return whether the axon map matches the implant's current eye."""
-        return super().is_built and self._built_eye == self.implant.eye
+        return super().is_built and self._built_eye == self.eye
 
     def get_default_params(self):
         base_params = super(AxonMapSpatial, self).get_default_params()
@@ -950,9 +961,10 @@ class AxonMapSpatial(RetinalSpatial):
         if self.lam < 10:
             raise ValueError('"lam" < 10 is not supported by this model. '
                              'Consider using ScoreboardModel instead.')
+        # Before the warnings, so a missing eye is the first thing reported:
+        self._built_eye = self.eye
         self._warn_placement()
         _warn_rho_vs_pitch(self)
-        self._built_eye = self.implant.eye
         self._correct_loc_od()
         # Reuse the cache only when format and build parameters match:
         need_axons = False

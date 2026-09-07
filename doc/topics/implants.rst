@@ -389,7 +389,8 @@ Migrating from v0.10
   :py:class:`~pulse2percept.implants.GridImplant` onto
   :py:class:`~pulse2percept.implants.retina.RetinalImplant`. Wrap an
   :py:class:`~pulse2percept.implants.ElectrodeGrid` in a ``RetinalImplant``
-  where a custom grid relied on the old implicit ``eye='RE'``.
+  where a custom grid relied on the old implicit ``eye='RE'``;
+  :py:class:`~pulse2percept.models.retina.AxonMapModel` requires one.
 * ``EnsembleImplant.from_cortical_map`` became
   :py:meth:`~pulse2percept.implants.EnsembleImplant.from_visual_field_map`,
   which takes any 2D visual field map. ``region`` now defaults to the map's

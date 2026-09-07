@@ -60,7 +60,7 @@ Implants
   :py:class:`~pulse2percept.implants.GridImplant`,
   :py:class:`~pulse2percept.implants.EnsembleImplant`), with the devices
   themselves under ``implants.retina`` and ``implants.cortex``. The old flat
-  paths were removed, not deprecated (:pull:`889`):
+  paths were removed, not deprecated (:pull:`887`):
 
   .. code-block:: python
 
@@ -83,21 +83,23 @@ Implants
   retinal device now derives from. A generic implant or grid carries no
   laterality; wrap an :py:class:`~pulse2percept.implants.ElectrodeGrid` in a
   ``RetinalImplant`` where a custom grid relied on the old implicit
-  ``eye='RE'`` (:pull:`889`).
+  ``eye='RE'``. :py:class:`~pulse2percept.models.retina.AxonMapModel` mirrors
+  the optic disc onto the implanted eye and says so if handed an implant
+  without one (:pull:`887`).
 
 * New :py:class:`~pulse2percept.implants.cortex.CorticalImplant` gives
   cortical devices ``hemisphere`` (``'LH'``, ``'RH'``, or ``None``, the
   default), as does
   :py:class:`~pulse2percept.implants.cortex.Neuralink`. It is device metadata:
   electrode coordinates and the model's ``implant_position`` still place the
-  array (:pull:`889`).
+  array (:pull:`887`).
 
 * ``EnsembleImplant.from_cortical_map`` becomes
   :py:meth:`~pulse2percept.implants.EnsembleImplant.from_visual_field_map`,
   which accepts any 2D :py:class:`~pulse2percept.topography.VisualFieldMap`
   rather than only a cortical one, and rejects 3D maps. ``region`` defaults to
   the map's only region instead of ``'v1'``, so a multi-region map now
-  requires it (:pull:`889`).
+  requires it (:pull:`887`).
 
 * ``ProsthesisSystem`` is renamed
   :py:class:`~pulse2percept.implants.Implant`; the old name remains as a
@@ -137,7 +139,7 @@ Models
   :py:mod:`pulse2percept.models` now holds only the abstract model classes and
   the generic temporal models, with the models themselves under
   ``models.retina`` and ``models.cortex``. The old flat paths were removed,
-  not deprecated (:pull:`888`):
+  not deprecated (:pull:`887`):
 
   .. code-block:: python
 
@@ -164,7 +166,7 @@ Models
   raises if built without a ``visual_field_map``, and predicting from a
   :py:class:`~pulse2percept.vision.Scene` on a model that does not implement
   the registration (a cortical one, for now) raises ``NotImplementedError``
-  rather than ``ValueError`` (:pull:`888`).
+  rather than ``ValueError`` (:pull:`887`).
 
 * Model constructors now expose their supported parameters explicitly instead
   of accepting arbitrary ``**params``. Composite models no longer forward

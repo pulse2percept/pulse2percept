@@ -14,6 +14,7 @@ from pulse2percept.implants.cortex import (EllipsoidElectrode, LinearEdgeThread,
 from pulse2percept.topography import Grid2D
 from pulse2percept.topography.cortex import (CorticalMap, NeuropythyMap,
                                              Polimeni2006Map)
+from pulse2percept.topography.retina import Curcio1990Map, Watson2014Map
 
 
 class StubNeuropythyMap(NeuropythyMap):
@@ -589,6 +590,21 @@ def test_Neuralink_from_visual_field_map_non_neuropythy():
         # No 3D map, so the threads stay at the default depth/orientation:
         npt.assert_almost_equal(thread.z, 0)
         npt.assert_almost_equal(thread.direction, [0, 0, 1])
+
+
+def test_Neuralink_from_visual_field_map_rejects_a_retinal_map():
+    """A cortical device will not place its threads by a retinal map
+
+    The generic ensemble factory takes any 2D map, and a retinal map returns
+    microns just like a cortical one, so nothing downstream would notice the
+    threads landing nowhere in cortex.
+    """
+    for visual_field_map in (Curcio1990Map(), Watson2014Map()):
+        with pytest.raises(TypeError) as excinfo:
+            Neuralink.from_visual_field_map(LinearEdgeThread, visual_field_map,
+                                            xrange=(-1, 1), yrange=(0, 0),
+                                            step=1)
+        npt.assert_equal('CorticalMap' in str(excinfo.value), True)
 
 
 def test_Neuralink_from_visual_field_map_neuropythy():

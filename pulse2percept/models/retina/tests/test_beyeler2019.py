@@ -1057,6 +1057,32 @@ def test_axon_map_eye_follows_the_implant():
     npt.assert_equal(model.spatial.loc_od[0] < 0, True)
 
 
+def test_axon_map_needs_an_implant_with_an_eye():
+    """A generic implant does not say which eye, and the optic disc needs one
+
+    ``eye`` left :py:class:`~pulse2percept.implants.Implant` in 0.11, so a
+    generic array reaches the model without laterality. Say so, rather than
+    failing on a missing attribute somewhere inside the build.
+    """
+    from pulse2percept.implants import ElectrodeGrid, GridImplant
+    from pulse2percept.implants.retina import RetinalImplant
+    grid = dict(rho=200, xrange=(-2, 2), yrange=(-2, 2), step=1, n_axons=50,
+                n_ax_segments=30, ignore_pickle=True)
+    model = AxonMapModel(implant=GridImplant((3, 3), 2000), **grid)
+    with pytest.raises(TypeError) as excinfo:
+        model.build()
+    npt.assert_equal('RetinalImplant' in str(excinfo.value), True)
+    # Reading the property says the same thing, and so does `is_built`:
+    with pytest.raises(TypeError):
+        model.spatial.eye
+    # Wrapping the same array in a RetinalImplant is all it takes:
+    fixed = AxonMapModel(
+        implant=RetinalImplant(ElectrodeGrid((3, 3), 2000), eye='LE'),
+        **grid).build()
+    npt.assert_equal(fixed.spatial.eye, 'LE')
+    npt.assert_equal(fixed.is_built, True)
+
+
 def test_axon_map_warns_when_the_implant_is_not_epiretinal():
     from pulse2percept.implants import ElectrodeGrid
     from pulse2percept.implants.retina import (Lorach2015Array,

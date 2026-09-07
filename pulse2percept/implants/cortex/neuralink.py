@@ -396,8 +396,14 @@ class Neuralink(EnsembleImplant):
 
         A :py:class:`~pulse2percept.topography.cortex.NeuropythyMap` is handed
         to :py:meth:`from_neuropythy`, which inserts each thread along the
-        cortical surface normal; any other 2D map goes through the generic
-        implementation.
+        cortical surface normal; any other 2D cortical map goes through the
+        generic implementation.
+
+        Only a :py:class:`~pulse2percept.topography.cortex.CorticalMap` is
+        accepted. The generic factory takes any 2D map, but the tissue
+        coordinates a retinal map returns are also microns, so placing threads
+        by one would produce a valid-looking implant sitting nowhere in
+        cortex.
 
         .. versionadded:: 0.11.0
             Replaces ``from_cortical_map``.
@@ -406,8 +412,8 @@ class Neuralink(EnsembleImplant):
         ----------
         implant_type : p2p.implants.Implant
             Type of implant to create. Currently only NeuralinkThread is supported.
-        visual_field_map : p2p.topography.VisualFieldMap
-            Visual field map to create the implant from.
+        visual_field_map : p2p.topography.cortex.CorticalMap
+            Cortical visual field map to create the implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations to create threads at. Not
             needed if using xrange, yrange, and step.
@@ -426,7 +432,14 @@ class Neuralink(EnsembleImplant):
         """
         if not issubclass(implant_type, NeuralinkThread):
             raise TypeError("implant_type must be a subclass of NeuralinkThread")
-        from ...topography.cortex import NeuropythyMap
+        from ...topography.cortex import CorticalMap, NeuropythyMap
+        # A retinal map also returns microns, so nothing downstream would
+        # notice threads being placed by one:
+        if not isinstance(visual_field_map, CorticalMap):
+            raise TypeError(f"Neuralink is a cortical implant, so "
+                            f"'visual_field_map' must be a "
+                            f"p2p.topography.cortex.CorticalMap, not "
+                            f"{type(visual_field_map).__name__}.")
         if not isinstance(visual_field_map, NeuropythyMap):
             return super().from_visual_field_map(
                 implant_type, visual_field_map, locs=locs, xrange=xrange,

@@ -7,7 +7,9 @@ import pytest
 from pulse2percept.implants import (EnsembleImplant, GridImplant, Implant,
                                     PointSource)
 from pulse2percept.implants.cortex import Cortivis, Orion
+from pulse2percept.implants.retina import ArgusI
 from pulse2percept.topography.cortex import Polimeni2006Map
+from pulse2percept.topography.retina import Curcio1990Map
 from pulse2percept.models.cortex import ScoreboardModel
 from pulse2percept.stimuli import BiphasicPulseTrain, MonophasicPulse
 from pulse2percept.utils.constants import DT
@@ -139,6 +141,38 @@ def test_from_visual_field_map():
         npt.assert_approx_equal(ensemble[f'{i}-1'].x, device['1'].x + dx, 5)
         npt.assert_approx_equal(ensemble[f'{i}-1'].y, device['1'].y + dy, 5)
         npt.assert_approx_equal(ensemble[f'{i}-1'].z, device['1'].z, 5)
+
+
+def test_from_visual_field_map_works_for_a_retinal_map():
+    """The generic factory is not cortex-only
+
+    ``from_cortical_map`` took a CorticalMap; the operation it performs --
+    transform dva through one region of a map, then place a constituent at the
+    resulting tissue coordinates -- needs nothing cortical. A retinal map has
+    a single region, so ``region`` can be left out.
+    """
+    visual_field_map = Curcio1990Map()
+    locs = np.array([[-2., 0.], [0., 0.], [3., 1.]])
+    ensemble = EnsembleImplant.from_visual_field_map(ArgusI, visual_field_map,
+                                                     locs=locs)
+    npt.assert_equal(len(ensemble.implants), 3)
+    device = ArgusI()
+    x_ret, y_ret = visual_field_map.dva_to_ret(locs[:, 0].copy(),
+                                               locs[:, 1].copy())
+    for i, (dx, dy) in enumerate(zip(x_ret, y_ret)):
+        npt.assert_almost_equal(ensemble[f'{i}-A1'].x, device['A1'].x + dx)
+        npt.assert_almost_equal(ensemble[f'{i}-A1'].y, device['A1'].y + dy)
+        npt.assert_almost_equal(ensemble[f'{i}-A1'].z, device['A1'].z)
+    # Retinal microns, not the degrees the factory was handed:
+    ranged = EnsembleImplant.from_visual_field_map(
+        ArgusI, visual_field_map, xrange=(-2, 2), yrange=(0, 0), step=2)
+    npt.assert_equal(len(ranged.implants), 3)
+    npt.assert_allclose(
+        ranged.electrode_array.coordinates(),
+        EnsembleImplant.from_visual_field_map(
+            ArgusI, visual_field_map, xrange=(-2 * dva, 2 * dva),
+            yrange=(0 * dva, 0 * dva),
+            step=2 * dva).electrode_array.coordinates(), rtol=1e-12)
 
 
 def test_prepare_stim_merges_per_implant_input():

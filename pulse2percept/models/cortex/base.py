@@ -37,13 +37,12 @@ class CortexSpatial(SpatialModel):
         amplitude across electrodes.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
-        visual angle). In a right eye, negative x values correspond to the
-        temporal retina, and positive x values to the nasal retina. In a left
-        eye, the opposite is true.
+        visual angle). Negative x values lie left of fixation, positive x
+        values right of it.
     yrange : tuple, (y_min, y_max), optional
         A tuple indicating the range of y values to simulate (in degrees of
-        visual angle). Negative y values correspond to the superior retina,
-        and positive y values to the inferior retina.
+        visual angle). Negative y values lie below fixation, positive y
+        values above it.
     step : int, double, tuple, optional
         Step size for the range of (x,y) values to simulate (in degrees of
         visual angle). For example, to create a grid with x values [0, 0.5, 1]
