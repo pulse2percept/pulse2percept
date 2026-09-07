@@ -245,6 +245,15 @@ is accepted.
     different tasks (bar direction vs. gap direction). Thresholds obtained
     with one are not numerically interchangeable with the other.
 
+Both optotypes are rasterized by supersampling the analytic glyph and
+area-averaging it onto the requested ``shape``, so edge pixels carry the
+fraction of the glyph they cover rather than snapping to a binary mask. That
+keeps the realized gap and stroke widths from depending on where the pixel
+grid falls, which otherwise biases off-cardinal orientations in particular.
+Area-averaging does not lower the resolution a raster needs, so ``gap`` and
+``stroke`` must still span at least three output pixels; below that the
+generators raise rather than return an under-resolved optotype.
+
 :py:func:`~pulse2percept.stimuli.psychophysics.grating` and
 :py:func:`~pulse2percept.stimuli.psychophysics.bar` are parametrized in
 degrees of visual angle and physical time rather than in pixels and frames:

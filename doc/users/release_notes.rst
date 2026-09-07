@@ -102,7 +102,10 @@ Stimuli and encoding
   of a given gap size, eccentricity, and gap orientation, and
   :py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e` a 5x5 Tumbling E
   of a given stroke width, eccentricity, and bar orientation; both return a
-  :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
+  :py:class:`~pulse2percept.vision.Scene`. Both are supersampled and
+  area-averaged onto the requested raster, so the realized geometry does not
+  depend on where the pixel grid falls, and both require their critical
+  feature to span at least three output pixels (:pull:`889`).
 
 * New :py:func:`~pulse2percept.stimuli.psychophysics.grating` and
   :py:func:`~pulse2percept.stimuli.psychophysics.bar` replace

@@ -307,8 +307,23 @@ _INNER_DIAMETER, _OUTER_DIAMETER = 3.0, 5.0
 #: one-stroke bars separated by one-stroke gaps.
 _E_EXTENT = 5.0
 
-#: Fewest pixels across an optotype's critical feature that still rasterize it
-_MIN_FEATURE_PX = 2
+#: Output rows rasterized at a time, which caps how much of the finer grid
+#: has to exist at once
+_BLOCK_ROWS = 64
+
+#: Sub-pixels per axis used to rasterize the optotypes before area-averaging.
+#: The smallest factor meeting the tolerance below at `_MIN_OPTOTYPE_PX`
+#: (2x reaches 12%); 8x and 16x buy little beyond it.
+_SUPERSAMPLE = 4
+
+#: Fewest pixels across a bar that still rasterize it as a bar, not a line
+_MIN_BAR_PX = 2
+
+#: Fewest *output* pixels across an optotype's critical feature. Measured:
+#: the smallest integer at which the realized gap, stroke, and inter-bar gap
+#: stay within 10% of the requested size across sub-pixel positions and
+#: orientations, 2 px reaching 18%. See `test_optotype_raster_floor`.
+_MIN_OPTOTYPE_PX = 3
 
 
 def _check_shape(shape):
@@ -322,6 +337,14 @@ def _check_shape(shape):
     return int(shape[0]), int(shape[1])
 
 
+def _resolve_shape_fov(shape, fov):
+    """Return ``((n_rows, n_cols), (width, height))`` for a raster"""
+    # Local import: `vision` imports `stimuli`, so this cannot be top-level.
+    from ..vision.scene import _resolve_fov
+    n_rows, n_cols = _check_shape(shape)
+    return (n_rows, n_cols), _resolve_fov(fov, n_rows, n_cols)
+
+
 def _visual_grid(shape, fov):
     """Return ``(x, y, (width, height))`` for a procedural stimulus
 
@@ -329,30 +352,59 @@ def _visual_grid(shape, fov):
     following the :py:class:`~pulse2percept.vision.Scene` convention: ``fov``
     is the outer extent of the frame, and row 0 holds the largest ``y``.
     """
-    # Local import: `vision` imports `stimuli`, so this cannot be top-level.
-    from ..vision.scene import _resolve_fov
-    n_rows, n_cols = _check_shape(shape)
-    width, height = _resolve_fov(fov, n_rows, n_cols)
+    (n_rows, n_cols), (width, height) = _resolve_shape_fov(shape, fov)
     cols, rows = np.meshgrid(np.arange(n_cols), np.arange(n_rows))
     x = (cols + 0.5) * (width / n_cols) - width / 2
     y = height / 2 - (rows + 0.5) * (height / n_rows)
     return x, y, (width, height)
 
 
-def _check_raster(size, name, feature, fov, shape):
-    """Raise unless ``size`` spans ``_MIN_FEATURE_PX`` pixels of the raster
+def _rasterize(glyph, shape, fov):
+    """Area-average an analytic mask onto the output raster
+
+    ``glyph(x, y)`` returns a boolean mask on a ``_SUPERSAMPLE``-times finer
+    grid, whose broadcast coordinates are given as a row and a column vector.
+    Returns the fraction of each output pixel the mask covers, in [0, 1].
+
+    Done ``_BLOCK_ROWS`` output rows at a time, so the finer grid never
+    exists in full. float32 keeps it affordable and still resolves the
+    visual field far below any optotype feature.
+    """
+    n_rows, n_cols = shape
+    n_fine_cols = n_cols * _SUPERSAMPLE
+    pitch_x = fov[0] / n_fine_cols
+    pitch_y = fov[1] / (n_rows * _SUPERSAMPLE)
+    x = ((np.arange(n_fine_cols, dtype=np.float32) + 0.5) * pitch_x -
+         fov[0] / 2)[np.newaxis, :]
+    coverage = np.empty((n_rows, n_cols), dtype=np.float32)
+    for first in range(0, n_rows, _BLOCK_ROWS):
+        last = min(first + _BLOCK_ROWS, n_rows)
+        fine = np.arange(first * _SUPERSAMPLE, last * _SUPERSAMPLE,
+                         dtype=np.float32)
+        y = (fov[1] / 2 - (fine + 0.5) * pitch_y)[:, np.newaxis]
+        block = glyph(x, y).astype(np.float32)
+        coverage[first:last] = block.reshape(last - first, _SUPERSAMPLE,
+                                             n_cols, _SUPERSAMPLE).mean((1, 3))
+    return coverage
+
+
+def _check_raster(size, name, feature, fov, shape, minimum):
+    """Raise unless ``size`` spans ``minimum`` pixels of the output raster
 
     ``size`` is the angular size of parameter ``name``, which rasterizes as
     ``feature`` (the C's opening, the E's bars). Measured on the coarser of
     the two angular pixel sizes, so neither axis may under-resolve it.
+    Supersampling makes an optotype's edges less dependent on where the pixel
+    grid falls, but it cannot put information back into a raster too coarse
+    to carry the feature, so the floor applies to the output pixels.
     """
     px = max(fov[0] / shape[1], fov[1] / shape[0])
-    if size / px < _MIN_FEATURE_PX:
+    if size / px < minimum:
         raise ValueError(
             f"A {name} of {size:g} dva is {size / px:.2g} pixels across at "
             f"fov={fov} dva and shape={shape}, which does not resolve the "
-            f"{feature}. At least {_MIN_FEATURE_PX} pixels are required: "
-            f"increase 'shape' or reduce 'fov'.")
+            f"{feature}. At least {minimum} pixels are required: increase "
+            f"'shape' or reduce 'fov'.")
 
 
 def _check_contrast(contrast):
@@ -766,7 +818,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     _check_motion_sampled('speed', speed, 'dva/s', time)
     x, y, fov = _visual_grid(shape, fov)
     # A bar under two pixels wide rasterizes as an aliased line, not a bar:
-    _check_raster(width, 'bar width', 'bar', fov, x.shape)
+    _check_raster(width, 'bar width', 'bar', fov, x.shape, _MIN_BAR_PX)
     window = _aperture(x, y, mask, fov)
     theta = np.deg2rad(direction)
     # Signed distance along the motion axis, in dva, and where the bar's
@@ -820,7 +872,13 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
     which is what an acuity task varies; ``position`` moves the optotype
     through the visual field without changing that size.
 
-    The image is binary (gray levels 0 and 1), not antialiased.
+    The analytic C is supersampled and area-averaged onto the requested
+    raster, so edge pixels carry the fraction of the glyph they cover. This
+    keeps the realized geometry from depending on where the pixel grid
+    happens to fall, at the cost of intermediate gray levels along the edges.
+    ``gap`` must still span at least three output pixels, which area-averaging
+    does not change: it renders a feature more faithfully, but cannot put
+    information into a raster too coarse to carry it.
 
     .. versionadded:: 0.11.0
 
@@ -878,7 +936,7 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
     if polarity not in ('dark', 'light'):
         raise ValueError(f"'polarity' is either 'dark' (black C on white) or "
                          f"'light' (white C on black), not {polarity!r}.")
-    x, y, (width, height) = _visual_grid(shape, fov)
+    shape, (width, height) = _resolve_shape_fov(shape, fov)
 
     # Cropping a C changes the task rather than the picture, so refuse it:
     radius = _OUTER_DIAMETER / 2 * gap
@@ -892,10 +950,13 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
                 f"Increase 'fov', or move the optotype closer to fixation.")
     # An opening narrower than a couple of pixels rasterizes as a closed ring,
     # i.e. as a different optotype:
-    _check_raster(gap, 'gap', 'opening', (width, height), x.shape)
-    mask = _landolt_mask(x, y, gap, center, orientation)
+    _check_raster(gap, 'gap', 'opening', (width, height), shape,
+                  _MIN_OPTOTYPE_PX)
+    coverage = _rasterize(
+        lambda x, y: _landolt_mask(x, y, gap, center, orientation), shape,
+        (width, height))
     ink, paper = (0.0, 1.0) if polarity == 'dark' else (1.0, 0.0)
-    img = np.where(mask, ink, paper).astype(np.float32)
+    img = (paper + (ink - paper) * coverage).astype(np.float32)
     metadata = {'generator': 'landolt_c', 'gap': gap,
                 'position': (float(center[0]), float(center[1])),
                 'orientation': orientation, 'polarity': polarity,
@@ -943,7 +1004,11 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
        gap direction). Thresholds obtained with one are not numerically
        interchangeable with the other.
 
-    The image is binary (gray levels 0 and 1), not antialiased.
+    The analytic E is supersampled and area-averaged onto the requested
+    raster, so edge pixels carry the fraction of the glyph they cover. This
+    keeps bar and gap widths from depending on where the pixel grid happens to
+    fall, and matters most at off-cardinal orientations. ``stroke`` must still
+    span at least three output pixels.
 
     .. versionadded:: 0.11.0
 
@@ -1001,7 +1066,7 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
     if polarity not in ('dark', 'light'):
         raise ValueError(f"'polarity' is either 'dark' (black E on white) or "
                          f"'light' (white E on black), not {polarity!r}.")
-    x, y, (width, height) = _visual_grid(shape, fov)
+    shape, (width, height) = _resolve_shape_fov(shape, fov)
 
     # Cropping an E changes the task rather than the picture, so refuse it.
     # The glyph is a square, so off-cardinal angles need the axis-aligned
@@ -1020,10 +1085,13 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
                 f"move the optotype closer to fixation.")
     # Bars narrower than a couple of pixels merge with their gaps, i.e. turn
     # the E into a filled square:
-    _check_raster(stroke, 'stroke', 'bars', (width, height), x.shape)
-    mask = _tumbling_e_mask(x, y, stroke, center, orientation)
+    _check_raster(stroke, 'stroke', 'bars', (width, height), shape,
+                  _MIN_OPTOTYPE_PX)
+    coverage = _rasterize(
+        lambda x, y: _tumbling_e_mask(x, y, stroke, center, orientation),
+        shape, (width, height))
     ink, paper = (0.0, 1.0) if polarity == 'dark' else (1.0, 0.0)
-    img = np.where(mask, ink, paper).astype(np.float32)
+    img = (paper + (ink - paper) * coverage).astype(np.float32)
     metadata = {'generator': 'tumbling_e', 'stroke': stroke,
                 'position': (float(center[0]), float(center[1])),
                 'orientation': orientation, 'polarity': polarity,

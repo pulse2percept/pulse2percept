@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+from scipy.ndimage import map_coordinates
 
 import pulse2percept as p2p
 from pulse2percept.stimuli import (BarStimulus, GratingStimulus,
@@ -121,6 +122,18 @@ def test_psychophysics_namespace():
         npt.assert_equal(hasattr(p2p.stimuli, name), False)
 
 
+def _assert_area_averaged(scene):
+    """Gray levels are sub-pixel coverages, not a binary mask"""
+    levels = np.unique(scene.source.data)
+    npt.assert_equal(levels[[0, -1]].tolist(), [0.0, 1.0])
+    # Edge pixels are partly covered, and a `_SUPERSAMPLE` x `_SUPERSAMPLE`
+    # box average can only land on multiples of 1 / _SUPERSAMPLE ** 2:
+    npt.assert_equal(levels.size > 2, True)
+    quantum = psychophysics._SUPERSAMPLE ** 2
+    npt.assert_allclose(levels, np.round(levels * quantum) / quantum,
+                        atol=1e-6)
+
+
 def _ink(scene):
     """Visual-field coordinates of the inked pixels, as ``(x, y)`` arrays"""
     img = scene.source.data.reshape(scene.source.img_shape)
@@ -134,7 +147,7 @@ def test_landolt_c():
     npt.assert_equal(isinstance(scene, Scene), True)
     npt.assert_equal(scene.shape, (512, 512))
     npt.assert_equal(scene.fov, (15.0, 15.0))
-    npt.assert_equal(np.unique(scene.source.data).tolist(), [0.0, 1.0])
+    _assert_area_averaged(scene)
     meta = scene.source.metadata
     npt.assert_equal(meta['generator'], 'landolt_c')
     npt.assert_almost_equal(meta['gap'], 0.5)
@@ -247,7 +260,7 @@ def test_tumbling_e():
     npt.assert_equal(isinstance(scene, Scene), True)
     npt.assert_equal(scene.shape, (512, 512))
     npt.assert_equal(scene.fov, (15.0, 15.0))
-    npt.assert_equal(np.unique(scene.source.data).tolist(), [0.0, 1.0])
+    _assert_area_averaged(scene)
     meta = scene.source.metadata
     npt.assert_equal(meta['generator'], 'tumbling_e')
     npt.assert_almost_equal(meta['stroke'], 0.5)
@@ -371,6 +384,82 @@ def test_tumbling_e_units():
                                         shape=(128, 128))
     npt.assert_almost_equal(plain.source.data, quantity.source.data)
     npt.assert_equal(plain.fov, quantity.fov)
+
+
+def _profile(scene, center, theta, u0, v0, along, half, n=2001):
+    """Ink fraction along a line through the optotype's own frame
+
+    Returns ``(t, f)``: signed distance in dva from local point ``(u0, v0)``
+    along local axis ``along`` ('u' or 'v'), and the ink fraction there.
+    """
+    t = np.linspace(-half, half, n)
+    u = u0 + (t if along == 'u' else 0.0)
+    v = v0 + (t if along == 'v' else 0.0)
+    c, s = np.cos(np.deg2rad(theta)), np.sin(np.deg2rad(theta))
+    col, row = scene.dva_to_pixel(center[0] + u * c - v * s,
+                                  center[1] + u * s + v * c)
+    img = scene.source.data.reshape(scene.source.img_shape)
+    return t, 1.0 - map_coordinates(img, [row, col], order=1, mode='nearest')
+
+
+def _feature_width(t, f, ink):
+    """Width in dva of the feature straddling t = 0, at 50% ink coverage"""
+    g = (f - 0.5) if ink else (0.5 - f)
+    i0 = int(np.argmin(np.abs(t)))
+    npt.assert_equal(g[i0] > 0, True)  # the profile has to start inside it
+    j = np.flatnonzero(g[:i0] <= 0)[-1]
+    i = np.flatnonzero(g[i0:] <= 0)[0] + i0
+    left = np.interp(0, [g[j], g[j + 1]], [t[j], t[j + 1]])
+    right = np.interp(0, [g[i], g[i - 1]], [t[i], t[i - 1]])
+    return right - left
+
+
+@pytest.mark.parametrize('orientation', [0, 22.5, 45, 67.5])
+@pytest.mark.parametrize('subpixel', [0.0, 0.25, 0.5])
+def test_optotype_raster_floor(orientation, subpixel):
+    """At the floor, realized features stay within 10% of the requested size
+
+    `_MIN_OPTOTYPE_PX` and `_SUPERSAMPLE` were picked together against this
+    criterion, over a far denser sweep of sub-pixel positions and orientations
+    than the boundary cases pinned here. Binary rasterization misses it by a
+    wide margin at any feature size, since its edges snap to whole pixels.
+    """
+    fov, shape = 20.0, (128, 128)
+    px = fov / shape[1]
+    feature = psychophysics._MIN_OPTOTYPE_PX * px
+    center = (subpixel * px, subpixel * px)
+    kwargs = dict(position=center, orientation=orientation * deg, fov=fov,
+                  shape=shape)
+    c = psychophysics.landolt_c(gap=feature, **kwargs)
+    e = psychophysics.tumbling_e(stroke=feature, **kwargs)
+    npt.assert_allclose([
+        # The C's opening, measured across the gap direction at mid-annulus:
+        _feature_width(*_profile(c, center, orientation, 2 * feature, 0, 'v',
+                                 1.5 * feature), ink=False),
+        # ... and its stroke, through the arm opposite the opening:
+        _feature_width(*_profile(c, center, orientation, -2 * feature, 0, 'u',
+                                 1.5 * feature), ink=True),
+        # The E's middle bar, and the gap between it and the top bar, both
+        # sampled down the spine-free center column:
+        _feature_width(*_profile(e, center, orientation, 0, 0, 'v',
+                                 1.5 * feature), ink=True),
+        _feature_width(*_profile(e, center, orientation, 0, feature, 'v',
+                                 0.75 * feature), ink=False),
+    ], feature, rtol=0.1)
+
+
+@pytest.mark.parametrize('generator,param,feature', [
+    (psychophysics.landolt_c, 'gap', 'opening'),
+    (psychophysics.tumbling_e, 'stroke', 'bars'),
+])
+def test_optotype_raster_minimum(generator, param, feature):
+    """The floor counts output pixels; supersampling does not lower it"""
+    fov, shape = 20.0, (128, 128)
+    at_floor = psychophysics._MIN_OPTOTYPE_PX * fov / shape[1]
+    generator(fov=fov, shape=shape, **{param: at_floor})
+    with pytest.raises(ValueError) as excinfo:
+        generator(fov=fov, shape=shape, **{param: 0.99 * at_floor})
+    npt.assert_equal(f'resolve the {feature}' in str(excinfo.value), True)
 
 
 @pytest.mark.parametrize('kwargs,msg', [
