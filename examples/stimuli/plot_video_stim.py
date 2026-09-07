@@ -30,8 +30,9 @@ print(video)
 ##############################################################################
 # There is a lot of useful information in this output.
 #
-# Firstly, note that ``vid_shape`` gives the dimension of the original video in
-# (height, width, the number of frames).
+# Firstly, note that ``vid_shape`` gives the video dimensions as loaded, not
+# those of the source file: grayscale video is (height, width, frames), while
+# color video also has a channel axis.
 #
 # On the other hand, ``shape`` gives the dimension of the stimulation which is
 # (the number of electrodes, the number of time steps). This is calculated from

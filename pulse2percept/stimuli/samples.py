@@ -59,7 +59,8 @@ def big_buck_bunny(resize=None, electrodes=None, metadata=None,
     """Big Buck Bunny video clip
 
     Load a 359x640x3 RGB excerpt of *Big Buck Bunny*, 115 frames at 24 fps
-    (4.75 s of video), as a naturalistic video stimulus.
+    (4.79 s of video), as a naturalistic video stimulus. ``time`` holds frame
+    onsets, so it ends at 4750 ms, when the last frame comes up.
 
     The clip is copyright 2008 Blender Foundation
     (`bigbuckbunny.org <https://www.bigbuckbunny.org>`_) and is distributed
