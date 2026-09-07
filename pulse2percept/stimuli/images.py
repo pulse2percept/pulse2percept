@@ -851,7 +851,7 @@ class LogoBVL(ImageStimulus):
                  as_gray=False):
         # Load logo from data dir:
         module_path = dirname(__file__)
-        source = join(module_path, 'data', 'bionic-vision-lab.png')
+        source = join(module_path, 'data', 'samples', 'bionic-vision-lab.png')
         # Call ImageStimulus constructor:
         super().__init__(source,
                                       resize=resize,
@@ -895,7 +895,7 @@ class LogoUCSB(ImageStimulus):
     def __init__(self, resize=None, electrodes=None, metadata=None):
         # Load logo from data dir:
         module_path = dirname(__file__)
-        source = join(module_path, 'data', 'ucsb.png')
+        source = join(module_path, 'data', 'samples', 'ucsb.png')
         # Call ImageStimulus constructor:
         super().__init__(source,
                                        resize=resize,

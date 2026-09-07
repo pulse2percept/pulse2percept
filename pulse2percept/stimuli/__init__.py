@@ -28,6 +28,7 @@ from .videos import VideoStimulus, BostonTrain, GirlPool
 from .encoders import (Encoder, StimulusEncoder, AmplitudeEncoder,
                        FrequencyEncoder, PRIMAEncoder)
 from .psychophysics import BarStimulus, GratingStimulus
+from . import samples
 
 __all__ = [
     'AmplitudeEncoder',
@@ -49,6 +50,7 @@ __all__ = [
     'MonophasicPulse',
     'PRIMAEncoder',
     'PulseTrain',
+    'samples',
     'SnellenChart',
     'Stimulus',
     'StimulusEncoder',

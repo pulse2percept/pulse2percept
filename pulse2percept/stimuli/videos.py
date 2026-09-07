@@ -925,7 +925,7 @@ class BostonTrain(VideoStimulus):
                  metadata=None):
         # Load logo from data dir:
         module_path = dirname(__file__)
-        source = join(module_path, 'data', 'boston-train.mp4')
+        source = join(module_path, 'data', 'samples', 'boston-train.mp4')
         # Call VideoStimulus constructor:
         super().__init__(source, format="MP4",
                                           resize=resize,
@@ -975,7 +975,7 @@ class GirlPool(VideoStimulus):
                  metadata=None):
         # Load logo from data dir:
         module_path = dirname(__file__)
-        source = join(module_path, 'data', 'girl-pool.mp4')
+        source = join(module_path, 'data', 'samples', 'girl-pool.mp4')
         # Call VideoStimulus constructor:
         super().__init__(source, format="MP4",
                                        resize=resize,
