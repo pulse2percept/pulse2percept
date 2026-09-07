@@ -1,9 +1,9 @@
 """:py:func:`~pulse2percept.stimuli.psychophysics.bar`,
-   :py:func:`~pulse2percept.stimuli.psychophysics.grating`,
-   :py:func:`~pulse2percept.stimuli.psychophysics.landolt_c`,
-   :py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e`,
-   :py:class:`~pulse2percept.stimuli.BarStimulus`,
-   :py:class:`~pulse2percept.stimuli.GratingStimulus`
+:py:func:`~pulse2percept.stimuli.psychophysics.grating`,
+:py:func:`~pulse2percept.stimuli.psychophysics.landolt_c`,
+:py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e`,
+:py:class:`~pulse2percept.stimuli.BarStimulus`,
+:py:class:`~pulse2percept.stimuli.GratingStimulus`
 
 Procedurally generated visual stimuli.
 

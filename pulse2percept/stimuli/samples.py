@@ -1,13 +1,13 @@
 """:py:func:`~pulse2percept.stimuli.samples.big_buck_bunny`,
-   :py:func:`~pulse2percept.stimuli.samples.bvl_cake`,
-   :py:func:`~pulse2percept.stimuli.samples.cajal_retina`,
-   :py:func:`~pulse2percept.stimuli.samples.logo_bvl`,
-   :py:func:`~pulse2percept.stimuli.samples.logo_ucsb`,
-   :py:func:`~pulse2percept.stimuli.samples.ucsb_bike`,
-   :py:func:`~pulse2percept.stimuli.samples.ucsb_flyover`,
-   :py:func:`~pulse2percept.stimuli.samples.ucsb_pedestrians`,
-   :py:func:`~pulse2percept.stimuli.samples.ucsb_surf`,
-   :py:func:`~pulse2percept.stimuli.samples.zebrafish_retina`
+:py:func:`~pulse2percept.stimuli.samples.bvl_cake`,
+:py:func:`~pulse2percept.stimuli.samples.cajal_retina`,
+:py:func:`~pulse2percept.stimuli.samples.logo_bvl`,
+:py:func:`~pulse2percept.stimuli.samples.logo_ucsb`,
+:py:func:`~pulse2percept.stimuli.samples.ucsb_bike`,
+:py:func:`~pulse2percept.stimuli.samples.ucsb_flyover`,
+:py:func:`~pulse2percept.stimuli.samples.ucsb_pedestrians`,
+:py:func:`~pulse2percept.stimuli.samples.ucsb_surf`,
+:py:func:`~pulse2percept.stimuli.samples.zebrafish_retina`
 
 Sample stimuli bundled with pulse2percept, for demos, docs, and tests.
 
