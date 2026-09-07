@@ -40,7 +40,6 @@ wedges, and triangles [Beyeler2019]_:
 # sphinx_gallery_thumbnail_number = 1
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pulse2percept as p2p
 
 fig, axes = plt.subplots(ncols=3, figsize=(10, 3))
@@ -76,14 +75,9 @@ model.plot(show_implant=True)
 
 ###############################################################################
 # We then need to choose a stimulus to run through the model. A camera feed
-# stands in here as a drifting pattern of light and dark patches, at 30 fps:
+# stands in here as the bundled *Big Buck Bunny* clip, 24 fps, downscaled:
 
-n_frames, rows, cols = 30, 120, 160
-x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
-y = np.cos(np.linspace(0, 3 * np.pi, rows))[:, np.newaxis, np.newaxis]
-phase = 2 * np.pi * np.arange(n_frames) / n_frames
-video = p2p.stimuli.VideoStimulus(0.5 + 0.5 * y * np.sin(x - phase),
-                                  metadata={'fps': 30})
+video = p2p.stimuli.samples.big_buck_bunny(resize=(120, 160), as_gray=True)
 video.play()
 
 ###############################################################################
@@ -100,9 +94,9 @@ video.play()
 # model reads, and the percept comes back at one frame per video frame. Use
 # ``implant.prepare_stim(video)`` to look at the current itself.
 #
-# The encoder warns that most frames of this 30 fps clip carry no pulse of
+# The encoder warns that most frames of this 24 fps clip carry no pulse of
 # their own: 6 Hz is the rate the real device runs at, and it is slower than
-# the video. Pass ``encoder=p2p.stimuli.AmplitudeEncoder(freq=30)`` to deliver
+# the video. Pass ``encoder=p2p.stimuli.AmplitudeEncoder(freq=24)`` to deliver
 # every frame instead.
 model.predict_percept(video).play()
 

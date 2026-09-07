@@ -74,14 +74,18 @@ Stimuli and encoding
   ``samples.logo_ucsb()``), which return plain ``ImageStimulus`` objects.
   ``LogoBVL`` and ``LogoUCSB`` are deprecated until v0.12.0 (:pull:`889`).
 
+* New :py:func:`~pulse2percept.stimuli.samples.big_buck_bunny` is the bundled
+  naturalistic video sample: a 115-frame, 24 fps excerpt of *Big Buck Bunny*,
+  © 2008 Blender Foundation, licensed CC BY 3.0 rather than BSD (:pull:`889`).
+
 * New procedural :py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a
   Landolt C of a given gap size, eccentricity, and gap orientation, and
   returns it as a :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
 
 * The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
   along with their asset files and the README banner derived from them,
-  because their original provenance and licensing could not be verified.
-  There is no replacement loader (:pull:`889`).
+  because their original provenance and licensing could not be verified. Use
+  ``samples.big_buck_bunny()`` instead (:pull:`889`).
 
 
 Implants

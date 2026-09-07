@@ -1,11 +1,13 @@
-""":py:func:`~pulse2percept.stimuli.samples.landolt_c`,
+""":py:func:`~pulse2percept.stimuli.samples.big_buck_bunny`,
+   :py:func:`~pulse2percept.stimuli.samples.landolt_c`,
    :py:func:`~pulse2percept.stimuli.samples.logo_bvl`,
    :py:func:`~pulse2percept.stimuli.samples.logo_ucsb`
 
 Sample stimuli bundled with pulse2percept, for demos, docs, and tests.
 
 The loaders return ordinary
-:py:class:`~pulse2percept.stimuli.ImageStimulus` objects (or, for procedural
+:py:class:`~pulse2percept.stimuli.ImageStimulus` or
+:py:class:`~pulse2percept.stimuli.VideoStimulus` objects (or, for procedural
 optotypes, a :py:class:`~pulse2percept.vision.Scene` wrapping one); they are
 not stimulus types of their own. Access them through the module rather than
 the top-level namespace::
@@ -20,9 +22,11 @@ from os.path import dirname, join
 import numpy as np
 
 from .images import ImageStimulus
+from .videos import VideoStimulus
 from ..units import as_value, deg, dva
 
 __all__ = [
+    'big_buck_bunny',
     'landolt_c',
     'logo_bvl',
     'logo_ucsb',
@@ -39,6 +43,84 @@ _MIN_GAP_PX = 2
 def _sample_path(filename):
     """Return the absolute path of a bundled sample asset"""
     return join(dirname(__file__), 'data', 'samples', filename)
+
+
+#: The clip is CC BY 3.0, not BSD like the rest of pulse2percept, so its
+#: attribution travels with the stimulus. See ``data/samples/README.rst``.
+_BIG_BUCK_BUNNY_CREDIT = {
+    'title': 'Big Buck Bunny',
+    'creator': 'Blender Foundation',
+    'license': 'CC BY 3.0',
+}
+
+
+def big_buck_bunny(resize=None, electrodes=None, metadata=None,
+                   as_gray=False):
+    """Big Buck Bunny video clip
+
+    Load a 359x640x3 RGB excerpt of *Big Buck Bunny*, 115 frames at 24 fps
+    (4.75 s of video), as a naturalistic video stimulus.
+
+    The clip is copyright 2008 Blender Foundation
+    (`bigbuckbunny.org <https://www.bigbuckbunny.org>`_) and is distributed
+    under the Creative Commons Attribution 3.0 license, not under
+    pulse2percept's BSD license; ``metadata`` carries the attribution.
+
+    The clip has no intrinsic field of view; wrap it in a
+    :py:class:`~pulse2percept.vision.Scene` to say how much of the visual
+    field it covers.
+
+    .. note::
+       At full resolution this is 689,280 electrodes x 115 time points
+       (~317 MB). Pass ``resize`` and/or ``as_gray`` before feeding it to a
+       model.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of each video
+        frame.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the frame: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) frame.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary. Keys given
+        here override the attribution defaults above.
+
+    as_gray : bool, optional
+        Flag whether to convert the video to grayscale.
+
+    Returns
+    -------
+    stim : :py:class:`~pulse2percept.stimuli.VideoStimulus`
+
+    Examples
+    --------
+    >>> from pulse2percept.stimuli import samples
+    >>> video = samples.big_buck_bunny(resize=(60, 80))
+    >>> video.vid_shape
+    (60, 80, 3, 115)
+
+    """
+    meta = dict(_BIG_BUCK_BUNNY_CREDIT)
+    if isinstance(metadata, dict):
+        meta.update(metadata)
+    elif metadata is not None:
+        meta['user'] = metadata
+    return VideoStimulus(_sample_path('big-buck-bunny.mp4'), resize=resize,
+                         as_gray=as_gray, electrodes=electrodes,
+                         metadata=meta, compress=False)
 
 
 def logo_bvl(resize=None, electrodes=None, metadata=None, as_gray=False):

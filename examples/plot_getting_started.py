@@ -25,7 +25,6 @@ brightness, phosphene size, and streak length.
 # sphinx_gallery_thumbnail_number = 1
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 import pulse2percept as p2p
 from pulse2percept.units import Hz, mm, ms, uA, xTh, dva
@@ -148,23 +147,18 @@ plt.show()
 # Videos work the same way
 # ------------------------
 #
-# A video is another visual source. A clip made here on the spot -- a drifting
-# pattern of light and dark patches at 30 fps -- lets us see both the input
-# and the predicted percept as interactive players; a
-# :class:`~pulse2percept.stimuli.VideoStimulus` reads a movie file the same
-# way.
+# A video is another visual source. ``samples.big_buck_bunny()`` is a bundled
+# excerpt of *Big Buck Bunny* (© 2008 Blender Foundation, CC BY 3.0) at
+# 24 fps, downscaled here; it lets us see both the input and the predicted
+# percept as interactive players. Any movie file a
+# :class:`~pulse2percept.stimuli.VideoStimulus` can read works the same way.
 #
 # The Granley biphasic model above describes one biphasic pulse-train condition
 # per electrode. For a video whose encoded amplitude changes frame by frame,
 # the spatial :class:`~pulse2percept.models.retina.AxonMapModel` maps that
 # modulation to a percept frame by frame.
 
-n_frames, rows, cols = 30, 120, 160
-x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
-y = np.cos(np.linspace(0, 3 * np.pi, rows))[:, np.newaxis, np.newaxis]
-phase = 2 * np.pi * np.arange(n_frames) / n_frames
-video = p2p.stimuli.VideoStimulus(0.5 + 0.5 * y * np.sin(x - phase),
-                                  metadata={'fps': 30})
+video = p2p.stimuli.samples.big_buck_bunny(resize=(120, 160), as_gray=True)
 video.play()
 
 ###############################################################################
@@ -172,7 +166,7 @@ video.play()
 implant = p2p.implants.retina.ArgusII(
     encoder=p2p.stimuli.AmplitudeEncoder(
         amp_range=(0, 50 * uA),
-        freq=30 * Hz,
+        freq=24 * Hz,
     )
 )
 model = p2p.models.retina.AxonMapModel(implant)

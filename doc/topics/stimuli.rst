@@ -151,9 +151,10 @@ Sample stimuli
 --------------
 
 :py:mod:`pulse2percept.stimuli.samples` bundles a few ready-made stimuli for
-demos, docs, and tests. They are ordinary ``ImageStimulus`` objects (or, for
-procedural optotypes, a :py:class:`~pulse2percept.vision.Scene`), and are
-reached through the module rather than the top-level namespace:
+demos, docs, and tests. They are ordinary ``ImageStimulus`` or
+``VideoStimulus`` objects (or, for procedural optotypes, a
+:py:class:`~pulse2percept.vision.Scene`), and are reached through the module
+rather than the top-level namespace:
 
 .. code-block:: python
 
@@ -161,6 +162,19 @@ reached through the module rather than the top-level namespace:
 
     logo = samples.logo_bvl()
     logo = samples.logo_ucsb()
+
+:py:func:`~pulse2percept.stimuli.samples.big_buck_bunny` is the bundled
+naturalistic video, a 115-frame excerpt of *Big Buck Bunny* at 24 fps:
+
+.. code-block:: python
+
+    video = samples.big_buck_bunny()
+    video.play()
+
+At full resolution it is 359x640 RGB, i.e. 689,280 electrodes; pass
+``resize`` and/or ``as_gray=True`` before handing it to a model. The clip is
+© 2008 Blender Foundation and licensed CC BY 3.0, not under pulse2percept's
+BSD license; its attribution rides along in ``video.metadata``.
 
 :py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a Landolt C at
 standard proportions (stroke width and inner/outer diameters of 1, 3, and 5

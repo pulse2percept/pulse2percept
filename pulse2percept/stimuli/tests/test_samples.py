@@ -5,7 +5,8 @@ import numpy.testing as npt
 import pytest
 
 import pulse2percept as p2p
-from pulse2percept.stimuli import ImageStimulus, LogoBVL, LogoUCSB, samples
+from pulse2percept.stimuli import (ImageStimulus, LogoBVL, LogoUCSB,
+                                   VideoStimulus, samples)
 from pulse2percept.units import deg, dva
 from pulse2percept.vision import Scene
 
@@ -65,6 +66,49 @@ def test_samples_namespace():
         npt.assert_equal(hasattr(p2p.stimuli, gone), False)
     for gone in ('boston_train', 'girl_pool'):
         npt.assert_equal(hasattr(samples, gone), False)
+
+
+#: Properties of the packaged clip, as decoded (not as the container claims:
+#: the MP4 header advertises more frames than the file actually holds).
+_BUNNY_SHAPE, _BUNNY_FRAMES, _BUNNY_FPS = (359, 640), 115, 24.0
+
+
+def test_big_buck_bunny():
+    video = samples.big_buck_bunny()
+    # A loader returns a plain stimulus, not a sample type of its own:
+    npt.assert_equal(type(video), VideoStimulus)
+    npt.assert_equal(video.vid_shape, _BUNNY_SHAPE + (3, _BUNNY_FRAMES))
+    npt.assert_equal(video.time.size, _BUNNY_FRAMES)
+    npt.assert_almost_equal(video.metadata['fps'], _BUNNY_FPS)
+    npt.assert_almost_equal(np.diff(video.time), 1000.0 / _BUNNY_FPS)
+    npt.assert_equal(np.all(np.isfinite(video.data)), True)
+    npt.assert_equal(video.data.min() >= 0, True)
+    npt.assert_equal(video.data.max() <= 1, True)
+
+
+def test_big_buck_bunny_options():
+    gray = samples.big_buck_bunny(as_gray=True, resize=(30, 40))
+    npt.assert_equal(gray.vid_shape, (30, 40, _BUNNY_FRAMES))
+    npt.assert_equal(np.all(np.isfinite(gray.data)), True)
+    rgb = samples.big_buck_bunny(resize=(30, 40))
+    npt.assert_equal(rgb.vid_shape, (30, 40, 3, _BUNNY_FRAMES))
+
+
+def test_big_buck_bunny_metadata():
+    video = samples.big_buck_bunny(resize=(8, 8))
+    npt.assert_equal(video.metadata['title'], 'Big Buck Bunny')
+    npt.assert_equal(video.metadata['creator'], 'Blender Foundation')
+    npt.assert_equal(video.metadata['license'], 'CC BY 3.0')
+    # User metadata merges the usual way, and wins over the defaults:
+    user = samples.big_buck_bunny(resize=(8, 8),
+                                  metadata={'foo': 'bar', 'title': 'clip'})
+    npt.assert_equal(user.metadata['foo'], 'bar')
+    npt.assert_equal(user.metadata['title'], 'clip')
+    npt.assert_equal(user.metadata['license'], 'CC BY 3.0')
+
+
+def test_big_buck_bunny_not_top_level():
+    npt.assert_equal(hasattr(p2p.stimuli, 'big_buck_bunny'), False)
 
 
 def _ink(scene):

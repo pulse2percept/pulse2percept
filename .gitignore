@@ -15,6 +15,7 @@ __pycache__
 # ...but the bundled sample videos are package data and documentation assets,
 # not build output or stray test artifacts:
 !pulse2percept/stimuli/data/*.mp4
+!pulse2percept/stimuli/data/samples/*.mp4
 !doc/_static/*.mp4
 **/*.pickle
 **/*.DS_Store
