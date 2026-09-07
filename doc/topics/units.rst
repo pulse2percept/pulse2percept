@@ -98,7 +98,7 @@ each other freely, and bare numbers still mean degrees:
 .. code-block:: python
 
     import numpy as np
-    from pulse2percept.implants import ArgusII
+    from pulse2percept.implants.retina import ArgusII
     from pulse2percept.units import deg, rad
 
     ElectrodeGrid((6, 10), 575, rot=45)              # degrees, as before

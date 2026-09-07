@@ -1,6 +1,6 @@
 from pulse2percept.plotting import (plot_argus_phosphenes,
                                plot_argus_simulated_phosphenes)
-from pulse2percept.implants import ArgusI, ArgusII, AlphaAMS
+from pulse2percept.implants.retina import ArgusI, ArgusII, AlphaAMS
 from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
                                          ScoreboardModel)
 from pulse2percept.units import deg, um

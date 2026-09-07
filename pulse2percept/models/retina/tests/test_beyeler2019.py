@@ -11,7 +11,7 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 
-from pulse2percept.implants import ArgusI, ArgusII, PRIMAPivotal
+from pulse2percept.implants.retina import ArgusI, ArgusII, PRIMAPivotal
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (ImageStimulus, LogoBVL, Stimulus,
                                    VideoStimulus)
@@ -1058,7 +1058,9 @@ def test_axon_map_eye_follows_the_implant():
 
 
 def test_axon_map_warns_when_the_implant_is_not_epiretinal():
-    from pulse2percept.implants import GridImplant, Lorach2015Array
+    from pulse2percept.implants import ElectrodeGrid
+    from pulse2percept.implants.retina import (Lorach2015Array,
+                                               RetinalImplant)
     grid = dict(step=1, xrange=(-2, 2), yrange=(-2, 2), n_axons=50,
                 n_ax_segments=30)
     said = _user_warnings(AxonMapModel(implant=Lorach2015Array(), **grid).build)
@@ -1066,24 +1068,25 @@ def test_axon_map_warns_when_the_implant_is_not_epiretinal():
     npt.assert_equal(any('scoreboard model' in w for w in said), True)
     # An implant whose placement nobody wrote down says nothing either way.
     # Its pitch is wide enough not to trip the other warning:
-    quiet = GridImplant(shape=(3, 3), spacing=2000)
+    quiet = RetinalImplant(ElectrodeGrid((3, 3), 2000))
     npt.assert_equal(_user_warnings(AxonMapModel(implant=quiet, **grid).build),
                      [])
 
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, AxonMapModel])
 def test_rho_wider_than_the_electrode_pitch_warns(ModelClass):
-    from pulse2percept.implants import GridImplant
+    from pulse2percept.implants import ElectrodeGrid
+    from pulse2percept.implants.retina import RetinalImplant
     extra = {'n_axons': 50, 'n_ax_segments': 30} if ModelClass is AxonMapModel         else {}
     grid = dict(step=1, xrange=(-2, 2), yrange=(-2, 2), **extra)
-    dense = ModelClass(implant=GridImplant(shape=(3, 3), spacing=100),
+    dense = ModelClass(implant=RetinalImplant(ElectrodeGrid((3, 3), 100)),
                        rho=400, **grid)
     said = _user_warnings(dense.build)
     # The numbers a reader needs to judge it, not a verdict:
     npt.assert_equal(any('pitch (100 um)' in w for w in said), True)
     npt.assert_equal(any('ratio of 4.00' in w for w in said), True)
     # rho at the pitch is the boundary, and is not warned about:
-    matched = ModelClass(implant=GridImplant(shape=(3, 3), spacing=400),
+    matched = ModelClass(implant=RetinalImplant(ElectrodeGrid((3, 3), 400)),
                          rho=400, **grid)
     npt.assert_equal(_user_warnings(matched.build), [])
 
@@ -1091,12 +1094,12 @@ def test_rho_wider_than_the_electrode_pitch_warns(ModelClass):
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, AxonMapModel])
 def test_electrode_pitch_ignores_a_dimension_the_model_drops(ModelClass):
     """A retinal model reads x and y, so z cannot pull neighbours apart"""
-    from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
-                                        Implant)
+    from pulse2percept.implants import DiskElectrode, ElectrodeArray
+    from pulse2percept.implants.retina import RetinalImplant
     extra = {'n_axons': 50, 'n_ax_segments': 30} if ModelClass is AxonMapModel         else {}
     # Three electrodes 100 um apart in x, but 1000 um apart in z. Reading all
     # three coordinates would call that a ~1005 um pitch and stay quiet:
-    stacked = Implant(ElectrodeArray(
+    stacked = RetinalImplant(ElectrodeArray(
         [DiskElectrode(100 * i, 0, 1000 * i, 50) for i in range(3)]))
     model = ModelClass(implant=stacked, rho=400, step=1, xrange=(-2, 2),
                        yrange=(-2, 2), **extra)

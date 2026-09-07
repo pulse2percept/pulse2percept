@@ -2,13 +2,13 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 
-from pulse2percept import implants
+from pulse2percept.implants import retina
 
 @pytest.mark.parametrize('eye', ('LE', 'RE'))
 def test_IMIE(eye):
     # Create an IMIE and make sure location is correct
 
-    imie = implants.IMIE(eye=eye)
+    imie = retina.IMIE(eye=eye)
     # Slots:
     npt.assert_equal(hasattr(imie, '__slots__'), True)
     npt.assert_equal(hasattr(imie, '__dict__'), False)
@@ -38,24 +38,24 @@ def test_IMIE(eye):
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
-        implants.IMIE(z=np.zeros(5))
+        retina.IMIE(z=np.zeros(5))
     with pytest.raises(ValueError):
-        implants.IMIE(z=[1, 2, 3])
+        retina.IMIE(z=[1, 2, 3])
 
     # Right-eye implant:
-    imie_re = implants.IMIE(eye='RE')
+    imie_re = retina.IMIE(eye='RE')
     npt.assert_equal(imie_re['A4'].x > imie_re['A3'].x, True)
     npt.assert_almost_equal(imie_re['A4'].y, imie_re['A3'].y)
 
     # need to adjust for reflection about y-axis
     # Left-eye implant:
-    imie_le = implants.IMIE(eye='LE')
+    imie_le = retina.IMIE(eye='LE')
     npt.assert_equal(imie_le['A3'].x > imie_le['A4'].x, True)
     npt.assert_almost_equal(imie_le['A3'].y, imie_le['A4'].y)
 
 def test_IMIE_stim():
     # Prepare a stimulus via dict:
-    implant = implants.IMIE()
+    implant = retina.IMIE()
     stim = implant.prepare_stim({'A3': 1})
     npt.assert_equal(stim.electrodes, ['A3'])
     npt.assert_equal(stim.time, None)

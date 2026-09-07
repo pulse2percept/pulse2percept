@@ -6,7 +6,7 @@ Beyeler et al. (2019): Axonal streaks with the axon map model
 
 This example shows how to apply the
 :py:class:`~pulse2percept.models.retina.AxonMapModel` to an
-:py:class:`~pulse2percept.implants.ArgusII` implant.
+:py:class:`~pulse2percept.implants.retina.ArgusII` implant.
 
 The axon map model assumes that electrical stimulation leads to percepts that
 are elongated along the direction of the underlying nerve fiber bundle
@@ -39,14 +39,15 @@ A model predicts what a *particular* device produces, so the first step is to
 specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
 
 In the following, we use an
-:py:class:`~pulse2percept.implants.ArgusII` in its canonical device-local
+:py:class:`~pulse2percept.implants.retina.ArgusII` in its canonical
+device-local
 frame:
 
 """
 # sphinx_gallery_thumbnail_number = 2
 
 import numpy as np
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models.retina import AxonMapModel
 from pulse2percept.units import um
 

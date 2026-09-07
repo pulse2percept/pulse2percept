@@ -5,7 +5,7 @@ from inspect import signature
 import pytest
 import numpy.testing as npt
 from pulse2percept import implants
-from pulse2percept.implants import cortex
+from pulse2percept.implants import cortex, retina
 from pulse2percept.units import (DimensionMismatchError, Quantity, deg,
                                  dimensionless, dva, mA, mm, ms, nA, rad, uA,
                                  um, xTh)
@@ -13,15 +13,16 @@ from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 
-from pulse2percept.implants import (PointSource, ElectrodeArray, ElectrodeGrid,
-                                    GridImplant, Implant,
-                                    RectangleImplant, PhotovoltaicPixel)
+from pulse2percept.implants import (PointSource, ElectrodeArray,
+                                    ElectrodeGrid, GridImplant, Implant)
+from pulse2percept.implants.retina import PhotovoltaicPixel
 from pulse2percept.stimuli import (Stimulus, ImageStimulus, VideoStimulus,
                                    BostonTrain, LogoBVL)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, FrequencyEncoder,
                                    MonophasicPulse)
-from pulse2percept.implants import (ArgusII, DiskElectrode)
+from pulse2percept.implants import DiskElectrode
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models.retina import ScoreboardModel, ScoreboardSpatial
 
 
@@ -33,7 +34,6 @@ class PhotovoltaicArray(Implant):
         self.trench = 5  # um
         elec_radius = 8  # um
         self.shape = (int(r * 600 / spacing), int(r * 700 / spacing))
-        self.eye = 'RE'
         self.preprocess = preprocess
         self.safe_mode = safe_mode
         dva2ret = 280.0
@@ -53,8 +53,6 @@ class PhotovoltaicArray(Implant):
 
 def test_Implant():
     # Invalid instantiations:
-    with pytest.raises(ValueError):
-        Implant(ElectrodeArray(PointSource(0, 0, 0)), eye='both')
     with pytest.raises(TypeError):
         Implant(Stimulus)
 
@@ -217,104 +215,6 @@ def test_Implant_deactivate():
     npt.assert_equal(electrode in implant.prepare_stim(source).electrodes,
                      False)
 
-@pytest.mark.parametrize('ztype', ('float', 'list'))
-@pytest.mark.parametrize('x', (-100, 200))
-@pytest.mark.parametrize('y', (-200, 400))
-@pytest.mark.parametrize('rot', (-45, 60))
-def test_rectangle_implant(ztype, x, y, rot):
-    # Create an argus like implant and make sure location is correct
-    z = 100 if ztype == 'float' else np.ones(60) * 20
-    implant = RectangleImplant(x=x, y=y, z=z, rot=rot, shape=(6, 10), r=112.5, spacing=575.0)
-
-    # Slots:
-    npt.assert_equal(hasattr(implant, '__slots__'), True)
-
-    # Coordinates of first electrode
-    xy = np.array([-2587.5, -1437.5]).T
-
-    # Rotate
-    rot_rad = np.deg2rad(rot)
-    R = np.array([np.cos(rot_rad), -np.sin(rot_rad),
-                  np.sin(rot_rad), np.cos(rot_rad)]).reshape((2, 2))
-    xy = np.matmul(R, xy)
-
-    # Then off-set: Make sure first electrode is placed
-    # correctly
-    npt.assert_almost_equal(implant['A1'].x, xy[0] + x)
-    npt.assert_almost_equal(implant['A1'].y, xy[1] + y)
-
-    # Make sure array center is still (x,y)
-    y_center = implant['F1'].y + (implant['A10'].y - implant['F1'].y) / 2
-    npt.assert_almost_equal(y_center, y)
-    x_center = implant['A1'].x + (implant['F10'].x - implant['A1'].x) / 2
-    npt.assert_almost_equal(x_center, x)
-
-    # Make sure radius is correct
-    for e in ['A1', 'B3', 'C5', 'D7', 'E9', 'F10']:
-        npt.assert_almost_equal(implant[e].radius, 112.5)
-
-    # Indexing must work for both integers and electrode names
-    for idx, (name, electrode) in enumerate(implant.electrodes.items()):
-        npt.assert_equal(electrode, implant[idx])
-        npt.assert_equal(electrode, implant[name])
-    with pytest.raises(KeyError):
-        implant["unlikely name for an electrode"]
-
-    # Right-eye implant:
-    xc, yc = 500, -500
-    implant = RectangleImplant(eye='RE', x=xc, y=yc)
-    npt.assert_equal(implant['A10'].x > implant['A1'].x, True)
-    npt.assert_almost_equal(implant['A10'].y, implant['A1'].y)
-
-    # Left-eye implant:
-    implant = RectangleImplant(eye='LE', x=xc, y=yc)
-    npt.assert_equal(implant['A1'].x > implant['A10'].x, True)
-    npt.assert_almost_equal(implant['A10'].y, implant['A1'].y)
-
-    # In both left and right eyes, rotation with positive angle should be
-    # counter-clock-wise (CCW): for (x>0,y>0), decreasing x and increasing y
-    for eye, el in zip(['LE', 'RE'], ['O1', 'O15']):
-        # By default, electrode 'F1' in a left eye has the same coordinates as
-        # 'F10' in a right eye (because the columns are reversed). Thus both
-        # cases are testing an electrode with x>0, y>0:
-        before = RectangleImplant(eye=eye)
-        after = RectangleImplant(eye=eye, rot=20)
-        npt.assert_equal(after[el].x < before[el].x, True)
-        npt.assert_equal(after[el].y > before[el].y, True)
-
-    # Prepare a stimulus via dict:
-    stim = RectangleImplant().prepare_stim({'B7': 13})
-    npt.assert_equal(stim.shape, (1, 1))
-    npt.assert_equal(stim.electrodes, ['B7'])
-
-    # Prepare a stimulus via array:
-    stim = RectangleImplant().prepare_stim(np.ones(225))
-    npt.assert_equal(stim.shape, (225, 1))
-    npt.assert_almost_equal(stim.data, 1)
-
-    # test different shapes
-    for shape in [(6, 10), (5, 12), (15, 15)]:
-        implant = RectangleImplant(shape=shape)
-        npt.assert_equal(implant.electrode_array.shape, shape)
-
-
-def test_RectangleImplant_is_deprecated():
-    """Deprecated in favor of GridImplant, but otherwise unchanged"""
-    with pytest.deprecated_call(match='drop-in replacement'):
-        implant = RectangleImplant(shape=(3, 4), spacing=100)
-    # The legacy defaults and geometry survive the deprecation:
-    npt.assert_equal(implant.preprocess, True)
-    npt.assert_equal(implant.electrode_array.shape, (3, 4))
-    npt.assert_equal(isinstance(implant['A1'], DiskElectrode), True)
-    npt.assert_almost_equal(implant['A1'].radius, 75.)
-    # Including the left-eye column reversal that GridImplant does not do
-    # (see test_GridImplant_does_not_relabel_the_left_eye):
-    with pytest.deprecated_call():
-        le = RectangleImplant(shape=(3, 4), spacing=100, eye='LE')
-    npt.assert_equal(le['A1'].x > le['A4'].x, True)
-    npt.assert_almost_equal(le['A1'].x, implant['A4'].x)
-
-
 def test_ProsthesisSystem_is_a_deprecated_alias():
     """Renamed to Implant in 0.11.0; the old name is the same class"""
     for module in (implants, implants.base):
@@ -410,10 +310,9 @@ def test_GridImplant_device_arguments_reach_Implant():
     """
     encoder = AmplitudeEncoder(amp_range=(0, 20))
     raster = implants.SequentialRaster(2)
-    implant = GridImplant((2, 3), 100, eye='LE',
+    implant = GridImplant((2, 3), 100,
                           preprocess=True, safe_mode=True, encoder=encoder,
                           raster=raster, max_current=100)
-    npt.assert_equal(implant.eye, 'LE')
     npt.assert_equal(
         implant.prepare_stim({'A1': BiphasicPulse(10, 1)}).electrodes, ['A1'])
     npt.assert_equal(implant.preprocess, True)
@@ -421,15 +320,6 @@ def test_GridImplant_device_arguments_reach_Implant():
     npt.assert_equal(implant.encoder, encoder)
     npt.assert_equal(implant.raster, raster)
     npt.assert_almost_equal(implant.max_current, 100)
-
-
-def test_GridImplant_does_not_relabel_the_left_eye():
-    """Unlike RectangleImplant, a generic grid is the same in either eye"""
-    re = GridImplant((3, 4), 100, eye='RE')
-    le = GridImplant((3, 4), 100, eye='LE')
-    npt.assert_equal(le.electrode_names, re.electrode_names)
-    npt.assert_almost_equal(le.electrode_array.coordinates(),
-                            re.electrode_array.coordinates())
 
 
 def test_Implant_reshape_stim_frames_independent():
@@ -482,24 +372,21 @@ def test_implant_geometry_units():
     to normalize inside the grid.
     """
     cases = [
-        (implants.ArgusI, {'z': 100 * um}, {'z': 100}),
-        (implants.ArgusII, {'z': 100 * um}, {'z': 100}),
-        (implants.AlphaIMS, {'z': -0.1 * mm}, {'z': -100}),
-        (implants.AlphaAMS, {'z': -0.1 * mm}, {'z': -100}),
-        (implants.PRIMAPivotal, {'z': -0.1 * mm}, {'z': -100}),
-        (implants.Lorach2015Array, {'z': -0.1 * mm}, {'z': -100}),
-        (implants.Ho2019FlatArray, {'pixel_size': 55 * um, 'z': -0.1 * mm},
+        (retina.ArgusI, {'z': 100 * um}, {'z': 100}),
+        (retina.ArgusII, {'z': 100 * um}, {'z': 100}),
+        (retina.AlphaIMS, {'z': -0.1 * mm}, {'z': -100}),
+        (retina.AlphaAMS, {'z': -0.1 * mm}, {'z': -100}),
+        (retina.PRIMAPivotal, {'z': -0.1 * mm}, {'z': -100}),
+        (retina.Lorach2015Array, {'z': -0.1 * mm}, {'z': -100}),
+        (retina.Ho2019FlatArray, {'pixel_size': 55 * um, 'z': -0.1 * mm},
          {'pixel_size': 55, 'z': -100}),
-        (implants.Ho2019FlatArray, {'pixel_size': 40 * um, 'z': -0.1 * mm},
+        (retina.Ho2019FlatArray, {'pixel_size': 40 * um, 'z': -0.1 * mm},
          {'pixel_size': 40, 'z': -100}),
-        (implants.Huang2021Array, {'pixel_size': 0.03 * mm, 'z': -0.1 * mm},
+        (retina.Huang2021Array, {'pixel_size': 0.03 * mm, 'z': -0.1 * mm},
          {'pixel_size': 30, 'z': -100}),
-        (implants.BVT24, {'z': 50 * um}, {'z': 50}),
-        (implants.BVT44, {'z': 50 * um}, {'z': 50}),
-        (implants.IMIE, {'z': 100 * um}, {'z': 100}),
-        (implants.RectangleImplant,
-         {'x': 1 * mm, 'spacing': 0.4 * mm, 'r': 75 * um},
-         {'x': 1000, 'spacing': 400., 'r': 75.}),
+        (retina.BVT24, {'z': 50 * um}, {'z': 50}),
+        (retina.BVT44, {'z': 50 * um}, {'z': 50}),
+        (retina.IMIE, {'z': 100 * um}, {'z': 100}),
     ]
     for cls, unitful, bare in cases:
         coords = cls(**unitful).electrode_array.coordinates()
@@ -509,8 +396,8 @@ def test_implant_geometry_units():
         npt.assert_equal(coords.dtype, np.float64)
     # A conversion that does not land on a round number is no different:
     npt.assert_allclose(
-        implants.ArgusII(z=0.0417 * mm).electrode_array.coordinates(),
-        implants.ArgusII(z=41.7).electrode_array.coordinates(), rtol=1e-12)
+        retina.ArgusII(z=0.0417 * mm).electrode_array.coordinates(),
+        retina.ArgusII(z=41.7).electrode_array.coordinates(), rtol=1e-12)
 
 
 def test_implant_rot_units():
@@ -524,9 +411,9 @@ def test_implant_rot_units():
 
 def test_implant_per_electrode_z_units():
     """A per-electrode list of heights never reaches ElectrodeGrid"""
-    for cls, n in [(implants.PRIMAPivotal, 378),
-                   (implants.Lorach2015Array, 142),
-                   (implants.AlphaIMS, 1500)]:
+    for cls, n in [(retina.PRIMAPivotal, 378),
+                   (retina.Lorach2015Array, 142),
+                   (retina.AlphaIMS, 1500)]:
         heights = np.linspace(-150, -50, n)
         unitful = cls(z=[h * um for h in heights])
         npt.assert_allclose(unitful.electrode_array.coordinates(),
@@ -538,15 +425,14 @@ def test_implant_per_electrode_z_units():
 
 
 def test_implant_dimension_errors():
-    for cls in (implants.ArgusII, implants.PRIMAPivotal, implants.BVT24):
+    for cls in (retina.ArgusII, retina.PRIMAPivotal,
+                retina.BVT24):
         with pytest.raises(DimensionMismatchError):
             cls(z=10 * uA)
     with pytest.raises(DimensionMismatchError):
         GridImplant((2, 2), 400, rot=5 * dva)
     with pytest.raises(DimensionMismatchError):
-        implants.RectangleImplant(spacing=2 * dva)
-    with pytest.raises(DimensionMismatchError):
-        implants.RectangleImplant(r=10 * uA)
+        GridImplant((2, 2), 0.4 * dva)
 
 
 def test_Implant_max_current_units():
@@ -1115,11 +1001,11 @@ def test_Implant_partial_calibration_of_xTh_is_refused():
 
 
 @pytest.mark.parametrize('cls,expected', [
-    (implants.ArgusII, 'epiretinal'),
-    (implants.IMIE, 'epiretinal'),
-    (implants.AlphaAMS, 'subretinal'),
-    (implants.Lorach2015Array, 'subretinal'),
-    (implants.BVT24, 'suprachoroidal'),
+    (retina.ArgusII, 'epiretinal'),
+    (retina.IMIE, 'epiretinal'),
+    (retina.AlphaAMS, 'subretinal'),
+    (retina.Lorach2015Array, 'subretinal'),
+    (retina.BVT24, 'suprachoroidal'),
     (cortex.Orion, 'epicortical'),
     (cortex.Cortivis, 'intracortical'),
     (cortex.ICVP, 'intracortical'),
@@ -1131,19 +1017,19 @@ def test_named_devices_say_where_they_sit(cls, expected):
 
 @pytest.mark.parametrize('cls,expected', [
     # Driven by a camera the eye cannot move:
-    (implants.ArgusI, 'head'),
-    (implants.ArgusII, 'head'),
-    (implants.BVT24, 'head'),
-    (implants.BVT44, 'head'),
-    (implants.IMIE, 'head'),
+    (retina.ArgusI, 'head'),
+    (retina.ArgusII, 'head'),
+    (retina.BVT24, 'head'),
+    (retina.BVT44, 'head'),
+    (retina.IMIE, 'head'),
     # Photodiode arrays are illuminated through the eye's own optics, and
     # PRIMA projects its camera image through the eye onto the array:
-    (implants.AlphaIMS, 'eye'),
-    (implants.AlphaAMS, 'eye'),
-    (implants.PRIMAPivotal, 'eye'),
-    (implants.Lorach2015Array, 'eye'),
-    (implants.Ho2019FlatArray, 'eye'),
-    (implants.Huang2021Array, 'eye'),
+    (retina.AlphaIMS, 'eye'),
+    (retina.AlphaAMS, 'eye'),
+    (retina.PRIMAPivotal, 'eye'),
+    (retina.Lorach2015Array, 'eye'),
+    (retina.Ho2019FlatArray, 'eye'),
+    (retina.Huang2021Array, 'eye'),
 ])
 def test_named_devices_say_how_gaze_reaches_them(cls, expected):
     npt.assert_equal(cls._default_scene_input_frame, expected)
@@ -1157,10 +1043,10 @@ def test_a_generic_array_moves_its_input_with_the_eye():
 
 def test_one_system_can_override_how_gaze_reaches_it():
     # Eye-tracked Argus II:
-    tracked = implants.ArgusII()
+    tracked = retina.ArgusII()
     tracked.scene_input_frame = 'eye'
     npt.assert_equal(tracked.scene_input_frame, 'eye')
-    npt.assert_equal(implants.ArgusII().scene_input_frame, 'head')
+    npt.assert_equal(retina.ArgusII().scene_input_frame, 'head')
     npt.assert_equal('scene_input_frame' in str(tracked), True)
     # None restores the class default:
     tracked.scene_input_frame = None
@@ -1213,10 +1099,10 @@ def test_Implant_is_a_container():
 
 #: Every named device, which must describe hardware about its own origin.
 NAMED_IMPLANTS = [
-    implants.ArgusI, implants.ArgusII, implants.AlphaIMS, implants.AlphaAMS,
-    implants.BVT24, implants.BVT44, implants.IMIE, implants.PRIMAPivotal,
-    implants.Lorach2015Array, partial(implants.Ho2019FlatArray, 55),
-    partial(implants.Huang2021Array, 55), cortex.Cortivis, cortex.ICVP,
+    retina.ArgusI, retina.ArgusII, retina.AlphaIMS, retina.AlphaAMS,
+    retina.BVT24, retina.BVT44, retina.IMIE, retina.PRIMAPivotal,
+    retina.Lorach2015Array, partial(retina.Ho2019FlatArray, 55),
+    partial(retina.Huang2021Array, 55), cortex.Cortivis, cortex.ICVP,
     cortex.Orion,
 ]
 
@@ -1249,7 +1135,7 @@ def test_a_named_implant_is_built_around_its_own_origin(implant_type):
 
 def test_model_side_placement_reproduces_an_old_absolute_position():
     """Model-side placement reproduces the former Argus II pose."""
-    implant = implants.ArgusII()
+    implant = retina.ArgusII()
     rot = -28.4
     model = ScoreboardSpatial(implant, implant_position=(-1331, -850) * um,
                               implant_rotation=rot, implant_depth=100 * um,
@@ -1292,12 +1178,12 @@ def test_one_implant_serves_two_models_at_different_depths():
 
 def test_a_flat_named_array_is_flat_in_its_own_frame():
     """Flat named retinal arrays use z=0 in their local frame."""
-    for implant_type in (implants.AlphaIMS, implants.AlphaAMS,
-                         implants.ArgusI, implants.ArgusII, implants.BVT24,
-                         implants.BVT44, implants.IMIE,
-                         implants.PRIMAPivotal, implants.Lorach2015Array,
-                         partial(implants.Ho2019FlatArray, 55),
-                         partial(implants.Huang2021Array, 55)):
+    for implant_type in (retina.AlphaIMS, retina.AlphaAMS,
+                         retina.ArgusI, retina.ArgusII, retina.BVT24,
+                         retina.BVT44, retina.IMIE,
+                         retina.PRIMAPivotal, retina.Lorach2015Array,
+                         partial(retina.Ho2019FlatArray, 55),
+                         partial(retina.Huang2021Array, 55)):
         z = implant_type().electrode_array.coordinates()[:, 2]
         npt.assert_almost_equal(z, 0, decimal=9,
                                 err_msg=_name_of(implant_type))

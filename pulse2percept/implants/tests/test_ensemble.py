@@ -117,8 +117,8 @@ def test_from_coords_translates_every_kind_of_constituent():
         npt.assert_almost_equal(device[name].x, implant_type()[name].x)
 
 
-# test from_cortical_map initialization (vf coords in dva)
-def test_from_cortical_map():
+# test from_visual_field_map initialization (vf coords in dva)
+def test_from_visual_field_map():
     visual_field_map = Polimeni2006Map()
 
     locs = np.array([(2000,2000), (10000,0), (5000, 5000)]).astype(np.float64)
@@ -131,8 +131,8 @@ def test_from_cortical_map():
     device = Cortivis()
 
     # use dva coords to create ensemble
-    ensemble = EnsembleImplant.from_cortical_map(Cortivis, visual_field_map,
-                                                 dva_locs)
+    ensemble = EnsembleImplant.from_visual_field_map(
+        Cortivis, visual_field_map, dva_locs)
 
     # The dva locations round-trip back to the physical ones they came from:
     for i, (dx, dy) in enumerate(locs):
@@ -245,8 +245,8 @@ def test_EnsembleImplant_from_coords_needs_a_specification():
     """Locations or a complete grid, but never a guessed physical default
 
     There is no universal physical equivalent of the ``(-3, 3)`` dva that
-    `from_cortical_map` defaults to: how far a degree reaches depends on the
-    visual field map.
+    `from_visual_field_map` defaults to: how far a degree reaches depends on
+    the visual field map.
     """
     with pytest.raises(ValueError):
         EnsembleImplant.from_coords(Cortivis)
@@ -262,21 +262,21 @@ def test_EnsembleImplant_from_coords_needs_a_specification():
             EnsembleImplant.from_coords(Cortivis, **kwargs)
 
 
-def test_EnsembleImplant_from_cortical_map_units():
-    """`from_cortical_map` places implants by visual field location (dva)"""
-    bare = EnsembleImplant.from_cortical_map(
+def test_EnsembleImplant_from_visual_field_map_units():
+    """`from_visual_field_map` places implants by visual field location"""
+    bare = EnsembleImplant.from_visual_field_map(
         Cortivis, Polimeni2006Map(), xrange=(-2, 2), yrange=(0, 0), step=2)
-    unitful = EnsembleImplant.from_cortical_map(
+    unitful = EnsembleImplant.from_visual_field_map(
         Cortivis, Polimeni2006Map(), xrange=(-2 * dva, 2 * dva),
         yrange=(0 * dva, 0 * dva), step=2 * dva)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
     # Locations, too:
     locs = np.array([[-2.0, 0.0], [2.0, 0.0]])
-    unitful = EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
-                                                locs=locs * dva)
-    bare = EnsembleImplant.from_cortical_map(Cortivis, Polimeni2006Map(),
-                                             locs=locs)
+    unitful = EnsembleImplant.from_visual_field_map(
+        Cortivis, Polimeni2006Map(), locs=locs * dva)
+    bare = EnsembleImplant.from_visual_field_map(
+        Cortivis, Polimeni2006Map(), locs=locs)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
     # These are degrees, not microns: the whole point of the map is that the
@@ -284,7 +284,7 @@ def test_EnsembleImplant_from_cortical_map_units():
     for kwargs in ({'xrange': (-2 * mm, 2 * mm)}, {'step': 2 * um},
                    {'locs': locs * um}):
         with pytest.raises(DimensionMismatchError):
-            EnsembleImplant.from_cortical_map(
+            EnsembleImplant.from_visual_field_map(
                 Cortivis, Polimeni2006Map(),
                 **{'xrange': (-2, 2), 'yrange': (0, 0), 'step': 2, **kwargs})
 
@@ -305,7 +305,7 @@ def test_EnsembleImplant_from_coords_is_physical():
     npt.assert_allclose(ranged.electrode_array.coordinates(),
                         listed.electrode_array.coordinates(), rtol=1e-12)
     # A micron range is fine here and a dva one is not -- the mirror image of
-    # `from_cortical_map`:
+    # `from_visual_field_map`:
     npt.assert_allclose(
         EnsembleImplant.from_coords(
             Cortivis, xrange=(-10 * mm, 10 * mm), yrange=(0, 0),

@@ -975,7 +975,7 @@ class AmplitudeEncoder(StimulusEncoder):
     Encode a movie for Argus II, mapping gray levels onto 0-50 uA at 20 Hz:
 
     >>> import pulse2percept as p2p
-    >>> implant = p2p.implants.ArgusII()
+    >>> implant = p2p.implants.retina.ArgusII()
     >>> implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
     >>> stim = implant.prepare_stim(p2p.stimuli.BostonTrain())
 
@@ -1141,7 +1141,7 @@ frame_dur, stretch
     electrode at once:
 
     >>> import pulse2percept as p2p
-    >>> implant = p2p.implants.ArgusII(raster=None)
+    >>> implant = p2p.implants.retina.ArgusII(raster=None)
     >>> implant.encoder = p2p.stimuli.FrequencyEncoder(freq_range=(0, 300),
     ...                                                amp=50, clock=1)
     >>> stim = implant.prepare_stim(p2p.stimuli.BostonTrain())
@@ -1401,7 +1401,7 @@ class PRIMAEncoder(Encoder):
 
     Examples
     --------
-    >>> from pulse2percept.implants import PRIMAPivotal
+    >>> from pulse2percept.implants.retina import PRIMAPivotal
     >>> from pulse2percept.stimuli import LogoBVL, PRIMAEncoder
     >>> PRIMAEncoder().encode(LogoBVL(), implant=PRIMAPivotal()).unit
     mW/mm^2

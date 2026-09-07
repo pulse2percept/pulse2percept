@@ -10,11 +10,11 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon, RegularPolygon
 from scipy.spatial import cKDTree
 
-from pulse2percept.implants import (ArgusII, PhotovoltaicPixel, PRIMAPivotal,
-                                    Lorach2015Array, Ho2019FlatArray,
-                                    Huang2021Array, PointSource,
-                                    Implant, PRIMA, PRIMA75,
-                                    PRIMA55, PRIMA40)
+from pulse2percept.implants import PointSource, Implant
+from pulse2percept.implants.retina import (ArgusII, PhotovoltaicPixel,
+                                           PRIMAPivotal, Lorach2015Array,
+                                           Ho2019FlatArray, Huang2021Array,
+                                           PRIMA, PRIMA75, PRIMA55, PRIMA40)
 from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
                                    ImageStimulus, LogoBVL, PRIMAEncoder,
                                    Stimulus)
@@ -305,14 +305,18 @@ def test_implant_metadata():
 
 
 def test_prima_public_api():
-    """Check canonical and deprecated public names."""
-    import pulse2percept.implants as implants
+    """Check canonical and deprecated public names.
+
+    The deprecated PRIMA spellings stay in the retinal namespace; they were
+    never re-exported from the root.
+    """
+    import pulse2percept.implants.retina as retina
     canonical = ['PRIMAPivotal', 'Lorach2015Array', 'Ho2019FlatArray',
                  'Huang2021Array']
     deprecated = ['PRIMA', 'PRIMA75', 'PRIMA55', 'PRIMA40']
     for name in canonical + deprecated:
-        npt.assert_equal(name in implants.__all__, True)
-        npt.assert_equal(getattr(implants, name).__name__, name)
+        npt.assert_equal(name in retina.__all__, True)
+        npt.assert_equal(getattr(retina, name).__name__, name)
 
 
 @pytest.mark.parametrize('pixel_size, n_elec, n_total, elec_diam',

@@ -8,7 +8,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.models import SpatialModel
 from pulse2percept.models.cortex import ScoreboardSpatial as CortexScoreboard

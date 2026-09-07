@@ -25,7 +25,7 @@ For most electrical stimulation, start with a
         stim_dur=500,
     )
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     model = p2p.models.retina.ScoreboardModel(implant=implant)
 
     percept = model.predict_percept({'A5': pulse_train})

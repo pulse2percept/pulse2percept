@@ -1,15 +1,15 @@
-""":py:class:`~pulse2percept.implants.AlphaIMS`, 
-   :py:class:`~pulse2percept.implants.AlphaAMS`"""
+""":py:class:`~pulse2percept.implants.retina.AlphaIMS`, 
+   :py:class:`~pulse2percept.implants.retina.AlphaAMS`"""
 import numpy as np
 from collections import OrderedDict
 
-from .base import Implant
-from .electrodes import SquareElectrode, DiskElectrode
-from .electrode_arrays import ElectrodeGrid
-from ..units import as_value, um
+from .base import RetinalImplant
+from ..electrodes import SquareElectrode, DiskElectrode
+from ..electrode_arrays import ElectrodeGrid
+from ...units import as_value, um
 
 
-class AlphaIMS(Implant):
+class AlphaIMS(RetinalImplant):
     """Alpha-IMS
 
     This class creates an Alpha-IMS array with 1500 photovoltaic pixels (each
@@ -50,7 +50,7 @@ class AlphaIMS(Implant):
     --------
     Create an Alpha-IMS array:
 
-    >>> from pulse2percept.implants import AlphaIMS
+    >>> from pulse2percept.implants.retina import AlphaIMS
     >>> AlphaIMS()  # doctest: +NORMALIZE_WHITESPACE
     AlphaIMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
              safe_mode=False, shape=(39, 39))
@@ -139,7 +139,7 @@ class AlphaIMS(Implant):
         return params
 
 
-class AlphaAMS(Implant):
+class AlphaAMS(RetinalImplant):
     """Alpha-AMS
 
     This class creates an Alpha-AMS array with 1600 photovoltaic pixels (each
@@ -180,7 +180,7 @@ class AlphaAMS(Implant):
     --------
     Create an AlphaAMS array:
 
-    >>> from pulse2percept.implants import AlphaAMS
+    >>> from pulse2percept.implants.retina import AlphaAMS
     >>> AlphaAMS()  # doctest: +NORMALIZE_WHITESPACE
     AlphaAMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
              safe_mode=False, shape=(40, 40))

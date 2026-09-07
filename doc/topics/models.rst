@@ -138,7 +138,7 @@ predict a percept from a stimulus.
 
     import pulse2percept as p2p
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
     percept = model.predict_percept({'A8': 30})
 
@@ -223,7 +223,7 @@ what someone is *looking at* instead, give the model a
 
     scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva)
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
 
     model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
@@ -276,7 +276,7 @@ tracking, which shifts the camera ROI with gaze:
 
 .. code-block:: python
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     implant.scene_input_frame = 'eye'
 
 The sampled values are passed to ``implant.encoder``, which maps gray levels

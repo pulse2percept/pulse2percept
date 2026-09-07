@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.implants import AlphaIMS, AlphaAMS
+from pulse2percept.implants.retina import AlphaIMS, AlphaAMS
 
 
 @pytest.mark.parametrize('ztype', ('float', 'list'))

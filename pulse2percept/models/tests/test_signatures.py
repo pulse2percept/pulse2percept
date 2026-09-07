@@ -8,7 +8,7 @@ import inspect
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.implants.cortex import Orion
 from pulse2percept.models import AlphaTemporal, FadingTemporal
 from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,

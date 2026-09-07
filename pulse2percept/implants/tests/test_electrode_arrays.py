@@ -6,7 +6,7 @@ from collections import OrderedDict
 from pulse2percept.implants import (DiskElectrode, HexElectrode,
                                     PointSource, ElectrodeArray,
                                     ElectrodeGrid)
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.stimuli import ElectrodeNames, Stimulus
 from pulse2percept.units import (DimensionMismatchError, Quantity, cm, deg,
                                  dva, mm, ms, rad, uA, um)

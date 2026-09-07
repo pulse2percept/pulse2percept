@@ -908,7 +908,7 @@ class BiphasicAxonMapModel(Model):
 
         import pulse2percept as p2p
 
-        implant = p2p.implants.ArgusII(thresholds=80 * p2p.units.uA)
+        implant = p2p.implants.retina.ArgusII(thresholds=80 * p2p.units.uA)
         model = p2p.models.retina.BiphasicAxonMapModel(implant=implant)
         percept = model.predict_percept(p2p.stimuli.LogoBVL())
 
@@ -919,7 +919,7 @@ class BiphasicAxonMapModel(Model):
 
         encoder = p2p.stimuli.AmplitudeEncoder(
             amp_range=(0 * p2p.units.xTh, 3 * p2p.units.xTh))
-        implant = p2p.implants.ArgusII(encoder=encoder)
+        implant = p2p.implants.retina.ArgusII(encoder=encoder)
         model = p2p.models.retina.BiphasicAxonMapModel(implant=implant)
         percept = model.predict_percept(p2p.stimuli.LogoBVL())
     """
@@ -1221,7 +1221,8 @@ class BiphasicScoreboardModel(Model):
 
         import pulse2percept as p2p
 
-        model = p2p.models.retina.BiphasicScoreboardModel(p2p.implants.ArgusII())
+        model = p2p.models.retina.BiphasicScoreboardModel(
+            p2p.implants.retina.ArgusII())
         train = p2p.stimuli.BiphasicPulseTrain(20, 2 * p2p.units.xTh, 0.45)
         percept = model.predict_percept({'C5': train})
 
@@ -1230,7 +1231,7 @@ class BiphasicScoreboardModel(Model):
 
     .. code-block:: python
 
-        implant = p2p.implants.ArgusII(thresholds=80 * p2p.units.uA)
+        implant = p2p.implants.retina.ArgusII(thresholds=80 * p2p.units.uA)
         model = p2p.models.retina.BiphasicScoreboardModel(implant=implant)
         percept = model.predict_percept(p2p.stimuli.LogoBVL())
     """

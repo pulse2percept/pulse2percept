@@ -8,6 +8,36 @@ from ..stimuli.base import _describe_unit
 from ..units import DimensionMismatchError, as_value, dva, um
 
 
+def _resolve_region(visual_field_map, region, ndim=2):
+    """Return the map region to place implants in.
+
+    Only a single-region map has an unambiguous default, so anything else
+    requires an explicit ``region``. ``ndim`` is what the caller can place on:
+    the generic ensemble anchors each implant at an ``(x, y)`` and so rejects
+    a 3D map, while a device that walks a surface normal passes ``ndim=3``.
+    """
+    if getattr(visual_field_map, 'ndim', 2) > ndim:
+        raise NotImplementedError(
+            f"{type(visual_field_map).__name__} is a "
+            f"{visual_field_map.ndim}D map, and an ensemble places its "
+            f"implants by an (x, y) anchor. Place them yourself with "
+            f"'from_coords', or use a device that knows how to sit on a "
+            f"surface (e.g. Neuralink.from_neuropythy).")
+    regions = list(visual_field_map.from_dva().keys())
+    if region is None:
+        if len(regions) != 1:
+            raise ValueError(f"{type(visual_field_map).__name__} maps to "
+                             f"{len(regions)} regions ({', '.join(regions)}); "
+                             f"pass the one to place implants in as "
+                             f"'region'.")
+        return regions[0]
+    if region not in regions:
+        raise ValueError(f"Unknown region {region!r}. "
+                         f"{type(visual_field_map).__name__} maps to "
+                         f"{', '.join(regions)}.")
+    return region
+
+
 class EnsembleImplant(Implant):
     
     # Frozen class: User cannot add more class attributes
@@ -23,22 +53,34 @@ class EnsembleImplant(Implant):
         return implant
 
     @classmethod
-    def from_cortical_map(cls, implant_type, visual_field_map, locs=None,
-                          xrange=None, yrange=None, step=None, region='v1'):
+    def from_visual_field_map(cls, implant_type, visual_field_map, locs=None,
+                              xrange=None, yrange=None, step=None,
+                              region=None):
         """
-        Create an ensemble implant from a cortical visual field map.
+        Create an ensemble implant from a visual field map.
 
-        The implant will be created by creating an implant of type `implant_type`
-        for each visual field location specified either by locs or by xrange, yrange,
-        and step. Each implant will be centered at the given location.
+        An implant of type ``implant_type`` is created for each visual field
+        location specified either by ``locs`` or by ``xrange``, ``yrange`` and
+        ``step``, and centered at the tissue coordinates the map transforms
+        that location to.
+
+        The map may be retinal, cortical, or any other 2D
+        :py:class:`~pulse2percept.topography.VisualFieldMap`. 3D maps are not
+        supported, because placing an implant on a folded surface needs more
+        than the ``(x, y)`` anchor this method passes on; see
+        :py:meth:`~pulse2percept.implants.cortex.Neuralink.from_neuropythy`.
+
+        .. versionadded:: 0.11.0
+            Replaces ``from_cortical_map``, which knew about cortex
+            specifically.
 
         Parameters
         ----------
-        visual_field_map : p2p.topography.cortex.CorticalMap
-            Visual field map to create implant from.
         implant_type : type
             Type of implant to create for the ensemble. Must subclass
             p2p.implants.Implant
+        visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`
+            Visual field map to create the implant from.
         locs : np.ndarray with shape (n, 2), optional
             Array of visual field locations to create implants at (dva).
             Not needed if using xrange, yrange, and step.
@@ -47,12 +89,13 @@ class EnsembleImplant(Implant):
         step : float or (x_step, y_step), optional
             Spacing (dva) between implant centers.
         region : str, optional
-            Region of cortex to create implant in.
+            Region of tissue to create the implant in, e.g. ``'ret'`` or
+            ``'v1'``. Required unless the map has exactly one region.
 
         Returns
         -------
         ensemble : p2p.implants.EnsembleImplant
-            Ensemble implant created from the cortical visual field map.
+            Ensemble implant created from the visual field map.
 
         Notes
         -----
@@ -63,12 +106,13 @@ class EnsembleImplant(Implant):
            position in microns. See :py:mod:`pulse2percept.units`.
         """
         from ..topography import Grid2D
-        from ..topography.cortex import CorticalMap
-        if not isinstance(visual_field_map, CorticalMap):
+        from ..topography.base import VisualFieldMap
+        if not isinstance(visual_field_map, VisualFieldMap):
             raise TypeError("visual_field_map must be a "
-                            "p2p.topography.cortex.CorticalMap")
+                            "p2p.topography.VisualFieldMap")
         if not issubclass(implant_type, Implant):
             raise TypeError("implant_type must be a sub-type of Implant")
+        region = _resolve_region(visual_field_map, region)
 
         # Where in the *visual field* the implants go; `visual_field_map` turns
         # that into a physical location further down:
@@ -132,8 +176,8 @@ class EnsembleImplant(Implant):
         .. versionchanged:: 0.10.0
             The grid arguments no longer have defaults. They used to fall back
             on ``(-3, 3)`` and ``1``, which are the degrees of visual angle
-            :py:meth:`from_cortical_map` works in; here they are microns, so
-            the default laid every implant out inside a 6 um square.
+            :py:meth:`from_visual_field_map` works in; here they are microns,
+            so the default laid every implant out inside a 6 um square.
 
         """
         from ..topography.base import _rectangular_mesh
@@ -141,7 +185,7 @@ class EnsembleImplant(Implant):
         if not issubclass(implant_type, Implant):
             raise TypeError("implant_type must be a sub-type of Implant")
 
-        # Physical coordinates, unlike the dva ranges `from_cortical_map`
+        # Physical coordinates, unlike the dva ranges `from_visual_field_map`
         # takes:
         locs = as_value(locs, um, 'locs')
         xrange = as_value(xrange, um, 'xrange')
@@ -151,8 +195,9 @@ class EnsembleImplant(Implant):
         if locs is None:
             # There are two ways to say where the implants go, and no default
             # for the second one: a physical grid has no universal extent the
-            # way a visual field does, and the dva defaults `from_cortical_map`
-            # uses would put every implant inside a 6 um square here.
+            # way a visual field does, and the dva defaults
+            # `from_visual_field_map` uses would put every implant inside a
+            # 6 um square here.
             missing = [name for name, value in [('xrange', xrange),
                                                 ('yrange', yrange),
                                                 ('step', step)]

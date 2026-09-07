@@ -6,7 +6,7 @@ Beyeler et al. (2019): Focal percepts with the scoreboard model
 
 This example shows how to apply the
 :py:class:`~pulse2percept.models.retina.ScoreboardModel` to a
-:py:class:`~pulse2percept.implants.Lorach2015Array` implant.
+:py:class:`~pulse2percept.implants.retina.Lorach2015Array` implant.
 
 The scoreboard model is a standard baseline model of retinal prosthesis
 stimulation, which assumes that electrical stimulation leads to the percept
@@ -39,7 +39,7 @@ A model predicts what a *particular* device produces, so the first step is to
 specify a visual prosthesis from the :py:mod:`~pulse2percept.implants` module.
 
 In the following, we use a
-:py:class:`~pulse2percept.implants.Lorach2015Array` in its canonical
+:py:class:`~pulse2percept.implants.retina.Lorach2015Array` in its canonical
 device-local frame.
 
 Creating the model
@@ -65,7 +65,7 @@ and sample it at 0.05deg resolution:
 """
 # sphinx_gallery_thumbnail_number = 2
 
-from pulse2percept.implants import Lorach2015Array
+from pulse2percept.implants.retina import Lorach2015Array
 from pulse2percept.models.retina import ScoreboardModel
 
 implant = Lorach2015Array()

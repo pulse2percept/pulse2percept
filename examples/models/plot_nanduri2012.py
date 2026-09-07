@@ -57,8 +57,9 @@ electrode_array = ElectrodeArray(DiskElectrode(0, 0, 0, 260))
 
 ###############################################################################
 # Usually we would use a predefined retinal implant such as
-# :py:class:`~pulse2percept.implants.ArgusII` or
-# :py:class:`~pulse2percept.implants.AlphaIMS`. Alternatively, we can wrap the
+# :py:class:`~pulse2percept.implants.retina.ArgusII` or
+# :py:class:`~pulse2percept.implants.retina.AlphaIMS`. Alternatively, we can
+# wrap the
 # electrode array created above with a
 # :py:class:`~pulse2percept.implants.Implant` to create our own
 # retinal implant:

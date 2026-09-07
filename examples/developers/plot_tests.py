@@ -413,8 +413,9 @@ A few things to observe here:
     You would import :py:class:`~pulse2percept.stimuli.Stimulus` by writing
     ``from .base import Stimulus``, because it lives in the same directory
     (".") in the file "base.py".
-    Similarly, you could import :py:class:`~pulse2percept.implants.ArgusII` via
-    ``from ..implants import ArgusII``.
+    Similarly, you could import
+    :py:class:`~pulse2percept.implants.retina.ArgusII` via
+    ``from ..implants.retina import ArgusII``.
 
 .. _exception class: https://docs.python.org/3/library/exceptions.html
 .. _isinstance: https://www.programiz.com/python-programming/methods/built-in/isinstance

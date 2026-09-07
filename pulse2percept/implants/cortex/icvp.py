@@ -1,12 +1,12 @@
 """:py:class:`~pulse2percept.implants.cortex.ICVP`"""
 import numpy as np
 
-from ..base import Implant
+from .base import CorticalImplant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 
 
-class ICVP(Implant):
+class ICVP(CorticalImplant):
     """Create an ICVP array
 
     Electrode coordinates are device-local, with the base centered at
@@ -31,6 +31,9 @@ class ICVP(Implant):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
+    hemisphere : 'LH', 'RH' or None, optional
+        Which hemisphere the device is implanted in. Metadata: it does not
+        move the array, which the model's ``implant_position`` places.
 
     Examples
     --------
@@ -62,9 +65,10 @@ class ICVP(Implant):
 
     placement = 'intracortical'
 
-    def __init__(self, preprocess=False, safe_mode=False):
+    def __init__(self, preprocess=False, safe_mode=False, hemisphere=None):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+        self.hemisphere = hemisphere
         self.shape = (5, 4)
         spacing = 400
         names = np.array(

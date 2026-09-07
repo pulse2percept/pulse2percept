@@ -10,9 +10,10 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 import time
 
-from pulse2percept.implants import (ArgusI, ArgusII, DiskElectrode,
-                                    ElectrodeArray, Implant, PRIMAPivotal,
+from pulse2percept.implants import (DiskElectrode, ElectrodeArray, Implant,
                                     SquareElectrode)
+from pulse2percept.implants.retina import (ArgusI, ArgusII, PRIMAPivotal,
+                                           RetinalImplant)
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    BostonTrain, ImageStimulus, LogoBVL,
@@ -1925,9 +1926,9 @@ def test_SpatialModel_visual_field_map_is_the_canonical_name():
 
 
 
-def _implant_at(coords):
+def _implant_at(coords, cls=Implant):
     """A disk-electrode implant at the given tissue coordinates (um)"""
-    return Implant(ElectrodeArray(
+    return cls(ElectrodeArray(
         {f'A{i}': DiskElectrode(x, y, 0, 100)
          for i, (x, y) in enumerate(coords)}))
 
@@ -2090,8 +2091,9 @@ def test_location_noise_keeps_the_axon_map_kernel_joint():
     offsets = model._location_noise_z[rows]
     x_ret, y_ret = vfmap.dva_to_ret(x_dva + offsets[:, 0],
                                     y_dva + offsets[:, 1])
-    displaced = AxonMapSpatial(_implant_at(list(zip(x_ret, y_ret))),
-                               **kwargs).build()
+    displaced = AxonMapSpatial(
+        _implant_at(list(zip(x_ret, y_ret)), cls=RetinalImplant),
+        **kwargs).build()
     npt.assert_allclose(displaced.predict_percept({'A0': 1, 'A1': 1}).data,
                         joint, atol=1e-5)
 
@@ -2162,14 +2164,14 @@ def test_location_noise_rejects_3d_maps():
                                 **kwargs).build()
 
 
-def _square_implant():
+def _square_implant(cls=Implant):
     """Two square electrodes on the local +x axis, one at the origin
 
     Square bodies are asymmetric under rotation, so a plot that only moves
     electrode centers reads back differently from one that turns the device.
     """
-    return Implant(ElectrodeArray({'A1': SquareElectrode(0, 0, 0, 200),
-                                   'A2': SquareElectrode(600, 0, 0, 200)}))
+    return cls(ElectrodeArray({'A1': SquareElectrode(0, 0, 0, 200),
+                               'A2': SquareElectrode(600, 0, 0, 200)}))
 
 
 def _square_model(**params):
@@ -2278,7 +2280,7 @@ def _drawn_substrate(ax):
 
 def test_show_implant_works_on_the_axon_map_plot():
     """`AxonMapSpatial.plot` draws its own anatomical window"""
-    implant = _square_implant()
+    implant = _square_implant(cls=RetinalImplant)
     model = AxonMapSpatial(implant, rho=200, xrange=(-4, 4), yrange=(-4, 4),
                            step=0.5, implant_position=(1200, -400) * um,
                            implant_rotation=15)

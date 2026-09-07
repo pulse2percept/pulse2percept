@@ -12,7 +12,7 @@ from skimage.transform import (estimate_transform as img_transform,
 import matplotlib.pyplot as plt
 from matplotlib import patches
 
-from ..implants import ArgusI, ArgusII
+from ..implants.retina import ArgusI, ArgusII
 from ..models.retina import AxonMapModel
 from ..units import as_value, deg, um
 from ..utils import scale_image, center_image
@@ -105,7 +105,8 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
         The Beyeler2019 dataset, a subset thereof, or a DataFrame with
         identical organization (i.e., must contain columns 'subject', 'image',
         'xrange', and 'yrange').
-    argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
+    argus : :py:class:`~pulse2percept.implants.retina.ArgusI` or
+            :py:class:`~pulse2percept.implants.retina.ArgusII`
         Either an Argus I or Argus II implant. If None, the data must contain
         an "implant_type_str" column naming the device, either "ArgusI" or
         "ArgusII". Where it was implanted comes from ``implant_position`` and
@@ -292,7 +293,8 @@ def plot_argus_simulated_phosphenes(percepts, argus, scale=1.0,
     percepts : :py:class:`~pulse2percept.percepts.Percept`
         A Percept object containing multiple frames, where each frame is the
         percept produced by activating a single electrode.
-    argus : :py:class:`~pulse2percept.implants.ArgusI` or :py:class:`~pulse2percept.implants.ArgusII`
+    argus : :py:class:`~pulse2percept.implants.retina.ArgusI` or
+            :py:class:`~pulse2percept.implants.retina.ArgusII`
         Either an Argus I or Argus II implant
     scale : float
         Scaling factor to apply to the phosphenes

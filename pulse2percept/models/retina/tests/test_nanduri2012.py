@@ -3,8 +3,9 @@ import numpy.testing as npt
 import pytest
 import copy
 
-from pulse2percept.implants import (DiskElectrode, PointSource, ElectrodeArray,
-                                    Implant, ArgusI)
+from pulse2percept.implants import (DiskElectrode, PointSource,
+                                    ElectrodeArray, Implant)
+from pulse2percept.implants.retina import ArgusI
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.percepts import Percept
 from pulse2percept.models.retina import (Nanduri2012Model, Nanduri2012Spatial,

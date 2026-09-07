@@ -1,8 +1,8 @@
-""":py:class:`~pulse2percept.implants.PhotovoltaicPixel`,
-   :py:class:`~pulse2percept.implants.PRIMAPivotal`,
-   :py:class:`~pulse2percept.implants.Lorach2015Array`,
-   :py:class:`~pulse2percept.implants.Ho2019FlatArray`,
-   :py:class:`~pulse2percept.implants.Huang2021Array`"""
+""":py:class:`~pulse2percept.implants.retina.PhotovoltaicPixel`,
+   :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`,
+   :py:class:`~pulse2percept.implants.retina.Lorach2015Array`,
+   :py:class:`~pulse2percept.implants.retina.Ho2019FlatArray`,
+   :py:class:`~pulse2percept.implants.retina.Huang2021Array`"""
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon, RegularPolygon
@@ -10,15 +10,15 @@ from matplotlib.patches import Circle, Polygon, RegularPolygon
 import numpy as np
 from collections.abc import Sequence
 
-from .base import Implant
-from .electrodes import HexElectrode
-from .electrode_arrays import ElectrodeGrid
-from ..stimuli import PRIMAEncoder
-from ..stimuli.base import _describe_unit
-from ..stimuli.encoders import _OpticalStimulus
-from ..units import DimensionMismatchError, as_value, mW, mm, um
-from ..utils import deprecated
-from ..utils.constants import MS_PER_S, ZORDER
+from .base import RetinalImplant
+from ..electrodes import HexElectrode
+from ..electrode_arrays import ElectrodeGrid
+from ...stimuli import PRIMAEncoder
+from ...stimuli.base import _describe_unit
+from ...stimuli.encoders import _OpticalStimulus
+from ...units import DimensionMismatchError, as_value, mW, mm, um
+from ...utils import deprecated
+from ...utils.constants import MS_PER_S, ZORDER
 
 # Distinguish the default PRIMAEncoder from ``encoder=None``.
 _DEVICE_DEFAULT = object()
@@ -272,7 +272,7 @@ class PhotovoltaicPixel(HexElectrode):
         raise NotImplementedError
 
 
-class PRIMAPivotal(Implant):
+class PRIMAPivotal(RetinalImplant):
     """Create the PRIMA array used in the pivotal PRIMAvera trial
     
     The implant has 378 photovoltaic pixels, each 100 um wide on a 100 um
@@ -489,7 +489,7 @@ class PRIMAPivotal(Implant):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Lorach2015Array(Implant):
+class Lorach2015Array(RetinalImplant):
     """Create the 70 um photovoltaic array of [Lorach2015]_
     
     The array has 142 pixels, each 70 um wide on a 75 um hexagonal grid, with a
@@ -596,7 +596,7 @@ class Lorach2015Array(Implant):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Ho2019FlatArray(Implant):
+class Ho2019FlatArray(RetinalImplant):
     """Create a flat photovoltaic array of [Ho2019]_
     
     Supports the F55 and F40 arrays on a 1 mm substrate:
@@ -704,7 +704,7 @@ class Ho2019FlatArray(Implant):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Huang2021Array(Implant):
+class Huang2021Array(RetinalImplant):
     """Create a vertical-junction photovoltaic array of [Huang2021]_
     
     Supports four arrays on a 1.5 mm substrate. Only exposed pixels are modeled
@@ -865,7 +865,7 @@ class PRIMA(PRIMAPivotal):
     """Deprecated name for the pivotal-trial PRIMA array.
     
     .. deprecated:: 0.11.0
-        Use :py:class:`~pulse2percept.implants.PRIMAPivotal` instead.
+        Use :py:class:`~pulse2percept.implants.retina.PRIMAPivotal` instead.
     """
     __slots__ = ()
 
@@ -878,6 +878,6 @@ class PRIMA75(Lorach2015Array):
     """Deprecated name for the 70 um array of [Lorach2015]_.
     
     .. deprecated:: 0.11.0
-        Use :py:class:`~pulse2percept.implants.Lorach2015Array` instead.
+        Use :py:class:`~pulse2percept.implants.retina.Lorach2015Array` instead.
     """
     __slots__ = ()

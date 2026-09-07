@@ -6,14 +6,16 @@ Simulating Argus II
 Background
 ----------
 
-:py:class:`~pulse2percept.implants.ArgusII` is an epiretinal implant developed
+:py:class:`~pulse2percept.implants.retina.ArgusII` is an epiretinal implant
+developed
 by Second Sight Medical Products, Inc. (Sylmar, CA).
 Now discontinued, it was the first retinal implant to get FDA approval in the US
 and the CE mark in Europe, and has been implanted in close to 500 patients
 worldwide.
 
 A number of studies have documented how the artificial vision provided by
-:py:class:`~pulse2percept.implants.ArgusII` (Second Sight Medical Products, Inc.)
+:py:class:`~pulse2percept.implants.retina.ArgusII`
+(Second Sight Medical Products, Inc.)
 differs from normal sight.
 Argus II contains 60 electrodes of 225 um diameter arranged in a 6 x 10
 grid (575 um center-to-center separation) [Yue2020]_.
@@ -61,7 +63,7 @@ fig.tight_layout()
 # (``lam``) as well as the visual field we would like to simulate (given
 # in degrees of visual angle):
 
-implant = p2p.implants.ArgusII()
+implant = p2p.implants.retina.ArgusII()
 model = p2p.models.retina.AxonMapModel(implant=implant, rho=400, lam=200,
                                        xrange=(-12, 12), yrange=(-8, 8))
 model.build()

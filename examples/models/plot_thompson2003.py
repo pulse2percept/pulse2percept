@@ -21,8 +21,9 @@ import numpy as np
 import pulse2percept as p2p
 
 # A model predicts what a particular device produces, so it is bound to one.
-# Here we will use an :py:class:`~pulse2percept.implants.ArgusII` implant:
-implant = p2p.implants.ArgusII()
+# Here we will use an :py:class:`~pulse2percept.implants.retina.ArgusII`
+# implant:
+implant = p2p.implants.retina.ArgusII()
 model = p2p.models.retina.Thompson2003Model(implant=implant, step=0.2, dropout=0.1)
 
 ###############################################################################

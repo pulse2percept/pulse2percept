@@ -1130,7 +1130,7 @@ def test_Percept_rgb_temporal_plot():
 
 def test_model_prediction_stays_grayscale():
     """Adding RGB must not change what a model returns"""
-    from pulse2percept.implants import ArgusII
+    from pulse2percept.implants.retina import ArgusII
     from pulse2percept.models.retina import ScoreboardModel
     model = ScoreboardModel(implant=ArgusII(), rho=200, xrange=(-4, 4),
                             yrange=(-4, 4), step=1).build()

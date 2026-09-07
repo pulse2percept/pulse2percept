@@ -1,11 +1,11 @@
 """:py:class:`~pulse2percept.implants.cortex.Cortivis`"""
 import numpy as np
 
-from ..base import Implant
+from .base import CorticalImplant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 
-class Cortivis(Implant):
+class Cortivis(CorticalImplant):
     """Create a Cortivis array
     
     Electrode coordinates are device-local, with the base centered at
@@ -28,6 +28,9 @@ class Cortivis(Implant):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
+    hemisphere : 'LH', 'RH' or None, optional
+        Which hemisphere the device is implanted in. Metadata: it does not
+        move the array, which the model's ``implant_position`` places.
 
     Examples
     --------
@@ -52,9 +55,10 @@ class Cortivis(Implant):
     # depth of shanks: 1.5mm
     placement = 'intracortical'
 
-    def __init__(self, preprocess=False, safe_mode=False):
+    def __init__(self, preprocess=False, safe_mode=False, hemisphere=None):
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+        self.hemisphere = hemisphere
         self.shape = (10, 10)
         spacing = 400
         names = ['01','1','2','3','4','5','6','7','8','02'] \

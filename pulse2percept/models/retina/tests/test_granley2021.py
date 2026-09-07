@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 
-from pulse2percept.implants import ArgusI, ArgusII
+from pulse2percept.implants.retina import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulseTrain,
@@ -1219,7 +1219,7 @@ def test_BiphasicScoreboard_rejects_unstructured_stimuli(model_cls,
 def test_BiphasicScoreboard_rejects_normalized_drive(model_cls):
     # ScoreboardSpatial visualizes photovoltaic drive; this model cannot,
     # because normalized drive names no pulse:
-    from pulse2percept.implants import PRIMAPivotal
+    from pulse2percept.implants.retina import PRIMAPivotal
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
         model = model_cls(implant=PRIMAPivotal(), rho=200, step=0.5,

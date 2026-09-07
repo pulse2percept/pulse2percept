@@ -7,7 +7,7 @@ Granley et al. (2021): Effects of Biphasic Pulse Parameters with the BiphasicAxo
 This example shows how to use the
 :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel` to model the effects of 
 biphasic pulse train parameters phosphene appearance in an epiretinal
-implant such as :py:class:`~pulse2percept.implants.ArgusII`. 
+implant such as :py:class:`~pulse2percept.implants.retina.ArgusII`. 
 
 Biphasic pulse trains are a commonly used type of stimulus in visual prostheses. 
 This model enhances the :py:class:`~pulse2percept.models.retina.AxonMapModel` to reflect
@@ -45,7 +45,7 @@ with the exception that all stimuli are required to be :py:class:`~pulse2percept
 
 import matplotlib.pyplot as plt
 import numpy as np
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models.retina import BiphasicAxonMapModel
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.units import uA, xTh

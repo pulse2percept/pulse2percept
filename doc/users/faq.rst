@@ -69,7 +69,7 @@ and predict the resulting percept:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
+    from pulse2percept.implants.retina import ArgusII
     from pulse2percept.models.retina import ScoreboardModel
 
     model = ScoreboardModel(implant=ArgusII())
@@ -232,7 +232,7 @@ Model parameters can usually be passed when the model is created:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
+    from pulse2percept.implants.retina import ArgusII
     from pulse2percept.models.retina import AxonMapModel
     from pulse2percept.units import um
 
@@ -271,7 +271,7 @@ For example:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
+    from pulse2percept.implants.retina import ArgusII
     from pulse2percept.models.retina import AxonMapModel
 
     model = AxonMapModel(
@@ -319,7 +319,7 @@ Most pulse2percept simulations involve four objects, plus an optional encoder:
 :py:class:`~pulse2percept.implants.Implant`
     Describes the prosthetic device, including its electrode array, placement,
     and input/encoding pipeline. Specific devices such as
-    :py:class:`~pulse2percept.implants.ArgusII` are subclasses of this object.
+    :py:class:`~pulse2percept.implants.retina.ArgusII` are subclasses of this object.
 
 :py:class:`~pulse2percept.models.Model`
     A forward model that predicts a neural response or visual percept from the
@@ -368,7 +368,7 @@ frequency.
 
 Devices whose video processing is known carry an encoder of their own, in
 which case handing the model an image encodes it for you.
-:py:class:`~pulse2percept.implants.ArgusII` is one of them. Assign a different
+:py:class:`~pulse2percept.implants.retina.ArgusII` is one of them. Assign a different
 encoder to ``implant.encoder`` to say how the encoding should be done, or
 ``None`` to switch it off.
 
@@ -393,7 +393,7 @@ For example:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
+    from pulse2percept.implants.retina import ArgusII
     from pulse2percept.models import Model, FadingTemporal
     from pulse2percept.models.retina import ScoreboardSpatial
 
@@ -501,14 +501,14 @@ For example:
 
 .. code-block:: python
 
-    from pulse2percept.implants import ArgusII
+    from pulse2percept.implants.retina import ArgusII
     from pulse2percept.models.retina import ScoreboardModel
     from pulse2percept.stimuli import BostonTrain
 
     model = ScoreboardModel(implant=ArgusII())
     percept = model.predict_percept(BostonTrain())
 
-:py:class:`~pulse2percept.implants.ArgusII` comes with an encoder of its own,
+:py:class:`~pulse2percept.implants.retina.ArgusII` comes with an encoder of its own,
 so the video is encoded for you. To say how, give the implant a different one:
 
 .. code-block:: python

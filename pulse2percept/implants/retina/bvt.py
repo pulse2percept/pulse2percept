@@ -1,14 +1,14 @@
-""":py:class:`~pulse2percept.implants.BVT24`, 
-   :py:class:`~pulse2percept.implants.BVT44`"""
+""":py:class:`~pulse2percept.implants.retina.BVT24`, 
+   :py:class:`~pulse2percept.implants.retina.BVT44`"""
 import numpy as np
 
-from .base import Implant
-from .electrodes import DiskElectrode
-from .electrode_arrays import ElectrodeArray, ElectrodeGrid
-from ..units import as_value, um
+from .base import RetinalImplant
+from ..electrodes import DiskElectrode
+from ..electrode_arrays import ElectrodeArray, ElectrodeGrid
+from ...units import as_value, um
 
 
-class BVT24(Implant):
+class BVT24(RetinalImplant):
     """24-channel suprachoroidal retinal prosthesis
 
     This class creates a 24-channel suprachoroidal retinal prosthesis
@@ -119,7 +119,7 @@ class BVT24(Implant):
 
 
 
-class BVT44(Implant):
+class BVT44(RetinalImplant):
     """    44-channel suprachoroidal retinal prosthesis
 
     This class creates a 44-channel suprachoroidal retinal prosthesis

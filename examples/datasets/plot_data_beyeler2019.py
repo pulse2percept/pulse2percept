@@ -90,13 +90,14 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 # For this we can use :py:func:`~pulse2percept.plotting.plot_argus_phosphenes` from
 # the :py:mod:`~pulse2percept.plotting` module.
 # In addition to the ``data`` matrix, the function will also want an
-# :py:class:`~pulse2percept.implants.ArgusII` object implanted at the correct
+# :py:class:`~pulse2percept.implants.retina.ArgusII` object implanted at the
+# correct
 # location.
 #
 # [Beyeler2019]_ reports an implant position of ``(-1331, -850)`` um
 # and a rotation of -28.4 degrees:
 
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.units import um
 argus = ArgusII(eye='RE')
 implant_position = (-1331, -850) * um

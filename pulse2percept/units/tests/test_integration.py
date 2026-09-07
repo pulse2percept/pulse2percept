@@ -12,8 +12,9 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.implants import (ArgusII, DiskElectrode, ElectrodeGrid,
+from pulse2percept.implants import (DiskElectrode, ElectrodeGrid,
                                     EnsembleImplant, Implant)
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
 from pulse2percept.models.retina import AxonMapSpatial, ScoreboardSpatial
@@ -185,12 +186,12 @@ def test_every_spelling_builds_the_same_object():
                                       step=a).build(), angle, angles,
           lambda m: m.predict_percept(source).data,
           'ScoreboardSpatial.xrange')
-    _same(lambda a: EnsembleImplant.from_cortical_map(
+    _same(lambda a: EnsembleImplant.from_visual_field_map(
         Cortivis, Polimeni2006Map(), xrange=(-a, a), yrange=(-a, a),
         step=2 * a), angle, angles,
         lambda e: np.array([[el.x, el.y]
                             for el in e.electrode_array.electrode_objects]),
-        'EnsembleImplant.from_cortical_map')
+        'EnsembleImplant.from_visual_field_map')
     _same(lambda a: Watson2014Map().dva_to_ret(a, a), angle, angles,
           lambda xy: np.asarray(xy, dtype=float), 'Watson2014Map.dva_to_ret')
 

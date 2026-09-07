@@ -2,8 +2,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 
-from pulse2percept import implants
-from pulse2percept.implants import SequentialRaster
+from pulse2percept.implants import retina, SequentialRaster
 from pulse2percept.models.retina import AxonMapModel
 from pulse2percept.stimuli import AmplitudeEncoder, BostonTrain, LogoBVL
 from pulse2percept.units import DimensionMismatchError, uA
@@ -15,7 +14,7 @@ def test_ArgusI(ztype):
     # Height `z` can either be a float or a list
     z = 100 if ztype == 'float' else np.ones(16) * 20
 
-    argus = implants.ArgusI(z=z)
+    argus = retina.ArgusI(z=z)
 
     # Slots:
     npt.assert_equal(hasattr(argus, '__slots__'), True)
@@ -43,13 +42,13 @@ def test_ArgusI(ztype):
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
-        implants.ArgusI(z=np.zeros(5))
+        retina.ArgusI(z=np.zeros(5))
     with pytest.raises(ValueError):
-        implants.ArgusI(z=[1, 2, 3])
+        retina.ArgusI(z=[1, 2, 3])
 
     # Indexing must work for both integers and electrode names
     for use_legacy_names in [True, False]:
-        argus = implants.ArgusI(use_legacy_names=use_legacy_names)
+        argus = retina.ArgusI(use_legacy_names=use_legacy_names)
         for idx, (name, electrode) in enumerate(argus.electrodes.items()):
             npt.assert_equal(electrode, argus[idx])
             npt.assert_equal(electrode, argus[name])
@@ -57,32 +56,32 @@ def test_ArgusI(ztype):
             argus["unlikely name for an electrode"]
 
     # Right-eye implant:
-    argus_re = implants.ArgusI(eye='RE')
+    argus_re = retina.ArgusI(eye='RE')
     npt.assert_equal(argus_re['D1'].x > argus_re['A1'].x, True)
     npt.assert_almost_equal(argus_re['D1'].y, argus_re['A1'].y)
 
     # need to adjust for reflection about y-axis
     # Left-eye implant:
-    argus_le = implants.ArgusI(eye='LE')
+    argus_le = retina.ArgusI(eye='LE')
     npt.assert_equal(argus_le['A1'].x > argus_le['D4'].x, True)
     npt.assert_almost_equal(argus_le['D1'].y, argus_le['A1'].y)
 
     # Check naming scheme
-    argus = implants.ArgusI(use_legacy_names=False)
+    argus = retina.ArgusI(use_legacy_names=False)
     npt.assert_equal(argus.electrode_names[15], 'D4')
     npt.assert_equal(argus.electrode_names[0], 'A1')
 
-    argus = implants.ArgusI(use_legacy_names=True)
+    argus = retina.ArgusI(use_legacy_names=True)
     npt.assert_equal(argus.electrode_names[15], 'M1')
     npt.assert_equal(argus.electrode_names[0], 'L6')
 
     # Prepare a stimulus via dict:
-    stim = implants.ArgusI().prepare_stim({'B3': 13})
+    stim = retina.ArgusI().prepare_stim({'B3': 13})
     npt.assert_equal(stim.shape, (1, 1))
     npt.assert_equal(stim.electrodes, ['B3'])
 
     # Prepare a stimulus via array:
-    stim = implants.ArgusI().prepare_stim(np.ones(16))
+    stim = retina.ArgusI().prepare_stim(np.ones(16))
     npt.assert_equal(stim.shape, (16, 1))
     npt.assert_almost_equal(stim.data, 1)
 
@@ -92,7 +91,7 @@ def test_ArgusII(ztype):
     # Create an ArgusII and make sure location is correct
     # Height `h` can either be a float or a list
     z = 100 if ztype == 'float' else np.ones(60) * 20
-    argus = implants.ArgusII(z=z)
+    argus = retina.ArgusII(z=z)
 
     # Slots:
     npt.assert_equal(hasattr(argus, '__slots__'), True)
@@ -115,12 +114,12 @@ def test_ArgusII(ztype):
 
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
-        implants.ArgusII(z=np.zeros(5))
+        retina.ArgusII(z=np.zeros(5))
     with pytest.raises(ValueError):
-        implants.ArgusII(z=[1, 2, 3])
+        retina.ArgusII(z=[1, 2, 3])
 
     # Indexing must work for both integers and electrode names
-    argus = implants.ArgusII()
+    argus = retina.ArgusII()
     for idx, (name, electrode) in enumerate(argus.electrodes.items()):
         npt.assert_equal(electrode, argus[idx])
         npt.assert_equal(electrode, argus[name])
@@ -128,22 +127,22 @@ def test_ArgusII(ztype):
         argus["unlikely name for an electrode"]
 
     # Right-eye implant:
-    argus_re = implants.ArgusII(eye='RE')
+    argus_re = retina.ArgusII(eye='RE')
     npt.assert_equal(argus_re['A10'].x > argus_re['A1'].x, True)
     npt.assert_almost_equal(argus_re['A10'].y, argus_re['A1'].y)
 
     # Left-eye implant:
-    argus_le = implants.ArgusII(eye='LE')
+    argus_le = retina.ArgusII(eye='LE')
     npt.assert_equal(argus_le['A1'].x > argus_le['A10'].x, True)
     npt.assert_almost_equal(argus_le['A10'].y, argus_le['A1'].y)
 
     # Prepare a stimulus via dict:
-    stim = implants.ArgusII().prepare_stim({'B7': 13})
+    stim = retina.ArgusII().prepare_stim({'B7': 13})
     npt.assert_equal(stim.shape, (1, 1))
     npt.assert_equal(stim.electrodes, ['B7'])
 
     # Prepare a stimulus via array:
-    stim = implants.ArgusII().prepare_stim(np.ones(60))
+    stim = retina.ArgusII().prepare_stim(np.ones(60))
     npt.assert_equal(stim.shape, (60, 1))
     npt.assert_almost_equal(stim.data, 1)
 
@@ -151,7 +150,7 @@ def test_ArgusII(ztype):
 def test_ArgusII_defaults():
     """Argus II brings its own encoder and raster, and each instance a fresh one
     """
-    argus = implants.ArgusII()
+    argus = retina.ArgusII()
     # 6 Hz amplitude modulation, which is the rate the device runs video at:
     npt.assert_equal(isinstance(argus.encoder, AmplitudeEncoder), True)
     npt.assert_almost_equal(argus.encoder.freq, 6)
@@ -166,7 +165,7 @@ def test_ArgusII_defaults():
 
     # Each instance gets its own, so tweaking one implant's does not reach
     # every other Argus II in the session:
-    other = implants.ArgusII()
+    other = retina.ArgusII()
     npt.assert_equal(other.encoder is argus.encoder, False)
     npt.assert_equal(other.raster is argus.raster, False)
     other.encoder.freq = 20
@@ -174,35 +173,35 @@ def test_ArgusII_defaults():
 
     # An explicit None switches each feature off, and is told apart from the
     # argument simply not being given:
-    npt.assert_equal(implants.ArgusII(encoder=None).encoder, None)
-    npt.assert_equal(implants.ArgusII(raster=None).raster, None)
-    npt.assert_equal(implants.ArgusII(raster=None).encoder is None, False)
+    npt.assert_equal(retina.ArgusII(encoder=None).encoder, None)
+    npt.assert_equal(retina.ArgusII(raster=None).raster, None)
+    npt.assert_equal(retina.ArgusII(raster=None).encoder is None, False)
     # ... and switching the raster off really does stop the multiplexing: every
     # electrode then fires on the same schedule, at the same instant.
-    unrastered = implants.ArgusII(raster=None).prepare_stim(LogoBVL())
+    unrastered = retina.ArgusII(raster=None).prepare_stim(LogoBVL())
     npt.assert_equal(unrastered.metadata['encoder']['cycle'], None)
     # There is an instant at which every electrode is at its own peak, so the
     # stimulator has to source the whole array at once:
     npt.assert_almost_equal(np.abs(unrastered.data).sum(axis=0).max(),
                             np.abs(unrastered.data).max(axis=1).sum(),
                             decimal=3)
-    rastered = implants.ArgusII().prepare_stim(LogoBVL())
+    rastered = retina.ArgusII().prepare_stim(LogoBVL())
     npt.assert_array_less(np.abs(rastered.data).sum(axis=0).max(),
                           np.abs(unrastered.data).sum(axis=0).max())
     # ... and either can be replaced outright:
-    custom = implants.ArgusII(encoder=AmplitudeEncoder(freq=20),
+    custom = retina.ArgusII(encoder=AmplitudeEncoder(freq=20),
                               raster=SequentialRaster(3))
     npt.assert_almost_equal(custom.encoder.freq, 20)
     npt.assert_equal(custom.raster.n_groups, 3)
     with pytest.raises(TypeError):
-        implants.ArgusII(encoder='amplitude')
+        retina.ArgusII(encoder='amplitude')
     with pytest.raises(TypeError):
-        implants.ArgusII(raster='line')
+        retina.ArgusII(raster='line')
 
 
 def test_ArgusII_encodes_pictures_on_preparation():
     """The device's own defaults are what make `prepare_stim(picture)` work"""
-    argus = implants.ArgusII()
+    argus = retina.ArgusII()
     stim = argus.prepare_stim(LogoBVL())
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.shape[0], argus.n_electrodes)
@@ -230,7 +229,7 @@ def test_ArgusII_encodes_pictures_on_preparation():
     # Without an encoder the very same picture is refused, since there is no
     # default mapping from a gray level onto an amplitude:
     with pytest.raises(DimensionMismatchError):
-        implants.ArgusII(encoder=None).prepare_stim(LogoBVL())
+        retina.ArgusII(encoder=None).prepare_stim(LogoBVL())
 
     # And the whole point of it: a picture goes straight into a model, with no
     # encoding step for the caller to spell out.

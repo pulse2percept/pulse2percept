@@ -8,7 +8,7 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 
-from pulse2percept.implants import ArgusI, ArgusII
+from pulse2percept.implants.retina import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.models.retina import Thompson2003Spatial, Thompson2003Model
 from pulse2percept.topography.retina import (Curcio1990Map,

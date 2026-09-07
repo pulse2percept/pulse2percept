@@ -6,9 +6,9 @@ import numpy.testing as npt
 import pytest
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants import (ArgusII, CustomRaster, DiskElectrode,
-                                    GridImplant, PRIMAPivotal,
+from pulse2percept.implants import (CustomRaster, DiskElectrode, GridImplant,
                                     SequentialRaster)
+from pulse2percept.implants.retina import ArgusII, PRIMAPivotal
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, BostonTrain, Encoder,
                                    FrequencyEncoder, ImageStimulus,

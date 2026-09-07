@@ -134,10 +134,11 @@ stim.plot(kind='traces')
 # Stacked waveforms stop being readable at more than a handful of electrodes,
 # so :py:meth:`~pulse2percept.stimuli.Stimulus.plot` draws a whole
 # multi-electrode stimulus as an electrode-by-time heatmap. Here are all 60
-# electrodes of an :py:class:`~pulse2percept.implants.ArgusII`, driven by an
+# electrodes of an :py:class:`~pulse2percept.implants.retina.ArgusII`, driven
+# by an
 # amplitude-encoded eye chart:
 
-from pulse2percept.implants import ArgusII
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.stimuli import AmplitudeEncoder, SnellenChart
 
 implant = ArgusII()

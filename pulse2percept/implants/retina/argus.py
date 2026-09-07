@@ -1,14 +1,14 @@
-""":py:class:`~pulse2percept.implants.ArgusI`,
-   :py:class:`~pulse2percept.implants.ArgusII`"""
+""":py:class:`~pulse2percept.implants.retina.ArgusI`,
+   :py:class:`~pulse2percept.implants.retina.ArgusII`"""
 import numpy as np
 from collections import OrderedDict
 
-from .base import Implant
-from .electrodes import DiskElectrode
-from .electrode_arrays import ElectrodeGrid
-from .rasters import SequentialRaster
-from ..stimuli import AmplitudeEncoder
-from ..units import Hz, ms
+from .base import RetinalImplant
+from ..electrodes import DiskElectrode
+from ..electrode_arrays import ElectrodeGrid
+from ..rasters import SequentialRaster
+from ...stimuli import AmplitudeEncoder
+from ...units import Hz, ms
 
 # Distinguishes "the caller said nothing", which gets the device's own default,
 # from an explicit None, which switches the feature off. A plain None default
@@ -16,7 +16,7 @@ from ..units import Hz, ms
 _DEVICE_DEFAULT = object()
 
 
-class ArgusI(Implant):
+class ArgusI(RetinalImplant):
     """Create an Argus I array
 
     Electrode coordinates are device-local, centered on ``(0, 0)``.
@@ -73,7 +73,7 @@ class ArgusI(Implant):
     --------
     Create an Argus I array:
 
-    >>> from pulse2percept.implants import ArgusI
+    >>> from pulse2percept.implants.retina import ArgusI
     >>> ArgusI()  # doctest: +NORMALIZE_WHITESPACE
     ArgusI(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
            safe_mode=False, shape=(4, 4))
@@ -146,7 +146,7 @@ class ArgusI(Implant):
         return params
 
 
-class ArgusII(Implant):
+class ArgusII(RetinalImplant):
     """Create an Argus II array
 
     Electrode coordinates are device-local, centered on ``(0, 0)``.
@@ -221,7 +221,7 @@ class ArgusII(Implant):
     --------
     Create an Argus II array:
 
-    >>> from pulse2percept.implants import ArgusII
+    >>> from pulse2percept.implants.retina import ArgusII
     >>> ArgusII()  # doctest: +NORMALIZE_WHITESPACE
     ArgusII(electrode_array=ElectrodeGrid, encoder=AmplitudeEncoder, eye='RE',
             preprocess=True, raster=SequentialRaster, safe_mode=False,

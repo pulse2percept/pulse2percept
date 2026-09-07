@@ -20,7 +20,7 @@ For example:
     import pulse2percept as p2p
     from pulse2percept.units import Hz, ms, uA
 
-    implant = p2p.implants.ArgusII()
+    implant = p2p.implants.retina.ArgusII()
     model = p2p.models.retina.AxonMapModel(implant=implant)
 
     stim = {'A5': p2p.stimuli.BiphasicPulseTrain(
@@ -57,7 +57,7 @@ easiest way is to give the implant an encoder:
 
 .. code-block:: python
 
-    implant = p2p.implants.ArgusII(
+    implant = p2p.implants.retina.ArgusII(
         encoder=p2p.stimuli.AmplitudeEncoder(
             amp_range=(0, 50 * uA),
             freq=20 * Hz,

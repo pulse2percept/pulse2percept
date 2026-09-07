@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 from pulse2percept.implants.base import Implant
-from pulse2percept.implants.bvt import BVT24, BVT44
+from pulse2percept.implants.retina.bvt import BVT24, BVT44
 
 
 @pytest.mark.parametrize('eye', ('LE', 'RE'))

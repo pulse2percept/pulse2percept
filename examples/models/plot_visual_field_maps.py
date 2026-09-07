@@ -131,7 +131,7 @@ plt.show()
 # produces an approximately regular grid of phosphenes. Adding
 # ``location_noise`` moves those phosphenes off the grid:
 
-implant = p2p.implants.ArgusII(raster=None)
+implant = p2p.implants.retina.ArgusII(raster=None)
 stim = {
     electrode: 50
     for electrode in ['A1', 'A3', 'A5',
@@ -201,7 +201,7 @@ for ax, noise, title in zip(
 # a whole. Here the retinal implant sees the same encoded UCSB logo with and
 # without subject-specific phosphene locations:
 
-implant = p2p.implants.AlphaAMS()
+implant = p2p.implants.retina.AlphaAMS()
 stim = p2p.stimuli.LogoUCSB().encode(implant=implant)
 
 fig, axes = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(9, 4))

@@ -3,6 +3,7 @@
 .. autosummary::
     :toctree: _api
 
+    base
     orion
     cortivis
     icvp
@@ -13,12 +14,14 @@
     *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
 """
 
+from .base import CorticalImplant
 from .orion import Orion
 from .cortivis import Cortivis
 from .icvp import ICVP
 from .neuralink import EllipsoidElectrode, NeuralinkThread, LinearEdgeThread, Neuralink
 
 __all__ = [
+    "CorticalImplant",
     "Orion",
     "Cortivis",
     "ICVP",

@@ -8,8 +8,8 @@ pulse2percept supports the following implants:
 Argus Retinal Prosthesis System (Second Sight Medical Products Inc.)
 --------------------------------------------------------------------
 
-:py:class:`~pulse2percept.implants.ArgusI` and
-:py:class:`~pulse2percept.implants.ArgusII` are epiretinal implants
+:py:class:`~pulse2percept.implants.retina.ArgusI` and
+:py:class:`~pulse2percept.implants.retina.ArgusII` are epiretinal implants
 developed at the University of Southern California (USC) and commercialized
 by Second Sight. The devices were used in several clinical trials, including
 `NCT00279500`_ and `NCT00407602`_.
@@ -49,12 +49,12 @@ for axis, implant, title in [(ax[0], ArgusI(), 'Argus I'),
 # Pixium Vision developed the clinical system; `Science Corporation`_ acquired
 # Pixium's PRIMA assets and IP in 2024.
 #
-# :py:class:`~pulse2percept.implants.PRIMAPivotal` models the 378-pixel,
+# :py:class:`~pulse2percept.implants.retina.PRIMAPivotal` models the 378-pixel,
 # 100um array used in the pivotal PRIMAvera trial `NCT04676854`_ [Holz2026]_.
 # The same configuration was used in the earlier US feasibility study
 # `NCT03392324`_ [Palanker2020]_.
 #
-# :py:class:`~pulse2percept.implants.Lorach2015Array` models the earlier
+# :py:class:`~pulse2percept.implants.retina.Lorach2015Array` models the earlier
 # 142-pixel, 70um research array of [Lorach2015]_.
 #
 # .. _Science Corporation: https://science.xyz/news/pixium-vision-acquisition/
@@ -70,7 +70,8 @@ Lorach2015Array().plot(ax=ax[1])
 ax[1].set_title('Lorach et al. (2015)')
 
 ###############################################################################
-# :py:class:`~pulse2percept.implants.Ho2019FlatArray` models the flat F55 and
+# :py:class:`~pulse2percept.implants.retina.Ho2019FlatArray` models the flat
+# F55 and
 # F40 research arrays of [Ho2019]_, with 250 and 502 pixels on a 1 mm
 # substrate. The F55 outline is reconstructed from Fig. 2(a); the F40 outline
 # was not published and is approximated by the 502 lattice sites nearest the
@@ -85,7 +86,7 @@ Ho2019FlatArray(40).plot(ax=ax[1])
 ax[1].set_title('Ho et al. F40')
 
 ###############################################################################
-# :py:class:`~pulse2percept.implants.Huang2021Array` models the 1.5 mm
+# :py:class:`~pulse2percept.implants.retina.Huang2021Array` models the 1.5 mm
 # vertical-junction arrays of [Huang2021]_. Only exposed pixels are modeled as
 # electrodes; ``n_total_pixels`` gives the total number fabricated on the die.
 
@@ -100,7 +101,8 @@ for axis, pixel_size in zip(ax.ravel(), [55, 40, 30, 20]):
 # BVT Bionic Eye System (Bionic Vision Technologies)
 # --------------------------------------------------
 #
-# :py:class:`~pulse2percept.implants.BVT24` is a 24-channel suprachoroidal
+# :py:class:`~pulse2percept.implants.retina.BVT24` is a 24-channel
+# suprachoroidal
 # retinal prosthesis [Layton2014]_, which was developed by the Bionic Vision
 # Australia Consortium and commercialized by Bionic Vision Technologies (BVT).
 #
@@ -128,8 +130,8 @@ ax.set_title('BVT-24')
 # Alpha-IMS and Alpha-AMS Retinal Implant System (Retina Implant AG)
 # ------------------------------------------------------------------
 #
-# :py:class:`~pulse2percept.implants.AlphaIMS` and
-# :py:class:`~pulse2percept.implants.AlphaAMS` are subretinal implants
+# :py:class:`~pulse2percept.implants.retina.AlphaIMS` and
+# :py:class:`~pulse2percept.implants.retina.AlphaAMS` are subretinal implants
 # developed at the University of Tuebingen, Germany and commercialized by
 # Retina Implant AG.
 #
@@ -152,7 +154,8 @@ ax[1].set_title('Alpha-AMS')
 # Intelligent Micro Implant Eye epiretinal prosthesis system (IMIE)
 # ------------------------------------------------------------------
 #
-# :py:class:`~pulse2percept.implants.IMIE` is an epiretinal implant co-developed
+# :py:class:`~pulse2percept.implants.retina.IMIE` is an epiretinal implant
+# co-developed
 # by Golden Eye Bionic, LLC (Pasadena CA) and IntelliMicro Medical Co., Ltd. 
 # (Changsha, Hunan Province, China) and is manufactured by IntelliMicro. 
 #

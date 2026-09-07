@@ -1,12 +1,12 @@
-""":py:class:`~pulse2percept.implants.IMIE`"""
+""":py:class:`~pulse2percept.implants.retina.IMIE`"""
 import numpy as np
 from collections import OrderedDict
 
-from .base import Implant
-from .electrodes import DiskElectrode
-from .electrode_arrays import ElectrodeGrid
+from .base import RetinalImplant
+from ..electrodes import DiskElectrode
+from ..electrode_arrays import ElectrodeGrid
 
-class IMIE(Implant):
+class IMIE(RetinalImplant):
     """The 256-channel epiretinal prosthesis system (IMIE 256)
 
     This class implements a 256-channel Intelligent Micro Implant Eye 

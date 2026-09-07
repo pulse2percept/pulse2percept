@@ -171,7 +171,7 @@ logo_dilate.save('dilated_logo.png')
 # But let's start from the top. The first two steps are to choose an implant
 # and create a model bound to it:
 
-from pulse2percept.implants import AlphaAMS
+from pulse2percept.implants.retina import AlphaAMS
 implant = AlphaAMS()
 
 # Simulate only what we need (14x14 deg sampled at 0.1 deg):
@@ -183,7 +183,8 @@ model.build()
 model.plot(show_implant=True)
 
 ##############################################################################
-# Since :py:class:`~pulse2percept.implants.AlphaAMS` is a 2D electrode grid,
+# Since :py:class:`~pulse2percept.implants.retina.AlphaAMS` is a 2D electrode
+# grid,
 # all we need to do is downscale the image to the size of the grid, and then
 # *encode* it:
 
@@ -271,7 +272,8 @@ stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
 #     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
 #     delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
 #
-# :py:class:`~pulse2percept.implants.ArgusII` brings one along already, so
+# :py:class:`~pulse2percept.implants.retina.ArgusII` brings one along already,
+# so
 # ``model.predict_percept(p2p.stimuli.BostonTrain())`` on a model bound to one
 # is the whole setup.
 #

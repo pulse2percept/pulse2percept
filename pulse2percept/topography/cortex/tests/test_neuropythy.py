@@ -9,7 +9,8 @@ import pytest
 from scipy.spatial import cKDTree
 from types import SimpleNamespace
 
-from pulse2percept.implants import ArgusII, EnsembleImplant
+from pulse2percept.implants import EnsembleImplant
+from pulse2percept.implants.retina import ArgusII
 from pulse2percept.implants.cortex import Neuralink
 from pulse2percept.models.retina import ScoreboardModel as BeyelerScoreboard
 from pulse2percept.models.cortex import ScoreboardModel

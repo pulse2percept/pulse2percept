@@ -3,7 +3,8 @@
 Simulating PRIMA: from image to optical drive
 ===============================================================================
 
-:class:`~pulse2percept.implants.PRIMAPivotal` models the 378-pixel array used
+:class:`~pulse2percept.implants.retina.PRIMAPivotal` models the 378-pixel
+array used
 in the PRIMAvera trial [Holz2025]_. PRIMA uses 880 nm illumination rather than
 injected current, with image intensity encoded by pulse duration.
 
@@ -18,7 +19,7 @@ import numpy as np
 from skimage.morphology import binary_dilation, disk
 import pulse2percept as p2p
 
-implant = p2p.implants.PRIMAPivotal()
+implant = p2p.implants.retina.PRIMAPivotal()
 encoder = implant.encoder
 
 ###############################################################################
