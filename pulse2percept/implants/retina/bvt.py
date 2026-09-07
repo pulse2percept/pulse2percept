@@ -98,7 +98,7 @@ class BVT24(RetinalImplant):
             z_arr = np.ones(n_elecs, dtype=float) * z
 
         # the position of the electrodes 1-20, 21a-21m, R1-R2 for left eye
-        if eye == 'LE':
+        if self.eye == 'LE':
             x_arr = np.negative(x_arr)
 
         # the radius of all the electrodes in the implants
@@ -197,7 +197,7 @@ class BVT44(RetinalImplant):
             z_arr = np.ones(n_elecs, dtype=float) * z
 
         # the position of the electrodes 1-20, 21a-21m, R1-R2 for left eye
-        if eye == 'LE':
+        if self.eye == 'LE':
             x_arr = np.negative(x_arr)
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):

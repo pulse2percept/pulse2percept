@@ -111,11 +111,11 @@ When using a cortical map, it is important to place your implant in the correct
 3D location; the default z value of 0 will likely not be on a cortical surface.
 
 For the Neuralink implant, there exists a helper function,
-:py:meth:`~pulse2percept.implants.NeuralinkImplant.from_neuropythy`, which will
-automatically place neuralink threads at specified visual field locations across
-the cortical surface. Threads will be inserted perpendicular to the cortical surface
-up to ``rand_insertion_angle``. Similar helper functions are under development
-for other cortical implants.
+:py:meth:`~pulse2percept.implants.cortex.Neuralink.from_neuropythy`, which
+will automatically place neuralink threads at specified visual field locations
+across the cortical surface. Threads will be inserted perpendicular to the
+cortical surface up to ``rand_insertion_angle``. Similar helper functions are
+under development for other cortical implants.
 
 Lets place a Neuralink implant across the right hemisphere of the cortex:
 

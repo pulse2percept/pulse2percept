@@ -116,14 +116,8 @@ class ArgusI(RetinalImplant):
             self.shape, spacing, z=z,
             electrode_type=DiskElectrode, radius=r_arr, names=names)
 
-        # Set left/right eye:
-        if not isinstance(eye, str):
-            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
-        if eye != 'LE' and eye != 'RE':
-            raise ValueError("'eye' must be either 'LE' or 'RE'.")
-        self.eye = eye
         # Unfortunately, in the left eye the labeling of columns is reversed...
-        if eye == 'LE':
+        if self.eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = self.electrode_array.electrode_names
@@ -273,13 +267,9 @@ class ArgusII(RetinalImplant):
                        if raster is _DEVICE_DEFAULT else raster)
 
         # Set left/right eye:
-        if not isinstance(eye, str):
-            raise TypeError("'eye' must be a string, either 'LE' or 'RE'.")
-        if eye != 'LE' and eye != 'RE':
-            raise ValueError("'eye' must be either 'LE' or 'RE'.")
         self.eye = eye
         # Unfortunately, in the left eye the labeling of columns is reversed...
-        if eye == 'LE':
+        if self.eye == 'LE':
             # TODO: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = self.electrode_array.electrode_names

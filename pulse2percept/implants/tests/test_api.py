@@ -27,6 +27,9 @@ from pulse2percept.implants.retina import (AlphaAMS, AlphaIMS, ArgusI, ArgusII,
 
 RETINAL_DEVICES = [ArgusI, ArgusII, AlphaIMS, AlphaAMS, BVT24, BVT44, IMIE,
                    PRIMAPivotal, Lorach2015Array]
+#: Retinal devices whose electrode naming or geometry depends on the eye.
+EYE_SENSITIVE_DEVICES = [ArgusI, ArgusII, AlphaIMS, AlphaAMS, BVT24, BVT44,
+                         IMIE]
 CORTICAL_DEVICES = [Orion, Cortivis, ICVP]
 
 GENERIC = ['CheckerboardRaster', 'cortex', 'CustomRaster', 'DiskElectrode',
@@ -147,6 +150,24 @@ def test_retinal_implant_owns_the_eye():
     npt.assert_equal(implant.preprocess, True)
     npt.assert_equal(implant.safe_mode, True)
     npt.assert_almost_equal(implant.max_current, 100)
+
+
+@pytest.mark.parametrize('eye', ['LE', 'RE'])
+@pytest.mark.parametrize('implant_type', EYE_SENSITIVE_DEVICES)
+def test_canonicalized_eye_drives_the_geometry(implant_type, eye):
+    """Case is normalized before the device lays out its electrodes
+
+    These devices reverse their column names in the left eye, so reading the
+    raw constructor argument rather than the canonical
+    :py:attr:`~pulse2percept.implants.retina.RetinalImplant.eye` would let the
+    metadata say 'LE' while the geometry stayed right-eye.
+    """
+    lower, upper = implant_type(eye=eye.lower()), implant_type(eye=eye)
+    npt.assert_equal(lower.eye, eye)
+    npt.assert_equal(upper.eye, eye)
+    npt.assert_equal(lower.electrode_names, upper.electrode_names)
+    npt.assert_array_equal(lower.electrode_array.coordinates(),
+                           upper.electrode_array.coordinates())
 
 
 @pytest.mark.parametrize('implant_type', RETINAL_DEVICES)

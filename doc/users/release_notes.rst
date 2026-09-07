@@ -466,7 +466,8 @@ v0.6.0 API (2020-05-05)
 Highlights:
 
 *   New API (:pull:`96`, :pull:`174`, :pull:`178`)
-*   New implants: :py:class:`~pulse2percept.implants.BVA24` (:pull:`161`)
+*   New implants: ``BVA24``, since renamed
+    :py:class:`~pulse2percept.implants.retina.BVT24` (:pull:`161`)
 *   New models: :py:class:`~pulse2percept.models.retina.ScoreboardModel` (:pull:`96`),
     :py:class:`~pulse2percept.models.retina.AxonMapModel` (:pull:`96`),
     :py:class:`~pulse2percept.models.retina.Nanduri2012Model` (:pull:`168`),

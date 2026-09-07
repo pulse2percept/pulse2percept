@@ -97,7 +97,7 @@ class AlphaIMS(RetinalImplant):
             electrode_type=SquareElectrode, side_length=elec_width)
 
         # Unfortunately, in the left eye the labeling of columns is reversed...
-        if eye == 'LE':
+        if self.eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = self.electrode_array.electrode_names
@@ -217,7 +217,7 @@ class AlphaAMS(RetinalImplant):
 
         # Set left/right eye:
         # Unfortunately, in the left eye the labeling of columns is reversed...
-        if eye == 'LE':
+        if self.eye == 'LE':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = self.electrode_array.electrode_names
