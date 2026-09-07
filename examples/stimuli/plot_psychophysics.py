@@ -129,39 +129,58 @@ print(still.dva_to_pixel(0, 0))
 print(still.pixel_to_dva(0, 0))
 
 ###############################################################################
-# Passing a stimulus to an implant and a model
-# --------------------------------------------
+# Passing a scene to an implant and a model
+# -----------------------------------------
 #
-# The scene's source is an ordinary
-# :py:class:`~pulse2percept.stimuli.ImageStimulus` or
-# :py:class:`~pulse2percept.stimuli.VideoStimulus`, so it enters the usual
-# encoder/implant/model workflow. Here a drifting grating is encoded as
-# current and run through the
-# :py:class:`~pulse2percept.models.retina.AxonMapModel` [Beyeler2019]_:
+# Because the generators hand back a
+# :py:class:`~pulse2percept.vision.Scene`, a model can register the pattern
+# against the implant itself: it samples the scene at the electrodes' own
+# visual-field positions and encodes what each one sees. Nothing is resized
+# onto the electrode grid, and the degrees of visual angle above are the ones
+# the retina gets.
+#
+# A scene is a picture, so the implant needs an ``encoder`` to say how a gray
+# level becomes stimulation:
 
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models.retina import AxonMapModel
+from pulse2percept.stimuli import AmplitudeEncoder
+from pulse2percept.units import uA
 
-implant = ArgusII()
-model = AxonMapModel(implant=implant)
+implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 30) * uA, freq=50))
+model = AxonMapModel(implant, xrange=(-10, 10), yrange=(-10, 10), step=0.25)
 
-video = drift.source
-# A model reads current, so the video is encoded first. Its frames are 20 ms
-# apart, so the pulse rate has to be at least 50 Hz for every frame to get a
-# pulse; asking for a percept at the video's own frame times then gives one
-# percept frame per video frame:
-stim = video.encode(implant=implant, freq=50)
-
-percept = model.predict_percept(stim, t_percept=video.time)
+percept = model.predict_percept(drift, gaze=(0, 0) * dva,
+                                t_percept=drift.time)
 percept.play()
 
 ###############################################################################
-# The stimulus does not have to match the electrode grid: Argus II downscales
-# it to 6x10 on the way in.
+# ``gaze`` says which point of the scene falls on the fovea, so moving the eye
+# moves the grating across the array rather than redrawing it.
 #
-# Since the source is a video stimulus, any of its processing methods apply
-# first. Inverting it swaps the light and dark bars:
+# Stating the grating in cycles/dva also makes it directly comparable with the
+# array. Argus II spans about 19 x 11 degrees here, with roughly 2.1 degrees
+# between neighboring electrodes, so it cannot resolve anything finer than
+# about 0.24 cycles/dva: the 0.5 cycles/dva grating above is beyond what the
+# array can sample. At 0.1 cycles/dva there are about five electrodes per
+# cycle instead:
 
-stim = video.invert().encode(implant=implant, freq=50)
-percept = model.predict_percept(stim, t_percept=video.time)
+coarse = psychophysics.grating(spatial_freq=0.1 / dva, temporal_freq=2 * Hz,
+                               fov=20 * dva, shape=(128, 128), time=time)
+percept = model.predict_percept(coarse, gaze=(0, 0) * dva,
+                                t_percept=coarse.time)
+percept.play()
+
+###############################################################################
+# The scene's source is still an ordinary
+# :py:class:`~pulse2percept.stimuli.VideoStimulus`, so its processing methods
+# remain available if you need them; wrap the result back into a
+# :py:class:`~pulse2percept.vision.Scene` with the same ``fov`` to keep the
+# geometry:
+
+from pulse2percept.vision import Scene
+
+inverted = Scene(drift.source.invert(), fov=drift.fov)
+percept = model.predict_percept(inverted, gaze=(0, 0) * dva,
+                                t_percept=inverted.time)
 percept.play()

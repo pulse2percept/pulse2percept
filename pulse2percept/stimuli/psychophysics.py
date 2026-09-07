@@ -410,14 +410,33 @@ def _elapsed_s(time):
     return np.zeros(1) if time is None else time / MS_PER_S
 
 
-def _to_gray(pattern, contrast, mask):
+def _aperture(x, y, mask, fov):
+    """Radial aperture in [0, 1], measured in visual-field coordinates
+
+    Isotropic in dva, unlike :py:func:`~pulse2percept.utils.radial_mask`,
+    which normalizes each pixel axis separately and so becomes an ellipse on a
+    non-square frame. The aperture is the largest circle that fits the field,
+    i.e. half its shorter side in radius; ``'gauss'`` puts 3 standard
+    deviations at that radius.
+    """
+    if mask is None:
+        return None
+    radius = np.hypot(x, y) / (min(fov) / 2.0)
+    if mask == 'circle':
+        return (radius <= 1).astype(float)
+    if mask == 'gauss':
+        return np.exp(-4.5 * radius ** 2)
+    raise ValueError(f'Unknown mask "{mask}". Choose either "circle" or '
+                     f'"gauss".')
+
+
+def _to_gray(pattern, contrast, window):
     """Map a pattern in [-1, 1] onto gray levels around mean gray 0.5
 
-    ``mask`` multiplies the pattern rather than the gray levels, so masked
-    regions fade to mean gray instead of to black.
+    ``window`` (an aperture in [0, 1], or None) multiplies the pattern rather
+    than the gray levels, so apertured regions fade to mean gray, not black.
     """
-    if mask is not None:
-        window = radial_mask(pattern.shape[:2], mask=mask)
+    if window is not None:
         pattern = pattern * window[..., np.newaxis]
     return (contrast * pattern / 2.0 + 0.5).astype(np.float32)
 
@@ -433,8 +452,60 @@ def _raster_source(gray, time, metadata):
     return VideoStimulus(gray, time=time, metadata=metadata, compress=False)
 
 
+def _check_spatial_nyquist(spatial_freq, direction, fov, shape):
+    """Raise unless the raster resolves the grating along both pixel axes
+
+    A grating of frequency ``fs`` at angle ``theta`` has components
+    ``fs |cos(theta)|`` and ``fs |sin(theta)|`` along x and y, each of which
+    has to stay strictly below the Nyquist frequency of its own angular pixel
+    pitch. Direction matters: a grating that varies only vertically is
+    resolved by a frame of wide, short pixels. Equality is not enough either:
+    at exactly two samples per cycle the phase is unrecoverable, and a
+    quadrature-phase grating rasterizes as a uniform field.
+    """
+    n_rows, n_cols = shape
+    theta = np.deg2rad(direction)
+    for axis, component, pitch in (('horizontal', abs(np.cos(theta)),
+                                    fov[0] / n_cols),
+                                   ('vertical', abs(np.sin(theta)),
+                                    fov[1] / n_rows)):
+        freq, nyquist = spatial_freq * component, 0.5 / pitch
+        if freq >= nyquist:
+            raise ValueError(
+                f"A grating of {spatial_freq:g} cycles/dva at "
+                f"direction={direction:g} deg has a {axis} component of "
+                f"{freq:g} cycles/dva, at or above the {nyquist:g} "
+                f"cycles/dva Nyquist frequency of a {pitch:g} dva pixel, so "
+                f"it would alias. Increase 'shape', or reduce 'fov' or "
+                f"'spatial_freq'.")
+
+
+def _check_temporal_nyquist(temporal_freq, time):
+    """Raise unless consecutive samples resolve the drift
+
+    Adjacent frames must advance the grating by less than half a temporal
+    cycle. At or past that, the sampled sequence is indistinguishable from a
+    slower or a reversed drift, which is the confusion that dropping
+    cycles/frame was meant to end.
+    """
+    if temporal_freq == 0 or time is None or time.size < 2:
+        return
+    # The widest gap decides: one long gap aliases a sequence that is densely
+    # sampled everywhere else.
+    step = float(np.max(np.abs(np.diff(time)))) / MS_PER_S
+    if temporal_freq * step >= 0.5:
+        raise ValueError(
+            f"A drift rate of {temporal_freq:g} Hz advances the grating by "
+            f"{temporal_freq * step:g} cycles across the widest gap in "
+            f"'time' ({step * MS_PER_S:g} ms), at or past the half cycle "
+            f"where the sampled drift becomes ambiguous, i.e. past the "
+            f"temporal Nyquist limit. Sample at most every "
+            f"{0.5 / temporal_freq * MS_PER_S:g} ms, or reduce "
+            f"'temporal_freq'.")
+
+
 def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
-            fov=10, shape=(512, 512), time=None, mask=None):
+            fov=10, shape=(256, 256), time=None, mask=None):
     """Sinusoidal grating
 
     Rasterize a sinusoidal luminance grating of a given spatial frequency,
@@ -459,11 +530,12 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
     spatial_freq : float or Quantity, optional
         Spatial frequency in cycles per degree of visual angle (e.g.
         ``2 / dva``). One cycle is ``1 / spatial_freq`` dva wide, whatever
-        ``shape`` is. Must resolve to at least two pixels per cycle.
+        ``shape`` is. Its components along x and y must both stay strictly
+        below the Nyquist frequency of the corresponding angular pixel pitch.
     temporal_freq : float or Quantity, optional
-        Drift rate in Hz (e.g. ``4 * Hz``). 0 leaves the pattern static, and a
-        negative rate drifts against ``direction``. Has no effect when
-        ``time`` is None.
+        Drift rate in Hz (e.g. ``4 * Hz``), non-negative: ``direction`` alone
+        says which way the grating drifts. 0 leaves the pattern static, and it
+        has no effect when ``time`` is None.
     direction : float or Quantity, optional
         Drift direction, in degrees counterclockwise from the positive x axis
         (e.g. ``90 * deg``): 0 right, 90 up, 180 left, 270 down. The bars run
@@ -486,14 +558,16 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
         source carries as a
         :py:class:`~pulse2percept.stimuli.VideoStimulus`. None gives a static
         :py:class:`~pulse2percept.stimuli.ImageStimulus` instead. There is no
-        default frame rate, so a scalar duration is rejected.
+        default frame rate, so a scalar duration is rejected. Consecutive
+        samples must advance the drift by less than half a temporal cycle.
     mask : {'gauss', 'circle', None}, optional
-        Aperture applied to the pattern, which fades to mean gray outside it:
+        Radial aperture applied to the pattern, which fades to mean gray
+        outside it. Isotropic in dva and centered on fixation:
 
         -  ``'gauss'``: a 2D Gaussian whose 3rd standard deviation lies at the
-           border of the frame
-        -  ``'circle'``: the largest circle that fits into ``shape``
-        -  None: no mask
+           aperture radius
+        -  ``'circle'``: the largest circle that fits into ``fov``
+        -  None: no aperture
 
     Returns
     -------
@@ -529,17 +603,19 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
                          f"cycles/dva and must be finite and positive, not "
                          f"{spatial_freq}.")
     temporal_freq = float(as_value(temporal_freq, Hz, 'temporal_freq'))
-    if not np.isfinite(temporal_freq):
+    if not np.isfinite(temporal_freq) or temporal_freq < 0:
         raise ValueError(f"'temporal_freq' is a drift rate in Hz and must be "
-                         f"finite, not {temporal_freq}.")
+                         f"finite and non-negative, not {temporal_freq}. "
+                         f"'direction' alone says which way the grating "
+                         f"drifts, so use direction + 180 rather than a "
+                         f"negative rate.")
     direction, phase = _check_angles(direction=direction, phase=phase)
     contrast = _check_contrast(contrast)
     time = _time_points(time)
     x, y, fov = _visual_grid(shape, fov)
-    # Under two pixels per cycle the raster aliases into a different grating,
-    # so refuse rather than hand back the alias:
-    _check_raster(1.0 / spatial_freq, 'spatial period', 'grating', fov,
-                  x.shape)
+    _check_spatial_nyquist(spatial_freq, direction, fov, x.shape)
+    _check_temporal_nyquist(temporal_freq, time)
+    window = _aperture(x, y, mask, fov)
     theta = np.deg2rad(direction)
     # Signed distance along the drift axis, in dva:
     u = x * np.cos(theta) + y * np.sin(theta)
@@ -550,12 +626,13 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
                 'temporal_freq': temporal_freq, 'direction': direction,
                 'phase': phase, 'contrast': contrast, 'mask': mask,
                 'fov': fov}
-    source = _raster_source(_to_gray(pattern, contrast, mask), time, metadata)
+    source = _raster_source(_to_gray(pattern, contrast, window), time,
+                            metadata)
     return Scene(source, fov=fov)
 
 
 def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
-        fov=10, shape=(512, 512), time=None, mask=None):
+        fov=10, shape=(256, 256), time=None, mask=None):
     """Moving bar
 
     Rasterize a single bright bar of a given angular width, moving at a given
@@ -585,9 +662,9 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
         itself is perpendicular to it, so ``direction=0`` is a vertical bar
         moving rightwards.
     speed : float or Quantity, optional
-        Speed along ``direction``, in dva/s (e.g. ``5 * dva / s``). A negative
-        speed moves the bar against ``direction``. Has no effect when ``time``
-        is None.
+        Speed along ``direction``, in dva/s (e.g. ``5 * dva / s``),
+        non-negative: ``direction`` alone says which way the bar moves. It has
+        no effect when ``time`` is None.
     offset : float or Quantity, optional
         Signed position of the bar's center at ``t = 0``, in dva along the
         motion axis, measured from fixation.
@@ -611,12 +688,13 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
         :py:class:`~pulse2percept.stimuli.ImageStimulus` instead. There is no
         default frame rate, so a scalar duration is rejected.
     mask : {'gauss', 'circle', None}, optional
-        Aperture applied to the pattern, which fades to mean gray outside it:
+        Radial aperture applied to the pattern, which fades to mean gray
+        outside it. Isotropic in dva and centered on fixation:
 
         -  ``'gauss'``: a 2D Gaussian whose 3rd standard deviation lies at the
-           border of the frame
-        -  ``'circle'``: the largest circle that fits into ``shape``
-        -  None: no mask
+           aperture radius
+        -  ``'circle'``: the largest circle that fits into ``fov``
+        -  None: no aperture
 
     Returns
     -------
@@ -655,9 +733,11 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
         raise ValueError(f"'edge_width' is an angular width and must be "
                          f"finite and non-negative, not {edge_width}.")
     speed = float(as_value(speed, dva / s, 'speed'))
-    if not np.isfinite(speed):
-        raise ValueError(f"'speed' is a speed in dva/s and must be finite, "
-                         f"not {speed}.")
+    if not np.isfinite(speed) or speed < 0:
+        raise ValueError(f"'speed' is a speed in dva/s and must be finite and "
+                         f"non-negative, not {speed}. 'direction' alone says "
+                         f"which way the bar moves, so use direction + 180 "
+                         f"rather than a negative speed.")
     offset = float(as_value(offset, dva, 'offset'))
     if not np.isfinite(offset):
         raise ValueError(f"'offset' is a position in dva along the motion "
@@ -668,6 +748,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     x, y, fov = _visual_grid(shape, fov)
     # A bar under two pixels wide rasterizes as an aliased line, not a bar:
     _check_raster(width, 'bar width', 'bar', fov, x.shape)
+    window = _aperture(x, y, mask, fov)
     theta = np.deg2rad(direction)
     # Signed distance along the motion axis, in dva, and where the bar's
     # center sits on that axis at each sample time:
@@ -685,7 +766,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     metadata = {'generator': 'bar', 'width': width, 'edge_width': edge_width,
                 'direction': direction, 'speed': speed, 'offset': offset,
                 'contrast': contrast, 'mask': mask, 'fov': fov}
-    source = _raster_source(_to_gray(2.0 * profile - 1.0, contrast, mask),
+    source = _raster_source(_to_gray(2.0 * profile - 1.0, contrast, window),
                             time, metadata)
     return Scene(source, fov=fov)
 

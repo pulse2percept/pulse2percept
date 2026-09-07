@@ -495,20 +495,20 @@ def test_grating_spatial_period(shape):
 
 def test_grating_temporal_phase():
     """Temporal phase follows the physical clock, not the frame index"""
-    # 5 Hz: half a period is 100 ms, a full one 200 ms.
-    time = np.array([0.0, 100.0, 200.0])
+    # 5 Hz: half a period is 100 ms (frame 4 here), a full one 200 ms.
     scene = psychophysics.grating(spatial_freq=0.5, temporal_freq=5 * Hz,
-                                  fov=20, shape=(64, 64), time=time)
+                                  fov=20, shape=(64, 64),
+                                  time=np.arange(0, 201, 25))
     vid = _raster(scene)
-    npt.assert_allclose(vid[..., 2], vid[..., 0], atol=1e-5)
+    npt.assert_allclose(vid[..., 8], vid[..., 0], atol=1e-5)
     # Half a period inverts a full-contrast grating around mean gray:
-    npt.assert_allclose(vid[..., 1], 1.0 - vid[..., 0], atol=1e-5)
+    npt.assert_allclose(vid[..., 4], 1.0 - vid[..., 0], atol=1e-5)
     # Sampling the same physical instants twice as densely does not change
     # what happens at 100 ms, which a frame-index phase would:
     dense = psychophysics.grating(spatial_freq=0.5, temporal_freq=5 * Hz,
                                   fov=20, shape=(64, 64),
-                                  time=np.arange(0, 201, 50))
-    npt.assert_array_equal(_raster(dense)[..., 2], vid[..., 1])
+                                  time=np.arange(0, 201, 12.5))
+    npt.assert_array_equal(_raster(dense)[..., 8], vid[..., 4])
 
 
 def test_grating_sampling_invariance():
@@ -557,15 +557,6 @@ def test_grating_drift_speed():
                                       time=np.array([0.0, 250.0]))
         npt.assert_allclose(_peak_x(scene, 0), 0.0, atol=0.2)
         npt.assert_allclose(_peak_x(scene, 1), sign * speed * 0.25, atol=0.2)
-    # A negative drift rate is the same as reversing the direction:
-    forward = psychophysics.grating(spatial_freq=spatial_freq,
-                                    temporal_freq=temporal_freq, fov=20,
-                                    shape=(64, 64), time=[0.0, 250.0])
-    backward = psychophysics.grating(spatial_freq=spatial_freq,
-                                     temporal_freq=-temporal_freq,
-                                     direction=180 * deg, fov=20,
-                                     shape=(64, 64), time=[0.0, 250.0])
-    npt.assert_allclose(_raster(forward), _raster(backward), atol=1e-6)
 
 
 def test_grating_phase():
@@ -652,6 +643,7 @@ def test_grating_dimensions(kwargs):
     (dict(spatial_freq=-1), "'spatial_freq'"),
     (dict(spatial_freq=np.inf), "'spatial_freq'"),
     (dict(temporal_freq=np.nan), "'temporal_freq'"),
+    (dict(temporal_freq=-1), "'temporal_freq'"),
     (dict(direction=np.inf), "'direction'"),
     (dict(phase=np.nan), "'phase'"),
     (dict(contrast=-0.1), "'contrast'"),
@@ -665,8 +657,8 @@ def test_grating_dimensions(kwargs):
     (dict(time=[]), '1-D'),
     (dict(time=[[0, 10], [20, 30]]), '1-D'),
     (dict(time=[0, np.nan]), 'finite'),
-    # Half a pixel per cycle at 10 dva across 16 pixels:
-    (dict(spatial_freq=10), 'resolve the grating'),
+    # Well past the 0.8 cycles/dva Nyquist limit of a 0.625 dva pixel:
+    (dict(spatial_freq=10), 'Nyquist'),
 ])
 def test_grating_invalid(kwargs, msg):
     with pytest.raises(ValueError) as excinfo:
@@ -741,11 +733,14 @@ def test_bar_displacement():
     for frame, t in enumerate(time):
         x, _ = _lit(scene, frame)
         npt.assert_allclose(x.mean(), offset + speed * t / 1000, atol=0.1)
-    # A negative speed moves the bar against `direction`:
-    back = psychophysics.bar(width=2, speed=-speed * dva / sec, offset=offset,
-                             fov=20, shape=(256, 256), time=time)
+    # Reversing `direction` mirrors the whole trajectory through fixation,
+    # since `offset` is measured along the motion axis; `speed` stays a
+    # magnitude either way:
+    back = psychophysics.bar(width=2, direction=180 * deg,
+                             speed=speed * dva / sec, offset=offset, fov=20,
+                             shape=(256, 256), time=time)
     x, _ = _lit(back, 2)
-    npt.assert_allclose(x.mean(), offset - speed * 0.25, atol=0.1)
+    npt.assert_allclose(x.mean(), -(offset + speed * 0.25), atol=0.1)
 
 
 def test_bar_sampling_invariance():
@@ -842,6 +837,7 @@ def test_bar_dimensions(kwargs):
     (dict(edge_width=-1), "'edge_width'"),
     (dict(edge_width=np.nan), "'edge_width'"),
     (dict(speed=np.inf), "'speed'"),
+    (dict(speed=-1), "'speed'"),
     (dict(offset=np.nan), "'offset'"),
     (dict(direction=np.nan), "'direction'"),
     (dict(contrast=-0.1), "'contrast'"),
@@ -895,3 +891,80 @@ def test_psychophysics_legacy_semantics():
     npt.assert_equal(bar.vid_shape, (16, 16, 51))
     # ... and they are videos, not scenes:
     npt.assert_equal(isinstance(bar, VideoStimulus), True)
+
+
+def test_grating_spatial_nyquist():
+    """A grating at or past two samples per cycle is refused, not aliased"""
+    # 20 dva across 64 pixels is a 0.3125 dva pixel, whose Nyquist frequency
+    # is 1.6 cycles/dva:
+    nyquist = 0.5 / (20.0 / 64)
+    kwargs = dict(fov=20, shape=(64, 64), direction=0 * deg)
+    psychophysics.grating(spatial_freq=0.99 * nyquist, **kwargs)
+    # Exactly at Nyquist the phase is unrecoverable, so equality is refused
+    # along with everything above it:
+    for spatial_freq in (nyquist, 1.01 * nyquist, 10 * nyquist):
+        with pytest.raises(ValueError) as excinfo:
+            psychophysics.grating(spatial_freq=spatial_freq, **kwargs)
+        npt.assert_equal('Nyquist' in str(excinfo.value), True)
+
+
+def test_grating_nyquist_is_directional():
+    """Each axis is judged by its own angular pixel pitch"""
+    # 40 dva over 64 columns is a 0.625 dva pixel (0.8 cycles/dva Nyquist);
+    # 10 dva over 64 rows is a 0.15625 dva one (3.2 cycles/dva).
+    kwargs = dict(fov=(40, 10), shape=(64, 64), spatial_freq=1.0)
+    # A grating that varies only vertically is resolved at 1 cycle/dva ...
+    psychophysics.grating(direction=90 * deg, **kwargs)
+    # ... while the same frequency drawn horizontally aliases:
+    with pytest.raises(ValueError) as excinfo:
+        psychophysics.grating(direction=0 * deg, **kwargs)
+    npt.assert_equal('horizontal component' in str(excinfo.value), True)
+    # An oblique grating sits between the two limits: at 45 deg, 1 cycle/dva
+    # has a 0.71 cycles/dva horizontal component, which 0.8 still resolves ...
+    psychophysics.grating(direction=45 * deg, **kwargs)
+    # ... but 1.2 cycles/dva does not:
+    with pytest.raises(ValueError):
+        psychophysics.grating(direction=45 * deg,
+                              **{**kwargs, 'spatial_freq': 1.2})
+
+
+def test_grating_temporal_nyquist():
+    """Adjacent frames must advance the drift by less than half a cycle"""
+    kwargs = dict(spatial_freq=0.5, fov=20, shape=(32, 32))
+    # Samples 20 ms apart resolve anything slower than 25 Hz:
+    time = np.arange(0, 200, 20)
+    psychophysics.grating(temporal_freq=24 * Hz, time=time, **kwargs)
+    for temporal_freq in (25, 100):
+        with pytest.raises(ValueError) as excinfo:
+            psychophysics.grating(temporal_freq=temporal_freq * Hz, time=time,
+                                  **kwargs)
+        npt.assert_equal('Nyquist' in str(excinfo.value), True)
+    # The widest gap decides, not the average one:
+    with pytest.raises(ValueError):
+        psychophysics.grating(temporal_freq=24 * Hz, time=[0, 1, 2, 100],
+                              **kwargs)
+    # A static pattern and a single frame have no drift to resolve:
+    psychophysics.grating(temporal_freq=1000 * Hz, **kwargs)
+    psychophysics.grating(temporal_freq=1000 * Hz, time=[0.0], **kwargs)
+
+
+def test_aperture_is_circular_in_dva():
+    """Apertures are radial in visual angle, not stretched to the frame"""
+    # A 40 x 10 dva field: the aperture is the largest circle that fits, so 5
+    # dva in radius, rather than an ellipse filling the frame.
+    scene = psychophysics.grating(spatial_freq=0.2, fov=(40, 10),
+                                  shape=(64, 256), mask='circle')
+    img = _raster(scene)[..., 0]
+    rows, cols = np.where(abs(img - 0.5) > 1e-6)
+    x, y = scene.pixel_to_dva(cols, rows)
+    npt.assert_array_less(np.hypot(x, y), 5.0 + 1e-9)
+    npt.assert_allclose(np.hypot(x, y).max(), 5.0, atol=0.2)
+    # 15 dva out along x is inside an ellipse fitted to the frame, but far
+    # outside the circle:
+    npt.assert_almost_equal(_at(scene, 15, 0), 0.5)
+    # A Gaussian aperture is isotropic too. A bar wide enough to fill the
+    # frame leaves the aperture as the only thing shaping the gray levels:
+    gauss = psychophysics.bar(width=100, fov=(40, 10), shape=(64, 256),
+                              mask='gauss')
+    npt.assert_allclose(_at(gauss, 3, 0), _at(gauss, 0, 3), atol=1e-5)
+    npt.assert_array_less(_at(gauss, 4, 0), _at(gauss, 2, 0))

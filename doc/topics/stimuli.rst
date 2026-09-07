@@ -268,6 +268,14 @@ drifts along ``direction`` at ``temporal_freq / spatial_freq`` dva/s.
 drawn more finely. ``phase`` is the spatial phase at fixation and ``t = 0``,
 and ``contrast`` is a Michelson contrast around mean gray 0.5.
 
+``direction`` alone says which way the pattern moves, so ``temporal_freq``
+and ``speed`` are non-negative; to drift leftwards, use ``direction=180 *
+deg``. Both frequencies are checked against the raster: the grating's
+components along x and y must each stay strictly below the Nyquist frequency
+of the corresponding angular pixel pitch, and consecutive ``time`` samples
+must advance the drift by less than half a temporal cycle. A stimulus that
+would alias is refused rather than silently rasterized as a different one.
+
 :py:func:`~pulse2percept.stimuli.psychophysics.bar` draws a single bright bar
 perpendicular to its direction of motion, whose center sits at
 ``offset + speed * t`` along the motion axis:
@@ -279,8 +287,14 @@ perpendicular to its direction of motion, whose center sits at
                               fov=20 * dva, time=np.arange(0, 1000, 20))
 
 ``width`` and ``edge_width`` (the raised-cosine ramp on either side of the
-plateau) are angular sizes, and ``speed`` is in dva/s. A periodic array of
-bars is a grating, so ``bar`` draws only one.
+plateau) are angular sizes, and ``speed`` is in dva/s. ``offset`` is measured
+along the motion axis, so reversing ``direction`` mirrors the whole trajectory
+through fixation. A periodic array of bars is a grating, so ``bar`` draws only
+one.
+
+For both, ``mask`` applies a radial aperture that is isotropic in visual
+angle and centered on fixation: ``'circle'`` is the largest circle that fits
+the field, and ``'gauss'`` puts three standard deviations at that radius.
 
 ``time`` behaves the same way for both: ``None`` gives a static
 :py:class:`~pulse2percept.stimuli.ImageStimulus`, and an explicit array of
