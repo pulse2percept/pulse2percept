@@ -152,9 +152,8 @@ Sample stimuli
 
 :py:mod:`pulse2percept.stimuli.samples` bundles a few ready-made stimuli for
 demos, docs, and tests. They are ordinary ``ImageStimulus`` or
-``VideoStimulus`` objects (or, for procedural optotypes, a
-:py:class:`~pulse2percept.vision.Scene`), and are reached through the module
-rather than the top-level namespace:
+``VideoStimulus`` objects, and are reached through the module rather than the
+top-level namespace:
 
 .. code-block:: python
 
@@ -197,7 +196,18 @@ video as ``ucsb_surf``:
     flyover = samples.ucsb_flyover()
     pedestrians = samples.ucsb_pedestrians()
 
-:py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a Landolt C at
+Psychophysical stimuli
+----------------------
+
+:py:mod:`pulse2percept.stimuli.psychophysics` generates visual patterns from
+their parameters rather than loading them from a file. Like ``samples``, the
+optotype generators are reached through the module:
+
+.. code-block:: python
+
+    from pulse2percept.stimuli import psychophysics
+
+:py:func:`~pulse2percept.stimuli.psychophysics.landolt_c` draws a Landolt C at
 standard proportions (stroke width and inner/outer diameters of 1, 3, and 5
 gaps) and places it in the visual field:
 
@@ -205,8 +215,8 @@ gaps) and places it in the visual field:
 
     from pulse2percept.units import deg, dva
 
-    scene = samples.landolt_c(gap=0.5 * dva, position=(5, 0) * dva,
-                              orientation=90 * deg, fov=15 * dva)
+    scene = psychophysics.landolt_c(gap=0.5 * dva, position=(5, 0) * dva,
+                                    orientation=90 * deg, fov=15 * dva)
 
 ``gap`` is the angular size of the critical feature, which is what an acuity
 task varies; ``position`` sets where the optotype sits in the visual field,
@@ -214,14 +224,15 @@ and therefore its eccentricity, without changing that size. ``orientation``
 says where the opening points (0 right, 90 up, 180 left, 270 down), and
 ``polarity`` chooses a black C on white (``'dark'``) or the reverse.
 
-:py:func:`~pulse2percept.stimuli.samples.tumbling_e` is the other procedural
-optotype, drawn at the standard 5x5 proportions: bars and the gaps between
-them are one stroke width each, so the whole E is ``5 * stroke`` across:
+:py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e` is the other
+procedural optotype, drawn at the standard 5x5 proportions: bars and the gaps
+between them are one stroke width each, so the whole E is ``5 * stroke``
+across:
 
 .. code-block:: python
 
-    scene = samples.tumbling_e(stroke=0.5 * dva, position=(5, 0) * dva,
-                               orientation=90 * deg, fov=15 * dva)
+    scene = psychophysics.tumbling_e(stroke=0.5 * dva, position=(5, 0) * dva,
+                                     orientation=90 * deg, fov=15 * dva)
 
 ``stroke`` is the angular size of the critical feature, and ``position``
 again sets eccentricity without changing that size. ``orientation`` says

@@ -29,7 +29,7 @@ from .videos import VideoStimulus
 from .encoders import (Encoder, StimulusEncoder, AmplitudeEncoder,
                        FrequencyEncoder, PRIMAEncoder)
 from .psychophysics import BarStimulus, GratingStimulus
-from . import samples
+from . import psychophysics, samples
 
 __all__ = [
     'AmplitudeEncoder',
@@ -48,6 +48,7 @@ __all__ = [
     'LogoUCSB',
     'MonophasicPulse',
     'PRIMAEncoder',
+    'psychophysics',
     'PulseTrain',
     'samples',
     'SnellenChart',

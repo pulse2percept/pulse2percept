@@ -96,13 +96,13 @@ Stimuli and encoding
   public-domain National Library of Medicine video as ``samples.ucsb_surf()``
   (:pull:`889`).
 
-* New procedural :py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a
-  Landolt C of a given gap size, eccentricity, and gap orientation, and
-  returns it as a :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
-
-* New procedural :py:func:`~pulse2percept.stimuli.samples.tumbling_e` draws a
-  5x5 Tumbling E of a given stroke width, eccentricity, and bar orientation,
-  and returns it as a :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
+* New :py:mod:`pulse2percept.stimuli.psychophysics` namespace collects
+  procedurally generated stimuli.
+  :py:func:`~pulse2percept.stimuli.psychophysics.landolt_c` draws a Landolt C
+  of a given gap size, eccentricity, and gap orientation, and
+  :py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e` a 5x5 Tumbling E
+  of a given stroke width, eccentricity, and bar orientation; both return a
+  :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
 
 * The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
   along with their asset files and the README banner derived from them,
