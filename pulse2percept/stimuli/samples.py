@@ -1,7 +1,9 @@
 """:py:func:`~pulse2percept.stimuli.samples.big_buck_bunny`,
+   :py:func:`~pulse2percept.stimuli.samples.bvl_cake`,
    :py:func:`~pulse2percept.stimuli.samples.landolt_c`,
    :py:func:`~pulse2percept.stimuli.samples.logo_bvl`,
-   :py:func:`~pulse2percept.stimuli.samples.logo_ucsb`
+   :py:func:`~pulse2percept.stimuli.samples.logo_ucsb`,
+   :py:func:`~pulse2percept.stimuli.samples.ucsb_surf`
 
 Sample stimuli bundled with pulse2percept, for demos, docs, and tests.
 
@@ -27,9 +29,11 @@ from ..units import as_value, deg, dva
 
 __all__ = [
     'big_buck_bunny',
+    'bvl_cake',
     'landolt_c',
     'logo_bvl',
     'logo_ucsb',
+    'ucsb_surf',
 ]
 
 #: Landolt-C proportions, in multiples of the gap width. The stroke width is
@@ -124,6 +128,71 @@ def big_buck_bunny(resize=None, electrodes=None, metadata=None,
                          metadata=meta, compress=False)
 
 
+#: The photograph is released under pulse2percept's own BSD 3-Clause license.
+#: See ``data/samples/README.rst``.
+_BVL_CAKE_CREDIT = {
+    'title': 'Bionic Vision Lab cake',
+    'license': 'BSD-3-Clause',
+}
+
+
+def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
+    """Bionic Vision Lab cake photograph
+
+    Load a 495x435x3 RGB photograph of a cake decorated with the Bionic Vision
+    Lab logo, as a naturalistic image stimulus.
+
+    The photograph is made available by its copyright holder under the same
+    BSD 3-Clause license as pulse2percept; ``metadata`` carries a short form
+    of that.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary. Keys given
+        here override the attribution defaults above.
+
+    as_gray : bool, optional
+        Flag whether to convert the image to grayscale.
+
+    Returns
+    -------
+    stim : :py:class:`~pulse2percept.stimuli.ImageStimulus`
+
+    Examples
+    --------
+    >>> from pulse2percept.stimuli import samples
+    >>> samples.bvl_cake().img_shape
+    (495, 435, 3)
+
+    """
+    meta = dict(_BVL_CAKE_CREDIT)
+    if isinstance(metadata, dict):
+        meta.update(metadata)
+    elif metadata is not None:
+        meta['user'] = metadata
+    return ImageStimulus(_sample_path('bvl-cake.jpg'), resize=resize,
+                         as_gray=as_gray, electrodes=electrodes,
+                         metadata=meta, compress=False)
+
+
 def logo_bvl(resize=None, electrodes=None, metadata=None, as_gray=False):
     """Bionic Vision Lab (BVL) logo
 
@@ -202,6 +271,74 @@ def logo_ucsb(resize=None, electrodes=None, metadata=None):
     return ImageStimulus(_sample_path('ucsb.png'), resize=resize, as_gray=True,
                          electrodes=electrodes, metadata=metadata,
                          compress=False)
+
+
+#: ``ImageStimulus`` overwrites ``metadata['source']`` with the local file
+#: name, so provenance goes under ``credit``. See ``data/samples/README.rst``.
+_UCSB_SURF_CREDIT = {
+    'title': 'UCSB surf',
+    'credit': 'Courtesy of the National Library of Medicine',
+    'license': 'Public domain (U.S. government work)',
+}
+
+
+def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
+    """UCSB coastline video frame
+
+    Load a 476x845x3 RGB frame of the UCSB coastline, as a naturalistic image
+    stimulus.
+
+    The frame comes from *Towards a Smart Bionic Eye*, produced by the
+    National Library of Medicine / National Institutes of Health. As a U.S.
+    government work it is in the public domain in the United States, and is
+    therefore not covered by pulse2percept's BSD license; ``metadata`` carries
+    the requested attribution.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary. Keys given
+        here override the attribution defaults above.
+
+    as_gray : bool, optional
+        Flag whether to convert the image to grayscale.
+
+    Returns
+    -------
+    stim : :py:class:`~pulse2percept.stimuli.ImageStimulus`
+
+    Examples
+    --------
+    >>> from pulse2percept.stimuli import samples
+    >>> samples.ucsb_surf().img_shape
+    (476, 845, 3)
+
+    """
+    meta = dict(_UCSB_SURF_CREDIT)
+    if isinstance(metadata, dict):
+        meta.update(metadata)
+    elif metadata is not None:
+        meta['user'] = metadata
+    return ImageStimulus(_sample_path('ucsb-surf.jpg'), resize=resize,
+                         as_gray=as_gray, electrodes=electrodes,
+                         metadata=meta, compress=False)
 
 
 def _check_shape(shape):

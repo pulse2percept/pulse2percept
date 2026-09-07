@@ -1,9 +1,9 @@
 Bundled sample assets
 =====================
 
-Assets loaded by :py:mod:`pulse2percept.stimuli.samples`. None of them are
-covered by pulse2percept's BSD license, which applies to the source code only;
-each entry below states its own terms.
+Assets loaded by :py:mod:`pulse2percept.stimuli.samples`. pulse2percept's BSD
+license covers the source code; it does not automatically extend to the files
+in this directory. Each entry below states its own terms.
 
 ``big-buck-bunny.mp4``
 ----------------------
@@ -47,3 +47,33 @@ Redistributing pulse2percept carries these files along, but that is not a
 license to use either logo for any other purpose. In particular, the UCSB
 logo is a University of California trademark: reuse outside pulse2percept
 requires permission from the University, not from pulse2percept.
+
+``bvl-cake.jpg``
+----------------
+
+Photograph of a cake decorated with the Bionic Vision Lab logo, 435x495 RGB.
+
+:License: BSD 3-Clause, the same terms as pulse2percept itself, as granted by
+          the copyright holder. No separate third-party license applies.
+:Source: Supplied by the Bionic Vision Lab.
+:Modifications: None; the file is bundled as supplied.
+
+The logo depicted on the cake is still the lab's mark; see the entry above.
+
+``ucsb-surf.jpg``
+-----------------
+
+Frame of the UCSB coastline, 845x476 RGB.
+
+:License: U.S. government work, in the public domain in the United States.
+          This file is **not** covered by pulse2percept's BSD license.
+:Attribution: Courtesy of the National Library of Medicine.
+:Source: A frame extracted from *Towards a Smart Bionic Eye*
+         (https://www.youtube.com/watch?v=m2WXEjewqho), produced by the
+         National Library of Medicine / National Institutes of Health. The
+         timestamp of the frame within the video was not recorded.
+:Modifications: Extracted as a single frame and saved as JPEG; not cropped,
+                resized, or color-corrected.
+
+:py:func:`~pulse2percept.stimuli.samples.ucsb_surf` carries the attribution in
+``metadata``.

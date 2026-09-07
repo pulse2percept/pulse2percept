@@ -78,6 +78,12 @@ Stimuli and encoding
   naturalistic video sample: a 115-frame, 24 fps excerpt of *Big Buck Bunny*,
   © 2008 Blender Foundation, licensed CC BY 3.0 rather than BSD (:pull:`889`).
 
+* New naturalistic image samples
+  :py:func:`~pulse2percept.stimuli.samples.bvl_cake` (BSD-licensed photograph
+  of a Bionic Vision Lab cake) and
+  :py:func:`~pulse2percept.stimuli.samples.ucsb_surf` (a public-domain UCSB
+  coastal frame courtesy of the National Library of Medicine) (:pull:`889`).
+
 * New procedural :py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a
   Landolt C of a given gap size, eccentricity, and gap orientation, and
   returns it as a :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).

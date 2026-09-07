@@ -220,3 +220,44 @@ def test_landolt_c_invalid(kwargs, msg):
     with pytest.raises(ValueError) as excinfo:
         samples.landolt_c(**kwargs)
     npt.assert_equal(msg in str(excinfo.value), True)
+
+
+@pytest.mark.parametrize('loader,shape', [
+    (samples.bvl_cake, (495, 435, 3)),
+    (samples.ucsb_surf, (476, 845, 3)),
+])
+def test_samples_photos(loader, shape):
+    stim = loader()
+    # A loader returns a plain stimulus, not a sample type of its own:
+    npt.assert_equal(type(stim), ImageStimulus)
+    npt.assert_equal(stim.img_shape, shape)
+    npt.assert_equal(stim.time, None)
+    npt.assert_equal(np.all(np.isfinite(stim.data)), True)
+    npt.assert_equal(stim.data.min() >= 0, True)
+    npt.assert_equal(stim.data.max() <= 1, True)
+    npt.assert_equal(loader(as_gray=True).img_shape, shape[:2])
+    npt.assert_equal(loader(resize=(16, 24)).img_shape, (16, 24, 3))
+    npt.assert_equal(loader(metadata={'foo': 'bar'}).metadata['foo'], 'bar')
+
+
+def test_samples_photo_metadata():
+    cake = samples.bvl_cake(resize=(8, 8))
+    npt.assert_equal(cake.metadata['title'], 'Bionic Vision Lab cake')
+    npt.assert_equal(cake.metadata['license'], 'BSD-3-Clause')
+    surf = samples.ucsb_surf(resize=(8, 8))
+    npt.assert_equal(surf.metadata['title'], 'UCSB surf')
+    # Provenance lives under 'credit': ImageStimulus overwrites 'source' with
+    # the local file name.
+    npt.assert_equal(surf.metadata['credit'],
+                     'Courtesy of the National Library of Medicine')
+    # User metadata merges the usual way, and wins over the defaults:
+    user = samples.ucsb_surf(resize=(8, 8), metadata={'title': 'frame'})
+    npt.assert_equal(user.metadata['title'], 'frame')
+    npt.assert_equal(user.metadata['credit'],
+                     'Courtesy of the National Library of Medicine')
+
+
+def test_samples_photos_not_top_level():
+    for name in ('bvl_cake', 'ucsb_surf'):
+        npt.assert_equal(hasattr(samples, name), True)
+        npt.assert_equal(hasattr(p2p.stimuli, name), False)
