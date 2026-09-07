@@ -81,6 +81,8 @@ Stimuli and encoding
 * New bundled image samples
   :py:func:`~pulse2percept.stimuli.samples.bvl_cake` (BSD-licensed photograph
   of a Bionic Vision Lab cake),
+  :py:func:`~pulse2percept.stimuli.samples.ucsb_bike` (BSD-licensed campus
+  bike-path scene),
   :py:func:`~pulse2percept.stimuli.samples.ucsb_surf` (a public-domain UCSB
   coastal frame courtesy of the National Library of Medicine),
   :py:func:`~pulse2percept.stimuli.samples.cajal_retina` (Cajal's public-domain
@@ -88,9 +90,19 @@ Stimuli and encoding
   :py:func:`~pulse2percept.stimuli.samples.zebrafish_retina` (a CC BY 4.0
   zebrafish retina micrograph from the Wellcome Collection) (:pull:`889`).
 
+* New short video samples
+  :py:func:`~pulse2percept.stimuli.samples.ucsb_flyover` and
+  :py:func:`~pulse2percept.stimuli.samples.ucsb_pedestrians`, cut from the same
+  public-domain National Library of Medicine video as ``samples.ucsb_surf()``
+  (:pull:`889`).
+
 * New procedural :py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a
   Landolt C of a given gap size, eccentricity, and gap orientation, and
   returns it as a :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
+
+* New procedural :py:func:`~pulse2percept.stimuli.samples.tumbling_e` draws a
+  5x5 Tumbling E of a given stroke width, eccentricity, and bar orientation,
+  and returns it as a :py:class:`~pulse2percept.vision.Scene` (:pull:`889`).
 
 * The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
   along with their asset files and the README banner derived from them,

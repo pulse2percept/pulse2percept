@@ -166,12 +166,14 @@ rather than the top-level namespace:
     surf = samples.ucsb_surf()
     cajal = samples.cajal_retina()
     zebrafish = samples.zebrafish_retina()
+    bike = samples.ucsb_bike()
 
-The last four are RGB stills: a cake decorated with the lab logo (495x435), a
+The last five are RGB stills: a cake decorated with the lab logo (495x435), a
 frame of the UCSB coastline (476x845) from the National Library of Medicine
-video *Towards a Smart Bionic Eye*, Cajal's drawing of the retina (745x500),
-and a fluorescence micrograph of a zebrafish retina (544x760) from the
-Wellcome Collection. See ``pulse2percept/stimuli/data/samples/README.rst`` for
+video *Towards a Smart Bionic Eye*, Cajal's drawing of the retina (745x500), a
+fluorescence micrograph of a zebrafish retina (544x760) from the Wellcome
+Collection, and a campus bike path with a cyclist, crosswalk, and stop sign
+(600x900). See ``pulse2percept/stimuli/data/samples/README.rst`` for
 the licensing of each bundled asset; it differs from file to file.
 
 :py:func:`~pulse2percept.stimuli.samples.big_buck_bunny` is the bundled
@@ -186,6 +188,14 @@ At full resolution it is 359x640 RGB, i.e. 689,280 electrodes; pass
 ``resize`` and/or ``as_gray=True`` before handing it to a model. The clip is
 © 2008 Blender Foundation and licensed CC BY 3.0, not under pulse2percept's
 BSD license; its attribution rides along in ``video.metadata``.
+
+Two shorter 640x346 clips come from the same National Library of Medicine
+video as ``ucsb_surf``:
+
+.. code-block:: python
+
+    flyover = samples.ucsb_flyover()
+    pedestrians = samples.ucsb_pedestrians()
 
 :py:func:`~pulse2percept.stimuli.samples.landolt_c` draws a Landolt C at
 standard proportions (stroke width and inner/outer diameters of 1, 3, and 5
@@ -203,6 +213,26 @@ task varies; ``position`` sets where the optotype sits in the visual field,
 and therefore its eccentricity, without changing that size. ``orientation``
 says where the opening points (0 right, 90 up, 180 left, 270 down), and
 ``polarity`` chooses a black C on white (``'dark'``) or the reverse.
+
+:py:func:`~pulse2percept.stimuli.samples.tumbling_e` is the other procedural
+optotype, drawn at the standard 5x5 proportions: bars and the gaps between
+them are one stroke width each, so the whole E is ``5 * stroke`` across:
+
+.. code-block:: python
+
+    scene = samples.tumbling_e(stroke=0.5 * dva, position=(5, 0) * dva,
+                               orientation=90 * deg, fov=15 * dva)
+
+``stroke`` is the angular size of the critical feature, and ``position``
+again sets eccentricity without changing that size. ``orientation`` says
+where the bars point (0 right, 90 up, 180 left, 270 down); the four cardinal
+orientations are the conventional Tumbling-E task, although any finite angle
+is accepted.
+
+.. note::
+    The Tumbling E and the Landolt C are different optotypes measured with
+    different tasks (bar direction vs. gap direction). Thresholds obtained
+    with one are not numerically interchangeable with the other.
 
 Plotting and time operations
 ----------------------------
