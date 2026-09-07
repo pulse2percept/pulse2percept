@@ -410,6 +410,21 @@ def _elapsed_s(time):
     return np.zeros(1) if time is None else time / MS_PER_S
 
 
+def _check_motion_sampled(name, value, unit, time):
+    """Raise if a nonzero motion parameter has no sample times to act on
+
+    A static raster can only show the pattern frozen at ``t = 0``, so
+    accepting motion without ``time`` would silently discard it.
+    """
+    if value != 0 and time is None:
+        raise ValueError(
+            f"'{name}' is {value:g} {unit}, but 'time' is None, which "
+            f"rasterizes a single static frame at t = 0 and would drop the "
+            f"motion. Pass the sample times in ms, e.g. "
+            f"np.arange(0, 500, 10), or set '{name}' to 0 for a static "
+            f"stimulus.")
+
+
 def _aperture(x, y, mask, fov):
     """Radial aperture in [0, 1], measured in visual-field coordinates
 
@@ -534,8 +549,8 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
         below the Nyquist frequency of the corresponding angular pixel pitch.
     temporal_freq : float or Quantity, optional
         Drift rate in Hz (e.g. ``4 * Hz``), non-negative: ``direction`` alone
-        says which way the grating drifts. 0 leaves the pattern static, and it
-        has no effect when ``time`` is None.
+        says which way the grating drifts. 0 leaves the pattern static; any
+        other rate requires ``time``.
     direction : float or Quantity, optional
         Drift direction, in degrees counterclockwise from the positive x axis
         (e.g. ``90 * deg``): 0 right, 90 up, 180 left, 270 down. The bars run
@@ -557,9 +572,10 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
         Sample times in ms (e.g. ``np.arange(0, 500, 10)``), which the scene's
         source carries as a
         :py:class:`~pulse2percept.stimuli.VideoStimulus`. None gives a static
-        :py:class:`~pulse2percept.stimuli.ImageStimulus` instead. There is no
-        default frame rate, so a scalar duration is rejected. Consecutive
-        samples must advance the drift by less than half a temporal cycle.
+        :py:class:`~pulse2percept.stimuli.ImageStimulus` instead, and is only
+        allowed when ``temporal_freq`` is 0. There is no default frame rate,
+        so a scalar duration is rejected. Consecutive samples must advance the
+        drift by less than half a temporal cycle.
     mask : {'gauss', 'circle', None}, optional
         Radial aperture applied to the pattern, which fades to mean gray
         outside it. Isotropic in dva and centered on fixation:
@@ -612,6 +628,7 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
     direction, phase = _check_angles(direction=direction, phase=phase)
     contrast = _check_contrast(contrast)
     time = _time_points(time)
+    _check_motion_sampled('temporal_freq', temporal_freq, 'Hz', time)
     x, y, fov = _visual_grid(shape, fov)
     _check_spatial_nyquist(spatial_freq, direction, fov, x.shape)
     _check_temporal_nyquist(temporal_freq, time)
@@ -663,8 +680,8 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
         moving rightwards.
     speed : float or Quantity, optional
         Speed along ``direction``, in dva/s (e.g. ``5 * dva / s``),
-        non-negative: ``direction`` alone says which way the bar moves. It has
-        no effect when ``time`` is None.
+        non-negative: ``direction`` alone says which way the bar moves. 0
+        leaves the bar stationary; any other speed requires ``time``.
     offset : float or Quantity, optional
         Signed position of the bar's center at ``t = 0``, in dva along the
         motion axis, measured from fixation.
@@ -685,8 +702,9 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
         Sample times in ms (e.g. ``np.arange(0, 500, 10)``), which the scene's
         source carries as a
         :py:class:`~pulse2percept.stimuli.VideoStimulus`. None gives a static
-        :py:class:`~pulse2percept.stimuli.ImageStimulus` instead. There is no
-        default frame rate, so a scalar duration is rejected.
+        :py:class:`~pulse2percept.stimuli.ImageStimulus` instead, and is only
+        allowed when ``speed`` is 0. There is no default frame rate, so a
+        scalar duration is rejected.
     mask : {'gauss', 'circle', None}, optional
         Radial aperture applied to the pattern, which fades to mean gray
         outside it. Isotropic in dva and centered on fixation:
@@ -745,6 +763,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     direction, = _check_angles(direction=direction)
     contrast = _check_contrast(contrast)
     time = _time_points(time)
+    _check_motion_sampled('speed', speed, 'dva/s', time)
     x, y, fov = _visual_grid(shape, fov)
     # A bar under two pixels wide rasterizes as an aliased line, not a bar:
     _check_raster(width, 'bar width', 'bar', fov, x.shape)

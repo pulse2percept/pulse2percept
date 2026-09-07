@@ -657,6 +657,8 @@ def test_grating_dimensions(kwargs):
     (dict(time=[]), '1-D'),
     (dict(time=[[0, 10], [20, 30]]), '1-D'),
     (dict(time=[0, np.nan]), 'finite'),
+    # Drift without sample times would silently freeze at t = 0:
+    (dict(temporal_freq=4), "'temporal_freq' is 4 Hz"),
     # Well past the 0.8 cycles/dva Nyquist limit of a 0.625 dva pixel:
     (dict(spatial_freq=10), 'Nyquist'),
 ])
@@ -685,6 +687,24 @@ def test_bar_static():
     npt.assert_almost_equal(meta['width'], 1.0)
     npt.assert_almost_equal(meta['offset'], -3.0)
     npt.assert_almost_equal(meta['speed'], 0.0)
+
+
+@pytest.mark.parametrize('call,param,moving', [
+    (psychophysics.grating, 'temporal_freq', 4 * Hz),
+    (psychophysics.bar, 'speed', 8 * dva / sec),
+])
+def test_motion_requires_time(call, param, moving):
+    """A nonzero drift rate or speed may not silently vanish into an image"""
+    kwargs = dict(shape=(32, 32), fov=10)
+    with pytest.raises(ValueError) as excinfo:
+        call(**kwargs, **{param: moving})
+    npt.assert_equal("'time' is None" in str(excinfo.value), True)
+    # Zero motion is what a static stimulus means, so it stays legal:
+    static = call(**kwargs, **{param: 0})
+    npt.assert_equal(isinstance(static.source, ImageStimulus), True)
+    # ... and the same motion is fine once there are sample times:
+    video = call(**kwargs, time=np.arange(0, 200, 20), **{param: moving})
+    npt.assert_equal(isinstance(video.source, VideoStimulus), True)
 
 
 def test_bar_video():
@@ -758,8 +778,8 @@ def test_bar_sampling_invariance():
             _raster(fine)[..., int(np.argmin(abs(t_fine - t)))])
     npt.assert_equal(np.array_equal(_raster(coarse)[..., 1],
                                     _raster(fine)[..., 1]), False)
-    # A static bar is the moving one frozen at t = 0:
-    static = psychophysics.bar(**kwargs)
+    # A stationary bar is the moving one frozen at t = 0:
+    static = psychophysics.bar(**{**kwargs, 'speed': 0})
     npt.assert_array_equal(_raster(static)[..., 0], _raster(fine)[..., 0])
 
 
@@ -848,6 +868,8 @@ def test_bar_dimensions(kwargs):
     (dict(time=500), 'scalar'),
     (dict(time=[]), '1-D'),
     (dict(time=[0, np.nan]), 'finite'),
+    # Motion without sample times would silently freeze at t = 0:
+    (dict(speed=8), "'speed' is 8 dva/s"),
     # 0.1 dva across a 10-degree, 16-pixel frame is 0.16 pixels:
     (dict(width=0.1), 'resolve the bar'),
 ])
@@ -943,8 +965,7 @@ def test_grating_temporal_nyquist():
     with pytest.raises(ValueError):
         psychophysics.grating(temporal_freq=24 * Hz, time=[0, 1, 2, 100],
                               **kwargs)
-    # A static pattern and a single frame have no drift to resolve:
-    psychophysics.grating(temporal_freq=1000 * Hz, **kwargs)
+    # A single frame has no gap across which the drift could alias:
     psychophysics.grating(temporal_freq=1000 * Hz, time=[0.0], **kwargs)
 
 

@@ -304,6 +304,10 @@ rate, and temporal phase and bar position are computed from those timestamps,
 not from the frame index: two videos sampled on different grids agree exactly
 wherever they share a timestamp.
 
+A static frame can only show the pattern at ``t = 0``, so a nonzero
+``temporal_freq`` or ``speed`` requires ``time``; leaving it out is an error
+rather than a silently frozen stimulus.
+
 .. note::
     :py:class:`~pulse2percept.stimuli.GratingStimulus` and
     :py:class:`~pulse2percept.stimuli.BarStimulus` are the deprecated

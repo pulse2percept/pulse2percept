@@ -110,7 +110,8 @@ Stimuli and encoding
   rather than cycles/pixel, cycles/frame, and pixels/frame. They return a
   :py:class:`~pulse2percept.vision.Scene` whose source is an
   ``ImageStimulus`` when ``time`` is None and a ``VideoStimulus`` otherwise;
-  ``time`` takes explicit sample times, and there is no default frame rate.
+  ``time`` takes explicit sample times, there is no default frame rate, and a
+  nonzero ``temporal_freq`` or ``speed`` requires it.
   ``direction`` alone sets the direction of motion, and a grating that would
   alias in space or time is refused rather than rasterized
   (:issue:`499`, :pull:`890`).
