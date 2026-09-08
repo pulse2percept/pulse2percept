@@ -245,7 +245,7 @@ run:
 .. code-block:: python
 
     Scenario(
-        id='argus2_axonmap_bostontrain',
+        id='argus2_axonmap_video',
         ...
         slow=True,
     )

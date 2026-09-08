@@ -13,12 +13,12 @@ first two correspond to these one-liners::
     implant = p2p.implants.retina.ArgusII()
     p2p.models.retina.AxonMapModel(implant=implant, yrange=(-8, 8),
                                    xrange=(-12, 12)).predict_percept(
-        as_current(implant, p2p.stimuli.LogoBVL()))
+        as_current(implant, p2p.stimuli.samples.logo_bvl()))
 
     p2p.models.retina.ScoreboardModel(implant=p2p.implants.retina.PRIMAPivotal(),
                                       yrange=(-4, 4), xrange=(-4, 4), rho=50,
                                       step=0.1).predict_percept(
-        p2p.stimuli.LogoBVL().invert())
+        p2p.stimuli.samples.logo_bvl().invert())
 
 The PRIMA scenario runs its optical encoder directly. Electrical scenarios
 use :func:`as_current` to preserve their historical benchmark workload.
@@ -33,6 +33,8 @@ regression check cannot see.
 """
 from dataclasses import dataclass
 from typing import Callable
+
+import numpy as np
 
 import pulse2percept as p2p
 
@@ -70,6 +72,16 @@ def array_ptrain(implant_cls, amp=20):
 #: the value -- the kernels below do the same arithmetic on any amplitude --
 #: so raise it if a scenario ever needs a clinically plausible one.
 GRAY_LEVEL_UA = 1.0
+
+
+def drifting_grating(n_frames=94, fps=29.97, shape=(240, 426)):
+    """A grayscale clip the size and length of a short camera sequence"""
+    rows, cols = shape
+    x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
+    phase = 2 * np.pi * np.arange(n_frames) / n_frames
+    return p2p.stimuli.VideoStimulus(
+        np.tile(0.5 + 0.5 * np.sin(x - phase), (rows, 1, 1)),
+        metadata={'fps': fps})
 
 
 def as_current(implant, picture, amp_max=GRAY_LEVEL_UA):
@@ -170,7 +182,7 @@ class Scenario:
 SCENARIOS = [
     Scenario(
         id='argus2_axonmap_logobvl',
-        stimulus=lambda: p2p.stimuli.LogoBVL(),
+        stimulus=lambda: p2p.stimuli.samples.logo_bvl(),
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
         model=lambda **kwargs: p2p.models.retina.AxonMapModel(xrange=(-12, 12),
@@ -181,7 +193,7 @@ SCENARIOS = [
     Scenario(
         # Benchmark the image-to-optical encoding path for PRIMA.
         id='prima_scoreboard_logobvl',
-        stimulus=lambda: p2p.stimuli.LogoBVL().invert(),
+        stimulus=lambda: p2p.stimuli.samples.logo_bvl().invert(),
         implant=p2p.implants.retina.PRIMAPivotal,
         model=lambda **kwargs: p2p.models.retina.ScoreboardModel(
             xrange=(-4, 4), yrange=(-4, 4), rho=50, step=0.1, **kwargs),
@@ -225,7 +237,7 @@ SCENARIOS = [
     # scenario that reaches _thompson2003.
     Scenario(
         id='argus2_thompson2003_logobvl',
-        stimulus=lambda: p2p.stimuli.LogoBVL(),
+        stimulus=lambda: p2p.stimuli.samples.logo_bvl(),
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
         model=lambda **kwargs: p2p.models.retina.Thompson2003Model(
@@ -249,8 +261,8 @@ SCENARIOS = [
     # predict_percept takes roughly a minute where the image scenarios above
     # take well under a second. Slow, so it stays out of the default run.
     Scenario(
-        id='argus2_axonmap_bostontrain',
-        stimulus=lambda: p2p.stimuli.BostonTrain().rgb2gray(),
+        id='argus2_axonmap_video',
+        stimulus=drifting_grating,
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
         model=lambda **kwargs: p2p.models.retina.AxonMapModel(xrange=(-12, 12),

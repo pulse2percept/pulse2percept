@@ -635,8 +635,8 @@ class Implant(PrettyPrint):
 
         Argus II includes an encoder, so it can prepare an image directly:
 
-        >>> from pulse2percept.stimuli import LogoBVL
-        >>> ArgusII().prepare_stim(LogoBVL()).unit
+        >>> from pulse2percept.stimuli import samples
+        >>> ArgusII().prepare_stim(samples.logo_bvl()).unit
         uA
         """
         # Empty input produces no stimulation:

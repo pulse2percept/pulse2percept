@@ -9,29 +9,30 @@ Generating a stimulus from a video
 Loading a video
 ----------------
 
-A video can be loaded as follows:
+A video can be loaded from a file as follows:
 
 .. code:: python
 
-    stim = p2p.stimuli.videos.VideoStimulus("path-to-video.mp4")
+    stim = p2p.stimuli.VideoStimulus("path-to-video.mp4")
 
-There is an example video that is pre-installed with pulse2percept. You can
-load it like this.
+pulse2percept bundles one such file: an excerpt of *Big Buck Bunny*
+(© 2008 Blender Foundation, CC BY 3.0), 640x359 at 24 fps. We load it
+smaller and in grayscale, which is what a retinal implant sees anyway.
 
 """
 # sphinx_gallery_thumbnail_number = 1
 
 import pulse2percept as p2p
-import numpy as np
 
-video = p2p.stimuli.BostonTrain(as_gray=True)
+video = p2p.stimuli.samples.big_buck_bunny(resize=(120, 160), as_gray=True)
 print(video)
 
 ##############################################################################
 # There is a lot of useful information in this output.
 #
-# Firstly, note that ``vid_shape`` gives the dimension of the original video in
-# (height, width, the number of frames).
+# Firstly, note that ``vid_shape`` gives the video dimensions as loaded, not
+# those of the source file: grayscale video is (height, width, frames), while
+# color video also has a channel axis.
 #
 # On the other hand, ``shape`` gives the dimension of the stimulation which is
 # (the number of electrodes, the number of time steps). This is calculated from
@@ -106,10 +107,10 @@ video.resize((40, 40)).rotate(10).invert().filter('median').play()
 # An implant that knows how its device does this carries a
 # :py:class:`~pulse2percept.stimuli.StimulusEncoder` of its own, and encodes
 # whatever video it is handed. Here we replace Argus II's own 6 Hz encoder
-# with a 30 Hz one, so that every frame of this 30 fps video gets a pulse:
+# with a 24 Hz one, so that every frame of this 24 fps video gets a pulse:
 
 implant = p2p.implants.retina.ArgusII(
-    encoder=p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50), freq=30))
+    encoder=p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50), freq=24))
 
 # ``implant.prepare_stim(video)`` is the current the device would deliver, if
 # you want to look at it.

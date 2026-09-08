@@ -7,7 +7,8 @@ from pulse2percept.implants import (DiskElectrode, HexElectrode,
                                     PointSource, ElectrodeArray,
                                     ElectrodeGrid)
 from pulse2percept.implants.retina import ArgusII
-from pulse2percept.stimuli import ElectrodeNames, Stimulus
+from pulse2percept.stimuli import Stimulus
+from pulse2percept.stimuli._grid_names import _GridNames
 from pulse2percept.units import (DimensionMismatchError, Quantity, cm, deg,
                                  dva, mm, ms, rad, uA, um)
 
@@ -492,19 +493,19 @@ def test_ElectrodeGrid___get_item__(gtype):
 def test_ElectrodeGrid_canonical_names(shape):
     # A generic grid names its electrodes the same way an ImageStimulus names
     # its pixels: a letter for the row, a number for the column. Both come
-    # from ElectrodeNames, so this pins them together.
+    # from _GridNames, so this pins them together.
     grid = ElectrodeGrid(shape, 20, names=('A', '1'))
     npt.assert_equal(grid.electrode_names,
-                     np.asarray(ElectrodeNames(shape)).tolist())
+                     np.asarray(_GridNames(shape)).tolist())
     # ... and the name still addresses the electrode it describes:
     npt.assert_equal(grid['A1'], grid[0])
-    npt.assert_equal(grid[ElectrodeNames(shape)[-1]], grid[np.prod(shape) - 1])
+    npt.assert_equal(grid[_GridNames(shape)[-1]], grid[np.prod(shape) - 1])
 
 
 def test_ElectrodeGrid_naming_schemes():
     # The non-default schemes exist to reproduce published implants (ArgusI
     # uses ('1', 'A'), Orion ('A', '-1')). They are pinned here so that
-    # routing the default through ElectrodeNames cannot disturb them.
+    # routing the default through _GridNames cannot disturb them.
     expected = {
         ('A', '1'): ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'],
         ('1', 'A'): ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'],
@@ -680,9 +681,9 @@ def test_ElectrodeArray_coordinates_selector():
     single = ElectrodeArray({'7': DiskElectrode(1, 2, 3, 4)})
     npt.assert_almost_equal(single.coordinates(electrodes='7'), [[1, 2, 3]])
     # Whatever else can be iterated is a collection -- including the
-    # `ElectrodeNames` a stimulus reports, which is what models pass:
+    # name container a stimulus reports, which is what models pass:
     npt.assert_equal(
-        grid.coordinates(electrodes=ElectrodeNames((3, 3))).shape, (9, 3))
+        grid.coordinates(electrodes=_GridNames((3, 3))).shape, (9, 3))
     npt.assert_almost_equal(
         grid.coordinates(electrodes=Stimulus(np.ones(9)).electrodes),
         grid.coordinates())

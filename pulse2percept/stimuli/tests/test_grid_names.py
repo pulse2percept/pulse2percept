@@ -2,11 +2,12 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.stimuli import ElectrodeNames, ImageStimulus, Stimulus
+from pulse2percept.stimuli import ImageStimulus, Stimulus
+from pulse2percept.stimuli._grid_names import _GridNames
 
 
-def test_ElectrodeNames():
-    names = ElectrodeNames((3, 4))
+def test_GridNames():
+    names = _GridNames((3, 4))
     npt.assert_equal(len(names), 12)
     npt.assert_equal(names.shape, (12,))
     npt.assert_equal(names.size, 12)
@@ -24,37 +25,37 @@ def test_ElectrodeNames():
     npt.assert_equal(names.tolist(), np.asarray(names).tolist())
 
     # Beyond 26 rows, names continue AA, AB, ... just like ElectrodeGrid:
-    npt.assert_equal(ElectrodeNames((30, 2))[-1], 'AD2')
+    npt.assert_equal(_GridNames((30, 2))[-1], 'AD2')
 
     # An empty grid is still a valid (empty) set of names:
-    npt.assert_equal(len(ElectrodeNames((0, 4))), 0)
-    npt.assert_equal(np.asarray(ElectrodeNames((0, 4))).size, 0)
+    npt.assert_equal(len(_GridNames((0, 4))), 0)
+    npt.assert_equal(np.asarray(_GridNames((0, 4))).size, 0)
 
     with pytest.raises(ValueError):
-        ElectrodeNames((3,))
+        _GridNames((3,))
     with pytest.raises(ValueError):
-        ElectrodeNames((2, 3, 4, 5))
+        _GridNames((2, 3, 4, 5))
     with pytest.raises(ValueError):
-        ElectrodeNames((-1, 3))
+        _GridNames((-1, 3))
 
 
-def test_ElectrodeNames_channels():
-    names = ElectrodeNames((2, 3, 3))
+def test_GridNames_channels():
+    names = _GridNames((2, 3, 3))
     npt.assert_equal(np.asarray(names)[:4], ['A1_R', 'A1_G', 'A1_B', 'A2_R'])
     npt.assert_equal(names[-1], 'B3_B')
     # A fourth channel is the alpha channel:
-    npt.assert_equal(ElectrodeNames((2, 2, 4))[3], 'A1_A')
+    npt.assert_equal(_GridNames((2, 2, 4))[3], 'A1_A')
     # Anything else falls back to a numeric suffix, so that every channel
     # remains addressable:
-    npt.assert_equal(ElectrodeNames((2, 2, 5))[4], 'A1_4')
+    npt.assert_equal(_GridNames((2, 2, 5))[4], 'A1_4')
 
 
 @pytest.mark.parametrize('grid_shape', [(3, 4), (2, 3, 3), (5, 7, 4),
                                         (30, 50), (1, 1)])
-def test_ElectrodeNames_roundtrip(grid_shape):
+def test_GridNames_roundtrip(grid_shape):
     # Every generated name must map back onto the electrode it names, which is
     # what lets `index` work without ever building the names:
-    names = ElectrodeNames(grid_shape)
+    names = _GridNames(grid_shape)
     materialized = np.asarray(names)
     npt.assert_equal(materialized.size, names.size)
     npt.assert_equal([names.index(n) for n in materialized],
@@ -63,8 +64,8 @@ def test_ElectrodeNames_roundtrip(grid_shape):
     npt.assert_equal(len(np.unique(materialized)), names.size)
 
 
-def test_ElectrodeNames_index():
-    names = ElectrodeNames((3, 4))
+def test_GridNames_index():
+    names = _GridNames((3, 4))
     npt.assert_equal(names.index('A1'), 0)
     npt.assert_equal(names.index('B3'), 6)
     npt.assert_equal('C4' in names, True)
@@ -86,13 +87,13 @@ def test_ElectrodeNames_index():
         names.index('A1_R')
     # ... and vice versa:
     with pytest.raises(ValueError):
-        ElectrodeNames((3, 4, 3)).index('A1')
+        _GridNames((3, 4, 3)).index('A1')
     with pytest.raises(ValueError):
-        ElectrodeNames((3, 4, 3)).index('A1_X')
+        _GridNames((3, 4, 3)).index('A1_X')
 
 
-def test_ElectrodeNames_indexing():
-    names = ElectrodeNames((3, 4))
+def test_GridNames_indexing():
+    names = _GridNames((3, 4))
     # A slice keeps the names it selects:
     npt.assert_equal(np.asarray(names[1:4]), ['A2', 'A3', 'A4'])
     npt.assert_equal(names[1:4].is_unique, True)
@@ -118,8 +119,8 @@ def test_ElectrodeNames_indexing():
         sub.index('A1')
 
 
-def test_ElectrodeNames_reshape():
-    names = ElectrodeNames((4, 5))
+def test_GridNames_reshape():
+    names = _GridNames((4, 5))
     grid = names.reshape((4, 5))
     npt.assert_equal(grid.shape, (4, 5))
     npt.assert_equal(grid[1, 2], 'B3')
@@ -132,34 +133,34 @@ def test_ElectrodeNames_reshape():
     npt.assert_equal(names.ravel() is names, True)
 
 
-def test_ElectrodeNames_equality():
-    npt.assert_equal(np.all(ElectrodeNames((3, 4)) == ElectrodeNames((3, 4))),
+def test_GridNames_equality():
+    npt.assert_equal(np.all(_GridNames((3, 4)) == _GridNames((3, 4))),
                      True)
-    npt.assert_equal(np.all(ElectrodeNames((3, 4)) == ElectrodeNames((4, 3))),
+    npt.assert_equal(np.all(_GridNames((3, 4)) == _GridNames((4, 3))),
                      False)
     # Comparison is elementwise, so a stimulus can be indexed by
     # `stim[stim.electrodes != 'A1']`:
-    names = ElectrodeNames((2, 2))
+    names = _GridNames((2, 2))
     npt.assert_equal(names == 'A1', [True, False, False, False])
     npt.assert_equal(names != 'A1', [False, True, True, True])
     # Two views of differently-shaped grids still compare by name:
-    npt.assert_equal(np.all(ElectrodeNames((1, 2)) == np.array(['A1', 'A2'])),
+    npt.assert_equal(np.all(_GridNames((1, 2)) == np.array(['A1', 'A2'])),
                      True)
 
 
-def test_ElectrodeNames_copy():
-    names = ElectrodeNames((3, 4))[1:5]
+def test_GridNames_copy():
+    names = _GridNames((3, 4))[1:5]
     clone = names.copy()
     npt.assert_equal(np.asarray(clone), np.asarray(names))
     clone.indices[0] = 11
     npt.assert_equal(names[0], 'A2')
 
 
-def test_ElectrodeNames_is_lazy():
+def test_GridNames_is_lazy():
     # The whole point of the structure: naming a million electrodes must not
     # cost a million strings. Building the names, copying them and looking one
     # up all have to stay independent of the size of the grid.
-    names = ElectrodeNames((2000, 2000, 3))
+    names = _GridNames((2000, 2000, 3))
     npt.assert_equal(names.size, 12000000)
     npt.assert_equal(names.indices.size, 12000000)
     npt.assert_equal(names[0], 'A1_R')
@@ -167,11 +168,11 @@ def test_ElectrodeNames_is_lazy():
     npt.assert_equal(names.index('BXX2000_B'), names.size - 1)
 
 
-def test_Stimulus_with_ElectrodeNames():
+def test_Stimulus_with_GridNames():
     data = np.arange(12, dtype=np.float32).reshape((-1, 1))
-    stim = Stimulus(data, electrodes=ElectrodeNames((3, 4)))
+    stim = Stimulus(data, electrodes=_GridNames((3, 4)))
     npt.assert_equal(stim.electrodes[6], 'B3')
-    # Addressing an electrode by name goes through ElectrodeNames.index:
+    # Addressing an electrode by name goes through _GridNames.index:
     npt.assert_almost_equal(stim['B3'], 6)
     npt.assert_almost_equal(stim['C4'], 11)
     with pytest.raises(ValueError):
@@ -187,7 +188,7 @@ def test_Stimulus_with_ElectrodeNames():
     # container (a repeated index is the only way to produce them):
     with pytest.warns(UserWarning):
         Stimulus(np.zeros((3, 1)),
-                 electrodes=ElectrodeNames((3, 4))[[0, 0, 1]])
+                 electrodes=_GridNames((3, 4))[[0, 0, 1]])
 
 
 def test_ImageStimulus_electrode_names(tmp_path):
@@ -195,7 +196,7 @@ def test_ImageStimulus_electrode_names(tmp_path):
     fname = str(tmp_path / 'test.png')
     imsave(fname, np.random.randint(0, 255, (5, 7), dtype=np.uint8))
     stim = ImageStimulus(fname)
-    npt.assert_equal(isinstance(stim.electrodes, ElectrodeNames), True)
+    npt.assert_equal(isinstance(stim.electrodes, _GridNames), True)
     npt.assert_equal(stim.electrodes[0], 'A1')
     npt.assert_equal(stim.electrodes[-1], 'E7')
     # A pixel keeps its name through an operation that preserves the shape:

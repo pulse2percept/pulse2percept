@@ -60,14 +60,15 @@ API changes and improvements
 Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
-* New :py:class:`~pulse2percept.stimuli.Encoder` framework supports electrical
-  and non-electrical stimulation. 
-  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` implements photovoltaic
-  encoding, while :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` supports
-  threshold-relative amplitudes such as ``(0 * xTh, 3 * xTh)``. Optical power
-  units (``W``, ``mW``, ``uW``), geometric-angle units (``deg``, ``rad``), and
-  ``pathlib.Path`` input for image and video stimuli were also added
-  (:pull:`855`, :pull:`868`, :pull:`869`, :pull:`880`).
+* The stimuli API was streamlined (:pull:`889`): core stimulus classes now live
+  in :py:mod:`pulse2percept.stimuli.base`, bundled images and videos are exposed
+  through :py:mod:`pulse2percept.stimuli.samples`, and visual psychophysics
+  stimuli such as Landolt C, Tumbling E, gratings, and bars are generated through
+  :py:mod:`pulse2percept.stimuli.psychophysics` in physical visual units.
+  ``LogoBVL``, ``LogoUCSB``, ``GratingStimulus``, and ``BarStimulus`` are
+  deprecated until v0.12; ``SnellenChart``, ``BostonTrain``, and ``GirlPool``
+  were removed. The old ``stimuli.names``, ``stimuli.images``, and
+  ``stimuli.videos`` module paths were also removed.
 
 
 Implants
@@ -139,10 +140,14 @@ Models
   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` apply the
   [Granley2021]_ pulse-dependent brightness and size fits without axonal
   streaks. Retinal scoreboard and axon-map models also support the new encoding
-  workflows (:pull:`868`, :pull:`869`, :pull:`886`). * New ``location_noise``
+  workflows (:pull:`868`, :pull:`869`, :pull:`886`).
+
+* New ``location_noise``
   models fixed, electrode-specific uncertainty in phosphene location in
   visual-field coordinates. The old generic ``noise`` parameter was removed
-  (:pull:`881`, :pull:`885`). * ``find_threshold`` was removed; threshold
+  (:pull:`881`, :pull:`885`).
+  
+* ``find_threshold`` was removed; threshold
   estimation belongs at the experiment level rather than in the model API
   (:pull:`862`).
 

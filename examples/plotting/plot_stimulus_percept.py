@@ -23,7 +23,7 @@ Start with a logo, an implant, and a model:
 
 import pulse2percept as p2p
 
-stim = p2p.stimuli.LogoUCSB(resize=(60, 80))
+stim = p2p.stimuli.samples.logo_ucsb(resize=(60, 80))
 model = p2p.models.retina.ScoreboardModel(p2p.implants.retina.ArgusII(),
                                           rho=200,
                                           xrange=(-14, 12), yrange=(-12, 12),
@@ -42,10 +42,10 @@ p2p.plotting.plot_stimulus_percept(stim, percept)
 # -------
 #
 # The same works for a video, except that both panels now move. Predicting a
-# percept for every frame of a 30-Hz video is the expensive part here, so keep
-# the video small:
+# percept for every frame is the expensive part here, so load the bundled
+# *Big Buck Bunny* clip (24 fps) at a small size:
 
-video = p2p.stimuli.BostonTrain(resize=(60, 80), as_gray=True)
+video = p2p.stimuli.samples.big_buck_bunny(resize=(60, 80), as_gray=True)
 percept = model.predict_percept(video)
 
 ###############################################################################

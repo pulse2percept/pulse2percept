@@ -119,6 +119,13 @@ Stimulus in place.
 Images and videos
 -----------------
 
+:py:class:`~pulse2percept.stimuli.Stimulus`,
+:py:class:`~pulse2percept.stimuli.ImageStimulus` and
+:py:class:`~pulse2percept.stimuli.VideoStimulus` all live in
+:py:mod:`pulse2percept.stimuli.base`, and are imported from
+:py:mod:`pulse2percept.stimuli`. The ``stimuli.names``, ``stimuli.images`` and
+``stimuli.videos`` modules of v0.10 no longer exist.
+
 :py:class:`~pulse2percept.stimuli.ImageStimulus` and
 :py:class:`~pulse2percept.stimuli.VideoStimulus` are visual sources, not
 currents. Their values are dimensionless gray levels. A
@@ -138,7 +145,7 @@ A video can also be processed one frame at a time. Iterating over a
 
 .. code-block:: python
 
-    video = p2p.stimuli.BostonTrain()
+    video = p2p.stimuli.VideoStimulus('movie.mp4')
 
     for frame in video:
         percept = model.predict_percept(frame)
@@ -146,6 +153,80 @@ A video can also be processed one frame at a time. Iterating over a
 Each call treats the frame as an independent still image. Pass the complete
 video to ``predict_percept`` instead when temporal dynamics across frames
 matter.
+
+
+Sample stimuli
+--------------
+
+:py:mod:`pulse2percept.stimuli.samples` provides bundled images and videos for
+examples and tests. The loaders return ordinary ``ImageStimulus`` and
+``VideoStimulus`` objects:
+
+.. code-block:: python
+
+    from pulse2percept.stimuli import samples
+
+    image = samples.ucsb_bike()
+    video = samples.big_buck_bunny(resize=(60, 80))
+
+See the :py:mod:`~pulse2percept.stimuli.samples` API for the available assets
+and ``pulse2percept/stimuli/data/samples/README.rst`` for their provenance and
+licensing.
+
+
+Psychophysical stimuli
+----------------------
+
+:py:mod:`pulse2percept.stimuli.psychophysics` generates calibrated visual
+patterns in degrees of visual angle and physical time. The generators return
+a :py:class:`~pulse2percept.vision.Scene`; ``shape`` controls raster resolution
+without changing the stimulus geometry.
+
+.. code-block:: python
+
+    from pulse2percept.stimuli import psychophysics
+    from pulse2percept.units import deg, dva
+
+    c = psychophysics.landolt_c(
+        gap=0.5 * dva, position=(5, 0) * dva,
+        orientation=90 * deg, fov=15 * dva)
+
+    e = psychophysics.tumbling_e(
+        stroke=0.5 * dva, position=(5, 0) * dva,
+        orientation=90 * deg, fov=15 * dva)
+
+For a Landolt C, ``gap`` is the critical feature; for a Tumbling E it is
+``stroke``. Both use standard optotype proportions and are supersampled before
+being area-averaged onto the requested raster. The critical feature must span
+at least three output pixels.
+
+Gratings and bars use the same visual-field coordinates:
+
+.. code-block:: python
+
+    import numpy as np
+    from pulse2percept.units import Hz, s
+
+    grating = psychophysics.grating(
+        spatial_freq=0.5 / dva, temporal_freq=2 * Hz,
+        fov=20 * dva, time=np.arange(0, 1000, 20))
+
+    bar = psychophysics.bar(
+        width=2 * dva, speed=20 * dva / s, offset=-10 * dva,
+        fov=20 * dva, time=np.arange(0, 1000, 20))
+
+``spatial_freq`` is measured in cycles/dva, ``temporal_freq`` in Hz, and bar
+width, position, and speed in dva or dva/s. ``direction`` is measured
+counterclockwise from the positive x axis.
+
+With ``time=None`` the result contains an ``ImageStimulus``. Moving stimuli
+require explicit sample times and contain a ``VideoStimulus``; no frame rate
+is assumed. Gratings that exceed the spatial or temporal Nyquist limit are
+rejected rather than silently aliased.
+
+``GratingStimulus`` and ``BarStimulus`` use the legacy pixel/frame API and are
+deprecated until v0.12.
+
 
 Plotting and time operations
 ----------------------------

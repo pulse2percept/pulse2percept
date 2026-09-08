@@ -37,18 +37,18 @@ the Bionic Vision Lab (BVL) at UC Santa Barbara:
 import pulse2percept as p2p
 import numpy as np
 
-logo = p2p.stimuli.LogoBVL()
+logo = p2p.stimuli.samples.logo_bvl()
 print(logo)
 
 ##############################################################################
-# Inspecting the ``LogoBVL`` object, we can see that gray levels are converted
+# Inspecting the ``logo`` object, we can see that gray levels are converted
 # to floats in the range [0, 1], and that the original 576x720x4 image is
 # flattened so that each pixel can be assigned to an electrode.
 #
 # We also notice that ``time=None``, indicating that the stimulus does not have
 # a time component. Thus we cannot apply temporal models to it.
 #
-# ``LogoBVL`` can be assigned to a stimulus and used in conjunction with a
+# The logo can be assigned to a stimulus and used in conjunction with a
 # phosphene model, just like any other
 # :py:class:`~pulse2percept.stimuli.Stimulus` object.
 #
@@ -270,12 +270,12 @@ stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
 # .. code-block:: python
 #
 #     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
-#     delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
+#     delivered = implant.prepare_stim(p2p.stimuli.VideoStimulus('movie.mp4'))
 #
 # :py:class:`~pulse2percept.implants.retina.ArgusII` brings one along already,
-# so
-# ``model.predict_percept(p2p.stimuli.BostonTrain())`` on a model bound to one
-# is the whole setup.
+# so ``model.predict_percept(video)`` on a model bound to one is the whole
+# setup, for any ``video`` a
+# :py:class:`~pulse2percept.stimuli.VideoStimulus` can read.
 #
 # The other way to encode a gray level is as a pulse *rate* at fixed amplitude,
 # which is what :py:class:`~pulse2percept.stimuli.FrequencyEncoder` does. It is
@@ -287,7 +287,7 @@ stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
 #
 #     implant.encoder = p2p.stimuli.FrequencyEncoder(freq_range=(0, 300),
 #                                                    amp=50, clock=1)
-#     delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
+#     delivered = implant.prepare_stim(p2p.stimuli.VideoStimulus('movie.mp4'))
 #
 # A real stimulator usually cannot drive every electrode at once, because the
 # current it can source at any instant is limited. Give the implant a
@@ -301,7 +301,7 @@ stim_dilate = logo_dilate.trim().resize(implant.shape).encode()
 #
 #     implant.max_current = 1000  # uA, summed over electrodes
 #     implant.raster = p2p.implants.SequentialRaster(6)  # one row at a time
-#     delivered = implant.prepare_stim(video)
+#     delivered = implant.prepare_stim(p2p.stimuli.VideoStimulus('movie.mp4'))
 #
 # The raster belongs to the implant, and is the only place the schedule is
 # described: assigning one binds it to that implant, so

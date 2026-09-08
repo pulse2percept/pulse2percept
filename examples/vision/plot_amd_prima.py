@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 
 from pulse2percept.implants.retina import PRIMAPivotal
 from pulse2percept.models.retina import ScoreboardModel
-from pulse2percept.stimuli import LogoBVL
+from pulse2percept.stimuli import samples
 from pulse2percept.units import dva
 from pulse2percept.vision import Scene, Scotoma
 
@@ -54,7 +54,7 @@ scotoma = Scotoma.ellipse(5 * dva, 4 * dva, center=center)
 # the default black. ``rings=True`` adds 5-degree rings about the
 # fovea; they are drawn on top and change nothing about the scene.
 
-logo = LogoBVL(resize=(240, 300))
+logo = samples.logo_bvl(resize=(240, 300))
 filled_in = Scene(logo, fov=40 * dva, scotoma=scotoma,
                   scotoma_fill='inpaint', background=1)
 

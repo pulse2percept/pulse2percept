@@ -121,7 +121,7 @@ encoder = p2p.stimuli.AmplitudeEncoder(
 
 retinal_implant.encoder = encoder
 
-image = p2p.stimuli.LogoBVL()
+image = p2p.stimuli.samples.logo_bvl()
 percept = retinal_model.predict_percept(image)
 
 percept.plot()
@@ -130,7 +130,7 @@ plt.show()
 
 ###############################################################################
 # Individual thresholds can be stored in ``implant.thresholds``.
-# ``LogoBVL`` is a built-in
+# :func:`~pulse2percept.stimuli.samples.logo_bvl` is a bundled
 # :class:`~pulse2percept.stimuli.ImageStimulus`; your own image can be loaded
 # the same way. The model receives the image directly because the implant knows
 # how to encode it.
@@ -147,15 +147,18 @@ plt.show()
 # Videos work the same way
 # ------------------------
 #
-# A video is another visual source. The built-in Boston train clip lets us see
-# both the input and the predicted percept as interactive players.
+# A video is another visual source. ``samples.big_buck_bunny()`` is a bundled
+# excerpt of *Big Buck Bunny* (© 2008 Blender Foundation, CC BY 3.0) at
+# 24 fps, downscaled here; it lets us see both the input and the predicted
+# percept as interactive players. Any movie file a
+# :class:`~pulse2percept.stimuli.VideoStimulus` can read works the same way.
 #
 # The Granley biphasic model above describes one biphasic pulse-train condition
 # per electrode. For a video whose encoded amplitude changes frame by frame,
 # the spatial :class:`~pulse2percept.models.retina.AxonMapModel` maps that
 # modulation to a percept frame by frame.
 
-video = p2p.stimuli.BostonTrain(as_gray=True)
+video = p2p.stimuli.samples.big_buck_bunny(resize=(120, 160), as_gray=True)
 video.play()
 
 ###############################################################################
@@ -163,7 +166,7 @@ video.play()
 implant = p2p.implants.retina.ArgusII(
     encoder=p2p.stimuli.AmplitudeEncoder(
         amp_range=(0, 50 * uA),
-        freq=30 * Hz,
+        freq=24 * Hz,
     )
 )
 model = p2p.models.retina.AxonMapModel(implant)
@@ -185,13 +188,14 @@ percept.play()
 # This is useful when the person to be simulated still has native vision outside
 # a scotoma.
 #
-# In this example, ``LogoBVL`` supplies the image, ``Scene`` describes the
-# visible world and an eccentric central-field loss, PRIMA supplies prosthetic
-# input inside the scotoma, and the retinal model predicts the combined view.
+# In this example, ``samples.logo_bvl()`` supplies the image, ``Scene``
+# describes the visible world and an eccentric central-field loss, PRIMA
+# supplies prosthetic input inside the scotoma, and the retinal model predicts
+# the combined view.
 
 center = (6, -2) * dva
 
-image = p2p.stimuli.LogoBVL(resize=(240, 300))
+image = p2p.stimuli.samples.logo_bvl(resize=(240, 300))
 scotoma = p2p.vision.Scotoma.ellipse(
     5 * dva,
     4 * dva,

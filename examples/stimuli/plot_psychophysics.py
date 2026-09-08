@@ -1,144 +1,166 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-Generating a drifting sinusoidal grating or drifting bar stimulus
-===============================================================================
+Gratings and bars in degrees of visual angle
+=============================================
 
-*This example shows how to use drifting psychophysics-based stimuli for a retinal implant.*
+:py:mod:`pulse2percept.stimuli.psychophysics` generates gratings and bars in
+visual rather than pixel units. The resulting
+:py:class:`~pulse2percept.vision.Scene` carries the field of view needed to
+register the stimulus with an implant.
 
-Along with images, videos, and oter built-in stimuli, pulse2percept supports
-generating :py:class:`~pulse2percept.stimuli.GratingStimulus` and :py:class:`~pulse2percept.stimuli.BarStimulus` as stimuli
-that can be passed as percepts to implants.
+A static grating
+----------------
 
-Creating a Stimulus
--------------------
-
-First, create the stimuli:
-
-
-Shape (`(height, width)` in pixels) is the only required parameter for creating these stimuli.
-
-A drifting sinusoidal grating is represented by :py:class:`~pulse2percept.stimuli.GratingStimulus`.
-The following illustrates one frame of a grating stimulus.
+With ``time=None`` nothing changes over time, so the scene's source is an
+:py:class:`~pulse2percept.stimuli.ImageStimulus` rather than a video of some
+made-up duration:
 """
 # sphinx_gallery_thumbnail_number = 1
+import numpy as np
 import matplotlib.pyplot as plt
-from pulse2percept.stimuli import GratingStimulus
-stim = GratingStimulus((50, 50), spatial_freq=0.1, temporal_freq=0.1)
-plt.imshow(stim.data[:, 0].reshape(50, 50), cmap='gray')
-plt.title("Grating Stimulus")
+
+from pulse2percept.stimuli import psychophysics
+from pulse2percept.units import deg, dva, Hz, s
+
+scene = psychophysics.grating(spatial_freq=0.5 / dva, fov=20 * dva,
+                              shape=(256, 256))
+print(type(scene.source).__name__, scene.fov)
+
+scene.plot()
 plt.show()
 
-########################################################################################
-# You can view the entire stimulus over time using `stim.play()`
-stim.play()
+###############################################################################
+# ``spatial_freq=0.5 / dva`` gives one cycle every two degrees. Changing
+# ``shape`` changes only the raster resolution.
+#
+# ``direction`` is an ordinary angle, measured counterclockwise from the
+# positive x axis, in the same visual-field frame the scene uses (x to the
+# right, y upwards): 0 right, 90 up, 180 left, 270 down. The bars run
+# perpendicular to it. ``phase`` shifts the pattern along that axis, and
+# ``mask`` applies a circular or Gaussian aperture:
 
-#####################################################################################
-# Here, the spatial frequency of the grating (i.e., the inverse of how many pixels it
-# takes to represent one cycle of the sinusoid) is given as 0.1 cycles/pixel, whereas
-# the temporal frequency (i.e., the inverse of how many frames it takes to represent
-# one cycle of the sinusoid) is given as 0.1 cycles/frame.
-# By default, the drift direction of the grating will be to the right (0 degrees).
-#
-# A drifting bar is represented by :py:class:`~pulse2percept.stimuli.BarStimulus`.
-# A visual example of a basic sinusoidal grating can be generated as such:
+fig, axes = plt.subplots(ncols=3, figsize=(12, 4))
+for ax, kwargs in zip(axes, [{'direction': 0 * deg},
+                             {'direction': 45 * deg},
+                             {'direction': 90 * deg, 'mask': 'gauss'}]):
+    psychophysics.grating(spatial_freq=0.5 / dva, fov=20 * dva,
+                          shape=(256, 256), **kwargs).plot(ax=ax)
+    ax.set_title(str(kwargs))
+plt.show()
 
-from pulse2percept.stimuli.psychophysics import BarStimulus
-stim = BarStimulus((50, 50), speed=1)
-stim.play()
+###############################################################################
+# A drifting grating
+# ------------------
+#
+# ``time`` contains the explicit sample times. Temporal phase is computed from
+# those times rather than frame number.
 
-#####################################################################################
-# Here, the drift speed of the bar is given as 1 pixel/frame and, by default, the
-# bar will drift to the right (0 degrees).
-#
-# Customizing the Stimulus
-# ------------------------
-#
-# For both :py:class:`~pulse2percept.stimuli.BarStimulus` and 
-# :py:class:`~pulse2percept.stimuli.GratingStimulus`,
-# the only argument you must pass to the constructor is the shape `(height, width)` 
-# in pixels.
-# There are many optional arguments that can be passed to change various attributes 
-# of the stimulus.
-# In the examples above, we changed the speed at which the GratingStimulus changed 
-# with temporal_freq *(scalar, cycles/frame)* 
-# and the speed at which the BarStimulus moved with speed *(scalar, pixels/frame)* 
-# in order to make the effect easier to visualize.
-# If, for example, we wanted a longer stimulus, we cold set the time parameter 
-# (in units of milliseconds)
-# to change the duration of the stimulus:
+time = np.arange(0, 1000, 20)  # ms
+drift = psychophysics.grating(spatial_freq=0.5 / dva, temporal_freq=2 * Hz,
+                              direction=0 * deg, fov=20 * dva,
+                              shape=(128, 128), time=time)
+drift.source.play()
 
-stim = BarStimulus((50, 50), speed=1, time=1500)
-stim.play()
+###############################################################################
+# At 2 Hz the pattern completes two cycles per second, and since one cycle is
+# two degrees wide it travels ``temporal_freq / spatial_freq = 4`` dva/s.
+#
+# Because the clock is physical, the grating at a given timestamp does not
+# depend on how densely the video was sampled. Sampling the same second every
+# 40 ms instead of every 20 ms gives exactly the same frame at 200 ms:
 
-#####################################################################################
-# We can also change the direction *(scalar in [0, 360) degrees)*, where 0 degrees
-# represents rightward motion, 90 degrees represents upward motion, 180 degrees
-# represents leftward motion, and 270 degrees represents downward motion.
+coarse = psychophysics.grating(spatial_freq=0.5 / dva, temporal_freq=2 * Hz,
+                               direction=0 * deg, fov=20 * dva,
+                               shape=(128, 128), time=np.arange(0, 1000, 40))
+fine_frame = drift.source.data.reshape(drift.source.vid_shape)[..., 10]
+coarse_frame = coarse.source.data.reshape(coarse.source.vid_shape)[..., 5]
+print(np.array_equal(fine_frame, coarse_frame))
+
+###############################################################################
+# A moving bar
+# ------------
 #
-# .. code:: python
+# :py:func:`~pulse2percept.stimuli.psychophysics.bar` draws a single bright
+# bar of a given angular width, perpendicular to its direction of motion. Its
+# center sits at ``offset + speed * t`` along the motion axis, measured from
+# fixation, so ``offset`` is where it starts at ``t = 0``:
+
+sweep = psychophysics.bar(width=2 * dva, direction=0 * deg,
+                          speed=20 * dva / s, offset=-10 * dva,
+                          edge_width=0.5 * dva, fov=20 * dva,
+                          shape=(128, 128), time=np.arange(0, 1000, 20))
+sweep.source.play()
+
+###############################################################################
+# ``width`` and ``edge_width`` are angular sizes, ``speed`` is in dva/s, and
+# ``offset`` is the position at ``t = 0`` along the motion axis.
 #
-#     BarStimulus((height, width), direction=direction)
+# Dropping ``time`` freezes it at ``t = 0``, which is a plain image again:
+
+still = psychophysics.bar(width=2 * dva, offset=-5 * dva, fov=20 * dva,
+                          shape=(256, 256))
+still.plot()
+plt.show()
+
+###############################################################################
+# Scenes carry visual-field geometry
+# ----------------------------------
 #
-# Or the contrast *(scalar in [0,1])*
+# Because these are scenes, their pixels have angular coordinates. That is
+# what makes a bar "two degrees wide" rather than "sixteen pixels wide", and
+# it is what a model needs in order to place the pattern on the retina:
+
+print(still.fov)
+print(still.dva_to_pixel(0, 0))
+print(still.pixel_to_dva(0, 0))
+
+###############################################################################
+# Passing a scene to a model
+# --------------------------
 #
-# .. code:: python
-#
-#     BarStimulus((height, width), contrast=contrast)
-#
-# For exact info on all of the arguments, please refer to
-# :py:class:`~pulse2percept.stimuli.BarStimulus` and 
-# :py:class:`~pulse2percept.stimuli.GratingStimulus`.
-#
-#
-# Passing to an Implant
-# ---------------------
-# 
-# Psychophsyics stimuli can be passed to an implant and combined with a model.
-# To demonstrate, we will pass a ``GratingStimululus`` to an
-# :py:class:`~pulse2percept.implants.retina.ArgusII` implant and use the
-# :py:class:`~pulse2percept.models.retina.AxonMapModel` [Beyeler2019]_ to interpret it:
+# A scene can be sampled at the implant's visual-field locations and encoded
+# into stimulation:
 
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models.retina import AxonMapModel
+from pulse2percept.stimuli import AmplitudeEncoder
+from pulse2percept.units import uA
 
-implant = ArgusII()
-model = AxonMapModel(implant=implant)
+implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 30) * uA, freq=50))
+model = AxonMapModel(implant, xrange=(-10, 10), yrange=(-10, 10), step=0.25)
 
-grating = GratingStimulus((25,25), temporal_freq=0.1)
-# A model reads current, so the video is encoded first. Its frames are 20 ms
-# apart, so the pulse rate has to be at least 50 Hz for every frame to get a
-# pulse; asking for a percept at the video's own frame times then gives one
-# percept frame per video frame:
-stim = grating.encode(implant=implant, freq=50)
-
-percept = model.predict_percept(stim, t_percept=grating.time)
+percept = model.predict_percept(drift, gaze=(0, 0) * dva,
+                                t_percept=drift.time)
 percept.play()
 
-#####################################################################################
-# As you can see in the above code segment, the stimulus passed to the implant does
-# not necessarily have to have the same dimensions as the electrode grid.
-# This is functionality built in to the implant code: The implant will automatically
-# rescale the stimulus to the appropriate size.
-# In the case of Argus II, the stimulus would thus be downscaled to a 6x10 image.
+###############################################################################
+# ``gaze`` says which point of the scene falls on the fovea, so moving the eye
+# moves the grating across the array rather than redrawing it.
 #
-# Pre-Processing Stimuli
-# ----------------------
-# 
-# Since both :py:class:`~pulse2percept.stimuli.BarStimulus` and 
-# :py:class:`~pulse2percept.stimuli.GratingStimulus`
-# inherit form :py:class:`~pulse2percept.stimuli.VideoStimulus`, we can apply 
-# any video processing methods provided by ``VideoStimulus``.
-#
-# In the following example, we will invert the stimulus before passing it to the
-# implant:
+# Stating the grating in cycles/dva also makes it directly comparable with the
+# array. Argus II spans about 19 x 11 degrees here, with roughly 2.1 degrees
+# between neighboring electrodes, so it cannot resolve anything finer than
+# about 0.24 cycles/dva: the 0.5 cycles/dva grating above is beyond what the
+# array can sample. At 0.1 cycles/dva there are about five electrodes per
+# cycle instead:
 
-grating = GratingStimulus((25,25), temporal_freq=0.1).invert()
-# A model reads current, so the video is encoded first. Its frames are 20 ms
-# apart, so the pulse rate has to be at least 50 Hz for every frame to get a
-# pulse; asking for a percept at the video's own frame times then gives one
-# percept frame per video frame:
-stim = grating.encode(implant=implant, freq=50)
+coarse = psychophysics.grating(spatial_freq=0.1 / dva, temporal_freq=2 * Hz,
+                               fov=20 * dva, shape=(128, 128), time=time)
+percept = model.predict_percept(coarse, gaze=(0, 0) * dva,
+                                t_percept=coarse.time)
+percept.play()
 
-percept = model.predict_percept(stim, t_percept=grating.time)
+###############################################################################
+# The scene's source is still an ordinary
+# :py:class:`~pulse2percept.stimuli.VideoStimulus`, so its processing methods
+# remain available if you need them; wrap the result back into a
+# :py:class:`~pulse2percept.vision.Scene` with the same ``fov`` to keep the
+# geometry:
+
+from pulse2percept.vision import Scene
+
+inverted = Scene(drift.source.invert(), fov=drift.fov)
+percept = model.predict_percept(inverted, gaze=(0, 0) * dva,
+                                t_percept=inverted.time)
 percept.play()

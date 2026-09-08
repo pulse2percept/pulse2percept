@@ -55,7 +55,7 @@ fig.tight_layout()
 # about twice the nominal array resolution and dilated once so thin edges
 # survive sampling onto the implant.
 
-image = p2p.stimuli.LogoBVL().rgb2gray()
+image = p2p.stimuli.samples.logo_bvl().rgb2gray()
 edge_shape = tuple(2 * n for n in implant.shape)
 edges = image.resize(edge_shape).filter('canny', sigma=1.0)
 edges = edges.apply(binary_dilation, footprint=disk(1))

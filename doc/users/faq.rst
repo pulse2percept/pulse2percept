@@ -503,10 +503,11 @@ For example:
 
     from pulse2percept.implants.retina import ArgusII
     from pulse2percept.models.retina import ScoreboardModel
-    from pulse2percept.stimuli import BostonTrain
+    from pulse2percept.stimuli import VideoStimulus
 
+    video = VideoStimulus('movie.mp4')
     model = ScoreboardModel(implant=ArgusII())
-    percept = model.predict_percept(BostonTrain())
+    percept = model.predict_percept(video)
 
 :py:class:`~pulse2percept.implants.retina.ArgusII` comes with an encoder of its own,
 so the video is encoded for you. To say how, give the implant a different one:
@@ -519,7 +520,7 @@ so the video is encoded for you. To say how, give the implant a different one:
     implant = ArgusII(encoder=AmplitudeEncoder(amp_range=(0, 50 * uA),
                                                freq=20 * Hz))
 
-Either way ``implant.prepare_stim(BostonTrain())`` is the electrical
+Either way ``implant.prepare_stim(video)`` is the electrical
 stimulation the device would deliver, which is also what the bound model
 reads.
 

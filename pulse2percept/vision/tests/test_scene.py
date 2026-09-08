@@ -11,7 +11,7 @@ import pytest
 import matplotlib.pyplot as plt
 
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import ImageStimulus, LogoBVL, VideoStimulus
+from pulse2percept.stimuli import ImageStimulus, VideoStimulus, samples
 from pulse2percept.units import dva, ms, s
 from pulse2percept.vision import Scene, Scotoma
 
@@ -83,7 +83,7 @@ def test_an_ordinary_image_is_wrapped():
     npt.assert_equal(isinstance(scene.source, ImageStimulus), True)
     npt.assert_equal(scene.shape, (10, 20))
     # An ImageStimulus subclass is left exactly as it came:
-    logo = LogoBVL()
+    logo = samples.logo_bvl()
     npt.assert_equal(Scene(logo, fov=40).source is logo, True)
 
 
@@ -287,7 +287,7 @@ def test_unitful_gaze_reads_the_same_place():
 
 
 def test_without_a_scotoma_native_vision_is_the_scene_exactly():
-    scene = Scene(LogoBVL(), fov=40 * dva)
+    scene = Scene(samples.logo_bvl(), fov=40 * dva)
     native = scene._native_rgb()
     npt.assert_equal(native.shape, (576, 720, 3, 1))
     # The logo is RGBA, so alpha is blended against black and nothing else:

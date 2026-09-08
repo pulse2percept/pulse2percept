@@ -45,17 +45,6 @@ vision.
 .. _pulse2percept: https://github.com/pulse2percept/pulse2percept
 .. _retinal and cortical implants: https://en.wikipedia.org/wiki/Visual_prosthesis
 
-.. image:: https://raw.githubusercontent.com/pulse2percept/pulse2percept/master/doc/_static/boston-train-combined.gif
-   :align: center
-   :alt: Input stimulus and predicted percept
-
-*(left: input stimulus, right: predicted percept)*
-
-Simulations such as the above are likely to be critical for providing realistic
-estimates of prosthetic vision, thus providing regulatory bodies with guidance
-into what sort of visual tests are appropriate for evaluating prosthetic
-performance, and improving current and future technology.
-
 If you use p2p in a scholarly publication, please cite as:
 
 .. epigraph::

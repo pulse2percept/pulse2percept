@@ -7,7 +7,28 @@ guaranteed for ``pytest --pyargs pulse2percept``.
 """
 import os
 
+import numpy as np
 import pytest
+
+from pulse2percept.stimuli import VideoStimulus
+
+#: Frame count and rate of a short camera clip, kept as the numbers several
+#: tests reason about: 29.97 fps is 33.365 ms per frame, which is
+#: incommensurate with the 6 Hz pulse rate Argus II runs at.
+CAMERA_N_FRAMES, CAMERA_FPS = 94, 29.97
+
+
+@pytest.fixture
+def camera_video():
+    """A drifting grating standing in for a short grayscale camera clip"""
+    rows, cols = 60, 80
+    x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
+    # A vertical ramp, so that sampling the frame at different rows -- which
+    # is what an implant does -- reads different gray levels:
+    y = np.linspace(0.5, 1, rows)[:, np.newaxis, np.newaxis]
+    phase = 2 * np.pi * np.arange(CAMERA_N_FRAMES) / CAMERA_N_FRAMES
+    return VideoStimulus(y * (0.5 + 0.5 * np.sin(x - phase)),
+                         metadata={'fps': CAMERA_FPS})
 
 
 @pytest.fixture(scope='module')

@@ -63,11 +63,12 @@ fig.tight_layout()
 # See :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
 #
 # The pulse rate has to keep up with the frame rate, or some frames go by
-# without a pulse and are never seen; this video runs at 29.97 fps, so 30 Hz
-# it is. Asking for a percept at the video's own frame times then gives one
+# without a pulse and are never seen; this clip runs at 24 fps, so 24 Hz it
+# is. Asking for a percept at the video's own frame times then gives one
 # percept frame per video frame:
 
-video = p2p.stimuli.BostonTrain()
-encoded = video.encode(implant=implant, freq=30)
+# The bundled *Big Buck Bunny* clip stands in for a camera feed:
+video = p2p.stimuli.samples.big_buck_bunny(resize=(120, 160), as_gray=True)
+encoded = video.encode(implant=implant, freq=24)
 model.spatial.build(dropout=0.2)
 model.predict_percept(encoded, t_percept=video.time).play()

@@ -7,8 +7,8 @@ from skimage.color import rgb2gray
 from skimage.io import imsave
 from skimage.transform import resize as img_resize
 
-from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus, LogoBVL,
-                                   LogoUCSB, SnellenChart)
+from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus,
+                                   samples)
 from pulse2percept.units import DimensionMismatchError, deg, dva, ms, rad
 
 
@@ -441,7 +441,7 @@ def test_ImageStimulus_encode():
     with pytest.raises(TypeError):
         stim.encode(pulse={'invalid': 1})
     with pytest.raises(ValueError):
-        stim.encode(pulse=LogoUCSB())
+        stim.encode(pulse=samples.logo_ucsb())
 
 
 def test_ImageStimulus_plot():
@@ -482,42 +482,6 @@ def test_ImageStimulus_save():
     npt.assert_almost_equal(stim2.data, ImageStimulus(fname4).data)
     os.remove(fname3)
     os.remove(fname4)
-
-
-@pytest.mark.parametrize('show_annotations', (True, False))
-def test_SnellenChart(show_annotations):
-    width = 840 if show_annotations else 444
-    snellen = SnellenChart(show_annotations=show_annotations)
-    npt.assert_equal(snellen.img_shape, (1348, width))
-    npt.assert_equal(snellen.time, None)
-    npt.assert_almost_equal(snellen.data.max(), 1)
-    npt.assert_almost_equal(snellen.data.min(), 0)
-
-    snellen = SnellenChart(row=1, show_annotations=show_annotations)
-    npt.assert_equal(snellen.img_shape, (255, width))
-
-    with pytest.raises(ValueError):
-        SnellenChart(row=0)
-    with pytest.raises(ValueError):
-        SnellenChart(row=12)
-    with pytest.raises(ValueError):
-        SnellenChart(row=[1, 3])
-
-
-def test_LogoBVL():
-    logo = LogoBVL()
-    npt.assert_equal(logo.img_shape, (576, 720, 4))
-    npt.assert_equal(logo.time, None)
-    npt.assert_almost_equal(logo.data.min(), 0)
-    npt.assert_almost_equal(logo.data.max(), 1)
-
-
-def test_LogoUCSB():
-    logo = LogoUCSB()
-    npt.assert_equal(logo.img_shape, (324, 727))
-    npt.assert_equal(logo.time, None)
-    npt.assert_almost_equal(logo.data.min(), 0)
-    npt.assert_almost_equal(logo.data.max(), 1)
 
 
 def test_ImageStimulus_rgb2gray_matches_skimage():

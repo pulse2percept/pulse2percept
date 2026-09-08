@@ -27,7 +27,7 @@ Rasters are attached to an implant:
         freq=20,
     )
 
-    delivered = implant.prepare_stim(p2p.stimuli.BostonTrain())
+    delivered = implant.prepare_stim(p2p.stimuli.VideoStimulus('movie.mp4'))
 
 Electrodes in one group may pulse together; different groups occupy different
 time slots.

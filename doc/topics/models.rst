@@ -221,7 +221,7 @@ what someone is *looking at* instead, give the model a
 
     from pulse2percept.units import dva
 
-    scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva)
+    scene = p2p.vision.Scene(p2p.stimuli.samples.logo_bvl(), fov=40 * dva)
 
     implant = p2p.implants.retina.ArgusII()
     implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
@@ -319,7 +319,7 @@ lost region, and the prosthetic percept inside it -- as a single RGB
 
 .. code-block:: python
 
-    scene = p2p.vision.Scene(p2p.stimuli.LogoBVL(), fov=40 * dva,
+    scene = p2p.vision.Scene(p2p.stimuli.samples.logo_bvl(), fov=40 * dva,
                              scotoma=p2p.vision.Scotoma.circle(8 * dva))
     model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
 

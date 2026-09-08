@@ -1,10 +1,14 @@
-""":py:class:`~pulse2percept.stimuli.ElectrodeNames`"""
+"""Lazily generated grid labels shared by image/video stimuli and electrode
+grids.
+
+Private: users address electrodes through :py:attr:`Stimulus.electrodes` and
+:py:attr:`ElectrodeGrid.electrode_names`, never through this container.
+"""
 import re
+
 import numpy as np
 
 from ..utils.base import bijective26_name
-
-__all__ = ['ElectrodeNames']
 
 # Channel suffixes for the common color models. Anything else falls back to a
 # numeric suffix, so that every channel remains addressable:
@@ -45,8 +49,8 @@ def _is_pure_selection(item):
     return False
 
 
-class ElectrodeNames:
-    """Lazily generated electrode names for a grid of electrodes
+class _GridNames:
+    """Lazily generated names for a grid of pixels or electrodes
 
     Names every element of a (rows x columns [x channels]) grid after its
     position in that grid: letters address the row, digits the column, and an
@@ -62,13 +66,11 @@ class ElectrodeNames:
     electrodes, which matters because an image or video stimulus assigns one
     electrode per pixel -- a 576x720 RGBA image has 1.66 million of them.
 
-    An ``ElectrodeNames`` behaves like a read-only 1-D array of strings: it
+    A ``_GridNames`` behaves like a read-only 1-D array of strings: it
     supports ``len``, iteration, indexing, slicing, boolean masking,
     ``reshape`` and ``ravel``, and converts to a NumPy array of strings via
     ``np.asarray``. That conversion is the one operation whose cost scales
     with the number of electrodes, so it is left to the caller to trigger.
-
-    .. versionadded:: 0.10.0
 
     Parameters
     ----------
@@ -85,8 +87,8 @@ class ElectrodeNames:
 
     Examples
     --------
-    >>> from pulse2percept.stimuli import ElectrodeNames
-    >>> names = ElectrodeNames((3, 4))
+    >>> from pulse2percept.stimuli._grid_names import _GridNames
+    >>> names = _GridNames((3, 4))
     >>> names[0], names[6]
     ('A1', 'B3')
     >>> names.index('B3')
@@ -169,7 +171,7 @@ class ElectrodeNames:
     def __len__(self):
         shape = self.shape
         if not shape:
-            raise TypeError("len() of unsized ElectrodeNames")
+            raise TypeError("len() of unsized _GridNames")
         return shape[0]
 
     def __getitem__(self, item):
@@ -185,7 +187,7 @@ class ElectrodeNames:
         # index expression that *may* repeat leaves it undetermined (None),
         # for `check_unique` to settle if anyone asks:
         unique = True if (self._unique and _is_pure_selection(item)) else None
-        return ElectrodeNames(self._grid_shape, idx, unique=unique)
+        return _GridNames(self._grid_shape, idx, unique=unique)
 
     def __iter__(self):
         # Generating names one at a time is slower per element than building
@@ -208,7 +210,7 @@ class ElectrodeNames:
         return names
 
     def __eq__(self, other):
-        if isinstance(other, ElectrodeNames):
+        if isinstance(other, _GridNames):
             # Two views of the same grid hold the same names iff they select
             # the same indices, which is far cheaper to check than the names:
             if self._grid_shape != other._grid_shape:
@@ -223,27 +225,27 @@ class ElectrodeNames:
         return np.logical_not(result)
 
     def __repr__(self):
-        return (f"ElectrodeNames(grid_shape={self._grid_shape}, "
+        return (f"_GridNames(grid_shape={self._grid_shape}, "
                 f"size={self.size})")
 
     def reshape(self, *shape):
         """Return a view of the names with a new shape"""
         if len(shape) == 1 and isinstance(shape[0], (tuple, list, np.ndarray)):
             shape = tuple(shape[0])
-        return ElectrodeNames(self._grid_shape, self.indices.reshape(shape),
+        return _GridNames(self._grid_shape, self.indices.reshape(shape),
                               unique=self._unique)
 
     def ravel(self):
         """Return a flattened view of the names"""
         if self._idx is None or self._idx.ndim == 1:
             return self
-        return ElectrodeNames(self._grid_shape, self._idx.ravel(),
+        return _GridNames(self._grid_shape, self._idx.ravel(),
                               unique=self._unique)
 
     def copy(self):
         """Return an independent copy"""
         idx = None if self._idx is None else self._idx.copy()
-        return ElectrodeNames(self._grid_shape, idx, unique=self._unique)
+        return _GridNames(self._grid_shape, idx, unique=self._unique)
 
     def tolist(self):
         """Return the names as a list of strings"""
@@ -383,3 +385,18 @@ class ElectrodeNames:
         if len(self._grid_shape) > 2:
             names = np.char.add(names, self._channel_labels()[coords[2]])
         return names.reshape(idx.shape)
+
+
+def _names_equal(a, b):
+    """Whether two containers hold the same electrode names"""
+    if isinstance(a, _GridNames) and isinstance(b, _GridNames):
+        if a.grid_shape == b.grid_shape:
+            return np.array_equal(a.indices, b.indices)
+    return np.array_equal(np.asarray(a), np.asarray(b))
+
+
+def _index_of_name(electrodes, name):
+    """Return the position of electrode ``name`` in ``electrodes``"""
+    if isinstance(electrodes, _GridNames):
+        return electrodes.index(name)
+    return list(electrodes).index(name)

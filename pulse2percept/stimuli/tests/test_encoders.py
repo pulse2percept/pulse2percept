@@ -10,7 +10,7 @@ from pulse2percept.implants import (CustomRaster, DiskElectrode, GridImplant,
                                     SequentialRaster)
 from pulse2percept.implants.retina import ArgusII, PRIMAPivotal
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
-                                   BiphasicPulseTrain, BostonTrain, Encoder,
+                                   BiphasicPulseTrain, Encoder,
                                    FrequencyEncoder, ImageStimulus,
                                    MonophasicPulse, PRIMAEncoder, Stimulus,
                                    StimulusEncoder, VideoStimulus)
@@ -278,12 +278,12 @@ def test_AmplitudeEncoder_image():
         AmplitudeEncoder(frame_dur=10).encode(vid).time[-1], 30)
 
 
-def test_AmplitudeEncoder_implant():
+def test_AmplitudeEncoder_implant(camera_video):
     # No raster here: what is being checked is the sampling, and a raster would
     # stagger the onsets away from the pixel-resolution encoding compared with
     # at the end.
     implant = ArgusII(raster=None)
-    vid = BostonTrain()
+    vid = camera_video
     enc = AmplitudeEncoder(amp_range=(0, 50)).encode(vid, implant=implant)
     # The video is sampled at the electrode locations, so the stimulus has one
     # row per electrode rather than one per pixel:
@@ -433,19 +433,19 @@ def test_StimulusEncoder_big_time_warning(monkeypatch):
         FrequencyEncoder(freq_range=(0, 300), frame_dur=100).encode(img)
 
 
-def test_FrequencyEncoder_implant():
+def test_FrequencyEncoder_implant(camera_video):
     # A 300 Hz period is 3.3 ms, which Argus II's own six-group 2 ms raster
     # sweep does not fit into, so this device drives every electrode at once:
     implant = ArgusII(raster=None)
     enc = FrequencyEncoder(freq_range=(0, 300), amp=50, clock=1).encode(
-        BostonTrain(), implant=implant)
+        camera_video, implant=implant)
     npt.assert_equal(enc.shape[0], implant.n_electrodes)
     npt.assert_almost_equal(np.abs(enc.data).max(), 50)
     npt.assert_equal(implant.prepare_stim(enc).shape, enc.shape)
     # The clock is what makes this tractable at all: without one, the same
     # clip needs several times as many time points:
     unclocked = FrequencyEncoder(freq_range=(0, 300), amp=50).encode(
-        BostonTrain(), implant=implant)
+        camera_video, implant=implant)
     npt.assert_equal(enc.shape[1] < unclocked.shape[1] / 5, True)
 
 
