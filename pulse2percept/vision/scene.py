@@ -340,8 +340,9 @@ class Scene(PrettyPrint):
     aperture : 'circle' or None, optional
         Shape of the rendered field. Default (None) fills the rectangular
         frame. ``'circle'`` instead renders an eye-centered disc of radius
-        ``min(fov) / 2`` and blacks out the corners around it. Rendering only:
-        the source, the pixel grid, and what a device samples are unchanged.
+        ``min(fov) / 2`` and blacks out the corners around it. It affects only
+        the rendered scene, not scene sampling, device input, stimulation, or
+        the underlying prosthetic model response.
 
     Examples
     --------
@@ -426,8 +427,8 @@ class Scene(PrettyPrint):
     def aperture(self):
         """The rendered field boundary: ``'circle'`` or None for the frame
 
-        Rendering only. The source, the pixel grid and what a device is given
-        to encode are rectangular either way.
+        Affects only the rendered scene. The source, the pixel grid, and what
+        a device is given to encode are rectangular either way.
         """
         return self._aperture
 
@@ -802,7 +803,6 @@ class Scene(PrettyPrint):
         :py:meth:`~pulse2percept.models.Model.predict_percept` returns;
         without one the percept is drawn alone on black, because superimposing
         it on intact native vision would assert an unmodeled interaction.
-        Rendering only: it does not change what any model predicts.
 
         Parameters
         ----------
@@ -838,10 +838,10 @@ class Scene(PrettyPrint):
 
         """
         if percept is None:
-            if vmax is not None:
-                raise ValueError("'vmax' maps percept brightness onto a "
-                                 "display, and there is no percept to plot. "
-                                 "Pass 'percept'.")
+            if vmax is not None or vmin != 0:
+                raise ValueError("'vmin' and 'vmax' map percept brightness "
+                                 "onto a display, and there is no percept to "
+                                 "plot. Pass 'percept'.")
             rgb = self._native_rgb(gaze=gaze)
         elif self.scotoma is None:
             rgb = self._prosthetic_rgb(percept, vmax, vmin=vmin, gaze=gaze)

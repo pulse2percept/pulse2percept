@@ -846,8 +846,12 @@ def test_a_percept_can_be_plotted_in_the_context_of_the_whole_field():
     # Brightness is in arbitrary units, so a display range is required:
     with pytest.raises(ValueError):
         scene.plot(percept=phosphene)
+    # ... and a display range with nothing to map onto it is not silently
+    # ignored, either way round:
     with pytest.raises(ValueError):
         scene.plot(vmax=20)
+    with pytest.raises(ValueError):
+        scene.plot(vmin=5)
 
 
 def test_plotting_a_percept_over_a_scotoma_is_the_composed_view():
