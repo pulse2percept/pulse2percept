@@ -1,4 +1,4 @@
-"""Residual vision: what a person still sees, and where it is lost.
+"""Visual scenes, residual vision, and binocular views.
 
 .. autosummary::
     :toctree: _api

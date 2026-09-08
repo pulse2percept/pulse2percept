@@ -215,7 +215,9 @@ Simulating a visual scene
 
 The workflow above starts from a stimulus you built yourself. To start from
 what someone is *looking at* instead, give the model a
-:py:class:`~pulse2percept.vision.Scene`:
+:py:class:`~pulse2percept.vision.Scene`. A scene is **one monocular visual
+field**, not the person's final vision: it says what is present in front of
+one eye, and where that eye's native vision is lost.
 
 .. code-block:: python
 
@@ -332,6 +334,46 @@ gazes comparable.
 
 The scotoma affects *native* vision only. Prosthetic encoding samples the
 unmasked scene, including locations inside the scotoma.
+
+The rendered field boundary
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. versionadded:: 0.11.0
+
+A scene's source, pixel grid and sampling are rectangular. ``aperture='circle'``
+renders an eye-centered disc of radius ``min(fov) / 2`` instead, blacking out
+the corners around it and changing the rendered scene only:
+
+.. code-block:: python
+
+    scene = p2p.vision.Scene(image, fov=40 * dva, aperture='circle')
+
+Like the scotoma and the eccentricity rings, the disc is
+eye-centered, so gaze moves it through the scene.
+
+Both eyes
+~~~~~~~~~
+
+.. versionadded:: 0.11.0
+
+:py:class:`~pulse2percept.vision.BinocularScene` holds the left and right
+monocular views:
+
+.. code-block:: python
+
+    binocular = p2p.vision.BinocularScene(
+        left=p2p.vision.Scene(image, fov=40 * dva, scotoma=scotoma),
+        right=p2p.vision.Scene(image, fov=40 * dva),
+    )
+
+    ax_left, ax_right = binocular.plot(left_percept=percept, vmax=2)
+
+Models are monocular in v0.11, so a prediction names the eye it is about:
+
+.. code-block:: python
+
+    percept = model.predict_percept(binocular.left)
+
 
 Percept data layouts
 --------------------

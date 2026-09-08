@@ -44,10 +44,11 @@ Highlights
       percept = model.predict_percept(stim)
 
 * New :py:mod:`pulse2percept.vision` module with
-  :py:class:`~pulse2percept.vision.Scene` and
+  :py:class:`~pulse2percept.vision.Scene`,
   :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
-  residual vision and retinal prostheses (:pull:`854`, :pull:`871`, 
-  :pull:`883`).
+  residual vision and retinal prostheses, and
+  :py:class:`~pulse2percept.vision.BinocularScene` for the two eyes' views
+  side by side (:pull:`854`, :pull:`871`, :pull:`883`, :pull:`890`).
 
 * New photovoltaic stimulation pipeline for
   :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`, from image
@@ -79,17 +80,11 @@ remains in :py:mod:`pulse2percept.implants`; retinal and cortical devices
 moved to ``implants.retina`` and ``implants.cortex`` respectively
 (:pull:`887`).
 
-* ``eye`` now belongs to
+* ``eye`` (``left`` or ``right``) now belongs to
 :py:class:`~pulse2percept.implants.retina.RetinalImplant`, and
 :py:class:`~pulse2percept.implants.cortex.CorticalImplant` adds optional
-``hemisphere`` metadata. Generic implants carry neither. Custom retinal
-arrays used with :py:class:`~pulse2percept.models.retina.AxonMapModel`
-therefore need to be wrapped in a ``RetinalImplant``.
-
-* Anatomical side codes were replaced by canonical words, with no aliases:
-  ``eye='LE'`` / ``'RE'`` become ``eye='left'`` / ``'right'``, and
-  ``hemisphere='LH'`` / ``'RH'`` become ``hemisphere='left'`` / ``'right'``.
-  Input is case-insensitive; the stored value is lowercase.
+``hemisphere`` (``left`` or ``right``) metadata. 
+Generic implants carry neither. 
 
 * ``ProsthesisSystem`` was renamed :py:class:`~pulse2percept.implants.Implant`;
   the old name remains deprecated until v0.12.0. ``RectangleImplant`` was
@@ -185,6 +180,13 @@ Scene and plotting
   animated visualization. Inpainting is intentionally unavailable when
   composing prosthetic vision because its interaction with prosthetic
   brightness is not modeled (:pull:`871`, :pull:`884`).
+
+* ``Scene(aperture='circle')`` renders an eye-centered disc of radius
+  ``min(fov) / 2`` instead of the full rectangle (:pull:`890`).
+
+* New :py:class:`~pulse2percept.vision.BinocularScene` holds a left and a
+  right :py:class:`~pulse2percept.vision.Scene` and plots them side by side
+  (:pull:`890`).
 
 * New :py:mod:`pulse2percept.plotting` module provides combined
   stimulus/percept figures and animations. :py:mod:`pulse2percept.viz` is

@@ -116,7 +116,10 @@ electrode coordinates in microns. Placement is specified on the model with
 eye and is read by the models:
 :py:class:`~pulse2percept.models.retina.AxonMapModel` puts the optic disc on
 the side the eye calls for. Some devices also reverse their column names in
-the left eye; see each class's API documentation.
+the left eye; see each class's API documentation. A
+:py:class:`~pulse2percept.vision.Scene` carries no ``eye`` of its own; eye
+identity for a visual field comes from its side of a
+:py:class:`~pulse2percept.vision.BinocularScene`.
 
 PRIMA
 ^^^^^
