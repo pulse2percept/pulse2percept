@@ -32,8 +32,7 @@ import warnings
 
 import numpy as np
 
-from .images import ImageStimulus
-from .videos import VideoStimulus
+from .base import ImageStimulus, VideoStimulus
 from ..units import as_value, deg, dimensionless, dva, ms, s, Hz
 from ..utils import radial_mask
 from ..utils.constants import MS_PER_S

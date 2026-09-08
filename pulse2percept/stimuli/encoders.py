@@ -8,10 +8,8 @@ import math
 import numpy as np
 from copy import deepcopy
 
-from .base import Stimulus, _adoptable
-from .images import ImageStimulus
+from .base import ImageStimulus, Stimulus, VideoStimulus, _adoptable
 from .pulses import BiphasicPulse
-from .videos import VideoStimulus
 from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, mW,
                      mm, ms, uA, xTh)
 from ..utils import PrettyPrint, frame_interval

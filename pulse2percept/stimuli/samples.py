@@ -3,6 +3,7 @@
 :py:func:`~pulse2percept.stimuli.samples.cajal_retina`,
 :py:func:`~pulse2percept.stimuli.samples.logo_bvl`,
 :py:func:`~pulse2percept.stimuli.samples.logo_ucsb`,
+:py:func:`~pulse2percept.stimuli.samples.snellen_chart`,
 :py:func:`~pulse2percept.stimuli.samples.ucsb_bike`,
 :py:func:`~pulse2percept.stimuli.samples.ucsb_flyover`,
 :py:func:`~pulse2percept.stimuli.samples.ucsb_pedestrians`,
@@ -20,12 +21,21 @@ top-level namespace::
     from pulse2percept.stimuli import samples
     logo = samples.logo_bvl()
 
+:py:class:`~pulse2percept.stimuli.LogoBVL`,
+:py:class:`~pulse2percept.stimuli.LogoUCSB` and
+:py:class:`~pulse2percept.stimuli.SnellenChart` are the deprecated
+predecessors of :py:func:`logo_bvl`, :py:func:`logo_ucsb` and
+:py:func:`snellen_chart`. They load the same assets and are kept unchanged
+until they are removed in v0.12.0.
+
 .. versionadded:: 0.11.0
 """
 from os.path import dirname, join
 
-from .images import ImageStimulus
-from .videos import VideoStimulus
+from skimage.io import imread
+
+from .base import ImageStimulus, VideoStimulus
+from ..utils.deprecation import deprecated
 
 __all__ = [
     'big_buck_bunny',
@@ -33,6 +43,10 @@ __all__ = [
     'cajal_retina',
     'logo_bvl',
     'logo_ucsb',
+    'LogoBVL',
+    'LogoUCSB',
+    'snellen_chart',
+    'SnellenChart',
     'ucsb_bike',
     'ucsb_flyover',
     'ucsb_pedestrians',
@@ -44,6 +58,49 @@ __all__ = [
 def _sample_path(filename):
     """Return the absolute path of a bundled sample asset"""
     return join(dirname(__file__), 'data', 'samples', filename)
+
+
+#: Start and stop row of each of the chart's eleven lines, in source pixels.
+#: Line 1 is 20/200, line 2 is 20/100, and so on.
+_SNELLEN_ROWS = (
+    [5, 260],  # line 1
+    [310, 450],  # line 2
+    [505, 600],
+    [645, 715],
+    [755, 810],
+    [840, 883],
+    [965, 1003],
+    [1057, 1088],
+    [1170, 1193],
+    [1243, 1263],
+    [1317, 1335]  # line 11
+)
+
+
+def _snellen_source(show_annotations, row):
+    """Return the Snellen chart, cropped as requested
+
+    A path when the whole chart is wanted, and a decoded array when a crop
+    is, since cropping has to happen before the pixels become a stimulus.
+    """
+    source = join(dirname(__file__), 'data', 'snellen.png')
+    if row is None and show_annotations is not False:
+        return source
+    source = imread(source)
+    if show_annotations is False:
+        # Crop the line numbers and acuity annotations:
+        source = source[:, :444]
+    if row is not None:
+        try:
+            # It's 1-indexed, so make sure row=0 does not return the last row:
+            idx = row - 1
+            if idx < 0:
+                idx += 12
+            source = source[_SNELLEN_ROWS[idx][0]:_SNELLEN_ROWS[idx][1]]
+        except (IndexError, TypeError):
+            raise ValueError(f'Invalid value for "row": {row}. Choose an int '
+                             f'between 1 and 11.')
+    return source
 
 
 #: The clip is CC BY 3.0, not BSD like the rest of pulse2percept, so its
@@ -335,6 +392,59 @@ def logo_ucsb(resize=None, electrodes=None, metadata=None):
     return ImageStimulus(_sample_path('ucsb.png'), resize=resize, as_gray=True,
                          electrodes=electrodes, metadata=metadata,
                          compress=False)
+
+
+def snellen_chart(resize=None, show_annotations=True, row=None,
+                  electrodes=None, metadata=None):
+    """Snellen chart
+
+    Load the 1348x840 Snellen chart commonly used to measure visual acuity,
+    as a grayscale image stimulus.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    show_annotations : bool, optional
+        If False, crop the line numbers and acuity annotations on the right,
+        leaving the letters alone.
+
+    row : int or None, optional
+        Select a single row (1 to 11) of the chart. Row 1 corresponds to
+        20/200, row 2 to 20/100, and so on.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary.
+
+    Returns
+    -------
+    stim : :py:class:`~pulse2percept.stimuli.ImageStimulus`
+
+    Examples
+    --------
+    >>> from pulse2percept.stimuli import samples
+    >>> samples.snellen_chart(row=1).img_shape
+    (255, 840)
+
+    """
+    return ImageStimulus(_snellen_source(show_annotations, row),
+                         resize=resize, as_gray=True, electrodes=electrodes,
+                         metadata=metadata, compress=False)
 
 
 #: The photograph is released under pulse2percept's own BSD 3-Clause license.
@@ -683,3 +793,128 @@ def zebrafish_retina(resize=None, electrodes=None, metadata=None,
     return ImageStimulus(_sample_path('zebrafish-retina.jpg'), resize=resize,
                          as_gray=as_gray, electrodes=electrodes,
                          metadata=meta, compress=False)
+
+
+@deprecated(alt_func='pulse2percept.stimuli.samples.snellen_chart',
+            deprecated_version='0.11.0', removed_version='0.12.0')
+class SnellenChart(ImageStimulus):
+    """Snellen chart
+
+    Load the 1348x840 Snellen chart commonly used to measure visual acuity.
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    show_annotations : {True, False}, optional
+        If True, show the full Snellen chart including annotations of the rows
+        and corresponding acuity measures.
+
+    row : None, optional
+        Select a single row (between 1 and 11) from the Snellen chart.
+        For example, row 1 corresponds to 20/200, row 2 to 20/100.
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    """
+    __slots__ = ()
+
+    def __init__(self, resize=None, show_annotations=True, row=None,
+                 electrodes=None, metadata=None):
+        super().__init__(_snellen_source(show_annotations, row),
+                         resize=resize, as_gray=True, electrodes=electrodes,
+                         metadata=metadata, compress=False)
+
+
+@deprecated(alt_func='pulse2percept.stimuli.samples.logo_bvl',
+            deprecated_version='0.11.0', removed_version='0.12.0')
+class LogoBVL(ImageStimulus):
+    """Bionic Vision Lab (BVL) logo
+
+    Load the 576x720x4 Bionic Vision Lab (BVL) logo.
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary.
+
+    """
+    __slots__ = ()
+
+    def __init__(self, resize=None, electrodes=None, metadata=None,
+                 as_gray=False):
+        super().__init__(_sample_path('bionic-vision-lab.png'), resize=resize,
+                         as_gray=as_gray, electrodes=electrodes,
+                         metadata=metadata, compress=False)
+
+
+@deprecated(alt_func='pulse2percept.stimuli.samples.logo_ucsb',
+            deprecated_version='0.11.0', removed_version='0.12.0')
+class LogoUCSB(ImageStimulus):
+    """UCSB logo
+
+    Load a 324x727 white-on-black logo of the University of California, Santa
+    Barbara.
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    resize : (height, width) or None, optional
+        A tuple specifying the desired height and the width of the image
+        stimulus.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary.
+
+    """
+    __slots__ = ()
+
+    def __init__(self, resize=None, electrodes=None, metadata=None):
+        super().__init__(_sample_path('ucsb.png'), resize=resize,
+                         as_gray=True, electrodes=electrodes,
+                         metadata=metadata, compress=False)

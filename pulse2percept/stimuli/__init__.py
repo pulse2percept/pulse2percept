@@ -1,17 +1,100 @@
-"""Common electrical stimuli, such as charge-balanced square-wave pulse trains.
+"""Visual and electrical stimuli, and the containers that hold them.
+
+Top-level names are reusable types; namespaced snake-case functions construct
+particular content.
+
+Core
+----
+
+What a stimulus is: the data container, its pixel-data specializations, and
+the electrode naming they share.
 
 .. autosummary::
     :toctree: _api
 
-    base
-    names
-    pulses
-    pulse_trains
-    images
-    videos
-    encoders
-    psychophysics
-    samples
+    Stimulus
+    ImageStimulus
+    VideoStimulus
+    ElectrodeNames
+
+Electrical stimuli
+------------------
+
+.. autosummary::
+    :toctree: _api
+
+    MonophasicPulse
+    BiphasicPulse
+    AsymmetricBiphasicPulse
+    PulseTrain
+    BiphasicPulseTrain
+    BiphasicTripletTrain
+    AsymmetricBiphasicPulseTrain
+
+Encoders
+--------
+
+Transformations of a visual stimulus into electrical stimulation.
+
+.. autosummary::
+    :toctree: _api
+
+    Encoder
+    StimulusEncoder
+    AmplitudeEncoder
+    FrequencyEncoder
+    PRIMAEncoder
+
+Psychophysics
+-------------
+
+Visual stimuli generated from their parameters, in degrees of visual angle
+and physical time. Reached through
+:py:mod:`pulse2percept.stimuli.psychophysics`, not the top-level namespace.
+
+.. autosummary::
+    :toctree: _api
+
+    psychophysics.bar
+    psychophysics.grating
+    psychophysics.landolt_c
+    psychophysics.tumbling_e
+
+Samples
+-------
+
+Images and videos bundled with pulse2percept, for demos, docs, and tests.
+Reached through :py:mod:`pulse2percept.stimuli.samples`.
+
+.. autosummary::
+    :toctree: _api
+
+    samples.big_buck_bunny
+    samples.bvl_cake
+    samples.cajal_retina
+    samples.logo_bvl
+    samples.logo_ucsb
+    samples.snellen_chart
+    samples.ucsb_bike
+    samples.ucsb_flyover
+    samples.ucsb_pedestrians
+    samples.ucsb_surf
+    samples.zebrafish_retina
+
+Deprecated in v0.11
+-------------------
+
+Constructor subclasses replaced by the functions above. They are unchanged in
+v0.11 and will be removed in v0.12.
+
+.. autosummary::
+    :toctree: _api
+
+    BarStimulus
+    GratingStimulus
+    LogoBVL
+    LogoUCSB
+    SnellenChart
 
 .. seealso::
 
@@ -19,16 +102,14 @@
 
 """
 
-from .base import Stimulus
-from .names import ElectrodeNames
+from .base import ElectrodeNames, ImageStimulus, Stimulus, VideoStimulus
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
 from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
-from .images import ImageStimulus, LogoBVL, LogoUCSB, SnellenChart
-from .videos import VideoStimulus
 from .encoders import (Encoder, StimulusEncoder, AmplitudeEncoder,
                        FrequencyEncoder, PRIMAEncoder)
 from .psychophysics import BarStimulus, GratingStimulus
+from .samples import LogoBVL, LogoUCSB, SnellenChart
 from . import psychophysics, samples
 
 __all__ = [

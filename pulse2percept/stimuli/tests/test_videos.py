@@ -1,6 +1,6 @@
 from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus,
                                    VideoStimulus)
-from pulse2percept.stimuli.videos import _frame_index
+from pulse2percept.stimuli.base import _frame_index
 from pulse2percept.units import (DimensionMismatchError, Hz, kHz, deg, dva,
                                  ms, rad, s, uA)
 from skimage.color import rgb2gray
@@ -249,7 +249,7 @@ def test_VideoStimulus_clip_does_not_decode_the_whole_file(monkeypatch):
     reader = FakeReader()
     reader.index = 0
     reader.closed = False
-    monkeypatch.setattr('pulse2percept.stimuli.videos.video_reader',
+    monkeypatch.setattr('pulse2percept.stimuli.base.video_reader',
                         lambda *args, **kwargs: reader)
 
     stim = VideoStimulus('fake.mp4', start_time=2 * s, stop_time=2.5 * s)

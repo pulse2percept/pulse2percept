@@ -13,7 +13,7 @@ A video can be loaded from a file as follows:
 
 .. code:: python
 
-    stim = p2p.stimuli.videos.VideoStimulus("path-to-video.mp4")
+    stim = p2p.stimuli.VideoStimulus("path-to-video.mp4")
 
 pulse2percept bundles one such file: an excerpt of *Big Buck Bunny*
 (© 2008 Blender Foundation, CC BY 3.0), 640x359 at 24 fps. We load it

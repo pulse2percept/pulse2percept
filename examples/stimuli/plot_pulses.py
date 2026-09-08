@@ -139,11 +139,12 @@ stim.plot(kind='traces')
 # amplitude-encoded eye chart:
 
 from pulse2percept.implants.retina import ArgusII
-from pulse2percept.stimuli import AmplitudeEncoder, SnellenChart
+from pulse2percept.stimuli import AmplitudeEncoder, samples
 
 implant = ArgusII()
 encoder = AmplitudeEncoder(amp_range=(0, 50), freq=20)
-stim = encoder.encode(SnellenChart().invert(), implant=implant)
+stim = encoder.encode(samples.snellen_chart().invert(),
+                      implant=implant)
 
 stim.plot(time=(0, 100))
 

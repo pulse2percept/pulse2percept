@@ -10,7 +10,7 @@ from skimage.transform import SimilarityTransform
 from copy import deepcopy
 
 from .electrodes import Electrode, PointSource, HexElectrode
-from ..stimuli.names import ElectrodeNames
+from ..stimuli.base import ElectrodeNames
 from ..units import Quantity, as_value, deg, um
 from ..utils import PrettyPrint, bijective26_name
 from ..utils.constants import ZORDER

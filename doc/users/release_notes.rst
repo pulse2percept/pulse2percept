@@ -60,6 +60,17 @@ API changes and improvements
 Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
+* ``pulse2percept.stimuli.names``, ``pulse2percept.stimuli.images`` and
+  ``pulse2percept.stimuli.videos`` were merged into
+  :py:mod:`pulse2percept.stimuli.base` and removed. Import
+  :py:class:`~pulse2percept.stimuli.ElectrodeNames`,
+  :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+  :py:class:`~pulse2percept.stimuli.VideoStimulus` from
+  :py:mod:`pulse2percept.stimuli` (or from ``.base``); the three old module
+  paths no longer exist. Their behavior is unchanged, but their
+  ``__module__`` is, so pickles written by v0.10 or earlier no longer load
+  (:pull:`889`).
+
 * New :py:class:`~pulse2percept.stimuli.Encoder` framework supports electrical
   and non-electrical stimulation. 
   :py:class:`~pulse2percept.stimuli.PRIMAEncoder` implements photovoltaic
@@ -71,8 +82,9 @@ Stimuli and encoding
 
 * New :py:mod:`pulse2percept.stimuli.samples` namespace collects the bundled
   sample stimuli behind lowercase loaders (``samples.logo_bvl()``,
-  ``samples.logo_ucsb()``), which return plain ``ImageStimulus`` objects.
-  ``LogoBVL`` and ``LogoUCSB`` are deprecated until v0.12.0 (:pull:`889`).
+  ``samples.logo_ucsb()``, ``samples.snellen_chart()``), which return plain
+  ``ImageStimulus`` objects. ``LogoBVL``, ``LogoUCSB`` and ``SnellenChart``
+  are deprecated until v0.12.0 (:pull:`889`).
 
 * New :py:func:`~pulse2percept.stimuli.samples.big_buck_bunny` is the bundled
   naturalistic video sample: a 115-frame, 24 fps excerpt of *Big Buck Bunny*,

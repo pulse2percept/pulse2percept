@@ -6,7 +6,7 @@ import pytest
 
 import pulse2percept as p2p
 from pulse2percept.stimuli import (ImageStimulus, LogoBVL, LogoUCSB,
-                                   VideoStimulus, samples)
+                                   SnellenChart, VideoStimulus, samples)
 
 
 def _legacy(cls, **kwargs):
@@ -19,6 +19,7 @@ def _legacy(cls, **kwargs):
 @pytest.mark.parametrize('loader,legacy', [
     (samples.logo_bvl, LogoBVL),
     (samples.logo_ucsb, LogoUCSB),
+    (samples.snellen_chart, SnellenChart),
 ])
 def test_samples_match_legacy(loader, legacy):
     new = loader()
@@ -44,6 +45,7 @@ def test_samples_image_options():
 @pytest.mark.parametrize('legacy,alt', [
     (LogoBVL, 'samples.logo_bvl'),
     (LogoUCSB, 'samples.logo_ucsb'),
+    (SnellenChart, 'samples.snellen_chart'),
 ])
 def test_samples_legacy_classes_deprecated(legacy, alt):
     with pytest.warns(DeprecationWarning) as record:
@@ -53,11 +55,40 @@ def test_samples_legacy_classes_deprecated(legacy, alt):
     npt.assert_equal('0.12.0' in msg, True)
 
 
+#: The deprecated classes stay top-level until v0.12.0; the loaders that
+#: replace them do not get promoted there.
+_LEGACY_NAMES = ('LogoBVL', 'LogoUCSB', 'SnellenChart')
+
+
+@pytest.mark.parametrize('show_annotations', (True, False))
+@pytest.mark.parametrize('row', [None] + list(range(1, 12)))
+def test_snellen_chart(row, show_annotations):
+    """Every row/annotation combination matches the deprecated class"""
+    kwargs = dict(row=row, show_annotations=show_annotations)
+    new = samples.snellen_chart(**kwargs)
+    npt.assert_equal(type(new), ImageStimulus)
+    npt.assert_equal(new.img_shape, _legacy(SnellenChart, **kwargs).img_shape)
+    npt.assert_almost_equal(new.data, _legacy(SnellenChart, **kwargs).data)
+    npt.assert_equal(new.time, None)
+    # Annotations are the right-hand columns, so cropping them narrows the
+    # chart without changing its height:
+    npt.assert_equal(new.img_shape[1], 840 if show_annotations else 444)
+
+
+@pytest.mark.parametrize('row', [0, 12, [1, 3], 'first'])
+def test_snellen_chart_invalid_row(row):
+    with pytest.raises(ValueError) as excinfo:
+        samples.snellen_chart(row=row)
+    npt.assert_equal('"row"' in str(excinfo.value), True)
+
+
 def test_samples_namespace():
     # The module is reachable, but its loaders are not promoted to the
     # top-level namespace:
     npt.assert_equal(p2p.stimuli.samples is samples, True)
     for name in samples.__all__:
+        if name in _LEGACY_NAMES:
+            continue
         npt.assert_equal(hasattr(p2p.stimuli, name), False)
     # The two video samples were removed along with their assets:
     for gone in ('BostonTrain', 'GirlPool'):

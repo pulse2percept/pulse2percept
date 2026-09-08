@@ -1,3 +1,4 @@
+import importlib
 import subprocess
 import sys
 import warnings
@@ -14,6 +15,7 @@ import matplotlib.pyplot as plt
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, MonophasicPulse)
+from pulse2percept.stimuli import ElectrodeNames
 from pulse2percept.stimuli import ImageStimulus
 from pulse2percept.stimuli import VideoStimulus
 from pulse2percept.stimuli._merge import merge_time_axes
@@ -25,6 +27,19 @@ from pulse2percept.units import (DimensionMismatchError, Quantity,
 from pulse2percept.units import s as sec
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
+
+
+@pytest.mark.parametrize('cls', [ElectrodeNames, ImageStimulus, Stimulus,
+                                 VideoStimulus])
+def test_core_types_live_in_base(cls):
+    """The four containers are one module, not a taxonomy of three"""
+    npt.assert_equal(cls.__module__, 'pulse2percept.stimuli.base')
+
+
+@pytest.mark.parametrize('gone', ['names', 'images', 'videos'])
+def test_merged_modules_are_gone(gone):
+    with pytest.raises(ImportError):
+        importlib.import_module(f'pulse2percept.stimuli.{gone}')
 
 
 def test_Stimulus():

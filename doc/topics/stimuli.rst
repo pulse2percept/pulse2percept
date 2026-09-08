@@ -119,6 +119,14 @@ Stimulus in place.
 Images and videos
 -----------------
 
+:py:class:`~pulse2percept.stimuli.Stimulus`,
+:py:class:`~pulse2percept.stimuli.ImageStimulus`,
+:py:class:`~pulse2percept.stimuli.VideoStimulus` and
+:py:class:`~pulse2percept.stimuli.ElectrodeNames` all live in
+:py:mod:`pulse2percept.stimuli.base`, and are imported from
+:py:mod:`pulse2percept.stimuli`. The ``stimuli.names``, ``stimuli.images`` and
+``stimuli.videos`` modules of v0.10 no longer exist.
+
 :py:class:`~pulse2percept.stimuli.ImageStimulus` and
 :py:class:`~pulse2percept.stimuli.VideoStimulus` are visual sources, not
 currents. Their values are dimensionless gray levels. A
@@ -161,11 +169,17 @@ top-level namespace:
 
     logo = samples.logo_bvl()
     logo = samples.logo_ucsb()
+    chart = samples.snellen_chart()
     cake = samples.bvl_cake()
     surf = samples.ucsb_surf()
     cajal = samples.cajal_retina()
     zebrafish = samples.zebrafish_retina()
     bike = samples.ucsb_bike()
+
+:py:func:`~pulse2percept.stimuli.samples.snellen_chart` is the grayscale
+1348x840 acuity chart; ``show_annotations=False`` crops the line numbers and
+acuity labels, and ``row`` (1 to 11, where row 1 is 20/200) selects a single
+line.
 
 The last five are RGB stills: a cake decorated with the lab logo (495x435), a
 frame of the UCSB coastline (476x845) from the National Library of Medicine

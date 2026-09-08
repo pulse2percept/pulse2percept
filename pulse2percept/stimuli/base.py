@@ -1,21 +1,435 @@
-""":py:class:`~pulse2percept.stimuli.Stimulus`, 
-   :py:class:`~pulse2percept.stimuli.ImageStimulus`"""
+""":py:class:`~pulse2percept.stimuli.ElectrodeNames`,
+:py:class:`~pulse2percept.stimuli.ImageStimulus`,
+:py:class:`~pulse2percept.stimuli.Stimulus`,
+:py:class:`~pulse2percept.stimuli.VideoStimulus`
+
+The fundamental stimulus containers: the
+:py:class:`~pulse2percept.stimuli.Stimulus` data container, its
+:py:class:`~pulse2percept.stimuli.ImageStimulus` and
+:py:class:`~pulse2percept.stimuli.VideoStimulus` specializations for pixel
+data, and the :py:class:`~pulse2percept.stimuli.ElectrodeNames` mapping that
+names their electrodes. Other modules in :py:mod:`pulse2percept.stimuli`
+construct particular content on top of these.
+"""
+import operator as ops
+import os
+import re
 import warnings
-from ..units import (DimensionMismatchError, Quantity, Unit, as_value,
-                     dimensionless, ms, uA)
-from ..units.base import has_units
-from ..utils import PrettyPrint, is_strictly_increasing
-from ..utils.array import _interp_rows, _slice_times
-from ..utils.constants import DT, MIN_AMP
+from copy import copy, deepcopy
+from math import isclose
+
+import matplotlib.pyplot as plt
+import numpy as np
+from imageio import get_reader as video_reader
+from scipy.integrate import trapezoid
+from skimage import img_as_float32
+from skimage.color import rgba2rgb, rgb2gray
+from skimage.feature import canny
+from skimage.filters import (threshold_mean, threshold_minimum, threshold_otsu,
+                             threshold_local, threshold_isodata, scharr, sobel,
+                             median)
+from skimage.io import imread, imsave
+from skimage.transform import resize as img_resize, rotate as img_rotate
+# The video methods use their own aliases for the same two transforms:
+from skimage.transform import resize as vid_resize, rotate as vid_rotate
+
 from ._base import fast_compress_space, fast_compress_time
 from ._merge import merge_time_axes
-from .names import ElectrodeNames
+from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
+                     dimensionless, ms, uA)
+from ..units.base import has_units
+from ..utils import (PrettyPrint, center_image, frame_interval, HTMLAnimation,
+                     is_strictly_increasing, scale_image, shift_image,
+                     trim_image)
+from ..utils.array import _interp_rows, _slice_times
+from ..utils.base import bijective26_name
+from ..utils.constants import DT, MIN_AMP, MS_PER_S
+from ..utils.images import _as_writable
 
-from copy import copy, deepcopy
-import operator as ops
-from math import isclose
-from scipy.integrate import trapezoid
-import numpy as np
+__all__ = [
+    'ElectrodeNames',
+    'ImageStimulus',
+    'Stimulus',
+    'VideoStimulus',
+]
+
+# Channel suffixes for the common color models. Anything else falls back to a
+# numeric suffix, so that every channel remains addressable:
+_CHANNEL_LABELS = {3: ('R', 'G', 'B'), 4: ('R', 'G', 'B', 'A')}
+
+# 'A1', 'BC17', 'A1_R', 'A1_12' -- letters address the row, digits the column,
+# and the optional suffix the color channel:
+_NAME_RE = re.compile(r'^([A-Z]+)([0-9]+)(?:_([A-Z0-9]+))?$')
+
+
+def _bijective26_index(letters):
+    """Inverse of :py:func:`~pulse2percept.utils.bijective26_name`
+
+    Translates an "alphabetic number" back into the integer it names, e.g.
+    'A' -> 0, 'Z' -> 25, 'AA' -> 26.
+    """
+    value = 0
+    for char in letters:
+        value = value * 26 + (ord(char) - 64)
+    return value - 1
+
+
+def _is_pure_selection(item):
+    """Whether an index expression can only ever select, never repeat
+
+    Slices, ellipses and boolean masks visit every element at most once, so
+    they preserve uniqueness of the names they select. Integer (fancy)
+    indexing does not: ``names[[0, 0]]`` repeats an element. Uniqueness
+    matters because :py:class:`~pulse2percept.stimuli.Stimulus` can skip its
+    duplicate-name check whenever it is guaranteed by construction.
+    """
+    if item is Ellipsis or isinstance(item, slice):
+        return True
+    if isinstance(item, tuple):
+        return all(_is_pure_selection(i) for i in item)
+    if isinstance(item, np.ndarray):
+        return item.dtype == bool
+    return False
+
+
+class ElectrodeNames:
+    """Lazily generated electrode names for a grid of electrodes
+
+    Names every element of a (rows x columns [x channels]) grid after its
+    position in that grid: letters address the row, digits the column, and an
+    optional suffix the color channel. The first pixel of an RGB image is
+    therefore ``'A1_R'``, and the pixel in the third row and twelfth column of
+    a grayscale image is ``'C12'``.
+
+    The names are *not* stored. Only the shape of the grid is, plus (for a
+    subset such as a cropped image) the indices that were kept. Both
+    directions of the mapping are computed from that: a name is generated from
+    its index on demand, and the index of a name is recovered by parsing it.
+    That keeps construction, copying and lookup independent of the number of
+    electrodes, which matters because an image or video stimulus assigns one
+    electrode per pixel -- a 576x720 RGBA image has 1.66 million of them.
+
+    An ``ElectrodeNames`` behaves like a read-only 1-D array of strings: it
+    supports ``len``, iteration, indexing, slicing, boolean masking,
+    ``reshape`` and ``ravel``, and converts to a NumPy array of strings via
+    ``np.asarray``. That conversion is the one operation whose cost scales
+    with the number of electrodes, so it is left to the caller to trigger.
+
+    .. versionadded:: 0.10.0
+
+    Parameters
+    ----------
+    grid_shape : tuple
+        Shape of the electrode grid: ``(rows, cols)`` for a single-channel
+        image, or ``(rows, cols, channels)`` for a multi-channel one.
+    idx : array_like, optional
+        Flat indices into the grid, selecting (and ordering) the names to
+        expose. The array may have any shape; ``None`` means the whole grid in
+        row-major order.
+    unique : bool, optional
+        Whether ``idx`` is known to be free of duplicates. ``None`` means
+        "not known", in which case :py:meth:`check_unique` will work it out.
+
+    Examples
+    --------
+    >>> from pulse2percept.stimuli import ElectrodeNames
+    >>> names = ElectrodeNames((3, 4))
+    >>> names[0], names[6]
+    ('A1', 'B3')
+    >>> names.index('B3')
+    6
+
+    """
+    __slots__ = ('_grid_shape', '_idx', '_unique')
+
+    def __init__(self, grid_shape, idx=None, unique=None):
+        grid_shape = tuple(int(s) for s in grid_shape)
+        if len(grid_shape) not in (2, 3):
+            raise ValueError(f"'grid_shape' must be (rows, cols) or "
+                             f"(rows, cols, channels), not {grid_shape}.")
+        if any(s < 0 for s in grid_shape):
+            raise ValueError(f"'grid_shape' must not be negative, got "
+                             f"{grid_shape}.")
+        self._grid_shape = grid_shape
+        if idx is None:
+            self._idx = None
+            # The whole grid, in order, cannot contain duplicates:
+            self._unique = True
+        else:
+            self._idx = np.asarray(idx, dtype=np.intp)
+            self._unique = unique
+
+    # -- Grid geometry --------------------------------------------------
+
+    @property
+    def grid_shape(self):
+        """Shape of the underlying electrode grid"""
+        return self._grid_shape
+
+    @property
+    def grid_size(self):
+        """Total number of electrodes in the underlying grid"""
+        return int(np.prod(self._grid_shape))
+
+    @property
+    def indices(self):
+        """Flat indices into the grid, one per name"""
+        if self._idx is None:
+            return np.arange(self.grid_size, dtype=np.intp)
+        return self._idx
+
+    # -- Array-like interface -------------------------------------------
+
+    @property
+    def shape(self):
+        """Shape of the name container"""
+        if self._idx is None:
+            return (self.grid_size,)
+        return self._idx.shape
+
+    @property
+    def size(self):
+        """Total number of names"""
+        if self._idx is None:
+            return self.grid_size
+        return self._idx.size
+
+    @property
+    def ndim(self):
+        """Number of dimensions of the name container"""
+        return len(self.shape)
+
+    @property
+    def dtype(self):
+        """Dtype the names would have if materialized"""
+        return np.dtype(f'<U{self._max_name_len()}')
+
+    @property
+    def is_unique(self):
+        """Whether the names are known to be free of duplicates
+
+        ``False`` means "not known to be unique", not "known to contain
+        duplicates"; call :py:meth:`check_unique` to settle it.
+        """
+        return bool(self._unique)
+
+    def __len__(self):
+        shape = self.shape
+        if not shape:
+            raise TypeError("len() of unsized ElectrodeNames")
+        return shape[0]
+
+    def __getitem__(self, item):
+        # A name is not a valid index. Raise KeyError so that callers which
+        # accept either an index or a name can fall back to `index`, the same
+        # way they do for a NumPy array (which raises IndexError):
+        if isinstance(item, str):
+            raise KeyError(item)
+        idx = self.indices[item]
+        if np.ndim(idx) == 0:
+            return self._name_at(int(idx))
+        # Uniqueness only ever carries over; it is never ruled out here. An
+        # index expression that *may* repeat leaves it undetermined (None),
+        # for `check_unique` to settle if anyone asks:
+        unique = True if (self._unique and _is_pure_selection(item)) else None
+        return ElectrodeNames(self._grid_shape, idx, unique=unique)
+
+    def __iter__(self):
+        # Generating names one at a time is slower per element than building
+        # the whole array at once, but callers that break out early (or that
+        # only ever look at a handful of electrodes) never pay for the rest:
+        for i in self.indices.ravel():
+            yield self._name_at(int(i))
+
+    def __contains__(self, name):
+        try:
+            self.index(name)
+        except (ValueError, KeyError):
+            return False
+        return True
+
+    def __array__(self, dtype=None, copy=None):
+        names = self._materialize()
+        if dtype is not None:
+            names = names.astype(dtype)
+        return names
+
+    def __eq__(self, other):
+        if isinstance(other, ElectrodeNames):
+            # Two views of the same grid hold the same names iff they select
+            # the same indices, which is far cheaper to check than the names:
+            if self._grid_shape != other._grid_shape:
+                return np.asarray(self) == np.asarray(other)
+            if self._idx is None and other._idx is None:
+                return np.ones(self.shape, dtype=bool)
+            return self.indices == other.indices
+        return np.asarray(self) == other
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        return np.logical_not(result)
+
+    def __repr__(self):
+        return (f"ElectrodeNames(grid_shape={self._grid_shape}, "
+                f"size={self.size})")
+
+    def reshape(self, *shape):
+        """Return a view of the names with a new shape"""
+        if len(shape) == 1 and isinstance(shape[0], (tuple, list, np.ndarray)):
+            shape = tuple(shape[0])
+        return ElectrodeNames(self._grid_shape, self.indices.reshape(shape),
+                              unique=self._unique)
+
+    def ravel(self):
+        """Return a flattened view of the names"""
+        if self._idx is None or self._idx.ndim == 1:
+            return self
+        return ElectrodeNames(self._grid_shape, self._idx.ravel(),
+                              unique=self._unique)
+
+    def copy(self):
+        """Return an independent copy"""
+        idx = None if self._idx is None else self._idx.copy()
+        return ElectrodeNames(self._grid_shape, idx, unique=self._unique)
+
+    def tolist(self):
+        """Return the names as a list of strings"""
+        return np.asarray(self).tolist()
+
+    # -- Name <-> index mapping -----------------------------------------
+
+    def index(self, name):
+        """Return the position of ``name``
+
+        Unlike ``list(names).index(name)``, this does not build (or even
+        generate) the names: the position is recovered by parsing the name
+        itself, which is why it costs the same for one electrode as for a
+        million.
+
+        Parameters
+        ----------
+        name : str
+            An electrode name, e.g. ``'C12'`` or ``'A1_R'``.
+
+        Returns
+        -------
+        index : int
+            Position of ``name`` in the (flattened) sequence of names.
+        """
+        flat = self._flat_index_of(name)
+        if self._idx is None:
+            return int(flat)
+        # A subset (e.g. a cropped image) no longer has the grid's own
+        # ordering, so the parsed grid index still has to be located. This is
+        # a vectorized scan rather than a parse, but it touches integers
+        # instead of strings and stays in C:
+        hits = np.flatnonzero(self._idx.ravel() == flat)
+        if hits.size == 0:
+            raise ValueError(f"'{name}' is not in the list of electrodes.")
+        return int(hits[0])
+
+    def check_unique(self):
+        """Determine (and remember) whether the names are free of duplicates
+
+        The grid names are unique by construction, so duplicates can only come
+        from a repeated index. Checking the indices is therefore equivalent to
+        checking the names, and much cheaper.
+
+        Returns
+        -------
+        unique : bool
+            True if no name occurs twice.
+        """
+        if self._unique is None:
+            self._unique = bool(
+                np.unique(self._idx).size == self._idx.size)
+        return bool(self._unique)
+
+    # -- Internals ------------------------------------------------------
+
+    def _channel_labels(self):
+        n_channels = self._grid_shape[2]
+        labels = _CHANNEL_LABELS.get(n_channels,
+                                     tuple(str(c) for c in range(n_channels)))
+        return np.array([f'_{label}' for label in labels])
+
+    def _row_labels(self):
+        return np.array([bijective26_name(r)
+                         for r in range(self._grid_shape[0])])
+
+    def _col_labels(self):
+        # Ask for exactly as many characters as the largest column number
+        # needs. NumPy's own int-to-str conversion sizes for the widest
+        # possible integer instead ('<U21'), which would make a materialized
+        # name array several times larger than the names in it:
+        n_cols = self._grid_shape[1]
+        width = len(str(n_cols)) if n_cols else 1
+        return (np.arange(n_cols) + 1).astype(f'<U{width}')
+
+    def _max_name_len(self):
+        if self.grid_size == 0:
+            return 1
+        length = (len(bijective26_name(self._grid_shape[0] - 1)) +
+                  len(str(self._grid_shape[1])))
+        if len(self._grid_shape) > 2:
+            length += max(len(label) for label in self._channel_labels())
+        return length
+
+    def _name_at(self, flat):
+        """Generate the name of a single grid index"""
+        if flat < 0:
+            flat += self.grid_size
+        coords = np.unravel_index(flat, self._grid_shape)
+        name = f"{bijective26_name(int(coords[0]))}{int(coords[1]) + 1}"
+        if len(self._grid_shape) > 2:
+            name += self._channel_labels()[int(coords[2])]
+        return name
+
+    def _flat_index_of(self, name):
+        """Parse a name back into its flat index into the grid"""
+        if not isinstance(name, str):
+            raise KeyError(name)
+        match = _NAME_RE.match(name)
+        if match is None:
+            raise ValueError(f"'{name}' is not a valid electrode name.")
+        letters, digits, suffix = match.groups()
+        row = _bijective26_index(letters)
+        col = int(digits) - 1
+        coords = [row, col]
+        if len(self._grid_shape) > 2:
+            if suffix is None:
+                raise ValueError(f"'{name}' does not name a color channel, "
+                                 f"but the electrode grid has "
+                                 f"{self._grid_shape[2]} of them.")
+            labels = [label[1:] for label in self._channel_labels()]
+            try:
+                coords.append(labels.index(suffix))
+            except ValueError:
+                raise ValueError(f"'{name}' names an unknown color channel "
+                                 f"'{suffix}'.")
+        elif suffix is not None:
+            raise ValueError(f"'{name}' names a color channel, but the "
+                             f"electrode grid does not have any.")
+        if any(c < 0 or c >= s for c, s in zip(coords, self._grid_shape)):
+            raise ValueError(f"'{name}' lies outside a {self._grid_shape} "
+                             f"electrode grid.")
+        return int(np.ravel_multi_index(tuple(coords), self._grid_shape))
+
+    def _materialize(self):
+        """Build the actual array of name strings
+
+        This is the only operation whose cost scales with the number of
+        electrodes, so everything else is arranged to avoid it.
+        """
+        idx = self.indices
+        if idx.size == 0:
+            return np.empty(idx.shape, dtype=self.dtype)
+        coords = np.unravel_index(idx.ravel(), self._grid_shape)
+        names = np.char.add(self._row_labels()[coords[0]],
+                            self._col_labels()[coords[1]])
+        if len(self._grid_shape) > 2:
+            names = np.char.add(names, self._channel_labels()[coords[2]])
+        return names.reshape(idx.shape)
 
 
 def _as_scalar_column(source):
@@ -1477,3 +1891,1573 @@ class Stimulus(PrettyPrint):
 def _has_time_axis(stim):
     """Whether a stimulus has a time component, without sampling it"""
     return _component_shape(stim)[2]
+
+
+def _as_filename(source):
+    """Return ``source`` as a string path, or None if it names no file"""
+    if isinstance(source, (str, os.PathLike)):
+        return os.fsdecode(source)
+    return None
+
+
+class ImageStimulus(Stimulus):
+    """ImageStimulus
+
+    A stimulus made from an image, where each pixel gets assigned to an
+    electrode, and grayscale values in the range [0, 255] get converted to
+    activation values in the range [0, 1].
+
+    .. seealso ::
+
+        *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+        *  :py:class:`~pulse2percept.stimuli.VideoStimulus`
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    source : str, os.PathLike, ImageStimulus, or np.ndarray
+        Path to an image file (``str`` or :py:class:`pathlib.Path`). File types
+        are inferred from the file ending (support types include JPG, PNG, and
+        TIF).
+
+        .. note::
+
+            For GIFs, use :py:class:`~pulse2percept.stimuli.VideoStimulus`.
+
+        .. versionchanged:: 0.11.0
+            A :py:class:`pathlib.Path` is accepted wherever a filename is.
+            ``metadata['source']`` is always a string.
+
+    resize : (height, width) or None, optional
+        Shape of the resized image. If one of the dimensions is set to -1,
+        its value will be inferred by keeping a constant aspect ratio.
+
+    as_gray : bool, optional
+        Flag whether to convert the image to grayscale.
+        A four-channel image is interpreted as RGBA (e.g., a PNG), and the
+        alpha channel will be blended with the color black.
+
+    electrodes : int, string or list thereof; optional
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional
+        Additional stimulus metadata can be stored in a dictionary.
+
+    compress : bool, optional
+        If True, will remove pixels with 0 grayscale value.
+
+    """
+    __slots__ = ('img_shape',)
+
+    #: Pixel intensities are gray levels in [0, 1], not currents
+    _default_unit = dimensionless
+
+    def __init__(self, source, resize=None, as_gray=False,
+                 electrodes=None, metadata=None, compress=False):
+        if metadata is None:
+            metadata = {}
+        elif not isinstance(metadata, dict):
+            metadata = {'user': metadata}
+        # The buffer the caller still holds, if any:
+        borrowed = None
+        fname = _as_filename(source)
+        if fname is not None:
+            # Filename provided:
+            img = imread(fname)
+            metadata['source'] = fname
+            metadata['source_shape'] = img.shape
+        elif isinstance(source, ImageStimulus):
+            img = source.data.reshape(source.img_shape)
+            borrowed = source.data
+            metadata.update(source.metadata)
+            if electrodes is None:
+                electrodes = source.electrodes
+        elif isinstance(source, np.ndarray):
+            img = source
+            borrowed = source
+        else:
+            raise TypeError(f"Source must be a filename, an array, or "
+                            f"another ImageStimulus, not {type(source)}.")
+        if img.ndim < 2 or img.ndim > 3:
+            raise ValueError(f"Images must have 2 or 3 dimensions, not "
+                             f"{img.ndim}.")
+        # Convert to grayscale if necessary:
+        if as_gray:
+            if img.ndim == 3 and img.shape[2] == 4:
+                # Blend the background with black:
+                img = rgba2rgb(img, background=(0, 0, 0))
+            if img.ndim == 3:
+                img = rgb2gray(img)
+        # Resize if necessary:
+        if resize is not None:
+            height, width = resize
+            if height < 0 and width < 0:
+                raise ValueError('"height" and "width" cannot both be -1.')
+            if height < 0:
+                height = int(img.shape[0] * width / img.shape[1])
+            if width < 0:
+                width = int(img.shape[1] * height / img.shape[0])
+            img = img_resize(img, (height, width))
+        # Store the original image shape for resizing and color conversion:
+        self.img_shape = img.shape
+        if electrodes is None:
+            # Name every pixel after its place in the image: 'A1' is the
+            # top-left pixel, 'C12' sits in the third row and twelfth column,
+            # and a color image suffixes the channel ('A1_R'). The names are
+            # generated on demand rather than stored:
+            electrodes = ElectrodeNames(self.img_shape)
+        data = img_as_float32(img)
+        if borrowed is not None and np.may_share_memory(data, borrowed):
+            data = data.copy()
+        super().__init__(_adoptable(data.ravel()),
+                                            time=None, electrodes=electrodes,
+                                            metadata=metadata,
+                                            compress=compress)
+        self.metadata = metadata
+
+    def _pprint_params(self):
+        params = super()._pprint_params()
+        params.update({'img_shape': self.img_shape})
+        return params
+
+    def _names_for(self, img, electrodes):
+        """Electrode names for an image derived from this one"""
+        if electrodes is not None:
+            return electrodes
+        return self.electrodes if np.shape(img) == self.img_shape else None
+
+    def apply(self, func, *args, electrodes=None, **kwargs):
+        """Apply a function to the image
+
+        .. versionchanged:: 0.10.0
+
+            ``func`` may now change the shape of the image, and ``electrodes``
+            can name the result.
+
+        Parameters
+        ----------
+        func : function
+            The function to apply to the image. Must accept a 2D or 3D image
+            and return a 2D or 3D image. The returned image need not have the
+            same shape as the original; see ``electrodes``.
+        * args :
+            Additional positional arguments passed to the function
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, the original names are carried over whenever ``func`` leaves
+            the shape of the image alone, and the result is named after its
+            place in the new image otherwise (e.g. for
+            ``skimage.transform.resize``). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the returned image.
+        **kwargs :
+            Additional keyword arguments passed to the function
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the new image
+        """
+        # `func` gets a frame of its own: several of the scikit-image
+        # transforms this exists to reach cannot take a read-only one.
+        img = func(_as_writable(self.data.reshape(self.img_shape)),
+                   *args, **kwargs)
+        return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
+                             metadata=self.metadata)
+
+    def invert(self):
+        """Invert the gray levels of the image
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with all grayscale values inverted
+            in the range [0, 1].
+
+        """
+        img = self.data.reshape(self.img_shape)
+        if len(self.img_shape) > 2:
+            # Leave any alpha channel alone:
+            img = img.copy()
+            img[..., :3] = 1.0 - img[..., :3]
+        else:
+            img = 1.0 - img
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def rgb2gray(self, electrodes=None):
+        """Convert the image to grayscale
+
+        Parameters
+        ----------
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the grayscale image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with all RGB values converted to
+            grayscale in the range [0, 1].
+
+        Notes
+        -----
+        *  A four-channel image is interpreted as RGBA (e.g., a PNG), and the
+           alpha channel will be blended with the color black.
+
+        """
+        img = self.data.reshape(self.img_shape)
+        if img.ndim == 3 and img.shape[2] == 4:
+            # Blend the background with black in one pass:
+            img = np.clip(img[..., :3] * img[..., 3:4], 0.0, 1.0)
+        if img.ndim == 3:
+            img = rgb2gray(img)
+        return ImageStimulus(img, electrodes=electrodes,
+                             metadata=self.metadata)
+
+    def resize(self, shape, electrodes=None, **kwargs):
+        """Resize the image
+
+        .. versionchanged:: 0.10.0
+
+            Keyword arguments are passed on to scikit-image.
+
+        .. _skimage.transform.resize: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize
+
+        Parameters
+        ----------
+        shape : (rows, cols)
+            Shape of the resized image
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the grayscale image.
+        **kwargs :
+            Additional keyword arguments passed to `skimage.transform.resize`_,
+            such as ``order=0`` for nearest-neighbor interpolation (which keeps
+            a binary image binary).
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the resized image
+
+        """
+        height, width = shape
+        if height < 0 and width < 0:
+            raise ValueError('"height" and "width" cannot both be -1.')
+        if height < 0:
+            height = int(self.img_shape[0] * width / self.img_shape[1])
+        if width < 0:
+            width = int(self.img_shape[1] * height / self.img_shape[0])
+        img = img_resize(self.data.reshape(self.img_shape), (height, width),
+                         **kwargs)
+
+        return ImageStimulus(img, electrodes=electrodes,
+                             metadata=self.metadata)
+
+    def crop(self, idx_rect=None, left=0, right=0, top=0, bottom=0,
+             electrodes=None):
+        """Crop the image
+
+        This method maps a rectangle (defined by two corners) from the image
+        to a rectangle of the given size. Alternatively, this method can be used
+        to crop a number of columns either from the left or the right of the
+        image, or a number of rows either from the top or the bottom.
+
+        .. versionadded:: 0.8
+
+        Parameters
+        ----------
+        idx_rect : 4-tuple (y0, x0, y1, x1)
+            Image indices of the top-left corner ``[y0, x0]`` and bottom-right
+            corner ``[y1, x1]`` (exclusive) of the rectangle to crop.
+        left : int
+            Number of columns to crop from the left
+        right : int
+            Number of columns to crop from the right
+        top : int
+            Number of rows to crop from the top
+        bottom : int
+            Number of rows to crop from the bottom
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+
+               The number of electrode names provided must match the number of
+               pixels in the cropped image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the cropped image
+
+        """
+        if idx_rect is not None:
+            if left > 0 or right > 0 or top > 0 or bottom > 0:
+                raise ValueError('Crop window "idx_rect" cannot be given at '
+                                 'the same time as "left"/"right"/"top"/'
+                                 '"bottom".')
+            # Crop window is given by a rectangle (ignore left, right, etc.):
+            try:
+                y0, x0, y1, x1 = idx_rect
+            except (ValueError, TypeError):
+                raise TypeError('"idx_rect" must be a 4-tuple (y0, x0, y1, x1)')
+        else:
+            y0, x0 = top, left
+            y1, x1 = self.img_shape[0] - bottom, self.img_shape[1] - right
+        # Safety checks:
+        if y1 <= y0 or x1 <= x0:
+            raise ValueError(f"The corners do not define a valid rectangle:"
+                             f"(y0,x0)=({y0},{x0}), (y1,x1)=({y1},{x1}).")
+        if y0 < 0 or x0 < 0:
+            raise ValueError(f"Top-left corner (y0,x0)=({y0},{x0}) lies "
+                             f"outside the image.")
+        if y1 > self.img_shape[0] or x1 > self.img_shape[1]:
+            raise ValueError(f"Bottom-right corner (y1-1,x1-1)=({y1-1},{x1-1}) lies "
+                             f"outside the image.")
+        # Crop the image:
+        img = self.data.reshape(self.img_shape)
+        # Check if we have color channels & index appropriately
+        if len(self.img_shape) == 3:
+            cropped_img = img[y0:y1, x0:x1, :3]
+        else:
+            cropped_img = img[y0:y1, x0:x1]
+        if electrodes is None:
+            # Carry the cropped pixels' original names over, so that a pixel
+            # keeps the same name before and after cropping:
+            electrodes = self.electrodes.reshape(self.img_shape)
+            if len(self.img_shape) == 3:
+                electrodes = electrodes[y0:y1, x0:x1, :3].ravel()
+            else:
+                electrodes = electrodes[y0:y1, x0:x1].ravel()
+        return ImageStimulus(cropped_img, electrodes=electrodes,
+                             metadata=self.metadata)
+
+    def trim(self, tol=0, electrodes=None):
+        """Remove any black border around the image
+
+        .. versionadded:: 0.7
+
+        Parameters
+        ----------
+        tol : float
+            Any pixels with gray levels > tol will be trimmed.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the trimmed image.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with trimmed borders.
+
+        """
+        img = self.data.reshape(self.img_shape)
+        return ImageStimulus(trim_image(img, tol=tol), electrodes=electrodes,
+                             metadata=self.metadata)
+
+    def threshold(self, thresh, **kwargs):
+        """Threshold the image
+
+        Parameters
+        ----------
+        thresh : str or float
+            If a float in [0,1] is provided, pixels whose grayscale value is
+            above said threshold will be white, others black.
+
+            A number of additional methods are supported:
+
+            *  'mean': Threshold image based on the mean of grayscale values.
+            *  'minimum': Threshold image based on the minimum method, where
+                          the histogram of the input image is computed and
+                          smoothed until there are only two maxima.
+            *  'local': Threshold image based on `local pixel neighborhood`_.
+                        Requires ``block_size``: odd number of pixels in the
+                        neighborhood.
+            *  'otsu': `Otsu's method`_
+            *  'isodata': `ISODATA method`_, also known as the Ridler-Calvard 
+                          method or intermeans.
+
+        .. _local pixel neighborhood: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_local
+        .. _Otsu's method: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_otsu
+        .. _ISODATA method: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with two gray levels 0.0 and 1.0
+        """
+        if len(self.img_shape) > 2:
+            raise ValueError("Thresholding is only supported for grayscale "
+                             "(i.e., single-channel) images. Use `rgb2gray` "
+                             "first.")
+        img = self.data.reshape(self.img_shape)
+        if isinstance(thresh, str):
+            if thresh.lower() == 'mean':
+                img = img > threshold_mean(img)
+            elif thresh.lower() == 'minimum':
+                img = img > threshold_minimum(img, **kwargs)
+            elif thresh.lower() == 'local':
+                img = img > threshold_local(img, **kwargs)
+            elif thresh.lower() == 'otsu':
+                img = img > threshold_otsu(img, **kwargs)
+            elif thresh.lower() == 'isodata':
+                img = img > threshold_isodata(img, **kwargs)
+            else:
+                raise ValueError(f"Unknown threshold method '{thresh}'.")
+        elif np.isscalar(thresh):
+            img = self.data.reshape(self.img_shape) > thresh
+        else:
+            raise TypeError(f"Threshold type must be str or float, not "
+                            f"{type(thresh)}.")
+        return ImageStimulus(img, electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def rotate(self, angle, mode='constant', electrodes=None, **kwargs):
+        """Rotate the image
+
+        .. versionchanged:: 0.10.0
+
+            Keyword arguments are passed on to scikit-image.
+
+        .. _skimage.transform.rotate: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.rotate
+
+        Parameters
+        ----------
+        angle : float or Quantity
+            Angle by which to rotate the image (degrees).
+            Positive: counter-clockwise, negative: clockwise
+        mode : str, optional
+            How to fill in the corners the rotation leaves empty; see
+            `skimage.transform.rotate`_.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel keeps the name it had before the rotation, unless
+            ``resize=True`` grew the canvas, in which case the enlarged image is
+            named after its own pixel grid. See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        **kwargs :
+            Additional keyword arguments passed to `skimage.transform.rotate`_,
+            such as ``order``, ``cval``, or ``resize=True`` to grow the image so
+            that it contains every rotated pixel.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the rotated image
+
+        """
+        # Rotating in place is the common case, and keeps the pixel names
+        # meaningful; ``resize=True`` is available through kwargs:
+        kwargs.setdefault('resize', False)
+        angle = as_value(angle, deg, 'angle')
+        img = img_rotate(_as_writable(self.data.reshape(self.img_shape)),
+                         angle, mode=mode, **kwargs)
+        return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
+                             metadata=self.metadata)
+
+    def shift(self, shift_cols, shift_rows):
+        """Shift the image foreground
+
+        This function shifts the center of mass (CoM) of the image by the
+        specified number of rows and columns.
+
+        Parameters
+        ----------
+        shift_cols : float
+            Number of columns by which to shift the CoM.
+            Positive: to the right, negative: to the left
+        shift_rows : float
+            Number of rows by which to shift the CoM.
+            Positive: downward, negative: upward
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the shifted image
+
+        """
+        return self.apply(shift_image, shift_cols, shift_rows)
+
+    def center(self, loc=None):
+        """Center the image foreground
+
+        This function shifts the center of mass (CoM) to the image center.
+
+        Parameters
+        ----------
+        loc : (col, row), optional
+            The pixel location at which to center the CoM. By default, shifts
+            the CoM to the image center.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the centered image
+
+        """
+        # Calculate center of mass:
+        img = self.data.reshape(self.img_shape)
+        return ImageStimulus(center_image(img, loc=loc),
+                             electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def scale(self, scaling_factor):
+        """Scale the image foreground
+
+        This function scales the image foreground (excluding black pixels)
+        by a factor.
+
+        Parameters
+        ----------
+        scaling_factor : float
+            Factory by which to scale the image
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the scaled image
+
+        """
+        img = self.data.reshape(self.img_shape)
+        return ImageStimulus(scale_image(img, scaling_factor),
+                             electrodes=self.electrodes,
+                             metadata=self.metadata)
+
+    def filter(self, filt, **kwargs):
+        """Filter the image
+
+        Parameters
+        ----------
+        filt : str
+            Image filter. Additional parameters can be passed as keyword
+            arguments. The following filters are supported:
+
+            *  'sobel': Edge filter the image using the `Sobel filter`_.
+            *  'scharr': Edge filter the image using the `Scharr filter`_.
+            *  'canny': Edge filter the image using the `Canny algorithm`_.
+               You can also specify ``sigma``, ``low_threshold``,
+               ``high_threshold``, ``mask``, and ``use_quantiles``.
+            *  'median': Return local median of the image.
+        **kwargs :
+            Additional parameters passed to the filter
+
+        .. _Sobel filter: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel
+        .. _Scharr filter: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr
+        .. _Canny algorithm: https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object with the filtered image
+        """
+        if not isinstance(filt, str):
+            raise TypeError(f"'filt' must be a string, not {type(filt)}.")
+        filters = {'sobel': sobel, 'scharr': scharr, 'canny': canny,
+                   'median': median}
+        try:
+            filt = filters[filt.lower()]
+        except KeyError:
+            raise ValueError(f"Unknown filter '{filt}'.")
+        return self.apply(filt, **kwargs)
+
+    def encode(self, amp_range=(0, 50), freq=20, implant=None, **kwargs):
+        """Encode the image using amplitude modulation
+
+        Encodes the image as a train of biphasic pulses, where the gray level
+        of a pixel sets the amplitude of its pulses.
+
+        This is a shorthand for
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`; use that directly
+        for the full set of options.
+
+        .. versionchanged:: 0.10.0
+
+            Gray levels now map onto ``amp_range`` absolutely rather than being
+            stretched to fill it (pass ``stretch=True`` for the old behavior),
+            the image receives a pulse *train* rather than a single pulse, and
+            ``implant`` encodes at electrode rather than pixel resolution.
+
+        Parameters
+        ----------
+        amp_range : (min_amp, max_amp), optional
+            Range of pulse amplitudes (uA). A gray level of 0 maps onto
+            ``min_amp``, a gray level of 1 onto ``max_amp``.
+        freq : float, optional
+            Pulse train frequency (Hz). The image is treated as a single frame
+            lasting 500 ms unless ``frame_dur`` says otherwise.
+        implant : :py:class:`~pulse2percept.implants.Implant`, optional
+            If given, the image is first sampled at the implant's electrode
+            locations, so that the pulse trains are built at electrode rather
+            than pixel resolution.
+        **kwargs :
+            Additional arguments passed to
+            :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
+
+        Returns
+        -------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Encoded stimulus
+
+        """
+        # Imported here because `encoders` imports this module:
+        from .encoders import AmplitudeEncoder
+        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
+                                **kwargs).encode(self, implant=implant)
+
+    def plot(self, ax=None, **kwargs):
+        """Plot the stimulus
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes or list thereof; optional, default: None
+            A Matplotlib Axes object or a list thereof (one per electrode to
+            plot). If None, a new Axes object will be created.
+
+        Returns
+        -------
+        ax: matplotlib.axes.Axes
+            Returns the axes with the plot on it
+
+        """
+        if ax is None:
+            ax = plt.gca()
+        if 'figsize' in kwargs:
+            ax.figure.set_size_inches(kwargs.pop('figsize'))
+        if 'vmin' in kwargs:
+            vmin = kwargs.pop('vmin')
+        else:
+            vmin = 0
+
+        cmap = None
+        if len(self.img_shape) == 2:
+            cmap = 'gray'
+        if 'cmap' in kwargs:
+            cmap = kwargs.pop('cmap')
+        ax.imshow(self.data.reshape(self.img_shape), cmap=cmap, vmin=vmin,
+                  **kwargs)
+        return ax
+
+    def save(self, fname, vmin=0, vmax=None):
+        """Save the stimulus as an image
+
+        Parameters
+        ----------
+        fname : str or os.PathLike
+            The name of the image file to be created. Image type will be
+            inferred from the file extension.
+
+            .. versionchanged:: 0.11.0
+                A :py:class:`pathlib.Path` is accepted.
+
+        """
+        fname = os.fsdecode(fname)
+        # if vmax is not passed by user
+        if vmax is None:
+            vmax = self.data.max()
+        # clip to vmin, vmax vals
+        clipped_data = self.data.clip(vmin,vmax)
+        # if not a TIFF file, scale to uint8
+        if not fname.endswith(".tif") and not fname.endswith(".tiff"):
+            # scale to [0,255] 
+            scaled_data = ((clipped_data - vmin) * ( 1 / (vmax - vmin) * 255)).astype('uint8')
+            imsave(fname, scaled_data.reshape(self.img_shape))
+            warnings.warn(f"Stimulus {fname} has been scaled & compressed to the range [0, 255]. To retain the full precision and scaling of the original stimulus, please save using the TIFF format.", UserWarning)
+        else:
+            imsave(fname, clipped_data.reshape(self.img_shape))
+
+
+#: Anything this close to a frame boundary is treated as being on it
+_FRAME_TOL = 1e-6
+
+
+def _read_video(source, format, start_time, stop_time):
+    """Decode the frames of a video file that start in [start, stop) ms"""
+    start_time = as_value(start_time, ms, 'start_time')
+    stop_time = as_value(stop_time, ms, 'stop_time')
+    clipped = start_time is not None or stop_time is not None
+    for name, t in (('start_time', start_time), ('stop_time', stop_time)):
+        if t is not None and not np.isfinite(t):
+            raise ValueError(f'"{name}" must be a finite time in ms, not {t}.')
+    if start_time is not None and start_time < 0:
+        raise ValueError(f'"start_time" cannot be negative, but is '
+                         f'{start_time} ms.')
+    if (start_time is not None and stop_time is not None and
+            stop_time <= start_time):
+        raise ValueError(f'"stop_time" ({stop_time} ms) must be greater than '
+                         f'"start_time" ({start_time} ms).')
+    with video_reader(source, format=format) as reader:
+        meta = reader.get_meta_data()
+        fps = meta.get('fps') if meta is not None else None
+        if clipped:
+            if not fps:
+                raise ValueError(f'"{source}" does not report a frame rate, '
+                                 f'so "start_time"/"stop_time" cannot be '
+                                 f'mapped onto frames.')
+            first = 0 if start_time is None else _frame_index(start_time, fps)
+            last = None if stop_time is None else _frame_index(stop_time, fps)
+        else:
+            first, last = 0, None
+        if last is not None and last <= first:
+            raise ValueError(f'No video frame starts in [{start_time}, '
+                             f'{stop_time}) ms.')
+        if first:
+            reader.set_image_index(first)
+        frames = []
+        while last is None or first + len(frames) < last:
+            try:
+                frames.append(reader.get_next_data())
+            except (IndexError, StopIteration, EOFError):
+                break  # End of file
+    if clipped and not frames:
+        raise ValueError(f'No video frame starts in [{start_time}, '
+                         f'{stop_time}) ms.')
+    return np.array(frames), meta
+
+
+def _frame_index(t, fps):
+    """Index of the first frame that starts at or after ``t`` ms"""
+    return int(np.ceil(t * fps / MS_PER_S - _FRAME_TOL))
+
+
+class VideoStimulus(Stimulus):
+    """VideoStimulus
+
+    A stimulus made from a movie file, where each pixel gets assigned to an
+    electrode, and grayscale values in the range [0, 255] get assigned to
+    activation values in the range [0, 1].
+
+    The frame rate of the movie is used to infer the time points at which to
+    stimulate.
+
+    .. seealso ::
+
+        *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+        *  :py:class:`~pulse2percept.stimuli.ImageStimulus`
+
+    .. versionadded:: 0.7
+
+    Parameters
+    ----------
+    source : str, os.PathLike, VideoStimulus, or np.ndarray
+        Path to a video file (``str`` or :py:class:`pathlib.Path`). File types
+        are inferred from the file ending (support types include MP4, AVI, MOV,
+        and GIF). Enforce a specific format via ``format``.
+
+        .. versionchanged:: 0.11.0
+            A :py:class:`pathlib.Path` is accepted wherever a filename is.
+            ``metadata['source']`` is always a string.
+
+        Alternatively, pass a <rows x columns x channels x frames> NumPy array
+        or another :py:class:`~pulse2percept.stimuli.VideoStimulus` object.
+
+    format : str
+        A video format string supported by imageio, such as 'MP4', 'AVI', or
+        'MOV'. Use if the file type cannot be inferred from ``source``.
+        For a full list of supported formats, see
+        https://imageio.readthedocs.io/en/stable/formats.html.
+
+    resize : (height, width) or None, optional, default: None
+        A tuple specifying the desired height and the width of each video frame
+
+    as_gray : bool, optional
+        Flag whether to convert the image to grayscale.
+        A four-channel image is interpreted as RGBA (e.g., a PNG), and the
+        alpha channel will be blended with the color black.
+
+    electrodes : int, string or list thereof; optional, default: None
+        Optionally, you can provide your own electrode names. If none are
+        given, each pixel is named after its place in the image: a letter for
+        the row, a number for the column, and a suffix for the color channel
+        (e.g. 'A1', 'C12', 'A1_R'). See
+        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+        .. note::
+           The number of electrode names provided must match the number of
+           pixels in the (resized) image.
+
+    metadata : dict, optional, default: None
+        Additional stimulus metadata can be stored in a dictionary.
+
+    compress : bool, optional, default: False
+        If True, will compress the source data in two ways:
+        * Remove electrodes with all-zero activation.
+        * Retain only the time points at which the stimulus changes.
+
+    start_time, stop_time : float or Quantity, optional, default: None
+        Load only the frames that start in the half-open interval
+        ``[start_time, stop_time)`` of the source video, in milliseconds.
+        Time-based clipping requires the video reader to report a frame rate.
+
+        .. note::
+           The clip starts at ``time[0] == 0`` no matter where it was cut
+           from. To shorten a video that is already in memory, and keep its
+           original time stamps, use
+           :py:meth:`~pulse2percept.stimuli.VideoStimulus.crop` instead.
+
+        .. versionadded:: 0.10.0
+
+    """
+    __slots__ = ('vid_shape',)
+
+    #: Pixel intensities are gray levels in [0, 1], not currents; see
+    #: :py:class:`~pulse2percept.stimuli.ImageStimulus`.
+    _default_unit = dimensionless
+
+    def __init__(self, source, format=None, resize=None, as_gray=False,
+                 electrodes=None, time=None, metadata=None, compress=False,
+                 start_time=None, stop_time=None):
+        if metadata is None:
+            metadata = {}
+        elif not isinstance(metadata, dict):
+            metadata = {'user': metadata}
+        # The buffer the caller still holds, if any (see below):
+        borrowed = None
+        fname = _as_filename(source)
+        if fname is not None:
+            vid, meta = _read_video(fname, format, start_time, stop_time)
+            # Move frame index to the last dimension:
+            if vid.ndim == 4:
+                vid = np.ascontiguousarray(vid.transpose((1, 2, 3, 0)))
+            elif vid.ndim == 3:
+                vid = np.ascontiguousarray(vid.transpose((1, 2, 0)))
+            # Combine video metadata with user-specified metadata:
+            if meta is not None:
+                metadata.update(meta)
+            metadata['source'] = fname
+            metadata['source_shape'] = vid.shape
+            # Infer the time points from the video frame rate:
+            time = np.arange(vid.shape[-1]) * MS_PER_S / meta['fps']
+        elif isinstance(source, VideoStimulus):
+            vid = source.data.reshape(source.vid_shape)
+            borrowed = source.data
+            metadata.update(source.metadata)
+            if electrodes is None:
+                electrodes = source.electrodes
+            if time is None:
+                time = source.time
+        elif isinstance(source, np.ndarray):
+            vid = source
+            borrowed = source
+            if time is None and 'fps' in metadata:
+                # Infer the time points from the video frame rate:
+                time = np.arange(vid.shape[-1]) * MS_PER_S / metadata['fps']
+        else:
+            raise TypeError(f"Source must be a filename, a 3D NumPy array or "
+                            f"another VideoStimulus, not {type(source)}.")
+        if fname is None and (start_time is not None or
+                              stop_time is not None):
+            raise ValueError('"start_time"/"stop_time" only apply to a video '
+                             'read from a file. Use crop(idx_time=...) to '
+                             'shorten an array or another VideoStimulus.')
+        if vid.ndim < 3 or vid.ndim > 4:
+            raise ValueError(f"Videos must have 3 or 4 dimensions, not "
+                             f"{vid.ndim}.")
+        # Convert to grayscale if necessary:
+        if as_gray:
+            if vid.ndim == 4:
+                vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
+        # Convert to float array in [0, 1] and call the Stimulus constructor:
+        vid = img_as_float32(vid)
+        # Resize if necessary:
+        if resize is not None:
+            height, width = resize
+            if height < 0 and width < 0:
+                raise ValueError('"height" and "width" cannot both be -1.')
+            if height < 0:
+                height = int(vid.shape[0] * width / vid.shape[1])
+            if width < 0:
+                width = int(vid.shape[1] * height / vid.shape[0])
+            vid = vid_resize(vid, (height, width, *vid.shape[2:]))
+        # Store the original image shape for resizing and color conversion:
+        self.vid_shape = vid.shape
+        if electrodes is None:
+            # One electrode per pixel, named after its place in the frame
+            # ('A1', 'C12', 'A1_R' for a color video). The last axis holds the
+            # frames, which are the time component and not electrodes:
+            electrodes = ElectrodeNames(self.vid_shape[:-1])
+        if borrowed is not None and np.may_share_memory(vid, borrowed):
+            vid = vid.copy()
+        super().__init__(_adoptable(vid.reshape((-1, vid.shape[-1]))),
+                                            time=time, electrodes=electrodes,
+                                            metadata=metadata,
+                                            compress=compress)
+        self.metadata = metadata
+
+    def compress(self):
+        """Compress the source data
+
+        Also brings ``vid_shape`` back in line with the compressed data:
+        compression drops the time points at which the video does not change,
+        so the frame count of the source is no longer the frame count of the
+        stimulus. Every ``data.reshape(vid_shape)`` in this module relies on
+        that invariant. (Compression can also drop all-zero pixels, in which
+        case no shape describes the data any more; see ``_frames``.)
+
+        Returns
+        -------
+        compressed : :py:class:`~pulse2percept.stimuli.VideoStimulus`
+        """
+        super().compress()
+        # ``Stimulus.__init__`` calls this method for ``compress=True``, which
+        # is why ``vid_shape`` is set before the constructor runs: one
+        # implementation then covers both that and an explicit ``compress()``.
+        self.vid_shape = (*self.vid_shape[:-1], self.data.shape[-1])
+
+    def _frames(self):
+        """The stimulus as a dense <rows x columns [x channels] x frames> array
+
+        Raises a ``ValueError`` if the video has been compressed in space,
+        which removes all-zero pixels and therefore leaves nothing that can be
+        reshaped back into a frame.
+        """
+        n_px = int(np.prod(self.vid_shape[:-1]))
+        if self.data.shape[0] != n_px:
+            raise ValueError(
+                f"This video was compressed in space: {self.data.shape[0]} of "
+                f"its {n_px} pixels are left, so its frames cannot be "
+                f"reconstructed. Pass 'compress=False' to keep the video "
+                f"dense.")
+        return self.data.reshape(self.vid_shape)
+
+    def _pprint_params(self):
+        params = super()._pprint_params()
+        params.update({'vid_shape': self.vid_shape})
+        return params
+
+    def _names_for(self, vid, electrodes):
+        """Electrode names for a video derived from this one
+
+        A pixel keeps its name across an operation that leaves the pixel grid
+        alone, which is what makes 'A1' refer to the same thing before and
+        after. An operation that resamples the grid (a resize, a rotation that
+        grows the canvas) has no such correspondence to preserve, so the result
+        is named afresh rather than inheriting names that no longer describe
+        it. Only the frame layout is compared; the number of frames is the time
+        axis, not an electrode count.
+        """
+        if electrodes is not None:
+            return electrodes
+        same = np.shape(vid)[:-1] == self.vid_shape[:-1]
+        return self.electrodes if same else None
+
+    def apply(self, func, *args, electrodes=None, **kwargs):
+        """Apply a function to each frame of the video
+
+        .. versionchanged:: 0.10.0
+
+            ``func`` may now change the shape of a frame, and ``electrodes``
+            can name the result.
+
+        Parameters
+        ----------
+        func : function
+            The function to apply to each frame in the video. Must accept a 2D
+            or 3D image and return a 2D or 3D image. The returned frames need
+            not have the same shape as the originals (but must all have the
+            same shape as each other); see ``electrodes``.
+        *args :
+            Additional positional arguments passed to the function
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, the original names are carried over whenever ``func`` leaves
+            the shape of a frame alone, and the result is named after its place
+            in the new frame otherwise (e.g. for
+            ``skimage.transform.resize``). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in a returned frame.
+        **kwargs :
+            Additional keyword arguments passed to the function
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with the new video
+        """
+        # `func` gets a frame of its own: several of the scikit-image
+        # transforms this exists to reach cannot take a read-only one.
+        frames = self._frames()
+        vid = np.array([func(_as_writable(frames[..., idx]), *args, **kwargs)
+                        for idx in range(frames.shape[-1])])
+        # Move first axis (frames) to last:
+        vid = np.moveaxis(vid, 0, -1)
+        return VideoStimulus(vid, electrodes=self._names_for(vid, electrodes),
+                             time=self.time, metadata=self.metadata)
+
+    def invert(self):
+        """Invert the gray levels of the video
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with all grayscale values inverted
+            in the range [0, 1].
+
+        """
+        return VideoStimulus(1.0 - self.data.reshape(self.vid_shape),
+                             electrodes=self.electrodes, time=self.time,
+                             metadata=self.metadata)
+
+    def rgb2gray(self, electrodes=None):
+        """Convert the video to grayscale
+
+        Parameters
+        ----------
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the grayscale video.
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with all RGB values converted to
+            grayscale in the range [0, 1].
+
+        """
+        vid = self.data.reshape(self.vid_shape)
+        if len(self.vid_shape) == 4:
+            vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
+        return VideoStimulus(vid, electrodes=electrodes, time=self.time,
+                             metadata=self.metadata)
+
+    def resize(self, shape, electrodes=None, **kwargs):
+        """Resize the video
+
+        .. versionchanged:: 0.10.0
+
+            Keyword arguments are passed on to scikit-image.
+
+        .. _skimage.transform.resize: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize
+
+        Parameters
+        ----------
+        shape : (rows, cols)
+            Shape of each frame in the resized video. If one of the dimensions
+            is set to -1, its value will be inferred by keeping a constant
+            aspect ratio.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in the resized video.
+        **kwargs :
+            Additional keyword arguments passed to `skimage.transform.resize`_,
+            such as ``order=0`` for nearest-neighbor interpolation (which keeps
+            a binary video binary).
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object containing the resized video
+
+        """
+        height, width = shape
+        if height < 0 and width < 0:
+            raise ValueError('"height" and "width" cannot both be -1.')
+        if height < 0:
+            height = int(self.vid_shape[0] * width / self.vid_shape[1])
+        if width < 0:
+            width = int(self.vid_shape[1] * height / self.vid_shape[0])
+        vid = vid_resize(self.data.reshape(self.vid_shape),
+                         (height, width, *self.vid_shape[2:]), **kwargs)
+        return VideoStimulus(vid, electrodes=electrodes, time=self.time,
+                             metadata=self.metadata)
+
+    def crop(self, idx_space=None, idx_time=None, left=0, right=0, top=0,
+             bottom=0, front=0, back=0, electrodes=None):
+        """Crop the video
+
+        This method maps a rectangle (defined by two corners) from each video
+        frame to a rectangle of the given size. Similarly, the video can be
+        shortened to a specified range of frames.
+
+        Alternatively, this method can be used to crop a number of columns
+        either from the left or the right of the video frame, or a number of
+        rows either from the top or the bottom, or a number of frames from the
+        front (beginning) or back (end) of the video.
+
+        .. versionadded:: 0.8
+
+        Parameters
+        ----------
+        idx_space : 4-tuple (y0, x0, y1, x1)
+            Image indices of the top-left corner ``[y0, x0]`` and bottom-right
+            corner ``[y1, x1]`` (exclusive) of the rectangle to crop.
+        idx_time : tuple (t0, t1)
+            Frame indices defining the start ``t0`` and end ``t1`` of the
+            cropped video.
+        left : int
+            Number of columns to crop from the left of each video frame
+        right: int
+            Number of columns to crop from the right of each video frame
+        top: int
+            Number of rows to crop from the top of each video frame
+        bottom : int
+            Number of rows to crop from the bottom of each video frame
+        front : int
+            Number of frames to crop from the front (beginning) of the video
+        back : int
+            Number of frames to crop from the back (end) of the video
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+
+               The number of electrode names provided must match the number of
+               pixels in the cropped image.
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object containing the video
+
+        """
+        if idx_space is not None:
+            if left > 0 or right > 0 or top > 0 or bottom > 0:
+                raise ValueError('Crop window "idx_space" cannot be given at '
+                                 'the same time as "left"/"right"/"top"/'
+                                 '"bottom".')
+            # Crop window is given by a rectangle (ignore left, right, etc.):
+            try:
+                y0, x0, y1, x1 = idx_space
+            except (ValueError, TypeError):
+                raise TypeError('"idx_space" must be a 4-tuple (y0,x0,y1,x1)')
+        else:
+            # Crop window not given, use left/right/top/bottom:
+            y0, x0 = top, left
+            y1, x1 = self.vid_shape[0] - bottom, self.vid_shape[1] - right
+        if idx_time is not None:
+            if front > 0 or back > 0:
+                raise ValueError('Crop window "idx_time" cannot be given at '
+                                 'the same times as "front"/"back".')
+            try:
+                t0, t1 = idx_time
+            except (ValueError, TypeError):
+                raise TypeError('"idx_time" must be a tuple (t0, t1).')
+        else:
+            t0, t1 = front, self.vid_shape[-1] - back
+        # Safety checks:
+        if y1 <= y0 or x1 <= x0:
+            raise ValueError(f"The corners do not define a valid rectangle:"
+                             f"(y0,x0)=({y0},{x0}), (y1,x1)=({y1},{x1}).")
+        if y0 < 0 or x0 < 0:
+            raise ValueError(f"Top-left corner (y0,x0)=({y0},{x0}) lies "
+                             f"outside the video frame.")
+        if y1 >= self.vid_shape[0] or x1 >= self.vid_shape[1]:
+            raise ValueError(f"Bottom-right corner (y1,x1)=({y1},{x1}) lies "
+                             f"outside the video frame.")
+        if t1 <= t0:
+            raise ValueError(f"Start and stop frame do not form a valid range: "
+                             f"t0={t0}, t1={t1}.")
+        if t0 < 0 or t1 > self.vid_shape[-1]:
+            raise ValueError(f"Start/stop frames lie outside the valid range: "
+                             f"t0={t0}, t1={t1}")
+        # Crop the video:
+        vid = self.data.reshape(self.vid_shape)
+        cropped_vid = vid[y0:y1, x0:x1, ..., t0:t1]  # could be RGB or gray
+        time = self.time[t0:t1]
+        if electrodes is None:
+            # Carry the cropped pixels' original names over, so that a pixel
+            # keeps the same name before and after cropping:
+            electrodes = self.electrodes.reshape(self.vid_shape[:-1])
+            electrodes = electrodes[y0:y1, x0:x1, ...].ravel()
+        return VideoStimulus(cropped_vid, electrodes=electrodes, time=time,
+                             metadata=self.metadata)
+
+    def trim(self, tol=0, electrodes=None):
+        """Remove any black border around the video
+
+        .. versionadded:: 0.7
+
+        Parameters
+        ----------
+        tol : float
+            Any pixels with gray levels > tol will be trimmed.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel is named after its place in the image (e.g.
+            'A1', 'C12', 'A1_R'). See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+
+            .. note::
+               The number of electrode names provided must match the number of
+               pixels in each frame of the trimmed video.
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with trimmed borders.
+
+        """
+        vid = self.data.reshape(self.vid_shape)
+        # First we trim each frame individually and record the start and stop
+        # indices for rows and columns:
+        rows, cols = [], []
+        for i in range(vid.shape[-1]):
+            _, r, c = trim_image(vid[..., i], return_coords=True)
+            rows.append(r)
+            cols.append(c)
+        rows, cols = np.array(rows), np.array(cols)
+        # Then we
+        col_start, col_end = cols[:, 0].min(), cols[:, 1].max()
+        row_start, row_end = rows[:, 0].min(), rows[:, 1].max()
+        vid = vid[row_start:row_end, col_start:col_end, ...]
+        return VideoStimulus(vid, electrodes=electrodes, metadata=self.metadata,
+                             time=self.time)
+
+    def rotate(self, angle, mode='constant', electrodes=None, **kwargs):
+        """Rotate each frame of the video
+
+        .. versionchanged:: 0.10.0
+
+            Keyword arguments are passed on to scikit-image.
+
+        .. _skimage.transform.rotate: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.rotate
+
+        Parameters
+        ----------
+        angle : float or Quantity
+            Angle by which to rotate each video frame (degrees).
+            Positive: counter-clockwise, negative: clockwise
+        mode : str, optional
+            How to fill in the corners the rotation leaves empty; see
+            `skimage.transform.rotate`_.
+        electrodes : int, string or list thereof; optional
+            Optionally, you can provide your own electrode names. If none are
+            given, each pixel keeps the name it had before the rotation, unless
+            ``resize=True`` grew the frame, in which case the enlarged video is
+            named after its own pixel grid. See
+            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        **kwargs :
+            Additional keyword arguments passed to `skimage.transform.rotate`_,
+            such as ``order``, ``cval``, or ``resize=True`` to grow each frame
+            so that it contains every rotated pixel.
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object containing the rotated video
+
+        """
+        # Rotating in place is the common case, and keeps the pixel names
+        # meaningful; ``resize=True`` is available through kwargs:
+        kwargs.setdefault('resize', False)
+        angle = as_value(angle, deg, 'angle')
+        data = self.data.reshape(self.vid_shape)
+        if len(self.vid_shape) == 3:
+            # A grayscale video can be fed to `rotate` in one go, with its
+            # frames standing in for the color channels it expects:
+            data = vid_rotate(_as_writable(data), angle, mode=mode,
+                              **kwargs)
+            return VideoStimulus(data,
+                                 electrodes=self._names_for(data, electrodes),
+                                 metadata=self.metadata, time=self.time)
+        # Else need to feed in each frame individually:
+        return self.apply(vid_rotate, angle, mode=mode, electrodes=electrodes,
+                          **kwargs)
+
+    def shift(self, shift_cols, shift_rows):
+        """Shift the image foreground
+
+        This function shifts the center of mass (CoM) of the image by the
+        specified number of rows and columns.
+
+        Parameters
+        ----------
+        shift_cols : float
+            Number of columns by which to shift the CoM.
+            Positive: to the right, negative: to the left
+        shift_rows : float
+            Number of rows by which to shift the CoM.
+            Positive: downward, negative: upward
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the shifted image
+
+        """
+        return self.apply(shift_image, shift_cols, shift_rows)
+
+    def center(self, loc=None):
+        """Center the image foreground
+
+        This function shifts the center of mass (CoM) to the image center.
+
+        Parameters
+        ----------
+        loc : (col, row), optional
+            The pixel location at which to center the CoM. By default, shifts
+            the CoM to the image center.
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the centered image
+
+        """
+        return self.apply(center_image, loc=loc)
+
+    def scale(self, scaling_factor):
+        """Scale the image foreground
+
+        This function scales the image foreground (excluding black pixels)
+        by a factor.
+
+        Parameters
+        ----------
+        scaling_factor : float
+            Factory by which to scale the image
+
+        Returns
+        -------
+        stim : `ImageStimulus`
+            A copy of the stimulus object containing the scaled image
+
+        """
+        return self.apply(scale_image, scaling_factor)
+
+    def filter(self, filt, **kwargs):
+        """Filter each frame of the video
+
+        Parameters
+        ----------
+        filt : str
+            Image filter that will be applied to every frame of the video.
+            Additional parameters can be passed as keyword arguments.
+            The following filters are supported:
+
+            *  'sobel': Edge filter the image using the `Sobel filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel>`_.
+            *  'scharr': Edge filter the image using the `Scarr filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr>`_.
+            *  'canny': Edge filter the image using the `Canny algorithm
+               <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>`_.
+               You can also specify ``sigma``, ``low_threshold``,
+               ``high_threshold``, ``mask``, and ``use_quantiles``.
+            *  'median': Return local median of the image.
+        **kwargs :
+            Additional parameters passed to the filter
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with the filtered image
+        """
+        if not isinstance(filt, str):
+            raise TypeError(f"'filt' must be a string, not {type(filt)}.")
+        if len(self.vid_shape) == 4:
+            raise ValueError('Cannot apply filter to RGB video. Convert to '
+                             'grayscale first.')
+        filters = {'sobel': sobel, 'scharr': scharr, 'canny': canny,
+                   'median': median}
+        try:
+            filt = filters[filt.lower()]
+        except KeyError:
+            raise ValueError(f"Unknown filter '{filt}'.")
+        return self.apply(filt, **kwargs)
+
+    def encode(self, amp_range=(0, 50), freq=20, implant=None, **kwargs):
+        """Encode the video using amplitude modulation
+
+        Encodes every frame of the video as a train of biphasic pulses, where
+        the gray level of a pixel sets the amplitude of its pulses. Each train
+        lasts one frame period.
+
+        This is a shorthand for
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`; use that directly
+        for the full set of options.
+
+        .. versionchanged:: 0.10.0
+
+            Gray levels now map onto ``amp_range`` absolutely rather than being
+            stretched to fill it (pass ``stretch=True`` for the old behavior),
+            each frame receives a pulse *train* rather than a single pulse, and
+            ``implant`` encodes at electrode rather than pixel resolution.
+
+        Parameters
+        ----------
+        amp_range : (min_amp, max_amp), optional
+            Range of pulse amplitudes (uA). A gray level of 0 maps onto
+            ``min_amp``, a gray level of 1 onto ``max_amp``.
+        freq : float, optional
+            Pulse train frequency (Hz).
+        implant : :py:class:`~pulse2percept.implants.Implant`, optional
+            If given, the video is first sampled at the implant's electrode
+            locations, so that the pulse trains are built at electrode rather
+            than pixel resolution. Strongly recommended: a video has orders of
+            magnitude more pixels than an implant has electrodes.
+        **kwargs :
+            Additional arguments passed to
+            :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
+
+        Returns
+        -------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Encoded stimulus
+
+        """
+        # Imported here because `encoders` imports this module:
+        from .encoders import AmplitudeEncoder
+        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
+                                **kwargs).encode(self, implant=implant)
+
+    def __iter__(self):
+        """Iterate over the video, one frame at a time
+
+        .. versionchanged:: 0.11.0
+
+            Each frame is handed out as a standalone
+            :py:class:`~pulse2percept.stimuli.ImageStimulus` that carries the
+            electrode names and metadata of the video, but no time axis
+
+        Yields
+        ------
+        frame : :py:class:`~pulse2percept.stimuli.ImageStimulus`
+            The frames of the video, in order.
+
+        Raises
+        ------
+        ValueError
+            If the video was compressed in space, in which case its frames
+            cannot be reconstructed (see ``compress``).
+        """
+        frames = self._frames()
+        for idx in range(frames.shape[-1]):
+            yield ImageStimulus(frames[..., idx], electrodes=self.electrodes,
+                                metadata=self.metadata)
+
+    def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
+             fmt='jpg'):
+        """Animate the video as HTML with JavaScript
+
+        The video will be played in an interactive player in IPython or
+        Jupyter Notebook.
+
+        Parameters
+        ----------
+        fps : float or None
+            If None, uses the video's time axis. Not supported for
+            non-homogeneous time axis. May be given as a plain number of hertz
+            or as a unitful frequency (e.g. ``30 * Hz``, ``0.03 * kHz``); see
+            :py:mod:`pulse2percept.units`.
+        repeat : bool, optional
+            Whether the animation should repeat when the sequence of frames is
+            completed.
+        annotate_time : bool, optional
+            If True, the time of the frame will be shown as t = X ms in the
+            title of the panel.
+        ax : matplotlib.axes.AxesSubplot, optional
+            A Matplotlib axes object. If None, will create a new Axes object
+        fmt : {'jpg', 'png'}, optional
+            The image format used to embed the frames. 'jpg' keeps notebooks
+            and doc pages an order of magnitude smaller; use 'png' if you need
+            the frames to be pixel-exact.
+
+            .. versionadded:: 0.10.0
+
+        Returns
+        -------
+        ani : pulse2percept.utils.HTMLAnimation
+            A Matplotlib animation object that will play the video
+            frame-by-frame.
+
+        Notes
+        -----
+        .. versionchanged:: 0.10.0
+
+            The HTML player is now generated by
+            :py:class:`~pulse2percept.utils.HTMLAnimation`, which renders the
+            figure once and ships all frames as a single sprite sheet. This is
+            roughly two orders of magnitude faster than Matplotlib's
+            ``to_jshtml`` and produces much smaller notebooks and doc pages.
+        """
+        if self.time is None:
+            raise ValueError("Cannot animate a percept with time=None.")
+        frames = self._frames()
+
+        # Only the inherited Matplotlib machinery (``save``,
+        # ``to_html5_video``) runs these; the HTML player draws ``frames``
+        # itself. Frames are handed out by index so that the title can be
+        # looked up without tracking iterator state:
+        def update(idx):
+            if annotate_time:
+                mat.axes.set_title(f't = {self.time[idx]:.2f} ms')
+            mat.set_data(frames[..., idx])
+            return mat
+
+        def data_gen():
+            return iter(range(frames.shape[-1]))
+
+        # There are several options to animate a percept in Jupyter/IPython
+        # (see https://stackoverflow.com/a/46878531). Displaying the animation
+        # as HTML with JavaScript is compatible with most browsers and even
+        # %matplotlib inline (although it can be kind of slow):
+        plt.rcParams["animation.html"] = 'jshtml'
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 5))
+        else:
+            fig = ax.figure
+        # Start from an empty frame:
+        mat = ax.imshow(np.zeros(self.vid_shape[:-1]), cmap='gray',
+                        vmin=0, vmax=self.data.max())
+        plt.close(fig)
+        # Create the animation. The frame data is handed to HTMLAnimation so
+        # that it can render the HTML player without going through Matplotlib:
+        labels = None
+        if annotate_time:
+            labels = [f't = {t:.2f} ms' for t in self.time]
+        return HTMLAnimation(fig, update, data_gen, repeat=repeat,
+                             interval=frame_interval(self.time, fps=fps),
+                             save_count=len(self.time), image=mat,
+                             labels=labels, fmt=fmt, frame_data=frames)
