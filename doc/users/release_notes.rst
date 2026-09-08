@@ -129,12 +129,12 @@ Stimuli and encoding
   nonzero ``temporal_freq`` or ``speed`` requires it.
   ``direction`` alone sets the direction of motion, and a grating that would
   alias in space or time is refused rather than rasterized
-  (:issue:`499`, :pull:`890`).
+  (:issue:`499`, :pull:`889`).
 
 * ``GratingStimulus`` and ``BarStimulus`` are deprecated until v0.12.0. Their
   units and temporal semantics are unchanged, so parameter values do not
   carry over to the new generators; ``px_btw_bars`` has no counterpart, since
-  a periodic array of bars is a grating (:pull:`890`).
+  a periodic array of bars is a grating (:pull:`889`).
 
 * The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
   along with their asset files and the README banner derived from them,

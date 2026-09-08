@@ -78,13 +78,29 @@ A frame of the UCSB coastline (845x476 RGB), an aerial flyover of the campus
 and shoreline (640x346, 53 frames), and a shot of pedestrians on campus
 (640x346, 45 frames).
 
-:License: U.S. government work, in the public domain in the United States.
-          These files are **not** covered by pulse2percept's BSD license.
-:Attribution: Courtesy of the National Library of Medicine.
+:License: In the public domain in the United States as a work of the U.S.
+          government, per NLM's own policy
+          (https://www.nlm.nih.gov/web_policies.html#copyright): "Works
+          produced by the U.S. government are not subject to copyright
+          protection in the United States. Any such works found on National
+          Library of Medicine (NLM) Web sites may be freely used or
+          reproduced without permission in the U.S." That policy asks for
+          the acknowledgement given below, and these files are **not**
+          covered by pulse2percept's BSD license.
+:Attribution: Courtesy of the National Library of Medicine. This is the
+              wording NLM's policy requests.
 :Source: Cut from *Towards a Smart Bionic Eye*
          (https://www.youtube.com/watch?v=m2WXEjewqho), produced by the
          National Library of Medicine / National Institutes of Health. The
          timestamps within the video were not recorded.
+:Caveats: The basis above is NLM's site-wide policy; no item-level rights
+          statement was located for this video, so the claim rests on NLM /
+          NIH being credited as its producer. The same policy warns that NLM
+          sites also carry third-party content that *is* copyrighted, and
+          individual shots within the source video were not separately
+          cleared. Section 105 of the U.S. Copyright Act is a United States
+          rule, so no claim is made about the status of these files
+          elsewhere.
 :Modifications: The still was extracted as a single frame and saved as JPEG.
                 The two clips were cut without re-encoding and their audio
                 tracks dropped. Nothing was cropped, resized, or
@@ -104,10 +120,20 @@ attribution in ``metadata``.
 Santiago Ramón y Cajal's drawing of the layered structure of the retina,
 500x745 RGB.
 
-:License: Public domain. Cajal died in 1934, so the drawing is out of
-          copyright worldwide. This file is **not** covered by
-          pulse2percept's BSD license, but no permission is needed to use it.
-:Source: https://commons.wikimedia.org/wiki/File:Cajal_Retina.jpg
+:License: Public domain, as designated by the source. Wikimedia Commons
+          carries the file under its ``PD-old-70`` tag: "in the public
+          domain in its country of origin and other countries and areas
+          where the copyright term is the author's life plus 70 years or
+          fewer." Cajal died in 1934. This file is **not** covered by
+          pulse2percept's BSD license.
+:Source: https://commons.wikimedia.org/wiki/File:Cajal_Retina.jpg, uploaded
+         2006-03-04 and described there as "From 'Structure of the Mammalian
+         Retina' c.1900 By Santiago Ramon y Cajal".
+:Caveats: The designation is Commons', not a rights statement from a holding
+          institution: the file page has no machine-readable author or source
+          field, and no separate United States public-domain tag. The
+          ``PD-old-70`` term is conditional on the jurisdiction, so no claim
+          is made that the drawing is out of copyright everywhere.
 :Modifications: None; the file is bundled as downloaded.
 
 ``zebrafish-retina.jpg``

@@ -32,6 +32,7 @@ until they are removed in v0.12.0.
 """
 from os.path import dirname, join
 
+import numpy as np
 from skimage.io import imread
 
 from .base import ImageStimulus, VideoStimulus
@@ -43,10 +44,7 @@ __all__ = [
     'cajal_retina',
     'logo_bvl',
     'logo_ucsb',
-    'LogoBVL',
-    'LogoUCSB',
     'snellen_chart',
-    'SnellenChart',
     'ucsb_bike',
     'ucsb_flyover',
     'ucsb_pedestrians',
@@ -91,15 +89,17 @@ def _snellen_source(show_annotations, row):
         # Crop the line numbers and acuity annotations:
         source = source[:, :444]
     if row is not None:
-        try:
-            # It's 1-indexed, so make sure row=0 does not return the last row:
-            idx = row - 1
-            if idx < 0:
-                idx += 12
-            source = source[_SNELLEN_ROWS[idx][0]:_SNELLEN_ROWS[idx][1]]
-        except (IndexError, TypeError):
-            raise ValueError(f'Invalid value for "row": {row}. Choose an int '
-                             f'between 1 and 11.')
+        # Only these eleven lines exist, and they are 1-indexed. A bool or a
+        # negative index would otherwise select some other line silently.
+        valid = (isinstance(row, (int, np.integer)) and
+                 not isinstance(row, bool) and
+                 1 <= row <= len(_SNELLEN_ROWS))
+        if not valid:
+            raise ValueError(f'Invalid value for "row": {row!r}. Choose an '
+                             f'int between 1 and {len(_SNELLEN_ROWS)}, where '
+                             f'row 1 is 20/200.')
+        first, last = _SNELLEN_ROWS[row - 1]
+        source = source[first:last]
     return source
 
 
@@ -247,8 +247,8 @@ def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
                          metadata=meta, compress=False)
 
 
-#: Cajal died in 1934, so the drawing is out of copyright worldwide. See
-#: ``data/samples/README.rst``.
+#: Wikimedia Commons designates the drawing public domain under its
+#: ``PD-old-70`` tag; Cajal died in 1934. See ``data/samples/README.rst``.
 _CAJAL_RETINA_CREDIT = {
     'title': 'Cajal retina drawing',
     'creator': 'Santiago Ramon y Cajal',
@@ -264,8 +264,9 @@ def cajal_retina(resize=None, electrodes=None, metadata=None, as_gray=False):
     layered structure of the retina, as a high-contrast line-art image
     stimulus.
 
-    The drawing is in the public domain and is therefore not covered by
-    pulse2percept's BSD license; ``metadata`` carries the attribution.
+    Wikimedia Commons designates the drawing public domain, so it is not
+    covered by pulse2percept's BSD license; ``metadata`` carries the
+    attribution and ``data/samples/README.rst`` the terms and their limits.
 
     .. versionadded:: 0.11.0
 
@@ -415,7 +416,8 @@ def snellen_chart(resize=None, show_annotations=True, row=None,
 
     row : int or None, optional
         Select a single row (1 to 11) of the chart. Row 1 corresponds to
-        20/200, row 2 to 20/100, and so on.
+        20/200, row 2 to 20/100, and so on. Anything outside that range
+        raises.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. If none are

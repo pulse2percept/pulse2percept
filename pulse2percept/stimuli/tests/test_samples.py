@@ -55,11 +55,6 @@ def test_samples_legacy_classes_deprecated(legacy, alt):
     npt.assert_equal('0.12.0' in msg, True)
 
 
-#: The deprecated classes stay top-level until v0.12.0; the loaders that
-#: replace them do not get promoted there.
-_LEGACY_NAMES = ('LogoBVL', 'LogoUCSB', 'SnellenChart')
-
-
 @pytest.mark.parametrize('show_annotations', (True, False))
 @pytest.mark.parametrize('row', [None] + list(range(1, 12)))
 def test_snellen_chart(row, show_annotations):
@@ -75,7 +70,7 @@ def test_snellen_chart(row, show_annotations):
     npt.assert_equal(new.img_shape[1], 840 if show_annotations else 444)
 
 
-@pytest.mark.parametrize('row', [0, 12, [1, 3], 'first'])
+@pytest.mark.parametrize('row', [0, 12, -1, -11, True, 1.5, [1, 3], 'first'])
 def test_snellen_chart_invalid_row(row):
     with pytest.raises(ValueError) as excinfo:
         samples.snellen_chart(row=row)
@@ -87,9 +82,12 @@ def test_samples_namespace():
     # top-level namespace:
     npt.assert_equal(p2p.stimuli.samples is samples, True)
     for name in samples.__all__:
-        if name in _LEGACY_NAMES:
-            continue
         npt.assert_equal(hasattr(p2p.stimuli, name), False)
+    # `samples` publishes the loaders only: the deprecated classes stay
+    # importable for `pulse2percept.stimuli`, but are not new public API here.
+    for legacy in ('LogoBVL', 'LogoUCSB', 'SnellenChart'):
+        npt.assert_equal(legacy in samples.__all__, False)
+        npt.assert_equal(hasattr(p2p.stimuli, legacy), True)
     # The two video samples were removed along with their assets:
     for gone in ('BostonTrain', 'GirlPool'):
         npt.assert_equal(hasattr(p2p.stimuli, gone), False)
