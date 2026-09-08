@@ -1,13 +1,11 @@
-""":py:class:`~pulse2percept.stimuli.ElectrodeNames`,
-:py:class:`~pulse2percept.stimuli.ImageStimulus`,
+""":py:class:`~pulse2percept.stimuli.ImageStimulus`,
 :py:class:`~pulse2percept.stimuli.Stimulus`,
 :py:class:`~pulse2percept.stimuli.VideoStimulus`
 
-Core stimulus containers and electrode naming.
+Core stimulus containers.
 """
 import operator as ops
 import os
-import re
 import warnings
 from copy import copy, deepcopy
 from math import isclose
@@ -28,6 +26,7 @@ from skimage.transform import resize as img_resize, rotate as img_rotate
 from skimage.transform import resize as vid_resize, rotate as vid_rotate
 
 from ._base import fast_compress_space, fast_compress_time
+from ._grid_names import _GridNames, _index_of_name, _names_equal
 from ._merge import merge_time_axes
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
                      dimensionless, ms, uA)
@@ -36,394 +35,14 @@ from ..utils import (PrettyPrint, center_image, frame_interval, HTMLAnimation,
                      is_strictly_increasing, scale_image, shift_image,
                      trim_image)
 from ..utils.array import _interp_rows, _slice_times
-from ..utils.base import bijective26_name
 from ..utils.constants import DT, MIN_AMP, MS_PER_S
 from ..utils.images import _as_writable
 
 __all__ = [
-    'ElectrodeNames',
     'ImageStimulus',
     'Stimulus',
     'VideoStimulus',
 ]
-
-# Channel suffixes for the common color models. Anything else falls back to a
-# numeric suffix, so that every channel remains addressable:
-_CHANNEL_LABELS = {3: ('R', 'G', 'B'), 4: ('R', 'G', 'B', 'A')}
-
-# 'A1', 'BC17', 'A1_R', 'A1_12' -- letters address the row, digits the column,
-# and the optional suffix the color channel:
-_NAME_RE = re.compile(r'^([A-Z]+)([0-9]+)(?:_([A-Z0-9]+))?$')
-
-
-def _bijective26_index(letters):
-    """Inverse of :py:func:`~pulse2percept.utils.bijective26_name`
-
-    Translates an "alphabetic number" back into the integer it names, e.g.
-    'A' -> 0, 'Z' -> 25, 'AA' -> 26.
-    """
-    value = 0
-    for char in letters:
-        value = value * 26 + (ord(char) - 64)
-    return value - 1
-
-
-def _is_pure_selection(item):
-    """Whether an index expression can only ever select, never repeat
-
-    Slices, ellipses and boolean masks visit every element at most once, so
-    they preserve uniqueness of the names they select. Integer (fancy)
-    indexing does not: ``names[[0, 0]]`` repeats an element. Uniqueness
-    matters because :py:class:`~pulse2percept.stimuli.Stimulus` can skip its
-    duplicate-name check whenever it is guaranteed by construction.
-    """
-    if item is Ellipsis or isinstance(item, slice):
-        return True
-    if isinstance(item, tuple):
-        return all(_is_pure_selection(i) for i in item)
-    if isinstance(item, np.ndarray):
-        return item.dtype == bool
-    return False
-
-
-class ElectrodeNames:
-    """Lazily generated electrode names for a grid of electrodes
-
-    Names every element of a (rows x columns [x channels]) grid after its
-    position in that grid: letters address the row, digits the column, and an
-    optional suffix the color channel. The first pixel of an RGB image is
-    therefore ``'A1_R'``, and the pixel in the third row and twelfth column of
-    a grayscale image is ``'C12'``.
-
-    The names are *not* stored. Only the shape of the grid is, plus (for a
-    subset such as a cropped image) the indices that were kept. Both
-    directions of the mapping are computed from that: a name is generated from
-    its index on demand, and the index of a name is recovered by parsing it.
-    That keeps construction, copying and lookup independent of the number of
-    electrodes, which matters because an image or video stimulus assigns one
-    electrode per pixel -- a 576x720 RGBA image has 1.66 million of them.
-
-    An ``ElectrodeNames`` behaves like a read-only 1-D array of strings: it
-    supports ``len``, iteration, indexing, slicing, boolean masking,
-    ``reshape`` and ``ravel``, and converts to a NumPy array of strings via
-    ``np.asarray``. That conversion is the one operation whose cost scales
-    with the number of electrodes, so it is left to the caller to trigger.
-
-    .. versionadded:: 0.10.0
-
-    Parameters
-    ----------
-    grid_shape : tuple
-        Shape of the electrode grid: ``(rows, cols)`` for a single-channel
-        image, or ``(rows, cols, channels)`` for a multi-channel one.
-    idx : array_like, optional
-        Flat indices into the grid, selecting (and ordering) the names to
-        expose. The array may have any shape; ``None`` means the whole grid in
-        row-major order.
-    unique : bool, optional
-        Whether ``idx`` is known to be free of duplicates. ``None`` means
-        "not known", in which case :py:meth:`check_unique` will work it out.
-
-    Examples
-    --------
-    >>> from pulse2percept.stimuli import ElectrodeNames
-    >>> names = ElectrodeNames((3, 4))
-    >>> names[0], names[6]
-    ('A1', 'B3')
-    >>> names.index('B3')
-    6
-
-    """
-    __slots__ = ('_grid_shape', '_idx', '_unique')
-
-    def __init__(self, grid_shape, idx=None, unique=None):
-        grid_shape = tuple(int(s) for s in grid_shape)
-        if len(grid_shape) not in (2, 3):
-            raise ValueError(f"'grid_shape' must be (rows, cols) or "
-                             f"(rows, cols, channels), not {grid_shape}.")
-        if any(s < 0 for s in grid_shape):
-            raise ValueError(f"'grid_shape' must not be negative, got "
-                             f"{grid_shape}.")
-        self._grid_shape = grid_shape
-        if idx is None:
-            self._idx = None
-            # The whole grid, in order, cannot contain duplicates:
-            self._unique = True
-        else:
-            self._idx = np.asarray(idx, dtype=np.intp)
-            self._unique = unique
-
-    # -- Grid geometry --------------------------------------------------
-
-    @property
-    def grid_shape(self):
-        """Shape of the underlying electrode grid"""
-        return self._grid_shape
-
-    @property
-    def grid_size(self):
-        """Total number of electrodes in the underlying grid"""
-        return int(np.prod(self._grid_shape))
-
-    @property
-    def indices(self):
-        """Flat indices into the grid, one per name"""
-        if self._idx is None:
-            return np.arange(self.grid_size, dtype=np.intp)
-        return self._idx
-
-    # -- Array-like interface -------------------------------------------
-
-    @property
-    def shape(self):
-        """Shape of the name container"""
-        if self._idx is None:
-            return (self.grid_size,)
-        return self._idx.shape
-
-    @property
-    def size(self):
-        """Total number of names"""
-        if self._idx is None:
-            return self.grid_size
-        return self._idx.size
-
-    @property
-    def ndim(self):
-        """Number of dimensions of the name container"""
-        return len(self.shape)
-
-    @property
-    def dtype(self):
-        """Dtype the names would have if materialized"""
-        return np.dtype(f'<U{self._max_name_len()}')
-
-    @property
-    def is_unique(self):
-        """Whether the names are known to be free of duplicates
-
-        ``False`` means "not known to be unique", not "known to contain
-        duplicates"; call :py:meth:`check_unique` to settle it.
-        """
-        return bool(self._unique)
-
-    def __len__(self):
-        shape = self.shape
-        if not shape:
-            raise TypeError("len() of unsized ElectrodeNames")
-        return shape[0]
-
-    def __getitem__(self, item):
-        # A name is not a valid index. Raise KeyError so that callers which
-        # accept either an index or a name can fall back to `index`, the same
-        # way they do for a NumPy array (which raises IndexError):
-        if isinstance(item, str):
-            raise KeyError(item)
-        idx = self.indices[item]
-        if np.ndim(idx) == 0:
-            return self._name_at(int(idx))
-        # Uniqueness only ever carries over; it is never ruled out here. An
-        # index expression that *may* repeat leaves it undetermined (None),
-        # for `check_unique` to settle if anyone asks:
-        unique = True if (self._unique and _is_pure_selection(item)) else None
-        return ElectrodeNames(self._grid_shape, idx, unique=unique)
-
-    def __iter__(self):
-        # Generating names one at a time is slower per element than building
-        # the whole array at once, but callers that break out early (or that
-        # only ever look at a handful of electrodes) never pay for the rest:
-        for i in self.indices.ravel():
-            yield self._name_at(int(i))
-
-    def __contains__(self, name):
-        try:
-            self.index(name)
-        except (ValueError, KeyError):
-            return False
-        return True
-
-    def __array__(self, dtype=None, copy=None):
-        names = self._materialize()
-        if dtype is not None:
-            names = names.astype(dtype)
-        return names
-
-    def __eq__(self, other):
-        if isinstance(other, ElectrodeNames):
-            # Two views of the same grid hold the same names iff they select
-            # the same indices, which is far cheaper to check than the names:
-            if self._grid_shape != other._grid_shape:
-                return np.asarray(self) == np.asarray(other)
-            if self._idx is None and other._idx is None:
-                return np.ones(self.shape, dtype=bool)
-            return self.indices == other.indices
-        return np.asarray(self) == other
-
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        return np.logical_not(result)
-
-    def __repr__(self):
-        return (f"ElectrodeNames(grid_shape={self._grid_shape}, "
-                f"size={self.size})")
-
-    def reshape(self, *shape):
-        """Return a view of the names with a new shape"""
-        if len(shape) == 1 and isinstance(shape[0], (tuple, list, np.ndarray)):
-            shape = tuple(shape[0])
-        return ElectrodeNames(self._grid_shape, self.indices.reshape(shape),
-                              unique=self._unique)
-
-    def ravel(self):
-        """Return a flattened view of the names"""
-        if self._idx is None or self._idx.ndim == 1:
-            return self
-        return ElectrodeNames(self._grid_shape, self._idx.ravel(),
-                              unique=self._unique)
-
-    def copy(self):
-        """Return an independent copy"""
-        idx = None if self._idx is None else self._idx.copy()
-        return ElectrodeNames(self._grid_shape, idx, unique=self._unique)
-
-    def tolist(self):
-        """Return the names as a list of strings"""
-        return np.asarray(self).tolist()
-
-    # -- Name <-> index mapping -----------------------------------------
-
-    def index(self, name):
-        """Return the position of ``name``
-
-        Unlike ``list(names).index(name)``, this does not build (or even
-        generate) the names: the position is recovered by parsing the name
-        itself, which is why it costs the same for one electrode as for a
-        million.
-
-        Parameters
-        ----------
-        name : str
-            An electrode name, e.g. ``'C12'`` or ``'A1_R'``.
-
-        Returns
-        -------
-        index : int
-            Position of ``name`` in the (flattened) sequence of names.
-        """
-        flat = self._flat_index_of(name)
-        if self._idx is None:
-            return int(flat)
-        # A subset (e.g. a cropped image) no longer has the grid's own
-        # ordering, so the parsed grid index still has to be located. This is
-        # a vectorized scan rather than a parse, but it touches integers
-        # instead of strings and stays in C:
-        hits = np.flatnonzero(self._idx.ravel() == flat)
-        if hits.size == 0:
-            raise ValueError(f"'{name}' is not in the list of electrodes.")
-        return int(hits[0])
-
-    def check_unique(self):
-        """Determine (and remember) whether the names are free of duplicates
-
-        The grid names are unique by construction, so duplicates can only come
-        from a repeated index. Checking the indices is therefore equivalent to
-        checking the names, and much cheaper.
-
-        Returns
-        -------
-        unique : bool
-            True if no name occurs twice.
-        """
-        if self._unique is None:
-            self._unique = bool(
-                np.unique(self._idx).size == self._idx.size)
-        return bool(self._unique)
-
-    # -- Internals ------------------------------------------------------
-
-    def _channel_labels(self):
-        n_channels = self._grid_shape[2]
-        labels = _CHANNEL_LABELS.get(n_channels,
-                                     tuple(str(c) for c in range(n_channels)))
-        return np.array([f'_{label}' for label in labels])
-
-    def _row_labels(self):
-        return np.array([bijective26_name(r)
-                         for r in range(self._grid_shape[0])])
-
-    def _col_labels(self):
-        # Ask for exactly as many characters as the largest column number
-        # needs. NumPy's own int-to-str conversion sizes for the widest
-        # possible integer instead ('<U21'), which would make a materialized
-        # name array several times larger than the names in it:
-        n_cols = self._grid_shape[1]
-        width = len(str(n_cols)) if n_cols else 1
-        return (np.arange(n_cols) + 1).astype(f'<U{width}')
-
-    def _max_name_len(self):
-        if self.grid_size == 0:
-            return 1
-        length = (len(bijective26_name(self._grid_shape[0] - 1)) +
-                  len(str(self._grid_shape[1])))
-        if len(self._grid_shape) > 2:
-            length += max(len(label) for label in self._channel_labels())
-        return length
-
-    def _name_at(self, flat):
-        """Generate the name of a single grid index"""
-        if flat < 0:
-            flat += self.grid_size
-        coords = np.unravel_index(flat, self._grid_shape)
-        name = f"{bijective26_name(int(coords[0]))}{int(coords[1]) + 1}"
-        if len(self._grid_shape) > 2:
-            name += self._channel_labels()[int(coords[2])]
-        return name
-
-    def _flat_index_of(self, name):
-        """Parse a name back into its flat index into the grid"""
-        if not isinstance(name, str):
-            raise KeyError(name)
-        match = _NAME_RE.match(name)
-        if match is None:
-            raise ValueError(f"'{name}' is not a valid electrode name.")
-        letters, digits, suffix = match.groups()
-        row = _bijective26_index(letters)
-        col = int(digits) - 1
-        coords = [row, col]
-        if len(self._grid_shape) > 2:
-            if suffix is None:
-                raise ValueError(f"'{name}' does not name a color channel, "
-                                 f"but the electrode grid has "
-                                 f"{self._grid_shape[2]} of them.")
-            labels = [label[1:] for label in self._channel_labels()]
-            try:
-                coords.append(labels.index(suffix))
-            except ValueError:
-                raise ValueError(f"'{name}' names an unknown color channel "
-                                 f"'{suffix}'.")
-        elif suffix is not None:
-            raise ValueError(f"'{name}' names a color channel, but the "
-                             f"electrode grid does not have any.")
-        if any(c < 0 or c >= s for c, s in zip(coords, self._grid_shape)):
-            raise ValueError(f"'{name}' lies outside a {self._grid_shape} "
-                             f"electrode grid.")
-        return int(np.ravel_multi_index(tuple(coords), self._grid_shape))
-
-    def _materialize(self):
-        """Build the actual array of name strings
-
-        This is the only operation whose cost scales with the number of
-        electrodes, so everything else is arranged to avoid it.
-        """
-        idx = self.indices
-        if idx.size == 0:
-            return np.empty(idx.shape, dtype=self.dtype)
-        coords = np.unravel_index(idx.ravel(), self._grid_shape)
-        names = np.char.add(self._row_labels()[coords[0]],
-                            self._col_labels()[coords[1]])
-        if len(self._grid_shape) > 2:
-            names = np.char.add(names, self._channel_labels()[coords[2]])
-        return names.reshape(idx.shape)
 
 
 def _as_scalar_column(source):
@@ -441,21 +60,6 @@ def _as_scalar_column(source):
     if flat.ndim != 1 or flat.dtype.kind not in 'biuf':
         return None
     return flat.astype(np.float32).reshape((-1, 1))
-
-
-def _names_equal(a, b):
-    """Whether two containers hold the same electrode names"""
-    if isinstance(a, ElectrodeNames) and isinstance(b, ElectrodeNames):
-        if a.grid_shape == b.grid_shape:
-            return np.array_equal(a.indices, b.indices)
-    return np.array_equal(np.asarray(a), np.asarray(b))
-
-
-def _index_of_name(electrodes, name):
-    """Return the position of electrode ``name`` in ``electrodes``"""
-    if isinstance(electrodes, ElectrodeNames):
-        return electrodes.index(name)
-    return list(electrodes).index(name)
 
 
 class _AdoptableArray(np.ndarray):
@@ -704,7 +308,7 @@ class Stimulus(PrettyPrint):
         self._unit = self._default_unit if unit is None else unit
         self._time_unit = (self._default_time_unit if time_unit is None
                            else time_unit)
-        if not isinstance(electrodes, ElectrodeNames):
+        if not isinstance(electrodes, _GridNames):
             electrodes = np.array([electrodes]).ravel()
         # `data=None` is what says the waveform has not been generated yet
         self.__stim = {'data': None, 'time': None,
@@ -930,7 +534,7 @@ class Stimulus(PrettyPrint):
 
         # User can overwrite the names of the electrodes:
         if electrodes is not None:
-            if isinstance(electrodes, ElectrodeNames):
+            if isinstance(electrodes, _GridNames):
                 # Names generated from a grid pattern:
                 _electrodes = electrodes.ravel()
                 _auto_electrodes = _electrodes.check_unique()
@@ -938,7 +542,7 @@ class Stimulus(PrettyPrint):
                 _electrodes = np.array([electrodes]).flatten()
                 _auto_electrodes = False
         else:
-            if isinstance(_electrodes, ElectrodeNames):
+            if isinstance(_electrodes, _GridNames):
                 # The source brought its own generated names along:
                 _electrodes = _electrodes.ravel()
                 _auto_electrodes = _electrodes.check_unique()
@@ -955,7 +559,7 @@ class Stimulus(PrettyPrint):
         # Electrodes we numbered ourselves are 0..N-1 and therefore unique by
         # construction, so the sort that np.unique performs can be skipped:
         if not _auto_electrodes:
-            if isinstance(_electrodes, ElectrodeNames):
+            if isinstance(_electrodes, _GridNames):
                 _electrodes = np.asarray(_electrodes)
             unq, nunq = np.unique(_electrodes, return_index=True)
             if len(unq) != _n_rows:
@@ -1675,7 +1279,7 @@ class Stimulus(PrettyPrint):
     @staticmethod
     def _own_names(electrodes):
         """The electrode names, in a container nobody can write into"""
-        if isinstance(electrodes, ElectrodeNames):
+        if isinstance(electrodes, _GridNames):
             return electrodes
         owned = np.array(electrodes)
         owned.flags.writeable = False
@@ -1936,8 +1540,7 @@ class ImageStimulus(Stimulus):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -2008,7 +1611,7 @@ class ImageStimulus(Stimulus):
             # top-left pixel, 'C12' sits in the third row and twelfth column,
             # and a color image suffixes the channel ('A1_R'). The names are
             # generated on demand rather than stored:
-            electrodes = ElectrodeNames(self.img_shape)
+            electrodes = _GridNames(self.img_shape)
         data = img_as_float32(img)
         if borrowed is not None and np.may_share_memory(data, borrowed):
             data = data.copy()
@@ -2050,8 +1653,7 @@ class ImageStimulus(Stimulus):
             given, the original names are carried over whenever ``func`` leaves
             the shape of the image alone, and the result is named after its
             place in the new image otherwise (e.g. for
-            ``skimage.transform.resize``). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            ``skimage.transform.resize``).
 
             .. note::
                The number of electrode names provided must match the number of
@@ -2099,8 +1701,7 @@ class ImageStimulus(Stimulus):
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
-            'A1', 'C12', 'A1_R'). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            'A1', 'C12', 'A1_R').
 
             .. note::
                The number of electrode names provided must match the number of
@@ -2143,8 +1744,7 @@ class ImageStimulus(Stimulus):
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
-            'A1', 'C12', 'A1_R'). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            'A1', 'C12', 'A1_R').
 
             .. note::
                The number of electrode names provided must match the number of
@@ -2200,8 +1800,7 @@ class ImageStimulus(Stimulus):
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
-            'A1', 'C12', 'A1_R'). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            'A1', 'C12', 'A1_R').
 
             .. note::
 
@@ -2267,8 +1866,7 @@ class ImageStimulus(Stimulus):
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
-            'A1', 'C12', 'A1_R'). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            'A1', 'C12', 'A1_R').
 
             .. note::
                The number of electrode names provided must match the number of
@@ -2362,8 +1960,7 @@ class ImageStimulus(Stimulus):
             Optionally, you can provide your own electrode names. If none are
             given, each pixel keeps the name it had before the rotation, unless
             ``resize=True`` grew the canvas, in which case the enlarged image is
-            named after its own pixel grid. See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            named after its own pixel grid.
         **kwargs :
             Additional keyword arguments passed to `skimage.transform.rotate`_,
             such as ``order``, ``cval``, or ``resize=True`` to grow the image so
@@ -2697,8 +2294,7 @@ class VideoStimulus(Stimulus):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -2803,7 +2399,7 @@ class VideoStimulus(Stimulus):
             # One electrode per pixel, named after its place in the frame
             # ('A1', 'C12', 'A1_R' for a color video). The last axis holds the
             # frames, which are the time component and not electrodes:
-            electrodes = ElectrodeNames(self.vid_shape[:-1])
+            electrodes = _GridNames(self.vid_shape[:-1])
         if borrowed is not None and np.may_share_memory(vid, borrowed):
             vid = vid.copy()
         super().__init__(_adoptable(vid.reshape((-1, vid.shape[-1]))),
@@ -2891,8 +2487,7 @@ class VideoStimulus(Stimulus):
             given, the original names are carried over whenever ``func`` leaves
             the shape of a frame alone, and the result is named after its place
             in the new frame otherwise (e.g. for
-            ``skimage.transform.resize``). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            ``skimage.transform.resize``).
 
             .. note::
                The number of electrode names provided must match the number of
@@ -2937,8 +2532,7 @@ class VideoStimulus(Stimulus):
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
-            'A1', 'C12', 'A1_R'). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            'A1', 'C12', 'A1_R').
 
             .. note::
                The number of electrode names provided must match the number of
@@ -2975,8 +2569,7 @@ class VideoStimulus(Stimulus):
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
-            'A1', 'C12', 'A1_R'). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            'A1', 'C12', 'A1_R').
 
             .. note::
                The number of electrode names provided must match the number of
@@ -3042,8 +2635,7 @@ class VideoStimulus(Stimulus):
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
-            'A1', 'C12', 'A1_R'). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            'A1', 'C12', 'A1_R').
 
             .. note::
 
@@ -3120,8 +2712,7 @@ class VideoStimulus(Stimulus):
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
-            'A1', 'C12', 'A1_R'). See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            'A1', 'C12', 'A1_R').
 
             .. note::
                The number of electrode names provided must match the number of
@@ -3170,8 +2761,7 @@ class VideoStimulus(Stimulus):
             Optionally, you can provide your own electrode names. If none are
             given, each pixel keeps the name it had before the rotation, unless
             ``resize=True`` grew the frame, in which case the enlarged video is
-            named after its own pixel grid. See
-            :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+            named after its own pixel grid.
         **kwargs :
             Additional keyword arguments passed to `skimage.transform.rotate`_,
             such as ``order``, ``cval``, or ``resize=True`` to grow each frame

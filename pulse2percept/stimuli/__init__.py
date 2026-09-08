@@ -13,7 +13,6 @@ Core
     Stimulus
     ImageStimulus
     VideoStimulus
-    ElectrodeNames
 
 Electrical stimuli
 ------------------
@@ -94,7 +93,7 @@ These compatibility classes will be removed in v0.12.
 
 """
 
-from .base import ElectrodeNames, ImageStimulus, Stimulus, VideoStimulus
+from .base import ImageStimulus, Stimulus, VideoStimulus
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
 from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
@@ -112,7 +111,6 @@ __all__ = [
     'BiphasicPulse',
     'BiphasicPulseTrain',
     'BiphasicTripletTrain',
-    'ElectrodeNames',
     'Encoder',
     'FrequencyEncoder',
     'GratingStimulus',

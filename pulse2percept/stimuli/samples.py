@@ -70,8 +70,7 @@ def big_buck_bunny(resize=None, electrodes=None, metadata=None,
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the frame: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -134,8 +133,7 @@ def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -199,8 +197,7 @@ def cajal_retina(resize=None, electrodes=None, metadata=None, as_gray=False):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -251,8 +248,7 @@ def logo_bvl(resize=None, electrodes=None, metadata=None, as_gray=False):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -293,8 +289,7 @@ def logo_ucsb(resize=None, electrodes=None, metadata=None):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -344,8 +339,7 @@ def ucsb_bike(resize=None, electrodes=None, metadata=None, as_gray=False):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -423,8 +417,7 @@ def ucsb_flyover(resize=None, electrodes=None, metadata=None, as_gray=False):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the frame: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -494,8 +487,7 @@ def ucsb_pedestrians(resize=None, electrodes=None, metadata=None,
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the frame: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -556,8 +548,7 @@ def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -624,8 +615,7 @@ def zebrafish_retina(resize=None, electrodes=None, metadata=None,
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -678,8 +668,7 @@ class LogoBVL(ImageStimulus):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -718,8 +707,7 @@ class LogoUCSB(ImageStimulus):
         Optionally, you can provide your own electrode names. If none are
         given, each pixel is named after its place in the image: a letter for
         the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R'). See
-        :py:class:`~pulse2percept.stimuli.ElectrodeNames`.
+        (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of

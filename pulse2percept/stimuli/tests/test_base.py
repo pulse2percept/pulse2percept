@@ -12,10 +12,10 @@ from collections import OrderedDict as ODict
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
+from pulse2percept import stimuli
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, MonophasicPulse)
-from pulse2percept.stimuli import ElectrodeNames
 from pulse2percept.stimuli import ImageStimulus
 from pulse2percept.stimuli import VideoStimulus
 from pulse2percept.stimuli._merge import merge_time_axes
@@ -29,11 +29,15 @@ from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 
 
-@pytest.mark.parametrize('cls', [ElectrodeNames, ImageStimulus, Stimulus,
-                                 VideoStimulus])
+@pytest.mark.parametrize('cls', [ImageStimulus, Stimulus, VideoStimulus])
 def test_core_types_live_in_base(cls):
-    """The four containers are one module, not a taxonomy of three"""
+    """The three containers are one module, not a taxonomy of three"""
     npt.assert_equal(cls.__module__, 'pulse2percept.stimuli.base')
+
+
+def test_ElectrodeNames_is_not_public():
+    # The lazy name container is an implementation detail of `electrodes`:
+    npt.assert_equal(hasattr(stimuli, 'ElectrodeNames'), False)
 
 
 @pytest.mark.parametrize('gone', ['names', 'images', 'videos'])
@@ -1599,9 +1603,8 @@ def test_Stimulus_is_immutable(build):
     if stim.time is not None:
         with pytest.raises(ValueError):
             stim.time[0] = 1
-    # `ImageStimulus` names its pixels with an `ElectrodeNames`, which
-    # generates them from a grid instead of storing them and so has no way to
-    # set one at all:
+    # `ImageStimulus` generates its pixel names from a grid instead of
+    # storing them, so there is no way to set one at all:
     with pytest.raises((ValueError, TypeError)):
         stim.electrodes[0] = 'X'
     # Metadata stays writable: it is the user's, and describes the stimulus

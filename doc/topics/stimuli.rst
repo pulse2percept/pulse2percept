@@ -120,9 +120,8 @@ Images and videos
 -----------------
 
 :py:class:`~pulse2percept.stimuli.Stimulus`,
-:py:class:`~pulse2percept.stimuli.ImageStimulus`,
-:py:class:`~pulse2percept.stimuli.VideoStimulus` and
-:py:class:`~pulse2percept.stimuli.ElectrodeNames` all live in
+:py:class:`~pulse2percept.stimuli.ImageStimulus` and
+:py:class:`~pulse2percept.stimuli.VideoStimulus` all live in
 :py:mod:`pulse2percept.stimuli.base`, and are imported from
 :py:mod:`pulse2percept.stimuli`. The ``stimuli.names``, ``stimuli.images`` and
 ``stimuli.videos`` modules of v0.10 no longer exist.
