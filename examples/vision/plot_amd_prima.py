@@ -28,7 +28,7 @@ from pulse2percept.implants.retina import PRIMAPivotal
 from pulse2percept.models.retina import ScoreboardModel
 from pulse2percept.stimuli import samples
 from pulse2percept.units import dva
-from pulse2percept.vision import Scene, Scotoma
+from pulse2percept.vision import BinocularScene, Scene, Scotoma
 
 ###############################################################################
 # Use the same eccentric center for the lesion and implant:
@@ -109,5 +109,45 @@ percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=0.3)
 
 percept.plot()
 plt.title('Edge-filtered device input, intact vision around it')
+
+###############################################################################
+# Both eyes
+# ---------
+#
+# PRIMA is implanted in one eye. A :py:class:`~pulse2percept.vision.Scene` is
+# one monocular visual field, so the fellow eye needs a scene of its own.
+# The two are held together by a
+# :py:class:`~pulse2percept.vision.BinocularScene`.
+#
+# ``aperture='circle'`` renders each field as an eye-centered disc rather than
+# a rectangle, which reads as an ocular field. It changes the rendering only;
+# the implant is given the same scene values either way.
+
+implant.preprocess = False
+
+worse_eye = Scene(logo, fov=40 * dva, scotoma=scotoma, scotoma_fill=0,
+                  background=1, aperture='circle')
+fellow_eye = Scene(logo, fov=40 * dva, background=1, aperture='circle',
+                   scotoma=Scotoma.circle(3 * dva, center=center),
+                   scotoma_fill=0.4)
+
+binocular = BinocularScene(left=worse_eye, right=fellow_eye)
+
+###############################################################################
+# Differences in residual acuity or contrast sensitivity between the two eyes
+# are not currently modeled; the scenes differ only through explicitly
+# specified visual-field loss and source content.
+#
+# By default, models are monocular:
+
+prosthetic_input = Scene(logo, fov=40 * dva, background=1)
+percept = model.predict_percept(prosthetic_input, gaze=(0, 0) * dva)
+
+###############################################################################
+# But percepts can be assigned to an eye in the scene.
+# Here, ``left_percept`` puts it in the left eye alone.
+# The fellow eye shows whatever its own scene says it sees.
+
+binocular.plot(left_percept=percept, vmax=2, rings=True)
 
 ###############################################################################

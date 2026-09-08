@@ -4,7 +4,7 @@ import numpy.testing as npt
 
 from pulse2percept.implants import retina
 
-@pytest.mark.parametrize('eye', ('LE', 'RE'))
+@pytest.mark.parametrize('eye', ('left', 'right'))
 def test_IMIE(eye):
     # Create an IMIE and make sure location is correct
 
@@ -43,13 +43,13 @@ def test_IMIE(eye):
         retina.IMIE(z=[1, 2, 3])
 
     # Right-eye implant:
-    imie_re = retina.IMIE(eye='RE')
+    imie_re = retina.IMIE(eye='right')
     npt.assert_equal(imie_re['A4'].x > imie_re['A3'].x, True)
     npt.assert_almost_equal(imie_re['A4'].y, imie_re['A3'].y)
 
     # need to adjust for reflection about y-axis
     # Left-eye implant:
-    imie_le = retina.IMIE(eye='LE')
+    imie_le = retina.IMIE(eye='left')
     npt.assert_equal(imie_le['A3'].x > imie_le['A4'].x, True)
     npt.assert_almost_equal(imie_le['A3'].y, imie_le['A4'].y)
 

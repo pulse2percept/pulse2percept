@@ -114,3 +114,44 @@ def test_Scotoma_rejects_non_finite_coordinates(coord):
         scotoma(0, coord)
     with pytest.raises(ValueError):
         scotoma(np.array([0.0, coord]), 0)
+
+
+def test_Scotoma_mirror():
+    """Reflection across the vertical meridian: mirrored(x, y) == f(-x, y)"""
+    left = Scotoma.circle(2, center=(6, -3))
+    right = left.mirror()
+    npt.assert_almost_equal(right(-6, -3), 1)
+    npt.assert_almost_equal(right(6, -3), 0)
+    # y is untouched, so a y-flip would fail here:
+    npt.assert_almost_equal(right(-6, 3), 0)
+    npt.assert_equal('mirror' in repr(right), True)
+
+
+def test_Scotoma_mirror_an_arbitrary_mask():
+    """Any callable mirrors, not just circle/ellipse"""
+    # Graded and asymmetric in both x and y:
+    def mask(x, y):
+        return np.clip((x + 10) / 20, 0, 1) * np.clip((y + 5) / 10, 0, 1)
+
+    scotoma = Scotoma(mask, name='graded')
+    mirrored = scotoma.mirror()
+    x, y = np.meshgrid(np.linspace(-9, 9, 19), np.linspace(-4, 4, 9))
+    npt.assert_almost_equal(mirrored(x, y), scotoma(-x, y))
+    npt.assert_equal(np.any(mirrored(x, y) != scotoma(x, y)), True)
+
+
+def test_Scotoma_mirror_twice_is_the_original():
+    scotoma = Scotoma(lambda x, y: np.clip((x + 10) / 20, 0, 1))
+    x, y = np.meshgrid(np.linspace(-9, 9, 19), np.linspace(-4, 4, 9))
+    npt.assert_almost_equal(scotoma.mirror().mirror()(x, y), scotoma(x, y))
+
+
+def test_Scotoma_mirror_leaves_the_original_alone():
+    left = Scotoma.circle(2, center=(6, -3), name='left')
+    mask = left.mask
+    right = left.mirror()
+    npt.assert_equal(right is left, False)
+    npt.assert_equal(left.mask is mask, True)
+    npt.assert_equal(left.name, 'left')
+    npt.assert_almost_equal(left(6, -3), 1)
+    npt.assert_almost_equal(left(-6, -3), 0)

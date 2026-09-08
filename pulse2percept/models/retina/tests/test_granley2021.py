@@ -371,10 +371,10 @@ def test_biphasicAxonMapModel():
 
     # The eye is the implanted one, and is not settable on its own:
     npt.assert_equal(
-        BiphasicAxonMapModel(implant=ArgusII(eye='LE'), step=5).spatial.eye,
-        'LE')
+        BiphasicAxonMapModel(implant=ArgusII(eye='left'), step=5).spatial.eye,
+        'left')
     with pytest.raises(TypeError):
-        BiphasicAxonMapModel(implant=ArgusII(), eye='LE')
+        BiphasicAxonMapModel(implant=ArgusII(), eye='left')
 
     # Lambda cannot be too small:
     with pytest.raises(ValueError):

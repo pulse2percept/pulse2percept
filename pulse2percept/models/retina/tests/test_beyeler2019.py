@@ -356,9 +356,9 @@ def test_AxonMapModel():
 
     # The eye is the implanted one, and is not settable on its own:
     npt.assert_equal(
-        AxonMapModel(implant=ArgusII(eye='LE'), step=5).spatial.eye, 'LE')
+        AxonMapModel(implant=ArgusII(eye='left'), step=5).spatial.eye, 'left')
     with pytest.raises(TypeError):
-        AxonMapModel(implant=ArgusII(), eye='LE')
+        AxonMapModel(implant=ArgusII(), eye='left')
 
     # Lambda cannot be too small:
     with pytest.raises(ValueError):
@@ -404,7 +404,7 @@ def test_deepcopy_AxonMapModel(build):
     npt.assert_equal(original.spatial != copied.spatial, True)
 
 
-@ pytest.mark.parametrize('eye', ('LE', 'RE'))
+@ pytest.mark.parametrize('eye', ('left', 'right'))
 @ pytest.mark.parametrize('loc_od', ((15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)))
 @ pytest.mark.parametrize('sign', (-1.0, 1.0))
 def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
@@ -1040,17 +1040,17 @@ def _user_warnings(build):
 
 def test_axon_map_eye_follows_the_implant():
     """The eye is the implanted one, and cannot drift out of step with it"""
-    implant = ArgusII(eye='RE')
+    implant = ArgusII(eye='right')
     model = AxonMapModel(implant=implant, step=2, n_axons=50,
                          n_ax_segments=30).build()
-    npt.assert_equal(model.spatial.eye, 'RE')
+    npt.assert_equal(model.spatial.eye, 'right')
     # The optic disc is on the nasal side, which is a different side per eye:
     npt.assert_equal(model.spatial.loc_od[0] > 0, True)
 
     # Turning the *bound implant* around is the one build-invalidating change
     # the parameter machinery cannot see, so the model checks it itself:
-    implant.eye = 'LE'
-    npt.assert_equal(model.spatial.eye, 'LE')
+    implant.eye = 'left'
+    npt.assert_equal(model.spatial.eye, 'left')
     npt.assert_equal(model.is_built, False)
     model.predict_percept({'A1': 20})
     npt.assert_equal(model.is_built, True)
@@ -1077,9 +1077,9 @@ def test_axon_map_needs_an_implant_with_an_eye():
         model.spatial.eye
     # Wrapping the same array in a RetinalImplant is all it takes:
     fixed = AxonMapModel(
-        implant=RetinalImplant(ElectrodeGrid((3, 3), 2000), eye='LE'),
+        implant=RetinalImplant(ElectrodeGrid((3, 3), 2000), eye='left'),
         **grid).build()
-    npt.assert_equal(fixed.spatial.eye, 'LE')
+    npt.assert_equal(fixed.spatial.eye, 'left')
     npt.assert_equal(fixed.is_built, True)
 
 

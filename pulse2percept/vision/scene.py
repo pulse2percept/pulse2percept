@@ -29,6 +29,9 @@ _RING_COLOR = '0.3'
 # The only non-numeric `scotoma_fill`; see `_inpaint_rgb` for what it does.
 _INPAINT = 'inpaint'
 
+# The only `aperture` v0.11 supports; see `Scene._aperture_mask`.
+_CIRCLE = 'circle'
+
 
 def _resolve_fov(fov, n_rows, n_cols):
     """Normalize a user-supplied ``fov`` to ``(width, height)`` in dva"""
@@ -130,6 +133,33 @@ def _resolve_background(background):
         raise ValueError(f"'background' is a display intensity and must lie "
                          f"in [0, 1], not {background!r}.")
     return bg
+
+
+def _resolve_aperture(aperture):
+    """Normalize ``aperture`` to None or ``_CIRCLE``"""
+    if aperture is None:
+        return None
+    if aperture != _CIRCLE:
+        raise ValueError(f"'aperture' is either None or {_CIRCLE!r}, not "
+                         f"{aperture!r}.")
+    return _CIRCLE
+
+
+def _check_prosthetic(prosthetic):
+    """Reject a percept that cannot be placed in a scene as brightness"""
+    if not isinstance(prosthetic, Percept):
+        raise TypeError(f"'prosthetic' must be a Percept, not "
+                        f"{type(prosthetic)}.")
+    if prosthetic.is_rgb:
+        raise ValueError("'prosthetic' must be a brightness percept: "
+                         "models produce brightness in arbitrary units, "
+                         "and composing it is what turns that into "
+                         "display intensity.")
+    if not prosthetic._has_space:
+        raise ValueError("'prosthetic' has no visual-field coordinates, "
+                         "so there is nowhere in the scene to put it. "
+                         "Predict it on a model grid, or pass 'space' "
+                         "when building it.")
 
 
 def _ring_radii(rings, fov):
@@ -307,6 +337,12 @@ class Scene(PrettyPrint):
         rasterized loss map before it is drawn, softening the boundary from
         both sides. Defaults to 2. Rendering only: the scotoma's geometry is
         unchanged.
+    aperture : 'circle' or None, optional
+        Shape of the rendered field. Default (None) fills the rectangular
+        frame. ``'circle'`` instead renders an eye-centered disc of radius
+        ``min(fov) / 2`` and blacks out the corners around it. It affects only
+        the rendered scene, not scene sampling, device input, stimulation, or
+        the underlying prosthetic model response.
 
     Examples
     --------
@@ -323,7 +359,7 @@ class Scene(PrettyPrint):
     """
 
     def __init__(self, source, fov, scotoma=None, scotoma_fill=0,
-                 scotoma_blend=2, background=0):
+                 scotoma_blend=2, background=0, aperture=None):
         if not isinstance(source, (ImageStimulus, VideoStimulus)):
             # A picture is the common case:
             source = ImageStimulus(source)
@@ -342,17 +378,22 @@ class Scene(PrettyPrint):
         self._scotoma = scotoma
         self._scotoma_fill = fill
         self._scotoma_blend = blend
+        self._aperture = _resolve_aperture(aperture)
         n_rows, n_cols = self._frame_shape
         self._fov = _resolve_fov(fov, n_rows, n_cols)
         self._cached_frames = None
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
-        return {'source': type(self.source).__name__, 'fov': self.fov,
-                'shape': self.shape, 'scotoma': self.scotoma,
-                'background': self.background,
-                'scotoma_fill': self.scotoma_fill,
-                'scotoma_blend': self.scotoma_blend}
+        params = {'source': type(self.source).__name__, 'fov': self.fov,
+                  'shape': self.shape, 'scotoma': self.scotoma,
+                  'background': self.background,
+                  'scotoma_fill': self.scotoma_fill,
+                  'scotoma_blend': self.scotoma_blend}
+        # Omitted when rectangular, which is the default:
+        if self.aperture is not None:
+            params['aperture'] = self.aperture
+        return params
 
     @property
     def source(self):
@@ -381,6 +422,15 @@ class Scene(PrettyPrint):
     def scotoma_blend(self):
         """Gaussian sigma, in scene pixels, softening the drawn scotoma"""
         return self._scotoma_blend
+
+    @property
+    def aperture(self):
+        """The rendered field boundary: ``'circle'`` or None for the frame
+
+        Affects only the rendered scene. The source, the pixel grid, and what
+        a device is given to encode are rectangular either way.
+        """
+        return self._aperture
 
     @property
     def _frame_shape(self):
@@ -565,11 +615,50 @@ class Scene(PrettyPrint):
             return self._scotoma_fill
         return _inpaint_rgb(frame_rgb, loss > 0)
 
+    def _aperture_mask(self, gaze_xy):
+        """True at pixel centers a circular aperture hides
+
+        Eye-centered like the scotoma and the rings, so the disc sits at
+        ``gaze``. Its radius is the shorter half-axis of the FOV, the same
+        convention the outermost eccentricity ring uses. The boundary is hard.
+        """
+        gx, gy = gaze_xy
+        x_scene, y_scene = self._pixel_centers()
+        radius = min(self._fov) / 2
+        return (x_scene - gx) ** 2 + (y_scene - gy) ** 2 > radius ** 2
+
+    def _apply_aperture(self, frames, gaze=None):
+        """Black out ``(rows, cols, 3, n_frames)`` outside the aperture"""
+        if self._aperture is None:
+            return frames
+        points = _gaze_points(gaze, frames.shape[-1])
+        static = len(points) == 1
+        mask = self._aperture_mask(points[0]) if static else None
+        out = np.array(frames, dtype=np.float32)
+        for f in range(frames.shape[-1]):
+            outside = mask if static else self._aperture_mask(points[f])
+            out[outside, :, f] = 0
+        return out
+
+    def _percept_on_grid(self, sample, gaze_xy):
+        """Percept brightness read at every scene pixel center
+
+        ``sample`` is a `_percept_sampler`; the returned array is
+        ``(rows, cols, n)`` with one trailing entry per frame it carries.
+        """
+        n_rows, n_cols = self._frame_shape
+        gx, gy = gaze_xy
+        x_scene, y_scene = self._pixel_centers()
+        # The percept is eye-centered; the scene raster is not:
+        points = np.column_stack(((y_scene - gy).ravel(),
+                                  (x_scene - gx).ravel()))
+        return sample(points).reshape((n_rows, n_cols, -1))
+
     def _native_rgb(self, gaze=None):
         """What is left of native vision, as ``(rows, cols, 3, n_frames)``"""
         frames = self._rgb_frames()
         if self.scotoma is None:
-            return frames
+            return self._apply_aperture(frames, gaze=gaze)
         n_frames = frames.shape[-1]
         gaze = _gaze_points(gaze, n_frames)
         static = len(gaze) == 1
@@ -584,7 +673,7 @@ class Scene(PrettyPrint):
             fill = self._fill_rgb(frame, loss)
             alpha = loss[..., np.newaxis]
             out[..., f] = (1 - alpha) * frame + alpha * fill
-        return out
+        return self._apply_aperture(out, gaze=gaze)
 
     def _pixel_centers(self, pad=0):
         """Scene coordinates of every pixel center, as ``(x, y)`` meshes"""
@@ -600,19 +689,7 @@ class Scene(PrettyPrint):
                 f"scotoma_fill={_INPAINT!r} cannot be combined with a "
                 f"prosthetic percept because their interaction is not modeled. "
                 f"Use a numeric 'scotoma_fill' for prosthetic composition.")
-        if not isinstance(prosthetic, Percept):
-            raise TypeError(f"'prosthetic' must be a Percept, not "
-                            f"{type(prosthetic)}.")
-        if prosthetic.is_rgb:
-            raise ValueError("'prosthetic' must be a brightness percept: "
-                             "models produce brightness in arbitrary units, "
-                             "and composing it is what turns that into "
-                             "display intensity.")
-        if not prosthetic._has_space:
-            raise ValueError("'prosthetic' has no visual-field coordinates, "
-                             "so there is nowhere in the scene to put it. "
-                             "Predict it on a model grid, or pass 'space' "
-                             "when building it.")
+        _check_prosthetic(prosthetic)
         vmin, vmax = _check_range(vmin, vmax)
         scene_rgb = self._rgb_frames()
         pframes, out_time, out_unit = self._prosthetic_frames(prosthetic)
@@ -620,14 +697,10 @@ class Scene(PrettyPrint):
         gaze = _gaze_points(gaze, n_out)
         n_rows, n_cols = self._frame_shape
 
-        x_scene, y_scene = self._pixel_centers()
         static = len(gaze) == 1
         if static:
-            gx, gy = gaze[0]
-            points = np.column_stack(((y_scene - gy).ravel(),
-                                      (x_scene - gx).ravel()))
-            brightness = _percept_sampler(prosthetic, pframes)(points)
-            brightness = brightness.reshape((n_rows, n_cols, n_out))
+            brightness = self._percept_on_grid(
+                _percept_sampler(prosthetic, pframes), gaze[0])
             loss = self._rendered_loss_at(gaze[0])
 
         out = np.empty((n_rows, n_cols, 3, n_out), dtype=np.float32)
@@ -635,11 +708,8 @@ class Scene(PrettyPrint):
             if static:
                 frame = brightness[..., f]
             else:
-                gx, gy = gaze[f]
-                points = np.column_stack(((y_scene - gy).ravel(),
-                                          (x_scene - gx).ravel()))
                 sample = _percept_sampler(prosthetic, pframes[..., f:f + 1])
-                frame = sample(points).reshape((n_rows, n_cols))
+                frame = self._percept_on_grid(sample, gaze[f])[..., 0]
                 loss = self._rendered_loss_at(gaze[f])
             phosphene = np.clip((frame - vmin) / (vmax - vmin), 0, 1)
             native = scene_rgb[..., 0 if scene_rgb.shape[-1] == 1 else f]
@@ -647,8 +717,34 @@ class Scene(PrettyPrint):
             lost = np.maximum(fill, phosphene[..., np.newaxis])
             alpha = loss[..., np.newaxis]
             out[..., f] = (1 - alpha) * native + alpha * lost
-        return Percept(out, space=self._grid(), time=out_time,
-                       time_unit=out_unit)
+        return Percept(self._apply_aperture(out, gaze=gaze),
+                       space=self._grid(), time=out_time, time_unit=out_unit)
+
+    def _prosthetic_rgb(self, prosthetic, vmax, vmin=0, gaze=None):
+        """A prosthetic percept alone on black, on the scene's pixel grid
+
+        Places a percept where and at what size this field sees it. Not a
+        composition: with no scotoma there is nothing to paint the percept
+        into, and superimposing it on intact native vision would assert an
+        interaction that is not modeled.
+        """
+        _check_prosthetic(prosthetic)
+        vmin, vmax = _check_range(vmin, vmax)
+        pframes, _, _ = self._prosthetic_frames(prosthetic)
+        n_out = pframes.shape[-1]
+        gaze = _gaze_points(gaze, n_out)
+        if len(gaze) == 1:
+            brightness = self._percept_on_grid(
+                _percept_sampler(prosthetic, pframes), gaze[0])
+        else:
+            brightness = np.concatenate(
+                [self._percept_on_grid(
+                    _percept_sampler(prosthetic, pframes[..., f:f + 1]),
+                    gaze[f]) for f in range(n_out)], axis=-1)
+        scaled = np.clip((brightness - vmin) / (vmax - vmin), 0, 1)
+        rgb = np.repeat(scaled[:, :, np.newaxis, :], 3, axis=2)
+        return self._apply_aperture(np.asarray(rgb, dtype=np.float32),
+                                    gaze=gaze)
 
     def _prosthetic_frames(self, prosthetic):
         """Line a percept up with the output frames, and say when they happen"""
@@ -693,12 +789,20 @@ class Scene(PrettyPrint):
                        time=self.time, time_unit=self.time_unit)
 
     def plot(self, gaze=None, frame=0, ax=None, rings=False,
-             ring_color=_RING_COLOR, **kwargs):
+             ring_color=_RING_COLOR, percept=None, vmax=None, vmin=0,
+             **kwargs):
         """Plot what is left of native vision
 
         The scene unchanged where vision is intact, and ``scotoma_fill`` where
         it is lost. A scotoma is eye-centered, so ``gaze`` decides where in the
         scene it falls.
+
+        Passing a ``percept`` draws a prosthetic percept in this field instead,
+        so its size and place can be read against the FOV. With a scotoma that
+        is the same composition
+        :py:meth:`~pulse2percept.models.Model.predict_percept` returns;
+        without one the percept is drawn alone on black, because superimposing
+        it on intact native vision would assert an unmodeled interaction.
 
         Parameters
         ----------
@@ -718,6 +822,13 @@ class Scene(PrettyPrint):
         ring_color : color, optional
             Any Matplotlib color for those rings and their labels. Defaults to
             a mid-gray that reads on a light scene.
+        percept : :py:class:`~pulse2percept.percepts.Percept`, optional
+            A brightness percept to draw in this field, placed by ``gaze``.
+        vmax : float, optional
+            The percept brightness that displays as white. Required whenever
+            ``percept`` is given: brightness is in arbitrary units.
+        vmin : float, optional
+            The percept brightness that displays as black. Defaults to 0.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.percepts.Percept.plot`.
 
@@ -726,7 +837,16 @@ class Scene(PrettyPrint):
         ax : matplotlib.axes.Axes
 
         """
-        rgb = self._native_rgb(gaze=gaze)
+        if percept is None:
+            if vmax is not None or vmin != 0:
+                raise ValueError("'vmin' and 'vmax' map percept brightness "
+                                 "onto a display, and there is no percept to "
+                                 "plot. Pass 'percept'.")
+            rgb = self._native_rgb(gaze=gaze)
+        elif self.scotoma is None:
+            rgb = self._prosthetic_rgb(percept, vmax, vmin=vmin, gaze=gaze)
+        else:
+            rgb = self._compose(percept, vmax, vmin=vmin, gaze=gaze).data
         if not 0 <= frame < rgb.shape[-1]:
             raise ValueError(f"'frame' must be in 0..{rgb.shape[-1] - 1}, not "
                              f"{frame}.")

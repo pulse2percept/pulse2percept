@@ -19,9 +19,9 @@ class RetinalImplant(Implant):
     electrode_array : :py:class:`~pulse2percept.implants.ElectrodeArray` or
                       :py:class:`~pulse2percept.implants.Electrode`
         The electrode array used to deliver electrical stimuli to the retina.
-    eye : 'LE' or 'RE', optional
-        A string indicating whether the system is implanted in the left ('LE')
-        or right eye ('RE').
+    eye : 'left' or 'right', optional
+        A string indicating whether the system is implanted in the left or
+        right eye. Case-insensitive on input; stored lowercase.
     **kwargs :
         Keyword arguments accepted by
         :py:class:`~pulse2percept.implants.Implant`, such as ``preprocess``,
@@ -34,15 +34,15 @@ class RetinalImplant(Implant):
 
     >>> from pulse2percept.implants import ElectrodeGrid
     >>> from pulse2percept.implants.retina import RetinalImplant
-    >>> implant = RetinalImplant(ElectrodeGrid((4, 4), 400), eye='LE')
+    >>> implant = RetinalImplant(ElectrodeGrid((4, 4), 400), eye='left')
     >>> implant.eye
-    'LE'
+    'left'
 
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_eye',)
 
-    def __init__(self, electrode_array, eye='RE', **kwargs):
+    def __init__(self, electrode_array, eye='right', **kwargs):
         super().__init__(electrode_array, **kwargs)
         self.eye = eye
 
@@ -57,17 +57,18 @@ class RetinalImplant(Implant):
         """Implanted eye
 
         A :py:class:`~pulse2percept.implants.retina.RetinalImplant` can be
-        implanted either in a left eye ('LE') or right eye ('RE'). Models such
-        as :py:class:`~pulse2percept.models.retina.AxonMapModel` will treat
-        left and right eyes differently (for example, adjusting the location
-        of the optic disc).
+        implanted either in a left eye ('left') or right eye ('right').
+        Models such as
+        :py:class:`~pulse2percept.models.retina.AxonMapModel` will treat left
+        and right eyes differently (for example, adjusting the location of the
+        optic disc).
 
         Examples
         --------
         Implant Argus II in a left eye:
 
         >>> from pulse2percept.implants.retina import ArgusII
-        >>> implant = ArgusII(eye='LE')
+        >>> implant = ArgusII(eye='left')
         """
         return self._eye
 
@@ -76,8 +77,8 @@ class RetinalImplant(Implant):
         """Eye setter (called upon `self.eye = eye`)"""
         if not isinstance(eye, str):
             raise TypeError(f"'eye' must be a string, not {type(eye)}.")
-        eye = eye.upper()
-        if eye != 'LE' and eye != 'RE':
-            raise ValueError(f"'eye' must be either 'LE' or 'RE', not "
+        eye = eye.lower()
+        if eye not in ('left', 'right'):
+            raise ValueError(f"'eye' must be either 'left' or 'right', not "
                              f"{eye}.")
         self._eye = eye

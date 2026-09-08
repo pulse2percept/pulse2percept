@@ -14,6 +14,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import ImageStimulus, VideoStimulus, samples
 from pulse2percept.units import dva, ms, s
 from pulse2percept.vision import Scene, Scotoma
+from pulse2percept.vision.scene import _ring_radii
 
 SCENE_PX = 41
 HALF = (SCENE_PX - 1) // 2
@@ -716,3 +717,171 @@ def test_play_animates_a_video_scene_and_refuses_a_still_one():
     plt.close('all')
     with pytest.raises(ValueError):
         ramp_scene().play()
+
+
+def circle_scene(**kwargs):
+    """`ramp_scene` seen through a circular aperture"""
+    return ramp_scene(aperture='circle', **kwargs)
+
+
+def test_no_aperture_is_the_default_and_fills_the_frame():
+    scene = ramp_scene()
+    npt.assert_equal(scene.aperture, None)
+    npt.assert_equal('aperture' in repr(scene), False)
+    # Every pixel of the rectangle still shows the ramp, corners included:
+    native = scene._native_rgb()[..., 0]
+    npt.assert_almost_equal(native[0, 0, 0], ramp_at(-HALF), decimal=6)
+    npt.assert_almost_equal(native[0, -1, 0], ramp_at(HALF), decimal=6)
+
+
+def test_a_circular_aperture_keeps_the_center_and_blacks_out_the_corners():
+    scene = circle_scene()
+    npt.assert_equal(scene.aperture, 'circle')
+    npt.assert_equal("aperture='circle'" in repr(scene), True)
+    rect = ramp_scene()._native_rgb()[..., 0]
+    circ = scene._native_rgb()[..., 0]
+    # Inside the disc nothing changed; the four corners went black:
+    npt.assert_array_equal(circ[HALF, :, 0], rect[HALF, :, 0])
+    npt.assert_array_equal(circ[:, HALF, 0], rect[:, HALF, 0])
+    for row, col in ((0, 0), (0, -1), (-1, 0), (-1, -1)):
+        npt.assert_almost_equal(circ[row, col], 0.0)
+    # The right-hand corners are the bright end of the ramp, so they say the
+    # aperture blacked them out rather than the source being dark there:
+    npt.assert_almost_equal(rect[0, -1, 0], ramp_at(HALF), decimal=6)
+    npt.assert_almost_equal(rect[-1, -1, 0], ramp_at(HALF), decimal=6)
+
+
+@pytest.mark.parametrize('aperture', ['circular', 'CIRCLE', 'ellipse', '',
+                                      0, ['circle']])
+def test_a_bad_aperture_is_refused(aperture):
+    with pytest.raises(ValueError):
+        ramp_scene(aperture=aperture)
+
+
+def test_the_aperture_radius_is_the_shorter_half_of_the_field():
+    """A wide field is clipped by its height, matching the outermost ring"""
+    data = np.tile(np.linspace(0.2, 1, 81), (41, 1))
+    scene = Scene(ImageStimulus(data), fov=(81, 41), aperture='circle')
+    lit = scene._native_rgb()[..., 0, 0] > 0
+    radius = np.hypot(*scene._pixel_centers())
+    # 20.5 dva is min(fov) / 2, not max(fov) / 2:
+    npt.assert_equal(radius[lit].max() <= 20.5, True)
+    npt.assert_equal(radius[~lit].min() > 20.5, True)
+
+
+def test_the_aperture_is_eye_centered_and_follows_gaze():
+    data = np.tile(np.linspace(0.2, 1, SCENE_PX), (SCENE_PX, 1))
+    scene = Scene(ImageStimulus(data), fov=(SCENE_PX, SCENE_PX),
+                  aperture='circle')
+    lit = scene._native_rgb(gaze=(8, -5) * dva)[..., 0, 0] > 0
+    x, y = scene._pixel_centers()
+    # scene = eye-centered + gaze, so the disc is centered on the gaze point:
+    npt.assert_array_equal(lit, (x - 8) ** 2 + (y + 5) ** 2 <= 20.5 ** 2)
+
+
+def test_a_transparent_background_does_not_leak_outside_the_aperture():
+    """Outside the aperture is black even when the scene's ground is white"""
+    scene = Scene(rgba_source(), fov=(8, 8), background=1, aperture='circle')
+    native = scene._native_rgb()[..., 0]
+    npt.assert_almost_equal(native[0, 0], 0.0)
+    # ... while the background still shows through inside it:
+    npt.assert_almost_equal(native[0, 4], [1.0, 1.0, 1.0], decimal=6)
+
+
+def test_the_aperture_does_not_change_what_a_device_is_given():
+    """The critical invariant: a rendering boundary, not a sampling geometry"""
+    x = np.array([-19.0, -8.0, 0.0, 6.5, 18.0, 30.0])
+    y = np.array([17.0, -3.0, 0.0, 11.25, -19.0, 0.0])
+    rect, circ = ramp_scene(), circle_scene()
+    for gaze in (None, (6, -4) * dva, (-9.5, 12) * dva):
+        npt.assert_array_equal(circ._sample_at(x, y, gaze=gaze),
+                               rect._sample_at(x, y, gaze=gaze))
+        npt.assert_array_equal(circ._device_input(x, y, gaze=gaze),
+                               rect._device_input(x, y, gaze=gaze))
+    npt.assert_array_equal(circ.dva_to_pixel(x, y), rect.dva_to_pixel(x, y))
+    npt.assert_array_equal(circ.pixel_to_dva(x, y), rect.pixel_to_dva(x, y))
+    npt.assert_array_equal(circ._frames(), rect._frames())
+
+
+def test_the_aperture_leaves_the_scotoma_alone_inside_it():
+    scotoma = Scotoma.circle(6)
+    rect = ramp_scene(scotoma=scotoma, scotoma_fill=0.5)
+    circ = ramp_scene(scotoma=scotoma, scotoma_fill=0.5, aperture='circle')
+    npt.assert_array_equal(circ.scotoma(0.0, 0.0), rect.scotoma(0.0, 0.0))
+    inside = np.hypot(*circ._pixel_centers()) <= 20.5
+    npt.assert_array_equal(circ._native_rgb()[..., 0][inside],
+                           rect._native_rgb()[..., 0][inside])
+
+
+def test_the_aperture_clips_a_composed_percept_only_when_it_is_drawn():
+    scotoma = Scotoma.circle(6)
+    bright = Percept(np.ones((SCENE_PX, SCENE_PX, 1)),
+                     space=ramp_scene()._grid())
+    rect = ramp_scene(scotoma=scotoma, scotoma_fill=0.0)
+    circ = ramp_scene(scotoma=scotoma, scotoma_fill=0.0, aperture='circle')
+    seen_rect = rect._compose(bright, vmax=1).data[..., 0]
+    seen_circ = circ._compose(bright, vmax=1).data[..., 0]
+    inside = np.hypot(*circ._pixel_centers()) <= 20.5
+    npt.assert_array_equal(seen_circ[inside], seen_rect[inside])
+    npt.assert_almost_equal(seen_circ[0, -1], 0.0)
+    npt.assert_almost_equal(seen_rect[0, -1, 0], ramp_at(HALF), decimal=6)
+
+
+def test_a_percept_can_be_plotted_in_the_context_of_the_whole_field():
+    """A small phosphene, drawn on black at the scale of the ocular field"""
+    space = Scene(ImageStimulus(np.zeros((9, 9))), fov=(9, 9))._grid()
+    data = np.zeros((9, 9, 1))
+    data[4, 4] = 20.0
+    phosphene = Percept(data, space=space)
+    scene = circle_scene()
+    ax = scene.plot(percept=phosphene, vmax=20)
+    drawn = ax.images[-1].get_array()
+    # The percept lands on the fovea at its own size, not stretched to the FOV
+    npt.assert_almost_equal(drawn[HALF, HALF], [1.0, 1.0, 1.0], decimal=6)
+    npt.assert_almost_equal(drawn[HALF, HALF + 3], 0.0)
+    # ... and native vision is not underneath it, since nothing is lost here:
+    npt.assert_almost_equal(drawn[HALF, HALF + 15], 0.0)
+    npt.assert_almost_equal(drawn[0, 0], 0.0)
+    plt.close('all')
+    # Brightness is in arbitrary units, so a display range is required:
+    with pytest.raises(ValueError):
+        scene.plot(percept=phosphene)
+    # ... and a display range with nothing to map onto it is not silently
+    # ignored, either way round:
+    with pytest.raises(ValueError):
+        scene.plot(vmax=20)
+    with pytest.raises(ValueError):
+        scene.plot(vmin=5)
+
+
+def test_plotting_a_percept_over_a_scotoma_is_the_composed_view():
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    bright = Percept(np.ones((SCENE_PX, SCENE_PX, 1)), space=scene._grid())
+    ax = scene.plot(percept=bright, vmax=1)
+    npt.assert_almost_equal(ax.images[-1].get_array(),
+                            scene._compose(bright, vmax=1).data[..., 0],
+                            decimal=6)
+    plt.close('all')
+
+
+def test_rings_still_land_on_the_fovea_the_aperture_is_centered_on():
+    scene = circle_scene()
+    ax = scene.plot(gaze=(7, -3) * dva, rings=[10])
+    # The ring is a circle of radius 10 about the gaze point:
+    ring = ax.lines[-1]
+    xs, ys = ring.get_xdata(), ring.get_ydata()
+    npt.assert_almost_equal([xs.min(), xs.max()], [-3.0, 17.0], decimal=6)
+    npt.assert_almost_equal([ys.min(), ys.max()], [-13.0, 7.0], decimal=6)
+    # The outermost ring `rings=True` asks for sits inside that same boundary:
+    npt.assert_almost_equal(_ring_radii(True, scene.fov).max(), 20.0)
+    plt.close('all')
+
+
+def test_the_aperture_reaches_the_frames_the_player_shows():
+    frames = np.stack([np.full((9, 9), v) for v in (0.4, 0.8)], axis=-1)
+    scene = Scene(VideoStimulus(frames, time=[0, 10]), fov=(9, 9),
+                  aperture='circle')
+    ani = scene.play()
+    npt.assert_almost_equal(ani._frame_data[0, 0, :, 0], 0.0)
+    npt.assert_almost_equal(ani._frame_data[4, 4, :, 1], 0.8, decimal=6)
+    plt.close('all')

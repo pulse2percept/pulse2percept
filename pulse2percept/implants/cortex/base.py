@@ -3,15 +3,15 @@ from ..base import Implant
 
 
 def _validate_hemisphere(hemisphere):
-    """Return ``hemisphere`` as 'LH', 'RH' or None."""
+    """Return ``hemisphere`` as 'left', 'right' or None."""
     if hemisphere is None:
         return None
     if not isinstance(hemisphere, str):
         raise TypeError(f"'hemisphere' must be a string or None, not "
                         f"{type(hemisphere)}.")
-    hemisphere = hemisphere.upper()
-    if hemisphere not in ('LH', 'RH'):
-        raise ValueError(f"'hemisphere' must be 'LH', 'RH' or None, not "
+    hemisphere = hemisphere.lower()
+    if hemisphere not in ('left', 'right'):
+        raise ValueError(f"'hemisphere' must be 'left', 'right' or None, not "
                          f"{hemisphere}.")
     return hemisphere
 
@@ -38,9 +38,9 @@ class CorticalImplant(Implant):
     electrode_array : :py:class:`~pulse2percept.implants.ElectrodeArray` or
                       :py:class:`~pulse2percept.implants.Electrode`
         The electrode array used to deliver electrical stimuli to cortex.
-    hemisphere : 'LH', 'RH' or None, optional
-        Which hemisphere the device is implanted in. Defaults to None, i.e.
-        unspecified.
+    hemisphere : 'left', 'right' or None, optional
+        Which hemisphere the device is implanted in. Case-insensitive on
+        input; stored lowercase. Defaults to None, i.e. unspecified.
     **kwargs :
         Keyword arguments accepted by
         :py:class:`~pulse2percept.implants.Implant`, such as ``preprocess``,
@@ -54,9 +54,9 @@ class CorticalImplant(Implant):
     >>> from pulse2percept.implants import ElectrodeGrid
     >>> from pulse2percept.implants.cortex import CorticalImplant
     >>> implant = CorticalImplant(ElectrodeGrid((4, 4), 400),
-    ...                           hemisphere='RH')
+    ...                           hemisphere='right')
     >>> implant.hemisphere
-    'RH'
+    'right'
 
     """
     # Frozen class: User cannot add more class attributes
@@ -78,9 +78,9 @@ class CorticalImplant(Implant):
     def hemisphere(self):
         """Implanted hemisphere
 
-        'LH', 'RH', or None if unspecified. Metadata: cortical models place
-        the array from its coordinates and their own ``implant_position``, not
-        from this attribute.
+        'left', 'right', or None if unspecified. Metadata: cortical models
+        place the array from its coordinates and their own
+        ``implant_position``, not from this attribute.
         """
         return getattr(self, '_hemisphere', None)
 

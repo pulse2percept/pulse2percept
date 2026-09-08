@@ -59,12 +59,12 @@ def test_AlphaIMS_indexing():
 
 def test_AlphaIMS_eye():
     # Right-eye implant:
-    alpha_re = AlphaIMS(eye='RE')
+    alpha_re = AlphaIMS(eye='right')
     npt.assert_equal(alpha_re['A37'].x > alpha_re['A1'].x, True)
     npt.assert_almost_equal(alpha_re['A37'].y, alpha_re['A1'].y)
 
     # Left-eye implant:
-    alpha_le = AlphaIMS(eye='LE')
+    alpha_le = AlphaIMS(eye='left')
     npt.assert_equal(alpha_le['A1'].x > alpha_le['AE37'].x, True)
     npt.assert_almost_equal(alpha_le['A37'].y, alpha_le['A1'].y)
 
@@ -126,12 +126,12 @@ def test_AlphaAMS_indexing():
 
 def test_AlphaAMS_eye():
     # Right-eye implant:
-    alpha_re = AlphaAMS(eye='RE')
+    alpha_re = AlphaAMS(eye='right')
     npt.assert_equal(alpha_re['A40'].x > alpha_re['A1'].x, True)
     npt.assert_almost_equal(alpha_re['A40'].y, alpha_re['A1'].y)
 
     # Left-eye implant:
-    alpha_le = AlphaAMS(eye='LE')
+    alpha_le = AlphaAMS(eye='left')
     npt.assert_equal(alpha_le['A1'].x > alpha_le['AE40'].x, True)
     npt.assert_almost_equal(alpha_le['A40'].y, alpha_le['A1'].y)
 

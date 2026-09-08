@@ -120,7 +120,8 @@ def test_argus_plot_does_not_flip_the_electrode_constants():
          'xrange': (-10, 10), 'yrange': (-10, 10)},
     ])
     _, ax = plt.subplots()
-    for implant in (ArgusI(eye='LE'), ArgusII(eye='LE'), ArgusII(eye='LE')):
+    for implant in (ArgusI(eye='left'), ArgusII(eye='left'),
+                    ArgusII(eye='left')):
         plot_argus_phosphenes(df, implant, ax=ax)
         npt.assert_array_equal(argus_mod.PX_ARGUS1, px1)
         npt.assert_array_equal(argus_mod.PX_ARGUS2, px2)
@@ -164,11 +165,11 @@ def test_the_plotted_implant_owns_the_axon_laterality(monkeypatch):
 
     monkeypatch.setattr(AxonMapSpatial, 'grow_axon_bundles', spy)
     # A model bound to the other eye, which used to be what decided:
-    axon_map = AxonMapModel(implant=ArgusII(eye='RE'), loc_od=(15.5, 1.5))
+    axon_map = AxonMapModel(implant=ArgusII(eye='right'), loc_od=(15.5, 1.5))
     _, ax = plt.subplots()
-    plot_argus_phosphenes(df, ArgusII(eye='LE'), ax=ax, axon_map=axon_map)
+    plot_argus_phosphenes(df, ArgusII(eye='left'), ax=ax, axon_map=axon_map)
     # The optic disc is nasal, so a left eye puts it at negative x:
-    npt.assert_equal(grown, [('LE', (-15.5, 1.5))])
+    npt.assert_equal(grown, [('left', (-15.5, 1.5))])
     # ... and the caller's model is left pointed where it was:
-    npt.assert_equal(axon_map.implant.eye, 'RE')
+    npt.assert_equal(axon_map.implant.eye, 'right')
     npt.assert_equal(tuple(axon_map.spatial.loc_od), (15.5, 1.5))

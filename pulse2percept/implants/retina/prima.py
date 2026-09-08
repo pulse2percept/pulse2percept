@@ -296,7 +296,7 @@ class PRIMAPivotal(RetinalImplant):
         applies to every electrode, a list of 378 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -336,7 +336,7 @@ class PRIMAPivotal(RetinalImplant):
     #: The device is illuminated, not driven by a current source.
     stimulus_unit = mW / mm ** 2
 
-    def __init__(self, z=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='right', preprocess=False,
                  safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.spacing = 100  # um, nearest-neighbor center-to-center
         self.pixel_width = 100  # um, flat-to-flat
@@ -507,7 +507,7 @@ class Lorach2015Array(RetinalImplant):
         applies to every electrode, a list of 142 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -528,7 +528,7 @@ class Lorach2015Array(RetinalImplant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, z=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='right', preprocess=False,
                  safe_mode=False):
         self.spacing = 75  # um, nearest-neighbor center-to-center
         self.pixel_width = 70  # um, flat-to-flat
@@ -619,7 +619,7 @@ class Ho2019FlatArray(RetinalImplant):
         applies to every electrode, a list of them gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -644,7 +644,7 @@ class Ho2019FlatArray(RetinalImplant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, pixel_size, z=0, eye='RE',
+    def __init__(self, pixel_size, z=0, eye='right',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HO2019_VARIANTS,
                                          'Ho2019FlatArray')
@@ -730,7 +730,7 @@ class Huang2021Array(RetinalImplant):
         applies to every electrode, a list of them gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -756,7 +756,7 @@ class Huang2021Array(RetinalImplant):
     placement = 'subretinal'
     technology = 'photovoltaic'
 
-    def __init__(self, pixel_size, z=0, eye='RE',
+    def __init__(self, pixel_size, z=0, eye='right',
                  preprocess=False, safe_mode=False):
         self.pixel_size = _pixel_size_um(pixel_size, _HUANG2021_AXIAL_SPANS,
                                          'Huang2021Array')
@@ -830,7 +830,7 @@ class PRIMA55(Ho2019FlatArray):
     """
     __slots__ = ()
 
-    def __init__(self, z=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='right', preprocess=False,
                  safe_mode=False):
         super().__init__(55, z=z, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)
@@ -850,7 +850,7 @@ class PRIMA40(Ho2019FlatArray):
     """
     __slots__ = ()
 
-    def __init__(self, z=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='right', preprocess=False,
                  safe_mode=False):
         super().__init__(40, z=z, eye=eye,
                          preprocess=preprocess, safe_mode=safe_mode)

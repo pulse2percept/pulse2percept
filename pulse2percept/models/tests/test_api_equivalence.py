@@ -242,7 +242,7 @@ def test_rebinding_the_implant_invalidates_the_build():
     npt.assert_equal(model.is_built, True)
     here = model.predict_percept({'C5': 30})
 
-    model.implant = ArgusII(eye='LE')
+    model.implant = ArgusII(eye='left')
     npt.assert_equal(model.is_built, False)
     model.build()
     there = model.predict_percept({'C5': 30})

@@ -58,8 +58,8 @@ plt.show()
 # Each piece owns a different scientific choice:
 #
 # * **Implant:** swap ``ArgusII`` for another retinal device, choose
-#   ``eye='LE'`` or ``'RE'``, provide measured electrode thresholds, or attach
-#   a different image/video encoder.
+#   ``eye='left'`` or ``'right'``, provide measured electrode thresholds, or
+#   attach a different image/video encoder.
 # * **Model:** change ``rho`` (spread across axons), ``lam`` (spread along
 #   axons), the visual-field map, or the model-side implant placement. Swap in
 #   :class:`~pulse2percept.models.retina.BiphasicScoreboardModel` if your

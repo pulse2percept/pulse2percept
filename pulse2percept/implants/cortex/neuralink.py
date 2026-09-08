@@ -454,8 +454,8 @@ class Neuralink(EnsembleImplant):
     def hemisphere(self):
         """Implanted hemisphere
 
-        'LH', 'RH', or None if unspecified. Metadata: thread coordinates and
-        the model's ``implant_position`` place the implant, not this
+        'left', 'right', or None if unspecified. Metadata: thread coordinates
+        and the model's ``implant_position`` place the implant, not this
         attribute.
 
         .. versionadded:: 0.11.0
@@ -496,7 +496,7 @@ class Neuralink(EnsembleImplant):
             function (callable).
         safe_mode : bool, optional
             If safe mode is enabled, only charge-balanced stimuli are allowed.
-        hemisphere : 'LH', 'RH' or None, optional
+        hemisphere : 'left', 'right' or None, optional
             Which hemisphere the implant sits in. Metadata: thread
             coordinates place the implant, not this attribute.
         """

@@ -786,7 +786,7 @@ def test_Implant_thresholds_at_construction():
     npt.assert_equal(sorted(implant.thresholds), ['A1', 'A2'])
     npt.assert_almost_equal(implant.thresholds['A2'], 107)
     # Threshold keys use the final left-eye electrode names:
-    implant = ArgusII(eye='LE', thresholds={'A10': 80})
+    implant = ArgusII(eye='left', thresholds={'A10': 80})
     npt.assert_equal(sorted(implant.thresholds), ['A10'])
     npt.assert_almost_equal(implant.thresholds['A10'], 80)
     stim = ArgusII(thresholds=80).prepare_stim(

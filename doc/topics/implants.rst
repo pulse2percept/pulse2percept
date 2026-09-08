@@ -17,8 +17,8 @@ they stimulate, which is also where laterality lives:
             |
     generic Implant pipeline        (p2p.implants)
             |
-    retina.RetinalImplant  -> eye          ('LE', 'RE')
-    cortex.CorticalImplant -> hemisphere   ('LH', 'RH', None)
+    retina.RetinalImplant  -> eye          ('left', 'right')
+    cortex.CorticalImplant -> hemisphere   ('left', 'right', None)
 
 So a device is constructed from its own namespace,
 ``p2p.implants.retina.ArgusII()`` or ``p2p.implants.cortex.Orion()``, while
@@ -112,10 +112,14 @@ Retinal implants derive from
 electrode coordinates in microns. Placement is specified on the model with
 ``implant_position``, ``implant_rotation`` and ``implant_depth``.
 
-``eye`` (``'LE'`` or ``'RE'``, default ``'RE'``) records the implanted eye and
-is read by the models: :py:class:`~pulse2percept.models.retina.AxonMapModel`
-puts the optic disc on the side the eye calls for. Some devices also reverse
-their column names in the left eye; see each class's API documentation.
+``eye`` (``'left'`` or ``'right'``, default ``'right'``) records the implanted
+eye and is read by the models:
+:py:class:`~pulse2percept.models.retina.AxonMapModel` puts the optic disc on
+the side the eye calls for. Some devices also reverse their column names in
+the left eye; see each class's API documentation. A
+:py:class:`~pulse2percept.vision.Scene` carries no ``eye`` of its own; eye
+identity for a visual field comes from its side of a
+:py:class:`~pulse2percept.vision.BinocularScene`.
 
 PRIMA
 ^^^^^
@@ -305,7 +309,7 @@ the visual field.
 
 Ordinary cortical devices derive from
 :py:class:`~pulse2percept.implants.cortex.CorticalImplant` and take
-``hemisphere`` (``'LH'``, ``'RH'``, or ``None`` if unspecified);
+``hemisphere`` (``'left'``, ``'right'``, or ``None`` if unspecified);
 :py:class:`~pulse2percept.implants.cortex.Neuralink` is an ensemble of threads
 and offers the same attribute. In v0.11 ``hemisphere`` is device metadata
 only: the electrode coordinates and the model's ``implant_position`` remain
@@ -369,8 +373,8 @@ instead:
     from pulse2percept.implants.cortex import CorticalImplant
 
     array = ElectrodeGrid(shape=(10, 10), spacing=500)
-    retinal = RetinalImplant(array, eye='RE')
-    cortical = CorticalImplant(array, hemisphere='RH')
+    retinal = RetinalImplant(array, eye='right')
+    cortical = CorticalImplant(array, hemisphere='right')
 
 :py:class:`~pulse2percept.implants.EnsembleImplant` combines multiple implants
 into one system. Its
@@ -389,7 +393,7 @@ Migrating from v0.10
   :py:class:`~pulse2percept.implants.GridImplant` onto
   :py:class:`~pulse2percept.implants.retina.RetinalImplant`. Wrap an
   :py:class:`~pulse2percept.implants.ElectrodeGrid` in a ``RetinalImplant``
-  where a custom grid relied on the old implicit ``eye='RE'``;
+  where a custom grid relied on the old implicit ``eye='right'``;
   :py:class:`~pulse2percept.models.retina.AxonMapModel` requires one.
 * ``EnsembleImplant.from_cortical_map`` became
   :py:meth:`~pulse2percept.implants.EnsembleImplant.from_visual_field_map`,

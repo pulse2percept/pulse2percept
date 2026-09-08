@@ -179,7 +179,7 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
 
     # To simulate an implant in a left eye, flip the image left-right (along
     # with the electrode x-coordinates):
-    if argus.eye == 'LE':
+    if argus.eye == 'left':
         img_argus = np.fliplr(img_argus)
         px_argus[:, 0] = img_argus.shape[1] - px_argus[:, 0] - 1
 
