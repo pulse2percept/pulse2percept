@@ -83,6 +83,46 @@ class Scotoma(PrettyPrint):
                              f"[{loss.min():g}, {loss.max():g}].")
         return loss
 
+    def mirror(self, name=None):
+        """A copy reflected across the vertical meridian
+
+        Purely geometric: ``mirrored(x, y) == original(-x, y)`` in
+        eye-centered visual-field coordinates.
+
+        .. versionadded:: 0.11.0
+
+        Parameters
+        ----------
+        name : str, optional
+            Name for the mirrored scotoma (default: original name, marked
+            as mirrored)
+
+        Returns
+        -------
+        scotoma : :py:class:`~pulse2percept.vision.Scotoma`
+            A new scotoma. The original is left unchanged.
+
+        Examples
+        --------
+        The fellow eye of a bilateral, meridian-symmetric loss:
+
+        >>> from pulse2percept.units import dva
+        >>> from pulse2percept.vision import Scotoma
+        >>> left_scotoma = Scotoma.circle(3 * dva, center=(6, 0) * dva)
+        >>> right_scotoma = left_scotoma.mirror()
+        >>> float(right_scotoma(-6, 0)), float(right_scotoma(6, 0))
+        (1.0, 0.0)
+
+        """
+        mask = self.mask
+
+        def mirrored(x, y):
+            return mask(-x, y)
+
+        if name is None and self.name is not None:
+            name = f'mirror of {self.name}'
+        return type(self)(mirrored, name=name)
+
     @classmethod
     def ellipse(cls, x_radius, y_radius, center=(0, 0), name=None):
         """An elliptical scotoma, lost inside and intact outside

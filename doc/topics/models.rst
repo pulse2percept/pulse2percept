@@ -368,6 +368,15 @@ monocular views:
 
     ax_left, ax_right = binocular.plot(left_percept=percept, vmax=2)
 
+A bilateral loss is often symmetric about the vertical meridian.
+:py:meth:`~pulse2percept.vision.Scotoma.mirror` reflects a scotoma across it
+(``mirrored(x, y) == original(-x, y)``) and returns a new one:
+
+.. code-block:: python
+
+    left_scotoma = p2p.vision.Scotoma.circle(3 * dva, center=(6, 0) * dva)
+    right_scotoma = left_scotoma.mirror()
+
 Models are monocular in v0.11, so a prediction names the eye it is about:
 
 .. code-block:: python
