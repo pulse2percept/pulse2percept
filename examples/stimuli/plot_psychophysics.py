@@ -2,21 +2,12 @@
 """
 ===============================================================================
 Gratings and bars in degrees of visual angle
-===============================================================================
+=============================================
 
-*This example generates sinusoidal gratings and moving bars in physical units,
-and feeds one of them to an implant and a model.*
-
-:py:mod:`pulse2percept.stimuli.psychophysics` rasterizes visual patterns from
-their parameters. :py:func:`~pulse2percept.stimuli.psychophysics.grating` and
-:py:func:`~pulse2percept.stimuli.psychophysics.bar` are parametrized the way a
-psychophysics method section is: spatial frequency in cycles per degree of
-visual angle, drift rate in Hz, speed in dva/s, and explicit sample times in
-milliseconds. ``shape`` sets the raster resolution only; it does not enter any
-of those numbers.
-
-Both return a :py:class:`~pulse2percept.vision.Scene`, which pairs the picture
-with the extent of the visual field it covers.
+:py:mod:`pulse2percept.stimuli.psychophysics` generates gratings and bars in
+visual rather than pixel units. The resulting
+:py:class:`~pulse2percept.vision.Scene` carries the field of view needed to
+register the stimulus with an implant.
 
 A static grating
 ----------------
@@ -40,9 +31,8 @@ scene.plot()
 plt.show()
 
 ###############################################################################
-# ``spatial_freq=0.5 / dva`` means one cycle every two degrees, so ten cycles
-# fit across the 20-degree field. Doubling ``shape`` gives a finer raster of
-# the same grating, not a different one.
+# ``spatial_freq=0.5 / dva`` gives one cycle every two degrees. Changing
+# ``shape`` changes only the raster resolution.
 #
 # ``direction`` is an ordinary angle, measured counterclockwise from the
 # positive x axis, in the same visual-field frame the scene uses (x to the
@@ -63,10 +53,8 @@ plt.show()
 # A drifting grating
 # ------------------
 #
-# Passing ``time`` turns the source into a
-# :py:class:`~pulse2percept.stimuli.VideoStimulus`. The sample times are
-# always explicit: there is no default frame rate, and temporal phase is
-# computed from the milliseconds you pass, not from the frame index.
+# ``time`` contains the explicit sample times. Temporal phase is computed from
+# those times rather than frame number.
 
 time = np.arange(0, 1000, 20)  # ms
 drift = psychophysics.grating(spatial_freq=0.5 / dva, temporal_freq=2 * Hz,
@@ -105,9 +93,8 @@ sweep = psychophysics.bar(width=2 * dva, direction=0 * deg,
 sweep.source.play()
 
 ###############################################################################
-# The bar crosses the 20-degree field in one second at 20 dva/s. ``width`` and
-# ``edge_width`` are angular sizes too: this bar has a 2-degree plateau with a
-# half-degree raised-cosine ramp on either side.
+# ``width`` and ``edge_width`` are angular sizes, ``speed`` is in dva/s, and
+# ``offset`` is the position at ``t = 0`` along the motion axis.
 #
 # Dropping ``time`` freezes it at ``t = 0``, which is a plain image again:
 
@@ -129,18 +116,11 @@ print(still.dva_to_pixel(0, 0))
 print(still.pixel_to_dva(0, 0))
 
 ###############################################################################
-# Passing a scene to an implant and a model
-# -----------------------------------------
+# Passing a scene to a model
+# --------------------------
 #
-# Because the generators hand back a
-# :py:class:`~pulse2percept.vision.Scene`, a model can register the pattern
-# against the implant itself: it samples the scene at the electrodes' own
-# visual-field positions and encodes what each one sees. Nothing is resized
-# onto the electrode grid, and the degrees of visual angle above are the ones
-# the retina gets.
-#
-# A scene is a picture, so the implant needs an ``encoder`` to say how a gray
-# level becomes stimulation:
+# A scene can be sampled at the implant's visual-field locations and encoded
+# into stimulation:
 
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models.retina import AxonMapModel

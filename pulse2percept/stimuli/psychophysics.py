@@ -1,31 +1,11 @@
-""":py:func:`~pulse2percept.stimuli.psychophysics.bar`,
-:py:func:`~pulse2percept.stimuli.psychophysics.grating`,
-:py:func:`~pulse2percept.stimuli.psychophysics.landolt_c`,
-:py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e`,
-:py:class:`~pulse2percept.stimuli.BarStimulus`,
-:py:class:`~pulse2percept.stimuli.GratingStimulus`
+"""Procedurally generated visual stimuli in physical visual units.
 
-Procedurally generated visual stimuli.
-
-Nothing here is loaded from a bundled file (see
-:py:mod:`pulse2percept.stimuli.samples` for those): every pattern is
-rasterized from its parameters, in degrees of visual angle and physical time.
-The generators return a :py:class:`~pulse2percept.vision.Scene`, and are
-reached through the module rather than the top-level namespace::
-
-    import numpy as np
-    from pulse2percept.stimuli import psychophysics
-    from pulse2percept.units import dva, Hz
-
-    scene = psychophysics.landolt_c(gap=0.5 * dva)
-    drift = psychophysics.grating(spatial_freq=2 / dva, temporal_freq=4 * Hz,
-                                  time=np.arange(0, 500, 10))
+The generators return :py:class:`~pulse2percept.vision.Scene` objects and are
+accessed through :mod:`pulse2percept.stimuli.psychophysics`.
 
 :py:class:`~pulse2percept.stimuli.GratingStimulus` and
-:py:class:`~pulse2percept.stimuli.BarStimulus` are the deprecated
-predecessors of :py:func:`grating` and :py:func:`bar`. They parametrize the
-pattern in cycles/pixel, cycles/frame, and pixels/frame, and are kept
-unchanged until they are removed in v0.12.0.
+:py:class:`~pulse2percept.stimuli.BarStimulus` are deprecated legacy APIs and
+will be removed in v0.12.
 """
 
 import warnings
@@ -310,18 +290,15 @@ _E_EXTENT = 5.0
 #: has to exist at once
 _BLOCK_ROWS = 64
 
-#: Sub-pixels per axis used to rasterize the optotypes before area-averaging.
-#: The smallest factor meeting the tolerance below at `_MIN_OPTOTYPE_PX`
-#: (2x reaches 12%); 8x and 16x buy little beyond it.
+#: Supersampling used for optotype rasterization.
 _SUPERSAMPLE = 4
 
 #: Fewest pixels across a bar that still rasterize it as a bar, not a line
 _MIN_BAR_PX = 2
 
-#: Fewest *output* pixels across an optotype's critical feature. Measured:
-#: the smallest integer at which the realized gap, stroke, and inter-bar gap
-#: stay within 10% of the requested size across sub-pixel positions and
-#: orientations, 2 px reaching 18%. See `test_optotype_raster_floor`.
+#: Minimum output pixels across an optotype's critical feature. The 3-pixel
+#: floor and 4x supersampling keep worst-case width error below 10% in the
+#: validation sweep; see ``test_optotype_raster_floor``.
 _MIN_OPTOTYPE_PX = 3
 
 
@@ -359,15 +336,9 @@ def _visual_grid(shape, fov):
 
 
 def _rasterize(glyph, shape, fov):
-    """Area-average an analytic mask onto the output raster
+    """Supersample an analytic mask and area-average it onto the output raster.
 
-    ``glyph(x, y)`` returns a boolean mask on a ``_SUPERSAMPLE``-times finer
-    grid, whose broadcast coordinates are given as a row and a column vector.
-    Returns the fraction of each output pixel the mask covers, in [0, 1].
-
-    Done ``_BLOCK_ROWS`` output rows at a time, so the finer grid never
-    exists in full. float32 keeps it affordable and still resolves the
-    visual field far below any optotype feature.
+    The raster is processed in row blocks to bound memory use.
     """
     n_rows, n_cols = shape
     n_fine_cols = n_cols * _SUPERSAMPLE
@@ -388,15 +359,7 @@ def _rasterize(glyph, shape, fov):
 
 
 def _check_raster(size, name, feature, fov, shape, minimum):
-    """Raise unless ``size`` spans ``minimum`` pixels of the output raster
-
-    ``size`` is the angular size of parameter ``name``, which rasterizes as
-    ``feature`` (the C's opening, the E's bars). Measured on the coarser of
-    the two angular pixel sizes, so neither axis may under-resolve it.
-    Supersampling makes an optotype's edges less dependent on where the pixel
-    grid falls, but it cannot put information back into a raster too coarse
-    to carry the feature, so the floor applies to the output pixels.
-    """
+    """Require ``size`` to span at least ``minimum`` output pixels."""
     px = max(fov[0] / shape[1], fov[1] / shape[0])
     if size / px < minimum:
         raise ValueError(
@@ -428,11 +391,9 @@ def _check_angles(**angles):
 
 
 def _time_points(time):
-    """Return the sample times in ms as a 1-D array, or None for an image
+    """Return explicit sample times in ms, or None for a static image.
 
-    A scalar is refused: the deprecated classes read one as the end point of
-    an implicit 50 Hz grid, and a generator that derives temporal phase from
-    physical time must not invent sample times of its own.
+    Scalar durations are rejected because these generators assume no frame rate.
     """
     time = as_value(time, ms, 'time')
     if time is None:
@@ -453,20 +414,12 @@ def _time_points(time):
 
 
 def _elapsed_s(time):
-    """Sample times in seconds, or a single 0 s for a static stimulus
-
-    ``t = 0`` is the reference for both drift phase and bar position, so a
-    static stimulus is the moving one frozen at that instant.
-    """
+    """Return sample times in seconds, using t=0 for a static stimulus."""
     return np.zeros(1) if time is None else time / MS_PER_S
 
 
 def _check_motion_sampled(name, value, unit, time):
-    """Raise if a nonzero motion parameter has no sample times to act on
-
-    A static raster can only show the pattern frozen at ``t = 0``, so
-    accepting motion without ``time`` would silently discard it.
-    """
+    """Reject nonzero motion without explicit sample times."""
     if value != 0 and time is None:
         raise ValueError(
             f"'{name}' is {value:g} {unit}, but 'time' is None, which "
@@ -508,11 +461,7 @@ def _to_gray(pattern, contrast, window):
 
 
 def _raster_source(gray, time, metadata):
-    """Wrap a ``(rows, cols, frames)`` raster as an image or a video
-
-    ``time is None`` means the stimulus does not change, which makes it an
-    image rather than a one-frame video of unstated duration.
-    """
+    """Wrap a raster as an ImageStimulus or VideoStimulus."""
     if time is None:
         return ImageStimulus(gray[..., 0], metadata=metadata, compress=False)
     return VideoStimulus(gray, time=time, metadata=metadata, compress=False)
@@ -584,10 +533,6 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
     drift axis in dva, ``fs`` is ``spatial_freq`` in cycles/dva, and ``ft`` is
     ``temporal_freq`` in Hz. The pattern therefore drifts along ``direction``
     at ``temporal_freq / spatial_freq`` dva/s.
-
-    Temporal phase is computed from the physical sample times, not from a
-    frame index: two videos sampled on different grids agree exactly wherever
-    they share a timestamp.
 
     .. versionadded:: 0.11.0
 
@@ -713,8 +658,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     fixation, so ``offset`` is where it is at ``t = 0`` and a given timestamp
     puts it in the same place no matter how the video is sampled.
 
-    Only one bar is drawn. A periodic array of bars is a grating; see
-    :py:func:`~pulse2percept.stimuli.psychophysics.grating`.
+    This generator draws one bar; use :func:`grating` for periodic patterns.
 
     .. versionadded:: 0.11.0
 
@@ -862,22 +806,13 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
               shape=(512, 512)):
     """Landolt C optotype
 
-    Rasterize a Landolt C at a given angular size, eccentricity, and gap
-    orientation, and place it in a :py:class:`~pulse2percept.vision.Scene`.
+    Rasterize a Landolt C and place it in a
+    :py:class:`~pulse2percept.vision.Scene`.
 
-    The C follows the standard proportions, all expressed in multiples of the
-    gap width ``gap``: stroke width ``gap``, inner diameter ``3 * gap``, outer
-    diameter ``5 * gap``. ``gap`` is therefore the critical feature size,
-    which is what an acuity task varies; ``position`` moves the optotype
-    through the visual field without changing that size.
-
-    The analytic C is supersampled and area-averaged onto the requested
-    raster, so edge pixels carry the fraction of the glyph they cover. This
-    keeps the realized geometry from depending on where the pixel grid
-    happens to fall, at the cost of intermediate gray levels along the edges.
-    ``gap`` must still span at least three output pixels, which area-averaging
-    does not change: it renders a feature more faithfully, but cannot put
-    information into a raster too coarse to carry it.
+    The C uses standard proportions: the stroke and gap are equal, with inner
+    and outer diameters of ``3 * gap`` and ``5 * gap``. The analytic glyph is
+    supersampled and area-averaged onto the requested raster; ``gap`` must
+    span at least three output pixels.
 
     .. versionadded:: 0.11.0
 
@@ -984,17 +919,16 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
                polarity='dark', shape=(512, 512)):
     """Tumbling E optotype
 
-    Rasterize a Tumbling E at a given angular size, eccentricity, and
-    orientation, and place it in a :py:class:`~pulse2percept.vision.Scene`.
+    Rasterize a Tumbling E and place it in a
+    :py:class:`~pulse2percept.vision.Scene`.
 
-    The E follows the standard 5x5 construction, all expressed in multiples of
-    the stroke width ``stroke``: overall width and height ``5 * stroke``, bars
-    and the gaps between them one ``stroke`` each. ``stroke`` is therefore the
-    critical feature size, which is what an acuity task varies; ``position``
-    moves the optotype through the visual field without changing that size.
+    The E uses the standard 5x5 construction: bars and gaps are one ``stroke``
+    wide and the full optotype is ``5 * stroke`` across. The glyph is
+    supersampled and area-averaged; ``stroke`` must span at least three
+    output pixels.
 
-    The four cardinal orientations are the conventional Tumbling-E task,
-    although any finite angle is accepted here.
+    The cardinal orientations form the conventional Tumbling-E task, although
+    any finite angle is accepted.
 
     .. note::
        The Tumbling E and the Landolt C

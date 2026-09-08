@@ -155,182 +155,79 @@ Each call treats the frame as an independent still image. Pass the complete
 video to ``predict_percept`` instead when temporal dynamics across frames
 matter.
 
+
 Sample stimuli
 --------------
 
-:py:mod:`pulse2percept.stimuli.samples` bundles a few ready-made stimuli for
-demos, docs, and tests. They are ordinary ``ImageStimulus`` or
-``VideoStimulus`` objects, and are reached through the module rather than the
-top-level namespace:
+:py:mod:`pulse2percept.stimuli.samples` provides bundled images and videos for
+examples and tests. The loaders return ordinary ``ImageStimulus`` and
+``VideoStimulus`` objects:
 
 .. code-block:: python
 
     from pulse2percept.stimuli import samples
 
-    logo = samples.logo_bvl()
-    logo = samples.logo_ucsb()
-    cake = samples.bvl_cake()
-    surf = samples.ucsb_surf()
-    cajal = samples.cajal_retina()
-    zebrafish = samples.zebrafish_retina()
-    bike = samples.ucsb_bike()
+    image = samples.ucsb_bike()
+    video = samples.big_buck_bunny(resize=(60, 80))
 
-The last five are RGB stills: a cake decorated with the lab logo (495x435), a
-frame of the UCSB coastline (476x845) from the National Library of Medicine
-video *Towards a Smart Bionic Eye*, Cajal's drawing of the retina (745x500), a
-fluorescence micrograph of a zebrafish retina (544x760) from the Wellcome
-Collection, and a campus bike path with a cyclist, crosswalk, and stop sign
-(600x900). See ``pulse2percept/stimuli/data/samples/README.rst`` for
-the licensing of each bundled asset; it differs from file to file.
+See the :py:mod:`~pulse2percept.stimuli.samples` API for the available assets
+and ``pulse2percept/stimuli/data/samples/README.rst`` for their provenance and
+licensing.
 
-:py:func:`~pulse2percept.stimuli.samples.big_buck_bunny` is the bundled
-naturalistic video, a 115-frame excerpt of *Big Buck Bunny* at 24 fps:
-
-.. code-block:: python
-
-    video = samples.big_buck_bunny()
-    video.play()
-
-At full resolution it is 359x640 RGB, i.e. 689,280 electrodes; pass
-``resize`` and/or ``as_gray=True`` before handing it to a model. The clip is
-© 2008 Blender Foundation and licensed CC BY 3.0, not under pulse2percept's
-BSD license; its attribution rides along in ``video.metadata``.
-
-Two shorter 640x346 clips come from the same National Library of Medicine
-video as ``ucsb_surf``:
-
-.. code-block:: python
-
-    flyover = samples.ucsb_flyover()
-    pedestrians = samples.ucsb_pedestrians()
 
 Psychophysical stimuli
 ----------------------
 
-:py:mod:`pulse2percept.stimuli.psychophysics` generates visual patterns from
-their parameters rather than loading them from a file. Like ``samples``, the
-optotype generators are reached through the module:
+:py:mod:`pulse2percept.stimuli.psychophysics` generates calibrated visual
+patterns in degrees of visual angle and physical time. The generators return
+a :py:class:`~pulse2percept.vision.Scene`; ``shape`` controls raster resolution
+without changing the stimulus geometry.
 
 .. code-block:: python
 
     from pulse2percept.stimuli import psychophysics
-
-:py:func:`~pulse2percept.stimuli.psychophysics.landolt_c` draws a Landolt C at
-standard proportions (stroke width and inner/outer diameters of 1, 3, and 5
-gaps) and places it in the visual field:
-
-.. code-block:: python
-
     from pulse2percept.units import deg, dva
 
-    scene = psychophysics.landolt_c(gap=0.5 * dva, position=(5, 0) * dva,
-                                    orientation=90 * deg, fov=15 * dva)
+    c = psychophysics.landolt_c(
+        gap=0.5 * dva, position=(5, 0) * dva,
+        orientation=90 * deg, fov=15 * dva)
 
-``gap`` is the angular size of the critical feature, which is what an acuity
-task varies; ``position`` sets where the optotype sits in the visual field,
-and therefore its eccentricity, without changing that size. ``orientation``
-says where the opening points (0 right, 90 up, 180 left, 270 down), and
-``polarity`` chooses a black C on white (``'dark'``) or the reverse.
+    e = psychophysics.tumbling_e(
+        stroke=0.5 * dva, position=(5, 0) * dva,
+        orientation=90 * deg, fov=15 * dva)
 
-:py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e` is the other
-procedural optotype, drawn at the standard 5x5 proportions: bars and the gaps
-between them are one stroke width each, so the whole E is ``5 * stroke``
-across:
+For a Landolt C, ``gap`` is the critical feature; for a Tumbling E it is
+``stroke``. Both use standard optotype proportions and are supersampled before
+being area-averaged onto the requested raster. The critical feature must span
+at least three output pixels.
 
-.. code-block:: python
-
-    scene = psychophysics.tumbling_e(stroke=0.5 * dva, position=(5, 0) * dva,
-                                     orientation=90 * deg, fov=15 * dva)
-
-``stroke`` is the angular size of the critical feature, and ``position``
-again sets eccentricity without changing that size. ``orientation`` says
-where the bars point (0 right, 90 up, 180 left, 270 down); the four cardinal
-orientations are the conventional Tumbling-E task, although any finite angle
-is accepted.
-
-.. note::
-    The Tumbling E and the Landolt C are different optotypes measured with
-    different tasks (bar direction vs. gap direction). Thresholds obtained
-    with one are not numerically interchangeable with the other.
-
-Both optotypes are rasterized by supersampling the analytic glyph and
-area-averaging it onto the requested ``shape``, so edge pixels carry the
-fraction of the glyph they cover rather than snapping to a binary mask. That
-keeps the realized gap and stroke widths from depending on where the pixel
-grid falls, which otherwise biases off-cardinal orientations in particular.
-Area-averaging does not lower the resolution a raster needs, so ``gap`` and
-``stroke`` must still span at least three output pixels; below that the
-generators raise rather than return an under-resolved optotype.
-
-:py:func:`~pulse2percept.stimuli.psychophysics.grating` and
-:py:func:`~pulse2percept.stimuli.psychophysics.bar` are parametrized in
-degrees of visual angle and physical time rather than in pixels and frames:
+Gratings and bars use the same visual-field coordinates:
 
 .. code-block:: python
 
     import numpy as np
     from pulse2percept.units import Hz, s
 
-    # A static grating, one cycle every two degrees:
-    scene = psychophysics.grating(spatial_freq=0.5 / dva, fov=20 * dva)
+    grating = psychophysics.grating(
+        spatial_freq=0.5 / dva, temporal_freq=2 * Hz,
+        fov=20 * dva, time=np.arange(0, 1000, 20))
 
-    # The same grating drifting rightwards at 2 Hz (i.e. 4 dva/s):
-    scene = psychophysics.grating(spatial_freq=0.5 / dva, temporal_freq=2 * Hz,
-                                  direction=0 * deg, fov=20 * dva,
-                                  time=np.arange(0, 1000, 20))
+    bar = psychophysics.bar(
+        width=2 * dva, speed=20 * dva / s, offset=-10 * dva,
+        fov=20 * dva, time=np.arange(0, 1000, 20))
 
-``spatial_freq`` is in cycles/dva and ``temporal_freq`` in Hz, so the pattern
-drifts along ``direction`` at ``temporal_freq / spatial_freq`` dva/s.
-``shape`` sets the raster resolution only: a finer raster is the same grating
-drawn more finely. ``phase`` is the spatial phase at fixation and ``t = 0``,
-and ``contrast`` is a Michelson contrast around mean gray 0.5.
+``spatial_freq`` is measured in cycles/dva, ``temporal_freq`` in Hz, and bar
+width, position, and speed in dva or dva/s. ``direction`` is measured
+counterclockwise from the positive x axis.
 
-``direction`` alone says which way the pattern moves, so ``temporal_freq``
-and ``speed`` are non-negative; to drift leftwards, use ``direction=180 *
-deg``. Both frequencies are checked against the raster: the grating's
-components along x and y must each stay strictly below the Nyquist frequency
-of the corresponding angular pixel pitch, and consecutive ``time`` samples
-must advance the drift by less than half a temporal cycle. A stimulus that
-would alias is refused rather than silently rasterized as a different one.
+With ``time=None`` the result contains an ``ImageStimulus``. Moving stimuli
+require explicit sample times and contain a ``VideoStimulus``; no frame rate
+is assumed. Gratings that exceed the spatial or temporal Nyquist limit are
+rejected rather than silently aliased.
 
-:py:func:`~pulse2percept.stimuli.psychophysics.bar` draws a single bright bar
-perpendicular to its direction of motion, whose center sits at
-``offset + speed * t`` along the motion axis:
+``GratingStimulus`` and ``BarStimulus`` use the legacy pixel/frame API and are
+deprecated until v0.12.
 
-.. code-block:: python
-
-    scene = psychophysics.bar(width=2 * dva, speed=20 * dva / s,
-                              offset=-10 * dva, edge_width=0.5 * dva,
-                              fov=20 * dva, time=np.arange(0, 1000, 20))
-
-``width`` and ``edge_width`` (the raised-cosine ramp on either side of the
-plateau) are angular sizes, and ``speed`` is in dva/s. ``offset`` is measured
-along the motion axis, so reversing ``direction`` mirrors the whole trajectory
-through fixation. A periodic array of bars is a grating, so ``bar`` draws only
-one.
-
-For both, ``mask`` applies a radial aperture that is isotropic in visual
-angle and centered on fixation: ``'circle'`` is the largest circle that fits
-the field, and ``'gauss'`` puts three standard deviations at that radius.
-
-``time`` behaves the same way for both: ``None`` gives a static
-:py:class:`~pulse2percept.stimuli.ImageStimulus`, and an explicit array of
-sample times in milliseconds gives a
-:py:class:`~pulse2percept.stimuli.VideoStimulus`. There is no default frame
-rate, and temporal phase and bar position are computed from those timestamps,
-not from the frame index: two videos sampled on different grids agree exactly
-wherever they share a timestamp.
-
-A static frame can only show the pattern at ``t = 0``, so a nonzero
-``temporal_freq`` or ``speed`` requires ``time``; leaving it out is an error
-rather than a silently frozen stimulus.
-
-.. note::
-    :py:class:`~pulse2percept.stimuli.GratingStimulus` and
-    :py:class:`~pulse2percept.stimuli.BarStimulus` are the deprecated
-    predecessors of these functions. They work in cycles/pixel, cycles/frame,
-    and pixels/frame on an implicit 50 Hz grid, and always produce a video.
-    They are unchanged in 0.11 and will be removed in 0.12.
 
 Plotting and time operations
 ----------------------------

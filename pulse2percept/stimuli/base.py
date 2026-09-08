@@ -3,13 +3,7 @@
 :py:class:`~pulse2percept.stimuli.Stimulus`,
 :py:class:`~pulse2percept.stimuli.VideoStimulus`
 
-The fundamental stimulus containers: the
-:py:class:`~pulse2percept.stimuli.Stimulus` data container, its
-:py:class:`~pulse2percept.stimuli.ImageStimulus` and
-:py:class:`~pulse2percept.stimuli.VideoStimulus` specializations for pixel
-data, and the :py:class:`~pulse2percept.stimuli.ElectrodeNames` mapping that
-names their electrodes. Other modules in :py:mod:`pulse2percept.stimuli`
-construct particular content on top of these.
+Core stimulus containers and electrode naming.
 """
 import operator as ops
 import os

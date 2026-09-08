@@ -1,13 +1,11 @@
-"""Visual and electrical stimuli, and the containers that hold them.
+"""Visual and electrical stimuli.
 
-Top-level names are reusable types; namespaced snake-case functions construct
-particular content.
+Core stimulus types are available at the top level. Generated psychophysics
+stimuli and bundled sample assets live in the ``psychophysics`` and ``samples``
+namespaces, respectively.
 
 Core
 ----
-
-What a stimulus is: the data container, its pixel-data specializations, and
-the electrode naming they share.
 
 .. autosummary::
     :toctree: _api
@@ -34,7 +32,7 @@ Electrical stimuli
 Encoders
 --------
 
-Transformations of a visual stimulus into electrical stimulation.
+Convert visual stimuli to electrical stimulation.
 
 .. autosummary::
     :toctree: _api
@@ -48,9 +46,7 @@ Transformations of a visual stimulus into electrical stimulation.
 Psychophysics
 -------------
 
-Visual stimuli generated from their parameters, in degrees of visual angle
-and physical time. Reached through
-:py:mod:`pulse2percept.stimuli.psychophysics`, not the top-level namespace.
+Generated visual stimuli in degrees of visual angle and physical time.
 
 .. autosummary::
     :toctree: _api
@@ -63,8 +59,7 @@ and physical time. Reached through
 Samples
 -------
 
-Images and videos bundled with pulse2percept, for demos, docs, and tests.
-Reached through :py:mod:`pulse2percept.stimuli.samples`.
+Bundled images and videos for examples, documentation, and tests.
 
 .. autosummary::
     :toctree: _api
@@ -83,8 +78,7 @@ Reached through :py:mod:`pulse2percept.stimuli.samples`.
 Deprecated in v0.11
 -------------------
 
-Constructor subclasses replaced by the functions above. They are unchanged in
-v0.11 and will be removed in v0.12.
+These compatibility classes will be removed in v0.12.
 
 .. autosummary::
     :toctree: _api

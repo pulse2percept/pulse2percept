@@ -1,29 +1,14 @@
-""":py:func:`~pulse2percept.stimuli.samples.big_buck_bunny`,
-:py:func:`~pulse2percept.stimuli.samples.bvl_cake`,
-:py:func:`~pulse2percept.stimuli.samples.cajal_retina`,
-:py:func:`~pulse2percept.stimuli.samples.logo_bvl`,
-:py:func:`~pulse2percept.stimuli.samples.logo_ucsb`,
-:py:func:`~pulse2percept.stimuli.samples.ucsb_bike`,
-:py:func:`~pulse2percept.stimuli.samples.ucsb_flyover`,
-:py:func:`~pulse2percept.stimuli.samples.ucsb_pedestrians`,
-:py:func:`~pulse2percept.stimuli.samples.ucsb_surf`,
-:py:func:`~pulse2percept.stimuli.samples.zebrafish_retina`
+"""Bundled sample images and videos.
 
-Sample stimuli bundled with pulse2percept, for demos, docs, and tests.
-
-The loaders return ordinary
-:py:class:`~pulse2percept.stimuli.ImageStimulus` or
-:py:class:`~pulse2percept.stimuli.VideoStimulus` objects; they are not
-stimulus types of their own. Access them through the module rather than the
-top-level namespace::
+Loaders return ordinary :py:class:`~pulse2percept.stimuli.ImageStimulus` or
+:py:class:`~pulse2percept.stimuli.VideoStimulus` objects::
 
     from pulse2percept.stimuli import samples
     logo = samples.logo_bvl()
 
 :py:class:`~pulse2percept.stimuli.LogoBVL` and
-:py:class:`~pulse2percept.stimuli.LogoUCSB` are the deprecated predecessors
-of :py:func:`logo_bvl` and :py:func:`logo_ucsb`. They load the same assets
-and are kept unchanged until they are removed in v0.12.0.
+:py:class:`~pulse2percept.stimuli.LogoUCSB` are deprecated in favor of
+:py:func:`logo_bvl` and :py:func:`logo_ucsb` and will be removed in v0.12.
 
 .. versionadded:: 0.11.0
 """
@@ -64,23 +49,14 @@ def big_buck_bunny(resize=None, electrodes=None, metadata=None,
                    as_gray=False):
     """Big Buck Bunny video clip
 
-    Load a 359x640x3 RGB excerpt of *Big Buck Bunny*, 115 frames at 24 fps
-    (4.79 s of video), as a naturalistic video stimulus. ``time`` holds frame
-    onsets, so it ends at 4750 ms, when the last frame comes up.
+    Load a 115-frame, 24 fps excerpt of *Big Buck Bunny* (359x640 RGB).
 
-    The clip is copyright 2008 Blender Foundation
-    (`bigbuckbunny.org <https://www.bigbuckbunny.org>`_) and is distributed
-    under the Creative Commons Attribution 3.0 license, not under
-    pulse2percept's BSD license; ``metadata`` carries the attribution.
-
-    The clip has no intrinsic field of view; wrap it in a
-    :py:class:`~pulse2percept.vision.Scene` to say how much of the visual
-    field it covers.
+    The clip is © 2008 Blender Foundation and licensed CC BY 3.0; attribution
+    is included in ``metadata``. It has no intrinsic field of view.
 
     .. note::
-       At full resolution this is 689,280 electrodes x 115 time points
-       (~317 MB). Pass ``resize`` and/or ``as_gray`` before feeding it to a
-       model.
+        At full resolution the stimulus contains 689,280 electrodes. Use
+        ``resize`` and/or ``as_gray`` before passing it to most models.
 
     .. versionadded:: 0.11.0
 
@@ -141,12 +117,10 @@ _BVL_CAKE_CREDIT = {
 def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
     """Bionic Vision Lab cake photograph
 
-    Load a 495x435x3 RGB photograph of a cake decorated with the Bionic Vision
-    Lab logo, as a naturalistic image stimulus.
+    Load a 495x435 RGB photograph of a Bionic Vision Lab cake.
 
-    The photograph is made available by its copyright holder under the same
-    BSD 3-Clause license as pulse2percept; ``metadata`` carries a short form
-    of that.
+    The photograph is distributed under the BSD 3-Clause license; attribution
+    is included in ``metadata``.
 
     .. versionadded:: 0.11.0
 
@@ -208,13 +182,10 @@ _CAJAL_RETINA_CREDIT = {
 def cajal_retina(resize=None, electrodes=None, metadata=None, as_gray=False):
     """Cajal's drawing of the retina
 
-    Load a 745x500x3 RGB scan of Santiago Ramon y Cajal's drawing of the
-    layered structure of the retina, as a high-contrast line-art image
-    stimulus.
+    Load a 745x500 RGB scan of Cajal's drawing of the retina.
 
-    Wikimedia Commons designates the drawing public domain, so it is not
-    covered by pulse2percept's BSD license; ``metadata`` carries the
-    attribution and ``data/samples/README.rst`` the terms and their limits.
+    Wikimedia Commons designates the drawing public domain. Attribution is
+    included in ``metadata``; see ``data/samples/README.rst`` for provenance.
 
     .. versionadded:: 0.11.0
 
@@ -355,8 +326,7 @@ def ucsb_bike(resize=None, electrodes=None, metadata=None, as_gray=False):
     """UCSB bike path photograph
 
     Load a 600x900x3 RGB photograph of a cyclist, a pedestrian, a crosswalk,
-    and a stop sign on the UCSB campus, as a naturalistic image stimulus of an
-    everyday mobility scene.
+    and a stop sign on the UCSB campus.
 
     The photograph is made available by its copyright holder under the same
     BSD 3-Clause license as pulse2percept; ``metadata`` carries a short form
@@ -425,8 +395,7 @@ def ucsb_flyover(resize=None, electrodes=None, metadata=None, as_gray=False):
     """UCSB aerial flyover clip
 
     Load a 346x640x3 RGB aerial shot sweeping over the UCSB campus and
-    shoreline, 53 frames at 24.32 fps (2.18 s of video). ``time`` holds frame
-    onsets, so it ends at 2138 ms, when the last frame comes up.
+    shoreline, 53 frames at 24.32 fps (2.18 s of video).
 
     The clip is cut from *Towards a Smart Bionic Eye*, produced by the
     National Library of Medicine / National Institutes of Health. As a U.S.
@@ -497,8 +466,7 @@ def ucsb_pedestrians(resize=None, electrodes=None, metadata=None,
     """UCSB pedestrians clip
 
     Load a 346x640x3 RGB shot of pedestrians on the UCSB campus, 45 frames at
-    24.52 fps (1.84 s of video). ``time`` holds frame onsets, so it ends at
-    1794 ms, when the last frame comes up.
+    24.52 fps (1.84 s of video).
 
     The clip is cut from *Towards a Smart Bionic Eye*, produced by the
     National Library of Medicine / National Institutes of Health. As a U.S.

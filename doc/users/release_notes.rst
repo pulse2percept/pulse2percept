@@ -60,92 +60,15 @@ API changes and improvements
 Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
-* ``pulse2percept.stimuli.names``, ``pulse2percept.stimuli.images`` and
-  ``pulse2percept.stimuli.videos`` were merged into
-  :py:mod:`pulse2percept.stimuli.base` and removed. Import
-  :py:class:`~pulse2percept.stimuli.ElectrodeNames`,
-  :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-  :py:class:`~pulse2percept.stimuli.VideoStimulus` from
-  :py:mod:`pulse2percept.stimuli` (or from ``.base``); the three old module
-  paths no longer exist. Their behavior is unchanged, but their
-  ``__module__`` is, so pickles written by v0.10 or earlier no longer load
-  (:pull:`889`).
-
-* New :py:class:`~pulse2percept.stimuli.Encoder` framework supports electrical
-  and non-electrical stimulation. 
-  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` implements photovoltaic
-  encoding, while :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` supports
-  threshold-relative amplitudes such as ``(0 * xTh, 3 * xTh)``. Optical power
-  units (``W``, ``mW``, ``uW``), geometric-angle units (``deg``, ``rad``), and
-  ``pathlib.Path`` input for image and video stimuli were also added
-  (:pull:`855`, :pull:`868`, :pull:`869`, :pull:`880`).
-
-* New :py:mod:`pulse2percept.stimuli.samples` namespace collects the bundled
-  sample stimuli behind lowercase loaders (``samples.logo_bvl()``,
-  ``samples.logo_ucsb()``), which return plain ``ImageStimulus`` objects.
-  ``LogoBVL`` and ``LogoUCSB`` are deprecated until v0.12.0 (:pull:`889`).
-
-* New :py:func:`~pulse2percept.stimuli.samples.big_buck_bunny` is the bundled
-  naturalistic video sample: a 115-frame, 24 fps excerpt of *Big Buck Bunny*,
-  © 2008 Blender Foundation, licensed CC BY 3.0 rather than BSD (:pull:`889`).
-
-* New bundled image samples
-  :py:func:`~pulse2percept.stimuli.samples.bvl_cake` (BSD-licensed photograph
-  of a Bionic Vision Lab cake),
-  :py:func:`~pulse2percept.stimuli.samples.ucsb_bike` (BSD-licensed campus
-  bike-path scene),
-  :py:func:`~pulse2percept.stimuli.samples.ucsb_surf` (a public-domain UCSB
-  coastal frame courtesy of the National Library of Medicine),
-  :py:func:`~pulse2percept.stimuli.samples.cajal_retina` (Cajal's public-domain
-  drawing of the retina), and
-  :py:func:`~pulse2percept.stimuli.samples.zebrafish_retina` (a CC BY 4.0
-  zebrafish retina micrograph from the Wellcome Collection) (:pull:`889`).
-
-* New short video samples
-  :py:func:`~pulse2percept.stimuli.samples.ucsb_flyover` and
-  :py:func:`~pulse2percept.stimuli.samples.ucsb_pedestrians`, cut from the same
-  public-domain National Library of Medicine video as ``samples.ucsb_surf()``
-  (:pull:`889`).
-
-* New :py:mod:`pulse2percept.stimuli.psychophysics` namespace collects
-  procedurally generated stimuli.
-  :py:func:`~pulse2percept.stimuli.psychophysics.landolt_c` draws a Landolt C
-  of a given gap size, eccentricity, and gap orientation, and
-  :py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e` a 5x5 Tumbling E
-  of a given stroke width, eccentricity, and bar orientation; both return a
-  :py:class:`~pulse2percept.vision.Scene`. Both are supersampled and
-  area-averaged onto the requested raster, so the realized geometry does not
-  depend on where the pixel grid falls, and both require their critical
-  feature to span at least three output pixels (:pull:`889`).
-
-* New :py:func:`~pulse2percept.stimuli.psychophysics.grating` and
-  :py:func:`~pulse2percept.stimuli.psychophysics.bar` replace
-  ``GratingStimulus`` and ``BarStimulus``, in cycles/dva, Hz, dva, and dva/s
-  rather than cycles/pixel, cycles/frame, and pixels/frame. They return a
-  :py:class:`~pulse2percept.vision.Scene` whose source is an
-  ``ImageStimulus`` when ``time`` is None and a ``VideoStimulus`` otherwise;
-  ``time`` takes explicit sample times, there is no default frame rate, and a
-  nonzero ``temporal_freq`` or ``speed`` requires it.
-  ``direction`` alone sets the direction of motion, and a grating that would
-  alias in space or time is refused rather than rasterized
-  (:issue:`499`, :pull:`889`).
-
-* ``GratingStimulus`` and ``BarStimulus`` are deprecated until v0.12.0. Their
-  units and temporal semantics are unchanged, so parameter values do not
-  carry over to the new generators; ``px_btw_bars`` has no counterpart, since
-  a periodic array of bars is a grating (:pull:`889`).
-
-* ``SnellenChart`` and its ``snellen.png`` asset were removed outright
-  rather than deprecated. The bundled raster defined no visual angle, so its
-  row labels could not guarantee the acuity they advertised. Use
-  :py:func:`~pulse2percept.stimuli.psychophysics.landolt_c` or
-  :py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e`, whose critical
-  feature is specified in degrees of visual angle (:pull:`889`).
-
-* The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
-  along with their asset files and the README banner derived from them,
-  because their original provenance and licensing could not be verified. Use
-  ``samples.big_buck_bunny()`` instead (:pull:`889`).
+* The stimuli API was streamlined (:pull:`889`): core stimulus classes now live
+  in :py:mod:`pulse2percept.stimuli.base`, bundled images and videos are exposed
+  through :py:mod:`pulse2percept.stimuli.samples`, and visual psychophysics
+  stimuli such as Landolt C, Tumbling E, gratings, and bars are generated through
+  :py:mod:`pulse2percept.stimuli.psychophysics` in physical visual units.
+  ``LogoBVL``, ``LogoUCSB``, ``GratingStimulus``, and ``BarStimulus`` are
+  deprecated until v0.12; ``SnellenChart``, ``BostonTrain``, and ``GirlPool``
+  were removed. The old ``stimuli.names``, ``stimuli.images``, and
+  ``stimuli.videos`` module paths were also removed.
 
 
 Implants
@@ -217,10 +140,14 @@ Models
   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` apply the
   [Granley2021]_ pulse-dependent brightness and size fits without axonal
   streaks. Retinal scoreboard and axon-map models also support the new encoding
-  workflows (:pull:`868`, :pull:`869`, :pull:`886`). * New ``location_noise``
+  workflows (:pull:`868`, :pull:`869`, :pull:`886`).
+
+* New ``location_noise``
   models fixed, electrode-specific uncertainty in phosphene location in
   visual-field coordinates. The old generic ``noise`` parameter was removed
-  (:pull:`881`, :pull:`885`). * ``find_threshold`` was removed; threshold
+  (:pull:`881`, :pull:`885`).
+  
+* ``find_threshold`` was removed; threshold
   estimation belongs at the experiment level rather than in the model API
   (:pull:`862`).
 
