@@ -82,9 +82,8 @@ Stimuli and encoding
 
 * New :py:mod:`pulse2percept.stimuli.samples` namespace collects the bundled
   sample stimuli behind lowercase loaders (``samples.logo_bvl()``,
-  ``samples.logo_ucsb()``, ``samples.snellen_chart()``), which return plain
-  ``ImageStimulus`` objects. ``LogoBVL``, ``LogoUCSB`` and ``SnellenChart``
-  are deprecated until v0.12.0 (:pull:`889`).
+  ``samples.logo_ucsb()``), which return plain ``ImageStimulus`` objects.
+  ``LogoBVL`` and ``LogoUCSB`` are deprecated until v0.12.0 (:pull:`889`).
 
 * New :py:func:`~pulse2percept.stimuli.samples.big_buck_bunny` is the bundled
   naturalistic video sample: a 115-frame, 24 fps excerpt of *Big Buck Bunny*,
@@ -135,6 +134,13 @@ Stimuli and encoding
   units and temporal semantics are unchanged, so parameter values do not
   carry over to the new generators; ``px_btw_bars`` has no counterpart, since
   a periodic array of bars is a grating (:pull:`889`).
+
+* ``SnellenChart`` and its ``snellen.png`` asset were removed outright
+  rather than deprecated. The bundled raster defined no visual angle, so its
+  row labels could not guarantee the acuity they advertised. Use
+  :py:func:`~pulse2percept.stimuli.psychophysics.landolt_c` or
+  :py:func:`~pulse2percept.stimuli.psychophysics.tumbling_e`, whose critical
+  feature is specified in degrees of visual angle (:pull:`889`).
 
 * The bundled ``BostonTrain`` and ``GirlPool`` sample videos were removed,
   along with their asset files and the README banner derived from them,

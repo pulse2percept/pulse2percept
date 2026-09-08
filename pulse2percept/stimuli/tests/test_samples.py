@@ -6,7 +6,7 @@ import pytest
 
 import pulse2percept as p2p
 from pulse2percept.stimuli import (ImageStimulus, LogoBVL, LogoUCSB,
-                                   SnellenChart, VideoStimulus, samples)
+                                   VideoStimulus, samples)
 
 
 def _legacy(cls, **kwargs):
@@ -19,7 +19,6 @@ def _legacy(cls, **kwargs):
 @pytest.mark.parametrize('loader,legacy', [
     (samples.logo_bvl, LogoBVL),
     (samples.logo_ucsb, LogoUCSB),
-    (samples.snellen_chart, SnellenChart),
 ])
 def test_samples_match_legacy(loader, legacy):
     new = loader()
@@ -45,7 +44,6 @@ def test_samples_image_options():
 @pytest.mark.parametrize('legacy,alt', [
     (LogoBVL, 'samples.logo_bvl'),
     (LogoUCSB, 'samples.logo_ucsb'),
-    (SnellenChart, 'samples.snellen_chart'),
 ])
 def test_samples_legacy_classes_deprecated(legacy, alt):
     with pytest.warns(DeprecationWarning) as record:
@@ -53,28 +51,6 @@ def test_samples_legacy_classes_deprecated(legacy, alt):
     msg = str(record[0].message)
     npt.assert_equal(alt in msg, True)
     npt.assert_equal('0.12.0' in msg, True)
-
-
-@pytest.mark.parametrize('show_annotations', (True, False))
-@pytest.mark.parametrize('row', [None] + list(range(1, 12)))
-def test_snellen_chart(row, show_annotations):
-    """Every row/annotation combination matches the deprecated class"""
-    kwargs = dict(row=row, show_annotations=show_annotations)
-    new = samples.snellen_chart(**kwargs)
-    npt.assert_equal(type(new), ImageStimulus)
-    npt.assert_equal(new.img_shape, _legacy(SnellenChart, **kwargs).img_shape)
-    npt.assert_almost_equal(new.data, _legacy(SnellenChart, **kwargs).data)
-    npt.assert_equal(new.time, None)
-    # Annotations are the right-hand columns, so cropping them narrows the
-    # chart without changing its height:
-    npt.assert_equal(new.img_shape[1], 840 if show_annotations else 444)
-
-
-@pytest.mark.parametrize('row', [0, 12, -1, -11, True, 1.5, [1, 3], 'first'])
-def test_snellen_chart_invalid_row(row):
-    with pytest.raises(ValueError) as excinfo:
-        samples.snellen_chart(row=row)
-    npt.assert_equal('"row"' in str(excinfo.value), True)
 
 
 def test_samples_namespace():
@@ -85,15 +61,17 @@ def test_samples_namespace():
         npt.assert_equal(hasattr(p2p.stimuli, name), False)
     # `samples` publishes the loaders only: the deprecated classes stay
     # importable for `pulse2percept.stimuli`, but are not new public API here.
-    for legacy in ('LogoBVL', 'LogoUCSB', 'SnellenChart'):
+    for legacy in ('LogoBVL', 'LogoUCSB'):
         npt.assert_equal(legacy in samples.__all__, False)
         npt.assert_equal(hasattr(p2p.stimuli, legacy), True)
-    # The two video samples were removed along with their assets:
-    for gone in ('BostonTrain', 'GirlPool'):
+    # Removed outright, along with their assets:
+    for gone in ('BostonTrain', 'GirlPool', 'SnellenChart'):
         npt.assert_equal(hasattr(p2p.stimuli, gone), False)
+    for gone in ('boston_train', 'girl_pool', 'snellen_chart'):
+        npt.assert_equal(hasattr(samples, gone), False)
     # The procedural optotypes are generated, not bundled, so they live in
     # `psychophysics` now:
-    for gone in ('boston_train', 'girl_pool', 'landolt_c', 'tumbling_e'):
+    for gone in ('landolt_c', 'tumbling_e'):
         npt.assert_equal(hasattr(samples, gone), False)
 
 

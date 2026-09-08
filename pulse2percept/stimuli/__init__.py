@@ -74,7 +74,6 @@ Reached through :py:mod:`pulse2percept.stimuli.samples`.
     samples.cajal_retina
     samples.logo_bvl
     samples.logo_ucsb
-    samples.snellen_chart
     samples.ucsb_bike
     samples.ucsb_flyover
     samples.ucsb_pedestrians
@@ -94,7 +93,6 @@ v0.11 and will be removed in v0.12.
     GratingStimulus
     LogoBVL
     LogoUCSB
-    SnellenChart
 
 .. seealso::
 
@@ -109,7 +107,7 @@ from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
 from .encoders import (Encoder, StimulusEncoder, AmplitudeEncoder,
                        FrequencyEncoder, PRIMAEncoder)
 from .psychophysics import BarStimulus, GratingStimulus
-from .samples import LogoBVL, LogoUCSB, SnellenChart
+from .samples import LogoBVL, LogoUCSB
 from . import psychophysics, samples
 
 __all__ = [
@@ -132,7 +130,6 @@ __all__ = [
     'psychophysics',
     'PulseTrain',
     'samples',
-    'SnellenChart',
     'Stimulus',
     'StimulusEncoder',
     'VideoStimulus'
