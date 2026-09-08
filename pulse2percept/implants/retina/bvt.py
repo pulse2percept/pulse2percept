@@ -45,7 +45,7 @@ class BVT24(RetinalImplant):
         applies to every electrode, a list of 35 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -61,7 +61,7 @@ class BVT24(RetinalImplant):
     placement = 'suprachoroidal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, z=0, eye='RE', preprocess=False,
+    def __init__(self, z=0, eye='right', preprocess=False,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -98,7 +98,7 @@ class BVT24(RetinalImplant):
             z_arr = np.ones(n_elecs, dtype=float) * z
 
         # the position of the electrodes 1-20, 21a-21m, R1-R2 for left eye
-        if self.eye == 'LE':
+        if self.eye == 'left':
             x_arr = np.negative(x_arr)
 
         # the radius of all the electrodes in the implants
@@ -151,7 +151,7 @@ class BVT44(RetinalImplant):
         applies to every electrode, a list of 35 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -166,7 +166,7 @@ class BVT44(RetinalImplant):
     placement = 'suprachoroidal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, z=0, eye='LE', preprocess=False,
+    def __init__(self, z=0, eye='left', preprocess=False,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -197,7 +197,7 @@ class BVT44(RetinalImplant):
             z_arr = np.ones(n_elecs, dtype=float) * z
 
         # the position of the electrodes 1-20, 21a-21m, R1-R2 for left eye
-        if self.eye == 'LE':
+        if self.eye == 'left':
             x_arr = np.negative(x_arr)
 
         for x, y, z, r, name in zip(x_arr, y_arr, z_arr, r_arr, names):

@@ -56,13 +56,13 @@ def test_ArgusI(ztype):
             argus["unlikely name for an electrode"]
 
     # Right-eye implant:
-    argus_re = retina.ArgusI(eye='RE')
+    argus_re = retina.ArgusI(eye='right')
     npt.assert_equal(argus_re['D1'].x > argus_re['A1'].x, True)
     npt.assert_almost_equal(argus_re['D1'].y, argus_re['A1'].y)
 
     # need to adjust for reflection about y-axis
     # Left-eye implant:
-    argus_le = retina.ArgusI(eye='LE')
+    argus_le = retina.ArgusI(eye='left')
     npt.assert_equal(argus_le['A1'].x > argus_le['D4'].x, True)
     npt.assert_almost_equal(argus_le['D1'].y, argus_le['A1'].y)
 
@@ -127,12 +127,12 @@ def test_ArgusII(ztype):
         argus["unlikely name for an electrode"]
 
     # Right-eye implant:
-    argus_re = retina.ArgusII(eye='RE')
+    argus_re = retina.ArgusII(eye='right')
     npt.assert_equal(argus_re['A10'].x > argus_re['A1'].x, True)
     npt.assert_almost_equal(argus_re['A10'].y, argus_re['A1'].y)
 
     # Left-eye implant:
-    argus_le = retina.ArgusII(eye='LE')
+    argus_le = retina.ArgusII(eye='left')
     npt.assert_equal(argus_le['A1'].x > argus_le['A10'].x, True)
     npt.assert_almost_equal(argus_le['A10'].y, argus_le['A1'].y)
 

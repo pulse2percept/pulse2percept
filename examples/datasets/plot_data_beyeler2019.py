@@ -99,7 +99,7 @@ plt.imshow(data.loc[0, 'image'], cmap='gray')
 
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.units import um
-argus = ArgusII(eye='RE')
+argus = ArgusII(eye='right')
 implant_position = (-1331, -850) * um
 implant_rotation = -28.4
 

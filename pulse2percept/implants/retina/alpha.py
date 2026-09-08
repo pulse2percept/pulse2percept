@@ -37,7 +37,7 @@ class AlphaIMS(RetinalImplant):
         applies to every electrode, a list of 1500 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -52,7 +52,7 @@ class AlphaIMS(RetinalImplant):
 
     >>> from pulse2percept.implants.retina import AlphaIMS
     >>> AlphaIMS()  # doctest: +NORMALIZE_WHITESPACE
-    AlphaIMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
+    AlphaIMS(electrode_array=ElectrodeGrid, eye='right', preprocess=True,
              safe_mode=False, shape=(39, 39))
 
     Get access to the third electrode in the top row (by name or by row/column
@@ -72,7 +72,7 @@ class AlphaIMS(RetinalImplant):
 
     placement = 'subretinal'
 
-    def __init__(self, z=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, eye='right', preprocess=True,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -97,7 +97,7 @@ class AlphaIMS(RetinalImplant):
             electrode_type=SquareElectrode, side_length=elec_width)
 
         # Unfortunately, in the left eye the labeling of columns is reversed...
-        if self.eye == 'LE':
+        if self.eye == 'left':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = self.electrode_array.electrode_names
@@ -167,7 +167,7 @@ class AlphaAMS(RetinalImplant):
         applies to every electrode, a list of 1600 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -182,7 +182,7 @@ class AlphaAMS(RetinalImplant):
 
     >>> from pulse2percept.implants.retina import AlphaAMS
     >>> AlphaAMS()  # doctest: +NORMALIZE_WHITESPACE
-    AlphaAMS(electrode_array=ElectrodeGrid, eye='RE', preprocess=True,
+    AlphaAMS(electrode_array=ElectrodeGrid, eye='right', preprocess=True,
              safe_mode=False, shape=(40, 40))
 
     Get access to the third electrode in the top row (by name or by row/column
@@ -202,7 +202,7 @@ class AlphaAMS(RetinalImplant):
 
     placement = 'subretinal'
 
-    def __init__(self, z=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, eye='right', preprocess=True,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -217,7 +217,7 @@ class AlphaAMS(RetinalImplant):
 
         # Set left/right eye:
         # Unfortunately, in the left eye the labeling of columns is reversed...
-        if self.eye == 'LE':
+        if self.eye == 'left':
             # FIXME: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = self.electrode_array.electrode_names

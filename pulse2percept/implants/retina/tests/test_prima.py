@@ -267,7 +267,7 @@ def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
     # Still frozen, and still take the rest of the old signature:
     npt.assert_equal(hasattr(old, '__dict__'), False)
     with pytest.deprecated_call():
-        old_cls(-100, 'LE', False, False)
+        old_cls(-100, 'left', False, False)
 
 
 @pytest.mark.parametrize('old_cls, new_cls',
@@ -285,7 +285,7 @@ def test_PRIMA_PRIMA75_are_deprecated(old_cls, new_cls):
     # Still frozen, and still take the whole old signature:
     npt.assert_equal(hasattr(old, '__dict__'), False)
     with pytest.deprecated_call():
-        old_cls(-100, 'LE', False, False)
+        old_cls(-100, 'left', False, False)
 
 
 def test_implant_metadata():

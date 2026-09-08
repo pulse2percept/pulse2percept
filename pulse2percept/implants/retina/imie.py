@@ -30,7 +30,7 @@ class IMIE(RetinalImplant):
         applies to every electrode, a list of 35 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
-    eye : {'RE', 'LE'}, optional
+    eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
         Either True/False to indicate whether to execute the implant's default
@@ -46,7 +46,7 @@ class IMIE(RetinalImplant):
     placement = 'epiretinal'
     _default_scene_input_frame = 'head'
 
-    def __init__(self, z=0, eye='RE', preprocess=True,
+    def __init__(self, z=0, eye='right', preprocess=True,
                  safe_mode=False):
         self.eye = eye
         self.preprocess = preprocess
@@ -60,7 +60,7 @@ class IMIE(RetinalImplant):
             electrode_type=DiskElectrode, radius=elec_radius)
         
         # Unfortunately, in the left eye the labeling of columns is reversed...
-        if self.eye == 'LE':
+        if self.eye == 'left':
             # TODO: Would be better to have more flexibility in the naming
             # convention. This is a quick-and-dirty fix:
             names = self.electrode_array.electrode_names

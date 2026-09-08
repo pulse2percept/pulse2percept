@@ -557,7 +557,7 @@ class AxonMapSpatial(RetinalSpatial):
                 f"laterality, which {type(self.implant).__name__} does not. "
                 f"Wrap a custom array in "
                 f"pulse2percept.implants.retina.RetinalImplant, e.g. "
-                f"RetinalImplant(ElectrodeGrid(...), eye='RE').")
+                f"RetinalImplant(ElectrodeGrid(...), eye='right').")
         return self.implant.eye
 
     @property
@@ -590,7 +590,7 @@ class AxonMapSpatial(RetinalSpatial):
         return {**super().get_param_units(), 'rho': um, 'lam': um,
                 'loc_od': dva, 'meridian_blend': dva, 'axons_range': deg}
 
-    def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
+    def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='right'):
         """Generate one nerve fiber bundle using [Jansonius2009]_.
 
         Parameters
@@ -601,7 +601,7 @@ class AxonMapSpatial(RetinalSpatial):
             Superior-retina curvature parameter (Eq. 5 in [Jansonius2009]_).
         beta_inf : float, optional
             Inferior-retina curvature parameter (Eq. 6 in [Jansonius2009]_).
-        eye : {'RE', 'LE'}, optional
+        eye : {'right', 'left'}, optional
             Eye for which to generate the bundle.
 
         Returns
@@ -615,10 +615,10 @@ class AxonMapSpatial(RetinalSpatial):
         [Jansonius2009]_ did not include bundles with ``phi0`` in [-60, 60]
         degrees."""
         loc_od = self.loc_od
-        if eye.upper() not in ['LE', 'RE']:
-            e_s = f"Unknown eye string '{eye}': Choose from 'LE', 'RE'."
+        if eye.lower() not in ['left', 'right']:
+            e_s = f"Unknown eye string '{eye}': Choose from 'left', 'right'."
             raise ValueError(e_s)
-        if eye.upper() == 'LE':
+        if eye.lower() == 'left':
             # Jansonius is parameterized for a right eye; mirror left eyes.
             loc_od = (-loc_od[0], loc_od[1])
         if np.abs(phi0) > 180.0:
@@ -653,7 +653,7 @@ class AxonMapSpatial(RetinalSpatial):
             idx = xprime < -loc_od[0]
         ymodel[idx] = yprime[idx] + loc_od[1] * (xmodel[idx] / loc_od[0]) ** 2
         # Mirror back to the left eye:
-        if eye.upper() == 'LE':
+        if eye.lower() == 'left':
             xmodel *= -1
         return np.vstack((xmodel, ymodel)).astype(np.float32).T
 
@@ -954,7 +954,7 @@ class AxonMapSpatial(RetinalSpatial):
 
     def _correct_loc_od(self):
         """Place the optic disc on the nasal side of the implanted eye."""
-        sign = -1 if self.eye == 'LE' else 1
+        sign = -1 if self.eye == 'left' else 1
         self.loc_od = (sign * np.abs(self.loc_od[0]), self.loc_od[1])
 
     def _build(self):
@@ -1116,7 +1116,7 @@ class AxonMapSpatial(RetinalSpatial):
             od_xy = self.visual_field_map.dva_to_ret(*self.loc_od)
             od_w = 1770
             od_h = 1880
-            if self.eye == 'RE':
+            if self.eye == 'right':
                 labels = ['superior', 'inferior', 'temporal', 'nasal']
             else:
                 labels = ['superior', 'inferior', 'nasal', 'temporal']

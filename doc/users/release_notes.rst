@@ -86,6 +86,11 @@ moved to ``implants.retina`` and ``implants.cortex`` respectively
 arrays used with :py:class:`~pulse2percept.models.retina.AxonMapModel`
 therefore need to be wrapped in a ``RetinalImplant``.
 
+* Anatomical side codes were replaced by canonical words, with no aliases:
+  ``eye='LE'`` / ``'RE'`` become ``eye='left'`` / ``'right'``, and
+  ``hemisphere='LH'`` / ``'RH'`` become ``hemisphere='left'`` / ``'right'``.
+  Input is case-insensitive; the stored value is lowercase.
+
 * ``ProsthesisSystem`` was renamed :py:class:`~pulse2percept.implants.Implant`;
   the old name remains deprecated until v0.12.0. ``RectangleImplant`` was
   removed in favor of :py:class:`~pulse2percept.implants.GridImplant`

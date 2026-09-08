@@ -5,7 +5,7 @@ from pulse2percept.implants.base import Implant
 from pulse2percept.implants.retina.bvt import BVT24, BVT44
 
 
-@pytest.mark.parametrize('eye', ('LE', 'RE'))
+@pytest.mark.parametrize('eye', ('left', 'right'))
 def test_BVT24(eye):
     # Create a BVT24 and make sure location is correct
     bva = BVT24(eye=eye)
@@ -29,12 +29,12 @@ def test_BVT24(eye):
     npt.assert_almost_equal(x_center, 0)
 
     # Right-eye implant:
-    bva_re = BVT24(eye='RE')
+    bva_re = BVT24(eye='right')
     npt.assert_equal(bva_re['C1'].x > bva_re['C6'].x, True)
     npt.assert_equal(bva_re['C1'].y, bva_re['C1'].y)
 
     # Left-eye implant:
-    bva_le = BVT24(eye='LE')
+    bva_le = BVT24(eye='left')
     npt.assert_equal(bva_le['C1'].x < bva_le['C6'].x, True)
     npt.assert_equal(bva_le['C1'].y, bva_le['C1'].y)
 
@@ -53,7 +53,7 @@ def test_BVT24_stim():
     npt.assert_almost_equal(stim.data, 1)
 
 
-@pytest.mark.parametrize('eye', ('LE', 'RE'))
+@pytest.mark.parametrize('eye', ('left', 'right'))
 def test_BVT44(eye):
     # Create a BVT44 and make sure location is correct
     bva = BVT44(eye=eye)
@@ -73,12 +73,12 @@ def test_BVT44(eye):
     npt.assert_almost_equal((bva['E4'].y + bva['C4'].y) / 2.0, 0)
 
     # Right-eye implant:
-    bva_re = BVT44(eye='RE')
+    bva_re = BVT44(eye='right')
     npt.assert_equal(bva_re['A6'].x > bva_re['A1'].x, True)
     npt.assert_equal(bva_re['A6'].y, bva_re['A1'].y)
 
     # Left-eye implant:
-    bva_le = BVT44(eye='LE')
+    bva_le = BVT44(eye='left')
     npt.assert_equal(bva_le['A6'].x < bva_le['A1'].x, True)
     npt.assert_equal(bva_le['A6'].y, bva_le['A1'].y)
 

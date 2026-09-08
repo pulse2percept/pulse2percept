@@ -28,7 +28,7 @@ class Cortivis(CorticalImplant):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-    hemisphere : 'LH', 'RH' or None, optional
+    hemisphere : 'left', 'right' or None, optional
         Which hemisphere the device is implanted in. Metadata: it does not
         move the array, which the model's ``implant_position`` places.
 
