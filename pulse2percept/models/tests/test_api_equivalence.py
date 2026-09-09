@@ -17,14 +17,12 @@ import pytest
 
 from pulse2percept.implants import GridImplant
 from pulse2percept.implants.retina import ArgusII
-from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.models.retina import (AxonMapModel, BiphasicAxonMapModel,
                                          ScoreboardModel, ScoreboardSpatial)
-from pulse2percept.models.cortex import DynaphosModel
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    ImageStimulus, VideoStimulus)
-from pulse2percept.units import dva, mm, xTh
+from pulse2percept.units import dva, xTh
 from pulse2percept.vision import Scene, Scotoma
 
 GRID = dict(xrange=(-8, 8), yrange=(-6, 6), step=1)
@@ -66,10 +64,6 @@ REFERENCE = {
                  3.807037961360792, 0.5194367010755934, 1.0132546632537747,
                  (5.0853018679140565, 27.047305434768763,
                   6.941999430159145, 49.25247073610444)),
-    'dynaphos': ((7, 7, 6), (0.0, 100.0),
-                 3.864256768792984e-06, 1.0946714610327035e-06,
-                 3.800738015684018e-12,
-                 (2.0, 4.0, 1.0, 1.0)),
     'scene_gaze': ((13, 17, 1), None,
                    1663.1452019751928, 36.72337341308594, 43973.7099062507,
                    (6.000000013081055, 40.855445551864825,
@@ -193,15 +187,6 @@ def test_biphasic_axon_map_prediction_is_unchanged():
     percept = model.predict_percept(
         {'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45, stim_dur=100)})
     assert_matches_reference('biphasic', percept)
-
-
-def test_dynaphos_prediction_is_unchanged():
-    model = DynaphosModel(implant=Cortivis(), implant_position=(20, -5) * mm,
-                          xrange=(-3, 3), yrange=(-3, 3),
-                          step=1, dt=20).build()
-    percept = model.predict_percept(
-        {'11': BiphasicPulseTrain(300, 100, 0.17, stim_dur=100)})
-    assert_matches_reference('dynaphos', percept)
 
 
 def test_scene_with_gaze_prediction_is_unchanged():

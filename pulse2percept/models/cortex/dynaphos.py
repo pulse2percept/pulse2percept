@@ -50,7 +50,11 @@ class DynaphosModel(BaseModel):
     Implements the Dynaphos model. Percepts from each
     electrode are Gaussian blobs, with the size dictated by a magnification factor
     M determined by the electrode's position in the visual cortex.
-    
+
+    The blob's Gaussian standard deviation is a quarter of the phosphene
+    diameter P (dva), following the reference implementation's
+    ``radius_to_sigma = 0.5``.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -439,7 +443,9 @@ class DynaphosModel(BaseModel):
             D = 2 * np.sqrt(amp / K) # mm
             P = (D / M) # dva
             # calculate sigma for gaussian (only update sigma if amplitude > 0)
-            sigma = np.where(amp > 0, np.clip(P / 2, 1e-22, None), sigma) 
+            # P is a diameter, and the reference implementation uses
+            # radius_to_sigma = 0.5, i.e. sigma = 0.5 * P/2 = P/4:
+            sigma = np.where(amp > 0, np.clip(P / 4, 1e-22, None), sigma)
             # get activation (Ieff converted from uA to A)
             A = A + ((-A / tau_act_s) + Ieff * _A_PER_UA) * dt_s
             # get brightness
