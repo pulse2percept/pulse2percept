@@ -211,7 +211,7 @@ Bug fixes
 * :py:class:`~pulse2percept.models.cortex.DynaphosModel` phosphenes are half as
   wide: the Gaussian standard deviation is a quarter of the phosphene diameter,
   matching the reference implementation's ``radius_to_sigma = 0.5``
-  (:pull:`873`).
+  (:pull:`894`).
 
 
 v0.10.0 Encoders (2026-08-23)

@@ -18,7 +18,6 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    Stimulus)
 from pulse2percept.units import (DimensionMismatchError, Quantity, dva,
                                  mA, mm, ms, s, uA, um)
-from pulse2percept.utils import cart2pol
 
 def test_DynaphosModel():
     model = DynaphosModel(implant=Cortivis(), implant_position=(20, -5) * mm,
@@ -83,16 +82,15 @@ def test_predict_spatial_unsplit_map():
 def test_phosphene_size_matches_the_model_equations():
     # sigma = P/4, where P = D/M is the phosphene diameter (dva) and
     # D = 2*sqrt(amp/K) the diameter of activated cortex (mm).
-    x_el, amp = -61385.0, 200.0
-    implant = Implant(ElectrodeArray([DiskElectrode(x_el, 0, 0, 100)]))
+    ecc, amp = 8.0, 200.0
+    implant = Implant(ElectrodeArray([DiskElectrode(0, 0, 0, 100)]))
     # Window is +-5 sigma wide at a step of ~sigma/6, so the second moment
     # recovers sigma to well under 1%:
-    model = DynaphosModel(implant=implant, xrange=(7.25, 8.75),
+    model = DynaphosModel(implant=implant, implant_position=(ecc, 0) * dva,
+                          xrange=(ecc - 0.75, ecc + 0.75),
                           yrange=(-0.75, 0.75), step=0.025, dt=20).build()
     vfm = model.visual_field_map
-    x0, y0 = vfm.to_dva()['v1'](np.array([x_el]), np.array([0.0]))
-    _, r = cart2pol(np.asarray(x0), np.asarray(y0))
-    M = vfm.k * (vfm.b - vfm.a) / ((r + vfm.a) * (r + vfm.b))
+    M = vfm.k * (vfm.b - vfm.a) / ((ecc + vfm.a) * (ecc + vfm.b))
     expected = 2 * np.sqrt(amp / model.excitability) / M / 4
 
     source = {0: BiphasicPulseTrain(freq=300, amp=amp, phase_dur=0.17,
@@ -105,7 +103,7 @@ def test_phosphene_size_matches_the_model_equations():
     mean_y = (frame * yg).sum() / total
     sigma_x = np.sqrt((frame * (xg - mean_x) ** 2).sum() / total)
     sigma_y = np.sqrt((frame * (yg - mean_y) ** 2).sum() / total)
-    npt.assert_allclose([sigma_x, sigma_y], [expected[0]] * 2, rtol=0.01)
+    npt.assert_allclose([sigma_x, sigma_y], [expected] * 2, rtol=0.01)
 
 
 def test_temporal_predict():
