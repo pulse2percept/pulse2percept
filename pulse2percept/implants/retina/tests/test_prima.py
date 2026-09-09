@@ -787,6 +787,33 @@ def test_PRIMAPivotal_safe_mode_accepts_the_full_device():
         implant.prepare_stim(samples.logo_bvl())
 
 
+def test_PRIMAPivotal_safe_mode_checks_the_wavelength():
+    """The envelope is validated on the schedule, not the encoder class.
+
+    A PhotovoltaicEncoder can now put pivotal settings on a different
+    wavelength; photovoltaic response is wavelength dependent, so that is a
+    different operating point, not the PRIMA projector.
+    """
+    # Binary mode keeps ON durations on the projector's own 0.7 ms grid, so
+    # wavelength is the only thing left to fault.
+    off_color = PhotovoltaicEncoder(wavelength=915, irradiance=3.5, freq=30,
+                                    pulse_dur=9.8, grayscale=False)
+    with pytest.raises(ValueError) as excinfo:
+        PRIMAPivotal(safe_mode=True,
+                     encoder=off_color).prepare_stim(samples.logo_bvl())
+    npt.assert_equal('880 nm, not 915 nm' in str(excinfo.value), True)
+    # The same settings at 880 nm pass, so only wavelength was at fault:
+    on_color = PhotovoltaicEncoder(wavelength=880, irradiance=3.5, freq=30,
+                                   pulse_dur=9.8, grayscale=False)
+    npt.assert_equal(
+        PRIMAPivotal(safe_mode=True, encoder=on_color).prepare_stim(
+            samples.logo_bvl()).unit, mW / mm ** 2)
+    # Without safe_mode the wavelength check is skipped:
+    npt.assert_equal(
+        PRIMAPivotal(encoder=off_color).prepare_stim(
+            samples.logo_bvl()).unit, mW / mm ** 2)
+
+
 @pytest.mark.parametrize('encoder, msg', [
     (LooseEncoder(irradiance=5.0), 'exceeds the 3.5 mW/mm^2'),
     (LooseEncoder(pulse_dur=14.0), 'longest documented ON duration'),

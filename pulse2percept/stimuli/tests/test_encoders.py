@@ -1410,10 +1410,17 @@ def test_PhotovoltaicEncoder():
     {'threshold': -0.1}, {'threshold': 1.5},
 ])
 def test_PhotovoltaicEncoder_rejects(kwargs):
-    settings = {'irradiance': 4, 'freq': 40, 'pulse_dur': 4}
+    settings = {'irradiance': 4, 'freq': 40, 'pulse_dur': 4,
+                'wavelength': 915}
     settings.update(kwargs)
     with pytest.raises(ValueError):
         PhotovoltaicEncoder(**settings)
+
+
+def test_PhotovoltaicEncoder_needs_a_wavelength():
+    """There is no generic default; each device names its own."""
+    with pytest.raises(TypeError):
+        PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4)
 
 
 @pytest.mark.parametrize('pulse_dur, freq', [(4, 40), (10, 2)])
@@ -1422,7 +1429,7 @@ def test_PhotovoltaicEncoder_is_not_bound_to_the_PRIMA_grid(pulse_dur, freq):
     with pytest.raises(ValueError):
         PRIMAEncoder(pulse_dur=pulse_dur, freq=freq)
     encoder = PhotovoltaicEncoder(irradiance=4, freq=freq,
-                                  pulse_dur=pulse_dur)
+                                  pulse_dur=pulse_dur, wavelength=915)
     stim = encoder.encode(ImageStimulus(np.ones((16, 16))),
                           implant=PRIMAPivotal())
     npt.assert_almost_equal(stim.pulse_dur.max(), pulse_dur)
@@ -1433,7 +1440,8 @@ def test_PhotovoltaicEncoder_grayscale_is_continuous():
     """Gray levels scale ON duration linearly, without quantization."""
     implant = PRIMAPivotal()
     ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
-    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4)
+    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
+                                  wavelength=915)
     stim = encoder.encode(ImageStimulus(ramp), implant=implant)
     gray = implant.reshape_stim(ImageStimulus(ramp)).data
     npt.assert_almost_equal(stim.pulse_dur[:, :1], gray * 4, decimal=6)
@@ -1445,7 +1453,8 @@ def test_PhotovoltaicEncoder_grayscale_is_continuous():
 
     # Binary mode lights a pixel for the full duration or not at all.
     binary = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
-                                 grayscale=False, threshold=0.5)
+                                 wavelength=915, grayscale=False,
+                                 threshold=0.5)
     dur = binary.encode(ImageStimulus(ramp), implant=implant).pulse_dur
     npt.assert_almost_equal(np.unique(np.round(dur, 6)), np.array([0.0, 4.0]))
 
@@ -1453,7 +1462,8 @@ def test_PhotovoltaicEncoder_grayscale_is_continuous():
 def test_PhotovoltaicEncoder_spatial_view():
     implant = PRIMAPivotal()
     ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
-    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4)
+    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
+                                  wavelength=915)
     view = encoder.encode(ImageStimulus(ramp),
                           implant=implant)._spatial_view()
     npt.assert_equal(view.unit, dimensionless)
@@ -1464,7 +1474,8 @@ def test_PhotovoltaicEncoder_spatial_view():
     half = encoder.encode(ImageStimulus(np.full((8, 8), 0.5)),
                           implant=implant)._spatial_view()
     npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
-    dim = PhotovoltaicEncoder(irradiance=2, freq=40, pulse_dur=4).encode(
+    dim = PhotovoltaicEncoder(irradiance=2, freq=40, pulse_dur=4,
+                              wavelength=915).encode(
         ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
     npt.assert_almost_equal(dim.data.max(), 1, decimal=6)
 
@@ -1492,6 +1503,7 @@ def test_PRIMAEncoder():
     npt.assert_equal(encoder.grayscale, True)
     npt.assert_almost_equal(encoder.threshold, 0.5)
     npt.assert_almost_equal(encoder.period, 1000 / 30)
+    npt.assert_almost_equal(encoder.wavelength, 880)
     npt.assert_equal(encoder.n_levels, 14)
     npt.assert_equal(isinstance(encoder, Encoder), True)
     # PRIMAEncoder is not an electrical StimulusEncoder.

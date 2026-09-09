@@ -1387,8 +1387,9 @@ class PhotovoltaicEncoder(Encoder):
         Pulse repetition rate (Hz).
     pulse_dur : float or Quantity
         ON duration (ms) of a fully lit pixel. Must fit into ``1000 / freq``.
-    wavelength : float or Quantity, optional
-        Wavelength (nm) of the illumination.
+    wavelength : float or Quantity
+        Wavelength (nm) of the illumination. Photovoltaic pixel response is
+        wavelength dependent, so there is no generic default.
     grayscale : bool, optional
         If True (default), map gray levels to ON duration. If False, use
         binary off/on encoding.
@@ -1423,7 +1424,7 @@ class PhotovoltaicEncoder(Encoder):
     __slots__ = ('irradiance', 'freq', 'pulse_dur', 'wavelength', 'grayscale',
                  'threshold')
 
-    def __init__(self, irradiance, freq, pulse_dur, wavelength=880 * nm,
+    def __init__(self, irradiance, freq, pulse_dur, wavelength,
                  grayscale=True, threshold=0.5):
         irradiance = as_value(irradiance, _IRRADIANCE, 'irradiance')
         freq = as_value(freq, Hz, 'freq')
@@ -1644,6 +1645,9 @@ class PRIMAEncoder(PhotovoltaicEncoder):
     #: Longest documented ON duration (ms), i.e. 14 steps
     max_pulse_dur = 9.8
 
+    #: Wavelength (nm) the projector illuminates at
+    projector_wavelength = 880.0
+
     #: Peak irradiance (mW/mm^2) of the pivotal-trial projector
     max_irradiance = 3.5
 
@@ -1664,7 +1668,8 @@ class PRIMAEncoder(PhotovoltaicEncoder):
                  pulse_dur=9.8 * ms, grayscale=True, threshold=0.5):
         # Wavelength is a property of the projector, not a setting.
         super().__init__(irradiance=irradiance, freq=freq,
-                         pulse_dur=pulse_dur, wavelength=880 * nm,
+                         pulse_dur=pulse_dur,
+                         wavelength=self.projector_wavelength * nm,
                          grayscale=grayscale, threshold=threshold)
 
     def _pprint_params(self):

@@ -377,11 +377,11 @@ class PRIMAPivotal(_PhotovoltaicRetinalImplant):
         preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
-        Enforces the documented projector operating envelope: irradiance
-        <= 3.5 mW/mm^2, ON durations on the 0.7 ms grid and <= 9.8 ms,
-        duty cycle <= 0.294, and frame rate <= 30 Hz. All 378 pixels may be
-        illuminated simultaneously. This is not a biological safety limit or a
-        demonstrated hardware maximum.
+        Enforces the documented projector operating envelope: 880 nm
+        illumination, irradiance <= 3.5 mW/mm^2, ON durations on the 0.7 ms
+        grid and <= 9.8 ms, duty cycle <= 0.294, and frame rate <= 30 Hz. All
+        378 pixels may be illuminated simultaneously. This is not a biological
+        safety limit or a demonstrated hardware maximum.
 
         .. versionchanged:: 0.11.0
             Checks the optical envelope instead of electrical charge balance.
@@ -472,6 +472,13 @@ class PRIMAPivotal(_PhotovoltaicRetinalImplant):
                 "Safety check: stimulus no longer carries a projector "
                 "schedule, so its duty cycle cannot be verified. Build it "
                 "with a PRIMAEncoder, or set safe_mode=False.")
+        # The projector is an 880 nm system; photovoltaic pixel response is
+        # wavelength dependent, so another wavelength is another device.
+        if abs(schedule.wavelength - PRIMAEncoder.projector_wavelength) > 1e-9:
+            raise ValueError(
+                f"Safety check: the projector illuminates at "
+                f"{PRIMAEncoder.projector_wavelength:g} nm, not "
+                f"{schedule.wavelength:g} nm.")
         irradiance, freq = schedule.irradiance, schedule.freq
         dur = np.asarray(schedule.pulse_dur, dtype=np.float64)
         step = PRIMAEncoder.pulse_step

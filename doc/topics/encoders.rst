@@ -158,7 +158,8 @@ An implant's :py:class:`~pulse2percept.implants.Raster` determines which
 electrodes may pulse together; see :ref:`topics-rasters`. PRIMA uses no raster;
 all 378 pixels may be illuminated at once. With ``safe_mode=True``,
 :py:class:`~pulse2percept.implants.retina.PRIMAPivotal` checks the documented projector
-settings (3.5 mW/mm^2, 30 Hz, 0.7--9.8 ms ON durations, and duty cycle <= 0.294).
+settings (880 nm, 3.5 mW/mm^2, 30 Hz, 0.7--9.8 ms ON durations, and duty cycle
+<= 0.294).
 This is not a biological safety check or a demonstrated hardware maximum. That
 envelope is specific to the pivotal projector: research arrays with no
 published envelope of their own raise on ``safe_mode=True`` rather than borrow

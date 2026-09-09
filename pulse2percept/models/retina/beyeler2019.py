@@ -89,7 +89,11 @@ class ScoreboardSpatial(RetinalSpatial):
     controls the spatial spread of activation. Larger values of
     :math:`\rho` produce broader phosphenes.
 
-    For current-driven implants, :math:`a_e` is current amplitude.
+    For current-driven implants, :math:`a_e` is current amplitude. For
+    photovoltaic implants,
+    :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` instead provides
+    normalized optical drive. Scoreboard visualizes the stimulation pattern;
+    it does not model photovoltaic conversion or the retinal response.
 
     .. warning::
 
@@ -250,7 +254,12 @@ class ScoreboardModel(Model):
         controls the spatial spread of activation. Larger values of
         :math:`\rho` produce broader phosphenes.
 
-        For current-driven implants, :math:`a_e` is current amplitude.
+        For current-driven implants, :math:`a_e` is current amplitude. For
+        photovoltaic implants,
+        :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` instead
+        provides normalized optical drive. Scoreboard visualizes the
+        stimulation pattern; it does not model photovoltaic conversion or the
+        retinal response.
 
     .. warning::
 
