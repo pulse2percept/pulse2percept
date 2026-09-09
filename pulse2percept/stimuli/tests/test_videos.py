@@ -799,3 +799,24 @@ def test_VideoStimulus_accepts_a_path(tmp_path):
                      from_str.metadata['source'])
     # A Path is a filename, so the file-only arguments still apply:
     npt.assert_equal(VideoStimulus(fname, stop_time=3000).vid_shape[-1], 3)
+
+
+@pytest.mark.parametrize('resize', [None, (5, 9)])
+def test_VideoStimulus_as_gray_from_uint8_rgb(resize):
+    """Grayscale ingest narrows to float32 before mixing the channels"""
+    shape = (10, 18, 3, 4)
+    rgb = np.random.randint(0, 256, shape, dtype=np.uint8)
+    stim = VideoStimulus(rgb, as_gray=True, resize=resize,
+                         metadata={'fps': 25})
+    rows, cols = resize if resize else shape[:2]
+    npt.assert_equal(stim.vid_shape, (rows, cols, shape[-1]))
+    npt.assert_equal(stim.data.dtype, np.float32)
+    npt.assert_equal(stim.shape, (rows * cols, shape[-1]))
+    npt.assert_almost_equal(stim.time, np.arange(shape[-1]) * 1000.0 / 25)
+    # `rgb2gray` wants the channels last; the frames come along for the ride:
+    expected = rgb2gray(rgb.transpose((0, 1, 3, 2)) / 255.0)
+    if resize is not None:
+        expected = vid_resize(expected, (rows, cols, shape[-1]))
+    npt.assert_almost_equal(stim.data.reshape(stim.vid_shape), expected,
+                            decimal=6)
+    npt.assert_equal(stim.data.min() >= 0 and stim.data.max() <= 1, True)
