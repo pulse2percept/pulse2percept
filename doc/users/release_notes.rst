@@ -208,6 +208,11 @@ Bug fixes
   `n_gray` and preserves the full stimulus in percept metadata
   (:pull:`869`).
 
+* :py:class:`~pulse2percept.models.cortex.DynaphosModel` phosphenes are half as
+  wide: the Gaussian standard deviation is a quarter of the phosphene diameter,
+  matching the reference implementation's ``radius_to_sigma = 0.5``
+  (:pull:`873`).
+
 
 v0.10.0 Encoders (2026-08-23)
 =============================
