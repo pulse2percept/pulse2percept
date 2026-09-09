@@ -74,3 +74,45 @@ def test_Watson2014DisplaceMap():
     npt.assert_almost_equal(radii[np.argmax(all_displace)], 2.1212121)
     # Smoke test
     trafo.dva_to_ret(0, 0)
+
+
+def test_Watson2014DisplaceMap_meridian_by_eye():
+    """`eye` decides which displacement curve a signed x coordinate gets"""
+    ecc = 2.0  # near the peak, where the two curves differ most
+    re, le = Watson2014DisplaceMap(), Watson2014DisplaceMap(eye='LE')
+    plain = Watson2014Map()
+    # What the two published curves predict on the horizontal meridian:
+    nasal, temporal = [
+        plain.dva_to_ret(ecc + re.watson_displacement(ecc, meridian=m), 0)[0]
+        for m in ('nasal', 'temporal')]
+    # Guard the test itself: the curves must be far enough apart (um) to tell
+    # which one was used.
+    npt.assert_equal(np.abs(nasal - temporal) > 50, True)
+
+    npt.assert_almost_equal(re.dva_to_ret(ecc, 0)[0], nasal, decimal=6)
+    npt.assert_almost_equal(re.dva_to_ret(-ecc, 0)[0], -temporal, decimal=6)
+    npt.assert_almost_equal(le.dva_to_ret(ecc, 0)[0], temporal, decimal=6)
+    npt.assert_almost_equal(le.dva_to_ret(-ecc, 0)[0], -nasal, decimal=6)
+
+
+def test_Watson2014DisplaceMap_mirror_invariant():
+    """Corresponding locations in opposite eyes mirror horizontally"""
+    # (0, 0) is excluded: displacement pushes it out along theta=0, so the
+    # mirrored point is not its own reflection there.
+    x = np.array([-12.0, -8.0, -3.0, 0.0, 3.0, 8.0, 12.0])
+    y = np.array([-6.0, -2.0, 1.0, 4.0, 2.0, -5.0, 7.0])
+    x_re, y_re = Watson2014DisplaceMap(eye='RE').dva_to_ret(x, y)
+    x_le, y_le = Watson2014DisplaceMap(eye='LE').dva_to_ret(-x, y)
+    npt.assert_allclose(x_le, -x_re, rtol=1e-12, atol=1e-9)
+    npt.assert_allclose(y_le, y_re, rtol=1e-12, atol=1e-9)
+
+
+def test_Watson2014DisplaceMap_vertical_meridian():
+    """x == 0 counts as nasal in both eyes"""
+    y = np.array([-6.0, -1.0, 0.0, 1.0, 6.0])
+    x = np.zeros_like(y)
+    npt.assert_allclose(Watson2014DisplaceMap(eye='LE').dva_to_ret(x, y),
+                        Watson2014DisplaceMap(eye='RE').dva_to_ret(x, y),
+                        rtol=1e-12)
+    npt.assert_almost_equal(Watson2014DisplaceMap().dva_to_ret(0, 0),
+                            Watson2014DisplaceMap(eye='LE').dva_to_ret(0, 0))

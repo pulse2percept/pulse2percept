@@ -100,6 +100,23 @@ class Watson2014DisplaceMap(Watson2014Map):
     receptive field. The displacement function is described in Eq. 5 of
     [Watson2014]_.
 
+    [Watson2014]_ fits separate displacement functions for nasal and temporal
+    retina, so this map is numerically eye-dependent: ``eye`` decides which
+    anatomical half-retina a signed x coordinate belongs to. For a right eye,
+    negative x is temporal and positive x is nasal; for a left eye this is
+    mirrored.
+
+    Parameters
+    ----------
+    eye : {'RE', 'LE'}, optional
+        Whether the map describes a right eye ('RE') or a left eye ('LE').
+
+    .. versionchanged:: 0.11.0
+
+        Honors ``eye`` when assigning the nasal and temporal displacement
+        functions. Previously the right-eye assignment was applied to both
+        eyes.
+
     """
 
     def watson_displacement(self, r, meridian='temporal'):
@@ -140,6 +157,10 @@ class Watson2014DisplaceMap(Watson2014Map):
     def dva_to_ret(self, xdva, ydva):
         """Converts dva to retinal coords
 
+        Off the horizontal meridian, the horizontal coordinate alone decides
+        which displacement function applies; superior and inferior retina are
+        not interpolated.
+
         Parameters
         ----------
         xdva, ydva : double or array-like
@@ -152,8 +173,11 @@ class Watson2014DisplaceMap(Watson2014Map):
         """
         # Convert x, y (dva) into polar coordinates:
         theta, rho_dva = cart2pol(xdva, ydva)
-        # Add RGC displacement:
-        meridian = np.where(xdva < 0, 'temporal', 'nasal')
+        # Which half-retina a signed x lands in depends on the eye. The
+        # vertical meridian (x == 0) counts as nasal in both eyes:
+        xd = np.asarray(xdva)
+        is_temporal = xd < 0 if self.eye == 'RE' else xd > 0
+        meridian = np.where(is_temporal, 'temporal', 'nasal')
         rho_dva += self.watson_displacement(rho_dva, meridian=meridian)
         # Convert back to x, y (dva):
         x, y = pol2cart(theta, rho_dva)

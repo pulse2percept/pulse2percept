@@ -173,6 +173,14 @@ Topography
       p2p.topography.retina.Watson2014Map()
       p2p.topography.cortex.Polimeni2006Map()
 
+* :py:class:`~pulse2percept.topography.retina.RetinalMap` now carries ``eye``
+  (``'RE'`` or ``'LE'``, default ``'RE'``), and
+  :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap` uses it to
+  assign Watson's nasal and temporal RGC displacement functions to the correct
+  half-retina; previously the right-eye assignment was applied to both eyes.
+  Laterality-sensitive maps must be constructed for the intended eye, e.g.
+  ``Watson2014DisplaceMap(eye='LE')`` (:pull:`895`).
+
 
 Scene and plotting
 ~~~~~~~~~~~~~~~~~~
