@@ -804,19 +804,26 @@ def test_VideoStimulus_accepts_a_path(tmp_path):
 @pytest.mark.parametrize('resize', [None, (5, 9)])
 def test_VideoStimulus_as_gray_from_uint8_rgb(resize):
     """Grayscale ingest narrows to float32 before mixing the channels"""
-    shape = (10, 18, 3, 4)
-    rgb = np.random.randint(0, 256, shape, dtype=np.uint8)
+    n_rows, n_cols, n_frames = 10, 18, 4
+    # Each channel ramps along a different axis and each frame sits at its own
+    # blue level, so a swapped channel or a shuffled frame changes the gray:
+    red = np.linspace(0, 255, n_cols)[np.newaxis, :, np.newaxis]
+    green = np.linspace(255, 0, n_rows)[:, np.newaxis, np.newaxis]
+    blue = np.linspace(40, 200, n_frames)[np.newaxis, np.newaxis, :]
+    shape = (n_rows, n_cols, n_frames)
+    rgb = np.stack([np.broadcast_to(c, shape) for c in (red, green, blue)],
+                   axis=2).round().astype(np.uint8)
     stim = VideoStimulus(rgb, as_gray=True, resize=resize,
                          metadata={'fps': 25})
-    rows, cols = resize if resize else shape[:2]
-    npt.assert_equal(stim.vid_shape, (rows, cols, shape[-1]))
+    rows, cols = resize if resize else (n_rows, n_cols)
+    npt.assert_equal(stim.vid_shape, (rows, cols, n_frames))
     npt.assert_equal(stim.data.dtype, np.float32)
-    npt.assert_equal(stim.shape, (rows * cols, shape[-1]))
-    npt.assert_almost_equal(stim.time, np.arange(shape[-1]) * 1000.0 / 25)
+    npt.assert_equal(stim.shape, (rows * cols, n_frames))
+    npt.assert_almost_equal(stim.time, np.arange(n_frames) * 1000.0 / 25)
     # `rgb2gray` wants the channels last; the frames come along for the ride:
     expected = rgb2gray(rgb.transpose((0, 1, 3, 2)) / 255.0)
     if resize is not None:
-        expected = vid_resize(expected, (rows, cols, shape[-1]))
+        expected = vid_resize(expected, (rows, cols, n_frames))
     npt.assert_almost_equal(stim.data.reshape(stim.vid_shape), expected,
                             decimal=6)
     npt.assert_equal(stim.data.min() >= 0 and stim.data.max() <= 1, True)
