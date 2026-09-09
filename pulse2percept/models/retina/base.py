@@ -78,21 +78,13 @@ class RetinalSpatial(SpatialModel):
         # Laterality the grid was last built for; see `is_built`.
         self._built_map_eye = None
 
-    @property
-    def eye(self):
-        """Eye being modeled (``None`` for a generic implant)
-
-        .. versionadded:: 0.11.0
-        """
-        return getattr(self.implant, 'eye', None)
-
     def _validate_map_eye(self):
         """Require an eye-dependent visual_field_map to match the implant"""
         map_eye = getattr(self.visual_field_map, 'eye', None)
         if map_eye is None:
             return
-        eye = self.eye
-        if eye is None:
+        implant_eye = getattr(self.implant, 'eye', None)
+        if implant_eye is None:
             raise TypeError(
                 f"{type(self.visual_field_map).__name__} depends on retinal "
                 f"laterality, but {type(self.implant).__name__} does not "
@@ -100,12 +92,12 @@ class RetinalSpatial(SpatialModel):
                 f"pulse2percept.implants.retina.RetinalImplant, e.g. "
                 f"RetinalImplant(ElectrodeGrid(...), eye='{map_eye}'), or "
                 f"use an eye-independent visual_field_map.")
-        if eye != map_eye:
+        if implant_eye != map_eye:
             raise ValueError(
-                f"The implant sits in the {eye} eye, but "
+                f"The implant sits in the {implant_eye} eye, but "
                 f"{type(self.visual_field_map).__name__}(eye='{map_eye}') "
-                f"maps the {map_eye} eye. Set the map's 'eye' to '{eye}' or "
-                f"implant the {map_eye} eye.")
+                f"maps the {map_eye} eye. Use a map with "
+                f"eye='{implant_eye}', or an implant with eye='{map_eye}'.")
 
     @property
     def is_built(self):
@@ -114,7 +106,9 @@ class RetinalSpatial(SpatialModel):
         map_eye = getattr(self.visual_field_map, 'eye', None)
         if map_eye is None:
             return built
-        return built and self._built_map_eye == map_eye and self.eye == map_eye
+        implant_eye = getattr(self.implant, 'eye', None)
+        return (built and self._built_map_eye == map_eye
+                and implant_eye == map_eye)
 
     def build(self, **build_params):
         """Build the model

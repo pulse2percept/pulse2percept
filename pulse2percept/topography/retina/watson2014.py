@@ -103,7 +103,8 @@ class Watson2014DisplaceMap(Watson2014Map):
     [Watson2014]_ fits Eq. 5 separately for the nasal and temporal meridian.
     Specify ``eye`` as either ``'left'`` or ``'right'`` for the proper
     assignment (one is the horizontal mirror of the other).
-    Points on the vertical meridian (``x == 0``) use the nasal fit.
+    Points on the vertical meridian (``x == 0``) use the nasal fit, which is a
+    backward-compatible tie-break rather than an anatomical claim.
 
     Parameters
     ----------

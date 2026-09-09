@@ -19,20 +19,6 @@ def model(implant, **params):
                              verbose=False, **params)
 
 
-def test_RetinalSpatial_eye():
-    imp = implant(eye='right')
-    spatial = model(imp)
-    npt.assert_equal(spatial.eye, 'right')
-    npt.assert_equal(spatial.eye, spatial.implant.eye)
-    # Derived, not stored:
-    imp.eye = 'left'
-    npt.assert_equal(spatial.eye, 'left')
-    with pytest.raises(AttributeError):
-        spatial.eye = 'right'
-    # A generic implant does not say which eye it sits in:
-    npt.assert_equal(model(implant(generic=True)).eye, None)
-
-
 @pytest.mark.parametrize('eye', ('left', 'right'))
 def test_RetinalSpatial_matching_map(eye):
     spatial = model(implant(eye=eye),
@@ -82,4 +68,3 @@ def test_RetinalSpatial_eye_mutation_after_build():
     # Rebuilding the now-matching left/left configuration works:
     spatial.build()
     npt.assert_equal(spatial.is_built, True)
-    npt.assert_equal(spatial.eye, 'left')
