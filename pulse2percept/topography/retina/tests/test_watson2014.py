@@ -74,3 +74,55 @@ def test_Watson2014DisplaceMap():
     npt.assert_almost_equal(radii[np.argmax(all_displace)], 2.1212121)
     # Smoke test
     trafo.dva_to_ret(0, 0)
+
+
+def test_Watson2014DisplaceMap_eye():
+    npt.assert_equal(Watson2014DisplaceMap().eye, 'right')
+    npt.assert_equal(Watson2014DisplaceMap(eye='LEFT').eye, 'left')
+    npt.assert_equal(Watson2014DisplaceMap(eye='Right').eye, 'right')
+    with pytest.raises(TypeError):
+        Watson2014DisplaceMap(eye=0)
+    with pytest.raises(ValueError):
+        Watson2014DisplaceMap(eye='both')
+    # `eye` is a regular parameter:
+    npt.assert_equal('right' in repr(Watson2014DisplaceMap()), True)
+    npt.assert_equal(Watson2014DisplaceMap() == Watson2014DisplaceMap(), True)
+    npt.assert_equal(Watson2014DisplaceMap() ==
+                     Watson2014DisplaceMap(eye='left'), False)
+
+
+@pytest.mark.parametrize('eye', ('right', 'left'))
+def test_Watson2014DisplaceMap_meridian(eye):
+    trafo = Watson2014DisplaceMap(eye=eye)
+    # An eccentricity where the two fits differ clearly:
+    rho = 2.0
+    expect = {m: rho + trafo.watson_displacement(rho, meridian=m)
+              for m in ('nasal', 'temporal')}
+    npt.assert_equal(np.isclose(expect['nasal'], expect['temporal']), False)
+    # Nasal is on the right of a right eye and on the left of a left eye:
+    nasal_sign = -1 if eye == 'left' else 1
+    for sign, meridian in [(nasal_sign, 'nasal'), (-nasal_sign, 'temporal')]:
+        ref = Watson2014Map().dva_to_ret(sign * expect[meridian], 0)
+        npt.assert_almost_equal(trafo.dva_to_ret(sign * rho, 0), ref)
+
+
+def test_Watson2014DisplaceMap_mirror():
+    right = Watson2014DisplaceMap(eye='right')
+    left = Watson2014DisplaceMap(eye='left')
+    x = np.array([-8.0, -2.5, -0.5, 0.5, 2.5, 8.0])
+    y = np.array([-6.0, 3.0, -1.5, 0.0, 4.5, -2.0])
+    x_right, y_right = right.dva_to_ret(x, y)
+    x_left, y_left = left.dva_to_ret(-x, y)
+    npt.assert_almost_equal(x_left, -x_right)
+    npt.assert_almost_equal(y_left, y_right)
+
+
+@pytest.mark.parametrize('eye', ('right', 'left'))
+def test_Watson2014DisplaceMap_vertical_meridian(eye):
+    # Legacy tie-break: x == 0 takes the nasal fit for either eye.
+    trafo = Watson2014DisplaceMap(eye=eye)
+    for ydva in [-5.0, -1.0, 1.0, 5.0]:
+        rho = np.abs(ydva) + trafo.watson_displacement(np.abs(ydva),
+                                                       meridian='nasal')
+        ref = Watson2014Map().dva_to_ret(0, np.sign(ydva) * rho)
+        npt.assert_almost_equal(trafo.dva_to_ret(0, ydva), ref)

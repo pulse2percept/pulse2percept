@@ -127,7 +127,9 @@ Models
   retina-specific behavior formerly embedded in the generic
   :py:class:`~pulse2percept.models.SpatialModel`, including the default retinal
   map, physical retinal extents, and scene registration. ``SpatialModel`` is now
-  anatomy-neutral.
+  anatomy-neutral. Retinal models derive a read-only ``eye`` from their implant
+  and reject an eye-dependent ``visual_field_map`` that disagrees with it
+  (:pull:`895`).
 
 * Model construction and placement were simplified. Models bind their implant,
   expose supported constructor parameters explicitly, build on demand, and take
@@ -172,6 +174,12 @@ Topography
       # v0.11
       p2p.topography.retina.Watson2014Map()
       p2p.topography.cortex.Polimeni2006Map()
+
+* :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap` now takes
+  ``eye='left'`` or ``eye='right'`` (default ``'right'``, which reproduces
+  previous behavior). Watson's nasal and temporal ganglion-cell displacement
+  fits are now applied to the correct half-retina in a left eye, which was
+  previously mirrored (:pull:`895`).
 
 
 Scene and plotting

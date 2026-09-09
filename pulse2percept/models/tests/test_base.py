@@ -2063,6 +2063,8 @@ def test_location_noise_resets_on_a_new_implant():
 
 def test_location_noise_needs_an_invertible_map():
     model = _one_electrode_model(location_noise=1.0, seed=7)
+    # Watson displacement is eye-dependent, so it needs a lateralized implant:
+    model.implant = _implant_at([(560, 0)], cls=RetinalImplant)
     model.visual_field_map = Watson2014DisplaceMap()
     model.build()
     with pytest.raises(NotImplementedError):

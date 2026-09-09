@@ -75,15 +75,68 @@ class RetinalSpatial(SpatialModel):
         # extent, which is resolved through the map as it is assigned. See
         # `_visual_field_map_first`.
         super().__init__(implant, **_visual_field_map_first(params))
+        # Laterality the grid was last built for; see `is_built`.
+        self._built_map_eye = None
+
+    @property
+    def eye(self):
+        """Eye being modeled (``None`` for a generic implant)
+
+        .. versionadded:: 0.11.0
+        """
+        return getattr(self.implant, 'eye', None)
+
+    def _validate_map_eye(self):
+        """Require an eye-dependent visual_field_map to match the implant"""
+        map_eye = getattr(self.visual_field_map, 'eye', None)
+        if map_eye is None:
+            return
+        eye = self.eye
+        if eye is None:
+            raise TypeError(
+                f"{type(self.visual_field_map).__name__} depends on retinal "
+                f"laterality, but {type(self.implant).__name__} does not "
+                f"carry an eye. Wrap a custom array in "
+                f"pulse2percept.implants.retina.RetinalImplant, e.g. "
+                f"RetinalImplant(ElectrodeGrid(...), eye='{map_eye}'), or "
+                f"use an eye-independent visual_field_map.")
+        if eye != map_eye:
+            raise ValueError(
+                f"The implant sits in the {eye} eye, but "
+                f"{type(self.visual_field_map).__name__}(eye='{map_eye}') "
+                f"maps the {map_eye} eye. Set the map's 'eye' to '{eye}' or "
+                f"implant the {map_eye} eye.")
+
+    @property
+    def is_built(self):
+        """Return whether the grid matches the current retinal laterality"""
+        built = super().is_built
+        map_eye = getattr(self.visual_field_map, 'eye', None)
+        if map_eye is None:
+            return built
+        return built and self._built_map_eye == map_eye and self.eye == map_eye
+
+    def build(self, **build_params):
+        """Build the model
+
+        Parameters
+        ----------
+        **build_params : keyword arguments
+            Declared model parameters to set before building.
+
+        Returns
+        -------
+        self
+        """
+        self.set_params(**build_params)
+        # Before the grid is laid out, so a mismatch cannot be baked into it:
+        self._validate_map_eye()
+        super().build()
+        self._built_map_eye = getattr(self.visual_field_map, 'eye', None)
+        return self
 
     def set_params(self, **params):
-        """Set the parameters of this model
-
-        ``visual_field_map`` is applied before the other parameters, so that a
-        retinal extent given for ``xrange``/``yrange`` in the same call is
-        resolved through the map the caller asked for. See
-        ``_visual_field_map_first``.
-        """
+        """Set the parameters of this model"""
         super().set_params(**_visual_field_map_first(params))
 
     def get_default_params(self):
@@ -92,10 +145,7 @@ class RetinalSpatial(SpatialModel):
                 'visual_field_map': Curcio1990Map()}
 
     def _scene_sampling_points(self):
-        """Return placed electrode positions in dva, through retinotopy.
-
-        See :py:meth:`~pulse2percept.models.SpatialModel`.
-        """
+        """Return placed electrode positions in dva, through retinotopy."""
         visual_field_map = self.visual_field_map
         if not isinstance(visual_field_map, RetinalMap):
             raise ValueError(
