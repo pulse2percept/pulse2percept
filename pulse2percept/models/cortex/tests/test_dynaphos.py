@@ -117,14 +117,14 @@ def test_temporal_predict():
 
     # Test that default models give expected values
     orion = DynaphosModel(implant=Orion(), implant_position=(15, 0) * mm,
-                          step=0.1, dt=20).build()
+                          step=0.01, dt=20).build()
     percept = orion.predict_percept(
         {'55': BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)})
-    npt.assert_equal(np.sum(percept.data > 0.0122), 147)
-    npt.assert_equal(np.sum(percept.data > 0.0375), 96)
-    npt.assert_equal(np.sum(percept.data > 0.3305), 49)
-    npt.assert_equal(np.sum(percept.data > 0.8451), 39)
-    npt.assert_equal(np.sum(percept.data > 0.8883), 9)
+    npt.assert_equal(np.sum(percept.data > 0.0122), 4026)
+    npt.assert_equal(np.sum(percept.data > 0.0375), 2806)
+    npt.assert_equal(np.sum(percept.data > 0.3305), 907)
+    npt.assert_equal(np.sum(percept.data > 0.8451), 172)
+    npt.assert_equal(np.sum(percept.data > 0.8883), 90)
 
 def test_deepcopy_Dynaphos():
     original = DynaphosModel(implant=Cortivis())
@@ -391,7 +391,7 @@ def test_location_noise():
                                             phase_dur=0.17)}
     kwargs = dict(implant_position=(20, -5) * mm,
                   xrange=(-4, 4), yrange=(-4, 4),
-                  step=0.05)
+                  step=0.02)
     plain = DynaphosModel(implant=implant, **kwargs).build()
     expected = plain.predict_percept(source).data
 
@@ -424,7 +424,7 @@ def test_location_noise_crosses_meridian():
     # Choose an electrode/offset pair that crosses the vertical meridian.
     implant = Implant(ElectrodeArray([DiskElectrode(-25000, 2000, 0, 100)]))
     source = {0: BiphasicPulseTrain(freq=300, amp=200, phase_dur=0.17)}
-    kwargs = dict(xrange=(-4, 4), yrange=(-4, 4), step=0.05)
+    kwargs = dict(xrange=(-4, 4), yrange=(-4, 4), step=0.02)
     plain = DynaphosModel(implant=implant, **kwargs).build()
     canonical = plain.predict_percept(source)
     npt.assert_array_less(0, _brightest_dva(canonical, plain.grid)[0])

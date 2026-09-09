@@ -439,7 +439,7 @@ class DynaphosModel(BaseModel):
             D = 2 * np.sqrt(amp / K) # mm
             P = (D / M) # dva
             # calculate sigma for gaussian (only update sigma if amplitude > 0)
-            sigma = np.where(amp > 0, np.clip(P / 2, 1e-22, None), sigma) 
+            sigma = np.where(amp > 0, np.clip(P / 4, 1e-22, None), sigma) 
             # get activation (Ieff converted from uA to A)
             A = A + ((-A / tau_act_s) + Ieff * _A_PER_UA) * dt_s
             # get brightness
