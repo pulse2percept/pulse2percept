@@ -382,6 +382,8 @@ class Scene(PrettyPrint):
         n_rows, n_cols = self._frame_shape
         self._fov = _resolve_fov(fov, n_rows, n_cols)
         self._cached_frames = None
+        # `_pixel_centers` keyed by pad:
+        self._pixel_centers_cache = {}
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
@@ -586,14 +588,16 @@ class Scene(PrettyPrint):
         return frames
 
     def _loss_at(self, gaze_xy, pad=0):
-        """Geometric loss at each scene pixel, in [0, 1]"""
+        """Geometric loss at each scene pixel, in [0, 1], as float32"""
         n_rows, n_cols = self._frame_shape
         if self.scotoma is None:
-            return np.zeros((n_rows + 2 * pad, n_cols + 2 * pad))
+            return np.zeros((n_rows + 2 * pad, n_cols + 2 * pad),
+                            dtype=np.float32)
         # scene = visual field + gaze:
         gx, gy = gaze_xy
         x_scene, y_scene = self._pixel_centers(pad=pad)
-        return self.scotoma(x_scene - gx, y_scene - gy)
+        return np.asarray(self.scotoma(x_scene - gx, y_scene - gy),
+                          dtype=np.float32)
 
     def _rendered_loss_at(self, gaze_xy):
         """The loss map as drawn: `_loss_at` softened by `scotoma_blend`"""
@@ -677,10 +681,15 @@ class Scene(PrettyPrint):
 
     def _pixel_centers(self, pad=0):
         """Scene coordinates of every pixel center, as ``(x, y)`` meshes"""
-        n_rows, n_cols = self._frame_shape
-        cols, rows = np.meshgrid(np.arange(-pad, n_cols + pad),
-                                 np.arange(-pad, n_rows + pad))
-        return self.pixel_to_dva(cols, rows)
+        if pad not in self._pixel_centers_cache:
+            n_rows, n_cols = self._frame_shape
+            cols, rows = np.meshgrid(np.arange(-pad, n_cols + pad),
+                                     np.arange(-pad, n_rows + pad))
+            centers = self.pixel_to_dva(cols, rows)
+            for mesh in centers:
+                mesh.flags.writeable = False
+            self._pixel_centers_cache[pad] = centers
+        return self._pixel_centers_cache[pad]
 
     def _compose(self, prosthetic, vmax, vmin=0, gaze=None):
         """Native vision with a prosthetic percept painted into the loss"""
@@ -691,7 +700,9 @@ class Scene(PrettyPrint):
                 f"Use a numeric 'scotoma_fill' for prosthetic composition.")
         _check_prosthetic(prosthetic)
         vmin, vmax = _check_range(vmin, vmax)
-        scene_rgb = self._rgb_frames()
+        # Not `_rgb_frames`: a grayscale source is broadcast to RGB below
+        # rather than copied into a second full-size array.
+        scene_frames = self._frames()
         pframes, out_time, out_unit = self._prosthetic_frames(prosthetic)
         n_out = pframes.shape[-1]
         gaze = _gaze_points(gaze, n_out)
@@ -703,7 +714,10 @@ class Scene(PrettyPrint):
                 _percept_sampler(prosthetic, pframes), gaze[0])
             loss = self._rendered_loss_at(gaze[0])
 
-        out = np.empty((n_rows, n_cols, 3, n_out), dtype=np.float32)
+        n_scene = scene_frames.shape[-1]
+        # Frame-major while composing: writing a whole frame at a time is
+        # contiguous here:
+        out = np.empty((n_out, n_rows, n_cols, 3), dtype=np.float32)
         for f in range(n_out):
             if static:
                 frame = brightness[..., f]
@@ -712,11 +726,15 @@ class Scene(PrettyPrint):
                 frame = self._percept_on_grid(sample, gaze[f])[..., 0]
                 loss = self._rendered_loss_at(gaze[f])
             phosphene = np.clip((frame - vmin) / (vmax - vmin), 0, 1)
-            native = scene_rgb[..., 0 if scene_rgb.shape[-1] == 1 else f]
+            native = scene_frames[..., 0 if n_scene == 1 else f]
+            if native.shape[2] == 1:
+                # Grayscale = three identical copies
+                native = np.broadcast_to(native, (n_rows, n_cols, 3))
             fill = self._fill_rgb(native, loss)
             lost = np.maximum(fill, phosphene[..., np.newaxis])
             alpha = loss[..., np.newaxis]
-            out[..., f] = (1 - alpha) * native + alpha * lost
+            out[f] = (1 - alpha) * native + alpha * lost
+        out = np.ascontiguousarray(np.moveaxis(out, 0, -1))
         return Percept(self._apply_aperture(out, gaze=gaze),
                        space=self._grid(), time=out_time, time_unit=out_unit)
 

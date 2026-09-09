@@ -2377,12 +2377,11 @@ class VideoStimulus(Stimulus):
         if vid.ndim < 3 or vid.ndim > 4:
             raise ValueError(f"Videos must have 3 or 4 dimensions, not "
                              f"{vid.ndim}.")
-        # Convert to grayscale if necessary:
+        # Narrow to float32 before `rgb2gray`:
+        vid = img_as_float32(vid)
         if as_gray:
             if vid.ndim == 4:
                 vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
-        # Convert to float array in [0, 1] and call the Stimulus constructor:
-        vid = img_as_float32(vid)
         # Resize if necessary:
         if resize is not None:
             height, width = resize

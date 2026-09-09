@@ -181,7 +181,7 @@ Scene and plotting
   configurable backgrounds, inpainting, eccentricity rings, and static or
   animated visualization. Inpainting is intentionally unavailable when
   composing prosthetic vision because its interaction with prosthetic
-  brightness is not modeled (:pull:`871`, :pull:`884`).
+  brightness is not modeled (:pull:`871`, :pull:`884`, :pull:`893`).
 
 * ``Scene(aperture='circle')`` renders an eye-centered disc of radius
   ``min(fov) / 2`` instead of the full rectangle (:pull:`890`).

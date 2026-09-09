@@ -885,3 +885,155 @@ def test_the_aperture_reaches_the_frames_the_player_shows():
     npt.assert_almost_equal(ani._frame_data[0, 0, :, 0], 0.0)
     npt.assert_almost_equal(ani._frame_data[4, 4, :, 1], 0.8, decimal=6)
     plt.close('all')
+
+
+def gray_video_scene(n_frames=3, **kwargs):
+    """A ramp scene dimmed by a different factor in every frame"""
+    ramp = np.tile(np.linspace(0, 1, SCENE_PX), (SCENE_PX, 1))
+    frames = np.stack([ramp * w for w in np.linspace(0.4, 1.0, n_frames)],
+                      axis=-1)
+    kwargs.setdefault('scotoma_blend', 0)
+    return Scene(VideoStimulus(frames, time=np.arange(n_frames) * 10.0),
+                 fov=(SCENE_PX, SCENE_PX), **kwargs)
+
+
+def rgb_video_scene(n_frames=3, **kwargs):
+    """Three channels that never agree, so a channel mix-up shows up"""
+    rgb = np.stack([np.tile(np.linspace(0, 1, SCENE_PX), (SCENE_PX, 1)),
+                    np.tile(np.linspace(1, 0, SCENE_PX), (SCENE_PX, 1)),
+                    np.full((SCENE_PX, SCENE_PX), 0.5)], axis=-1)
+    frames = np.stack([rgb * w for w in np.linspace(0.4, 1.0, n_frames)],
+                      axis=-1)
+    kwargs.setdefault('scotoma_blend', 0)
+    return Scene(VideoStimulus(frames, time=np.arange(n_frames) * 10.0),
+                 fov=(SCENE_PX, SCENE_PX), **kwargs)
+
+
+def ramped_percept(scene, n_frames):
+    """A percept on the scene's own grid, brighter with every frame"""
+    frame = np.tile(np.linspace(0, 1, SCENE_PX), (SCENE_PX, 1))
+    data = np.stack([frame * w for w in np.linspace(0.3, 1.0, n_frames)],
+                    axis=-1)
+    return Percept(data, space=scene._grid(),
+                   time=np.arange(n_frames) * 10.0)
+
+
+def frame_scene(scene, f, **kwargs):
+    """A still scene of frame ``f``, built exactly like the video one"""
+    frames = scene.source.data.reshape(scene.source.vid_shape)
+    return Scene(ImageStimulus(frames[..., f]), fov=scene.fov,
+                 scotoma=scene.scotoma, scotoma_fill=scene.scotoma_fill,
+                 scotoma_blend=scene.scotoma_blend,
+                 aperture=scene.aperture, **kwargs)
+
+
+def test_composing_a_grayscale_video_keeps_the_canonical_rgb_layout():
+    """A gray source is composed as RGB without ever differing by channel"""
+    n = 3
+    scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    seen = scene._compose(ramped_percept(scene, n), vmax=1).data
+    npt.assert_equal(seen.shape, (SCENE_PX, SCENE_PX, 3, n))
+    npt.assert_equal(np.asarray(seen).dtype, np.float32)
+    npt.assert_array_equal(seen[:, :, 0, :], seen[:, :, 1, :])
+    npt.assert_array_equal(seen[:, :, 0, :], seen[:, :, 2, :])
+    # Where nothing is lost, native vision passes through untouched:
+    source = scene.source.data.reshape(scene.source.vid_shape)
+    x, y = scene._pixel_centers()
+    intact = scene.scotoma(x, y) == 0
+    for f in range(n):
+        npt.assert_array_equal(seen[intact, 0, f], source[intact, f])
+
+
+def test_composing_an_rgb_video_keeps_every_channel_where_it_was():
+    n = 3
+    scene = rgb_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.2)
+    seen = scene._compose(ramped_percept(scene, n), vmax=1).data
+    npt.assert_equal(seen.shape, (SCENE_PX, SCENE_PX, 3, n))
+    source = scene.source.data.reshape(scene.source.vid_shape)
+    x, y = scene._pixel_centers()
+    intact = scene.scotoma(x, y) == 0
+    npt.assert_array_equal(seen[intact], source[intact])
+    # Inside complete loss the fill and the phosphene are all that is left,
+    # whichever is brighter (dim phosphene in frame 0, bright one in frame -1):
+    for f in (0, n - 1):
+        phosphene = float(ramped_percept(scene, n).data[HALF, HALF, f])
+        npt.assert_almost_equal(seen[HALF, HALF, :, f],
+                                [max(0.2, phosphene)] * 3, decimal=6)
+
+
+@pytest.mark.parametrize('blend', [0, 2])
+def test_composition_follows_a_gaze_that_moves_between_frames(blend):
+    """Frame f of a moving-gaze composition is frame f composed on its own"""
+    n = 3
+    scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.0,
+                             scotoma_blend=blend)
+    gaze = np.array([[-7.0, 2.0], [0.0, 0.0], [8.0, -3.0]])
+    percept = ramped_percept(scene, n)
+    moving = scene._compose(percept, vmax=1, gaze=gaze).data
+    for f in range(n):
+        still = frame_scene(scene, f)
+        alone = still._compose(
+            Percept(percept.data[..., f:f + 1], space=still._grid()),
+            vmax=1, gaze=gaze[f]).data
+        npt.assert_almost_equal(moving[..., f], alone[..., 0], decimal=6)
+    # Reusing the pixel raster must not freeze the geometry:
+    static = scene._compose(percept, vmax=1, gaze=gaze[1]).data
+    npt.assert_equal(np.allclose(moving, static), False)
+
+
+def test_a_static_gaze_composes_every_frame_of_a_video():
+    n = 4
+    scene = gray_video_scene(n, scotoma=Scotoma.circle(5), scotoma_fill=0.1,
+                             scotoma_blend=2)
+    percept = ramped_percept(scene, n)
+    seen = scene._compose(percept, vmax=1, gaze=(4.0, -1.0)).data
+    npt.assert_equal(seen.shape, (SCENE_PX, SCENE_PX, 3, n))
+    for f in range(n):
+        still = frame_scene(scene, f)
+        alone = still._compose(
+            Percept(percept.data[..., f:f + 1], space=still._grid()),
+            vmax=1, gaze=(4.0, -1.0)).data
+        npt.assert_almost_equal(seen[..., f], alone[..., 0], decimal=6)
+    # The frames are not copies of one another:
+    npt.assert_equal(np.allclose(seen[..., 0], seen[..., -1]), False)
+
+
+def test_a_circular_aperture_survives_composing_a_video():
+    n = 3
+    scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.0,
+                             aperture='circle')
+    percept = ramped_percept(scene, n)
+    seen = scene._compose(percept, vmax=1).data
+    npt.assert_equal(seen.shape, (SCENE_PX, SCENE_PX, 3, n))
+    npt.assert_equal(np.asarray(seen).dtype, np.float32)
+    npt.assert_array_equal(seen[0, 0], 0)
+    npt.assert_array_equal(seen[-1, -1], 0)
+    # Inside the disc the aperture changes nothing:
+    rect = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    inside = ~scene._aperture_mask((0, 0))
+    npt.assert_array_equal(seen[inside],
+                           rect._compose(percept, vmax=1).data[inside])
+
+
+@pytest.mark.parametrize('blend', [0, 2])
+def test_the_loss_composition_renders_is_float32(blend):
+    """A float64 loss map would upcast the whole float32 blend"""
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0,
+                       scotoma_blend=blend)
+    npt.assert_equal(scene._rendered_loss_at((0, 0)).dtype, np.float32)
+    npt.assert_equal(ramp_scene()._rendered_loss_at((0, 0)).dtype, np.float32)
+
+
+@pytest.mark.parametrize('pad', [0, 9])
+def test_repeated_pixel_center_queries_read_the_same_raster(pad):
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_blend=2)
+    x, y = scene._pixel_centers(pad=pad)
+    npt.assert_equal(x.shape, (SCENE_PX + 2 * pad,) * 2)
+    again = scene._pixel_centers(pad=pad)
+    npt.assert_array_equal(again[0], x)
+    npt.assert_array_equal(again[1], y)
+    # A padded raster is the unpadded one plus a margin, not a rescaled grid:
+    if pad:
+        x0, y0 = scene._pixel_centers()
+        npt.assert_array_equal(x[pad:-pad, pad:-pad], x0)
+        npt.assert_array_equal(y[pad:-pad, pad:-pad], y0)
