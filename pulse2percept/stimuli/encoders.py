@@ -1221,10 +1221,10 @@ class _OpticalStimulus(Stimulus):
         if not math.isfinite(irradiance) or irradiance < 0:
             raise ValueError(f"'irradiance' must be a finite, nonnegative "
                              f"power density, not {irradiance}.")
-        # ON duration (ms) per pixel and projector frame:
+        # ON duration (ms) per pixel and pulse period:
         self._dur = self._own(dur, np.float64)
         self._ticks = self._own(ticks, np.int64)
-        # Onset (ticks) of every projector frame:
+        # Onset (ticks) of every pulse period:
         self._onsets = self._own(onsets, np.int64)
         self._irradiance = irradiance
         self._freq = float(freq)
@@ -1348,7 +1348,7 @@ class _OpticalStimulus(Stimulus):
             lo, hi = bounds[j], bounds[j + 1]
             if hi <= lo:
                 continue
-            # Time since the current projector-frame onset.
+            # Time since the current pulse-period onset.
             since = ticks[lo:hi] - self._onsets[j]
             # Match the one-DT rise/fall convention used by other stimuli.
             np.copyto(data[:, lo:hi], irradiance,
