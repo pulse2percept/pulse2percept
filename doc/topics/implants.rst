@@ -227,6 +227,13 @@ The total number of fabricated cells was therefore 526 for F55,
 However, these peripheral cells covered by the common return are not
 independently stimulating and are therefore not exposed in pulse2percept.
 
+All four classes are driven by pulsed near-infrared illumination rather than
+injected current: ``prepare_stim`` returns irradiance in ``mW/mm^2``, encoded
+by :py:class:`~pulse2percept.stimuli.PRIMAEncoder` by default. Its settings
+describe the standard PRIMA projector, not the illumination protocol of each
+original study; pass a configured encoder or ``encoder=None`` instead.
+Photovoltaic conversion to tissue current is not modeled.
+
 ``PRIMA``, ``PRIMA75``, ``PRIMA55`` and ``PRIMA40`` are deprecated aliases;
 see the v0.11 release notes for the corresponding canonical names.
 
