@@ -9,8 +9,8 @@ Stimulus Encoders
 A visual source contains gray levels; an implant delivers stimulation. An
 :py:class:`~pulse2percept.stimuli.Encoder` defines the mapping between the two.
 :py:class:`~pulse2percept.stimuli.StimulusEncoder` covers devices driven by a
-current source; :py:class:`~pulse2percept.stimuli.PRIMAEncoder` covers the
-photovoltaic PRIMA system, which is driven by light.
+current source; :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` covers
+subretinal photovoltaic arrays, which are driven by light.
 
 Basic usage
 -----------
@@ -95,9 +95,10 @@ Optical encoding
 
 .. versionadded:: 0.11.0
 
-:py:class:`~pulse2percept.implants.retina.PRIMAPivotal` is illuminated by an
-880 nm projector. :py:class:`~pulse2percept.stimuli.PRIMAEncoder` maps image
-intensity to pulse duration and returns irradiance in ``mW/mm^2``:
+Photovoltaic arrays are illuminated by pulsed near-infrared light rather than
+driven by a current source.
+:py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` maps image intensity to
+ON duration at fixed peak irradiance and returns ``mW/mm^2``:
 
 .. code-block:: python
 
@@ -105,13 +106,33 @@ intensity to pulse duration and returns irradiance in ``mW/mm^2``:
     stim = implant.prepare_stim(p2p.stimuli.samples.logo_bvl())
     stim.unit  # mW/mm^2
 
-At the default settings, the projector runs at 30 Hz and 3.5 mW/mm^2. It has
-14 nonzero ON durations from 0.7 to 9.8 ms. The default linear mapping from
-image intensity to these levels is a pulse2percept convention; the clinical
-camera-to-pulse-duration transfer function is not published. Set
+The implant class describes the array; the encoder describes an optical
+stimulation protocol. Each photovoltaic implant therefore defaults to an
+encoder configured for its own experimental system (see
+:ref:`topics-implants`), and any array accepts any compatible encoder:
+
+.. code-block:: python
+
+    implant.encoder = p2p.stimuli.PhotovoltaicEncoder(
+        irradiance=4,      # mW/mm^2
+        freq=40,           # Hz
+        pulse_dur=4,       # ms
+        wavelength=915,    # nm
+    )
+
+:py:class:`~pulse2percept.stimuli.PRIMAEncoder` is the PRIMA specialization.
+Its defaults are the pivotal projector: 30 Hz, 3.5 mW/mm^2, and 14 nonzero ON
+durations from 0.7 to 9.8 ms. It quantizes duration onto that 0.7 ms grid; the
+generic encoder does not, so it can express protocols such as 4 ms at 40 Hz or
+10 ms at 2 Hz.
+
+Where a source paper does not specify a natural-image grayscale transfer
+function -- which is the case for all of these systems -- the mapping from
+gray level to ON duration is an explicit pulse2percept simulation convention
+(linear), not a reconstruction of the original camera pipeline. Set
 ``grayscale=False`` for binary encoding.
 
-The clinical system also applies ambient-light adaptation, contrast
+The clinical PRIMA system also applies ambient-light adaptation, contrast
 enhancement, zoom, and, in some tests, contrast inversion. These operations
 remain explicit preprocessing steps in pulse2percept.
 
@@ -125,7 +146,10 @@ For example:
     percept = model.predict_percept(p2p.stimuli.samples.logo_bvl())
 
 Here ``ScoreboardModel`` visualizes implant geometry and optical drive. It does
-not model photovoltaic transduction or retinal activation.
+not model photovoltaic transduction or retinal activation. Drive of 1.0 means a
+fully lit pixel at the encoder's settings; for
+:py:class:`~pulse2percept.stimuli.PRIMAEncoder` it means the projector's
+documented maximum instead, so lowering any setting lowers the drive.
 
 Device constraints
 ------------------
@@ -134,8 +158,12 @@ An implant's :py:class:`~pulse2percept.implants.Raster` determines which
 electrodes may pulse together; see :ref:`topics-rasters`. PRIMA uses no raster;
 all 378 pixels may be illuminated at once. With ``safe_mode=True``,
 :py:class:`~pulse2percept.implants.retina.PRIMAPivotal` checks the documented projector
-settings (3.5 mW/mm^2, 30 Hz, 0.7--9.8 ms ON durations, and duty cycle <= 0.294).
-This is not a biological safety check or a demonstrated hardware maximum.
+settings (880 nm, 3.5 mW/mm^2, 30 Hz, 0.7--9.8 ms ON durations, and duty cycle
+<= 0.294).
+This is not a biological safety check or a demonstrated hardware maximum. That
+envelope is specific to the pivotal projector: research arrays with no
+published envelope of their own raise on ``safe_mode=True`` rather than borrow
+it.
 
 Encoders can also quantize timing with ``clock`` and gray levels with
 ``n_levels``. These constraints are conservative: quantization may lower a

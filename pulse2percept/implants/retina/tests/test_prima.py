@@ -16,8 +16,8 @@ from pulse2percept.implants.retina import (ArgusII, PhotovoltaicPixel,
                                            Ho2019FlatArray, Huang2021Array,
                                            PRIMA, PRIMA75, PRIMA55, PRIMA40)
 from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
-                                   ImageStimulus, PRIMAEncoder, samples,
-                                   Stimulus)
+                                   ImageStimulus, PhotovoltaicEncoder,
+                                   PRIMAEncoder, samples, Stimulus)
 from pulse2percept.units import DimensionMismatchError, deg, mW, mm, um, xTh
 from pulse2percept.utils.constants import ZORDER
 from pulse2percept.models.retina import ScoreboardModel
@@ -613,12 +613,158 @@ def test_PRIMAPivotal_rejects_threshold_relative_stimuli():
     npt.assert_equal(ArgusII(encoder=None).prepare_stim(train).unit, xTh)
 
 
-@pytest.mark.parametrize('implant_type', [Lorach2015Array,
-                                          partial(Ho2019FlatArray, 55),
-                                          partial(Huang2021Array, 55)])
-def test_other_photovoltaic_arrays_have_no_encoder(implant_type):
-    # Other photovoltaic arrays do not assume the pivotal PRIMA protocol.
-    npt.assert_equal(implant_type().encoder, None)
+# Constructor variants must not change the optical input pipeline:
+PHOTOVOLTAIC = [PRIMAPivotal,
+                Lorach2015Array,
+                partial(Ho2019FlatArray, 55),
+                partial(Ho2019FlatArray, 40),
+                partial(Huang2021Array, 55),
+                partial(Huang2021Array, 40),
+                partial(Huang2021Array, 30),
+                partial(Huang2021Array, 20)]
+
+
+@pytest.mark.parametrize('implant_type', PHOTOVOLTAIC)
+def test_photovoltaic_arrays_are_stimulated_optically(implant_type):
+    implant = implant_type()
+    npt.assert_equal(implant.technology, 'photovoltaic')
+    npt.assert_equal(implant.stimulus_unit, mW / mm ** 2)
+    npt.assert_equal(isinstance(implant.encoder, PhotovoltaicEncoder), True)
+    # Only the pivotal device is driven by the PRIMA projector:
+    npt.assert_equal(isinstance(implant.encoder, PRIMAEncoder),
+                     isinstance(implant, PRIMAPivotal))
+    # All photovoltaic pixels may be illuminated simultaneously.
+    npt.assert_equal(implant.raster, None)
+
+
+# optical protocol that each implant's default encoder represents:
+OPTICAL_PROTOCOLS = [
+    # Pivotal PRIMA projector [Holz2026]_:
+    (PRIMAPivotal, (880, 3.5, 30, 9.8)),
+    # Grating experiments of [Lorach2015]_:
+    (Lorach2015Array, (915, 4.0, 40, 4.0)),
+    # Grating experiments of [Ho2019]_:
+    (partial(Ho2019FlatArray, 55), (915, 8.0, 40, 4.0)),
+    (partial(Ho2019FlatArray, 40), (915, 8.0, 40, 4.0)),
+    # Brightest full-field condition of [Huang2021]_:
+    (partial(Huang2021Array, 55), (880, 4.7, 2, 10.0)),
+    (partial(Huang2021Array, 20), (880, 4.7, 2, 10.0)),
+]
+
+
+@pytest.mark.parametrize('implant_type, protocol', OPTICAL_PROTOCOLS)
+def test_photovoltaic_default_protocol(implant_type, protocol):
+    """Each array defaults to its own published stimulation conditions."""
+    encoder = implant_type().encoder
+    wavelength, irradiance, freq, pulse_dur = protocol
+    npt.assert_almost_equal(encoder.wavelength, wavelength)
+    npt.assert_almost_equal(encoder.irradiance, irradiance)
+    npt.assert_almost_equal(encoder.freq, freq)
+    npt.assert_almost_equal(encoder.pulse_dur, pulse_dur)
+    npt.assert_equal(encoder.grayscale, True)
+
+
+@pytest.mark.parametrize('implant_type', PHOTOVOLTAIC)
+def test_photovoltaic_encoder_is_per_instance(implant_type):
+    a, b = implant_type(), implant_type()
+    npt.assert_equal(a.encoder is b.encoder, False)
+    a.encoder.threshold = 0.9
+    npt.assert_almost_equal(b.encoder.threshold, 0.5)
+
+
+@pytest.mark.parametrize('implant_type', PHOTOVOLTAIC)
+def test_photovoltaic_encoder_opt_out(implant_type):
+    implant = implant_type(encoder=None)
+    npt.assert_equal(implant.encoder, None)
+    # A picture is dimensionless, so nothing turns it into irradiance:
+    with pytest.raises(DimensionMismatchError):
+        implant.prepare_stim(samples.logo_bvl())
+    with pytest.raises(TypeError):
+        implant_type(encoder='binary')
+    # A custom encoder reaches the implant through the usual machinery:
+    implant.encoder = PRIMAEncoder(irradiance=2.0)
+    npt.assert_almost_equal(
+        implant.prepare_stim(samples.logo_bvl()).data.max(), 2.0)
+
+
+@pytest.mark.parametrize('implant_type', PHOTOVOLTAIC)
+def test_photovoltaic_arrays_encode_images(implant_type):
+    implant = implant_type()
+    stim = implant.prepare_stim(samples.logo_bvl())
+    npt.assert_equal(stim.unit, mW / mm ** 2)
+    npt.assert_equal(list(stim.electrodes),
+                     list(implant.electrode_array.electrodes))
+    # A lit pixel sits at the encoder's own peak irradiance:
+    npt.assert_almost_equal(stim.data.max(), implant.encoder.irradiance)
+    npt.assert_equal(stim.data.min() >= 0, True)
+    npt.assert_almost_equal(stim._spatial_view().data.max(), 1, decimal=5)
+
+
+@pytest.mark.parametrize('implant_type', PHOTOVOLTAIC)
+def test_photovoltaic_arrays_reject_current(implant_type):
+    implant = implant_type()
+    elec = implant.electrode_names[0]
+    with pytest.raises(DimensionMismatchError):
+        implant.prepare_stim({elec: BiphasicPulseTrain(20, 20, 0.45)})
+    with pytest.raises(DimensionMismatchError):
+        implant.prepare_stim({elec: BiphasicPulse(10, 0.45)})
+
+
+@pytest.mark.parametrize('implant_type', PHOTOVOLTAIC)
+@pytest.mark.parametrize('safe_mode', (False, True))
+def test_photovoltaic_arrays_refuse_light_that_is_not_light(implant_type,
+                                                            safe_mode):
+    # Negative or nonfinite irradiance is invalid regardless of safe_mode.
+    implant = implant_type(safe_mode=safe_mode)
+    stim = implant_type().prepare_stim(samples.logo_bvl())
+    for factor in (np.nan, np.inf):
+        with pytest.raises(ValueError) as excinfo:
+            implant.check_stim(stim * factor)
+        npt.assert_equal('non-finite irradiance' in str(excinfo.value), True)
+    negative = Stimulus(stim)
+    negative.metadata = {'user': None}
+    negative._stim = {'data': -np.abs(negative.data),
+                      'electrodes': negative.electrodes,
+                      'time': negative.time}
+    with pytest.raises(ValueError) as excinfo:
+        implant.check_stim(negative)
+    npt.assert_equal('cannot be negative' in str(excinfo.value), True)
+
+
+def test_PRIMAPivotal_safe_mode_checks_the_projector():
+    """safe_mode checks the PRIMA projector envelope, not charge balance."""
+    # Light is never charge-balanced, so the electrical check must not run:
+    implant = PRIMAPivotal(safe_mode=True)
+    npt.assert_equal(implant.prepare_stim(samples.logo_bvl()).unit,
+                     mW / mm ** 2)
+    for encoder, msg in [(PRIMAEncoder(freq=60), 'duty cycle'),
+                         (LooseEncoder(irradiance=5.0), 'exceeds the 3.5')]:
+        with pytest.raises(ValueError) as excinfo:
+            PRIMAPivotal(safe_mode=True,
+                         encoder=encoder).prepare_stim(samples.logo_bvl())
+        npt.assert_equal(msg in str(excinfo.value), True)
+        # Without safe_mode the envelope check is skipped:
+        npt.assert_equal(
+            PRIMAPivotal(encoder=encoder).prepare_stim(
+                samples.logo_bvl()).unit, mW / mm ** 2)
+
+
+@pytest.mark.parametrize('implant_type', PHOTOVOLTAIC[1:])
+def test_photovoltaic_arrays_have_no_borrowed_safe_mode(implant_type):
+    """Arrays without a published envelope refuse safe_mode.
+
+    The PRIMA projector limits belong to the pivotal system. Applying them to
+    a research array would silently misrepresent that array's own protocol,
+    which is brighter than PRIMA in the Ho and Huang cases.
+    """
+    implant = implant_type(safe_mode=True)
+    with pytest.raises(NotImplementedError) as excinfo:
+        implant.prepare_stim(samples.logo_bvl())
+    npt.assert_equal('safe_mode' in str(excinfo.value), True)
+    npt.assert_equal('PRIMAPivotal' in str(excinfo.value), True)
+    # Its own default protocol is fine without safe_mode:
+    npt.assert_equal(implant_type().prepare_stim(samples.logo_bvl()).unit,
+                     mW / mm ** 2)
 
 
 def test_PRIMA_deprecated_alias_keeps_the_encoder():
@@ -639,6 +785,33 @@ def test_PRIMAPivotal_safe_mode_accepts_the_full_device():
     for pulse_dur in np.arange(1, 15) * 0.7:
         implant.encoder = PRIMAEncoder(pulse_dur=pulse_dur, grayscale=True)
         implant.prepare_stim(samples.logo_bvl())
+
+
+def test_PRIMAPivotal_safe_mode_checks_the_wavelength():
+    """The envelope is validated on the schedule, not the encoder class.
+
+    A PhotovoltaicEncoder can now put pivotal settings on a different
+    wavelength; photovoltaic response is wavelength dependent, so that is a
+    different operating point, not the PRIMA projector.
+    """
+    # Binary mode keeps ON durations on the projector's own 0.7 ms grid, so
+    # wavelength is the only thing left to fault.
+    off_color = PhotovoltaicEncoder(wavelength=915, irradiance=3.5, freq=30,
+                                    pulse_dur=9.8, grayscale=False)
+    with pytest.raises(ValueError) as excinfo:
+        PRIMAPivotal(safe_mode=True,
+                     encoder=off_color).prepare_stim(samples.logo_bvl())
+    npt.assert_equal('880 nm, not 915 nm' in str(excinfo.value), True)
+    # The same settings at 880 nm pass, so only wavelength was at fault:
+    on_color = PhotovoltaicEncoder(wavelength=880, irradiance=3.5, freq=30,
+                                   pulse_dur=9.8, grayscale=False)
+    npt.assert_equal(
+        PRIMAPivotal(safe_mode=True, encoder=on_color).prepare_stim(
+            samples.logo_bvl()).unit, mW / mm ** 2)
+    # Without safe_mode the wavelength check is skipped:
+    npt.assert_equal(
+        PRIMAPivotal(encoder=off_color).prepare_stim(
+            samples.logo_bvl()).unit, mW / mm ** 2)
 
 
 @pytest.mark.parametrize('encoder, msg', [

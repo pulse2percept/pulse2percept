@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.stimuli.StimulusEncoder`,
    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`,
    :py:class:`~pulse2percept.stimuli.FrequencyEncoder`,
+   :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder`,
    :py:class:`~pulse2percept.stimuli.PRIMAEncoder`"""
 from abc import ABCMeta, abstractmethod
 import math
@@ -11,7 +12,7 @@ from copy import deepcopy
 from .base import ImageStimulus, Stimulus, VideoStimulus, _adoptable
 from .pulses import BiphasicPulse
 from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, mW,
-                     mm, ms, uA, xTh)
+                     mm, ms, nm, uA, xTh)
 from ..utils import PrettyPrint, frame_interval
 # Point encoder warnings at the caller.
 from ..utils.deprecation import _warn_external
@@ -1197,10 +1198,10 @@ class _NormalizedStimulus(Stimulus):
 
 
 class _OpticalStimulus(Stimulus):
-    """Lazy PRIMA projector schedule.
+    """Lazy pulsed-illumination schedule.
 
-    Stores per-pixel ON duration for each projector frame, peak irradiance, and
-    frame rate. Waveform samples are generated on demand.
+    Stores per-pixel ON duration for each pulse period, peak irradiance, and
+    repetition rate. Waveform samples are generated on demand.
     """
     #: described by its schedule rather than by its samples
     _is_parametric = True
@@ -1220,10 +1221,10 @@ class _OpticalStimulus(Stimulus):
         if not math.isfinite(irradiance) or irradiance < 0:
             raise ValueError(f"'irradiance' must be a finite, nonnegative "
                              f"power density, not {irradiance}.")
-        # ON duration (ms) per pixel and projector frame:
+        # ON duration (ms) per pixel and pulse period:
         self._dur = self._own(dur, np.float64)
         self._ticks = self._own(ticks, np.int64)
-        # Onset (ticks) of every projector frame:
+        # Onset (ticks) of every pulse period:
         self._onsets = self._own(onsets, np.int64)
         self._irradiance = irradiance
         self._freq = float(freq)
@@ -1255,17 +1256,17 @@ class _OpticalStimulus(Stimulus):
 
     @property
     def freq(self):
-        """Projector frame rate (Hz)"""
+        """Pulse repetition rate (Hz)"""
         return self._freq
 
     @property
     def pulse_dur(self):
-        """ON duration (ms) of every pixel, one column per projector frame"""
+        """ON duration (ms) of every pixel, one column per pulse period"""
         return self._dur
 
     @property
     def duty_cycle(self):
-        """Fraction of each projector period every pixel spends on"""
+        """Fraction of each pulse period every pixel spends on"""
         return self._dur * self._freq / MS_PER_S
 
     @property
@@ -1292,7 +1293,7 @@ class _OpticalStimulus(Stimulus):
         drive = (self._irradiance * self.duty_cycle / self._ref_drive).astype(
             np.float32)
         if self._static:
-            # Collapse repeated projector periods for a static source.
+            # Collapse repeated pulse periods for a static source.
             stim = _NormalizedStimulus(drive[:, 0].ravel(),
                                        electrodes=self.electrodes)
         else:
@@ -1318,9 +1319,9 @@ class _OpticalStimulus(Stimulus):
         factor = float(factor)
         if not math.isfinite(factor) or factor < 0:
             raise ValueError(f"Scaling an optical stimulus by {factor} would "
-                             f"ask the projector for a negative or undefined "
-                             f"irradiance. Only nonnegative, finite factors "
-                             f"describe light.")
+                             f"ask for a negative or undefined irradiance. "
+                             f"Only nonnegative, finite factors describe "
+                             f"light.")
         return self._rebuilt(self.electrodes, self._dur,
                              self._irradiance * factor)
 
@@ -1334,20 +1335,20 @@ class _OpticalStimulus(Stimulus):
         """Expand the schedule into rectangular pulses."""
         ticks = np.asarray(self._ticks)
         n_frames = self._onsets.size
-        # Map stored time points to projector frames.
+        # Map stored time points to pulse periods.
         at = np.searchsorted(self._onsets, ticks, side='right') - 1
         np.clip(at, 0, n_frames - 1, out=at)
         # Keep durations per frame to avoid an n_electrodes x n_time int64 array.
         dur = np.round(self._dur / DT).astype(np.int64)
         data = np.zeros((dur.shape[0], ticks.size), dtype=np.float32)
-        # Each projector frame occupies a contiguous time span.
+        # Each pulse period occupies a contiguous time span.
         bounds = np.searchsorted(at, np.arange(n_frames + 1))
         irradiance = np.float32(self._irradiance)
         for j in range(n_frames):
             lo, hi = bounds[j], bounds[j + 1]
             if hi <= lo:
                 continue
-            # Time since the current projector-frame onset.
+            # Time since the current pulse-period onset.
             since = ticks[lo:hi] - self._onsets[j]
             # Match the one-DT rise/fall convention used by other stimuli.
             np.copyto(data[:, lo:hi], irradiance,
@@ -1367,79 +1368,68 @@ class _OpticalStimulus(Stimulus):
                 'metadata': self.metadata}
 
 
-class PRIMAEncoder(Encoder):
-    """Encode image/video gray levels for the PRIMA projector.
+class PhotovoltaicEncoder(Encoder):
+    """Encode image/video gray levels as pulsed optical stimulation
 
-    PRIMA uses 880 nm illumination rather than injected current. The projector
-    uses fixed peak irradiance and pulse-width modulation [Palanker2020]_,
-    [Holz2026]_. This encoder returns irradiance in ``mW/mm^2``.
+    Photovoltaic subretinal arrays are driven by pulsed near-infrared light.
+    This encoder samples an image or video at the implant's pixel locations
+    and returns irradiance in ``mW/mm^2``.
+    Peak irradiance is fixed; gray level sets the ON duration within each
+    pulse period.
 
     .. versionadded:: 0.11.0
 
     Parameters
     ----------
-    irradiance : float or Quantity, optional
+    irradiance : float or Quantity
         Peak irradiance (mW/mm^2) while a pixel is on.
-    freq : float or Quantity, optional
-        Projector frame rate (Hz).
-    pulse_dur : float or Quantity, optional
-        Maximum ON duration (ms). Must lie on the ``pulse_step`` grid and not
-        exceed ``max_pulse_dur``.
+    freq : float or Quantity
+        Pulse repetition rate (Hz).
+    pulse_dur : float or Quantity
+        ON duration (ms) of a fully lit pixel. Must fit into ``1000 / freq``.
+    wavelength : float or Quantity
+        Wavelength (nm) of the illumination. Photovoltaic pixel response is
+        wavelength dependent, so there is no generic default.
     grayscale : bool, optional
-        If True (default), map gray levels to pulse duration. If False, use
+        If True (default), map gray levels to ON duration. If False, use
         binary off/on encoding.
     threshold : float, optional
         Binary-mode threshold. The default 0.5 is a pulse2percept convention.
 
     Notes
     -----
-    *  Pivotal-system defaults are 3.5 mW/mm^2, 30 Hz, and 14 nonzero ON
-       durations from 0.7 to 9.8 ms.
-    *  Grayscale mode maps normalized intensity linearly to these duration
-       levels. The clinical camera-to-pulse-duration transfer function is not
-       published.
-    *  Videos are sampled at the projector clock using zero-order hold.
-    *  ``_spatial_view`` returns normalized time-averaged optical drive for
-       spatial models. It is neither retinal current nor perceptual brightness.
-    *  Clinical image preprocessing is outside this encoder.
+    *  Grayscale mode scales ON duration linearly, ``gray * pulse_dur``. The
+       studies these arrays come from report fixed-duration pulses and do not
+       specify a natural-image grayscale transfer function, so this mapping is
+       a pulse2percept simulation convention, not the experimental encoding
+       protocol. Because durations are continuous, an image with many gray
+       levels produces more distinct time points than a device that quantizes
+       duration (see :py:class:`~pulse2percept.stimuli.PRIMAEncoder`).
+    *  Videos are sampled at the pulse rate using zero-order hold.
+    *  ``_spatial_view`` returns normalized time-averaged optical drive, where
+       1.0 is a fully lit pixel at these settings (``ref_drive``). It is
+       neither retinal current nor perceptual brightness.
+    *  Photovoltaic conversion to retinal current is not modeled.
 
     Examples
     --------
-    >>> from pulse2percept.implants.retina import PRIMAPivotal
-    >>> from pulse2percept.stimuli import PRIMAEncoder, samples
-    >>> PRIMAEncoder().encode(samples.logo_bvl(), implant=PRIMAPivotal()).unit
+    >>> from pulse2percept.implants.retina import Lorach2015Array
+    >>> from pulse2percept.stimuli import PhotovoltaicEncoder, samples
+    >>> encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
+    ...                               wavelength=915)
+    >>> encoder.encode(samples.logo_bvl(), implant=Lorach2015Array()).unit
     mW/mm^2
 
     """
-    #: Wavelength (nm) of the projected near-infrared light
-    wavelength = 880.0
+    __slots__ = ('irradiance', 'freq', 'pulse_dur', 'wavelength', 'grayscale',
+                 'threshold')
 
-    #: Smallest nonzero ON duration (ms) the projector can produce; every other
-    #: duration is a whole multiple of it
-    pulse_step = 0.7
-
-    #: Longest documented ON duration (ms), i.e. 14 steps
-    max_pulse_dur = 9.8
-
-    #: Peak irradiance (mW/mm^2) of the pivotal-trial projector
-    max_irradiance = 3.5
-
-    #: Frame rate (Hz) of the pivotal-trial projector
-    max_freq = 30.0
-
-    #: Largest documented duty cycle, ``max_freq * max_pulse_dur``
-    max_duty_cycle = max_freq * max_pulse_dur / MS_PER_S
-
-    #: Time-averaged irradiance (mW/mm^2) the normalized spatial view calls 1.0
-    ref_drive = max_irradiance * max_duty_cycle
-
-    __slots__ = ('irradiance', 'freq', 'pulse_dur', 'grayscale', 'threshold')
-
-    def __init__(self, irradiance=3.5 * mW / mm ** 2, freq=30 * Hz,
-                 pulse_dur=9.8 * ms, grayscale=True, threshold=0.5):
+    def __init__(self, irradiance, freq, pulse_dur, wavelength,
+                 grayscale=True, threshold=0.5):
         irradiance = as_value(irradiance, _IRRADIANCE, 'irradiance')
         freq = as_value(freq, Hz, 'freq')
         pulse_dur = as_value(pulse_dur, ms, 'pulse_dur')
+        wavelength = as_value(wavelength, nm, 'wavelength')
         threshold = as_value(threshold, dimensionless, 'threshold')
         _finite('irradiance', irradiance)
         if irradiance <= 0:
@@ -1447,27 +1437,14 @@ class PRIMAEncoder(Encoder):
         _finite('freq', freq)
         if freq <= 0:
             raise ValueError("'freq' must be positive.")
+        _finite('wavelength', wavelength)
+        if wavelength <= 0:
+            raise ValueError("'wavelength' must be positive.")
         _finite('pulse_dur', pulse_dur)
         if pulse_dur < 0:
             raise ValueError("'pulse_dur' cannot be negative.")
         if pulse_dur > 0:
-            # Require exact hardware-grid durations; do not round silently.
-            steps = pulse_dur / self.pulse_step
-            if abs(steps - round(steps)) > 1e-9:
-                raise ValueError(
-                    f"'pulse_dur' must be a whole multiple of "
-                    f"{self.pulse_step} ms, the step the projector modulates "
-                    f"in, not {pulse_dur:g} ms.")
-            if pulse_dur > self.max_pulse_dur + 1e-9:
-                raise ValueError(
-                    f"'pulse_dur' cannot exceed {self.max_pulse_dur} ms, the "
-                    f"longest documented ON duration, not {pulse_dur:g} ms.")
-            period = MS_PER_S / freq
-            if pulse_dur >= period:
-                raise ValueError(
-                    f"A {pulse_dur:g} ms pulse does not fit into the "
-                    f"{period:.3f} ms period of a {freq:g} Hz projector. "
-                    f"Shorten 'pulse_dur' or lower 'freq'.")
+            self._check_pulse_dur(pulse_dur, freq)
         _finite('threshold', threshold)
         if not 0 <= threshold <= 1:
             raise ValueError(f"'threshold' must be a gray level in [0, 1], "
@@ -1475,37 +1452,53 @@ class PRIMAEncoder(Encoder):
         self.irradiance = irradiance
         self.freq = freq
         self.pulse_dur = pulse_dur
+        self.wavelength = wavelength
         self.grayscale = bool(grayscale)
         self.threshold = threshold
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
         return {'irradiance': self.irradiance, 'freq': self.freq,
-                'pulse_dur': self.pulse_dur, 'grayscale': self.grayscale,
-                'threshold': self.threshold}
+                'pulse_dur': self.pulse_dur, 'wavelength': self.wavelength,
+                'grayscale': self.grayscale, 'threshold': self.threshold}
+
+    def _check_pulse_dur(self, pulse_dur, freq):
+        """Reject a pulse (ms) that does not fit into one period"""
+        period = MS_PER_S / freq
+        if pulse_dur >= period:
+            raise ValueError(
+                f"A {pulse_dur:g} ms pulse does not fit into the "
+                f"{period:.3f} ms period of a {freq:g} Hz pulse train. "
+                f"Shorten 'pulse_dur' or lower 'freq'.")
 
     @property
     def period(self):
-        """Projector period (ms)"""
+        """Pulse period (ms)"""
         return MS_PER_S / self.freq
 
     @property
-    def n_levels(self):
-        """Number of nonzero ON durations available up to ``pulse_dur``"""
-        return int(round(self.pulse_dur / self.pulse_step))
+    def ref_drive(self):
+        """Time-averaged irradiance (mW/mm^2) the normalized view calls 1.0
+
+        A fully lit pixel at these settings. Devices with a documented
+        projector maximum normalize against that maximum instead.
+        """
+        drive = self.irradiance * self.pulse_dur * self.freq / MS_PER_S
+        # A dark schedule has nothing to normalize by; its drive is 0 anyway.
+        return drive if drive > 0 else 1.0
 
     def _durations(self, gray):
         """Map gray levels in [0, 1] to ON durations (ms)
 
         Binary mode lights a pixel for the full ``pulse_dur``; grayscale mode
-        pulse-width modulates onto the projector's own duration grid.
+        scales it linearly, which is a pulse2percept convention.
         """
-        # Use float64 so durations land exactly on the hardware grid.
+        # Use float64 so durations survive rounding onto the DT time grid.
         gray = np.asarray(gray, dtype=np.float64)
         if not self.grayscale:
             return np.where(gray >= self.threshold, self.pulse_dur, 0.0)
         # Gray levels are already clipped to [0, 1].
-        return np.round(gray * self.n_levels) * self.pulse_step
+        return gray * self.pulse_dur
 
     def encode(self, source, implant=None):
         """Encode an image or a video as near-infrared irradiance
@@ -1546,12 +1539,12 @@ class PRIMAEncoder(Encoder):
         total = float(frame_time[-1] + frame_dur)
         n_periods = max(1, int(np.ceil((total - start) / period - 1e-9)))
         onset_ms = start + np.arange(n_periods, dtype=np.float64) * period
-        # Sample source frames at projector onsets using zero-order hold.
+        # Sample source frames at pulse onsets using zero-order hold.
         at = np.searchsorted(frame_time, onset_ms, side='right') - 1
         np.clip(at, 0, frame_time.size - 1, out=at)
         dur = self._durations(gray[:, at])
 
-        # Round absolute onsets to DT to avoid accumulated 30 Hz period error.
+        # Round absolute onsets to DT to avoid accumulated period error.
         onsets = np.round(onset_ms / DT).astype(np.int64)
         end = int(np.round(total / DT))
         dur_ticks = np.round(dur / DT).astype(np.int64)
@@ -1577,18 +1570,143 @@ class PRIMAEncoder(Encoder):
             _warn_external(
                 f"This stimulus has {n_time} time points, which every model "
                 f"downstream will pay for. A lower 'freq' or a shorter source "
-                f"is the lever that helps most; in grayscale mode, so is a "
-                f"shorter 'pulse_dur', which offers fewer distinct durations.",
-                category=UserWarning)
+                f"is the lever that helps most; so is a source with fewer "
+                f"distinct gray levels, since each one needs its own ON "
+                f"duration.", category=UserWarning)
         if n_el * n_time > _BIG_STIM and implant is None:
             _warn_external(
                 f"Encoding {n_el} pixels x {n_time} time points will allocate "
                 f"{n_el * n_time * 4 / 1e9:.1f} GB. Pass 'implant' to encode "
                 f"at pixel resolution instead.", category=UserWarning)
 
-        # Keep the projector schedule lazy; render waveform samples on demand.
+        # Keep the pulse schedule lazy; render waveform samples on demand.
         return _OpticalStimulus(
             electrodes, dur, ticks, onsets, self.irradiance, self.freq,
             self.wavelength, self.grayscale, total, static,
             np.zeros(1) if static else onset_ms,
             total if static else period, self.ref_drive)
+
+
+class PRIMAEncoder(PhotovoltaicEncoder):
+    """Encode image/video gray levels for the PRIMA projector.
+
+    PRIMA uses 880 nm illumination rather than injected current. The projector
+    uses fixed peak irradiance and pulse-width modulation [Palanker2020]_,
+    [Holz2026]_. This encoder returns irradiance in ``mW/mm^2``.
+
+    Unlike the generic
+    :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder`, ON durations are
+    quantized onto the projector's own 0.7 ms duration grid, and normalized
+    drive is referenced to the projector maximum rather than to these
+    settings.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    irradiance : float or Quantity, optional
+        Peak irradiance (mW/mm^2) while a pixel is on.
+    freq : float or Quantity, optional
+        Projector frame rate (Hz).
+    pulse_dur : float or Quantity, optional
+        Maximum ON duration (ms). Must lie on the ``pulse_step`` grid and not
+        exceed ``max_pulse_dur``.
+    grayscale : bool, optional
+        If True (default), map gray levels to pulse duration. If False, use
+        binary off/on encoding.
+    threshold : float, optional
+        Binary-mode threshold. The default 0.5 is a pulse2percept convention.
+
+    Notes
+    -----
+    *  Pivotal-system defaults are 3.5 mW/mm^2, 30 Hz, and 14 nonzero ON
+       durations from 0.7 to 9.8 ms.
+    *  Grayscale mode maps normalized intensity linearly to these duration
+       levels. The clinical camera-to-pulse-duration transfer function is not
+       published.
+    *  Videos are sampled at the projector clock using zero-order hold.
+    *  ``_spatial_view`` returns normalized time-averaged optical drive for
+       spatial models. It is neither retinal current nor perceptual
+       brightness.
+    *  Clinical image preprocessing is outside this encoder.
+
+    Examples
+    --------
+    >>> from pulse2percept.implants.retina import PRIMAPivotal
+    >>> from pulse2percept.stimuli import PRIMAEncoder, samples
+    >>> PRIMAEncoder().encode(samples.logo_bvl(), implant=PRIMAPivotal()).unit
+    mW/mm^2
+
+    """
+    #: Smallest nonzero ON duration (ms) the projector can produce; every other
+    #: duration is a whole multiple of it
+    pulse_step = 0.7
+
+    #: Longest documented ON duration (ms), i.e. 14 steps
+    max_pulse_dur = 9.8
+
+    #: Wavelength (nm) the projector illuminates at
+    projector_wavelength = 880.0
+
+    #: Peak irradiance (mW/mm^2) of the pivotal-trial projector
+    max_irradiance = 3.5
+
+    #: Frame rate (Hz) of the pivotal-trial projector
+    max_freq = 30.0
+
+    #: Largest documented duty cycle, ``max_freq * max_pulse_dur``
+    max_duty_cycle = max_freq * max_pulse_dur / MS_PER_S
+
+    #: Time-averaged irradiance (mW/mm^2) the normalized spatial view calls
+    #: 1.0. Fixed at the projector maximum, so lowering any setting lowers the
+    #: normalized drive.
+    ref_drive = max_irradiance * max_duty_cycle
+
+    __slots__ = ()
+
+    def __init__(self, irradiance=3.5 * mW / mm ** 2, freq=30 * Hz,
+                 pulse_dur=9.8 * ms, grayscale=True, threshold=0.5):
+        # Wavelength is a property of the projector, not a setting.
+        super().__init__(irradiance=irradiance, freq=freq,
+                         pulse_dur=pulse_dur,
+                         wavelength=self.projector_wavelength * nm,
+                         grayscale=grayscale, threshold=threshold)
+
+    def _pprint_params(self):
+        """Return a dict of class arguments to pretty-print"""
+        return {'irradiance': self.irradiance, 'freq': self.freq,
+                'pulse_dur': self.pulse_dur, 'grayscale': self.grayscale,
+                'threshold': self.threshold}
+
+    def _check_pulse_dur(self, pulse_dur, freq):
+        """Also require an exact duration from the projector's own grid"""
+        # Require exact hardware-grid durations; do not round silently.
+        steps = pulse_dur / self.pulse_step
+        if abs(steps - round(steps)) > 1e-9:
+            raise ValueError(
+                f"'pulse_dur' must be a whole multiple of "
+                f"{self.pulse_step} ms, the step the projector modulates "
+                f"in, not {pulse_dur:g} ms.")
+        if pulse_dur > self.max_pulse_dur + 1e-9:
+            raise ValueError(
+                f"'pulse_dur' cannot exceed {self.max_pulse_dur} ms, the "
+                f"longest documented ON duration, not {pulse_dur:g} ms.")
+        super()._check_pulse_dur(pulse_dur, freq)
+
+    @property
+    def n_levels(self):
+        """Number of nonzero ON durations available up to ``pulse_dur``"""
+        return int(round(self.pulse_dur / self.pulse_step))
+
+    def _durations(self, gray):
+        """Map gray levels in [0, 1] to ON durations (ms)
+
+        Binary mode lights a pixel for the full ``pulse_dur``; grayscale mode
+        pulse-width modulates onto the projector's own duration grid.
+        """
+        # Use float64 so durations land exactly on the hardware grid.
+        gray = np.asarray(gray, dtype=np.float64)
+        if not self.grayscale:
+            return np.where(gray >= self.threshold, self.pulse_dur, 0.0)
+        # Gray levels are already clipped to [0, 1].
+        return np.round(gray * self.n_levels) * self.pulse_step

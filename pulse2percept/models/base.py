@@ -256,7 +256,7 @@ def _device_scene(scene, implant):
     if device.shape != scene.shape:
         refuse('shape', scene.shape, device.shape)
     if scene.time is not None:
-        # Same instants, told in whichever unit preprocessing handed back:
+        # Same instants:
         mine = np.asarray(scene.time)
         theirs = np.asarray(as_value(Quantity(np.asarray(device.time),
                                               device.time_unit),
@@ -272,40 +272,37 @@ def _device_scene(scene, implant):
 def _scene_stim(model, scene, gaze):
     """Prepare electrode stimulation sampled from a scene."""
     if not model.has_space:
-        raise ValueError("Registering a scene against an implant needs a "
-                         "spatial model. This model has only a temporal one.")
+        raise ValueError("Scene registration requires a spatial model.")
+
     implant = model.implant
     spatial = model.spatial
-    # Up here rather than next to its use below: a model that cannot register
-    # a scene at all is refused before the scene is preprocessed.
     x_vf, y_vf = spatial._scene_sampling_points()
+
     if implant.encoder is None:
         raise ValueError(
-            "A scene is a picture, and there is no principled default for "
-            "turning a gray level into stimulation. Give the implant an "
-            "'encoder' (e.g. an AmplitudeEncoder, or a PRIMAEncoder for a "
-            "photovoltaic device) to say how.")
+            "Scene input requires an implant encoder.")
+
     device_scene = _device_scene(scene, implant)
     frame = implant.scene_input_frame
     if frame not in ('eye', 'head'):
-        # Validate class defaults as well as instance overrides:
-        raise ValueError(f"This implant's 'scene_input_frame' is {frame!r}, "
-                         f"which says nothing about how gaze registers the "
-                         f"scene onto it; expected 'eye' or 'head'.")
-    # Head-fixed input ignores gaze when sampling, but gaze is still validated:
+        raise ValueError(
+            f"'scene_input_frame' must be 'eye' or 'head', not {frame!r}.")
+
     _gaze_points(gaze, device_scene.n_frames)
     input_gaze = gaze if frame == 'eye' else None
     gray = device_scene._device_input(x_vf, y_vf, gaze=input_gaze)
+
     if device_scene.time is None:
-        # A still scene is sampled as a one-frame movie; a `Stimulus` with no
-        # time axis wants that frame axis gone, or it reads the frame as a
-        # time point:
         gray = gray[:, 0]
-    seen = Stimulus(gray, electrodes=implant.electrode_names,
-                    time=device_scene.time,
-                    metadata=device_scene.source.metadata)
-    # Preprocessing already ran on the scene source. Use a shallow copy with
-    # preprocessing disabled for the remaining preparation steps:
+
+    seen = Stimulus(
+        gray,
+        electrodes=implant.electrode_names,
+        time=device_scene.time,
+        metadata=device_scene.source.metadata,
+    )
+
+    # Scene preprocessing has already been applied.
     device = copy(implant)
     device.preprocess = False
     return device.prepare_stim(seen._inherit_units(device_scene.source))

@@ -227,6 +227,52 @@ The total number of fabricated cells was therefore 526 for F55,
 However, these peripheral cells covered by the common return are not
 independently stimulating and are therefore not exposed in pulse2percept.
 
+All four classes are driven by pulsed near-infrared illumination rather than
+injected current: ``prepare_stim`` returns irradiance in ``mW/mm^2``.
+
+An implant class describes the photovoltaic *array*; its default encoder
+describes a documented optical stimulation protocol for that experimental
+system. The two are separate, so each array gets its own encoder:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 22 48
+
+   * - Object
+     - Default encoder
+     - Optical protocol
+   * - ``PRIMAPivotal()``
+     - ``PRIMAEncoder``
+     - 880 nm, 3.5 mW/mm^2, 30 Hz, ON durations on a 0.7 ms grid up to 9.8 ms
+   * - ``Lorach2015Array()``
+     - ``PhotovoltaicEncoder``
+     - 915 nm, 4 mW/mm^2, 4 ms pulses at 40 Hz [Lorach2015]_
+   * - ``Ho2019FlatArray()``
+     - ``PhotovoltaicEncoder``
+     - 915 nm, 8 mW/mm^2, 4 ms pulses at 40 Hz [Ho2019]_
+   * - ``Huang2021Array()``
+     - ``PhotovoltaicEncoder``
+     - 880 nm, 4.7 mW/mm^2, 10 ms pulses at 2 Hz [Huang2021]_
+
+[Huang2021]_ swept irradiance from 0.002 to 4.7 mW/mm^2 while measuring VEP
+thresholds rather than running a video system, so 4.7 mW/mm^2 is its brightest
+measured condition, not a device or safety maximum.
+
+None of these papers specifies a natural-image grayscale transfer function, so
+gray level maps to ON duration by an explicit pulse2percept simulation
+convention (linear, and additionally quantized onto the 0.7 ms grid for
+``PRIMAEncoder``) rather than by a reconstruction of the original camera
+pipeline. Pass a configured encoder or ``encoder=None`` to opt out.
+
+``safe_mode=True`` checks the documented PRIMA projector envelope on
+:py:class:`~pulse2percept.implants.retina.PRIMAPivotal`. No comparable
+envelope has been published for the research arrays, so they raise rather than
+borrow PRIMA's limits. Negative or non-finite irradiance is rejected on every
+array, with or without ``safe_mode``.
+
+Photovoltaic conversion to tissue current, and retinal transduction, are not
+modeled.
+
 ``PRIMA``, ``PRIMA75``, ``PRIMA55`` and ``PRIMA40`` are deprecated aliases;
 see the v0.11 release notes for the corresponding canonical names.
 

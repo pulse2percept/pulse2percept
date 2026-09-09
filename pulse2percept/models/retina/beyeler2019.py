@@ -89,10 +89,11 @@ class ScoreboardSpatial(RetinalSpatial):
     controls the spatial spread of activation. Larger values of
     :math:`\rho` produce broader phosphenes.
 
-    For current-driven implants, :math:`a_e` is current amplitude.
-    :py:class:`~pulse2percept.stimuli.PRIMAEncoder` instead provides normalized
-    optical drive. In that case, Scoreboard visualizes the stimulation pattern;
-    it does not model the retinal response.
+    For current-driven implants, :math:`a_e` is current amplitude. For
+    photovoltaic implants,
+    :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` instead provides
+    normalized optical drive. Scoreboard visualizes the stimulation pattern;
+    it does not model photovoltaic conversion or the retinal response.
 
     .. warning::
 
@@ -177,7 +178,8 @@ class ScoreboardSpatial(RetinalSpatial):
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
 
-    #: Also accepts encoded normalized optical drive from PRIMAEncoder.
+    #: Also accepts encoded normalized optical drive from a
+    #: PhotovoltaicEncoder.
     extra_stimulus_units = (dimensionless,)
 
     def __init__(self, implant, *, rho=100, xrange=(-15, 15),
@@ -252,10 +254,12 @@ class ScoreboardModel(Model):
         controls the spatial spread of activation. Larger values of
         :math:`\rho` produce broader phosphenes.
 
-        For current-driven implants, :math:`a_e` is current amplitude.
-        :py:class:`~pulse2percept.stimuli.PRIMAEncoder` instead provides
-        normalized optical drive. In that case, Scoreboard visualizes the
-        stimulation pattern; it does not model the retinal response.
+        For current-driven implants, :math:`a_e` is current amplitude. For
+        photovoltaic implants,
+        :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` instead
+        provides normalized optical drive. Scoreboard visualizes the
+        stimulation pattern; it does not model photovoltaic conversion or the
+        retinal response.
 
     .. warning::
 

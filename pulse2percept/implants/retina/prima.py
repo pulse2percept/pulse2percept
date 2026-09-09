@@ -13,20 +13,37 @@ from collections.abc import Sequence
 from .base import RetinalImplant
 from ..electrodes import HexElectrode
 from ..electrode_arrays import ElectrodeGrid
-from ...stimuli import PRIMAEncoder
+from ...stimuli import PhotovoltaicEncoder, PRIMAEncoder
 from ...stimuli.base import _describe_unit
 from ...stimuli.encoders import _OpticalStimulus
 from ...units import DimensionMismatchError, as_value, mW, mm, um
 from ...utils import deprecated
 from ...utils.constants import MS_PER_S, ZORDER
 
-# Distinguish the default PRIMAEncoder from ``encoder=None``.
+# Distinguish an implant's own default encoder from ``encoder=None``.
 _DEVICE_DEFAULT = object()
 
 
-def _projector(stim):
-    """Return ``stim`` if it retains a PRIMA projector schedule."""
+def _optical(stim):
+    """Return ``stim`` if it retains a pulsed-illumination schedule."""
     return stim if isinstance(stim, _OpticalStimulus) else None
+
+
+#: Representative optical stimulation in [Lorach2015]_: 915 nm, 4 mW/mm^2,
+#: 4 ms pulses at 40 Hz (grating-acuity experiments).
+_LORACH2015_OPTICS = {'wavelength': 915, 'irradiance': 4.0, 'freq': 40,
+                      'pulse_dur': 4.0}
+
+#: Representative optical stimulation in [Ho2019]_: 915 nm, 8 mW/mm^2, 4 ms
+#: pulses at 40 Hz (grating-acuity experiments).
+_HO2019_OPTICS = {'wavelength': 915, 'irradiance': 8.0, 'freq': 40,
+                  'pulse_dur': 4.0}
+
+#: Representative optical stimulation in [Huang2021]_: 880 nm, 10 ms pulses at
+#: 2 Hz. Peak irradiance is the brightest of the 0.002-4.7 mW/mm^2 series that
+#: paper sweeps -- a measurement condition, not a device or safety maximum.
+_HUANG2021_OPTICS = {'wavelength': 880, 'irradiance': 4.7, 'freq': 2,
+                     'pulse_dur': 10.0}
 
 
 #: F55 layout reconstructed from Fig. 2(a) of [Ho2019]_.
@@ -272,7 +289,64 @@ class PhotovoltaicPixel(HexElectrode):
         raise NotImplementedError
 
 
-class PRIMAPivotal(RetinalImplant):
+class _PhotovoltaicRetinalImplant(RetinalImplant):
+    """Subretinal photovoltaic array driven by pulsed NIR illumination.
+
+    Stimulation is irradiance (``mW/mm^2``), not injected current.
+    """
+    # Frozen class: User cannot add more class attributes
+    __slots__ = ()
+
+    technology = 'photovoltaic'
+
+    #: The device is illuminated, not driven by a current source.
+    stimulus_unit = mW / mm ** 2
+
+    def _require_physical_light(self, stim):
+        """Reject negative or nonfinite irradiance."""
+        if stim.unit.dimension != self.stimulus_unit.dimension:
+            return
+        schedule = _optical(stim)
+        if schedule is not None:
+            values = np.array([schedule.irradiance], dtype=np.float64)
+        else:
+            values = np.asarray(stim.data, dtype=np.float64)
+        if values.size == 0:
+            return
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Optical stimulus has non-finite irradiance.")
+        if values.min() < 0:
+            raise ValueError(
+                f"Irradiance is a power density and cannot be negative "
+                f"(got {values.min():.3f} mW/mm^2); a dark pixel is zero.")
+
+    def _check_optical_safe_mode(self, stim):
+        """Reject ``safe_mode`` where no optical envelope is published."""
+        raise NotImplementedError(
+            f"'safe_mode' is not available for {type(self).__name__}: no "
+            f"optical operating envelope has been published for this array, "
+            f"and the PRIMA projector limits checked by PRIMAPivotal are "
+            f"specific to that system. Set safe_mode=False.")
+
+    def check_stim(self, stim):
+        """Require finite, non-negative irradiance.
+
+        Charge balance does not apply to light and is not checked. With
+        ``safe_mode``, a subclass may additionally check its own documented
+        optical operating envelope; arrays without one reject ``safe_mode``
+        rather than borrow another device's limits.
+
+        .. versionadded:: 0.11.0
+        """
+        self._require_physical_light(stim)
+        if self.safe_mode:
+            self._check_optical_safe_mode(stim)
+        if self.max_current is not None:
+            # The inherited current-limit check rejects optical units.
+            self._require_within_current_limit(stim)
+
+
+class PRIMAPivotal(_PhotovoltaicRetinalImplant):
     """Create the PRIMA array used in the pivotal PRIMAvera trial
     
     The implant has 378 photovoltaic pixels, each 100 um wide on a 100 um
@@ -303,18 +377,18 @@ class PRIMAPivotal(RetinalImplant):
         preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
-        Enforces the documented projector operating envelope: irradiance
-        <= 3.5 mW/mm^2, ON durations on the 0.7 ms grid and <= 9.8 ms,
-        duty cycle <= 0.294, and frame rate <= 30 Hz. All 378 pixels may be
-        illuminated simultaneously. This is not a biological safety limit or a
-        demonstrated hardware maximum.
+        Enforces the documented projector operating envelope: 880 nm
+        illumination, irradiance <= 3.5 mW/mm^2, ON durations on the 0.7 ms
+        grid and <= 9.8 ms, duty cycle <= 0.294, and frame rate <= 30 Hz. All
+        378 pixels may be illuminated simultaneously. This is not a biological
+        safety limit or a demonstrated hardware maximum.
 
         .. versionchanged:: 0.11.0
             Checks the optical envelope instead of electrical charge balance.
     encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         Image/video encoder. Defaults to
-        :py:class:`~pulse2percept.stimuli.PRIMAEncoder`. Pass ``None`` to
-        disable automatic encoding.
+        :py:class:`~pulse2percept.stimuli.PRIMAEncoder`, which describes the
+        pivotal-trial projector. Pass ``None`` to disable automatic encoding.
 
         .. versionadded:: 0.11.0
 
@@ -325,16 +399,15 @@ class PRIMAPivotal(RetinalImplant):
     *  :py:meth:`~pulse2percept.implants.Implant.prepare_stim`
        returns optical irradiance (``mW/mm^2``). Photovoltaic conversion is not
        modeled.
+    *  Gray levels map linearly onto the projector's 0.7 ms duration grid.
+       The clinical camera-to-pulse-duration transfer function is not
+       published, so that mapping is a pulse2percept convention.
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
 
     placement = 'subretinal'
-    technology = 'photovoltaic'
     family = 'PRIMA'
-
-    #: The device is illuminated, not driven by a current source.
-    stimulus_unit = mW / mm ** 2
 
     def __init__(self, z=0, eye='right', preprocess=False,
                  safe_mode=False, encoder=_DEVICE_DEFAULT):
@@ -384,59 +457,40 @@ class PRIMAPivotal(RetinalImplant):
             for elec, z_elec in zip(self.electrode_array.electrode_objects, z):
                 elec.z = z_elec
 
-    def _require_physical_light(self, stim):
-        """Reject negative or nonfinite irradiance."""
-        if stim.unit.dimension != self.stimulus_unit.dimension:
-            return
-        projector = _projector(stim)
-        if projector is not None:
-            # Read peak irradiance directly from the projector schedule.
-            values = np.array([projector.irradiance], dtype=np.float64)
-        else:
-            values = np.asarray(stim.data, dtype=np.float64)
-        if values.size == 0:
-            return
-        if not np.all(np.isfinite(values)):
-            raise ValueError("Optical stimulus has non-finite irradiance.")
-        if values.min() < 0:
-            raise ValueError(
-                f"Optical stimulus asks for {values.min():.3f} mW/mm^2. "
-                f"Irradiance is a power density and cannot be negative; "
-                f"a dark pixel is zero.")
-
-    def _require_within_optical_envelope(self, stim):
+    def _check_optical_safe_mode(self, stim):
         """Check the documented PRIMA projector operating envelope."""
         if stim.unit.dimension != self.stimulus_unit.dimension:
             raise DimensionMismatchError(
-                f"Safety check 'safe_mode' needs an optical stimulus to "
-                f"check, and this one is measured in "
+                f"Safety check 'safe_mode' needs an optical stimulus, not "
                 f"{_describe_unit(stim.unit)}. Give the implant a "
-                f"PRIMAEncoder so that image or video input is encoded into "
+                f"PRIMAEncoder to encode image or video input into "
                 f"irradiance first.")
-        projector = _projector(stim)
-        if projector is None:
+        schedule = _optical(stim)
+        if schedule is None:
             # Duty cycle requires the projector schedule, not waveform samples.
             raise ValueError(
-                "Safety check: this stimulus no longer describes a projector "
-                "(irradiance, frame rate, per-pixel ON durations), so its "
-                "duty cycle cannot be verified. Build it with a PRIMAEncoder "
-                "and keep it intact, or set safe_mode=False and check the "
-                "device envelope yourself.")
-        irradiance, freq = projector.irradiance, projector.freq
-        dur = np.asarray(projector.pulse_dur, dtype=np.float64)
+                "Safety check: stimulus no longer carries a projector "
+                "schedule, so its duty cycle cannot be verified. Build it "
+                "with a PRIMAEncoder, or set safe_mode=False.")
+        # The projector is an 880 nm system; photovoltaic pixel response is
+        # wavelength dependent, so another wavelength is another device.
+        if abs(schedule.wavelength - PRIMAEncoder.projector_wavelength) > 1e-9:
+            raise ValueError(
+                f"Safety check: the projector illuminates at "
+                f"{PRIMAEncoder.projector_wavelength:g} nm, not "
+                f"{schedule.wavelength:g} nm.")
+        irradiance, freq = schedule.irradiance, schedule.freq
+        dur = np.asarray(schedule.pulse_dur, dtype=np.float64)
         step = PRIMAEncoder.pulse_step
         if irradiance > PRIMAEncoder.max_irradiance + 1e-9:
             raise ValueError(
-                f"Safety check: stimulus projects {irradiance:.3f} mW/mm^2, "
-                f"which exceeds the {PRIMAEncoder.max_irradiance} mW/mm^2 the "
-                f"device delivers.")
+                f"Safety check: {irradiance:.3f} mW/mm^2 exceeds the "
+                f"{PRIMAEncoder.max_irradiance} mW/mm^2 the device delivers.")
         longest = float(dur.max(initial=0.0))
         if longest > PRIMAEncoder.max_pulse_dur + 1e-9:
             raise ValueError(
-                f"Safety check: stimulus lights a pixel for {longest:.3f} ms, "
-                f"which exceeds the longest documented ON duration of "
-                f"{PRIMAEncoder.max_pulse_dur} ms.")
-        # Require 0.7 ms ON-duration steps.
+                f"Safety check: {longest:.3f} ms exceeds the longest "
+                f"documented ON duration of {PRIMAEncoder.max_pulse_dur} ms.")
         steps = dur[dur > 0] / step
         if steps.size and np.any(np.abs(steps - np.round(steps)) > 1e-6):
             raise ValueError(
@@ -446,28 +500,15 @@ class PRIMAPivotal(RetinalImplant):
         duty = freq * longest / MS_PER_S
         if duty > PRIMAEncoder.max_duty_cycle + 1e-9:
             raise ValueError(
-                f"Safety check: stimulus asks for a duty cycle of "
-                f"{duty:.3f} ({freq:g} Hz x {longest:.3f} ms), which exceeds "
-                f"the {PRIMAEncoder.max_duty_cycle:.3f} the device delivers. "
+                f"Safety check: duty cycle {duty:.3f} ({freq:g} Hz x "
+                f"{longest:.3f} ms) exceeds the "
+                f"{PRIMAEncoder.max_duty_cycle:.3f} the device delivers. "
                 f"Lower 'freq' or shorten 'pulse_dur'.")
         if freq > PRIMAEncoder.max_freq + 1e-9:
             raise ValueError(
                 f"Safety check: stimulus runs the projector at {freq:g} Hz, "
-                f"and the pivotal system is reported to run at "
-                f"{PRIMAEncoder.max_freq:g} Hz. Set safe_mode=False to "
-                f"explore other frame rates.")
-
-    def check_stim(self, stim):
-        """Validate optical stimulation and, in safe mode, projector limits.
-
-        .. versionadded:: 0.11.0
-        """
-        self._require_physical_light(stim)
-        if self.safe_mode:
-            self._require_within_optical_envelope(stim)
-        if self.max_current is not None:
-            # The inherited current-limit check rejects optical units.
-            self._require_within_current_limit(stim)
+                f"above the documented {PRIMAEncoder.max_freq:g} Hz. Set "
+                f"safe_mode=False to explore other frame rates.")
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
@@ -489,7 +530,7 @@ class PRIMAPivotal(RetinalImplant):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Lorach2015Array(RetinalImplant):
+class Lorach2015Array(_PhotovoltaicRetinalImplant):
     """Create the 70 um photovoltaic array of [Lorach2015]_
     
     The array has 142 pixels, each 70 um wide on a 75 um hexagonal grid, with a
@@ -514,10 +555,32 @@ class Lorach2015Array(RetinalImplant):
         preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
-        If safe mode is enabled, only charge-balanced stimuli are allowed.
+        Not supported: no optical operating envelope has been published for
+        this array, and the PRIMA projector limits are specific to
+        :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`. ``True``
+        raises when a stimulus is checked.
+
+        .. versionchanged:: 0.11.0
+            No longer applies the PRIMA projector envelope to this array.
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+        Image/video encoder. Defaults to a
+        :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` configured
+        for the illumination reported in [Lorach2015]_ (915 nm, 4 mW/mm^2,
+        4 ms pulses at 40 Hz). Pass ``None`` to disable automatic encoding.
+
+        .. versionadded:: 0.11.0
     
     Notes
     -----
+    *  Driven by pulsed near-infrared illumination:
+       :py:meth:`~pulse2percept.implants.Implant.prepare_stim` returns
+       irradiance (``mW/mm^2``). Photovoltaic conversion to tissue current is
+       not modeled.
+    *  The default encoder reproduces the 915 nm, 4 mW/mm^2, 4 ms, 40 Hz
+       illumination of the [Lorach2015]_ grating experiments. Gray levels set
+       ON duration linearly, which is a pulse2percept simulation convention:
+       the paper does not specify a natural-image grayscale transfer
+       function.
     *  [Lorach2015]_ reports the 65 um row spacing as the "pixel pitch".
     *  Seven rim pixels extend beyond the nominal 1 mm substrate and are clipped
        when plotted.
@@ -526,10 +589,9 @@ class Lorach2015Array(RetinalImplant):
     __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
 
     placement = 'subretinal'
-    technology = 'photovoltaic'
 
     def __init__(self, z=0, eye='right', preprocess=False,
-                 safe_mode=False):
+                 safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.spacing = 75  # um, nearest-neighbor center-to-center
         self.pixel_width = 70  # um, flat-to-flat
         self.gap = self.spacing - self.pixel_width  # um, open inter-pixel gap
@@ -539,6 +601,9 @@ class Lorach2015Array(RetinalImplant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+        # Do not share mutable encoder state between implant instances.
+        self.encoder = (PhotovoltaicEncoder(**_LORACH2015_OPTICS)
+                        if encoder is _DEVICE_DEFAULT else encoder)
 
         # Normalized here rather than in ElectrodeGrid, because a
         # per-electrode list of heights never reaches the grid at all -- it is
@@ -596,7 +661,7 @@ class Lorach2015Array(RetinalImplant):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Ho2019FlatArray(RetinalImplant):
+class Ho2019FlatArray(_PhotovoltaicRetinalImplant):
     """Create a flat photovoltaic array of [Ho2019]_
     
     Supports the F55 and F40 arrays on a 1 mm substrate:
@@ -626,10 +691,22 @@ class Ho2019FlatArray(RetinalImplant):
         preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
-        If safe mode is enabled, only charge-balanced stimuli are allowed.
+        Not supported: no optical operating envelope has been published for
+        this array, and the PRIMA projector limits are specific to
+        :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`.
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+        Image/video encoder. Pass ``None`` to disable automatic encoding.
     
     Notes
     -----
+    *  Driven by pulsed near-infrared illumination:
+       :py:meth:`~pulse2percept.implants.Implant.prepare_stim` returns
+       irradiance (``mW/mm^2``). Photovoltaic conversion to tissue current is
+       not modeled.
+    *  The default encoder reproduces the 915 nm, 8 mW/mm^2, 4 ms, 40 Hz
+       illumination of the [Ho2019]_ grating experiments. Gray levels set ON
+       duration linearly, which is a pulse2percept simulation convention: the
+       paper does not specify a natural-image grayscale transfer function.
     *  [Ho2019]_ also describes pillar arrays Pil55 and Pil40, which are not
        modeled here.
     *  The F55 layout is reconstructed from Fig. 2(a). The F40 outline is not
@@ -642,10 +719,9 @@ class Ho2019FlatArray(RetinalImplant):
     __slots__ = ('pixel_size', 'shape', 'spacing', 'pixel_width', 'gap')
 
     placement = 'subretinal'
-    technology = 'photovoltaic'
 
     def __init__(self, pixel_size, z=0, eye='right',
-                 preprocess=False, safe_mode=False):
+                 preprocess=False, safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.pixel_size = _pixel_size_um(pixel_size, _HO2019_VARIANTS,
                                          'Ho2019FlatArray')
         spec = _HO2019_VARIANTS[self.pixel_size]
@@ -656,6 +732,9 @@ class Ho2019FlatArray(RetinalImplant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+        # Do not share mutable encoder state between implant instances.
+        self.encoder = (PhotovoltaicEncoder(**_HO2019_OPTICS)
+                        if encoder is _DEVICE_DEFAULT else encoder)
 
         # Normalized here rather than in ElectrodeGrid, because a
         # per-electrode list of heights never reaches the grid at all -- it is
@@ -704,7 +783,7 @@ class Ho2019FlatArray(RetinalImplant):
         return self.spacing * np.sqrt(3) / 2
 
 
-class Huang2021Array(RetinalImplant):
+class Huang2021Array(_PhotovoltaicRetinalImplant):
     """Create a vertical-junction photovoltaic array of [Huang2021]_
     
     Supports four arrays on a 1.5 mm substrate. Only exposed pixels are modeled
@@ -737,10 +816,30 @@ class Huang2021Array(RetinalImplant):
         preprocessing method whenever a stimulus is prepared, or a custom
         function (callable).
     safe_mode : bool, optional
-        If safe mode is enabled, only charge-balanced stimuli are allowed.
+        Not supported: no optical operating envelope has been published for
+        this array, and the PRIMA projector limits are specific to
+        :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`. ``True``
+        raises when a stimulus is checked.
+
+        .. versionchanged:: 0.11.0
+            No longer applies the PRIMA projector envelope to this array.
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+        Image/video encoder. Defaults to a
+        :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` configured
+        for the illumination reported in [Huang2021]_ (880 nm, 4.7 mW/mm^2,
+        10 ms pulses at 2 Hz). Pass ``None`` to disable automatic encoding.
+
+        .. versionadded:: 0.11.0
     
     Notes
     -----
+    *  Driven by pulsed near-infrared illumination:
+       :py:meth:`~pulse2percept.implants.Implant.prepare_stim` returns
+       irradiance (``mW/mm^2``). Photovoltaic conversion to tissue current is
+       not modeled.
+    *  The default encoder reproduces the 880 nm, 10 ms, 2 Hz full-field
+       stimulation of [Huang2021]_. Gray levels set ON duration linearly
+       (a p2p convention).
     *  ``n_total_pixels`` gives the fabricated pixel count; peripheral pixels
        covered by the common return are not modeled as electrodes.
     *  Exposed-pixel layouts are reconstructed from Fig. 7 of [Huang2021]_.
@@ -754,10 +853,9 @@ class Huang2021Array(RetinalImplant):
                  'pixel_width', 'gap')
 
     placement = 'subretinal'
-    technology = 'photovoltaic'
 
     def __init__(self, pixel_size, z=0, eye='right',
-                 preprocess=False, safe_mode=False):
+                 preprocess=False, safe_mode=False, encoder=_DEVICE_DEFAULT):
         self.pixel_size = _pixel_size_um(pixel_size, _HUANG2021_AXIAL_SPANS,
                                          'Huang2021Array')
         spans = _HUANG2021_AXIAL_SPANS[self.pixel_size]
@@ -771,6 +869,9 @@ class Huang2021Array(RetinalImplant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
+        # Do not share mutable encoder state between implant instances.
+        self.encoder = (PhotovoltaicEncoder(**_HUANG2021_OPTICS)
+                        if encoder is _DEVICE_DEFAULT else encoder)
 
         # Normalized here rather than in ElectrodeGrid, because a
         # per-electrode list of heights never reaches the grid at all -- it is
