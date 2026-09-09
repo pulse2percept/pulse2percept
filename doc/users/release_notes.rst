@@ -51,7 +51,7 @@ Highlights
   side by side (:pull:`854`, :pull:`871`, :pull:`883`, :pull:`890`).
 
 * New photovoltaic stimulation pipeline for the PRIMA-style arrays, from image
-  encoding to irradiance-based model input (:pull:`868`).
+  encoding to irradiance-based model input (:pull:`868`, :pull:`891`).
 
 
 API changes and improvements
@@ -101,8 +101,11 @@ Generic implants carry neither.
   ``PRIMA75`` becomes :py:class:`~pulse2percept.implants.retina.Lorach2015Array`,
   and new :py:class:`~pulse2percept.implants.retina.Ho2019FlatArray` and
   :py:class:`~pulse2percept.implants.retina.Huang2021Array` classes capture other
-  photovoltaic designs. Device geometry and pixel dimensions were corrected
-  accordingly (:pull:`865`, :pull:`891`).
+  photovoltaic designs (:pull:`865`).
+  The new :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` holds the
+  generic image-to-irradiance machinery, with 
+  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` implementing the PRIMA
+  projector specialization (:pull:`891`).
 
 * :py:class:`~pulse2percept.implants.EnsembleImplant` can now be constructed
   from physical coordinates with ``from_coords`` or from any 2D visual-field map

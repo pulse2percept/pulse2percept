@@ -12,14 +12,15 @@ from pulse2percept.implants.retina import ArgusII, PRIMAPivotal
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, Encoder,
                                    FrequencyEncoder, ImageStimulus,
-                                   MonophasicPulse, PRIMAEncoder, Stimulus,
-                                   StimulusEncoder, VideoStimulus)
+                                   MonophasicPulse, PhotovoltaicEncoder,
+                                   PRIMAEncoder, Stimulus, StimulusEncoder,
+                                   VideoStimulus)
 from pulse2percept.stimuli import encoders
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
 from pulse2percept.units import (DimensionMismatchError, Hz, Quantity, W,
-                                 dimensionless, kHz, m, mA, mW, mm, ms, uA,
-                                 us, xTh)
+                                 dimensionless, kHz, m, mA, mW, mm, ms, nm,
+                                 uA, us, xTh)
 from pulse2percept.units import s as sec
 
 
@@ -1368,6 +1369,104 @@ def test_encoded_stimulus_survives_preparation_unrendered():
     stim = ArgusII(encoder=AmplitudeEncoder()).prepare_stim(img)
     npt.assert_equal(_rendered(stim), False)
     npt.assert_equal(stim.data.shape[0], 60)
+
+
+# -----------------------------------------------------------------------------
+# PhotovoltaicEncoder
+# -----------------------------------------------------------------------------
+
+def test_PhotovoltaicEncoder():
+    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
+                                  wavelength=915)
+    npt.assert_almost_equal(encoder.irradiance, 4)
+    npt.assert_almost_equal(encoder.freq, 40)
+    npt.assert_almost_equal(encoder.pulse_dur, 4)
+    npt.assert_almost_equal(encoder.wavelength, 915)
+    npt.assert_almost_equal(encoder.period, 25)
+    # Normalized drive is referenced to a fully lit pixel at these settings.
+    npt.assert_almost_equal(encoder.ref_drive, 4 * 4 * 40 / 1000)
+    npt.assert_equal(encoder.grayscale, True)
+    npt.assert_equal(isinstance(encoder, Encoder), True)
+    npt.assert_equal(isinstance(encoder, StimulusEncoder), False)
+    npt.assert_equal('PhotovoltaicEncoder' in str(encoder), True)
+    npt.assert_equal('wavelength' in str(encoder), True)
+
+    # Unitful and bare parameters are equivalent.
+    unitful = PhotovoltaicEncoder(irradiance=4000 * W / m ** 2,
+                                  freq=0.04 * kHz, pulse_dur=4000 * us,
+                                  wavelength=915 * nm)
+    npt.assert_almost_equal(unitful.irradiance, 4)
+    npt.assert_almost_equal(unitful.freq, 40)
+    npt.assert_almost_equal(unitful.pulse_dur, 4)
+    npt.assert_almost_equal(unitful.wavelength, 915)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'irradiance': 0}, {'irradiance': -1}, {'irradiance': np.inf},
+    {'freq': 0}, {'freq': -40}, {'freq': np.nan},
+    {'pulse_dur': -4}, {'pulse_dur': np.inf},
+    {'pulse_dur': 30},        # does not fit into a 25 ms period
+    {'wavelength': 0}, {'wavelength': -915},
+    {'threshold': -0.1}, {'threshold': 1.5},
+])
+def test_PhotovoltaicEncoder_rejects(kwargs):
+    settings = {'irradiance': 4, 'freq': 40, 'pulse_dur': 4}
+    settings.update(kwargs)
+    with pytest.raises(ValueError):
+        PhotovoltaicEncoder(**settings)
+
+
+@pytest.mark.parametrize('pulse_dur, freq', [(4, 40), (10, 2)])
+def test_PhotovoltaicEncoder_is_not_bound_to_the_PRIMA_grid(pulse_dur, freq):
+    """Durations off the 0.7 ms PRIMA grid are ordinary optical protocols."""
+    with pytest.raises(ValueError):
+        PRIMAEncoder(pulse_dur=pulse_dur, freq=freq)
+    encoder = PhotovoltaicEncoder(irradiance=4, freq=freq,
+                                  pulse_dur=pulse_dur)
+    stim = encoder.encode(ImageStimulus(np.ones((16, 16))),
+                          implant=PRIMAPivotal())
+    npt.assert_almost_equal(stim.pulse_dur.max(), pulse_dur)
+    npt.assert_almost_equal(on_intervals(stim)[0], pulse_dur, decimal=6)
+
+
+def test_PhotovoltaicEncoder_grayscale_is_continuous():
+    """Gray levels scale ON duration linearly, without quantization."""
+    implant = PRIMAPivotal()
+    ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
+    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4)
+    stim = encoder.encode(ImageStimulus(ramp), implant=implant)
+    gray = implant.reshape_stim(ImageStimulus(ramp)).data
+    npt.assert_almost_equal(stim.pulse_dur[:, :1], gray * 4, decimal=6)
+    # More distinct durations than PRIMA's 14 duration levels allow:
+    npt.assert_equal(np.unique(np.round(stim.pulse_dur, 6)).size > 14, True)
+    # Gray level changes duration, not peak irradiance.
+    lit = stim.data[stim.data > 0]
+    npt.assert_almost_equal(np.unique(np.round(lit, 6)), np.array([4.0]))
+
+    # Binary mode lights a pixel for the full duration or not at all.
+    binary = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
+                                 grayscale=False, threshold=0.5)
+    dur = binary.encode(ImageStimulus(ramp), implant=implant).pulse_dur
+    npt.assert_almost_equal(np.unique(np.round(dur, 6)), np.array([0.0, 4.0]))
+
+
+def test_PhotovoltaicEncoder_spatial_view():
+    implant = PRIMAPivotal()
+    ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
+    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4)
+    view = encoder.encode(ImageStimulus(ramp),
+                          implant=implant)._spatial_view()
+    npt.assert_equal(view.unit, dimensionless)
+    npt.assert_almost_equal(view.data.min(), 0)
+    npt.assert_almost_equal(view.data.max(), 1, decimal=6)
+    # 1.0 is a fully lit pixel at these settings, so halving the gray level
+    # halves the drive, but halving the irradiance does not change the scale.
+    half = encoder.encode(ImageStimulus(np.full((8, 8), 0.5)),
+                          implant=implant)._spatial_view()
+    npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
+    dim = PhotovoltaicEncoder(irradiance=2, freq=40, pulse_dur=4).encode(
+        ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
+    npt.assert_almost_equal(dim.data.max(), 1, decimal=6)
 
 
 # -----------------------------------------------------------------------------
