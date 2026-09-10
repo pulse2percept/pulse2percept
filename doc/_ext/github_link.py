@@ -42,7 +42,12 @@ def _linkcode_resolve(domain, info, package, url_fmt, revision):
         # Python 2 only
         class_name = class_name.encode('utf-8')
     module = __import__(info['module'], fromlist=[class_name])
-    obj = attrgetter(info['fullname'])(module)
+    try:
+        obj = attrgetter(info['fullname'])(module)
+    except AttributeError:
+        # Documented but not a runtime attribute, as an annotation-only
+        # dataclass field is. There is nothing to point a source link at:
+        return
 
     try:
         fn = inspect.getsourcefile(obj)

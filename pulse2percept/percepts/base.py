@@ -532,6 +532,37 @@ class Percept(Data):
         raise ValueError(f'Unknown axis value "{axis}". Use "frames" or '
                          f'None.')
 
+    def measure(self, threshold=0.5):
+        """Measure the brightness and geometry of the phosphenes in a percept
+
+        Measures each frame of a brightness percept: its integrated and peak
+        brightness, and the position, size and shape of its suprathreshold
+        support. Results are computed on call and not cached, so a percept
+        whose data changed measures anew.
+
+        See :py:func:`~pulse2percept.percepts.metrics.measure_percept` for the
+        definitions, units, and the inputs it rejects.
+
+        .. versionadded:: 0.11.0
+
+        Parameters
+        ----------
+        threshold : float, optional
+            Fraction of each frame's own positive maximum at or above which a
+            pixel belongs to the support. Must lie in (0, 1].
+
+        Returns
+        -------
+        metrics : :py:class:`~pulse2percept.percepts.metrics.PerceptMetrics`
+            One :py:class:`~pulse2percept.percepts.metrics.FrameMetrics` per
+            frame, plus the framewise arrays and the brightest frame.
+
+        """
+        # Local import: predicting a percept must not load the measurement
+        # module.
+        from .metrics import measure_percept
+        return measure_percept(self, threshold=threshold)
+
     def rewind(self):
         """Rewind the iterator"""
         self._next_frame = 0

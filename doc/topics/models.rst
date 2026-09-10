@@ -145,6 +145,127 @@ predict a percept from a stimulus.
 The result of ``predict_percept`` is a
 :py:class:`~pulse2percept.percepts.Percept`.
 
+Measuring a percept
+-------------------
+
+.. versionadded:: 0.11.0
+
+Prediction stops at the percept. Measurement is optional post-processing,
+performed on call and not part of the model::
+
+    stimulus → model → Percept → optional measurement
+
+:py:meth:`~pulse2percept.percepts.Percept.measure` reports the brightness and
+geometry of the phosphenes in each frame:
+
+.. code-block:: python
+
+    percept = model.predict_percept({'A8': 30})
+    metrics = percept.measure()
+
+    metrics.peak.diameter               # dva
+    metrics.peak.centroid               # (x, y) in dva
+    metrics.peak.integrated_brightness  # brightness units x dva^2
+
+Support
+~~~~~~~
+
+Each frame is clipped at zero, so negative model output does not contribute.
+Geometry is then measured on the *support*: the pixels at or above 50% of that
+frame's own positive maximum. The threshold is relative and re-evaluated per
+frame, so scaling a percept's brightness does not change its measured shape.
+Lower it to include more of the falloff:
+
+.. code-block:: python
+
+    metrics = percept.measure(threshold=0.25)
+
+What is measured
+~~~~~~~~~~~~~~~~
+
+``max_brightness`` is the largest positive pixel value, in the model's
+arbitrary units. ``integrated_brightness`` is the pixel sum scaled by pixel
+area (brightness units x dva^2), which approximates a spatial integral and is
+therefore insensitive to sampling resolution. Neither is on a psychophysical
+absolute scale.
+
+The remaining measurements describe the support as a binary set of pixels;
+brightness enters only through where the threshold falls. For a sufficiently
+sampled circular phosphene, ``major_axis``, ``minor_axis`` and ``diameter``
+approximately agree.
+
+**area**
+    Area of the support (dva^2).
+
+**diameter**
+    Diameter (dva) of the circle of equal area. At ``threshold=0.5`` this
+    approximates the FWHM of a sufficiently sampled circular Gaussian.
+
+**centroid**
+    Mean position ``(x, y)`` of the support pixels, in dva.
+
+**major_axis**, **minor_axis**
+    Axes (dva) of the ellipse with the same second moments as the support.
+
+**elongation**
+    ``major_axis / minor_axis``; approaches 1 for a circular phosphene.
+
+**n_components**
+    Number of disconnected suprathreshold regions.
+
+**touches_edge**
+    Whether the support reaches the simulated field boundary.
+
+A frame without positive brightness has no phosphene: brightness, area and
+component count are zero, and position and shape are ``NaN``.
+
+Multiple components and clipping
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Model output need not form a single connected phosphene. ``n_components``
+counts the disconnected suprathreshold regions; the largest is not selected,
+and every other measurement describes the combined support. An ``elongation``
+of 4 is consistent with one elongated phosphene or with two round ones some
+distance apart, which ``n_components`` distinguishes.
+
+``touches_edge`` flags support reaching the border of the simulated visual
+field. Where it is True, the measurements describe only the portion inside the
+field, and no extrapolation is performed. Widen the model's ``xrange`` and
+``yrange`` to capture the full percept.
+
+Temporal percepts
+~~~~~~~~~~~~~~~~~
+
+Frames are measured independently, and each measurement is also available as
+an array over frames:
+
+.. code-block:: python
+
+    metrics = percept.measure()
+
+    metrics.integrated_brightness  # one value per frame
+    metrics.peak_frame             # index of the brightest frame
+    metrics.peak                   # that frame's measurements
+
+``peak_frame`` ranks frames by integrated positive brightness, taking the
+earliest on a tie. Frame timing remains in ``percept.time``; no time
+integration or duration metrics are computed.
+
+Scope
+~~~~~
+
+These measurements describe the modeled percept *image*. They do not estimate
+visual acuity, phosphene discriminability, pairwise separability, behavioral
+resolution, or object-recognition performance.
+
+``measure()`` applies to model-produced brightness percepts and raises for the
+RGB percepts returned by scene composition, whose values are display
+intensities. Positions and sizes are in degrees of visual angle, so the percept
+must have been built on a
+:py:class:`~pulse2percept.topography.Grid2D`; a percept holding bare pixel
+indices is rejected.
+
+
 Source, delivered stimulation, percept
 --------------------------------------
 
