@@ -164,9 +164,9 @@ and nothing is cached afterwards:
     percept = model.predict_percept({'A8': 30})
     metrics = percept.measure()
 
-    metrics.peak.diameter          # 1.72 dva
-    metrics.peak.centroid          # (5.32, 5.32) dva
-    metrics.peak.total_brightness  # 102.7 brightness units x dva^2
+    metrics.peak.diameter          # dva
+    metrics.peak.centroid          # (x, y) in dva
+    metrics.peak.total_brightness  # brightness units x dva^2
 
 Support
 ~~~~~~~

@@ -299,7 +299,9 @@ def measure_percept(percept, threshold=0.5):
         raise ValueError(f"'threshold' is a fraction of a frame's own maximum "
                          f"brightness and must lie in (0, 1], not "
                          f"{threshold}.")
-    data = np.asarray(percept.data, dtype=np.float64)
+    # Left in the dtype it was stored in; `_measure_frame` promotes one frame
+    # at a time, so a long percept is never duplicated in double precision:
+    data = percept.data
     if not np.all(np.isfinite(data)):
         raise ValueError("Percept data must be finite to be measured.")
     dx = _pixel_spacing(percept.xdva, 'xdva')
