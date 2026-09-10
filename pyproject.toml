@@ -82,6 +82,7 @@ include-package-data = true
 "pulse2percept.stimuli" = ["data/samples/*"]
 "pulse2percept.datasets" = ["data/*"]
 "pulse2percept.plotting" = ["data/*"]
+"pulse2percept.topography.retina" = ["data/*.npz"]
 
 [tool.setuptools.packages.find]
 where = ["."]
