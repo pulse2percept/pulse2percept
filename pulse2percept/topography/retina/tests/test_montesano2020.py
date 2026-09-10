@@ -11,19 +11,14 @@ from pulse2percept.topography import Grid2D
 from pulse2percept.topography.retina import (Curcio1990Map, Montesano2020Map,
                                              Watson2014Map)
 
-# ---------------------------------------------------------------------------
-# Independent reference values.
-#
-# Taken from the directly solved reconstruction (7200 meridians on a 1 um
-# radial grid) that the packaged field was resampled from, not from the
-# packaged field itself, so these check the runtime interpolation rather than
-# restating it. Anatomical angle: 0 nasal, 90 superior, 180 temporal,
-# 270 inferior.
-# ---------------------------------------------------------------------------
+# Reference values come from the directly solved reconstruction (7200
+# meridians, 1 um radial grid) the packaged field was resampled from, not from
+# the packaged field itself, so the tests check the runtime interpolation
+# instead of restating it. Anatomical angle: 0 nasal, 90 superior,
+# 180 temporal, 270 inferior.
 
-#: r_rf (dva) the forward reference is tabulated at: inside the displacement
-#: zone, at the global peak, in its outer half, and past the nasal/inferior
-#: zone extents where the map is the identity.
+#: r_rf (dva): inside the zone, at the global peak, in its outer half, and
+#: past the nasal/inferior extents where the map is the identity.
 _FORWARD_RADII = (0.5, 1.0, 2.44, 5.0, 8.0, 12.0)
 
 #: r_soma = F(theta, r_rf) in dva
@@ -38,10 +33,9 @@ _FORWARD_REF = {
     315.0: (1.75812, 2.52205, 4.02135, 5.97731, 8.22723, 12.00000),
 }
 
-#: Retinal radii (um) that [Watson2014]_ Eq. A6 maps to exactly 1, 2, 4, 6, 10
-#: and 13 dva. Stated in microns so that the inverse reference below tests the
-#: displacement inverse alone: feeding these to ``ret_to_dva`` reaches soma
-#: space exactly, without Watson's Eq. A5/A6 mismatch entering.
+#: Retinal radii (um) that Eq. A6 maps to exactly 1, 2, 4, 6, 10 and 13 dva.
+#: Stated in microns so that ``ret_to_dva`` reaches soma space exactly and the
+#: reference below tests the displacement inverse alone.
 _INVERSE_UM = (279.939003, 557.541230, 1106.889150, 1650.067588,
                2724.219733, 3523.929907)
 _INVERSE_SOMA = (1.0, 2.0, 4.0, 6.0, 10.0, 13.0)
@@ -58,8 +52,7 @@ _INVERSE_REF = {
     315.0: (0.15467, 0.64280, 2.41545, 5.03191, 10.00000, 13.00000),
 }
 
-#: Displacement-zone extent (dva) per cardinal meridian: the largest r_rf that
-#: is still displaced.
+#: Largest r_rf (dva) still displaced, per cardinal meridian.
 _ZONE_EXTENT = {0.0: 9.5426, 90.0: 14.0971, 180.0: 14.0971, 270.0: 10.5238}
 
 #: Published global maximum displacement (dva), its meridian and its r_rf.
@@ -80,20 +73,19 @@ def _dva_point(theta_ret_deg, radius_dva, eye):
 def _ret_point(theta_ret_deg, radius_um, eye):
     """Retinal x,y (um) whose visual direction is that anatomical meridian
 
-    Eq. A6 flips the y axis, so the retinal polar angle is the negated visual
-    one.
+    Eq. A6 flips y, so the retinal polar angle is the negated visual one.
     """
     theta = np.deg2rad(-_visual_deg(theta_ret_deg, eye))
     return radius_um * np.cos(theta), radius_um * np.sin(theta)
 
 
-#: The field is stored as float32, so "undisplaced" holds to about 1e-6 dva,
-#: which is 3e-4 um. Displaced points are tens of microns out.
+#: float32 storage makes "undisplaced" exact only to ~1e-6 dva (3e-4 um);
+#: displaced points are tens of microns out.
 _UNDISPLACED_UM = 1e-2
 
 
 def _displacement_um(vfmap, theta_ret_deg, radius_dva):
-    """How much farther out than Watson2014Map the map places a point (um)"""
+    """How far the displacement moves a point (um)"""
     xdva, ydva = _dva_point(theta_ret_deg, radius_dva, vfmap.eye)
     displaced = np.hypot(*vfmap.dva_to_ret(xdva, ydva))
     plain = np.hypot(*Watson2014Map().dva_to_ret(xdva, ydva))
@@ -140,10 +132,9 @@ def test_Montesano2020Map_forward_reference(eye):
     for theta_ret, expected in _FORWARD_REF.items():
         for r_rf, r_soma in zip(_FORWARD_RADII, expected):
             got = trafo.dva_to_ret(*_dva_point(theta_ret, r_rf, eye))
-            # Both sides take the identical Watson2014Map step, so this
-            # compares the displacement alone. Agreement is 0.003 um; the
-            # packaged field's linear interpolation is worth up to 0.003 dva
-            # (~0.8 um) elsewhere in the field.
+            # Identical dva-to-micron step on both sides, so this
+            # compares the displacement alone: 0.003 um here, up to
+            # 0.003 dva (~0.8 um) elsewhere in the field.
             npt.assert_allclose(got,
                                 watson.dva_to_ret(*_dva_point(theta_ret,
                                                               r_soma, eye)),
@@ -163,7 +154,7 @@ def test_Montesano2020Map_inverse_reference(eye):
                                                                      yret)),
                                 r_soma, atol=1e-6)
             got = np.hypot(*trafo.ret_to_dva(xret, yret))
-            # Measured agreement 2.6e-5 dva across every case here.
+            # Measured agreement 2.6e-5 dva across all cases.
             npt.assert_allclose(got, r_rf, atol=1e-4,
                                 err_msg=f'{theta_ret} deg, {r_soma} dva')
 
@@ -172,9 +163,8 @@ def test_Montesano2020Map_inverse_reference(eye):
 def test_Montesano2020Map_horizontal_orientation(eye):
     """Which side of the visual field is nasal retina depends on the eye
 
-    The nasal displacement zone ends at 9.54 dva and the temporal one at
-    14.10, so a point 12 dva out is displaced on one horizontal side and not
-    on the other. Which side that is flips between the eyes.
+    The nasal zone ends at 9.54 dva and the temporal one at 14.10, so a point
+    12 dva out is displaced on one horizontal side and not the other.
     """
     trafo = Montesano2020Map(eye=eye)
     nasal_x = -1.0 if eye == 'left' else 1.0
@@ -194,8 +184,8 @@ def test_Montesano2020Map_horizontal_orientation(eye):
 def test_Montesano2020Map_vertical_orientation(eye):
     """Superior/inferior anatomy is the same in both eyes
 
-    Positive y in the visual field is inferior retina, whose displacement zone
-    ends at 10.52 dva; the superior zone reaches 14.10.
+    Positive y is inferior retina, whose zone ends at 10.52 dva; superior
+    reaches 14.10.
     """
     trafo = Montesano2020Map(eye=eye)
     npt.assert_allclose(_displacement_um(trafo, 270.0, 12.0), 0.0,
@@ -233,8 +223,8 @@ def test_Montesano2020Map_displacement_is_radial(eye):
     for radius in (0.3, 2.44, 7.0, 12.0, 20.0):
         x, y = radius * np.cos(theta), radius * np.sin(theta)
         xret, yret = trafo.dva_to_ret(x, y)
-        # Watson2014Map is itself radial, so the retinal direction of the
-        # displaced point must match the undisplaced one:
+        # The dva-to-micron step is itself radial, so the direction of
+        # the displaced point must match the undisplaced one:
         xref, yref = Watson2014Map().dva_to_ret(x, y)
         npt.assert_allclose(np.arctan2(yret, xret), np.arctan2(yref, xref),
                             atol=1e-12)
@@ -245,7 +235,7 @@ def test_Montesano2020Map_displacement_is_radial(eye):
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_identity_beyond_the_support(eye):
-    """At and beyond 15 dva the map is exactly Watson2014Map"""
+    """Beyond 15 dva nothing is displaced"""
     trafo = Montesano2020Map(eye=eye)
     theta = np.deg2rad(np.arange(0.0, 360.0, 3.0))
     for radius in (15.0, 15.5, 20.0, 45.0):
@@ -261,8 +251,8 @@ def test_Montesano2020Map_identity_beyond_the_support(eye):
 def test_Montesano2020Map_zone_boundary():
     """Displacement dies out at the per-meridian zone extent
 
-    The extent varies from 9.54 dva (nasal) to 14.10 (superior/temporal), and
-    the 751-node radial grid resolves the boundary to about 0.05 dva.
+    9.54 dva nasally to 14.10 superiorly/temporally; the 751-node radial grid
+    resolves the boundary to about 0.05 dva.
     """
     trafo = Montesano2020Map()
     for theta_ret, extent in _ZONE_EXTENT.items():
@@ -355,7 +345,7 @@ def test_Montesano2020Map_Grid2D_build(eye):
     npt.assert_equal(grid.ret.x.shape, grid.x.shape)
     npt.assert_equal(np.all(np.isfinite(grid.ret.x)), True)
     npt.assert_equal(np.all(np.isfinite(grid.ret.y)), True)
-    # The grid is displaced outward relative to a plain Watson grid:
+    # Every point is displaced outward, never inward:
     plain = Grid2D((-14, 14), (-14, 14), step=1)
     plain.build(Watson2014Map())
     outward = np.hypot(plain.ret.x, plain.ret.y) - _UNDISPLACED_UM
@@ -364,13 +354,12 @@ def test_Montesano2020Map_Grid2D_build(eye):
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_round_trip_dva(eye):
-    """dva -> ret -> dva, whose residual is Watson2014Map's own
+    """dva -> ret -> dva, whose residual is inherited
 
-    Watson's Eqs. A5 and A6 are fitted separately and only agree to a few
-    percent, so a Watson round trip does not close either. The displacement
-    inverse adds at most 0.057 dva on top of that (measured; its own
-    interpolation error is below 0.0005 dva, and the Jacobian of the
-    displacement amplifies Watson's residual inside the fovea).
+    Eqs. A5 and A6 are fitted separately and do not invert each other, so the
+    base round trip does not close. The displacement inverse adds at most
+    0.057 dva to that: under 0.0005 dva of interpolation error, the rest its
+    Jacobian amplifying the inherited residual near the fovea.
     """
     trafo = Montesano2020Map(eye=eye)
     watson = Watson2014Map()
@@ -387,14 +376,14 @@ def test_Montesano2020Map_round_trip_dva(eye):
                                    (x, y))])
     npt.assert_array_less(err, watson_err + 0.06)
     npt.assert_array_less(err, 0.24)
-    # Beyond the displacement zone the two round trips are the same thing:
+    # Beyond the zone the two round trips are the same thing:
     outside = radius >= 15.0
     npt.assert_allclose(err[outside], watson_err[outside], rtol=1e-9)
 
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_round_trip_ret(eye):
-    """ret -> dva -> ret closes as tightly as Watson2014Map alone does"""
+    """ret -> dva -> ret closes as tightly as the base map alone does"""
     trafo = Montesano2020Map(eye=eye)
     watson = Watson2014Map()
     theta = np.deg2rad(np.arange(0.0, 360.0, 5.0))
@@ -413,11 +402,10 @@ def test_Montesano2020Map_round_trip_ret(eye):
 
 
 def test_montesano2020_field_invariants():
-    """Scientific invariants of the packaged field
+    """Invariants the runtime interpolators rely on
 
     The full audit (E2v fits, zone extents, figure comparisons) lives in
-    ``tools/generate_montesano2020_map.py``; these are the properties the
-    runtime interpolators rely on.
+    ``tools/generate_montesano2020_map.py``.
     """
     path = resources.files('pulse2percept.topography.retina').joinpath(
         'data', 'montesano2020.npz')
@@ -439,8 +427,8 @@ def test_montesano2020_field_invariants():
     npt.assert_allclose(table[:, -1], r_rf[-1], atol=1e-5)
     # Strictly increasing in r_rf, so each meridian is invertible:
     npt.assert_equal(np.diff(table, axis=1).min() > 0.0, True)
-    # Displacement is centrifugal everywhere (float32 storage puts the
-    # identity part of the field within ~1e-6 dva of zero, not exactly on it):
+    # Centrifugal everywhere; float32 storage puts the identity part
+    # within ~1e-6 dva of zero rather than exactly on it:
     displacement = table - r_rf[np.newaxis, :]
     npt.assert_array_less(-2e-6, displacement)
     # The published global maximum:
@@ -454,8 +442,8 @@ def test_montesano2020_field_invariants():
 def test_montesano2020_field_loads_lazily():
     """The 3.7 MB field is read on first use, not at import
 
-    Run in a subprocess so the check does not depend on what earlier tests
-    have already loaded.
+    In a subprocess, so the check does not depend on what earlier tests
+    loaded.
     """
     script = """
 import numpy as np

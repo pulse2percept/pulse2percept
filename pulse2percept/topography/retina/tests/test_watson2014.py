@@ -8,9 +8,8 @@ from pulse2percept.topography.retina import (Curcio1990Map,
                                              Watson2014DisplaceMap)
 from pulse2percept.utils.testing import assert_warns_msg
 
-# Every Watson2014DisplaceMap test below is about the deprecated class itself,
-# so its construction warning is expected rather than noise. The one test that
-# checks the warning uses `pytest.warns`, which is unaffected by this filter.
+# Every test below is about the deprecated class itself, so its construction
+# warning is expected. `pytest.warns` is unaffected by the filter.
 pytestmark = pytest.mark.filterwarnings(
     'ignore:Class Watson2014DisplaceMap is deprecated:DeprecationWarning')
 
@@ -18,10 +17,8 @@ pytestmark = pytest.mark.filterwarnings(
 def test_Watson2014DisplaceMap_is_deprecated():
     assert_warns_msg(DeprecationWarning, Watson2014DisplaceMap,
                      'Class Watson2014DisplaceMap is deprecated since version '
-                     '0.11.0. Use ``Montesano2020Map`` instead.')
-    # The scientific reason a caller cannot just swap the two:
-    assert_warns_msg(DeprecationWarning, Watson2014DisplaceMap,
-                     'will not reproduce Watson2014DisplaceMap numerically')
+                     '0.11.0. Use ``Montesano2020Map`` instead. Eq. 5 fits '
+                     'the horizontal meridian only')
 
 
 def test_Watson2014Map():
@@ -93,8 +90,8 @@ def test_Watson2014DisplaceMap():
 
 
 def test_Watson2014DisplaceMap_has_no_inverse():
-    # Retained for backward compatibility: Eq. 5 is not invertible in closed
-    # form and was never inverted numerically. Montesano2020Map is.
+    # Eq. 5 is not invertible in closed form and was never inverted
+    # numerically; kept as documented behavior.
     with pytest.raises(NotImplementedError):
         Watson2014DisplaceMap().ret_to_dva(100, 100)
 

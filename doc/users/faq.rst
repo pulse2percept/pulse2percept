@@ -556,14 +556,11 @@ For retinal models, available mappings include:
     retinal scaling of 280 microns per degree of visual angle.
 *   :py:class:`~pulse2percept.topography.retina.Watson2014Map`: nonlinear
     retinal magnification.
-*   :py:class:`~pulse2percept.topography.retina.Montesano2020Map`: Watson's
-    retinal magnification plus a two-dimensional, meridian-dependent retinal
-    ganglion cell displacement field from [Montesano2020]_. Set ``eye`` to
-    ``'left'`` or ``'right'``, which is what decides whether the positive-x
-    visual field falls on nasal or temporal retina.
-
-The displacement field is population reference anatomy, not patient-specific:
-individual displacement, axial length and foveal position all vary.
+*   :py:class:`~pulse2percept.topography.retina.Montesano2020Map`:
+    nonlinear magnification plus a two-dimensional, meridian-dependent
+    retinal ganglion cell displacement field [Montesano2020]_. ``eye``
+    decides which side of the visual field is nasal retina. The field is
+    population reference anatomy, not patient-specific.
 
 You can also implement your own
 :py:class:`~pulse2percept.topography.VisualFieldMap`.

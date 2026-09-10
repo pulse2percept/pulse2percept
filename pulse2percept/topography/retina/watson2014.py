@@ -88,18 +88,17 @@ class Watson2014Map(RetinalMap):
 
 
 @deprecated(alt_func='Montesano2020Map', deprecated_version='0.11.0',
-            extra_msg='Montesano2020Map provides a two-dimensional, '
-                      'meridian-dependent RGC displacement model based on '
-                      'Curcio & Allen histology and will not reproduce '
-                      'Watson2014DisplaceMap numerically.')
+            extra_msg='Eq. 5 fits the horizontal meridian only, applies each '
+                      'fit throughout the corresponding hemifield, and has '
+                      'no inverse. Expect different numbers.')
 class Watson2014DisplaceMap(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using RGC
     displacement [Watson2014]_
 
     .. deprecated:: 0.11.0
 
-        Use :py:class:`Montesano2020Map` instead, which models RGC
-        displacement in two dimensions.
+        Use :py:class:`Montesano2020Map`, a two-dimensional displacement
+        field.
 
     Converts from eccentricity (defined as distance from a visual center) in
     degrees of visual angle (dva) to microns on the retina using Eqs. 5, A5,
@@ -117,12 +116,9 @@ class Watson2014DisplaceMap(Watson2014Map):
     Points on the vertical meridian (``x == 0``) use the nasal fit, which is a
     backward-compatible tie-break rather than an anatomical claim.
 
-    Those are fits to the two horizontal meridians, applied throughout the
-    corresponding retinal hemifield: a point 45 deg above the horizon gets the
-    same displacement as one on the horizon at the same eccentricity. The
-    approximation remains available for reproducing earlier results, but is
-    not recommended for new work needing a two-dimensional anatomical
-    displacement model. It also has no inverse, so ``ret_to_dva`` raises
+    Each fit applies throughout its retinal hemifield, so a point 45 deg above
+    the horizon is displaced like one on the horizon at the same
+    eccentricity. Kept for reproducing earlier results; ``ret_to_dva`` raises
     ``NotImplementedError``.
 
     Parameters

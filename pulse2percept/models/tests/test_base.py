@@ -2076,11 +2076,7 @@ def test_location_noise_needs_an_invertible_map():
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_location_noise_works_with_a_displacement_map(eye):
-    """What Watson2014DisplaceMap cannot do, Montesano2020Map can
-
-    Same setup as the test above -- an eye-dependent RGC displacement map on a
-    lateralized implant -- except that this map has an inverse.
-    """
+    """The same setup as above, with a displacement map that inverts"""
     def build(location_noise=None, seed=7):
         implant = _implant_at([(560, 0)], cls=RetinalImplant)
         implant.eye = eye

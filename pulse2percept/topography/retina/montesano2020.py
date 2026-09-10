@@ -9,28 +9,25 @@ from scipy.interpolate import RegularGridInterpolator
 from .watson2014 import Watson2014Map
 from ...utils.geometry import cart2pol, pol2cart
 
-#: Radial support of the packaged field (dva). The largest displacement-zone
-#: extent is 14.10 dva, so the map is the identity at and beyond this radius.
+#: Radial support of the packaged field (dva); identity at and beyond it.
 SUPPORT_MAX_DVA = 15.0
 
 _DATA_FILE = 'montesano2020.npz'
 
-#: Forward and inverse interpolators plus the last radial node of the stored
-#: grid, which sits a few float ulps below ``SUPPORT_MAX_DVA``.
+#: The two interpolators, plus the last radial node of the stored grid, which
+#: sits a few float ulps below ``SUPPORT_MAX_DVA``.
 _Field = namedtuple('_Field', ['forward', 'inverse', 'radial_max'])
 
 
 def _as_scalars(x, y):
-    """Return 0-d results as NumPy scalars, as the other maps do."""
+    """Return 0-d results as NumPy scalars."""
     return (x[()], y[()]) if np.ndim(x) == 0 else (x, y)
 
 
 def _check_layout(angle_deg, r_rf_dva, r_soma_dva):
-    """Guard the array layout the interpolators assume.
+    """Catch a swapped, truncated or reordered archive.
 
-    Scientific validation (E2v, zone extents, monotonicity) happens in
-    ``tools/generate_montesano2020_map.py``; this only catches a swapped,
-    truncated or reordered archive.
+    Scientific validation lives in ``tools/generate_montesano2020_map.py``.
     """
     if r_soma_dva.shape != (angle_deg.size, r_rf_dva.size):
         raise ValueError(f"{_DATA_FILE}: soma_eccentricity_dva has shape "
@@ -47,9 +44,9 @@ def _check_layout(angle_deg, r_rf_dva, r_soma_dva):
 
 
 def _periodic_interpolator(angle_deg, radius_dva, table):
-    """Bilinear interpolator over anatomical angle (deg) and radius (dva).
+    """Bilinear interpolator over angle (deg) and radius (dva).
 
-    Angle wraps: a 360 deg row identical to the 0 deg one is appended so that
+    A 360 deg row identical to the 0 deg one makes the angle axis periodic, so
     a query at 359.9 deg interpolates across the seam instead of clamping.
     """
     angle = np.append(angle_deg, 360.0)
@@ -60,11 +57,9 @@ def _periodic_interpolator(angle_deg, radius_dva, table):
 
 @lru_cache(maxsize=1)
 def _displacement_field():
-    """Read the packaged field and build its forward and inverse maps.
+    """Read the packaged field; build ``F(theta, r_rf)`` and its inverse.
 
-    Returns a `_Field` whose interpolators give ``r_soma = F(theta, r_rf)``
-    and ``r_rf = G(theta, r_soma)``, both in dva. Cached, so the 3.7 MB
-    archive is read on first use rather than at import.
+    Cached, so the 3.7 MB archive is read on first use, not at import.
     """
     path = resources.files(__package__).joinpath('data', _DATA_FILE)
     with path.open('rb') as f:
@@ -74,9 +69,9 @@ def _displacement_field():
             r_soma = np.asarray(npz['soma_eccentricity_dva'],
                                 dtype=np.float64)
     _check_layout(angle, r_rf, r_soma)
-    # Invert each meridian onto the stored radial grid. Every forward row is
-    # strictly increasing (checked by the generator), so `np.interp` inverts it
-    # directly; deriving the inverse here avoids packaging a second field.
+    # Every forward row is strictly increasing (checked by the generator), so
+    # `np.interp` inverts it onto the same radial grid. Deriving the inverse
+    # here avoids packaging a second field.
     r_rf_of_soma = np.array([np.interp(r_rf, row, r_rf) for row in r_soma])
     return _Field(_periodic_interpolator(angle, r_rf, r_soma),
                   _periodic_interpolator(angle, r_rf, r_rf_of_soma),
@@ -87,60 +82,38 @@ class Montesano2020Map(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using
     two-dimensional RGC displacement [Montesano2020]_
 
-    Retinal ganglion cell (RGC) bodies are displaced centrifugally from the
-    receptive fields (RFs) they serve, and the displacement depends on the
-    meridian as well as on eccentricity. This map applies the displacement
-    field of [Montesano2020]_, reconstructed from that paper's equations and
-    the [Curcio1990]_ ganglion-cell topography, and then converts the displaced
-    visual-field location to retinal microns with :py:class:`Watson2014Map`.
-    The two halves are therefore of different origin:
+    Retinal ganglion cell (RGC) bodies sit displaced centrifugally from the
+    receptive fields (RFs) they serve, by an amount that depends on meridian
+    as well as eccentricity. This map displaces RF to soma in degrees of
+    visual angle (dva) using the [Montesano2020]_ field, reconstructed from
+    that paper's equations and the [Curcio1990]_ ganglion-cell topography,
+    then converts the displaced location to microns with
+    :py:class:`Watson2014Map`.
 
-    * the RGC RF-to-soma displacement, in degrees of visual angle (dva), is
-      Montesano's;
-    * the final dva-to-micron scaling is Watson's Eqs. A5 and A6, which is
-      what the rest of pulse2percept uses.
-
-    The displacement is purely radial: only the radius changes, so the
-    visual-field polar angle of a location is preserved. The anatomical
-    meridian, which the field is indexed by, selects the profile applied:
-    ``eye`` decides which side of the visual field is nasal retina and which
-    is temporal. The displacement zone extends at most 14.10 dva (nasal
-    9.54 dva, inferior 10.52 dva), and the map is the identity at and beyond
-    15 dva.
-
-    Unlike :py:class:`Watson2014DisplaceMap`, this map is invertible, so it
-    can be used with features that need to go from tissue back to the visual
-    field, such as ``location_noise``.
+    Displacement is radial, so the visual-field polar angle is preserved and
+    the anatomical meridian only selects the profile applied. The zone reaches
+    14.10 dva temporally and superiorly, 10.52 dva inferiorly and 9.54 dva
+    nasally; beyond 15 dva the map is the identity. Both directions are
+    implemented, so the map works with ``location_noise``.
 
     .. versionadded:: 0.11.0
 
     Parameters
     ----------
     eye : {'right', 'left'}, optional
-        Eye whose nasal/temporal anatomy the displacement field is applied
-        with. In a right eye the positive-x visual field falls on nasal
-        retina, in a left eye on temporal retina; the vertical direction is
-        the same in both (positive y is inferior retina). Case-insensitive on
-        input; stored lowercase. Defaults to ``'right'``.
+        Which side of the visual field is nasal retina: positive x in a right
+        eye, negative x in a left one. Positive y is inferior retina in both.
+        Case-insensitive on input; stored lowercase. Defaults to ``'right'``.
 
     Notes
     -----
-    *  The displacement field is an independent reconstruction of
-       [Montesano2020]_, validated against that paper's published figures and
-       fitted E2v values, not a port of the authors' code. See
-       ``tools/generate_montesano2020_map.py`` for the reconstruction, the
-       resolved ambiguities in the published description, and the source
-       histology, which is not redistributed.
-    *  The field is derived from population histology ([Curcio1990]_,
-       averaged over six donor retinas) and a schematic eye. It is reference
-       anatomy, not subject-specific: individual displacement, axial length
-       and foveal position all vary.
-    *  It will not reproduce :py:class:`Watson2014DisplaceMap` numerically.
-       Watson fits the horizontal meridian only, whereas this field varies
-       continuously with meridian.
-    *  The packaged field is tabulated on 1440 meridians and 751 radial
-       nodes and interpolated linearly, which costs about 0.003 dva against
-       the directly solved model.
+    *  An independent reconstruction of [Montesano2020]_, validated against
+       that paper's published figures and E2v fits rather than ported from
+       author code. See ``tools/generate_montesano2020_map.py``.
+    *  Population reference anatomy ([Curcio1990]_, six donor retinas, plus a
+       schematic eye), not subject-specific.
+    *  Tabulated on 1440 meridians by 751 radial nodes and interpolated
+       linearly, costing about 0.003 dva against the directly solved model.
 
     """
 
@@ -166,10 +139,8 @@ class Montesano2020Map(Watson2014Map):
     def _retinal_angle(self, theta_visual):
         """Anatomical retinal angle (deg) of a visual polar angle (rad).
 
-        Anatomical convention: 0 nasal, 90 superior, 180 temporal,
-        270 inferior. Both eyes flip the vertical axis (an inferior retinal
-        location is seen in the upper visual field); the horizontal axis flips
-        between them.
+        0 nasal, 90 superior, 180 temporal, 270 inferior. Both eyes flip the
+        vertical axis; only the horizontal one flips between them.
         """
         theta_deg = np.degrees(theta_visual)
         if self.eye == 'left':
@@ -179,11 +150,10 @@ class Montesano2020Map(Watson2014Map):
     def _remap_radius(self, theta_visual, radius_dva, inverse=False):
         """Map a radius (dva) between RF and soma space along one meridian.
 
-        Radii at or beyond ``SUPPORT_MAX_DVA`` are returned unchanged: the
-        stored field is the identity there, and nothing is extrapolated past
-        the modeled support. The interpolators work in double precision, but
-        the result comes back in the caller's, since a model grid is float32
-        and the spatial kernels require it.
+        Radii at or beyond ``SUPPORT_MAX_DVA`` pass through unchanged; nothing
+        is extrapolated past the modeled support. Interpolation runs in double
+        precision but returns the caller's dtype, since a model grid is
+        float32 and the spatial kernels require it back.
         """
         given = np.asarray(radius_dva)
         theta_ret = np.ravel(self._retinal_angle(theta_visual))
@@ -202,9 +172,7 @@ class Montesano2020Map(Watson2014Map):
     def dva_to_ret(self, xdva, ydva):
         """Converts dva to retinal coords
 
-        Applies the [Montesano2020]_ RF-to-soma displacement in the visual
-        field, then :py:meth:`Watson2014Map.dva_to_ret` to the displaced
-        location.
+        Displaces RF to soma in the visual field, then converts to microns.
 
         Parameters
         ----------
@@ -218,16 +186,14 @@ class Montesano2020Map(Watson2014Map):
         """
         theta, r_rf = cart2pol(np.asarray(xdva), np.asarray(ydva))
         r_soma = self._remap_radius(theta, r_rf)
-        # Radial displacement: reconstruct from the *visual* polar angle, not
-        # from the anatomical one used to pick the meridian.
+        # Radial: rebuild from the visual polar angle, not the anatomical one.
         return _as_scalars(*super().dva_to_ret(*pol2cart(theta, r_soma)))
 
     def ret_to_dva(self, xret, yret):
         """Converts retinal coords to dva
 
-        Inverts :py:meth:`dva_to_ret`: retinal microns become a soma location
-        in dva via :py:meth:`Watson2014Map.ret_to_dva`, which is then mapped
-        back to the receptive field it serves.
+        Inverse of :py:meth:`dva_to_ret`: microns become a soma location in
+        dva, which is mapped back to the RF it serves.
 
         Parameters
         ----------

@@ -15,9 +15,9 @@ and include:
   retinal scaling of 280 microns per degree of visual angle (dva).
 * :py:class:`~pulse2percept.topography.retina.Watson2014Map`, which uses the nonlinear
   retinal magnification model from [Watson2014]_.
-* :py:class:`~pulse2percept.topography.retina.Montesano2020Map`, which adds a
-  two-dimensional, meridian-dependent retinal ganglion-cell displacement field
-  from [Montesano2020]_ on top of Watson's retinal magnification.
+* :py:class:`~pulse2percept.topography.retina.Montesano2020Map`, which adds
+  a two-dimensional, meridian-dependent retinal ganglion-cell displacement
+  field from [Montesano2020]_ to that magnification.
 
 Cortical maps derive from :py:class:`~pulse2percept.topography.cortex.CorticalMap`
 and include:
@@ -69,15 +69,10 @@ for ax, transform in zip(axes, transforms):
     ax.axis('equal')
 
 ###############################################################################
-# ``Curcio1990Map`` is a simple scaling, whereas ``Watson2014Map`` is
-# nonlinear. ``Montesano2020Map`` keeps Watson's magnification and adds the
-# foveal distortion caused by retinal ganglion-cell displacement: the cell
-# bodies sit farther from the fovea than the receptive fields they serve.
-#
-# That displacement is meridian-dependent, which is easiest to see on the
-# cardinal meridians. The displacement zone reaches 14.1 dva on the temporal
-# and superior retina, but only 9.5 dva nasally and 10.5 dva inferiorly, so
-# the four directions do not stop bending at the same eccentricity:
+# ``Curcio1990Map`` is a simple scaling, ``Watson2014Map`` a nonlinear one.
+# ``Montesano2020Map`` adds the foveal distortion of retinal ganglion-cell
+# displacement: the cell bodies sit farther out than the receptive fields
+# they serve, by an amount that depends on the meridian.
 
 vfmap = p2p.topography.retina.Montesano2020Map(eye='right')
 plain = p2p.topography.retina.Watson2014Map()
@@ -86,8 +81,8 @@ radius = np.linspace(0, 20, 400)
 fig, ax = plt.subplots(figsize=(6, 4))
 for angle, label in [(0, 'nasal'), (90, 'superior'),
                      (180, 'temporal'), (270, 'inferior')]:
-    # The visual field mirrors the retina: an anatomical meridian of a right
-    # eye sits at the negated visual-field polar angle.
+    # The visual field mirrors the retina: in a right eye an anatomical
+    # meridian sits at the negated visual-field polar angle.
     theta = np.deg2rad(-angle)
     x, y = radius * np.cos(theta), radius * np.sin(theta)
     displaced = np.hypot(*vfmap.dva_to_ret(x, y))
@@ -98,16 +93,15 @@ ax.set_ylabel('RGC displacement (microns)')
 ax.legend(title='retinal meridian')
 
 ###############################################################################
-# ``eye`` is what decides which side of the visual field is nasal retina and
-# which is temporal, so a left eye is the horizontal mirror of a right eye.
-# The vertical direction is the same in both.
+# The zone reaches 14.1 dva temporally and superiorly, but only 10.5 dva
+# inferiorly and 9.5 dva nasally. ``eye`` decides which side of the visual
+# field is nasal retina, so a left eye is the horizontal mirror of a right
+# one; the vertical direction is the same in both.
 #
-# The field is population reference anatomy reconstructed from
-# [Montesano2020]_ and [Curcio1990]_ histology, not subject-specific: how far
-# an individual's ganglion cells are displaced, and where their fovea sits,
-# both vary. ``Watson2014DisplaceMap`` remains available for reproducing
-# earlier results, but it fits the horizontal meridian only and has no
-# inverse; it is deprecated in favor of ``Montesano2020Map``.
+# The field is population reference anatomy from [Montesano2020]_ and
+# [Curcio1990]_ histology, not subject-specific: individual displacement and
+# foveal position both vary. The deprecated ``Watson2014DisplaceMap`` fits
+# the horizontal meridian only and has no inverse.
 #
 # Cortical visual field maps
 # --------------------------

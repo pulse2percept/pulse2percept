@@ -175,17 +175,14 @@ Topography
       p2p.topography.cortex.Polimeni2006Map()
 
 * New :py:class:`~pulse2percept.topography.retina.Montesano2020Map` models
-  retinal ganglion cell displacement in two dimensions, using a reconstruction
-  of the [Montesano2020]_ displacement field on top of Watson's retinal
-  magnification. The displacement zone is meridian-dependent, reaching
-  14.1 dva temporally and superiorly but only 9.5 dva nasally, and ``eye``
-  determines which side of the visual field is nasal retina. Unlike
-  ``Watson2014DisplaceMap`` it is invertible, so it works with
-  ``location_noise`` (:pull:`897`).
-
-  The field is population reference anatomy, not subject-specific. It is an
-  independent reconstruction validated against the paper's published figures;
-  ``tools/generate_montesano2020_map.py`` documents its derivation.
+  retinal ganglion cell displacement in two dimensions, from a reconstruction
+  of the [Montesano2020]_ field. The displacement zone is meridian-dependent,
+  reaching 14.1 dva temporally and superiorly but only 9.5 dva nasally, and
+  ``eye`` decides which side of the visual field is nasal retina. It is
+  invertible, so it works with ``location_noise``. The field is population
+  reference anatomy, not subject-specific;
+  ``tools/generate_montesano2020_map.py`` documents its derivation
+  (:pull:`897`).
 
 * :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap` now takes
   ``eye='left'`` or ``eye='right'`` (default ``'right'``, which reproduces
@@ -193,8 +190,8 @@ Topography
   fits are now applied to the correct half-retina in a left eye, which was
   previously mirrored. The class is deprecated in favor of
   ``Montesano2020Map``: it fits the horizontal meridian only, applies each fit
-  throughout the corresponding retinal hemifield, and has no inverse. The two
-  do not agree numerically (:pull:`895`, :pull:`897`).
+  throughout the corresponding hemifield, and has no inverse
+  (:pull:`895`, :pull:`897`).
 
 
 Scene and plotting
