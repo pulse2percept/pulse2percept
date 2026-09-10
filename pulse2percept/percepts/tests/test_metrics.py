@@ -252,3 +252,49 @@ def test_measure_percept_invalid():
     with pytest.raises(ValueError):
         measure_percept(Percept(np.ones((5, 1, 1)),
                                 space=Grid2D((0, 0), (-2, 2), step=1)))
+
+
+def test_Percept_measure():
+    grid = Grid2D((-5, 5), (-5, 5), step=0.1)
+    percept = Percept(gaussian(grid, x0=1, y0=-2, sigma_x=1.3), space=grid)
+    metrics = percept.measure()
+    npt.assert_equal(isinstance(metrics, PerceptMetrics), True)
+    npt.assert_equal(metrics.threshold, 0.5)
+    # The method is a thin delegation, so it must agree with the function:
+    npt.assert_equal(metrics, measure_percept(percept))
+    npt.assert_equal(metrics is measure_percept(percept), False)
+
+
+def test_Percept_measure_threshold():
+    grid = Grid2D((-5, 5), (-5, 5), step=0.1)
+    percept = Percept(gaussian(grid, sigma_x=1.3), space=grid)
+    strict = percept.measure(threshold=0.25)
+    npt.assert_equal(strict.threshold, 0.25)
+    npt.assert_equal(strict, measure_percept(percept, threshold=0.25))
+    # A lower threshold keeps more of the frame than the default does:
+    npt.assert_equal(strict.peak.area > percept.measure().peak.area, True)
+
+
+def test_Percept_measure_not_cached():
+    grid = Grid2D((-5, 5), (-5, 5), step=0.1)
+    percept = Percept(gaussian(grid, sigma_x=1.3), space=grid)
+    first = percept.measure()
+    # Brighten the percept in place; a cached result would not notice:
+    percept.data[:] *= 2
+    second = percept.measure()
+    npt.assert_equal(second is first, False)
+    npt.assert_allclose(second.total_brightness,
+                        2 * first.total_brightness)
+    npt.assert_allclose(second.max_brightness, 2 * first.max_brightness)
+    # The threshold is relative, so the geometry is where it was:
+    npt.assert_allclose(second.area, first.area)
+    npt.assert_allclose(second.diameter, first.diameter)
+    npt.assert_allclose(second.centroid, first.centroid)
+
+
+def test_Percept_measure_rejects_rgb():
+    # One smoke check that validation is reached through the method; the full
+    # matrix is tested against `measure_percept` itself:
+    grid = Grid2D((-2, 2), (-2, 2), step=0.5)
+    with pytest.raises(ValueError):
+        Percept(np.zeros(grid.shape + (3, 1)), space=grid).measure()
