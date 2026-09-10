@@ -2,10 +2,9 @@
    :py:class:`~pulse2percept.percepts.metrics.PerceptMetrics`,
    :py:func:`~pulse2percept.percepts.metrics.measure_percept`
 
-Measurements of the phosphenes in a percept. Not imported by
-:py:mod:`pulse2percept.percepts` itself, so that predicting a percept never
-loads them; :py:meth:`~pulse2percept.percepts.Percept.measure` pulls them in
-on demand.
+Phosphene measurements. Imported on demand by
+:py:meth:`~pulse2percept.percepts.Percept.measure`, not by
+:py:mod:`pulse2percept.percepts`.
 """
 from dataclasses import dataclass
 
@@ -20,8 +19,8 @@ def _pixel_spacing(coords, name):
         raise ValueError(f"Phosphene measurements need at least two pixels "
                          f"along '{name}' to know how much of the visual "
                          f"field a pixel covers.")
-    # Grid2D lays its axes down with `linspace`, so the end points give the
-    # exact spacing even when the stored coordinates are float32:
+    # Grid2D spaces its axes with `linspace`, so the end points give the exact
+    # spacing even when the stored coordinates are float32:
     return abs(coords[-1] - coords[0]) / (coords.size - 1)
 
 
@@ -29,68 +28,55 @@ def _pixel_spacing(coords, name):
 class FrameMetrics:
     """Phosphene measurements for a single frame of a brightness percept
 
-    Produced by :py:func:`measure_percept` (usually through
-    :py:meth:`~pulse2percept.percepts.Percept.measure`); not meant to be
-    constructed directly.
+    Produced by :py:func:`measure_percept`, usually through
+    :py:meth:`~pulse2percept.percepts.Percept.measure`.
 
-    All measurements consider only positive brightness: the frame is clipped
-    at zero first, so negative model output does not count as phosphene
-    brightness. "Support" means the pixels at or above ``threshold`` times the
-    frame's own positive maximum (half maximum by default), and every shape
-    measurement below describes the *entire* support, even if it falls into
-    several blobs.
+    Only positive brightness is measured: the frame is clipped at zero first.
+    The support is the set of pixels at or above ``threshold`` times the
+    frame's own positive maximum (half maximum by default). Geometry is
+    measured on that support as a binary set of pixels, unweighted by the
+    brightness within it, and describes the support in full even when it falls
+    into several components. For a sufficiently sampled circular support,
+    :py:attr:`major_axis`, :py:attr:`minor_axis` and :py:attr:`diameter`
+    converge to a common value.
 
-    Geometry is measured on the support as a set of pixels, not weighted by
-    the brightness inside it: brightness enters only through where the
-    threshold falls. So for a circular phosphene the support is a disk, and
-    :py:attr:`major_axis`, :py:attr:`minor_axis` and :py:attr:`diameter` all
-    agree.
-
-    A frame with no positive brightness has no phosphene: its brightness,
-    area, and component count are zero, and the quantities that would describe
-    the position or shape of a phosphene are ``NaN`` rather than a phantom
-    phosphene at the origin.
+    A frame without positive brightness has no phosphene: brightness, area and
+    component count are zero, and position and shape are ``NaN``.
 
     .. versionadded:: 0.11.0
 
     Attributes
     ----------
     integrated_brightness : float
-        Positive brightness integrated over the visual field, in brightness
-        units x dva^2. This is a pixel sum scaled by the area of a pixel, so
-        it approximates an integral rather than counting pixels: sampling the
-        same percept more finely leaves it approximately unchanged, up to
+        Positive brightness integrated over the visual field (brightness units
+        x dva^2): the pixel sum scaled by pixel area. Approximates a spatial
+        integral, so it is insensitive to sampling resolution up to
         discretization.
     max_brightness : float
-        Largest positive brightness in the frame, in arbitrary brightness
-        units.
+        Largest positive brightness in the frame (arbitrary units).
     area : float
         Area of the support (dva^2).
     centroid : (float, float)
-        Center ``(x, y)`` of the support, in dva: the mean position of its
-        pixels.
+        Mean position ``(x, y)`` of the support pixels (dva).
     diameter : float
-        Diameter (dva) of the circle with the same area as the support,
-        ``2 * sqrt(area / pi)``. For a sufficiently sampled circular Gaussian
-        and the default half-maximum threshold, this approximates its FWHM;
-        the support is a set of whole pixels, so the agreement is limited by
-        how finely the grid samples the phosphene.
+        Diameter (dva) of the circle of equal area, ``2 * sqrt(area / pi)``.
+        At ``threshold=0.5`` this approximates the FWHM of a sufficiently
+        sampled circular Gaussian; agreement is limited by grid resolution.
     major_axis, minor_axis : float
         Axis lengths (dva) of the ellipse with the same second moments as the
-        support, ``4 * sqrt(eigenvalue)``. For a uniformly filled ellipse this
-        recovers its actual axes, so a circular support gives
-        ``major_axis == minor_axis == diameter``.
+        support, ``4 * sqrt(eigenvalue)``. Exact for a continuous uniformly
+        filled ellipse; sampled supports approach those values as resolution
+        increases.
     elongation : float
-        ``major_axis / minor_axis``; 1 for a circular phosphene.
+        ``major_axis / minor_axis``; approaches 1 for a circular phosphene.
     n_components : int
         Number of connected components in the support, using full 2D
-        connectivity so diagonally adjacent pixels count as connected.
-        Descriptive only: the measurements above still describe the combined
-        support.
+        connectivity so diagonal neighbors count as connected. Descriptive
+        only: the other measurements still describe the combined support.
     touches_edge : bool
         Whether the support reaches the first or last row or column. If True,
-        the percept may extend past the simulated visual field, and the
-        measurements describe only the visible part of it.
+        the percept may extend beyond the simulated field and the measurements
+        describe only its visible part.
 
     """
     integrated_brightness: float
@@ -105,7 +91,7 @@ class FrameMetrics:
     touches_edge: bool
 
 
-# What a frame without any positive brightness measures. Shared because
+# What a frame without positive brightness measures. Shared because
 # ``FrameMetrics`` is immutable:
 _NO_PHOSPHENE = FrameMetrics(integrated_brightness=0.0, max_brightness=0.0,
                              area=0.0, centroid=(np.nan, np.nan),
@@ -118,15 +104,14 @@ _NO_PHOSPHENE = FrameMetrics(integrated_brightness=0.0, max_brightness=0.0,
 class PerceptMetrics:
     """Phosphene measurements for every frame of a brightness percept
 
-    Produced by :py:func:`measure_percept` (usually through
-    :py:meth:`~pulse2percept.percepts.Percept.measure`); not meant to be
-    constructed directly. Frames are measured independently of one another;
-    :py:attr:`~pulse2percept.percepts.Percept.time` remains the source of
-    timing information.
+    Produced by :py:func:`measure_percept`, usually through
+    :py:meth:`~pulse2percept.percepts.Percept.measure`. Frames are measured
+    independently; frame timing stays in
+    :py:attr:`~pulse2percept.percepts.Percept.time`.
 
-    Each measurement of :py:class:`FrameMetrics` is also available as an array
-    over frames, so ``metrics.diameter`` is the diameter of every frame and
-    ``metrics.peak.diameter`` is the diameter of the brightest one.
+    Every :py:class:`FrameMetrics` measurement is also available as an array
+    over frames: ``metrics.diameter`` is the diameter of each frame,
+    ``metrics.peak.diameter`` that of the brightest.
 
     .. versionadded:: 0.11.0
 
@@ -136,7 +121,7 @@ class PerceptMetrics:
         One measurement per frame, in the order the frames are stored.
     threshold : float
         Fraction of each frame's own positive maximum that defined its
-        support, recorded so a result says what was measured.
+        support.
 
     """
     frames: tuple[FrameMetrics, ...]
@@ -219,7 +204,7 @@ class PerceptMetrics:
 def _measure_frame(frame, x, y, dx, dy, threshold):
     """Measure one (Y, X) frame on the 1D column/row coordinates ``x``/``y``"""
     frame = np.asarray(frame, dtype=np.float64)
-    # Before clipping, which would turn a -inf into an innocent-looking 0:
+    # Before clipping, which would map -inf onto 0:
     if not np.all(np.isfinite(frame)):
         raise ValueError("Percept data must be finite to be measured.")
     positive = np.clip(frame, 0, None)
@@ -227,24 +212,23 @@ def _measure_frame(frame, x, y, dx, dy, threshold):
     pixel_area = dx * dy
     if peak <= 0:
         return _NO_PHOSPHENE
-    # The threshold is relative to this frame's own maximum, so scaling a
-    # frame's brightness leaves its support -- and every shape measure -- put:
+    # Relative to this frame's own maximum, so scaling brightness leaves the
+    # support, and every measurement derived from it, unchanged:
     support = positive >= threshold * peak
     n_rows, n_cols = support.shape
-    # Only the support pixels carry coordinates, so index the 1D axes rather
-    # than building two full-field coordinate images:
+    # Index the 1D axes rather than building two full-field coordinate images:
     rows, cols = np.nonzero(support)
     xs, ys = x[cols], y[rows]
     area = rows.size * pixel_area
     cx, cy = xs.mean(), ys.mean()
     off_x, off_y = xs - cx, ys - cy
     # Pixels are cells, not point samples: without the variance of a uniform
-    # cell added in, a support only a pixel or two across measures zero width.
+    # cell, a support a pixel or two across would measure zero width.
     cov_xx = (off_x ** 2).mean() + dx ** 2 / 12
     cov_yy = (off_y ** 2).mean() + dy ** 2 / 12
     cov_xy = (off_x * off_y).mean()
-    # `eigvalsh` returns the two eigenvalues in ascending order; clip because
-    # roundoff can push a near-degenerate one slightly negative:
+    # `eigvalsh` returns eigenvalues in ascending order; clip because roundoff
+    # can push a near-degenerate one slightly negative:
     eigvals = np.clip(np.linalg.eigvalsh([[cov_xx, cov_xy],
                                           [cov_xy, cov_yy]]), 0, None)
     minor_axis = 4 * np.sqrt(eigvals[0])
@@ -267,36 +251,39 @@ def _measure_frame(frame, x, y, dx, dy, threshold):
 def measure_percept(percept, threshold=0.5):
     """Measure the phosphenes in a brightness percept
 
-    Measures every frame of ``percept`` independently and returns the results
-    as a :py:class:`PerceptMetrics`. See :py:class:`FrameMetrics` for what is
-    measured and in what units.
+    Measures each frame independently. See :py:class:`FrameMetrics` for the
+    definitions and units.
 
     .. versionadded:: 0.11.0
 
     Parameters
     ----------
     percept : :py:class:`~pulse2percept.percepts.Percept`
-        A (Y, X, T) percept of perceived brightness built on a real
-        :py:class:`~pulse2percept.topography.Grid2D`. Positions and sizes are
-        reported in degrees of visual angle, which a percept built without a
-        grid does not have (its coordinates are pixel indices).
+        A (Y, X, T) brightness percept built on a
+        :py:class:`~pulse2percept.topography.Grid2D`. The grid is required
+        because positions and sizes are reported in degrees of visual angle;
+        without one a percept carries pixel indices instead.
     threshold : float, optional
         Fraction of a frame's own positive maximum at or above which a pixel
-        counts as part of the phosphene. Must lie in (0, 1]. The default of
-        0.5 makes :py:attr:`FrameMetrics.diameter` approximately the full
-        width at half maximum of a sufficiently sampled circular Gaussian
-        phosphene. More generally, a Gaussian of standard deviation ``sigma``
-        has support diameter ``2 * sigma * sqrt(-2 * log(threshold))``.
+        belongs to the support. Must lie in (0, 1]. A Gaussian of standard
+        deviation ``sigma`` has support diameter
+        ``2 * sigma * sqrt(-2 * log(threshold))``, so the default of 0.5 gives
+        approximately its FWHM.
 
     Returns
     -------
     metrics : :py:class:`PerceptMetrics`
 
+    Raises
+    ------
+    ValueError
+        For an RGB percept, a percept without visual-field coordinates, a
+        threshold outside (0, 1], or non-finite data.
+
     Notes
     -----
-    These are measurements of the model's output image. They describe how big
-    and how bright a modeled phosphene is, not how well an observer could
-    resolve or tell apart what they saw.
+    These measurements describe the modeled percept image, not behavioral
+    performance such as acuity or discriminability.
 
     """
     if getattr(percept, 'is_rgb', False):
@@ -314,8 +301,8 @@ def measure_percept(percept, threshold=0.5):
         raise ValueError(f"'threshold' is a fraction of a frame's own maximum "
                          f"brightness and must lie in (0, 1], not "
                          f"{threshold}.")
-    # Left in the dtype it was stored in; `_measure_frame` promotes, and
-    # checks, one frame at a time, so a long percept is never duplicated:
+    # Left in its stored dtype; `_measure_frame` promotes and checks one frame
+    # at a time, so a long percept is never duplicated:
     data = percept.data
     dx = _pixel_spacing(percept.xdva, 'xdva')
     dy = _pixel_spacing(percept.ydva, 'ydva')

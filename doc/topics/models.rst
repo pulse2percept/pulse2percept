@@ -150,69 +150,65 @@ Measuring a percept
 
 .. versionadded:: 0.11.0
 
-Prediction stops at the percept. Measuring one is optional post-processing,
-not part of the model::
+Prediction stops at the percept. Measurement is optional post-processing,
+performed on call and not part of the model::
 
     stimulus → model → Percept → optional measurement
 
-:py:meth:`~pulse2percept.percepts.Percept.measure` summarizes how bright a
-modeled percept is and what shape it has. Nothing is measured until you ask,
-and nothing is cached afterwards:
+:py:meth:`~pulse2percept.percepts.Percept.measure` reports the brightness and
+geometry of the phosphenes in each frame:
 
 .. code-block:: python
 
     percept = model.predict_percept({'A8': 30})
     metrics = percept.measure()
 
-    metrics.peak.diameter          # dva
-    metrics.peak.centroid          # (x, y) in dva
+    metrics.peak.diameter               # dva
+    metrics.peak.centroid               # (x, y) in dva
     metrics.peak.integrated_brightness  # brightness units x dva^2
 
 Support
 ~~~~~~~
 
-Geometry is measured on the pixels at or above 50% of a frame's own positive
-peak brightness. The threshold is *relative* and re-evaluated per frame, so
-doubling a percept's brightness leaves its measured shape where it was. Lower
-it to measure a wider skirt:
+Each frame is clipped at zero, so negative model output does not contribute.
+Geometry is then measured on the *support*: the pixels at or above 50% of that
+frame's own positive maximum. The threshold is relative and re-evaluated per
+frame, so scaling a percept's brightness does not change its measured shape.
+Lower it to include more of the falloff:
 
 .. code-block:: python
 
     metrics = percept.measure(threshold=0.25)
 
-Negative model output never counts as brightness; each frame is clipped at
-zero first.
-
 What is measured
 ~~~~~~~~~~~~~~~~
 
-Brightness comes in two flavors. ``max_brightness`` is the brightest positive
-pixel, in the model's own arbitrary units. ``integrated_brightness`` sums
-positive brightness over the visual field --- a pixel sum scaled by the area
-of a pixel, in brightness units x dva^2 --- so it approximates a spatial
-integral instead of tracking how finely you sampled the field. Neither is on a
-psychophysical absolute scale.
+``max_brightness`` is the largest positive pixel value, in the model's
+arbitrary units. ``integrated_brightness`` is the pixel sum scaled by pixel
+area (brightness units x dva^2), which approximates a spatial integral and is
+therefore insensitive to sampling resolution. Neither is on a psychophysical
+absolute scale.
 
-The remaining measurements describe the suprathreshold support as a set of
-pixels. Brightness enters only through where the threshold falls, not as a
-weight, so the geometry stays internally consistent: a circular phosphene has
-``major_axis == minor_axis == diameter``.
+The remaining measurements describe the support as a binary set of pixels;
+brightness enters only through where the threshold falls. For a sufficiently
+sampled circular phosphene, ``major_axis``, ``minor_axis`` and ``diameter``
+approximately agree.
 
 **area**
     Area of the support (dva^2).
 
 **diameter**
-    Diameter (dva) of the circle with the same area. At ``threshold=0.5``
-    this approximates the FWHM of a sufficiently sampled circular Gaussian.
+    Diameter (dva) of the circle of equal area. At ``threshold=0.5`` this
+    approximates the FWHM of a sufficiently sampled circular Gaussian.
 
 **centroid**
-    Center ``(x, y)`` of the support, in dva: the mean position of its pixels.
+    Mean position ``(x, y)`` of the support pixels, in dva.
 
 **major_axis**, **minor_axis**
     Axes (dva) of the ellipse with the same second moments as the support.
 
 **elongation**
-    ``major_axis / minor_axis``; 1 for a circular phosphene.
+    ``major_axis / minor_axis``; approaches 1 for a circular phosphene.
 
 **n_components**
     Number of disconnected suprathreshold regions.
@@ -220,57 +216,54 @@ weight, so the geometry stays internally consistent: a circular phosphene has
 **touches_edge**
     Whether the support reaches the simulated field boundary.
 
-A frame with no positive brightness has no phosphene: its brightness, area and
-component count are zero, and the quantities that would place or shape a
-phosphene are ``NaN`` rather than a phantom blob at the origin.
+A frame without positive brightness has no phosphene: brightness, area and
+component count are zero, and position and shape are ``NaN``.
 
 Multiple components and clipping
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Model output is not always one tidy phosphene. ``n_components`` counts the
-disconnected suprathreshold regions, and every other measurement describes the
-*whole* support: pulse2percept does not quietly keep the largest blob and
-throw the rest away. An ``elongation`` of 4 can mean one stretched phosphene
-or two round ones far apart, and ``n_components`` is what tells them apart.
+Model output need not form a single connected phosphene. ``n_components``
+counts the disconnected suprathreshold regions; the largest is not selected,
+and every other measurement describes the combined support. An ``elongation``
+of 4 is consistent with one elongated phosphene or with two round ones some
+distance apart, which ``n_components`` distinguishes.
 
-``touches_edge`` warns that the support runs into the border of the simulated
-visual field. When it is True, area, diameter, axes, centroid and integrated
-brightness describe only the part of the percept the simulation covers. No
-extrapolation is attempted; widen the model's ``xrange``/``yrange`` if you
-need the whole thing.
+``touches_edge`` flags support reaching the border of the simulated visual
+field. Where it is True, the measurements describe only the portion inside the
+field, and no extrapolation is performed. Widen the model's ``xrange`` and
+``yrange`` to capture the full percept.
 
 Temporal percepts
 ~~~~~~~~~~~~~~~~~
 
-Every frame is measured independently, and each measurement is also available
-as an array over frames:
+Frames are measured independently, and each measurement is also available as
+an array over frames:
 
 .. code-block:: python
 
     metrics = percept.measure()
 
     metrics.integrated_brightness  # one value per frame
-    metrics.peak_frame        # frame with the most integrated brightness
-    metrics.peak              # that frame's measurements
+    metrics.peak_frame             # index of the brightest frame
+    metrics.peak                   # that frame's measurements
 
 ``peak_frame`` ranks frames by integrated positive brightness, taking the
-earliest of any tie. When each frame occurred stays where it was, in
-``percept.time``; measurement adds no time integration or duration metrics.
+earliest on a tie. Frame timing remains in ``percept.time``; no time
+integration or duration metrics are computed.
 
 Scope
 ~~~~~
 
-These are measurements of a modeled percept *image*. They do not estimate
+These measurements describe the modeled percept *image*. They do not estimate
 visual acuity, phosphene discriminability, pairwise separability, behavioral
-resolution, or object-recognition performance --- those are psychophysical
-questions that a picture of a percept does not answer.
+resolution, or object-recognition performance.
 
-``measure()`` applies to model-produced brightness percepts, and raises for
-the RGB percepts scene composition returns, whose values are display
-intensities rather than perceived brightness. Positions and sizes are reported
-in degrees of visual angle, so the percept must have been built on a real
-:py:class:`~pulse2percept.topography.Grid2D`; a percept carrying bare image
-pixel indices is rejected rather than measured as though pixels were degrees.
+``measure()`` applies to model-produced brightness percepts and raises for the
+RGB percepts returned by scene composition, whose values are display
+intensities. Positions and sizes are in degrees of visual angle, so the percept
+must have been built on a
+:py:class:`~pulse2percept.topography.Grid2D`; a percept holding bare pixel
+indices is rejected.
 
 
 Source, delivered stimulation, percept

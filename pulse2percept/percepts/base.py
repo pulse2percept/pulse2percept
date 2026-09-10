@@ -535,25 +535,21 @@ class Percept(Data):
     def measure(self, threshold=0.5):
         """Measure the brightness and geometry of the phosphenes in a percept
 
-        Measures each frame of a model-produced brightness percept: how bright
-        it is, how large and how elongated its phosphenes are, and where they
-        sit in the visual field. Nothing is measured or stored until this is
-        called, and nothing is cached afterwards, so a percept whose data have
-        changed measures anew.
+        Measures each frame of a brightness percept: its integrated and peak
+        brightness, and the position, size and shape of its suprathreshold
+        support. Results are computed on call and not cached, so a percept
+        whose data changed measures anew.
 
         See :py:func:`~pulse2percept.percepts.metrics.measure_percept` for the
-        definitions, units, and the inputs it rejects (RGB percepts and
-        percepts built without a real
-        :py:class:`~pulse2percept.topography.Grid2D`, whose coordinates are
-        pixel indices rather than degrees of visual angle).
+        definitions, units, and the inputs it rejects.
 
         .. versionadded:: 0.11.0
 
         Parameters
         ----------
         threshold : float, optional
-            Fraction of each frame's own maximum brightness at or above which
-            a pixel counts as part of a phosphene. Must lie in (0, 1].
+            Fraction of each frame's own positive maximum at or above which a
+            pixel belongs to the support. Must lie in (0, 1].
 
         Returns
         -------
@@ -562,8 +558,8 @@ class Percept(Data):
             frame, plus the framewise arrays and the brightest frame.
 
         """
-        # Imported here so that predicting a percept never pays for the
-        # measurement machinery:
+        # Local import: predicting a percept must not load the measurement
+        # module.
         from .metrics import measure_percept
         return measure_percept(self, threshold=threshold)
 

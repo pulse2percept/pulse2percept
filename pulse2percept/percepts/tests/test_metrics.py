@@ -43,7 +43,7 @@ def test_measure_percept_circular_gaussian():
     sigma = 1.2
     percept = Percept(gaussian(grid, sigma_x=sigma), space=grid)
     metrics = measure_percept(percept, threshold=0.5)
-    # At half maximum, the equivalent-circle diameter is the FWHM:
+    # At half maximum, the equivalent-circle diameter approximates the FWHM:
     npt.assert_allclose(metrics.peak.diameter, FWHM * sigma, rtol=0.02)
     npt.assert_allclose(metrics.peak.area, np.pi * (FWHM * sigma / 2) ** 2,
                         rtol=0.03)
@@ -51,7 +51,7 @@ def test_measure_percept_circular_gaussian():
     npt.assert_allclose(metrics.peak.major_axis, metrics.peak.minor_axis,
                         rtol=0.02)
     # Geometry is measured on the support alone, so the second-moment axes of
-    # a disk agree with its equivalent-circle diameter:
+    # a sampled disk approach its equivalent-circle diameter:
     npt.assert_allclose(metrics.peak.major_axis, metrics.peak.diameter,
                         rtol=0.02)
     npt.assert_allclose(metrics.peak.minor_axis, metrics.peak.diameter,
@@ -83,14 +83,13 @@ def test_measure_percept_threshold():
 
 
 def test_measure_percept_anisotropic_pixels():
-    # Deliberately unequal x/y spacing, so a pixel is twice as wide as it is
-    # tall. Anything that collapses (dx, dy) to a single step size, or drops
-    # the within-cell variance, gets this wrong:
+    # Pixels twice as wide as they are tall: this fails if (dx, dy) collapses
+    # to a single step size, or if the within-cell variance is dropped.
     grid = Grid2D((-1, 1), (-1, 1), step=(0.5, 0.25))
     dx, dy = 0.5, 0.25
     npt.assert_almost_equal(np.diff(grid.x[0, :]), dx)
     npt.assert_almost_equal(np.abs(np.diff(grid.y[:, 0])), dy)
-    # A support of exactly one pixel: the pixel is all the extent there is.
+    # A support of exactly one pixel, whose cell is its entire extent:
     frame = np.zeros(grid.shape)
     frame[3, 2] = 1.0
     metrics = measure_percept(Percept(frame[..., np.newaxis], space=grid)).peak
@@ -321,14 +320,14 @@ def test_Percept_measure_not_cached():
     grid = Grid2D((-5, 5), (-5, 5), step=0.1)
     percept = Percept(gaussian(grid, sigma_x=1.3), space=grid)
     first = percept.measure()
-    # Brighten the percept in place; a cached result would not notice:
+    # Brighten in place; a cached result would not reflect this:
     percept.data[:] *= 2
     second = percept.measure()
     npt.assert_equal(second is first, False)
     npt.assert_allclose(second.integrated_brightness,
                         2 * first.integrated_brightness)
     npt.assert_allclose(second.max_brightness, 2 * first.max_brightness)
-    # The threshold is relative, so the geometry is where it was:
+    # The threshold is relative, so the geometry is unchanged:
     npt.assert_allclose(second.area, first.area)
     npt.assert_allclose(second.diameter, first.diameter)
     npt.assert_allclose(second.centroid, first.centroid)
