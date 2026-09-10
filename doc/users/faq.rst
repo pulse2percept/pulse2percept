@@ -550,10 +550,20 @@ pulse2percept uses
 :py:class:`~pulse2percept.topography.VisualFieldMap` objects to convert between
 retinal or cortical coordinates and visual-field coordinates.
 
-For retinal models, available mappings include
-:py:class:`~pulse2percept.topography.retina.Curcio1990Map`,
-:py:class:`~pulse2percept.topography.retina.Watson2014Map`, and
-:py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap`.
+For retinal models, available mappings include:
+
+*   :py:class:`~pulse2percept.topography.retina.Curcio1990Map`: constant
+    retinal scaling of 280 microns per degree of visual angle.
+*   :py:class:`~pulse2percept.topography.retina.Watson2014Map`: nonlinear
+    retinal magnification.
+*   :py:class:`~pulse2percept.topography.retina.Montesano2020Map`: Watson's
+    retinal magnification plus a two-dimensional, meridian-dependent retinal
+    ganglion cell displacement field from [Montesano2020]_. Set ``eye`` to
+    ``'left'`` or ``'right'``, which is what decides whether the positive-x
+    visual field falls on nasal or temporal retina.
+
+The displacement field is population reference anatomy, not patient-specific:
+individual displacement, axial length and foveal position all vary.
 
 You can also implement your own
 :py:class:`~pulse2percept.topography.VisualFieldMap`.

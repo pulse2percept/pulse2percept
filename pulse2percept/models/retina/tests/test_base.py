@@ -4,8 +4,9 @@ import pytest
 from pulse2percept.implants import ElectrodeGrid, Implant
 from pulse2percept.implants.retina import RetinalImplant
 from pulse2percept.models.retina import ScoreboardSpatial
-from pulse2percept.topography.retina import (Curcio1990Map, Watson2014Map,
-                                             Watson2014DisplaceMap)
+from pulse2percept.topography.retina import (Curcio1990Map,
+                                             Montesano2020Map,
+                                             Watson2014Map)
 
 
 def implant(eye='right', generic=False):
@@ -22,21 +23,21 @@ def model(implant, **params):
 @pytest.mark.parametrize('eye', ('left', 'right'))
 def test_RetinalSpatial_matching_map(eye):
     spatial = model(implant(eye=eye),
-                    visual_field_map=Watson2014DisplaceMap(eye=eye))
+                    visual_field_map=Montesano2020Map(eye=eye))
     spatial.build()
     npt.assert_equal(spatial.is_built, True)
 
 
 def test_RetinalSpatial_map_eye_mismatch():
     spatial = model(implant(eye='left'),
-                    visual_field_map=Watson2014DisplaceMap(eye='right'))
+                    visual_field_map=Montesano2020Map(eye='right'))
     with pytest.raises(ValueError):
         spatial.build()
 
 
 def test_RetinalSpatial_map_eye_missing():
     spatial = model(implant(generic=True),
-                    visual_field_map=Watson2014DisplaceMap(eye='right'))
+                    visual_field_map=Montesano2020Map(eye='right'))
     with pytest.raises(TypeError):
         spatial.build()
 
@@ -57,7 +58,7 @@ def test_RetinalSpatial_eye_mutation_after_build():
     # assignment, so `is_built` has to catch it.
     for mutate in ['implant', 'map', 'both']:
         spatial = model(implant(eye='right'),
-                        visual_field_map=Watson2014DisplaceMap(eye='right'))
+                        visual_field_map=Montesano2020Map(eye='right'))
         spatial.build()
         npt.assert_equal(spatial.is_built, True)
         if mutate in ('implant', 'both'):

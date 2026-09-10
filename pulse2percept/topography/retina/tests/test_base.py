@@ -1,15 +1,15 @@
 import numpy.testing as npt
 import pytest
 
-from pulse2percept.topography.retina import (Curcio1990Map, Watson2014Map,
-                                             Watson2014DisplaceMap)
+from pulse2percept.topography.retina import (Curcio1990Map, Montesano2020Map,
+                                             Watson2014Map)
 from pulse2percept.units import (DimensionMismatchError, Quantity, dva, mm,
                                  ms, um)
 
 
 def test_retinal_map_units():
     """dva in, microns out -- and either may be spelled with a unit"""
-    for cls in (Curcio1990Map, Watson2014Map, Watson2014DisplaceMap):
+    for cls in (Curcio1990Map, Watson2014Map, Montesano2020Map):
         visual_field_map = cls()
         bare = visual_field_map.dva_to_ret(5, -2)
         npt.assert_allclose(visual_field_map.dva_to_ret(5 * dva, -2 * dva),
@@ -24,7 +24,7 @@ def test_retinal_map_units():
             visual_field_map.dva_to_ret(5, -2 * ms)
 
     # The inverse takes a length, and mixed spellings round-trip:
-    for cls in (Curcio1990Map, Watson2014Map):
+    for cls in (Curcio1990Map, Watson2014Map, Montesano2020Map):
         visual_field_map = cls()
         x_um, y_um = visual_field_map.dva_to_ret(5 * dva, -2 * dva)
         bare = visual_field_map.ret_to_dva(x_um, y_um)

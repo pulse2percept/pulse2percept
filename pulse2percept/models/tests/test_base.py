@@ -38,7 +38,8 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, deg,
 from pulse2percept.utils import FreezeError, frame_interval
 from pulse2percept.topography import Grid2D, VisualFieldMap
 from pulse2percept.topography.cortex import Polimeni2006Map
-from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
+from pulse2percept.topography.retina import (Curcio1990Map, Montesano2020Map,
+                                             RetinalMap,
                                              Watson2014DisplaceMap,
                                              Watson2014Map)
 
@@ -2061,6 +2062,8 @@ def test_location_noise_resets_on_a_new_implant():
     npt.assert_equal(model._location_noise_z.shape, (2, 2))
 
 
+@pytest.mark.filterwarnings(
+    'ignore:Class Watson2014DisplaceMap is deprecated:DeprecationWarning')
 def test_location_noise_needs_an_invertible_map():
     model = _one_electrode_model(location_noise=1.0, seed=7)
     # Watson displacement is eye-dependent, so it needs a lateralized implant:
@@ -2069,6 +2072,42 @@ def test_location_noise_needs_an_invertible_map():
     model.build()
     with pytest.raises(NotImplementedError):
         model.predict_percept({'A0': 1})
+
+
+@pytest.mark.parametrize('eye', ('right', 'left'))
+def test_location_noise_works_with_a_displacement_map(eye):
+    """What Watson2014DisplaceMap cannot do, Montesano2020Map can
+
+    Same setup as the test above -- an eye-dependent RGC displacement map on a
+    lateralized implant -- except that this map has an inverse.
+    """
+    def build(location_noise=None, seed=7):
+        implant = _implant_at([(560, 0)], cls=RetinalImplant)
+        implant.eye = eye
+        np.random.seed(seed)
+        return ScoreboardSpatial(
+            implant, xrange=(-10, 10), yrange=(-10, 10), step=0.1, rho=400,
+            location_noise=location_noise,
+            visual_field_map=Montesano2020Map(eye=eye)).build()
+
+    model = build(location_noise=1.0)
+    npt.assert_equal(model.is_built, True)
+    percept = model.predict_percept({'A0': 1})
+    npt.assert_equal(np.all(np.isfinite(percept.data)), True)
+    npt.assert_equal(percept.data.max() > 0, True)
+    # The offsets are the ones the seed draws, and they move the phosphene:
+    npt.assert_almost_equal(model._location_noise_z, _latents(1, 7))
+    plain = build()
+    was, _ = _blob_moments(plain.predict_percept({'A0': 1}), plain.grid)
+    now, _ = _blob_moments(percept, model.grid)
+    npt.assert_array_less(0.1, np.abs(now - was))
+    # Reproducible for a fixed seed, and different for another one:
+    npt.assert_array_equal(
+        build(location_noise=1.0).predict_percept({'A0': 1}).data,
+        percept.data)
+    npt.assert_equal(np.array_equal(
+        build(location_noise=1.0, seed=8).predict_percept({'A0': 1}).data,
+        percept.data), False)
 
 
 def test_location_noise_keeps_the_axon_map_kernel_joint():

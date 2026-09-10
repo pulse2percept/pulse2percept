@@ -18,8 +18,8 @@ def test_root_namespace_is_anatomy_neutral():
     npt.assert_equal(sorted(topo.__all__),
                      ['Grid2D', 'VisualFieldMap', 'cortex', 'retina'])
     for name in ('RetinalMap', 'Curcio1990Map', 'Watson2014Map',
-                 'Watson2014DisplaceMap', 'CorticalMap', 'Polimeni2006Map',
-                 'NeuropythyMap'):
+                 'Watson2014DisplaceMap', 'Montesano2020Map', 'CorticalMap',
+                 'Polimeni2006Map', 'NeuropythyMap'):
         npt.assert_equal(hasattr(topo, name), False, err_msg=name)
         with pytest.raises(ImportError):
             importlib.import_module(f'pulse2percept.topography.{name}')
@@ -27,8 +27,8 @@ def test_root_namespace_is_anatomy_neutral():
 
 @pytest.mark.parametrize('module, names', [
     ('pulse2percept.topography.retina',
-     ['Curcio1990Map', 'RetinalMap', 'Watson2014DisplaceMap',
-      'Watson2014Map']),
+     ['Curcio1990Map', 'Montesano2020Map', 'RetinalMap',
+      'Watson2014DisplaceMap', 'Watson2014Map']),
     ('pulse2percept.topography.cortex',
      ['CorticalMap', 'NeuropythyMap', 'Polimeni2006Map']),
 ])
@@ -42,6 +42,7 @@ def test_canonical_imports(module, names):
 @pytest.mark.parametrize('module, name', [
     ('pulse2percept.topography.retina.base', 'RetinalMap'),
     ('pulse2percept.topography.retina.curcio1990', 'Curcio1990Map'),
+    ('pulse2percept.topography.retina.montesano2020', 'Montesano2020Map'),
     ('pulse2percept.topography.retina.watson2014', 'Watson2014Map'),
     ('pulse2percept.topography.retina.watson2014', 'Watson2014DisplaceMap'),
     ('pulse2percept.topography.cortex.base', 'CorticalMap'),

@@ -12,7 +12,7 @@ from pulse2percept.implants.retina import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
 from pulse2percept.models.retina import Thompson2003Spatial, Thompson2003Model
 from pulse2percept.topography.retina import (Curcio1990Map,
-                                             Watson2014DisplaceMap)
+                                             Montesano2020Map)
 from pulse2percept.utils.testing import assert_warns_msg
 
 
@@ -30,9 +30,9 @@ def test_Thompson2003Spatial():
 
     # Converting ret <=> dva
     model2 = Thompson2003Spatial(implant=ArgusI(),
-                                 visual_field_map=Watson2014DisplaceMap())
+                                 visual_field_map=Montesano2020Map())
     npt.assert_equal(isinstance(model2.visual_field_map,
-                                Watson2014DisplaceMap),
+                                Montesano2020Map),
                      True)
 
     # Zero in = zero out:
@@ -102,9 +102,9 @@ def test_Thompson2003Model():
     npt.assert_almost_equal(model.spatial.visual_field_map.dva_to_ret(0, 0),
                             (0, 0))
     model2 = Thompson2003Model(implant=ArgusI(),
-                               visual_field_map=Watson2014DisplaceMap())
+                               visual_field_map=Montesano2020Map())
     npt.assert_equal(isinstance(model2.spatial.visual_field_map,
-                                Watson2014DisplaceMap),
+                                Montesano2020Map),
                      True)
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)

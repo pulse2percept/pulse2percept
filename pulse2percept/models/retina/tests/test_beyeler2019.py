@@ -19,8 +19,8 @@ from pulse2percept.models.retina import (AxonMapSpatial, AxonMapModel,
                                          ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.models.retina.beyeler2019 import _AXON_CACHE_VERSION
 from pulse2percept.models.retina._beyeler2019 import fast_axon_map
-from pulse2percept.topography.retina import (Watson2014Map,
-                                             Watson2014DisplaceMap)
+from pulse2percept.topography.retina import (Montesano2020Map,
+                                             Watson2014Map)
 from pulse2percept.units import (DimensionMismatchError, deg,
                                  dimensionless, dva, mW, mm, rad, um)
 from pulse2percept.utils.testing import assert_warns_msg
@@ -47,9 +47,10 @@ def test_ScoreboardSpatial():
     npt.assert_equal(isinstance(model.visual_field_map, Watson2014Map), True)
     npt.assert_almost_equal(model.visual_field_map.ret_to_dva(0, 0), (0, 0))
     npt.assert_almost_equal(model.visual_field_map.dva_to_ret(0, 0), (0, 0))
-    model2 = ScoreboardSpatial(implant=ArgusII(), visual_field_map=Watson2014DisplaceMap())
+    model2 = ScoreboardSpatial(implant=ArgusII(),
+                               visual_field_map=Montesano2020Map())
     npt.assert_equal(isinstance(model2.visual_field_map,
-                                Watson2014DisplaceMap),
+                                Montesano2020Map),
                      True)
 
     # Zero in = zero out:
@@ -116,9 +117,9 @@ def test_ScoreboardModel():
     npt.assert_almost_equal(model.spatial.visual_field_map.dva_to_ret(0, 0),
                             (0, 0))
     model2 = ScoreboardModel(implant=ArgusII(),
-                             visual_field_map=Watson2014DisplaceMap())
+                             visual_field_map=Montesano2020Map())
     npt.assert_equal(isinstance(model2.spatial.visual_field_map,
-                                Watson2014DisplaceMap),
+                                Montesano2020Map),
                      True)
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)
@@ -234,9 +235,9 @@ def test_AxonMapSpatial():
     npt.assert_almost_equal(model.visual_field_map.ret_to_dva(0, 0), (0, 0))
     npt.assert_almost_equal(model.visual_field_map.dva_to_ret(0, 0), (0, 0))
     model2 = AxonMapSpatial(implant=ArgusII(),
-                            visual_field_map=Watson2014DisplaceMap())
+                            visual_field_map=Montesano2020Map())
     npt.assert_equal(isinstance(model2.visual_field_map,
-                                Watson2014DisplaceMap),
+                                Montesano2020Map),
                      True)
 
     # Nothing in, None out:
@@ -346,9 +347,9 @@ def test_AxonMapModel():
     npt.assert_almost_equal(model.spatial.visual_field_map.dva_to_ret(0, 0),
                             (0, 0))
     model2 = AxonMapModel(implant=ArgusII(),
-                          visual_field_map=Watson2014DisplaceMap())
+                          visual_field_map=Montesano2020Map())
     npt.assert_equal(isinstance(model2.spatial.visual_field_map,
-                                Watson2014DisplaceMap),
+                                Montesano2020Map),
                      True)
 
     # Zeros in, zeros out:

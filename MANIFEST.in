@@ -11,6 +11,10 @@ recursive-include doc *
 # Include examples
 recursive-include examples *
 
+# Include the generator for the packaged displacement field (provenance for
+# pulse2percept/topography/retina/data/montesano2020.npz)
+include tools/generate_montesano2020_map.py
+
 # Explicitly include Numpy headers
 # (This ensures the source distribution works across environments)
 recursive-include numpy/core/include *.h

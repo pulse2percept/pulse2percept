@@ -110,6 +110,12 @@ Studies referenced throughout the Documentation:
              Reproducibility of Phosphene Characteristics in Chronically Implanted
              Argus(R) II Retinal Prosthesis Subjects. *Am J Ophthalmol*, 
              doi:`10.1016/j.ajo.2016.07.021 <https://doi.org/10.1016/j.ajo.2016.07.021>`_.
+.. [Montesano2020] G Montesano, G Ometto, RE Hogg, LM Rossetti, DF Garway-Heath,
+                   DP Crabb (2020). Revisiting the Drasdo model: implications
+                   for structure-function analysis of the macular region.
+                   *Translational Vision Science & Technology* 9(10):15,
+                   doi:`10.1167/tvst.9.10.15
+                   <https://doi.org/10.1167/tvst.9.10.15>`_.
 .. [Musk2019] E Musk & Neuralink (2019). An Integrated Brain-Machine Interface 
               Platform With Thousands of Channels. *Journal of Medical Internet Research*,
               doi: `10.2196/16194 <https://doi.org/10.2196/16194>`_.
