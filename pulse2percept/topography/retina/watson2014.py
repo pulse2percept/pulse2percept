@@ -100,7 +100,40 @@ class Watson2014DisplaceMap(Watson2014Map):
     receptive field. The displacement function is described in Eq. 5 of
     [Watson2014]_.
 
+    [Watson2014]_ fits Eq. 5 separately for the nasal and temporal meridian.
+    Specify ``eye`` as either ``'left'`` or ``'right'`` for the proper
+    assignment (one is the horizontal mirror of the other).
+    Points on the vertical meridian (``x == 0``) use the nasal fit, which is a
+    backward-compatible tie-break rather than an anatomical claim.
+
+    Parameters
+    ----------
+    eye : {'right', 'left'}, optional
+        Eye whose nasal/temporal displacement functions are used.
+        Case-insensitive on input; stored lowercase. Defaults to ``'right'``.
+
+        .. versionadded:: 0.11.0
+
     """
+
+    @property
+    def eye(self):
+        """Eye whose nasal and temporal displacement functions are used"""
+        return self._eye
+
+    @eye.setter
+    def eye(self, eye):
+        """Eye setter (called upon `self.eye = eye`)"""
+        if not isinstance(eye, str):
+            raise TypeError(f"'eye' must be a string, not {type(eye)}.")
+        eye = eye.lower()
+        if eye not in ('left', 'right'):
+            raise ValueError(f"'eye' must be either 'left' or 'right', not "
+                             f"{eye}.")
+        self._eye = eye
+
+    def get_default_params(self):
+        return {**super().get_default_params(), 'eye': 'right'}
 
     def watson_displacement(self, r, meridian='temporal'):
         """Ganglion cell displacement function
@@ -113,6 +146,9 @@ class Watson2014DisplaceMap(Watson2014Map):
         r : double|array-like
             Eccentricity in degrees of visual angle (dva)
         meridian : 'temporal' or 'nasal'
+            Meridian whose fit to apply, elementwise if array-like. Which
+            meridian a visual-field location falls on depends on the eye, but
+            this function does not: it only evaluates the requested fit.
 
         Returns
         -------
@@ -152,8 +188,14 @@ class Watson2014DisplaceMap(Watson2014Map):
         """
         # Convert x, y (dva) into polar coordinates:
         theta, rho_dva = cart2pol(xdva, ydva)
-        # Add RGC displacement:
-        meridian = np.where(xdva < 0, 'temporal', 'nasal')
+        # Add RGC displacement. The nasal retina lies on the right of a right
+        # eye and on the left of a left eye; x == 0 takes the nasal fit either
+        # way:
+        if self.eye == 'left':
+            is_temporal = np.greater(xdva, 0)
+        else:
+            is_temporal = np.less(xdva, 0)
+        meridian = np.where(is_temporal, 'temporal', 'nasal')
         rho_dva += self.watson_displacement(rho_dva, meridian=meridian)
         # Convert back to x, y (dva):
         x, y = pol2cart(theta, rho_dva)
