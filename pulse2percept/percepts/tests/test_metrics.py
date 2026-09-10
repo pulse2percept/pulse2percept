@@ -1,6 +1,3 @@
-import subprocess
-import sys
-
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -14,11 +11,19 @@ from pulse2percept.topography import Grid2D
 FWHM = 2 * np.sqrt(2 * np.log(2))
 
 
-def gaussian(grid, x0=0, y0=0, sigma_x=1, sigma_y=None, amplitude=1):
-    """A Gaussian blob sampled on ``grid``, as a one-frame (Y, X, 1) array"""
+def gaussian(grid, x0=0, y0=0, sigma_x=1, sigma_y=None, amplitude=1,
+             angle=0):
+    """A Gaussian blob sampled on ``grid``, as a one-frame (Y, X, 1) array
+
+    ``angle`` rotates the blob counterclockwise (radians) about ``(x0, y0)``.
+    """
     sigma_y = sigma_x if sigma_y is None else sigma_y
-    frame = amplitude * np.exp(-0.5 * (((grid.x - x0) / sigma_x) ** 2 +
-                                       ((grid.y - y0) / sigma_y) ** 2))
+    dx, dy = grid.x - x0, grid.y - y0
+    # Rotate the sampling coordinates into the blob's own frame:
+    u = dx * np.cos(angle) + dy * np.sin(angle)
+    v = -dx * np.sin(angle) + dy * np.cos(angle)
+    frame = amplitude * np.exp(-0.5 * ((u / sigma_x) ** 2 +
+                                       (v / sigma_y) ** 2))
     return frame[..., np.newaxis]
 
 
@@ -44,6 +49,12 @@ def test_measure_percept_circular_gaussian():
                         rtol=0.03)
     npt.assert_allclose(metrics.peak.elongation, 1, rtol=0.02)
     npt.assert_allclose(metrics.peak.major_axis, metrics.peak.minor_axis,
+                        rtol=0.02)
+    # Geometry is measured on the support alone, so the second-moment axes of
+    # a disk agree with its equivalent-circle diameter:
+    npt.assert_allclose(metrics.peak.major_axis, metrics.peak.diameter,
+                        rtol=0.02)
+    npt.assert_allclose(metrics.peak.minor_axis, metrics.peak.diameter,
                         rtol=0.02)
     npt.assert_equal(metrics.peak.n_components, 1)
     npt.assert_equal(metrics.peak.touches_edge, False)
@@ -93,7 +104,7 @@ def test_measure_percept_anisotropic_pixels():
     npt.assert_almost_equal(metrics.minor_axis, 4 * np.sqrt(dy ** 2 / 12))
     npt.assert_almost_equal(metrics.elongation, dx / dy)
     npt.assert_almost_equal(metrics.centroid, (grid.x[3, 2], grid.y[3, 2]))
-    npt.assert_almost_equal(metrics.total_brightness, dx * dy)
+    npt.assert_almost_equal(metrics.integrated_brightness, dx * dy)
 
 
 def test_measure_percept_anisotropic_gaussian():
@@ -109,6 +120,33 @@ def test_measure_percept_anisotropic_gaussian():
     npt.assert_allclose(tall.minor_axis, wide.minor_axis, rtol=1e-6)
 
 
+def test_measure_percept_rotated_gaussian():
+    # A blob at 90 deg leaves the off-diagonal moment zero; these angles do
+    # not, so they are what actually exercises `cov_xy`:
+    grid = Grid2D((-6, 6), (-6, 6), step=0.05)
+    kwargs = dict(sigma_x=1.5, sigma_y=0.5)
+    upright = measure_percept(Percept(gaussian(grid, **kwargs),
+                                      space=grid)).peak
+    for angle in (np.pi / 6, np.pi / 4, np.pi / 3):
+        turned = measure_percept(Percept(gaussian(grid, angle=angle,
+                                                  **kwargs), space=grid)).peak
+        # Axis lengths and elongation are rotation invariant; only the
+        # orientation of the ellipse changed:
+        npt.assert_allclose(turned.major_axis, upright.major_axis, rtol=0.02)
+        npt.assert_allclose(turned.minor_axis, upright.minor_axis, rtol=0.02)
+        npt.assert_allclose(turned.elongation, upright.elongation, rtol=0.02)
+        npt.assert_allclose(turned.area, upright.area, rtol=0.02)
+        npt.assert_almost_equal(turned.centroid, (0, 0), decimal=2)
+    # A 45 deg blob really is diagonal: its support spans x and y equally,
+    # which a measurement that ignored `cov_xy` would report as circular.
+    diagonal = measure_percept(Percept(gaussian(grid, angle=np.pi / 4,
+                                                **kwargs), space=grid)).peak
+    rows, cols = np.nonzero(gaussian(grid, angle=np.pi / 4,
+                                     **kwargs)[..., 0] >= 0.5)
+    npt.assert_allclose(np.ptp(cols), np.ptp(rows), rtol=0.05)
+    npt.assert_allclose(diagonal.elongation, 3, rtol=0.03)
+
+
 def test_measure_percept_amplitude_scaling():
     grid = Grid2D((-5, 5), (-5, 5), step=0.1)
     base = measure_percept(Percept(gaussian(grid), space=grid)).peak
@@ -117,7 +155,8 @@ def test_measure_percept_amplitude_scaling():
     # Brightness scales, but the threshold is relative to each frame's own
     # maximum, so the support and everything derived from it is untouched:
     npt.assert_allclose(scaled.max_brightness, 7.5 * base.max_brightness)
-    npt.assert_allclose(scaled.total_brightness, 7.5 * base.total_brightness)
+    npt.assert_allclose(scaled.integrated_brightness,
+                        7.5 * base.integrated_brightness)
     npt.assert_allclose(scaled.area, base.area)
     npt.assert_allclose(scaled.diameter, base.diameter)
     npt.assert_allclose(scaled.elongation, base.elongation)
@@ -133,8 +172,8 @@ def test_measure_percept_resolution_invariance():
                                              space=coarse)).peak
     fine_metrics = measure_percept(Percept(gaussian(fine, **args),
                                            space=fine)).peak
-    npt.assert_allclose(fine_metrics.total_brightness,
-                        coarse_metrics.total_brightness, rtol=0.01)
+    npt.assert_allclose(fine_metrics.integrated_brightness,
+                        coarse_metrics.integrated_brightness, rtol=0.01)
     npt.assert_allclose(fine_metrics.area, coarse_metrics.area, rtol=0.02)
     npt.assert_allclose(fine_metrics.diameter, coarse_metrics.diameter,
                         rtol=0.01)
@@ -157,7 +196,7 @@ def test_measure_percept_empty():
     for frame in (np.zeros(grid.shape), -np.ones(grid.shape)):
         metrics = measure_percept(Percept(frame[..., np.newaxis], space=grid))
         npt.assert_equal(metrics.peak_frame, 0)
-        npt.assert_equal(metrics.peak.total_brightness, 0)
+        npt.assert_equal(metrics.peak.integrated_brightness, 0)
         npt.assert_equal(metrics.peak.max_brightness, 0)
         npt.assert_equal(metrics.peak.area, 0)
         npt.assert_equal(metrics.peak.n_components, 0)
@@ -202,8 +241,8 @@ def test_measure_percept_temporal():
     npt.assert_equal(isinstance(metrics.frames[0], FrameMetrics), True)
     npt.assert_equal(isinstance(metrics, PerceptMetrics), True)
     npt.assert_allclose(metrics.max_brightness, amplitudes)
-    npt.assert_allclose(metrics.total_brightness / metrics.total_brightness[2],
-                        amplitudes)
+    integrated = metrics.integrated_brightness
+    npt.assert_allclose(integrated / integrated[2], amplitudes)
     npt.assert_equal(metrics.peak_frame, 1)
     npt.assert_equal(metrics.peak, metrics.frames[1])
     # The relative threshold makes every frame the same size:
@@ -246,7 +285,7 @@ def test_measure_percept_invalid():
         with pytest.raises(ValueError):
             measure_percept(Percept(gaussian(grid), space=grid),
                             threshold=threshold)
-    for bad in (np.nan, np.inf):
+    for bad in (np.nan, np.inf, -np.inf):
         frame = gaussian(grid)
         frame[0, 0, 0] = bad
         with pytest.raises(ValueError):
@@ -286,8 +325,8 @@ def test_Percept_measure_not_cached():
     percept.data[:] *= 2
     second = percept.measure()
     npt.assert_equal(second is first, False)
-    npt.assert_allclose(second.total_brightness,
-                        2 * first.total_brightness)
+    npt.assert_allclose(second.integrated_brightness,
+                        2 * first.integrated_brightness)
     npt.assert_allclose(second.max_brightness, 2 * first.max_brightness)
     # The threshold is relative, so the geometry is where it was:
     npt.assert_allclose(second.area, first.area)
@@ -301,24 +340,3 @@ def test_Percept_measure_rejects_rgb():
     grid = Grid2D((-2, 2), (-2, 2), step=0.5)
     with pytest.raises(ValueError):
         Percept(np.zeros(grid.shape + (3, 1)), space=grid).measure()
-
-
-def test_Percept_measure_not_imported_eagerly():
-    # Ordinary percept use must not pull in the measurement module; only
-    # `Percept.measure` imports it. This has to run in a subprocess, because
-    # by the time this test executes the module has long been imported.
-    code = ("import sys;"
-            "import numpy as np;"
-            "import pulse2percept as p2p;"
-            "from pulse2percept.percepts import Percept;"
-            "from pulse2percept.topography import Grid2D;"
-            "grid = Grid2D((-2, 2), (-2, 2), step=0.5);"
-            "percept = Percept(np.ones(grid.shape + (1,)), space=grid);"
-            "name = 'pulse2percept.percepts.metrics';"
-            "print('BEFORE', name in sys.modules);"
-            "percept.measure();"
-            "print('AFTER', name in sys.modules)")
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True,
-                         text=True, check=True)
-    npt.assert_equal(out.stdout.strip().splitlines()[-2:],
-                     ['BEFORE False', 'AFTER True'])

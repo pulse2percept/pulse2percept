@@ -40,6 +40,12 @@ class FrameMetrics:
     measurement below describes the *entire* support, even if it falls into
     several blobs.
 
+    Geometry is measured on the support as a set of pixels, not weighted by
+    the brightness inside it: brightness enters only through where the
+    threshold falls. So for a circular phosphene the support is a disk, and
+    :py:attr:`major_axis`, :py:attr:`minor_axis` and :py:attr:`diameter` all
+    agree.
+
     A frame with no positive brightness has no phosphene: its brightness,
     area, and component count are zero, and the quantities that would describe
     the position or shape of a phosphene are ``NaN`` rather than a phantom
@@ -49,7 +55,7 @@ class FrameMetrics:
 
     Attributes
     ----------
-    total_brightness : float
+    integrated_brightness : float
         Positive brightness integrated over the visual field, in brightness
         units x dva^2. This is a pixel sum scaled by the area of a pixel, so
         it approximates an integral rather than counting pixels: sampling the
@@ -61,7 +67,8 @@ class FrameMetrics:
     area : float
         Area of the support (dva^2).
     centroid : (float, float)
-        Brightness-weighted center ``(x, y)`` of the support, in dva.
+        Center ``(x, y)`` of the support, in dva: the mean position of its
+        pixels.
     diameter : float
         Diameter (dva) of the circle with the same area as the support,
         ``2 * sqrt(area / pi)``. For a sufficiently sampled circular Gaussian
@@ -69,8 +76,10 @@ class FrameMetrics:
         the support is a set of whole pixels, so the agreement is limited by
         how finely the grid samples the phosphene.
     major_axis, minor_axis : float
-        Axis lengths (dva) of the ellipse with the same brightness-weighted
-        second moments as the support, ``4 * sqrt(eigenvalue)``.
+        Axis lengths (dva) of the ellipse with the same second moments as the
+        support, ``4 * sqrt(eigenvalue)``. For a uniformly filled ellipse this
+        recovers its actual axes, so a circular support gives
+        ``major_axis == minor_axis == diameter``.
     elongation : float
         ``major_axis / minor_axis``; 1 for a circular phosphene.
     n_components : int
@@ -84,7 +93,7 @@ class FrameMetrics:
         measurements describe only the visible part of it.
 
     """
-    total_brightness: float
+    integrated_brightness: float
     max_brightness: float
     area: float
     centroid: tuple[float, float]
@@ -98,7 +107,7 @@ class FrameMetrics:
 
 # What a frame without any positive brightness measures. Shared because
 # ``FrameMetrics`` is immutable:
-_NO_PHOSPHENE = FrameMetrics(total_brightness=0.0, max_brightness=0.0,
+_NO_PHOSPHENE = FrameMetrics(integrated_brightness=0.0, max_brightness=0.0,
                              area=0.0, centroid=(np.nan, np.nan),
                              diameter=np.nan, major_axis=np.nan,
                              minor_axis=np.nan, elongation=np.nan,
@@ -144,11 +153,11 @@ class PerceptMetrics:
 
     @property
     def peak_frame(self):
-        """Index of the frame with the largest ``total_brightness``
+        """Index of the frame with the largest ``integrated_brightness``
 
         Ties go to the earliest frame, as with ``np.argmax``.
         """
-        return int(np.argmax(self.total_brightness))
+        return int(np.argmax(self.integrated_brightness))
 
     @property
     def peak(self):
@@ -156,9 +165,9 @@ class PerceptMetrics:
         return self.frames[self.peak_frame]
 
     @property
-    def total_brightness(self):
+    def integrated_brightness(self):
         """Integrated positive brightness of each frame, (T,)"""
-        return self._column('total_brightness')
+        return self._column('integrated_brightness')
 
     @property
     def max_brightness(self):
@@ -177,7 +186,7 @@ class PerceptMetrics:
 
     @property
     def centroid(self):
-        """Brightness-weighted ``(x, y)`` center (dva) of each frame, (T, 2)"""
+        """Support ``(x, y)`` center (dva) of each frame, (T, 2)"""
         return np.array([frame.centroid for frame in self.frames],
                         dtype=float).reshape((len(self.frames), 2))
 
@@ -208,8 +217,12 @@ class PerceptMetrics:
 
 
 def _measure_frame(frame, x, y, dx, dy, threshold):
-    """Measure one (Y, X) frame laid out on the coordinates ``x``/``y``"""
-    positive = np.clip(np.asarray(frame, dtype=np.float64), 0, None)
+    """Measure one (Y, X) frame on the 1D column/row coordinates ``x``/``y``"""
+    frame = np.asarray(frame, dtype=np.float64)
+    # Before clipping, which would turn a -inf into an innocent-looking 0:
+    if not np.all(np.isfinite(frame)):
+        raise ValueError("Percept data must be finite to be measured.")
+    positive = np.clip(frame, 0, None)
     peak = positive.max()
     pixel_area = dx * dy
     if peak <= 0:
@@ -217,36 +230,38 @@ def _measure_frame(frame, x, y, dx, dy, threshold):
     # The threshold is relative to this frame's own maximum, so scaling a
     # frame's brightness leaves its support -- and every shape measure -- put:
     support = positive >= threshold * peak
-    area = support.sum() * pixel_area
-    weights = positive[support]
-    total_weight = weights.sum()
-    xs, ys = x[support], y[support]
-    cx = (weights * xs).sum() / total_weight
-    cy = (weights * ys).sum() / total_weight
+    n_rows, n_cols = support.shape
+    # Only the support pixels carry coordinates, so index the 1D axes rather
+    # than building two full-field coordinate images:
+    rows, cols = np.nonzero(support)
+    xs, ys = x[cols], y[rows]
+    area = rows.size * pixel_area
+    cx, cy = xs.mean(), ys.mean()
     off_x, off_y = xs - cx, ys - cy
     # Pixels are cells, not point samples: without the variance of a uniform
     # cell added in, a support only a pixel or two across measures zero width.
-    cov_xx = (weights * off_x ** 2).sum() / total_weight + dx ** 2 / 12
-    cov_yy = (weights * off_y ** 2).sum() / total_weight + dy ** 2 / 12
-    cov_xy = (weights * off_x * off_y).sum() / total_weight
+    cov_xx = (off_x ** 2).mean() + dx ** 2 / 12
+    cov_yy = (off_y ** 2).mean() + dy ** 2 / 12
+    cov_xy = (off_x * off_y).mean()
     # `eigvalsh` returns the two eigenvalues in ascending order; clip because
     # roundoff can push a near-degenerate one slightly negative:
     eigvals = np.clip(np.linalg.eigvalsh([[cov_xx, cov_xy],
                                           [cov_xy, cov_yy]]), 0, None)
     minor_axis = 4 * np.sqrt(eigvals[0])
     major_axis = 4 * np.sqrt(eigvals[1])
-    touches_edge = bool(support[0].any() or support[-1].any() or
-                        support[:, 0].any() or support[:, -1].any())
-    return FrameMetrics(total_brightness=float(positive.sum() * pixel_area),
-                        max_brightness=float(peak),
-                        area=float(area),
-                        centroid=(float(cx), float(cy)),
-                        diameter=float(2 * np.sqrt(area / np.pi)),
-                        major_axis=float(major_axis),
-                        minor_axis=float(minor_axis),
-                        elongation=float(major_axis / minor_axis),
-                        n_components=int(label(support, connectivity=2).max()),
-                        touches_edge=touches_edge)
+    touches_edge = bool(rows.min() == 0 or rows.max() == n_rows - 1 or
+                        cols.min() == 0 or cols.max() == n_cols - 1)
+    return FrameMetrics(
+        integrated_brightness=float(positive.sum() * pixel_area),
+        max_brightness=float(peak),
+        area=float(area),
+        centroid=(float(cx), float(cy)),
+        diameter=float(2 * np.sqrt(area / np.pi)),
+        major_axis=float(major_axis),
+        minor_axis=float(minor_axis),
+        elongation=float(major_axis / minor_axis),
+        n_components=int(label(support, connectivity=2).max()),
+        touches_edge=touches_edge)
 
 
 def measure_percept(percept, threshold=0.5):
@@ -299,17 +314,15 @@ def measure_percept(percept, threshold=0.5):
         raise ValueError(f"'threshold' is a fraction of a frame's own maximum "
                          f"brightness and must lie in (0, 1], not "
                          f"{threshold}.")
-    # Left in the dtype it was stored in; `_measure_frame` promotes one frame
-    # at a time, so a long percept is never duplicated in double precision:
+    # Left in the dtype it was stored in; `_measure_frame` promotes, and
+    # checks, one frame at a time, so a long percept is never duplicated:
     data = percept.data
-    if not np.all(np.isfinite(data)):
-        raise ValueError("Percept data must be finite to be measured.")
     dx = _pixel_spacing(percept.xdva, 'xdva')
     dy = _pixel_spacing(percept.ydva, 'ydva')
     # Row 0 of a percept is drawn at the *top* of the visual field, so the row
     # coordinates run the other way from the stored (ascending) 'ydva':
-    x, y = np.meshgrid(np.asarray(percept.xdva, dtype=np.float64),
-                       np.asarray(percept.ydva, dtype=np.float64)[::-1])
+    x = np.asarray(percept.xdva, dtype=np.float64)
+    y = np.asarray(percept.ydva, dtype=np.float64)[::-1]
     frames = tuple(_measure_frame(data[..., t], x, y, dx, dy, threshold)
                    for t in range(data.shape[-1]))
     return PerceptMetrics(frames=frames, threshold=threshold)

@@ -166,7 +166,7 @@ and nothing is cached afterwards:
 
     metrics.peak.diameter          # dva
     metrics.peak.centroid          # (x, y) in dva
-    metrics.peak.total_brightness  # brightness units x dva^2
+    metrics.peak.integrated_brightness  # brightness units x dva^2
 
 Support
 ~~~~~~~
@@ -187,13 +187,16 @@ What is measured
 ~~~~~~~~~~~~~~~~
 
 Brightness comes in two flavors. ``max_brightness`` is the brightest positive
-pixel, in the model's own arbitrary units. ``total_brightness`` integrates
+pixel, in the model's own arbitrary units. ``integrated_brightness`` sums
 positive brightness over the visual field --- a pixel sum scaled by the area
 of a pixel, in brightness units x dva^2 --- so it approximates a spatial
 integral instead of tracking how finely you sampled the field. Neither is on a
 psychophysical absolute scale.
 
-The remaining measurements describe the suprathreshold support:
+The remaining measurements describe the suprathreshold support as a set of
+pixels. Brightness enters only through where the threshold falls, not as a
+weight, so the geometry stays internally consistent: a circular phosphene has
+``major_axis == minor_axis == diameter``.
 
 **area**
     Area of the support (dva^2).
@@ -203,11 +206,10 @@ The remaining measurements describe the suprathreshold support:
     this approximates the FWHM of a sufficiently sampled circular Gaussian.
 
 **centroid**
-    Brightness-weighted ``(x, y)`` center, in dva.
+    Center ``(x, y)`` of the support, in dva: the mean position of its pixels.
 
 **major_axis**, **minor_axis**
-    Axes (dva) of the ellipse with the same brightness-weighted second
-    moments as the support.
+    Axes (dva) of the ellipse with the same second moments as the support.
 
 **elongation**
     ``major_axis / minor_axis``; 1 for a circular phosphene.
@@ -247,7 +249,7 @@ as an array over frames:
 
     metrics = percept.measure()
 
-    metrics.total_brightness  # one value per frame
+    metrics.integrated_brightness  # one value per frame
     metrics.peak_frame        # frame with the most integrated brightness
     metrics.peak              # that frame's measurements
 
