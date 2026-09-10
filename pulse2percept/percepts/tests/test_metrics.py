@@ -47,6 +47,52 @@ def test_measure_percept_circular_gaussian():
     npt.assert_almost_equal(metrics.peak.max_brightness, 1)
 
 
+def test_measure_percept_threshold():
+    grid = Grid2D((-5, 5), (-5, 5), step=0.05)
+    sigma = 1.2
+    percept = Percept(gaussian(grid, sigma_x=sigma), space=grid)
+    # A Gaussian falls to `threshold` of its peak at a radius of
+    # sigma * sqrt(-2 * log(threshold)):
+    for threshold in (np.exp(-0.5), 0.25, 0.8):
+        metrics = measure_percept(percept, threshold=threshold)
+        npt.assert_equal(metrics.threshold, threshold)
+        npt.assert_allclose(metrics.peak.diameter,
+                            2 * sigma * np.sqrt(-2 * np.log(threshold)),
+                            rtol=0.02)
+    # exp(-0.5) puts the support edge exactly one standard deviation out:
+    at_sigma = measure_percept(percept, threshold=np.exp(-0.5)).peak
+    npt.assert_allclose(at_sigma.diameter, 2 * sigma, rtol=0.02)
+    # A stricter threshold keeps strictly less of the same frame:
+    half = measure_percept(percept, threshold=0.5).peak
+    npt.assert_equal(at_sigma.area < half.area, True)
+    npt.assert_equal(measure_percept(percept).threshold, 0.5)
+
+
+def test_measure_percept_anisotropic_pixels():
+    # Deliberately unequal x/y spacing, so a pixel is twice as wide as it is
+    # tall. Anything that collapses (dx, dy) to a single step size, or drops
+    # the within-cell variance, gets this wrong:
+    grid = Grid2D((-1, 1), (-1, 1), step=(0.5, 0.25))
+    dx, dy = 0.5, 0.25
+    npt.assert_almost_equal(np.diff(grid.x[0, :]), dx)
+    npt.assert_almost_equal(np.abs(np.diff(grid.y[:, 0])), dy)
+    # A support of exactly one pixel: the pixel is all the extent there is.
+    frame = np.zeros(grid.shape)
+    frame[3, 2] = 1.0
+    metrics = measure_percept(Percept(frame[..., np.newaxis], space=grid)).peak
+    npt.assert_almost_equal(metrics.area, dx * dy)
+    npt.assert_almost_equal(metrics.diameter, 2 * np.sqrt(dx * dy / np.pi))
+    npt.assert_equal(np.isfinite([metrics.major_axis, metrics.minor_axis]),
+                     [True, True])
+    npt.assert_equal(min(metrics.major_axis, metrics.minor_axis) > 0, True)
+    # A uniform cell has variance (side ** 2) / 12 along each side:
+    npt.assert_almost_equal(metrics.major_axis, 4 * np.sqrt(dx ** 2 / 12))
+    npt.assert_almost_equal(metrics.minor_axis, 4 * np.sqrt(dy ** 2 / 12))
+    npt.assert_almost_equal(metrics.elongation, dx / dy)
+    npt.assert_almost_equal(metrics.centroid, (grid.x[3, 2], grid.y[3, 2]))
+    npt.assert_almost_equal(metrics.total_brightness, dx * dy)
+
+
 def test_measure_percept_anisotropic_gaussian():
     grid = Grid2D((-6, 6), (-6, 6), step=0.05)
     wide = measure_percept(Percept(gaussian(grid, sigma_x=1.5, sigma_y=0.5),

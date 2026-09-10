@@ -46,7 +46,9 @@ class FrameMetrics:
     total_brightness : float
         Positive brightness integrated over the visual field, in brightness
         units x dva^2. This is a pixel sum scaled by the area of a pixel, so
-        it does not change when the same percept is sampled more finely.
+        it approximates an integral rather than counting pixels: sampling the
+        same percept more finely leaves it approximately unchanged, up to
+        discretization.
     max_brightness : float
         Largest positive brightness in the frame, in arbitrary brightness
         units.
@@ -56,8 +58,10 @@ class FrameMetrics:
         Brightness-weighted center ``(x, y)`` of the support, in dva.
     diameter : float
         Diameter (dva) of the circle with the same area as the support,
-        ``2 * sqrt(area / pi)``. For a well-sampled circular Gaussian and the
-        default half-maximum threshold, this is its FWHM.
+        ``2 * sqrt(area / pi)``. For a sufficiently sampled circular Gaussian
+        and the default half-maximum threshold, this approximates its FWHM;
+        the support is a set of whole pixels, so the agreement is limited by
+        how finely the grid samples the phosphene.
     major_axis, minor_axis : float
         Axis lengths (dva) of the ellipse with the same brightness-weighted
         second moments as the support, ``4 * sqrt(eigenvalue)``.
@@ -115,12 +119,17 @@ class PerceptMetrics:
     ----------
     frames : tuple of FrameMetrics
         One measurement per frame, in the order the frames are stored.
+    threshold : float
+        Fraction of each frame's own positive maximum that defined its
+        support, recorded so a result says what was measured.
 
     """
     frames: tuple[FrameMetrics, ...]
+    threshold: float
 
     def __repr__(self):
         return (f"PerceptMetrics(n_frames={len(self.frames)}, "
+                f"threshold={self.threshold:g}, "
                 f"peak_frame={self.peak_frame})")
 
     def _column(self, name, dtype=float):
@@ -253,8 +262,10 @@ def measure_percept(percept, threshold=0.5):
     threshold : float, optional
         Fraction of a frame's own positive maximum at or above which a pixel
         counts as part of the phosphene. Must lie in (0, 1]. The default of
-        0.5 makes :py:attr:`FrameMetrics.diameter` the full width at half
-        maximum of a circular Gaussian phosphene.
+        0.5 makes :py:attr:`FrameMetrics.diameter` approximately the full
+        width at half maximum of a sufficiently sampled circular Gaussian
+        phosphene. More generally, a Gaussian of standard deviation ``sigma``
+        has support diameter ``2 * sigma * sqrt(-2 * log(threshold))``.
 
     Returns
     -------
@@ -291,6 +302,6 @@ def measure_percept(percept, threshold=0.5):
     # coordinates run the other way from the stored (ascending) 'ydva':
     x, y = np.meshgrid(np.asarray(percept.xdva, dtype=np.float64),
                        np.asarray(percept.ydva, dtype=np.float64)[::-1])
-    return PerceptMetrics(frames=tuple(
-        _measure_frame(data[..., t], x, y, dx, dy, threshold)
-        for t in range(data.shape[-1])))
+    frames = tuple(_measure_frame(data[..., t], x, y, dx, dy, threshold)
+                   for t in range(data.shape[-1]))
+    return PerceptMetrics(frames=frames, threshold=threshold)
