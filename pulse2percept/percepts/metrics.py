@@ -1,6 +1,12 @@
-""":py:class:`~pulse2percept.percepts.FrameMetrics`,
-   :py:class:`~pulse2percept.percepts.PerceptMetrics`,
-   :py:func:`~pulse2percept.percepts.measure_percept`"""
+""":py:class:`~pulse2percept.percepts.metrics.FrameMetrics`,
+   :py:class:`~pulse2percept.percepts.metrics.PerceptMetrics`,
+   :py:func:`~pulse2percept.percepts.metrics.measure_percept`
+
+Measurements of the phosphenes in a percept. Not imported by
+:py:mod:`pulse2percept.percepts` itself, so that predicting a percept never
+loads them; :py:meth:`~pulse2percept.percepts.Percept.measure` pulls them in
+on demand.
+"""
 from dataclasses import dataclass
 
 import numpy as np

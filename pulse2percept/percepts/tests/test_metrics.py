@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -298,3 +301,24 @@ def test_Percept_measure_rejects_rgb():
     grid = Grid2D((-2, 2), (-2, 2), step=0.5)
     with pytest.raises(ValueError):
         Percept(np.zeros(grid.shape + (3, 1)), space=grid).measure()
+
+
+def test_Percept_measure_not_imported_eagerly():
+    # Ordinary percept use must not pull in the measurement module; only
+    # `Percept.measure` imports it. This has to run in a subprocess, because
+    # by the time this test executes the module has long been imported.
+    code = ("import sys;"
+            "import numpy as np;"
+            "import pulse2percept as p2p;"
+            "from pulse2percept.percepts import Percept;"
+            "from pulse2percept.topography import Grid2D;"
+            "grid = Grid2D((-2, 2), (-2, 2), step=0.5);"
+            "percept = Percept(np.ones(grid.shape + (1,)), space=grid);"
+            "name = 'pulse2percept.percepts.metrics';"
+            "print('BEFORE', name in sys.modules);"
+            "percept.measure();"
+            "print('AFTER', name in sys.modules)")
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True,
+                         text=True, check=True)
+    npt.assert_equal(out.stdout.strip().splitlines()[-2:],
+                     ['BEFORE False', 'AFTER True'])
