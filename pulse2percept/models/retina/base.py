@@ -107,8 +107,8 @@ class RetinalSpatial(SpatialModel):
         if map_eye is None:
             return built
         implant_eye = getattr(self.implant, 'eye', None)
-        return (built and self._built_map_eye == map_eye
-                and implant_eye == map_eye)
+        return (built and self._built_map_eye == map_eye and
+                implant_eye == map_eye)
 
     def build(self, **build_params):
         """Build the model
