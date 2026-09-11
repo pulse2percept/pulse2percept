@@ -15,6 +15,7 @@ from pulse2percept.stimuli import ImageStimulus, VideoStimulus, samples
 from pulse2percept.topography import Grid2D
 from pulse2percept.units import dva, ms, s
 from pulse2percept.vision import Scene, Scotoma
+from pulse2percept.vision import scene as scene_module
 from pulse2percept.vision.scene import (_raster_axes, _raster_step,
                                         _ring_radii)
 
@@ -804,10 +805,10 @@ def test_render_composes_by_the_documented_equation():
             (1 - half) * native + half * max(fill, phosphene), decimal=6)
     # Renders at a different resolution agree, the composition being pointwise:
     percept = Percept(np.full((9, 9, 1), 3.0), space=scene._grid())
-    npt.assert_almost_equal(
-        scene.render(percept=percept, vmax=4, shape=(45, 45)).data[22, 22, 0,
-                                                                  0],
-        scene.render(percept=percept, vmax=4).data[4, 4, 0, 0], decimal=6)
+    fine = scene.render(percept=percept, vmax=4, shape=(45, 45))
+    npt.assert_almost_equal(fine.data[22, 22, 0, 0],
+                            scene.render(percept=percept,
+                                         vmax=4).data[4, 4, 0, 0], decimal=6)
 
 
 def test_the_aperture_is_support_and_not_scene_data():
@@ -1281,6 +1282,109 @@ def test_an_elliptical_aperture_survives_composing_a_video():
     inside = ~scene._aperture_mask(*scene._axes, (0, 0))
     npt.assert_array_equal(seen[inside],
                            rendered(rect, percept=percept, vmax=1)[inside])
+
+
+def frames_evaluated(monkeypatch):
+    """Record how many frames each stage of the drawing path evaluates"""
+    counts = {'source': [], 'percept': []}
+    source_on, percept_on = Scene._source_on, scene_module._percept_on
+
+    def counted_source(self, xs, ys, frame=None):
+        out = source_on(self, xs, ys, frame=frame)
+        counts['source'].append(out.shape[-1])
+        return out
+
+    def counted_percept(prosthetic, frames, xs, ys, gaze_xy):
+        counts['percept'].append(frames.shape[-1])
+        return percept_on(prosthetic, frames, xs, ys, gaze_xy)
+
+    monkeypatch.setattr(Scene, '_source_on', counted_source)
+    monkeypatch.setattr(scene_module, '_percept_on', counted_percept)
+    return counts
+
+
+def test_plotting_one_frame_evaluates_only_that_frame(monkeypatch):
+    """Drawing frame k must not compose, sample or align the other frames"""
+    n = 6
+    scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.0,
+                             scotoma_blend=2)
+    percept = ramped_percept(scene, n)
+    counts = frames_evaluated(monkeypatch)
+    ax = scene.plot(percept=percept, vmax=1, frame=4, ax=plt.subplots()[1])
+    # One source frame for the patch, one for the wide layer, one percept
+    # frame, whatever the length of the video:
+    npt.assert_equal(counts['source'], [1, 1])
+    npt.assert_equal(counts['percept'], [1])
+    # ... and it is frame 4, drawn exactly as the dense composition has it:
+    dense = rendered(scene, percept=percept, vmax=1)
+    npt.assert_almost_equal(ax.images[1].get_array(), dense[..., 4],
+                            decimal=6)
+    npt.assert_almost_equal(ax.images[0].get_array(),
+                            scene._native_rgb()[..., 4], decimal=6)
+    plt.close('all')
+
+
+def test_a_still_scene_narrows_to_the_requested_percept_frame(monkeypatch):
+    """One source frame stands behind whichever percept frame is drawn"""
+    n = 5
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    percept = ramped_percept(scene, n)
+    counts = frames_evaluated(monkeypatch)
+    ax = scene.plot(percept=percept, vmax=1, frame=3, ax=plt.subplots()[1])
+    npt.assert_equal(counts['percept'], [1])
+    npt.assert_equal(counts['source'], [1, 1])
+    npt.assert_almost_equal(ax.images[1].get_array(),
+                            rendered(scene, percept=percept,
+                                     vmax=1)[..., 3], decimal=6)
+    plt.close('all')
+
+
+def test_plotting_a_video_frame_without_a_percept_reads_one_frame(monkeypatch):
+    n = 6
+    scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.2)
+    counts = frames_evaluated(monkeypatch)
+    ax = scene.plot(frame=2, ax=plt.subplots()[1])
+    npt.assert_equal(counts['source'], [1])
+    npt.assert_almost_equal(ax.images[0].get_array(),
+                            scene._native_rgb()[..., 2], decimal=6)
+    plt.close('all')
+
+
+def test_render_still_rasterizes_the_whole_video(monkeypatch):
+    """Narrowing is `plot`'s business; `render` is the full temporal result"""
+    n = 6
+    scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    percept = ramped_percept(scene, n)
+    counts = frames_evaluated(monkeypatch)
+    npt.assert_equal(scene.render(percept=percept, vmax=1).shape[-1], n)
+    npt.assert_equal(counts['source'], [n])
+    npt.assert_equal(counts['percept'], [n])
+
+
+def test_narrowing_aligns_the_percept_at_that_scene_time_alone():
+    """A resampled percept is read at frame k's instant, and at no other"""
+    n = 4
+    ramp = np.tile(np.linspace(0, 1, SCENE_PX), (SCENE_PX, 1))
+    frames = np.stack([ramp * w for w in np.linspace(0.4, 1.0, n)], axis=-1)
+    scene = Scene(VideoStimulus(frames, time=[0.0, 10.0, 20.0, 30.0]),
+                  fov=(SCENE_PX, SCENE_PX))
+    # A clock of its own, so the percept is resampled rather than taken:
+    percept = Percept(np.stack([ramp * b for b in (0.0, 3.0)], axis=-1),
+                      space=scene._grid(), time=[-5.0, 35.0])
+    full, full_time, unit = scene._prosthetic_frames(percept)
+    npt.assert_equal(full.shape[-1], n)
+    for f in range(n):
+        one, one_time, one_unit = scene._prosthetic_frames(percept, frame=f)
+        npt.assert_equal(one.shape[-1], 1)
+        npt.assert_array_equal(one[..., 0], full[..., f])
+        npt.assert_almost_equal(one_time, np.asarray(full_time)[f:f + 1])
+        npt.assert_equal(one_unit, unit)
+    # A percept that does not cover the video is refused whichever frame is
+    # asked for, since the check is made against the whole video:
+    short = Percept(percept.data, space=scene._grid(), time=[0.0, 20.0])
+    for frame in (None, 0):
+        with pytest.raises(ValueError):
+            scene._prosthetic_frames(short, frame=frame)
 
 
 @pytest.mark.parametrize('blend', [0, 2])

@@ -83,7 +83,7 @@ def _raster_step(xs, ys):
 
 
 def _raster_extent(xs, ys):
-    """Outer edges ``(left, right, bottom, top)`` of a raster, for ``imshow``"""
+    """Outer edges ``(left, right, bottom, top)`` of a raster, for `imshow`"""
     dx, dy = _raster_step(xs, ys)
     return (float(xs[0]) - dx / 2, float(xs[-1]) + dx / 2,
             float(ys[-1]) - dy / 2, float(ys[0]) + dy / 2)
@@ -96,7 +96,7 @@ def _raster_grid(xs, ys):
 
 
 def _pad_axis(axis, step, pad):
-    """Extend a regular axis by ``pad`` samples of signed ``step`` at both ends"""
+    """Extend a regular axis by ``pad`` samples of signed ``step`` each end"""
     if pad == 0:
         return axis
     lead = axis[0] + step * np.arange(-pad, 0)
@@ -105,7 +105,7 @@ def _pad_axis(axis, step, pad):
 
 
 def _pixel_count(extent, step):
-    """How many pixels of at most ``step`` degrees it takes to cover ``extent``"""
+    """How many pixels of at most ``step`` degrees ``extent`` takes"""
     n = extent / step
     # A ratio that is only integral up to rounding must not buy a pixel:
     return max(int(np.ceil(n - 1e-9 * max(n, 1.0))), 1)
@@ -155,6 +155,18 @@ def _as_rgb(frame):
     if frame.shape[2] == 3:
         return frame
     return np.broadcast_to(frame, frame.shape[:2] + (3,))
+
+
+def _take_frame(frames, frame):
+    """One frame of a stack, kept as a stack; ``None`` keeps all of them"""
+    return frames if frame is None else frames[..., frame:frame + 1]
+
+
+def _take_time(time, frame):
+    """The matching slice of a frame clock, which may be absent"""
+    if frame is None or time is None:
+        return time
+    return np.asarray(time)[frame:frame + 1]
 
 
 def _percept_axes(prosthetic):
@@ -671,7 +683,10 @@ class Scene(PrettyPrint):
 
     def _sample_at(self, x, y, gaze=None):
         """What the scene shows at eye-centered visual-field positions"""
-        frames = self._frames()
+        return self._sample_frames(self._frames(), x, y, gaze=gaze)
+
+    def _sample_frames(self, frames, x, y, gaze=None):
+        """`_sample_at` against a chosen stack of the source's frames"""
         gaze = _gaze_points(gaze, frames.shape[-1])
         x = np.asarray(x, dtype=float).ravel()
         y = np.asarray(y, dtype=float).ravel()
@@ -716,17 +731,27 @@ class Scene(PrettyPrint):
             self._pixel_centers_cache = centers
         return self._pixel_centers_cache
 
-    def _source_on(self, xs, ys):
+    def _source_frame(self, frame):
+        """Which source frame an output frame reads; None means all of them"""
+        if frame is None:
+            return None
+        # A still source stands behind every output frame:
+        return frame if self.n_frames > 1 else 0
+
+    def _source_on(self, xs, ys, frame=None):
         """The source at every node of a scene-coordinate raster
 
         ``(rows, cols, channels, n_frames)`` with 1 or 3 channels, as
         `_frames`. The source lives in scene coordinates, so this does not
-        depend on gaze.
+        depend on gaze. ``frame`` restricts both the work and the result to
+        that one source frame.
         """
-        if np.array_equal(xs, self._axes[0]) and                 np.array_equal(ys, self._axes[1]):
+        frames = _take_frame(self._frames(), frame)
+        same_x = np.array_equal(xs, self._axes[0])
+        if same_x and np.array_equal(ys, self._axes[1]):
             # The raster the source already sits on, so nothing is resampled
             # and the intact periphery comes through bit for bit:
-            return self._frames()
+            return frames
         n_rows, n_cols = ys.size, xs.size
         # Interpolated in row blocks: the interpolator works in float64, so a
         # fine raster done in one go costs several times the float32 result.
@@ -735,7 +760,7 @@ class Scene(PrettyPrint):
         for lo in range(0, n_rows, block):
             hi = min(lo + block, n_rows)
             x, y = np.meshgrid(xs, ys[lo:hi])
-            values = self._sample_at(x, y)
+            values = self._sample_frames(frames, x, y)
             if values.ndim == 2:
                 # Grayscale: give it the channel axis `_frames` has
                 values = values[:, np.newaxis, :]
@@ -837,9 +862,13 @@ class Scene(PrettyPrint):
         for artist in artists:
             artist.set_clip_path(clip)
 
-    def _native_on(self, xs, ys, gaze=None):
-        """Residual native vision on a raster, ``(rows, cols, 3, n_frames)``"""
-        frames = self._source_on(xs, ys)
+    def _native_on(self, xs, ys, gaze=None, frame=None):
+        """Residual native vision on a raster, ``(rows, cols, 3, n_frames)``
+
+        ``frame`` restricts the work to that one source frame, in which case
+        ``gaze`` is the single pair that frame is seen with.
+        """
+        frames = self._source_on(xs, ys, frame=frame)
         if self.scotoma is None:
             return (frames if frames.shape[2] == 3
                     else np.repeat(frames, 3, axis=2))
@@ -863,25 +892,28 @@ class Scene(PrettyPrint):
         """Residual native vision on the source raster, aperture not applied"""
         return self._native_on(*self._axes, gaze=gaze)
 
-    def _composed_on(self, xs, ys, prosthetic, vmax, vmin=0, gaze=None):
+    def _composed_on(self, xs, ys, prosthetic, vmax, vmin=0, gaze=None,
+                     frame=None):
         """Native vision on a raster with a prosthetic percept in the loss
 
         ``out = (1 - loss) * native + loss * max(fill, phosphene)``. Returns
-        ``(frames, time, time_unit)``.
+        ``(frames, time, time_unit)``. ``frame`` restricts the work to that
+        one output frame, in which case ``gaze`` is the single pair for it.
         """
         if self._scotoma_fill == _INPAINT:
             raise ValueError(
                 f"scotoma_fill={_INPAINT!r} cannot be combined with a "
-                f"prosthetic percept because their interaction is not modeled. "
-                f"Use a numeric 'scotoma_fill' for prosthetic composition.")
+                f"prosthetic percept because their interaction is not "
+                f"modeled. Use a numeric 'scotoma_fill' to compose one.")
         _check_prosthetic(prosthetic)
         vmin, vmax = _check_range(vmin, vmax)
-        pframes, out_time, out_unit = self._prosthetic_frames(prosthetic)
+        pframes, out_time, out_unit = self._prosthetic_frames(prosthetic,
+                                                              frame=frame)
         n_out = pframes.shape[-1]
         points = _gaze_points(gaze, n_out)
         # Not `_native_on`: a grayscale source is broadcast to RGB per frame
         # below rather than copied into a second full-size array.
-        source = self._source_on(xs, ys)
+        source = self._source_on(xs, ys, frame=self._source_frame(frame))
         n_scene = source.shape[-1]
         n_rows, n_cols = ys.size, xs.size
 
@@ -908,17 +940,20 @@ class Scene(PrettyPrint):
         return (np.ascontiguousarray(np.moveaxis(out, 0, -1)), out_time,
                 out_unit)
 
-    def _prosthetic_on(self, xs, ys, prosthetic, vmax, vmin=0, gaze=None):
+    def _prosthetic_on(self, xs, ys, prosthetic, vmax, vmin=0, gaze=None,
+                       frame=None):
         """A prosthetic percept alone on black, on a scene-coordinate raster
 
         Places a percept where and at what size this field sees it. Not a
         composition: with no scotoma there is nothing to paint the percept
         into, and superimposing it on intact native vision would assert an
-        interaction that is not modeled.
+        interaction that is not modeled. ``frame`` restricts the work to that
+        one output frame, in which case ``gaze`` is the single pair for it.
         """
         _check_prosthetic(prosthetic)
         vmin, vmax = _check_range(vmin, vmax)
-        pframes, out_time, out_unit = self._prosthetic_frames(prosthetic)
+        pframes, out_time, out_unit = self._prosthetic_frames(prosthetic,
+                                                              frame=frame)
         n_out = pframes.shape[-1]
         points = _gaze_points(gaze, n_out)
         if len(points) == 1:
@@ -931,24 +966,29 @@ class Scene(PrettyPrint):
         rgb = np.repeat(scaled[:, :, np.newaxis, :], 3, axis=2)
         return np.asarray(rgb, dtype=np.float32), out_time, out_unit
 
-    def _display_on(self, xs, ys, percept=None, vmax=None, vmin=0, gaze=None):
+    def _display_on(self, xs, ys, percept=None, vmax=None, vmin=0, gaze=None,
+                    frame=None):
         """Display-ready RGB on a scene-coordinate raster, and its clock
 
         Residual native vision, or that with a prosthetic percept composed
         into the loss. The aperture is left to whatever draws the result.
-        Returns ``(frames, time, time_unit)``.
+        Returns ``(frames, time, time_unit)``. ``frame`` restricts the work to
+        that one output frame, in which case ``gaze`` is the single pair for
+        it.
         """
         if percept is None:
             if vmax is not None or vmin != 0:
                 raise ValueError("'vmin' and 'vmax' map percept brightness "
                                  "onto a display, and there is no percept "
                                  "here. Pass 'percept'.")
-            return (self._native_on(xs, ys, gaze=gaze), self.time,
-                    self.time_unit)
+            # Without a percept the output frames are the source's own:
+            return (self._native_on(xs, ys, gaze=gaze, frame=frame),
+                    _take_time(self.time, frame), self.time_unit)
         if self.scotoma is None:
             return self._prosthetic_on(xs, ys, percept, vmax, vmin=vmin,
-                                       gaze=gaze)
-        return self._composed_on(xs, ys, percept, vmax, vmin=vmin, gaze=gaze)
+                                       gaze=gaze, frame=frame)
+        return self._composed_on(xs, ys, percept, vmax, vmin=vmin, gaze=gaze,
+                                 frame=frame)
 
     def _n_display_frames(self, percept):
         """How many frames a drawn or rendered result has
@@ -960,18 +1000,29 @@ class Scene(PrettyPrint):
             return self.n_frames
         return percept.data.shape[-1]
 
-    def _prosthetic_frames(self, prosthetic):
-        """Line a percept up with the output frames, and say when they happen"""
+    def _prosthetic_frames(self, prosthetic, frame=None):
+        """Line a percept up with the output frames, and say when they happen
+
+        ``frame`` narrows the result to that one output frame and aligns it
+        alone; the timing checks are made against the whole video either way.
+        """
         if self.time is None:
-            return prosthetic.data, prosthetic.time, prosthetic.time_unit
+            # A still scene has no clock of its own, so the percept's frames
+            # are the output frames:
+            return (_take_frame(prosthetic.data, frame),
+                    _take_time(prosthetic.time, frame), prosthetic.time_unit)
         n_out = self.n_frames
         n_pros = prosthetic.data.shape[-1]
+        out_time = _take_time(self.time, frame)
         if n_pros == 1 and prosthetic.time is None:
-            return (np.repeat(prosthetic.data, n_out, axis=-1), self.time,
-                    self.time_unit)
+            # An untimed still percept stands behind every frame:
+            return (np.repeat(prosthetic.data, 1 if frame is not None
+                              else n_out, axis=-1), out_time, self.time_unit)
         if n_pros == n_out:
-            return prosthetic.data, prosthetic.time, prosthetic.time_unit
+            return (_take_frame(prosthetic.data, frame),
+                    _take_time(prosthetic.time, frame), prosthetic.time_unit)
         unit = prosthetic.time_unit
+        # Checked against the whole video, not just the frame being drawn:
         asked = np.asarray(self.source.times(unit), dtype=float)
         lo, hi = float(prosthetic.time[0]), float(prosthetic.time[-1])
         slack = 1e-9 * max(abs(lo), abs(hi), 1.0)
@@ -983,9 +1034,16 @@ class Scene(PrettyPrint):
                 f"frame there would show a phosphene that was never "
                 f"simulated. Predict the percept over the whole video, or "
                 f"trim the video to the percept.")
-        frames = prosthetic[..., Quantity(np.asarray(self.time),
-                                          self.time_unit)]
-        return frames, self.time, self.time_unit
+        asked_time = np.asarray(out_time, dtype=float)
+        if frame is None:
+            frames = prosthetic[..., Quantity(asked_time, self.time_unit)]
+        else:
+            # A scalar time index drops the frame axis, which is what a
+            # one-element array index is read as too; put the axis back:
+            frames = prosthetic[..., Quantity(float(asked_time[0]),
+                                              self.time_unit)]
+            frames = frames[..., np.newaxis]
+        return frames, out_time, self.time_unit
 
     def _grid(self):
         """A Grid2D on the scene's pixel centers, in scene coordinates"""
@@ -998,7 +1056,8 @@ class Scene(PrettyPrint):
                              "raster; pass one or the other.")
         if shape is not None:
             shape = np.asarray(shape)
-            if shape.shape != (2,) or shape.dtype.kind not in 'iu' or                     shape.min() < 1:
+            bad = shape.shape != (2,) or shape.dtype.kind not in 'iu'
+            if bad or shape.min() < 1:
                 raise ValueError(f"'shape' must be a (rows, cols) pair of "
                                  f"positive integers, not {np.ravel(shape)}.")
             return (int(shape[0]), int(shape[1]))
@@ -1009,7 +1068,8 @@ class Scene(PrettyPrint):
         step = np.asarray(as_value(step, dva, 'step'), dtype=float)
         if step.ndim == 0:
             step = np.repeat(step, 2)
-        if step.shape != (2,) or not np.all(np.isfinite(step)) or                 step.min() <= 0:
+        bad = step.shape != (2,) or not np.all(np.isfinite(step))
+        if bad or step.min() <= 0:
             raise ValueError(f"'step' is an angular sampling in degrees and "
                              f"must be a positive number or a (dx, dy) pair, "
                              f"not {np.ravel(step)}.")
@@ -1144,16 +1204,16 @@ class Scene(PrettyPrint):
             raise ValueError(f"'frame' must be in 0..{n_out - 1}, not "
                              f"{frame}.")
         points = _gaze_points(gaze, n_out)
+        # One frame is drawn, so one gaze and one frame of each layer is all
+        # the work there is; the others are never evaluated.
         gaze_xy = points[0] if len(points) == 1 else points[frame]
         xs, ys = self._axes
-        # The source layer has its own frame count; one drawn frame of it
-        # needs only the one gaze:
-        src_frame = 0 if self.n_frames == 1 else frame
+        src_frame = self._source_frame(frame)
         patch = None
         if percept is None:
             # `_display_on` rejects a display range with nothing to map:
             wide = self._display_on(xs, ys, vmax=vmax, vmin=vmin,
-                                    gaze=gaze_xy)[0][..., src_frame]
+                                    gaze=gaze_xy, frame=frame)[0][..., 0]
         else:
             pxs, pys = _percept_axes(percept)
             # Eye-centered percept coordinates, moved into the scene; `pys`
@@ -1161,13 +1221,15 @@ class Scene(PrettyPrint):
             pxs = pxs + gaze_xy[0]
             pys = pys[::-1] + gaze_xy[1]
             patch = self._display_on(pxs, pys, percept=percept, vmax=vmax,
-                                     vmin=vmin, gaze=gaze)[0][..., frame]
+                                     vmin=vmin, gaze=gaze_xy,
+                                     frame=frame)[0][..., 0]
             if self.scotoma is None:
                 # Nothing is lost, so there is no residual vision to draw the
                 # percept into; only the field's extent is left to show.
                 wide = np.zeros((ys.size, xs.size, 3), dtype=np.float32)
             else:
-                wide = self._native_on(xs, ys, gaze=gaze_xy)[..., src_frame]
+                wide = self._native_on(xs, ys, gaze=gaze_xy,
+                                       frame=src_frame)[..., 0]
         still = Percept(wide[..., np.newaxis], space=self._grid())
         ax = still.plot(ax=ax, **kwargs)
         artists = [ax.images[-1]]
