@@ -494,8 +494,7 @@ monocular views:
 
     ax_left, ax_right = binocular.plot(left_percept=percept, vmax=2)
 
-Imagery already packed left-right side by side, as HMDs and stereo cameras
-deliver it, splits into the two eyes with
+Imagery already packed left-right side by side splits into the two eyes with
 :py:meth:`~pulse2percept.vision.BinocularScene.from_side_by_side`:
 
 .. code-block:: python
@@ -506,8 +505,8 @@ deliver it, splits into the two eyes with
     )
 
 The left half becomes the left eye and the right half the right eye. ``fov``
-describes one eye's half, no pixel values change, and
-no disparity or depth is inferred.
+describes one eye's half, splitting does not flip, resample, or interpolate
+either half, and no disparity or depth is inferred.
 
 A bilateral loss is often symmetric about the vertical meridian.
 :py:meth:`~pulse2percept.vision.Scene.fellow_eye` builds the homologous scene

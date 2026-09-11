@@ -216,28 +216,37 @@ def packed_stereo(rows=10, half_cols=20, channels=None):
     return stereo
 
 
+def packed_ramp(rows=10, half_cols=20):
+    """A side-by-side ramp in which no two pixels share a value"""
+    n_px = rows * 2 * half_cols
+    return (np.arange(n_px, dtype=np.float32) / n_px).reshape(rows, -1)
+
+
 def test_side_by_side_splits_left_from_right():
-    stereo = packed_stereo()
+    stereo = packed_ramp()
     binocular = BinocularScene.from_side_by_side(stereo, fov=(40, 20) * dva)
-    for eye, level in ((binocular.left, 0.0), (binocular.right, 1.0)):
+    for eye, half in ((binocular.left, stereo[:, :20]),
+                      (binocular.right, stereo[:, 20:])):
         npt.assert_equal(eye.shape, (10, 20))
-        npt.assert_almost_equal(eye.source.data.reshape(eye.shape),
-                                np.full((10, 20), level))
-    # The halves are drawn as given, neither swapped nor flipped:
-    npt.assert_almost_equal(binocular.left._native_rgb().max(), 0.0)
-    npt.assert_almost_equal(binocular.right._native_rgb().min(), 1.0)
+        # Exact, so a flip along either axis or any resampling fails here:
+        npt.assert_array_equal(eye.source.data.reshape(eye.shape), half)
 
 
-def test_side_by_side_splits_columns_not_channels():
-    stereo = packed_stereo(rows=6, half_cols=4, channels=3)
+@pytest.mark.parametrize('channels', [3, 4])
+def test_side_by_side_splits_columns_not_channels(channels):
+    stereo = packed_stereo(rows=6, half_cols=4, channels=channels)
     stereo[:, 4:, 1:] = 0.25
     binocular = BinocularScene.from_side_by_side(stereo, fov=(40, 20) * dva)
     for eye in (binocular.left, binocular.right):
-        npt.assert_equal(eye.source.img_shape, (6, 4, 3))
+        npt.assert_equal(eye.source.img_shape, (6, 4, channels))
         npt.assert_equal(eye.shape, (6, 4))
-    right = binocular.right.source.data.reshape(6, 4, 3)
-    npt.assert_almost_equal(right[..., 0], 1.0)
-    npt.assert_almost_equal(right[..., 1:], 0.25)
+    # All channels survive, alpha included; nothing is dropped to RGB:
+    right = binocular.right.source.data.reshape(6, 4, channels)
+    npt.assert_array_equal(right[..., 0], np.ones((6, 4), dtype=np.float32))
+    npt.assert_array_equal(right[..., 1:], np.full((6, 4, channels - 1), 0.25,
+                                                   dtype=np.float32))
+    npt.assert_array_equal(binocular.left.source.data.reshape(6, 4, channels),
+                           np.zeros((6, 4, channels), dtype=np.float32))
 
 
 @pytest.mark.parametrize('n_cols', [21, 7])
