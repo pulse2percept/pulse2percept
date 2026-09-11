@@ -206,3 +206,84 @@ def test_it_has_no_implant_or_model_behavior():
         npt.assert_equal(hasattr(binocular, absent), False)
     # A Scene is monocular; eye identity lives in the container, not the scene:
     npt.assert_equal(hasattr(binocular.left, 'eye'), False)
+
+
+def packed_stereo(rows=10, half_cols=20, channels=None):
+    """A side-by-side frame whose halves are unmistakably different"""
+    shape = (rows, 2 * half_cols) + (() if channels is None else (channels,))
+    stereo = np.zeros(shape, dtype=np.float32)
+    stereo[:, half_cols:] = 1.0
+    return stereo
+
+
+def test_side_by_side_splits_left_from_right():
+    stereo = packed_stereo()
+    binocular = BinocularScene.from_side_by_side(stereo, fov=(40, 20) * dva)
+    for eye, level in ((binocular.left, 0.0), (binocular.right, 1.0)):
+        npt.assert_equal(eye.shape, (10, 20))
+        npt.assert_almost_equal(eye.source.data.reshape(eye.shape),
+                                np.full((10, 20), level))
+    # The halves are drawn as given, neither swapped nor flipped:
+    npt.assert_almost_equal(binocular.left._native_rgb().max(), 0.0)
+    npt.assert_almost_equal(binocular.right._native_rgb().min(), 1.0)
+
+
+def test_side_by_side_splits_columns_not_channels():
+    stereo = packed_stereo(rows=6, half_cols=4, channels=3)
+    stereo[:, 4:, 1:] = 0.25
+    binocular = BinocularScene.from_side_by_side(stereo, fov=(40, 20) * dva)
+    for eye in (binocular.left, binocular.right):
+        npt.assert_equal(eye.source.img_shape, (6, 4, 3))
+        npt.assert_equal(eye.shape, (6, 4))
+    right = binocular.right.source.data.reshape(6, 4, 3)
+    npt.assert_almost_equal(right[..., 0], 1.0)
+    npt.assert_almost_equal(right[..., 1:], 0.25)
+
+
+@pytest.mark.parametrize('n_cols', [21, 7])
+def test_an_odd_width_has_no_seam(n_cols):
+    stereo = np.zeros((10, n_cols))
+    with pytest.raises(ValueError) as excinfo:
+        BinocularScene.from_side_by_side(stereo, fov=40 * dva)
+    npt.assert_equal('even' in str(excinfo.value), True)
+
+
+def test_a_scalar_fov_describes_one_eye_not_the_packed_frame():
+    """The packing geometry has no visual-field meaning"""
+    binocular = BinocularScene.from_side_by_side(packed_stereo(), fov=40)
+    for eye in (binocular.left, binocular.right):
+        npt.assert_equal(eye.shape, (10, 20))
+        # 40 degrees across 20 columns, so 20 degrees down 10 rows:
+        npt.assert_almost_equal(eye.fov, (40.0, 20.0))
+
+
+def test_an_explicit_fov_pair_goes_to_both_eyes():
+    binocular = BinocularScene.from_side_by_side(packed_stereo(),
+                                                 fov=(60, 40) * dva)
+    npt.assert_almost_equal(binocular.left.fov, (60.0, 40.0))
+    npt.assert_almost_equal(binocular.right.fov, (60.0, 40.0))
+
+
+def test_scene_kwargs_reach_both_eyes():
+    binocular = BinocularScene.from_side_by_side(packed_stereo(), fov=40 * dva,
+                                                 aperture='ellipse',
+                                                 background=0.5,
+                                                 scotoma=Scotoma.circle(8))
+    for eye in (binocular.left, binocular.right):
+        npt.assert_equal(eye.aperture, 'ellipse')
+        npt.assert_almost_equal(eye.background, (0.5, 0.5, 0.5))
+        npt.assert_equal(eye.scotoma is not None, True)
+
+
+def test_an_image_stimulus_is_a_stereo_source():
+    stereo = ImageStimulus(packed_stereo())
+    binocular = BinocularScene.from_side_by_side(stereo, fov=40 * dva)
+    npt.assert_equal(binocular.left.shape, (10, 20))
+    npt.assert_almost_equal(binocular.left.source.data.max(), 0.0)
+    npt.assert_almost_equal(binocular.right.source.data.min(), 1.0)
+
+
+def test_stereo_video_is_out_of_scope():
+    video = VideoStimulus(np.zeros((10, 40, 3)), time=[0, 1, 2])
+    with pytest.raises(TypeError):
+        BinocularScene.from_side_by_side(video, fov=40 * dva)

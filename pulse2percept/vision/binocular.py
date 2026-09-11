@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from .scene import Scene
+from ..stimuli import ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
 
 
@@ -66,6 +67,18 @@ class BinocularScene(PrettyPrint):
     >>> float(binocular.right.scotoma(-6, 0))
     1.0
 
+    Imagery that is already packed left-right side by side, split into the
+    two eyes by
+    :py:meth:`~pulse2percept.vision.BinocularScene.from_side_by_side`:
+
+    >>> stereo = np.zeros((10, 40))
+    >>> stereo[:, 20:] = 1.0
+    >>> binocular = BinocularScene.from_side_by_side(stereo, fov=40 * dva)
+    >>> binocular.left.shape, binocular.right.shape
+    ((10, 20), (10, 20))
+    >>> float(binocular.left.source.data.max())
+    0.0
+
     """
 
     def __init__(self, left, right):
@@ -75,6 +88,71 @@ class BinocularScene(PrettyPrint):
                                 f"{type(scene)}.")
         self._left = left
         self._right = right
+
+    @classmethod
+    def from_side_by_side(cls, source, fov, **scene_kwargs):
+        """Split one side-by-side stereo image into the two eyes
+
+        A side-by-side stereo image packs both views into one frame, the left
+        eye's in its left half and the right eye's in its right half. This
+        splits that frame exactly halfway along its width and hands each half
+        to a :py:class:`~pulse2percept.vision.Scene`.
+
+        Nothing is flipped, resampled, cropped or interpolated: the two halves
+        keep their pixel values and their grayscale/RGB/RGBA channels. This
+        loads existing stereo imagery; it neither creates disparity nor infers
+        depth, and the result remains two independent monocular views.
+
+        .. versionadded:: 0.11.0
+
+        Parameters
+        ----------
+        source : ImageStimulus or image
+            The packed stereo frame. Anything that is not already an
+            :py:class:`~pulse2percept.stimuli.ImageStimulus`, such as a file
+            name or a NumPy array, is handed to ``ImageStimulus``. Stereo
+            video is not supported.
+        fov : float or (width, height)
+            How much of the visual field *one eye's* half covers, in degrees
+            of visual angle. The packed frame's width has no visual-field
+            meaning, so a scalar (horizontal) FOV gets its vertical extent
+            from the aspect ratio of a half, not of the packed frame.
+        **scene_kwargs :
+            Passed unchanged to both
+            :py:class:`~pulse2percept.vision.Scene` constructors, so the two
+            eyes get identical scotoma, background, aperture and blend
+            settings. Eye-specific geometry is neither inferred nor mirrored
+            here; build the two scenes yourself if they should differ.
+
+        Returns
+        -------
+        binocular : :py:class:`~pulse2percept.vision.BinocularScene`
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from pulse2percept.units import dva
+        >>> from pulse2percept.vision import BinocularScene
+        >>> stereo = np.zeros((10, 40))
+        >>> binocular = BinocularScene.from_side_by_side(stereo,
+        ...                                              fov=(60, 40) * dva)
+        >>> binocular.left.shape, binocular.left.fov
+        ((10, 20), (60.0, 40.0))
+
+        """
+        if isinstance(source, VideoStimulus):
+            raise TypeError("'source' must be a still stereo image, not a "
+                            "VideoStimulus: stereo video is not supported.")
+        if not isinstance(source, ImageStimulus):
+            source = ImageStimulus(source)
+        n_cols = source.img_shape[1]
+        if n_cols % 2:
+            raise ValueError(f"A side-by-side stereo image must split evenly "
+                             f"into a left and a right half, so its width "
+                             f"must be even, not {n_cols}.")
+        halves = np.split(source.data.reshape(source.img_shape), 2, axis=1)
+        return cls(*[Scene(ImageStimulus(half), fov=fov, **scene_kwargs)
+                     for half in halves])
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
