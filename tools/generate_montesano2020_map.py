@@ -1,91 +1,114 @@
 #!/usr/bin/env python3
-"""Generate the packaged Montesano et al. (2020) RGC displacement field.
+"""Generate the Montesano et al. (2020) RGC displacement field.
 
-Reconstructs the retinal ganglion cell (RGC) displacement model of
+This script reconstructs the retinal ganglion cell (RGC) displacement model
+from Montesano et al. (2020), using the published equations together with the
+Curcio & Allen (1990) ganglion-cell topography data:
 
     Montesano G, Ometto G, Hogg RE, Rossetti LM, Garway-Heath DF, Crabb DP
     (2020). "Revisiting the Drasdo Model: Implications for Structure-Function
     Analysis of the Macular Region." Transl Vis Sci Technol 9(10):15.
     doi:10.1167/tvst.9.10.15
 
-from its published equations plus the Curcio & Allen (1990) ganglion cell
-topography map, and writes the resulting field to a compressed .npz for
+The resulting field is stored as a compressed ``.npz`` file for
 ``pulse2percept.topography.retina``.
 
 Usage::
 
     python tools/generate_montesano2020_map.py path/to/SORTED.txt
 
-Source histology data (not vendored)
-------------------------------------
-``SORTED.txt`` from https://christineacurcio.com/GanglionCellTopography/,
-SHA256 ``b29a3eb50fb1bd56742b86e87a9f585488baf94ec8646993b762a91149734c2e``
-(15460 bytes). It holds 171 scattered (co-latitude, longitude, density)
-samples of RGC soma density on a left-eye retinal sphere of radius 11.459 mm,
-which is the map Montesano's Appendix A describes. Curcio's site states no
-data-use license, so the file is not redistributed here; only the derived
-displacement field is packaged. The hash is enforced below: any other input
-would change the artifact without re-auditing the reconstruction.
+Source data
+-----------
+The input is ``SORTED.txt`` from
+https://christineacurcio.com/GanglionCellTopography/. It contains 171 samples
+of RGC soma density on a left-eye retinal sphere of radius 11.459 mm.
 
-The authors' own implementation (a Shiny app at relayer.online/drasdo) is no
-longer online and was not archived, so this is an independent reconstruction
-validated against the published figures, not a port of author code.
+Expected SHA256::
+
+    b29a3eb50fb1bd56742b86e87a9f585488baf94ec8646993b762a91149734c2e
+
+The source file is not redistributed because no data-use license is stated.
+The hash is checked so that regenerating the packaged field uses the same
+audited input.
+
+The original Montesano implementation was provided as a Shiny app at
+relayer.online/drasdo, which is no longer available. This script is therefore
+an independent reconstruction from the paper rather than a port of the
+authors' code.
 
 Coordinate conventions
 ----------------------
-``SORTED.txt`` is a left eye with longitude 0 deg temporal, 90 deg superior,
-180 deg nasal, 270 deg inferior. The artifact instead stores right-eye
-*retinal anatomical* meridians::
+``SORTED.txt`` describes a left eye with longitude
+
+    0 deg    temporal
+    90 deg   superior
+    180 deg  nasal
+    270 deg  inferior
+
+The generated field is stored in retinal anatomical coordinates as
 
     0 deg    nasal
     90 deg   superior
     180 deg  temporal
     270 deg  inferior
 
-Montesano's right eye is a horizontal mirror of the left-eye source map, so the
-anatomical-meridian profile is the same in both eyes; laterality enters only in
-the visual-field-to-anatomical-angle mapping, which is a runtime concern and is
-deliberately not baked into the artifact.
+The same anatomical-meridian profiles are used for both eyes. Eye laterality
+is handled at runtime by the visual-field-to-retinal-angle transform.
 
-Eccentricities are visual degrees (dva) throughout, converted from retinal mm
-with the schematic eye below.
+Eccentricities in the stored field are in degrees of visual angle (dva).
+Retinal distances used during reconstruction are converted with the schematic
+eye described by Montesano et al.
 
-Resolved ambiguities in the published description
--------------------------------------------------
-1. Table A1 gives "eccentricity of corneal ellipse = 0.500" without saying how
-   it enters the surface equation. Reading it as the conic constant (K = -0.5)
-   reproduces the published first nodal point to 0.5 um (6.9295 mm vs
-   6.930 mm); reading it as an ellipse eccentricity (K = -e**2 = -0.25) gives
-   6.8501 mm. K = -0.5 is used. The choice is immaterial downstream: retinal
-   distances differ by <= 8 um out to 15 deg.
-2. The piecewise-cubic reconstruction of the histology undershoots to about
-   -61 cells/mm2 near 0.1 mm on the superior meridian. Density is clipped at
-   zero as a physical safeguard. The effect on displacement is below 1 um for
-   r_rf >= 5 um, and the clipped cumulative count is invertible where the raw
-   one is not.
-3. Curcio's Figure 6 "Norm. mm" column implies an 11.556 mm sphere, while
-   Appendix A prescribes 11.459 mm (a 0.84% discrepancy internal to the
-   sources). Appendix A is followed.
+Implementation choices
+----------------------
+A few details of the published method require interpretation:
 
-Preserved caveats -- do not "fix" these
----------------------------------------
-* On the nasal meridian the displacement-zone radius rDZ = 4.034 mm falls about
-  34 um beyond the optic nerve head centre (20 deg co-latitude = 4.000 mm).
-  ``SORTED.txt`` has no samples inside the disc, so the nasal cumulative count
-  relies on the interpolant bridging it. Masking the disc instead moves nasal
-  E2v to 1.91-2.00 and displacement by up to 218 um, and no longer matches the
-  paper (published Fig. 4A nasal E2v 2.1804, this reconstruction 2.1855). The
-  published behaviour is reproduced, not corrected.
-* The field has two genuine angular discontinuities, near 11.05 deg and
-  354.4 deg, where a local minimum of ``C_gcrf - C_gcb`` becomes the first
-  cumulative-curve crossing and truncates the displacement zone. They jump by
-  0.013-0.025 deg (4-7 um), persist under radial and angular refinement, and
-  are visible in the paper's Figure 4B. They are not smoothed.
-* Count conservation (Montesano's "Method 2") holds only inside the
-  displacement zone. Beyond the first crossing the model sets r_soma = r_rf,
-  making the Jacobian 1, which would additionally require the soma and RF
-  densities to be pointwise equal. That is a property of the model, not a
-  defect.
+* Table A1 lists the "eccentricity of corneal ellipse" as 0.500. We use this
+  as the conic constant, ``K = -0.5``. This reproduces the published first
+  nodal point (6.9295 mm vs 6.930 mm); using ``K = -0.25`` does not.
+* Cubic interpolation of the Curcio data slightly undershoots zero near the
+  fovea on some meridians. Negative densities are clipped to zero.
+* Curcio's Figure 6 implies a retinal sphere radius of 11.556 mm, whereas
+  Montesano Appendix A uses 11.459 mm. We follow Appendix A.
+* ``SORTED.txt`` also contains 330 triangles, but the paper does not state
+  whether these were used for interpolation. We therefore interpolate the
+  171 points directly with ``CloughTocher2DInterpolator``.
+
+Validation
+----------
+The reconstruction was checked against the ``drasdolut`` table distributed
+with the R package ``visualFields`` (CRAN 1.0.7), which was produced by the
+same research group and is independent of this implementation.
+
+Across the four cardinal and four oblique meridians:
+
+* peak displacement on the cardinal meridians agrees within 0.014 dva;
+* soma eccentricity agrees within 0.073 dva at RF eccentricities of
+  1, 2.44, and 5 dva, and within 0.18 dva over 1-9 dva;
+* the ``visualFields`` displacement is radial to within 0.03 deg of polar
+  angle.
+
+Two systematic differences remain. ``drasdolut`` uses a relatively coarse,
+uniform radial grid, which under-resolves the steep displacement near the
+fovea. It also extends the nasal displacement zone farther than the published
+model. The reconstruction here instead matches the published nasal E2v value
+from Figure 4A.
+
+Known model features
+--------------------
+These features are preserved intentionally:
+
+* On the nasal meridian, the displacement-zone radius ``rDZ = 4.034 mm``
+  extends slightly beyond the optic nerve head centre. The Curcio data contain
+  no samples inside the disc, so interpolation bridges that region. Masking
+  the disc changes nasal E2v substantially and no longer reproduces the
+  published Figure 4A value.
+* The field contains small angular discontinuities near 11.05 and 354.4 deg,
+  where the first crossing of the cumulative RF and soma counts changes
+  abruptly. These persist under grid refinement and are visible in the
+  published Figure 4B.
+* Count conservation applies within the displacement zone. Beyond the first
+  crossing, the model sets ``r_soma = r_rf``.
 """
 import argparse
 import hashlib

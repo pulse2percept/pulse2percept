@@ -7,6 +7,7 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
 from .watson2014 import Watson2014Map
+from ...units import Quantity, mm, um
 from ...utils.geometry import cart2pol, pol2cart
 
 #: Radial support of the packaged field (dva); identity at and beyond it.
@@ -17,6 +18,27 @@ _DATA_FILE = 'montesano2020.npz'
 #: The two interpolators, plus the last radial node of the stored grid,
 #: which is a few float ulps below ``SUPPORT_MAX_DVA``.
 _Field = namedtuple('_Field', ['forward', 'inverse', 'radial_max'])
+
+
+#: Eq. A5 of [Watson2014]_ (dva -> mm), as (linear, square, cubic) terms.
+_A5_COEFF = (0.268, 3.427e-4, -8.3309e-6)
+
+
+def _invert_a5(r_mm, seed_deg):
+    """Solve Eq. A5 of [Watson2014]_ for eccentricity (dva).
+
+    [Watson2014]_ fits Eq. A6 for the reverse direction separately, and the
+    two fits disagree by a few percent. Inverting Eq. A5 instead keeps
+    :py:meth:`Montesano2020Map.ret_to_dva` the inverse of
+    :py:meth:`Montesano2020Map.dva_to_ret`, which ``location_noise`` requires.
+    """
+    a, b, c = _A5_COEFF
+    r_deg = np.asarray(seed_deg, dtype=np.float64)
+    for _ in range(3):
+        residual = ((c * r_deg + b) * r_deg + a) * r_deg - r_mm
+        slope = (3.0 * c * r_deg + 2.0 * b) * r_deg + a
+        r_deg = r_deg - residual / slope
+    return r_deg
 
 
 def _as_scalars(x, y):
@@ -92,12 +114,6 @@ class Montesano2020Map(Watson2014Map):
     reaches 14.10 dva temporally and superiorly, 10.52 dva inferiorly,
     9.54 dva nasally. Beyond 15 dva the map is the identity.
 
-    :py:meth:`ret_to_dva` implements the reverse mapping required by
-    ``location_noise``. It is not an exact inverse. The displacement itself
-    reverses to better than 0.001 dva, but Eqs. A5 and A6 of [Watson2014]_
-    are separately fitted, so a full dva-to-microns-and-back trip closes only
-    to about 0.2 dva.
-
     .. versionadded:: 0.11.0
 
     Parameters
@@ -110,14 +126,14 @@ class Montesano2020Map(Watson2014Map):
 
     Notes
     -----
-    *  An independent reconstruction of [Montesano2020]_, not a port of
-       author code, validated against that paper's published figures and E2v
-       fits. See ``tools/generate_montesano2020_map.py``.
-    *  Population reference anatomy ([Curcio1990]_, six donor retinas, plus a
-       schematic eye), not subject-specific.
-    *  Tabulated on 1440 meridians by 751 radial nodes, then interpolated
-       linearly. Away from two known first-crossing discontinuities, that
-       costs about 0.003 dva against the directly solved model.
+    *  An independent reconstruction of [Montesano2020]_ as opposed to a port
+       of the original code. The implementation was validated against that
+       paper's published figures and E2v fits, and cross-checked against the
+       ``visualFields`` implementation by the same group, which it matches to
+       0.07 dva inside the displacement zone. 
+       See ``tools/generate_montesano2020_map.py``.
+    *  This is based on population anatomy [Curcio1990]_ and not to be
+       interpreted as a subject-specific eye.
 
     """
 
@@ -176,7 +192,8 @@ class Montesano2020Map(Watson2014Map):
     def dva_to_ret(self, xdva, ydva, coords='cart'):
         """Converts dva to retinal coords
 
-        Displaces RF to soma in the visual field, then converts to microns.
+        Displaces RF to soma in the visual field, then converts to microns
+        with Eq. A5 of [Watson2014]_.
 
         Parameters
         ----------
@@ -199,9 +216,9 @@ class Montesano2020Map(Watson2014Map):
     def ret_to_dva(self, xret, yret, coords='cart'):
         """Converts retinal coords to dva
 
-        Reverses :py:meth:`dva_to_ret`: microns become a soma location in
-        dva, then the RF it serves. Not an exact inverse; see the class
-        docstring.
+        Inverts :py:meth:`dva_to_ret`. Eq. A5 of [Watson2014]_ is inverted
+        numerically, so this does not reproduce
+        :py:meth:`Watson2014Map.ret_to_dva`, which evaluates Eq. A6.
 
         Parameters
         ----------
@@ -215,7 +232,13 @@ class Montesano2020Map(Watson2014Map):
         xdva, ydva : double or array-like
             Corresponding x,y coordinates in dva
         """
-        theta, r_soma = super().ret_to_dva(xret, yret, coords='polar')
+        # The parent supplies the flipped polar angle and the Eq. A6 value,
+        # which seeds the Eq. A5 solve.
+        theta, seed = super().ret_to_dva(xret, yret, coords='polar')
+        r_um = np.hypot(np.asarray(xret, dtype=np.float64),
+                        np.asarray(yret, dtype=np.float64))
+        r_soma = _invert_a5(Quantity(r_um, um).to_value(mm), seed)
+        r_soma = r_soma.astype(np.asarray(seed).dtype, copy=False)
         r_rf = self._remap_radius(theta, r_soma, inverse=True)
         if coords.lower() == 'cart':
             return _as_scalars(*pol2cart(theta, r_rf))

@@ -2086,6 +2086,13 @@ def test_location_noise_works_with_a_displacement_map(eye):
             location_noise=location_noise,
             visual_field_map=Montesano2020Map(eye=eye)).build()
 
+    # A zero offset has to put the electrode back where it started, which
+    # needs ret_to_dva to invert dva_to_ret rather than approximate it:
+    still = build(location_noise=1.0)
+    still._location_noise_z = np.zeros((1, 2))
+    npt.assert_allclose(still.build().predict_percept({'A0': 1}).data,
+                        build().predict_percept({'A0': 1}).data, atol=1e-4)
+
     model = build(location_noise=1.0)
     npt.assert_equal(model.is_built, True)
     percept = model.predict_percept({'A0': 1})

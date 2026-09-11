@@ -69,10 +69,9 @@ for ax, transform in zip(axes, transforms):
     ax.axis('equal')
 
 ###############################################################################
-# ``Curcio1990Map`` is a simple scaling, ``Watson2014Map`` a nonlinear one.
-# ``Montesano2020Map`` adds the foveal distortion of retinal ganglion-cell
-# displacement: the cell bodies sit farther out than the receptive fields
-# they serve, by an amount that depends on the meridian.
+# ``Curcio1990Map`` uses a constant retinal scaling, while ``Watson2014Map``
+# uses a nonlinear one. ``Montesano2020Map`` additionally models
+# meridian-dependent retinal ganglion-cell displacement near the fovea.
 
 vfmap = p2p.topography.retina.Montesano2020Map(eye='right')
 plain = p2p.topography.retina.Watson2014Map()
@@ -89,27 +88,31 @@ for angle, label in [(0, 'nasal'), (90, 'superior'),
     ax.plot(radius, displaced - np.hypot(*plain.dva_to_ret(x, y)),
             label=label)
 ax.set_xlabel('receptive-field eccentricity (dva)')
-ax.set_ylabel('RGC displacement (microns)')
+ax.set_ylabel('RGC displacement (microns, Watson2014 scale)')
 ax.legend(title='retinal meridian')
 
 ###############################################################################
-# The zone reaches 14.1 dva temporally and superiorly, but only 10.5 dva
-# inferiorly and 9.5 dva nasally. ``eye`` gives the retinal laterality: a
-# left eye is the horizontal mirror of a right one. The vertical direction is
-# the same in both.
+# The displacement zone reaches 14.1 dva temporally and superiorly, 10.5 dva
+# inferiorly, and 9.5 dva nasally. ``eye`` controls retinal laterality: the
+# left-eye map is the horizontal mirror of the right-eye map.
 #
-# The field is population reference anatomy from [Montesano2020]_ and
-# [Curcio1990]_ histology, not subject-specific: individual displacement and
-# foveal position both vary. The deprecated ``Watson2014DisplaceMap`` fits
-# the horizontal meridian only and provides no reverse mapping.
+# Displacement is reconstructed from [Montesano2020]_ in degrees of visual
+# angle, then converted to retinal microns with ``Watson2014Map``. This keeps
+# the tissue coordinates consistent with the other retinal maps in
+# pulse2percept.
+#
+# The field represents population-average anatomy from [Montesano2020]_ and
+# [Curcio1990]_, not subject-specific retinal anatomy. The deprecated
+# ``Watson2014DisplaceMap`` uses horizontal-meridian fits across entire
+# hemifields and does not provide a reverse mapping.
 #
 # Cortical visual field maps
 # --------------------------
 #
 # Cortical models use a
-# :py:class:`~pulse2percept.topography.cortex.CorticalMap`. The standard choice is
-# :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, which maps the visual
-# field onto V1, V2, and V3:
+# :py:class:`~pulse2percept.topography.cortex.CorticalMap`. The standard choice
+# is :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, which maps
+# the visual field onto V1, V2, and V3:
 
 fig, axes = plt.subplots(ncols=2, figsize=(9, 4))
 
@@ -211,7 +214,7 @@ stim_cortex = {
 fig, axes = plt.subplots(ncols=2, sharex=True, sharey=True, figsize=(9, 4))
 for ax, noise, title in zip(
         axes,
-        [None, 0.5],
+        [None, 0.25],
         ['Canonical locations', 'Subject-specific locations']):
     np.random.seed(2)
     model = p2p.models.cortex.ScoreboardModel(
