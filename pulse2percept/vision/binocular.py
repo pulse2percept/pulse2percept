@@ -7,7 +7,7 @@ from ..utils import PrettyPrint
 
 
 def _share_visual_field(axes, scenes):
-    """Put both axes on the same degrees-per-inch scale"""
+    """Draw both eyes over the same angular extent."""
     half = [max(scene.fov[i] for scene in scenes) / 2 for i in (0, 1)]
     for axis, extent in zip(('x', 'y'), half):
         for ax in axes:
