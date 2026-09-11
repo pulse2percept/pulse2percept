@@ -6,6 +6,7 @@ import scipy.stats as spst
 
 from .base import RetinalMap
 from ...units import Quantity, mm, um
+from ...utils import deprecated
 from ...utils.geometry import cart2pol, pol2cart
 
 
@@ -86,9 +87,19 @@ class Watson2014Map(RetinalMap):
         raise ValueError(f'Unknown coordinate system "{coords}".')
 
 
+@deprecated(alt_func='Montesano2020Map', deprecated_version='0.11.0',
+            extra_msg='Eq. 5 fits the horizontal meridian only, applies each '
+                      'fit throughout the corresponding hemifield, and '
+                      'provides no reverse mapping. Expect different '
+                      'numbers.')
 class Watson2014DisplaceMap(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using RGC
     displacement [Watson2014]_
+
+    .. deprecated:: 0.11.0
+
+        Use :py:class:`Montesano2020Map`, a two-dimensional displacement
+        field.
 
     Converts from eccentricity (defined as distance from a visual center) in
     degrees of visual angle (dva) to microns on the retina using Eqs. 5, A5,
@@ -105,6 +116,11 @@ class Watson2014DisplaceMap(Watson2014Map):
     assignment (one is the horizontal mirror of the other).
     Points on the vertical meridian (``x == 0``) use the nasal fit, which is a
     backward-compatible tie-break rather than an anatomical claim.
+
+    Each fit applies throughout its retinal hemifield, so a point 45 deg above
+    the horizon is displaced like one on the horizon at the same
+    eccentricity. Kept for reproducing earlier results; ``ret_to_dva`` raises
+    ``NotImplementedError``.
 
     Parameters
     ----------

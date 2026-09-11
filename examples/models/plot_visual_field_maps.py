@@ -15,8 +15,9 @@ and include:
   retinal scaling of 280 microns per degree of visual angle (dva).
 * :py:class:`~pulse2percept.topography.retina.Watson2014Map`, which uses the nonlinear
   retinal magnification model from [Watson2014]_.
-* :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap`, which also
-  accounts for retinal ganglion-cell displacement near the fovea.
+* :py:class:`~pulse2percept.topography.retina.Montesano2020Map`, which adds
+  a two-dimensional, meridian-dependent retinal ganglion-cell displacement
+  field from [Montesano2020]_ to that magnification.
 
 Cortical maps derive from :py:class:`~pulse2percept.topography.cortex.CorticalMap`
 and include:
@@ -33,7 +34,7 @@ To see how the retinal maps differ, start with a regular grid in the visual
 field:
 """
 
-# sphinx_gallery_thumbnail_number = 5
+# sphinx_gallery_thumbnail_number = 6
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -55,7 +56,7 @@ plt.axis('square')
 transforms = [
     p2p.topography.retina.Curcio1990Map(),
     p2p.topography.retina.Watson2014Map(),
-    p2p.topography.retina.Watson2014DisplaceMap(),
+    p2p.topography.retina.Montesano2020Map(eye='right'),
 ]
 
 fig, axes = plt.subplots(ncols=3, sharey=True, figsize=(13, 4))
@@ -68,9 +69,39 @@ for ax, transform in zip(axes, transforms):
     ax.axis('equal')
 
 ###############################################################################
-# ``Curcio1990Map`` is a simple scaling, whereas ``Watson2014Map`` is
-# nonlinear. ``Watson2014DisplaceMap`` adds the prominent foveal distortion
-# caused by retinal ganglion-cell displacement.
+# ``Curcio1990Map`` is a simple scaling, ``Watson2014Map`` a nonlinear one.
+# ``Montesano2020Map`` adds the foveal distortion of retinal ganglion-cell
+# displacement: the cell bodies sit farther out than the receptive fields
+# they serve, by an amount that depends on the meridian.
+
+vfmap = p2p.topography.retina.Montesano2020Map(eye='right')
+plain = p2p.topography.retina.Watson2014Map()
+radius = np.linspace(0, 20, 400)
+
+fig, ax = plt.subplots(figsize=(6, 4))
+for angle, label in [(0, 'nasal'), (90, 'superior'),
+                     (180, 'temporal'), (270, 'inferior')]:
+    # The visual field mirrors the retina: in a right eye, an anatomical
+    # meridian is at the negated visual-field polar angle.
+    theta = np.deg2rad(-angle)
+    x, y = radius * np.cos(theta), radius * np.sin(theta)
+    displaced = np.hypot(*vfmap.dva_to_ret(x, y))
+    ax.plot(radius, displaced - np.hypot(*plain.dva_to_ret(x, y)),
+            label=label)
+ax.set_xlabel('receptive-field eccentricity (dva)')
+ax.set_ylabel('RGC displacement (microns)')
+ax.legend(title='retinal meridian')
+
+###############################################################################
+# The zone reaches 14.1 dva temporally and superiorly, but only 10.5 dva
+# inferiorly and 9.5 dva nasally. ``eye`` gives the retinal laterality: a
+# left eye is the horizontal mirror of a right one. The vertical direction is
+# the same in both.
+#
+# The field is population reference anatomy from [Montesano2020]_ and
+# [Curcio1990]_ histology, not subject-specific: individual displacement and
+# foveal position both vary. The deprecated ``Watson2014DisplaceMap`` fits
+# the horizontal meridian only and provides no reverse mapping.
 #
 # Cortical visual field maps
 # --------------------------
@@ -228,7 +259,7 @@ for ax, noise, title in zip(
 # locations or the canonical visual-field map. It therefore captures
 # subject-specific phosphene-location variability while leaving the anatomical
 # model intact. It requires an invertible map, so one without an inverse (such
-# as ``Watson2014DisplaceMap``) is not supported.
+# as the deprecated ``Watson2014DisplaceMap``) is not supported.
 #
 # Creating your own visual field map
 # ----------------------------------

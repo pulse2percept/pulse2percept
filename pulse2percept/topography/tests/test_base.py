@@ -7,9 +7,8 @@ import matplotlib.pyplot as plt
 from pulse2percept.models import BaseModel
 from pulse2percept.topography import Grid2D, VisualFieldMap
 from pulse2percept.topography.cortex import CorticalMap, Polimeni2006Map
-from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
-                                             Watson2014DisplaceMap,
-                                             Watson2014Map)
+from pulse2percept.topography.retina import (Curcio1990Map, Montesano2020Map,
+                                             RetinalMap, Watson2014Map)
 from pulse2percept.utils import Parametrized
 from pulse2percept.topography.base import _rectangular_mesh
 from pulse2percept.units import (DimensionMismatchError, Quantity, dva, mm,
@@ -401,8 +400,8 @@ def test_VisualFieldMap_eq_handles_arrays(make_visual_field_map):
 def test_VisualFieldMap_subclasses_do_not_compare_equal():
     # Equality is exact-class, as it is for every other Parametrized object:
     # a displacement map computes a different transform than a plain one.
-    npt.assert_equal(Watson2014DisplaceMap() == Watson2014Map(), False)
-    npt.assert_equal(Watson2014Map() == Watson2014DisplaceMap(), False)
+    npt.assert_equal(Montesano2020Map() == Watson2014Map(), False)
+    npt.assert_equal(Watson2014Map() == Montesano2020Map(), False)
     npt.assert_equal(Watson2014Map() == Watson2014Map(), True)
 
 
@@ -464,7 +463,7 @@ def test_rectangular_mesh_is_unitless():
 
 def test_VisualFieldMap_unit_contract():
     """Every map declares the two sides it converts between"""
-    for cls in (Curcio1990Map, Watson2014Map, Watson2014DisplaceMap,
+    for cls in (Curcio1990Map, Watson2014Map, Montesano2020Map,
                 Polimeni2006Map):
         visual_field_map = cls()
         npt.assert_equal(visual_field_map.visual_unit, dva)
