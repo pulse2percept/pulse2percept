@@ -1,8 +1,20 @@
 """:py:class:`~pulse2percept.vision.BinocularScene`"""
+import numpy as np
 import matplotlib.pyplot as plt
 
 from .scene import Scene
 from ..utils import PrettyPrint
+
+
+def _share_visual_field(axes, scenes):
+    """Draw both eyes over the same angular extent."""
+    half = [max(scene.fov[i] for scene in scenes) / 2 for i in (0, 1)]
+    for axis, extent in zip(('x', 'y'), half):
+        for ax in axes:
+            getattr(ax, f'set_{axis}lim')(-extent, extent)
+            # `Percept._label_axes` fixes five ticks across its own range:
+            getattr(ax, f'set_{axis}ticks')(np.linspace(-extent, extent,
+                                                        num=5))
 
 
 class BinocularScene(PrettyPrint):
@@ -44,6 +56,15 @@ class BinocularScene(PrettyPrint):
     ...     right=Scene(picture, fov=40 * dva))
     >>> binocular.left.scotoma is None, binocular.right.scotoma is None
     (False, True)
+
+    A bilateral loss that is symmetric about the vertical meridian, built with
+    :py:meth:`~pulse2percept.vision.Scene.fellow_eye`:
+
+    >>> left = Scene(picture, fov=40 * dva,
+    ...              scotoma=Scotoma.circle(3 * dva, center=(6, 0) * dva))
+    >>> binocular = BinocularScene(left, left.fellow_eye())
+    >>> float(binocular.right.scotoma(-6, 0))
+    1.0
 
     """
 
@@ -108,9 +129,10 @@ class BinocularScene(PrettyPrint):
             The two axes, always in left-eye, right-eye order.
 
         """
+        fig = None
         if axes is None:
-            _, axes = plt.subplots(1, 2, figsize=kwargs.pop('figsize',
-                                                            (10, 5)))
+            fig, axes = plt.subplots(1, 2, figsize=kwargs.pop('figsize',
+                                                              (10, 5)))
         axes = tuple(axes)
         if len(axes) != 2:
             raise ValueError(f"'axes' must be one axes per eye (2 of them), "
@@ -126,4 +148,7 @@ class BinocularScene(PrettyPrint):
                                     rings=rings, percept=percept, **scale,
                                     **kwargs))
             drawn[-1].set_title(f'{label} eye')
+        _share_visual_field(drawn, (self.left, self.right))
+        if fig is not None:
+            fig.tight_layout()
         return tuple(drawn)

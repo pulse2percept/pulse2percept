@@ -29,8 +29,10 @@ _RING_COLOR = '0.3'
 # The only non-numeric `scotoma_fill`; see `_inpaint_rgb` for what it does.
 _INPAINT = 'inpaint'
 
-# The only `aperture` v0.11 supports; see `Scene._aperture_mask`.
-_CIRCLE = 'circle'
+# The two `aperture` shapes; see `Scene._aperture_mask`. Both take their
+# dimensions from `fov`, so the shape is all that is named here.
+_RECTANGLE = 'rectangle'
+_ELLIPSE = 'ellipse'
 
 
 def _resolve_fov(fov, n_rows, n_cols):
@@ -136,13 +138,12 @@ def _resolve_background(background):
 
 
 def _resolve_aperture(aperture):
-    """Normalize ``aperture`` to None or ``_CIRCLE``"""
-    if aperture is None:
-        return None
-    if aperture != _CIRCLE:
-        raise ValueError(f"'aperture' is either None or {_CIRCLE!r}, not "
-                         f"{aperture!r}.")
-    return _CIRCLE
+    """Normalize ``aperture`` to ``_RECTANGLE`` or ``_ELLIPSE``"""
+    for shape in (_RECTANGLE, _ELLIPSE):
+        if aperture == shape:
+            return shape
+    raise ValueError(f"'aperture' is either {_RECTANGLE!r} or {_ELLIPSE!r}, "
+                     f"not {aperture!r}.")
 
 
 def _check_prosthetic(prosthetic):
@@ -337,12 +338,14 @@ class Scene(PrettyPrint):
         rasterized loss map before it is drawn, softening the boundary from
         both sides. Defaults to 2. Rendering only: the scotoma's geometry is
         unchanged.
-    aperture : 'circle' or None, optional
-        Shape of the rendered field. Default (None) fills the rectangular
-        frame. ``'circle'`` instead renders an eye-centered disc of radius
-        ``min(fov) / 2`` and blacks out the corners around it. It affects only
-        the rendered scene, not scene sampling, device input, stimulation, or
-        the underlying prosthetic model response.
+    aperture : {'rectangle', 'ellipse'}, optional
+        Shape of the rendered field. ``fov`` gives the aperture its dimensions
+        and this gives it its shape: the default ``'rectangle'`` fills the
+        whole frame, while ``'ellipse'`` inscribes an eye-centered ellipse of
+        semi-axes ``fov / 2`` in it and blacks out the corners around it. A
+        square ``fov`` therefore renders as a disc. Affects only the rendered
+        scene, not scene sampling, device input, stimulation, or the underlying
+        prosthetic model response.
 
     Examples
     --------
@@ -359,7 +362,7 @@ class Scene(PrettyPrint):
     """
 
     def __init__(self, source, fov, scotoma=None, scotoma_fill=0,
-                 scotoma_blend=2, background=0, aperture=None):
+                 scotoma_blend=2, background=0, aperture=_RECTANGLE):
         if not isinstance(source, (ImageStimulus, VideoStimulus)):
             # A picture is the common case:
             source = ImageStimulus(source)
@@ -393,7 +396,7 @@ class Scene(PrettyPrint):
                   'scotoma_fill': self.scotoma_fill,
                   'scotoma_blend': self.scotoma_blend}
         # Omitted when rectangular, which is the default:
-        if self.aperture is not None:
+        if self.aperture != _RECTANGLE:
             params['aperture'] = self.aperture
         return params
 
@@ -427,11 +430,7 @@ class Scene(PrettyPrint):
 
     @property
     def aperture(self):
-        """The rendered field boundary: ``'circle'`` or None for the frame
-
-        Affects only the rendered scene. The source, the pixel grid, and what
-        a device is given to encode are rectangular either way.
-        """
+        """Shape of the rendered field: ``'rectangle'`` or ``'ellipse'``"""
         return self._aperture
 
     @property
@@ -516,6 +515,41 @@ class Scene(PrettyPrint):
         col = (x + self._fov[0] / 2) / dx - 0.5
         row = (self._fov[1] / 2 - y) / dy - 0.5
         return col, row
+
+    def fellow_eye(self):
+        """The homologous scene for the other eye
+
+        Reflects eye-specific geometry (e.g., scotoma) across the vertical
+        meridian. The scene image is not flipped.
+
+        .. versionadded:: 0.11.0
+
+        Returns
+        -------
+        scene : :py:class:`~pulse2percept.vision.Scene`
+            A new scene. The original is left unchanged.
+
+        Examples
+        --------
+        A loss 6 degrees into one eye's right hemifield sits 6 degrees into
+        the other eye's left hemifield:
+
+        >>> import numpy as np
+        >>> from pulse2percept.units import dva
+        >>> from pulse2percept.vision import Scene, Scotoma
+        >>> left = Scene(np.zeros((8, 8)), fov=40 * dva,
+        ...              scotoma=Scotoma.circle(3 * dva, center=(6, 0) * dva))
+        >>> right = left.fellow_eye()
+        >>> float(right.scotoma(-6, 0)), float(right.scotoma(6, 0))
+        (1.0, 0.0)
+
+        """
+        scotoma = None if self.scotoma is None else self.scotoma.mirror()
+        return Scene(self.source, self.fov, scotoma=scotoma,
+                     scotoma_fill=self.scotoma_fill,
+                     scotoma_blend=self.scotoma_blend,
+                     background=self.background,
+                     aperture=self.aperture)
 
     def _frames(self):
         """The source as a dense ``(rows, cols, channels, n_frames)`` array"""
@@ -620,20 +654,19 @@ class Scene(PrettyPrint):
         return _inpaint_rgb(frame_rgb, loss > 0)
 
     def _aperture_mask(self, gaze_xy):
-        """True at pixel centers a circular aperture hides
+        """Return a mask for pixels outside the eye-centered aperture.
 
-        Eye-centered like the scotoma and the rings, so the disc sits at
-        ``gaze``. Its radius is the shorter half-axis of the FOV, the same
-        convention the outermost eccentricity ring uses. The boundary is hard.
+        The ellipse spans the full Scene FOV, with semi-axes `fov / 2`.
+        `gaze_xy` sets its center in scene coordinates.
         """
         gx, gy = gaze_xy
         x_scene, y_scene = self._pixel_centers()
-        radius = min(self._fov) / 2
-        return (x_scene - gx) ** 2 + (y_scene - gy) ** 2 > radius ** 2
+        a, b = self._fov[0] / 2, self._fov[1] / 2
+        return ((x_scene - gx) / a) ** 2 + ((y_scene - gy) / b) ** 2 > 1
 
     def _apply_aperture(self, frames, gaze=None):
         """Black out ``(rows, cols, 3, n_frames)`` outside the aperture"""
-        if self._aperture is None:
+        if self._aperture == _RECTANGLE:
             return frames
         points = _gaze_points(gaze, frames.shape[-1])
         static = len(points) == 1

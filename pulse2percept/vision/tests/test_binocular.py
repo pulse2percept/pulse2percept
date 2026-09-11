@@ -57,7 +57,7 @@ def test_the_two_eyes_are_independent_channels():
     """Different source, FOV, shape, scotoma and aperture on the two sides"""
     left = Scene(ImageStimulus(np.full((9, 9), 0.3)), fov=(30, 30),
                  scotoma=Scotoma.circle(6), scotoma_fill=0.0,
-                 aperture='circle')
+                 aperture='ellipse')
     right = Scene(VideoStimulus(np.zeros((15, 21, 2)), time=[0, 10]),
                   fov=(42, 30), background=1)
     binocular = BinocularScene(left=left, right=right)
@@ -65,8 +65,8 @@ def test_the_two_eyes_are_independent_channels():
     npt.assert_equal(binocular.right.fov, (42.0, 30.0))
     npt.assert_equal(binocular.left.shape, (9, 9))
     npt.assert_equal(binocular.right.shape, (15, 21))
-    npt.assert_equal(binocular.left.aperture, 'circle')
-    npt.assert_equal(binocular.right.aperture, None)
+    npt.assert_equal(binocular.left.aperture, 'ellipse')
+    npt.assert_equal(binocular.right.aperture, 'rectangle')
     npt.assert_equal(binocular.right.scotoma, None)
 
 
@@ -137,13 +137,45 @@ def test_two_percepts_stay_two_percepts():
 
 
 def test_each_eye_keeps_its_own_aperture():
-    left = flat_scene(0.6, aperture='circle')
+    left = flat_scene(0.6, aperture='ellipse')
     right = flat_scene(0.6)
     ax_left, ax_right = BinocularScene(left=left, right=right).plot()
-    # The corner is inside the rectangle but outside the disc:
+    # The corner is inside the rectangle but outside the ellipse:
     npt.assert_almost_equal(ax_left.images[-1].get_array()[0, 0], 0.0)
     npt.assert_almost_equal(ax_right.images[-1].get_array()[0, 0],
                             [0.6] * 3, decimal=6)
+    plt.close('all')
+
+
+def test_two_fovs_are_drawn_on_one_angular_scale():
+    """A 30-degree field must not be stretched to look like a 50-degree one"""
+    left, right = flat_scene(0.4, px=31), flat_scene(0.4, px=51)
+    npt.assert_equal(left.fov != right.fov, True)
+    ax_left, ax_right = BinocularScene(left=left, right=right).plot()
+    npt.assert_almost_equal(ax_left.get_xlim(), ax_right.get_xlim())
+    npt.assert_almost_equal(ax_left.get_ylim(), ax_right.get_ylim())
+    # Both axes span the wider field's stated outer extent, not the outermost
+    # pixel centers, and the images keep their own extents:
+    npt.assert_almost_equal(ax_right.get_xlim(), (-25.5, 25.5))
+    npt.assert_almost_equal(ax_left.images[-1].get_extent(),
+                            (-15.5, 15.5, -15.5, 15.5))
+    npt.assert_almost_equal(ax_right.images[-1].get_extent(),
+                            (-25.5, 25.5, -25.5, 25.5))
+    plt.close('all')
+
+
+def test_plot_lays_out_only_the_figure_it_made(monkeypatch):
+    binocular = BinocularScene(left=flat_scene(), right=flat_scene())
+    laid_out = []
+    monkeypatch.setattr(plt.Figure, 'tight_layout',
+                        lambda self, *a, **kw: laid_out.append(self))
+    binocular.plot()
+    npt.assert_equal(len(laid_out), 1)
+    plt.close('all')
+    # A caller's figure is left as the caller arranged it:
+    _, axes = plt.subplots(1, 2)
+    binocular.plot(axes=axes)
+    npt.assert_equal(len(laid_out), 1)
     plt.close('all')
 
 
