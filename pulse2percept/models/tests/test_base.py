@@ -2076,7 +2076,7 @@ def test_location_noise_needs_an_invertible_map():
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_location_noise_works_with_a_displacement_map(eye):
-    """The same setup as above, with a displacement map that inverts"""
+    """The same setup as above, with a map that reverses ret -> dva"""
     def build(location_noise=None, seed=7):
         implant = _implant_at([(560, 0)], cls=RetinalImplant)
         implant.eye = eye

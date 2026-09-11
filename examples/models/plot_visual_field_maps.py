@@ -81,8 +81,8 @@ radius = np.linspace(0, 20, 400)
 fig, ax = plt.subplots(figsize=(6, 4))
 for angle, label in [(0, 'nasal'), (90, 'superior'),
                      (180, 'temporal'), (270, 'inferior')]:
-    # The visual field mirrors the retina: in a right eye an anatomical
-    # meridian sits at the negated visual-field polar angle.
+    # The visual field mirrors the retina: in a right eye, an anatomical
+    # meridian is at the negated visual-field polar angle.
     theta = np.deg2rad(-angle)
     x, y = radius * np.cos(theta), radius * np.sin(theta)
     displaced = np.hypot(*vfmap.dva_to_ret(x, y))
@@ -94,14 +94,14 @@ ax.legend(title='retinal meridian')
 
 ###############################################################################
 # The zone reaches 14.1 dva temporally and superiorly, but only 10.5 dva
-# inferiorly and 9.5 dva nasally. ``eye`` decides which side of the visual
-# field is nasal retina, so a left eye is the horizontal mirror of a right
-# one; the vertical direction is the same in both.
+# inferiorly and 9.5 dva nasally. ``eye`` gives the retinal laterality: a
+# left eye is the horizontal mirror of a right one. The vertical direction is
+# the same in both.
 #
 # The field is population reference anatomy from [Montesano2020]_ and
 # [Curcio1990]_ histology, not subject-specific: individual displacement and
 # foveal position both vary. The deprecated ``Watson2014DisplaceMap`` fits
-# the horizontal meridian only and has no inverse.
+# the horizontal meridian only and provides no reverse mapping.
 #
 # Cortical visual field maps
 # --------------------------

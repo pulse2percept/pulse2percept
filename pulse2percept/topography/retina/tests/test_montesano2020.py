@@ -172,7 +172,7 @@ def test_Montesano2020Map_horizontal_orientation(eye):
     npt.assert_allclose(_displacement_um(trafo, 0.0, 12.0), 0.0,
                         atol=_UNDISPLACED_UM)
     npt.assert_equal(_displacement_um(trafo, 180.0, 12.0) > 50.0, True)
-    # And that anatomy sits on the expected side of the visual field:
+    # The same two meridians, addressed through the visual field:
     for x_sign, theta_ret in [(nasal_x, 0.0), (-nasal_x, 180.0)]:
         ref = Watson2014Map().dva_to_ret(
             *_dva_point(theta_ret, _FORWARD_REF[theta_ret][2], eye))
@@ -325,6 +325,24 @@ def test_Montesano2020Map_shapes():
                                          np.array([3.0, 4.0])), rtol=1e-12)
 
 
+def test_Montesano2020Map_coords():
+    """Both transforms take the parent's `coords` keyword"""
+    trafo = Montesano2020Map()
+    for transform, (x, y) in [(trafo.dva_to_ret, (2.0, -3.0)),
+                              (trafo.ret_to_dva, (560.0, -840.0))]:
+        cart = transform(x, y)
+        phi, rho = transform(x, y, coords='polar')
+        npt.assert_allclose((rho * np.cos(phi), rho * np.sin(phi)), cart,
+                            atol=1e-9)
+        with pytest.raises(ValueError):
+            transform(x, y, coords='invalid')
+    # Arrays keep their shape either way:
+    vec = np.array([1.0, 6.0, 20.0])
+    phi, rho = trafo.dva_to_ret(vec, vec, coords='polar')
+    npt.assert_equal(phi.shape, vec.shape)
+    npt.assert_equal(rho.shape, vec.shape)
+
+
 def test_Montesano2020Map_preserves_precision():
     """A model grid is float32, and the spatial kernels require it back"""
     trafo = Montesano2020Map()
@@ -404,7 +422,7 @@ def test_Montesano2020Map_round_trip_ret(eye):
 def test_montesano2020_field_invariants():
     """Invariants the runtime interpolators rely on
 
-    The full audit (E2v fits, zone extents, figure comparisons) lives in
+    The full audit (E2v fits, zone extents, figure comparisons) is in
     ``tools/generate_montesano2020_map.py``.
     """
     path = resources.files('pulse2percept.topography.retina').joinpath(

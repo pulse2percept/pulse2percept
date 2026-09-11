@@ -4,7 +4,7 @@
 *.npz
 # ...but the generated retinal displacement field is package data, not a
 # build artifact (see tools/generate_montesano2020_map.py):
-!pulse2percept/topography/retina/data/*.npz
+!pulse2percept/topography/retina/data/montesano2020.npz
 *.log
 *.so
 .coverage*

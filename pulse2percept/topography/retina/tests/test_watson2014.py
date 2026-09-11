@@ -89,9 +89,9 @@ def test_Watson2014DisplaceMap():
     trafo.dva_to_ret(0, 0)
 
 
-def test_Watson2014DisplaceMap_has_no_inverse():
-    # Eq. 5 is not invertible in closed form and was never inverted
-    # numerically; kept as documented behavior.
+def test_Watson2014DisplaceMap_has_no_reverse_mapping():
+    # Eq. 5 was never inverted, in closed form or numerically; kept as
+    # documented behavior.
     with pytest.raises(NotImplementedError):
         Watson2014DisplaceMap().ret_to_dva(100, 100)
 

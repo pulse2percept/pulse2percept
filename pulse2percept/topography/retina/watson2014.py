@@ -89,8 +89,9 @@ class Watson2014Map(RetinalMap):
 
 @deprecated(alt_func='Montesano2020Map', deprecated_version='0.11.0',
             extra_msg='Eq. 5 fits the horizontal meridian only, applies each '
-                      'fit throughout the corresponding hemifield, and has '
-                      'no inverse. Expect different numbers.')
+                      'fit throughout the corresponding hemifield, and '
+                      'provides no reverse mapping. Expect different '
+                      'numbers.')
 class Watson2014DisplaceMap(Watson2014Map):
     """Converts between visual angle and retinal eccentricity using RGC
     displacement [Watson2014]_

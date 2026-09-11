@@ -154,12 +154,12 @@ def load_sorted(path):
 def build_density_interpolator(data):
     """Piecewise-cubic RGC soma density over the left-eye retinal plane.
 
-    Co-latitude maps to retinal mm as ``r = R0 * colat``; samples are then laid
-    out planar as ``(r cos lon, r sin lon)`` and interpolated with
-    ``CloughTocher2DInterpolator``, the triangulation-based cubic scheme
-    matching MATLAB's ``griddata(..., 'cubic')``. Validated against Montesano
-    Figure A1 and Curcio's cardinal averages (RMSE 371-635 cells/mm2, every
-    residual within 0.62 SD); not bit-for-bit equivalent to author code.
+    Co-latitude maps to retinal mm as ``r = R0 * radians(colat)``; samples are
+    then laid out planar as ``(r cos lon, r sin lon)`` and interpolated with
+    SciPy's ``CloughTocher2DInterpolator``, a triangulation-based piecewise
+    cubic reconstruction. Validated against Montesano Figure A1 and Curcio's
+    cardinal averages (RMSE 371-635 cells/mm2, every residual within 0.62 SD);
+    not bit-for-bit equivalent to author code.
     """
     r_mm = data['colat'] * MM_PER_DEG_COLAT
     th = np.deg2rad(data['lon'])
