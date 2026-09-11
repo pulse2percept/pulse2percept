@@ -174,24 +174,18 @@ Topography
       p2p.topography.retina.Watson2014Map()
       p2p.topography.cortex.Polimeni2006Map()
 
-* New :py:class:`~pulse2percept.topography.retina.Montesano2020Map` models
-  retinal ganglion cell displacement in two dimensions, from a reconstruction
-  of the [Montesano2020]_ field. The displacement zone is meridian-dependent,
-  reaching 14.1 dva temporally and superiorly but only 9.5 dva nasally.
-  ``eye`` gives the retinal laterality. Unlike ``Watson2014DisplaceMap``, the
-  new map implements the reverse ``ret_to_dva`` mapping, so it can be used
-  with ``location_noise``. The field is population reference anatomy, not
-  subject-specific; ``tools/generate_montesano2020_map.py`` documents its
-  derivation.
+* Added :py:class:`~pulse2percept.topography.retina.Montesano2020Map`, a
+  two-dimensional, meridian-dependent retinal ganglion-cell displacement map
+  reconstructed from [Montesano2020]_. It supports left and right eyes and an
+  inverse transform, including use with ``location_noise``. Retinal distances
+  remain on the ``Watson2014Map`` tissue scale. The reconstruction and
+  validation are documented in ``tools/generate_montesano2020_map.py``
+  (:pull:`897`).
 
-* :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap` now takes
-  ``eye='left'`` or ``eye='right'`` (default ``'right'``, which reproduces
-  previous behavior). Watson's nasal and temporal ganglion-cell displacement
-  fits are now applied to the correct half-retina in a left eye, which was
-  previously mirrored. The class is deprecated in favor of
-  ``Montesano2020Map``: it fits the horizontal meridian only, applies each fit
-  throughout the corresponding hemifield, and provides no reverse mapping
-  (:pull:`895`).
+* :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap` now
+  supports ``eye='left'`` and ``eye='right'`` and correctly mirrors the
+  nasal/temporal assignment between eyes. It is now deprecated in favor of
+  ``Montesano2020Map`` (:pull:`895`).
 
 
 Scene and plotting

@@ -560,8 +560,9 @@ For retinal models, available mappings include:
     nonlinear magnification plus a two-dimensional, meridian-dependent
     retinal ganglion cell displacement field [Montesano2020]_. Set ``eye``
     for retinal laterality: nasal retina is the positive-x visual field in a
-    right eye, the negative-x one in a left eye. The field is population
-    reference anatomy, not patient-specific.
+    right eye, the negative-x one in a left eye. Only the displacement comes
+    from [Montesano2020]_; the degree-to-micron conversion stays Watson's.
+    The field is population reference anatomy, not patient-specific.
 
 You can also implement your own
 :py:class:`~pulse2percept.topography.VisualFieldMap`.

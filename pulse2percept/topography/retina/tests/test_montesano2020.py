@@ -33,11 +33,11 @@ _FORWARD_REF = {
     315.0: (1.75812, 2.52205, 4.02135, 5.97731, 8.22723, 12.00000),
 }
 
-#: Retinal radii (um) that Eq. A6 maps to exactly 1, 2, 4, 6, 10 and 13 dva.
-#: Stated in microns so that ``ret_to_dva`` reaches soma space exactly and the
-#: reference below tests the displacement inverse alone.
-_INVERSE_UM = (279.939003, 557.541230, 1106.889150, 1650.067588,
-               2724.219733, 3523.929907)
+#: Eq. A5 evaluated at exactly 1, 2, 4, 6, 10 and 13 dva. ``ret_to_dva``
+#: inverts Eq. A5, so feeding it these microns reaches soma space exactly and
+#: the reference below tests the displacement inverse alone.
+_INVERSE_UM = (268.334369, 537.304153, 1076.950022, 1618.537726,
+               2705.939100, 3523.613313)
 _INVERSE_SOMA = (1.0, 2.0, 4.0, 6.0, 10.0, 13.0)
 
 #: r_rf = G(theta, r_soma) in dva
@@ -55,8 +55,42 @@ _INVERSE_REF = {
 #: Largest r_rf (dva) still displaced, per cardinal meridian.
 _ZONE_EXTENT = {0.0: 9.5426, 90.0: 14.0971, 180.0: 14.0971, 270.0: 10.5238}
 
+#: Soma eccentricity (dva) from ``vf2gc`` in visualFields 1.0.7 (CRAN), a
+#: displacement look-up table built by [Montesano2020]_'s own group. Unlike
+#: every other reference here it comes from an implementation this package did
+#: not derive, so it checks the reconstruction rather than the interpolation.
+#: ``tools/generate_montesano2020_map.py`` records the full audit.
+_VISUALFIELDS_RADII = (1.0, 2.44, 5.0)
+_VISUALFIELDS_REF = {
+    0.0: (2.6645, 4.2669, 6.2297),
+    45.0: (2.5726, 4.0976, 6.1971),
+    90.0: (2.6231, 4.1808, 6.3956),
+    135.0: (2.6571, 4.2214, 6.3573),
+    180.0: (2.8052, 4.5361, 6.7689),
+    225.0: (2.5519, 4.1185, 6.3058),
+    270.0: (2.4576, 3.9117, 5.8772),
+    315.0: (2.5127, 4.0353, 5.9895),
+}
+
+#: Peak displacement (dva) per cardinal meridian, same source.
+_VISUALFIELDS_PEAK = {0.0: 1.8482, 90.0: 1.7449, 180.0: 2.0971, 270.0: 1.5306}
+
 #: Published global maximum displacement (dva), its meridian and its r_rf.
 _MAX_DISPLACEMENT = (2.0843, 182.75, 2.439)
+
+
+def _load_field():
+    """The packaged field as (angle deg, r_rf dva, r_soma dva)"""
+    path = resources.files('pulse2percept.topography.retina').joinpath(
+        'data', 'montesano2020.npz')
+    with path.open('rb') as f:
+        with np.load(f, allow_pickle=False) as npz:
+            # The artifact is a right-eye reference; laterality is runtime.
+            npt.assert_equal(str(npz['reference_eye']), 'right')
+            return (np.asarray(npz['retinal_angle_deg'], dtype=np.float64),
+                    np.asarray(npz['rf_eccentricity_dva'], dtype=np.float64),
+                    np.asarray(npz['soma_eccentricity_dva'],
+                               dtype=np.float64))
 
 
 def _visual_deg(theta_ret_deg, eye):
@@ -149,10 +183,10 @@ def test_Montesano2020Map_inverse_reference(eye):
     for theta_ret, expected in _INVERSE_REF.items():
         for r_um, r_soma, r_rf in zip(_INVERSE_UM, _INVERSE_SOMA, expected):
             xret, yret = _ret_point(theta_ret, r_um, eye)
-            # The hard-coded microns land on a whole number of soma dva:
-            npt.assert_allclose(np.hypot(*Watson2014Map().ret_to_dva(xret,
-                                                                     yret)),
-                                r_soma, atol=1e-6)
+            # The hard-coded microns are Eq. A5 at a whole number of soma dva:
+            npt.assert_allclose(
+                np.hypot(*Watson2014Map().dva_to_ret(r_soma, 0.0)), r_um,
+                atol=1e-5)
             got = np.hypot(*trafo.ret_to_dva(xret, yret))
             # Measured agreement 2.6e-5 dva across all cases.
             npt.assert_allclose(got, r_rf, atol=1e-4,
@@ -242,10 +276,30 @@ def test_Montesano2020Map_identity_beyond_the_support(eye):
         x, y = radius * np.cos(theta), radius * np.sin(theta)
         npt.assert_allclose(trafo.dva_to_ret(x, y),
                             Watson2014Map().dva_to_ret(x, y), rtol=1e-12)
-        xret, yret = Watson2014Map().dva_to_ret(x, y)
-        npt.assert_allclose(trafo.ret_to_dva(xret, yret),
-                            Watson2014Map().ret_to_dva(xret, yret),
-                            rtol=1e-12)
+        # With no displacement left, the reverse returns the input exactly:
+        xret, yret = trafo.dva_to_ret(x, y)
+        npt.assert_allclose(trafo.ret_to_dva(xret, yret), (x, y), atol=1e-9)
+
+
+@pytest.mark.parametrize('eye', ('right', 'left'))
+def test_Montesano2020Map_reverse_solves_eq_a5(eye):
+    """The reverse inverts Eq. A5 rather than evaluating Eq. A6
+
+    Watson fits the two directions separately, and they disagree by a few
+    percent. Reusing Eq. A6 here would leave ``ret_to_dva`` not inverting
+    ``dva_to_ret``, which ``location_noise`` relies on.
+    """
+    trafo = Montesano2020Map(eye=eye)
+    watson = Watson2014Map()
+    # Outside the displacement zone, so the Eq. A5/A6 choice is all that is
+    # left of the transform:
+    r_dva = np.array([16.0, 20.0, 30.0, 45.0])
+    xret, yret = watson.dva_to_ret(r_dva, np.zeros_like(r_dva))
+    npt.assert_allclose(np.hypot(*trafo.ret_to_dva(xret, yret)), r_dva,
+                        atol=1e-9)
+    # Eq. A6 is off by 0.07 to 0.22 dva at the same points:
+    npt.assert_array_less(0.05, np.abs(
+        np.hypot(*watson.ret_to_dva(xret, yret)) - r_dva))
 
 
 def test_Montesano2020Map_zone_boundary():
@@ -372,15 +426,8 @@ def test_Montesano2020Map_Grid2D_build(eye):
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_round_trip_dva(eye):
-    """dva -> ret -> dva, whose residual is inherited
-
-    Eqs. A5 and A6 are fitted separately and do not invert each other, so the
-    base round trip does not close. The displacement inverse adds at most
-    0.057 dva to that: under 0.0005 dva of interpolation error, the rest its
-    Jacobian amplifying the inherited residual near the fovea.
-    """
+    """dva -> ret -> dva closes to the field's interpolation error"""
     trafo = Montesano2020Map(eye=eye)
-    watson = Watson2014Map()
     theta = np.deg2rad(np.arange(0.0, 360.0, 5.0))
     radius = np.array([0.05, 0.5, 2.44, 5.0, 9.0, 12.0, 14.0, 15.0, 25.0,
                        40.0])
@@ -389,21 +436,23 @@ def test_Montesano2020Map_round_trip_dva(eye):
     err = np.hypot(*[back - fwd for back, fwd
                      in zip(trafo.ret_to_dva(*trafo.dva_to_ret(x, y)),
                             (x, y))])
-    watson_err = np.hypot(*[back - fwd for back, fwd
-                            in zip(watson.ret_to_dva(*watson.dva_to_ret(x, y)),
-                                   (x, y))])
-    npt.assert_array_less(err, watson_err + 0.06)
-    npt.assert_array_less(err, 0.24)
-    # Beyond the zone the two round trips are the same thing:
-    outside = radius >= 15.0
-    npt.assert_allclose(err[outside], watson_err[outside], rtol=1e-9)
+    # Measured max 7.6e-5 dva here, 8.3e-4 over the whole field; the residual
+    # is the inverse table in the outer displacement zone, where its radial
+    # nodes are coarsest.
+    npt.assert_array_less(err, 2e-3)
+    # Past the zone there is nothing to interpolate:
+    npt.assert_allclose(err[radius >= 15.0], 0.0, atol=1e-9)
 
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_round_trip_ret(eye):
-    """ret -> dva -> ret closes as tightly as the base map alone does"""
+    """ret -> dva -> ret closes, which is what location_noise needs
+
+    ``location_noise`` maps an electrode into the visual field, adds an
+    offset and maps it back, so a zero offset has to return the electrode to
+    its own tissue coordinate.
+    """
     trafo = Montesano2020Map(eye=eye)
-    watson = Watson2014Map()
     theta = np.deg2rad(np.arange(0.0, 360.0, 5.0))
     radius = np.array([50.0, 280.0, 560.0, 1100.0, 2700.0, 3520.0, 4100.0,
                        6000.0])
@@ -412,11 +461,8 @@ def test_Montesano2020Map_round_trip_ret(eye):
     err = np.hypot(*[back - fwd for back, fwd
                      in zip(trafo.dva_to_ret(*trafo.ret_to_dva(x, y)),
                             (x, y))])
-    watson_err = np.hypot(*[back - fwd for back, fwd
-                            in zip(watson.dva_to_ret(*watson.ret_to_dva(x, y)),
-                                   (x, y))])
-    # Measured excess over Watson's own residual: 0.07 um.
-    npt.assert_array_less(err, watson_err + 0.5)
+    # Measured max 0.054 um here, 0.073 um over the whole retina.
+    npt.assert_array_less(err, 0.2)
 
 
 def test_montesano2020_field_invariants():
@@ -425,16 +471,7 @@ def test_montesano2020_field_invariants():
     The full audit (E2v fits, zone extents, figure comparisons) is in
     ``tools/generate_montesano2020_map.py``.
     """
-    path = resources.files('pulse2percept.topography.retina').joinpath(
-        'data', 'montesano2020.npz')
-    with path.open('rb') as f:
-        with np.load(f, allow_pickle=False) as npz:
-            angle = np.asarray(npz['retinal_angle_deg'], dtype=np.float64)
-            r_rf = np.asarray(npz['rf_eccentricity_dva'], dtype=np.float64)
-            table = np.asarray(npz['soma_eccentricity_dva'],
-                               dtype=np.float64)
-            npt.assert_equal(str(npz['reference_eye']), 'right')
-
+    angle, r_rf, table = _load_field()
     npt.assert_equal(table.shape, (angle.size, r_rf.size))
     npt.assert_equal(np.all(np.isfinite(table)), True)
     npt.assert_allclose(angle, np.arange(0.0, 360.0, 0.25), atol=1e-4)
@@ -455,6 +492,32 @@ def test_montesano2020_field_invariants():
     npt.assert_allclose(displacement[i, j], peak, atol=5e-3)
     npt.assert_allclose(angle[i], peak_angle, atol=1.0)
     npt.assert_allclose(r_rf[j], peak_r, atol=0.05)
+
+
+def test_montesano2020_matches_visualfields():
+    """The reconstruction agrees with an implementation we did not derive
+
+    Every other reference in this module comes from the same solve that
+    produced the packaged field, so it can only show that interpolation
+    preserves the generator's output. visualFields ships a displacement
+    look-up table from [Montesano2020]_'s own group; agreeing with it is
+    evidence about the reconstruction itself.
+
+    Compared in the degree domain on the stored meridians, which the eight
+    angles below all fall on exactly.
+    """
+    angle, r_rf, table = _load_field()
+    for theta_ret, expected in _VISUALFIELDS_REF.items():
+        row = table[int(np.argmin(np.abs(angle - theta_ret)))]
+        # Measured max 0.073 dva across these 24 points.
+        npt.assert_allclose(np.interp(_VISUALFIELDS_RADII, r_rf, row),
+                            expected, atol=0.1,
+                            err_msg=f'{theta_ret} deg')
+    for theta_ret, peak in _VISUALFIELDS_PEAK.items():
+        row = table[int(np.argmin(np.abs(angle - theta_ret)))]
+        # Measured max 0.014 dva.
+        npt.assert_allclose((row - r_rf).max(), peak, atol=0.03,
+                            err_msg=f'{theta_ret} deg')
 
 
 def test_montesano2020_field_loads_lazily():
