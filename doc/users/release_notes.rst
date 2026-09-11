@@ -196,9 +196,11 @@ Scene and plotting
   :py:class:`~pulse2percept.vision.BinocularScene` place images, video,
   scotomas, and prosthetic percepts in visual-field coordinates. Scenes support
   eye-centered gaze, rectangular or elliptical apertures, residual-vision
-  rendering, and fellow-eye geometry; binocular scenes keep the two monocular
-  views independent while plotting them on a common angular scale
-  (:pull:`871`, :pull:`884`, :pull:`890`, :pull:`893`, :pull:`899`).
+  rendering, and fellow-eye geometry; binocular scenes can be built from a
+  side-by-side stereo image and keep the two monocular views independent while
+  plotting them on a common angular scale
+  (:pull:`871`, :pull:`884`, :pull:`890`, :pull:`893`, :pull:`899`,
+  :pull:`900`).
 
 * New :py:mod:`pulse2percept.plotting` module provides combined
   stimulus/percept figures and animations. :py:mod:`pulse2percept.viz` is
