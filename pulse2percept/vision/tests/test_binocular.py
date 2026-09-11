@@ -32,6 +32,15 @@ def spot_percept(scene, x_dva=0.0, y_dva=0.0, brightness=10.0):
     return Percept(data, space=scene._grid())
 
 
+def clipped_away(ax, point_dva):
+    """Whether the drawn image's support leaves out a visual-field location"""
+    clip = ax.images[-1].get_clip_path()
+    if clip is None:
+        return False
+    return not clip.get_fully_transformed_path().contains_point(
+        ax.transData.transform(point_dva))
+
+
 def test_the_two_eyes_are_stored_as_given_and_not_swapped():
     left, right = flat_scene(0.2), flat_scene(0.8)
     binocular = BinocularScene(left=left, right=right)
@@ -137,13 +146,21 @@ def test_two_percepts_stay_two_percepts():
 
 
 def test_each_eye_keeps_its_own_aperture():
+    """Support is geometry, so each panel is clipped to its own shape"""
     left = flat_scene(0.6, aperture='ellipse')
     right = flat_scene(0.6)
     ax_left, ax_right = BinocularScene(left=left, right=right).plot()
-    # The corner is inside the rectangle but outside the ellipse:
-    npt.assert_almost_equal(ax_left.images[-1].get_array()[0, 0], 0.0)
-    npt.assert_almost_equal(ax_right.images[-1].get_array()[0, 0],
-                            [0.6] * 3, decimal=6)
+    # The corner is inside the rectangle but outside the ellipse, so it is
+    # clipped away rather than written black:
+    npt.assert_equal([clipped_away(ax, (-HALF, HALF))
+                      for ax in (ax_left, ax_right)], [True, False])
+    for ax in (ax_left, ax_right):
+        npt.assert_almost_equal(ax.images[-1].get_array()[0, 0], [0.6] * 3,
+                                decimal=6)
+    # ... and rendering the same two eyes does black it out:
+    npt.assert_almost_equal(left.render().data[0, 0, :, 0], 0.0)
+    npt.assert_almost_equal(right.render().data[0, 0, :, 0], [0.6] * 3,
+                            decimal=6)
     plt.close('all')
 
 

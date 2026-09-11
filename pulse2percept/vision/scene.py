@@ -2,6 +2,7 @@
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
+from matplotlib.patches import Ellipse, Rectangle
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
 
@@ -18,6 +19,11 @@ from ..utils import PrettyPrint
 # How many sigmas of the blur kernel are kept; also how far off-frame the loss
 # map is rasterized, so the cropped result is free of edge effects:
 _TRUNCATE = 4.0
+
+# Roughly how many raster nodes are interpolated at once. The interpolator
+# works in float64, so a fine raster sampled in one go costs several times the
+# float32 result it is written into.
+_SAMPLE_BLOCK = 1 << 20
 
 # Eccentricity spacing, in dva, that `rings=True` asks for
 _RING_STEP = 5.0
@@ -51,6 +57,58 @@ def _resolve_fov(fov, n_rows, n_cols):
             raise ValueError(f"'fov' {name} must be a finite positive number "
                              f"of degrees, not {f}.")
     return (width, height)
+
+
+def _raster_axes(fov, shape):
+    """Pixel-center coordinates of a raster spanning ``fov``
+
+    ``fov`` is the raster's *outer* extent, so the outermost centers sit half
+    an angular pixel inside it. ``xs`` ascends left to right and ``ys``
+    descends, so ``ys[0]`` is row 0 at the top of the field.
+    """
+    n_rows, n_cols = shape
+    width, height = fov
+    dx, dy = width / n_cols, height / n_rows
+    xs = (np.arange(n_cols, dtype=float) + 0.5) * dx - width / 2
+    ys = height / 2 - (np.arange(n_rows, dtype=float) + 0.5) * dy
+    return xs, ys
+
+
+def _raster_step(xs, ys):
+    """Angular pixel pitch ``(dx, dy)`` of a raster, as positive numbers"""
+    def pitch(axis):
+        # A single row or column has no spacing to read off:
+        return abs(float(axis[1] - axis[0])) if axis.size > 1 else 1.0
+    return pitch(xs), pitch(ys)
+
+
+def _raster_extent(xs, ys):
+    """Outer edges ``(left, right, bottom, top)`` of a raster, for ``imshow``"""
+    dx, dy = _raster_step(xs, ys)
+    return (float(xs[0]) - dx / 2, float(xs[-1]) + dx / 2,
+            float(ys[-1]) - dy / 2, float(ys[0]) + dy / 2)
+
+
+def _raster_grid(xs, ys):
+    """A Grid2D on the nodes of a raster, ``ys`` descending"""
+    return Grid2D((float(xs[0]), float(xs[-1])),
+                  (float(ys[-1]), float(ys[0])), step=_raster_step(xs, ys))
+
+
+def _pad_axis(axis, step, pad):
+    """Extend a regular axis by ``pad`` samples of signed ``step`` at both ends"""
+    if pad == 0:
+        return axis
+    lead = axis[0] + step * np.arange(-pad, 0)
+    tail = axis[-1] + step * np.arange(1, pad + 1)
+    return np.concatenate((lead, axis, tail))
+
+
+def _pixel_count(extent, step):
+    """How many pixels of at most ``step`` degrees it takes to cover ``extent``"""
+    n = extent / step
+    # A ratio that is only integral up to rounding must not buy a pixel:
+    return max(int(np.ceil(n - 1e-9 * max(n, 1.0))), 1)
 
 
 def _gaze_points(gaze, n_frames):
@@ -92,19 +150,41 @@ def _drop_gray_axis(values):
     return values[:, 0] if values.shape[1] == 1 else values
 
 
-def _percept_sampler(prosthetic, frames):
-    """Read a percept at arbitrary eye-centered ``(y, x)`` coordinates in dva"""
+def _as_rgb(frame):
+    """One ``(rows, cols, channels)`` frame as RGB, without copying gray"""
+    if frame.shape[2] == 3:
+        return frame
+    return np.broadcast_to(frame, frame.shape[:2] + (3,))
+
+
+def _percept_axes(prosthetic):
+    """The percept's eye-centered ``(xs, ys)`` axes in dva, both ascending"""
     ys = np.asarray(prosthetic.ydva, dtype=float)
     xs = np.asarray(prosthetic.xdva, dtype=float)
     if ys.size < 2 or xs.size < 2:
         raise ValueError(f"A percept needs extent in both directions to be "
                          f"placed in a scene, but this one's grid is "
                          f"{ys.size} x {xs.size}.")
+    return xs, ys
+
+
+def _percept_on(prosthetic, frames, xs, ys, gaze_xy):
+    """Percept brightness at every node of a scene-coordinate raster
+
+    Returns ``(rows, cols, n)``, one trailing entry per frame carried.
+    """
+    pxs, pys = _percept_axes(prosthetic)
     # `Grid2D` meshes its y axis reversed, so row 0 of the data holds the
     # largest y while `ydva` ascends. Flipping the rows puts the two back in
     # the same order, which is also the ascending one the interpolator wants.
-    return RegularGridInterpolator((ys, xs), frames[::-1], method='linear',
-                                   bounds_error=False, fill_value=0)
+    sample = RegularGridInterpolator((pys, pxs), frames[::-1],
+                                     method='linear', bounds_error=False,
+                                     fill_value=0)
+    # The percept is eye-centered; the raster is in scene coordinates:
+    gx, gy = gaze_xy
+    x, y = np.meshgrid(xs - gx, ys - gy)
+    points = np.column_stack((y.ravel(), x.ravel()))
+    return sample(points).reshape((ys.size, xs.size, -1))
 
 
 def _resolve_fill(scotoma_fill):
@@ -334,18 +414,25 @@ class Scene(PrettyPrint):
         Gray level or RGB value to use for transparent pixels. Defaults to
         black.
     scotoma_blend : float, optional
-        Standard deviation, in scene pixels, of a Gaussian blur applied to the
-        rasterized loss map before it is drawn, softening the boundary from
-        both sides. Defaults to 2. Rendering only: the scotoma's geometry is
-        unchanged.
+        Standard deviation, in degrees of visual angle, of a Gaussian blur
+        applied to the rasterized loss map before it is drawn, softening the
+        boundary from both sides. Defaults to 0.5 dva; 0 leaves it as sharp as
+        the scotoma itself. Converted to pixels against whichever raster is
+        being drawn, so the angular softness does not depend on resolution.
+        Rendering only: the scotoma's geometry is unchanged.
+
+        .. versionchanged:: 0.11.0
+            Measured in degrees of visual angle rather than in scene pixels.
     aperture : {'rectangle', 'ellipse'}, optional
-        Shape of the rendered field. ``fov`` gives the aperture its dimensions
-        and this gives it its shape: the default ``'rectangle'`` fills the
-        whole frame, while ``'ellipse'`` inscribes an eye-centered ellipse of
-        semi-axes ``fov / 2`` in it and blacks out the corners around it. A
-        square ``fov`` therefore renders as a disc. Affects only the rendered
-        scene, not scene sampling, device input, stimulation, or the underlying
-        prosthetic model response.
+        Shape of the field's support. ``fov`` gives the aperture its
+        dimensions and this gives it its shape: the default ``'rectangle'``
+        fills the whole frame, while ``'ellipse'`` inscribes an eye-centered
+        ellipse of semi-axes ``fov / 2`` in it, so a square ``fov`` renders as
+        a disc. Support is a display boundary:
+        :py:meth:`~pulse2percept.vision.Scene.plot` clips its artists to it and
+        :py:meth:`~pulse2percept.vision.Scene.render` writes black outside it,
+        while scene sampling, device input, stimulation and the prosthetic
+        model response are untouched.
 
     Examples
     --------
@@ -362,7 +449,7 @@ class Scene(PrettyPrint):
     """
 
     def __init__(self, source, fov, scotoma=None, scotoma_fill=0,
-                 scotoma_blend=2, background=0, aperture=_RECTANGLE):
+                 scotoma_blend=0.5, background=0, aperture=_RECTANGLE):
         if not isinstance(source, (ImageStimulus, VideoStimulus)):
             # A picture is the common case:
             source = ImageStimulus(source)
@@ -370,12 +457,11 @@ class Scene(PrettyPrint):
             raise TypeError(f"'scotoma' must be a Scotoma object, not "
                             f"{type(scotoma)}.")
         fill = _resolve_fill(scotoma_fill)
-        blend = float(as_value(scotoma_blend, dimensionless,
-                               'scotoma_blend'))
+        blend = float(as_value(scotoma_blend, dva, 'scotoma_blend'))
         if not np.isfinite(blend) or blend < 0:
-            raise ValueError(f"'scotoma_blend' is a Gaussian sigma in scene "
-                             f"pixels and must be finite and non-negative, "
-                             f"not {scotoma_blend}.")
+            raise ValueError(f"'scotoma_blend' is a Gaussian sigma in degrees "
+                             f"of visual angle and must be finite and "
+                             f"non-negative, not {scotoma_blend}.")
         self._source = source
         self._background = _resolve_background(background)
         self._scotoma = scotoma
@@ -385,8 +471,8 @@ class Scene(PrettyPrint):
         n_rows, n_cols = self._frame_shape
         self._fov = _resolve_fov(fov, n_rows, n_cols)
         self._cached_frames = None
-        # `_pixel_centers` keyed by pad:
-        self._pixel_centers_cache = {}
+        self._axes_cache = None
+        self._pixel_centers_cache = None
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
@@ -425,12 +511,12 @@ class Scene(PrettyPrint):
 
     @property
     def scotoma_blend(self):
-        """Gaussian sigma, in scene pixels, softening the drawn scotoma"""
+        """Gaussian sigma, in dva, softening the drawn scotoma boundary"""
         return self._scotoma_blend
 
     @property
     def aperture(self):
-        """Shape of the rendered field: ``'rectangle'`` or ``'ellipse'``"""
+        """Shape of the field's support: ``'rectangle'`` or ``'ellipse'``"""
         return self._aperture
 
     @property
@@ -614,38 +700,80 @@ class Scene(PrettyPrint):
         # `rgb2gray` wants the channels last:
         return rgb2gray(values.transpose((0, 2, 1)))
 
-    def _rgb_frames(self):
-        """The source as ``(rows, cols, 3, n_frames)``, scotoma not applied"""
-        frames = self._frames()
-        if frames.shape[2] == 1:
-            frames = np.repeat(frames, 3, axis=2)
-        return frames
+    @property
+    def _axes(self):
+        """Pixel-center axes ``(xs, ys)`` of the source raster, in scene dva"""
+        if self._axes_cache is None:
+            self._axes_cache = _raster_axes(self._fov, self._frame_shape)
+        return self._axes_cache
 
-    def _loss_at(self, gaze_xy, pad=0):
-        """Geometric loss at each scene pixel, in [0, 1], as float32"""
-        n_rows, n_cols = self._frame_shape
+    def _pixel_centers(self):
+        """Scene coordinates of every pixel center, as ``(x, y)`` meshes"""
+        if self._pixel_centers_cache is None:
+            centers = np.meshgrid(*self._axes)
+            for mesh in centers:
+                mesh.flags.writeable = False
+            self._pixel_centers_cache = centers
+        return self._pixel_centers_cache
+
+    def _source_on(self, xs, ys):
+        """The source at every node of a scene-coordinate raster
+
+        ``(rows, cols, channels, n_frames)`` with 1 or 3 channels, as
+        `_frames`. The source lives in scene coordinates, so this does not
+        depend on gaze.
+        """
+        if np.array_equal(xs, self._axes[0]) and                 np.array_equal(ys, self._axes[1]):
+            # The raster the source already sits on, so nothing is resampled
+            # and the intact periphery comes through bit for bit:
+            return self._frames()
+        n_rows, n_cols = ys.size, xs.size
+        # Interpolated in row blocks: the interpolator works in float64, so a
+        # fine raster done in one go costs several times the float32 result.
+        block = max(1, _SAMPLE_BLOCK // max(n_cols, 1))
+        out = None
+        for lo in range(0, n_rows, block):
+            hi = min(lo + block, n_rows)
+            x, y = np.meshgrid(xs, ys[lo:hi])
+            values = self._sample_at(x, y)
+            if values.ndim == 2:
+                # Grayscale: give it the channel axis `_frames` has
+                values = values[:, np.newaxis, :]
+            if out is None:
+                out = np.empty((n_rows, n_cols) + values.shape[1:],
+                               dtype=np.float32)
+            out[lo:hi] = values.reshape((hi - lo, n_cols) + values.shape[1:])
+        return out
+
+    def _loss_on(self, xs, ys, gaze_xy):
+        """Geometric loss at every node of a raster, in [0, 1], as float32"""
         if self.scotoma is None:
-            return np.zeros((n_rows + 2 * pad, n_cols + 2 * pad),
-                            dtype=np.float32)
+            return np.zeros((ys.size, xs.size), dtype=np.float32)
         # scene = visual field + gaze:
         gx, gy = gaze_xy
-        x_scene, y_scene = self._pixel_centers(pad=pad)
-        return np.asarray(self.scotoma(x_scene - gx, y_scene - gy),
-                          dtype=np.float32)
+        x, y = np.meshgrid(xs - gx, ys - gy)
+        return np.asarray(self.scotoma(x, y), dtype=np.float32)
 
-    def _rendered_loss_at(self, gaze_xy):
-        """The loss map as drawn: `_loss_at` softened by `scotoma_blend`"""
+    def _rendered_loss_on(self, xs, ys, gaze_xy):
+        """The loss map as drawn: `_loss_on` softened by `scotoma_blend`
+
+        The sigma is angular, so it is converted against this raster's own
+        pixel pitch; anisotropic pixels get separate row and column sigmas.
+        """
         sigma = self._scotoma_blend
         # An inpainted fill ignores the hard boundary:
         hard = self.scotoma is None or self._scotoma_fill == _INPAINT
         if hard or sigma == 0:
-            return self._loss_at(gaze_xy)
-        # Blur the loss field, not a frame-sized crop of it:
-        pad = int(np.ceil(_TRUNCATE * sigma)) + 1
-        loss = self._loss_at(gaze_xy, pad=pad)
-        blurred = gaussian_filter(loss, sigma, mode='nearest',
+            return self._loss_on(xs, ys, gaze_xy)
+        dx, dy = _raster_step(xs, ys)
+        sigmas = (sigma / dy, sigma / dx)
+        pads = tuple(int(np.ceil(_TRUNCATE * s)) + 1 for s in sigmas)
+        # Blur the loss field, not a raster-sized crop of it:
+        loss = self._loss_on(_pad_axis(xs, dx, pads[1]),
+                             _pad_axis(ys, -dy, pads[0]), gaze_xy)
+        blurred = gaussian_filter(loss, sigmas, mode='nearest',
                                   truncate=_TRUNCATE)
-        return np.clip(blurred[pad:-pad, pad:-pad], 0, 1)
+        return np.clip(blurred[pads[0]:-pads[0], pads[1]:-pads[1]], 0, 1)
 
     def _fill_rgb(self, frame_rgb, loss):
         """What complete loss shows for one ``(rows, cols, 3)`` frame"""
@@ -653,79 +781,94 @@ class Scene(PrettyPrint):
             return self._scotoma_fill
         return _inpaint_rgb(frame_rgb, loss > 0)
 
-    def _aperture_mask(self, gaze_xy):
-        """Return a mask for pixels outside the eye-centered aperture.
+    def _aperture_mask(self, xs, ys, gaze_xy):
+        """Raster nodes outside the eye-centered aperture
 
         The ellipse spans the full Scene FOV, with semi-axes `fov / 2`.
         `gaze_xy` sets its center in scene coordinates.
         """
         gx, gy = gaze_xy
-        x_scene, y_scene = self._pixel_centers()
         a, b = self._fov[0] / 2, self._fov[1] / 2
-        return ((x_scene - gx) / a) ** 2 + ((y_scene - gy) / b) ** 2 > 1
+        across = ((xs - gx) / a) ** 2
+        down = (((ys - gy) / b) ** 2)[:, np.newaxis]
+        return across + down > 1
 
-    def _apply_aperture(self, frames, gaze=None):
-        """Black out ``(rows, cols, 3, n_frames)`` outside the aperture"""
+    def _apply_aperture(self, frames, xs, ys, gaze=None):
+        """Black out ``(rows, cols, 3, n_frames)`` outside the aperture
+
+        A display decision taken at the boundary of a finished raster: outside
+        the aperture is undefined visual-field support, not black content.
+        """
         if self._aperture == _RECTANGLE:
             return frames
         points = _gaze_points(gaze, frames.shape[-1])
         static = len(points) == 1
-        mask = self._aperture_mask(points[0]) if static else None
+        mask = self._aperture_mask(xs, ys, points[0]) if static else None
         out = np.array(frames, dtype=np.float32)
         for f in range(frames.shape[-1]):
-            outside = mask if static else self._aperture_mask(points[f])
+            outside = mask if static else self._aperture_mask(xs, ys,
+                                                              points[f])
             out[outside, :, f] = 0
         return out
 
-    def _percept_on_grid(self, sample, gaze_xy):
-        """Percept brightness read at every scene pixel center
+    def _support_patch(self, gaze_xy, transform):
+        """The field's support as a patch, for clipping drawn artists"""
+        width, height = self._fov
+        if self._aperture == _ELLIPSE:
+            # Eye-centered, so it sits wherever gaze points:
+            return Ellipse(tuple(gaze_xy), width, height, transform=transform)
+        # A rectangular aperture is the frame itself, which does not move:
+        return Rectangle((-width / 2, -height / 2), width, height,
+                         transform=transform)
 
-        ``sample`` is a `_percept_sampler`; the returned array is
-        ``(rows, cols, n)`` with one trailing entry per frame it carries.
+    def _clip_to_support(self, artists, gaze_xy, transform):
+        """Clip drawn artists to the field's support
+
+        Outside the aperture is undefined visual-field support, so the
+        boundary belongs to the artists rather than to their arrays. The
+        source layer already covers exactly the rectangle, so only a local
+        patch, which may reach past the field, needs clipping to that.
         """
-        n_rows, n_cols = self._frame_shape
-        gx, gy = gaze_xy
-        x_scene, y_scene = self._pixel_centers()
-        # The percept is eye-centered; the scene raster is not:
-        points = np.column_stack(((y_scene - gy).ravel(),
-                                  (x_scene - gx).ravel()))
-        return sample(points).reshape((n_rows, n_cols, -1))
+        if self._aperture == _RECTANGLE:
+            artists = artists[1:]
+        if not artists:
+            return
+        clip = self._support_patch(gaze_xy, transform)
+        for artist in artists:
+            artist.set_clip_path(clip)
 
-    def _native_rgb(self, gaze=None):
-        """What is left of native vision, as ``(rows, cols, 3, n_frames)``"""
-        frames = self._rgb_frames()
+    def _native_on(self, xs, ys, gaze=None):
+        """Residual native vision on a raster, ``(rows, cols, 3, n_frames)``"""
+        frames = self._source_on(xs, ys)
         if self.scotoma is None:
-            return self._apply_aperture(frames, gaze=gaze)
+            return (frames if frames.shape[2] == 3
+                    else np.repeat(frames, 3, axis=2))
         n_frames = frames.shape[-1]
-        gaze = _gaze_points(gaze, n_frames)
-        static = len(gaze) == 1
+        points = _gaze_points(gaze, n_frames)
+        static = len(points) == 1
         if static:
-            loss = self._rendered_loss_at(gaze[0])
-        out = np.empty(frames.shape, dtype=np.float32)
+            loss = self._rendered_loss_on(xs, ys, points[0])
+        out = np.empty((ys.size, xs.size, 3, n_frames), dtype=np.float32)
         for f in range(n_frames):
             if not static:
-                loss = self._rendered_loss_at(gaze[f])
-            frame = frames[..., f]
+                loss = self._rendered_loss_on(xs, ys, points[f])
+            frame = _as_rgb(frames[..., f])
             # An inpainted fill reads this frame, so it is per-frame work:
             fill = self._fill_rgb(frame, loss)
             alpha = loss[..., np.newaxis]
             out[..., f] = (1 - alpha) * frame + alpha * fill
-        return self._apply_aperture(out, gaze=gaze)
+        return out
 
-    def _pixel_centers(self, pad=0):
-        """Scene coordinates of every pixel center, as ``(x, y)`` meshes"""
-        if pad not in self._pixel_centers_cache:
-            n_rows, n_cols = self._frame_shape
-            cols, rows = np.meshgrid(np.arange(-pad, n_cols + pad),
-                                     np.arange(-pad, n_rows + pad))
-            centers = self.pixel_to_dva(cols, rows)
-            for mesh in centers:
-                mesh.flags.writeable = False
-            self._pixel_centers_cache[pad] = centers
-        return self._pixel_centers_cache[pad]
+    def _native_rgb(self, gaze=None):
+        """Residual native vision on the source raster, aperture not applied"""
+        return self._native_on(*self._axes, gaze=gaze)
 
-    def _compose(self, prosthetic, vmax, vmin=0, gaze=None):
-        """Native vision with a prosthetic percept painted into the loss"""
+    def _composed_on(self, xs, ys, prosthetic, vmax, vmin=0, gaze=None):
+        """Native vision on a raster with a prosthetic percept in the loss
+
+        ``out = (1 - loss) * native + loss * max(fill, phosphene)``. Returns
+        ``(frames, time, time_unit)``.
+        """
         if self._scotoma_fill == _INPAINT:
             raise ValueError(
                 f"scotoma_fill={_INPAINT!r} cannot be combined with a "
@@ -733,21 +876,19 @@ class Scene(PrettyPrint):
                 f"Use a numeric 'scotoma_fill' for prosthetic composition.")
         _check_prosthetic(prosthetic)
         vmin, vmax = _check_range(vmin, vmax)
-        # Not `_rgb_frames`: a grayscale source is broadcast to RGB below
-        # rather than copied into a second full-size array.
-        scene_frames = self._frames()
         pframes, out_time, out_unit = self._prosthetic_frames(prosthetic)
         n_out = pframes.shape[-1]
-        gaze = _gaze_points(gaze, n_out)
-        n_rows, n_cols = self._frame_shape
+        points = _gaze_points(gaze, n_out)
+        # Not `_native_on`: a grayscale source is broadcast to RGB per frame
+        # below rather than copied into a second full-size array.
+        source = self._source_on(xs, ys)
+        n_scene = source.shape[-1]
+        n_rows, n_cols = ys.size, xs.size
 
-        static = len(gaze) == 1
+        static = len(points) == 1
         if static:
-            brightness = self._percept_on_grid(
-                _percept_sampler(prosthetic, pframes), gaze[0])
-            loss = self._rendered_loss_at(gaze[0])
-
-        n_scene = scene_frames.shape[-1]
+            brightness = _percept_on(prosthetic, pframes, xs, ys, points[0])
+            loss = self._rendered_loss_on(xs, ys, points[0])
         # Frame-major while composing: writing a whole frame at a time is
         # contiguous here:
         out = np.empty((n_out, n_rows, n_cols, 3), dtype=np.float32)
@@ -755,24 +896,20 @@ class Scene(PrettyPrint):
             if static:
                 frame = brightness[..., f]
             else:
-                sample = _percept_sampler(prosthetic, pframes[..., f:f + 1])
-                frame = self._percept_on_grid(sample, gaze[f])[..., 0]
-                loss = self._rendered_loss_at(gaze[f])
+                frame = _percept_on(prosthetic, pframes[..., f:f + 1],
+                                    xs, ys, points[f])[..., 0]
+                loss = self._rendered_loss_on(xs, ys, points[f])
             phosphene = np.clip((frame - vmin) / (vmax - vmin), 0, 1)
-            native = scene_frames[..., 0 if n_scene == 1 else f]
-            if native.shape[2] == 1:
-                # Grayscale = three identical copies
-                native = np.broadcast_to(native, (n_rows, n_cols, 3))
+            native = _as_rgb(source[..., 0 if n_scene == 1 else f])
             fill = self._fill_rgb(native, loss)
             lost = np.maximum(fill, phosphene[..., np.newaxis])
             alpha = loss[..., np.newaxis]
             out[f] = (1 - alpha) * native + alpha * lost
-        out = np.ascontiguousarray(np.moveaxis(out, 0, -1))
-        return Percept(self._apply_aperture(out, gaze=gaze),
-                       space=self._grid(), time=out_time, time_unit=out_unit)
+        return (np.ascontiguousarray(np.moveaxis(out, 0, -1)), out_time,
+                out_unit)
 
-    def _prosthetic_rgb(self, prosthetic, vmax, vmin=0, gaze=None):
-        """A prosthetic percept alone on black, on the scene's pixel grid
+    def _prosthetic_on(self, xs, ys, prosthetic, vmax, vmin=0, gaze=None):
+        """A prosthetic percept alone on black, on a scene-coordinate raster
 
         Places a percept where and at what size this field sees it. Not a
         composition: with no scotoma there is nothing to paint the percept
@@ -781,21 +918,47 @@ class Scene(PrettyPrint):
         """
         _check_prosthetic(prosthetic)
         vmin, vmax = _check_range(vmin, vmax)
-        pframes, _, _ = self._prosthetic_frames(prosthetic)
+        pframes, out_time, out_unit = self._prosthetic_frames(prosthetic)
         n_out = pframes.shape[-1]
-        gaze = _gaze_points(gaze, n_out)
-        if len(gaze) == 1:
-            brightness = self._percept_on_grid(
-                _percept_sampler(prosthetic, pframes), gaze[0])
+        points = _gaze_points(gaze, n_out)
+        if len(points) == 1:
+            brightness = _percept_on(prosthetic, pframes, xs, ys, points[0])
         else:
             brightness = np.concatenate(
-                [self._percept_on_grid(
-                    _percept_sampler(prosthetic, pframes[..., f:f + 1]),
-                    gaze[f]) for f in range(n_out)], axis=-1)
+                [_percept_on(prosthetic, pframes[..., f:f + 1], xs, ys,
+                             points[f]) for f in range(n_out)], axis=-1)
         scaled = np.clip((brightness - vmin) / (vmax - vmin), 0, 1)
         rgb = np.repeat(scaled[:, :, np.newaxis, :], 3, axis=2)
-        return self._apply_aperture(np.asarray(rgb, dtype=np.float32),
-                                    gaze=gaze)
+        return np.asarray(rgb, dtype=np.float32), out_time, out_unit
+
+    def _display_on(self, xs, ys, percept=None, vmax=None, vmin=0, gaze=None):
+        """Display-ready RGB on a scene-coordinate raster, and its clock
+
+        Residual native vision, or that with a prosthetic percept composed
+        into the loss. The aperture is left to whatever draws the result.
+        Returns ``(frames, time, time_unit)``.
+        """
+        if percept is None:
+            if vmax is not None or vmin != 0:
+                raise ValueError("'vmin' and 'vmax' map percept brightness "
+                                 "onto a display, and there is no percept "
+                                 "here. Pass 'percept'.")
+            return (self._native_on(xs, ys, gaze=gaze), self.time,
+                    self.time_unit)
+        if self.scotoma is None:
+            return self._prosthetic_on(xs, ys, percept, vmax, vmin=vmin,
+                                       gaze=gaze)
+        return self._composed_on(xs, ys, percept, vmax, vmin=vmin, gaze=gaze)
+
+    def _n_display_frames(self, percept):
+        """How many frames a drawn or rendered result has
+
+        A video scene sets the clock, so a percept is read at its frame times;
+        a still scene has whatever frames the percept brought.
+        """
+        if percept is None or self.time is not None:
+            return self.n_frames
+        return percept.data.shape[-1]
 
     def _prosthetic_frames(self, prosthetic):
         """Line a percept up with the output frames, and say when they happen"""
@@ -826,18 +989,97 @@ class Scene(PrettyPrint):
 
     def _grid(self):
         """A Grid2D on the scene's pixel centers, in scene coordinates"""
-        n_rows, n_cols = self._frame_shape
-        x_left, y_top = self.pixel_to_dva(0, 0)
-        x_right, y_bottom = self.pixel_to_dva(n_cols - 1, n_rows - 1)
-        step = (float(x_right - x_left) / (n_cols - 1) if n_cols > 1 else 1.0,
-                float(y_top - y_bottom) / (n_rows - 1) if n_rows > 1 else 1.0)
-        return Grid2D((float(x_left), float(x_right)),
-                      (float(y_bottom), float(y_top)), step=step)
+        return _raster_grid(*self._axes)
 
-    def _native_percept(self, gaze=None):
-        """Residual native vision as an ordinary RGB percept"""
-        return Percept(self._native_rgb(gaze=gaze), space=self._grid(),
-                       time=self.time, time_unit=self.time_unit)
+    def _render_shape(self, step, shape):
+        """The ``(rows, cols)`` a requested render raster comes out at"""
+        if step is not None and shape is not None:
+            raise ValueError("'step' and 'shape' both choose the render "
+                             "raster; pass one or the other.")
+        if shape is not None:
+            shape = np.asarray(shape)
+            if shape.shape != (2,) or shape.dtype.kind not in 'iu' or                     shape.min() < 1:
+                raise ValueError(f"'shape' must be a (rows, cols) pair of "
+                                 f"positive integers, not {np.ravel(shape)}.")
+            return (int(shape[0]), int(shape[1]))
+        if step is None:
+            # The source's own raster, so rendering resamples nothing unless
+            # it is asked to:
+            return self._frame_shape
+        step = np.asarray(as_value(step, dva, 'step'), dtype=float)
+        if step.ndim == 0:
+            step = np.repeat(step, 2)
+        if step.shape != (2,) or not np.all(np.isfinite(step)) or                 step.min() <= 0:
+            raise ValueError(f"'step' is an angular sampling in degrees and "
+                             f"must be a positive number or a (dx, dy) pair, "
+                             f"not {np.ravel(step)}.")
+        # Rounded up, so the rendered pixels are never coarser than asked:
+        return (_pixel_count(self._fov[1], step[1]),
+                _pixel_count(self._fov[0], step[0]))
+
+    def render(self, percept=None, gaze=None, vmax=None, vmin=0, step=None,
+               shape=None):
+        """Rasterize this field onto one dense RGB percept
+
+        Residual native vision, with a prosthetic ``percept`` composed into the
+        loss where there is a scotoma, on one common raster. Use it when a
+        single RGB image is needed, for saving or for downstream image
+        processing; :py:meth:`~pulse2percept.vision.Scene.plot` draws the same
+        content without forcing a shared resolution.
+
+        The raster defaults to the source's own, which resamples nothing.
+        ``step`` or ``shape`` chooses another; a fine ``step`` over a wide
+        field is expensive by construction.
+
+        .. versionadded:: 0.11.0
+
+        Parameters
+        ----------
+        percept : :py:class:`~pulse2percept.percepts.Percept`, optional
+            A brightness percept to place in this field, positioned by
+            ``gaze``. With a scotoma it is composed into the loss as
+            ``(1 - loss) * native + loss * max(scotoma_fill, phosphene)``;
+            with none it is rendered alone on black, because superimposing it
+            on intact native vision would assert an unmodeled interaction.
+            ``scotoma_fill='inpaint'`` cannot be composed with one.
+        gaze : (x, y) or (n_frames, 2), optional
+            Where the eye is pointing: the scene location that falls on the
+            fovea, in dva. Defaults to the origin.
+        vmax : float, optional
+            The percept brightness that displays as white. Required whenever
+            ``percept`` is given: brightness is in arbitrary units.
+        vmin : float, optional
+            The percept brightness that displays as black. Defaults to 0.
+        step : float or (dx, dy), optional
+            Angular sampling of the render raster, in dva. Rounded up, so the
+            rendered pixels are never coarser than this. Mutually exclusive
+            with ``shape``.
+        shape : (rows, cols), optional
+            The render raster itself. Mutually exclusive with ``step``.
+
+        Returns
+        -------
+        percept : :py:class:`~pulse2percept.percepts.Percept`
+            An RGB percept in ``[0, 1]`` on the render raster, black outside
+            the aperture. The source is left unchanged.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from pulse2percept.units import dva
+        >>> from pulse2percept.vision import Scene
+        >>> scene = Scene(np.zeros((60, 80)), fov=40 * dva)
+        >>> scene.render().shape
+        (60, 80, 3, 1)
+        >>> scene.render(step=0.25 * dva).shape
+        (120, 160, 3, 1)
+
+        """
+        xs, ys = _raster_axes(self._fov, self._render_shape(step, shape))
+        frames, time, unit = self._display_on(xs, ys, percept=percept,
+                                              vmax=vmax, vmin=vmin, gaze=gaze)
+        return Percept(self._apply_aperture(frames, xs, ys, gaze=gaze),
+                       space=_raster_grid(xs, ys), time=time, time_unit=unit)
 
     def plot(self, gaze=None, frame=0, ax=None, rings=False,
              ring_color=_RING_COLOR, percept=None, vmax=None, vmin=0,
@@ -848,12 +1090,18 @@ class Scene(PrettyPrint):
         it is lost. A scotoma is eye-centered, so ``gaze`` decides where in the
         scene it falls.
 
-        Passing a ``percept`` draws a prosthetic percept in this field instead,
-        so its size and place can be read against the FOV. With a scotoma that
-        is the same composition
-        :py:meth:`~pulse2percept.models.Model.predict_percept` returns;
-        without one the percept is drawn alone on black, because superimposing
-        it on intact native vision would assert an unmodeled interaction.
+        Passing a ``percept`` draws it in this field as well, so its size and
+        place can be read against the FOV. Each layer keeps its own
+        resolution: the source on the source raster, the percept as a local
+        patch on its own visual-field grid. Neither is resampled onto a common
+        raster; see :py:meth:`~pulse2percept.vision.Scene.render` for that.
+
+        Inside the patch the layers compose as
+        ``(1 - loss) * native + loss * max(scotoma_fill, phosphene)``, so
+        where the percept is dark the patch is ordinary residual vision and
+        its boundary does not show. With no scotoma the percept is drawn alone
+        on black, because superimposing it on intact native vision would
+        assert an unmodeled interaction.
 
         Parameters
         ----------
@@ -874,7 +1122,8 @@ class Scene(PrettyPrint):
             Any Matplotlib color for those rings and their labels. Defaults to
             a mid-gray that reads on a light scene.
         percept : :py:class:`~pulse2percept.percepts.Percept`, optional
-            A brightness percept to draw in this field, placed by ``gaze``.
+            A brightness percept to draw in this field, placed by ``gaze`` and
+            drawn at its own resolution over the source.
         vmax : float, optional
             The percept brightness that displays as white. Required whenever
             ``percept`` is given: brightness is in arbitrary units.
@@ -888,27 +1137,54 @@ class Scene(PrettyPrint):
         ax : matplotlib.axes.Axes
 
         """
-        if percept is None:
-            if vmax is not None or vmin != 0:
-                raise ValueError("'vmin' and 'vmax' map percept brightness "
-                                 "onto a display, and there is no percept to "
-                                 "plot. Pass 'percept'.")
-            rgb = self._native_rgb(gaze=gaze)
-        elif self.scotoma is None:
-            rgb = self._prosthetic_rgb(percept, vmax, vmin=vmin, gaze=gaze)
-        else:
-            rgb = self._compose(percept, vmax, vmin=vmin, gaze=gaze).data
-        if not 0 <= frame < rgb.shape[-1]:
-            raise ValueError(f"'frame' must be in 0..{rgb.shape[-1] - 1}, not "
+        if percept is not None:
+            _check_prosthetic(percept)
+        n_out = self._n_display_frames(percept)
+        if not 0 <= frame < n_out:
+            raise ValueError(f"'frame' must be in 0..{n_out - 1}, not "
                              f"{frame}.")
-        still = Percept(rgb[..., frame:frame + 1], space=self._grid())
-        radii = _ring_radii(rings, self.fov)
+        points = _gaze_points(gaze, n_out)
+        gaze_xy = points[0] if len(points) == 1 else points[frame]
+        xs, ys = self._axes
+        # The source layer has its own frame count; one drawn frame of it
+        # needs only the one gaze:
+        src_frame = 0 if self.n_frames == 1 else frame
+        patch = None
+        if percept is None:
+            # `_display_on` rejects a display range with nothing to map:
+            wide = self._display_on(xs, ys, vmax=vmax, vmin=vmin,
+                                    gaze=gaze_xy)[0][..., src_frame]
+        else:
+            pxs, pys = _percept_axes(percept)
+            # Eye-centered percept coordinates, moved into the scene; `pys`
+            # descends so that row 0 of the patch is its top, as drawn:
+            pxs = pxs + gaze_xy[0]
+            pys = pys[::-1] + gaze_xy[1]
+            patch = self._display_on(pxs, pys, percept=percept, vmax=vmax,
+                                     vmin=vmin, gaze=gaze)[0][..., frame]
+            if self.scotoma is None:
+                # Nothing is lost, so there is no residual vision to draw the
+                # percept into; only the field's extent is left to show.
+                wide = np.zeros((ys.size, xs.size, 3), dtype=np.float32)
+            else:
+                wide = self._native_on(xs, ys, gaze=gaze_xy)[..., src_frame]
+        still = Percept(wide[..., np.newaxis], space=self._grid())
         ax = still.plot(ax=ax, **kwargs)
+        artists = [ax.images[-1]]
+        if patch is not None:
+            # `imshow` must not renegotiate the limits the wide layer set:
+            xlim, ylim = ax.get_xlim(), ax.get_ylim()
+            artists.append(ax.imshow(patch, origin='upper',
+                                     extent=_raster_extent(pxs, pys),
+                                     zorder=artists[0].get_zorder() + 1))
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+        self._clip_to_support(artists, gaze_xy, ax.transData)
+        radii = _ring_radii(rings, self.fov)
         if radii.size:
             # The fovea sits wherever gaze points, which is where the scotoma
             # is drawn too; at the default gaze that is the scene's center.
-            _draw_rings(ax, radii, _gaze_points(gaze, rgb.shape[-1])[0],
-                        color=ring_color)
+            _draw_rings(ax, radii, gaze_xy, color=ring_color)
         return ax
 
     def play(self, gaze=None, rings=False, ring_color=_RING_COLOR, ax=None,
@@ -940,8 +1216,10 @@ class Scene(PrettyPrint):
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
         radii = _ring_radii(rings, self.fov)
+        # The player rasterizes its own frames, so this is display output:
+        native = self.render(gaze=gaze)
         if not radii.size:
-            return self._native_percept(gaze=gaze).play(ax=ax, **kwargs)
+            return native.play(ax=ax, **kwargs)
         points = _gaze_points(gaze, self.n_frames)
         if len(points) > 1:
             raise ValueError(
@@ -951,9 +1229,8 @@ class Scene(PrettyPrint):
                 "rings=False.")
         # Painted into the displayed frames rather than left as an artist
         # behind the player's canvas, which would hide them:
-        frames = self._native_rgb(gaze=gaze)
         overlay = _rings_overlay(self._frame_shape, radii, points[0],
                                  self.dva_to_pixel, color=ring_color)
-        decorated = Percept(_over(frames, overlay), space=self._grid(),
+        decorated = Percept(_over(native.data, overlay), space=self._grid(),
                             time=self.time, time_unit=self.time_unit)
         return decorated.play(ax=ax, **kwargs)

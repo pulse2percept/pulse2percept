@@ -259,7 +259,8 @@ visual acuity, phosphene discriminability, pairwise separability, behavioral
 resolution, or object-recognition performance.
 
 ``measure()`` applies to model-produced brightness percepts and raises for the
-RGB percepts returned by scene composition, whose values are display
+RGB percepts :py:meth:`~pulse2percept.vision.Scene.render` returns, whose values
+are display
 intensities. Positions and sizes are in degrees of visual angle, so the percept
 must have been built on a
 :py:class:`~pulse2percept.topography.Grid2D`; a percept holding bare pixel
@@ -435,10 +436,11 @@ without an ``encoder``, raises ``ValueError``.
 Residual vision
 ~~~~~~~~~~~~~~~
 
-If the scene also carries a :py:class:`~pulse2percept.vision.Scotoma`, the
-result is what the person actually sees -- intact native vision outside the
-lost region, and the prosthetic percept inside it -- as a single RGB
-:py:class:`~pulse2percept.percepts.Percept` on the scene's own pixel grid:
+``predict_percept`` always returns perceived brightness on the model grid,
+with or without a :py:class:`~pulse2percept.vision.Scotoma`. A scotoma
+describes residual *native* vision, so it does not enter the model response,
+and prosthetic encoding samples the unmasked scene including locations inside
+it. Drawing the two together is a separate step:
 
 .. code-block:: python
 
@@ -446,26 +448,51 @@ lost region, and the prosthetic percept inside it -- as a single RGB
                              scotoma=p2p.vision.Scotoma.circle(8 * dva))
     model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
 
-    percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=50)
+    percept = model.predict_percept(scene, gaze=(0, 0) * dva)
+    scene.plot(percept=percept, gaze=(0, 0) * dva, vmax=50)
 
-``vmax`` is required here and is not inferred: model brightness is in
-arbitrary units, so which brightness counts as white is a claim about the
-display, not about the model. Holding it fixed across calls is what keeps two
-gazes comparable.
+Inside the loss the two compose as
+``(1 - loss) * native + loss * max(scotoma_fill, phosphene)``. With no
+scotoma the percept is drawn alone on black, because superimposing it on
+intact native vision would assert an unmodeled interaction.
 
-The scotoma affects *native* vision only. Prosthetic encoding samples the
-unmasked scene, including locations inside the scotoma.
+``vmax`` is required: model brightness is in arbitrary units, so which
+brightness counts as white is a display choice. Hold it fixed to keep
+separate calls comparable.
 
-The rendered field boundary
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Source and percept need not share a resolution. ``plot`` draws the source at
+its own raster and the percept as a local patch on the model grid, so a fine
+simulation in a wide field costs the model grid's pixels rather than the whole
+field at the model's step.
+
+:py:meth:`~pulse2percept.vision.Scene.render` is the explicit dense
+composition, for when one RGB raster is needed (saving, downstream image
+processing):
+
+.. code-block:: python
+
+    rgb = scene.render(percept=percept, gaze=(0, 0) * dva, vmax=50)
+    fine = scene.render(percept=percept, vmax=50, step=0.02 * dva)
+
+The raster defaults to the source's own, which resamples nothing. ``step``
+(dva per pixel, rounded up so pixels are never coarser than asked) or
+``shape`` chooses another; the two are mutually exclusive. A fine step over a
+wide field is expensive by construction.
+
+.. versionchanged:: 0.11.0
+    Scene prediction returns the model percept rather than an RGB
+    composition. ``vmin`` and ``vmax`` moved to ``Scene.plot`` and the new
+    ``Scene.render``.
+
+The field boundary
+~~~~~~~~~~~~~~~~~~
 
 .. versionadded:: 0.11.0
 
 A scene's source, pixel grid and sampling are rectangular. ``fov`` gives the
-rendered field its outer dimensions ``(width, height)``, and ``aperture`` gives
-it its shape: the default ``'rectangle'`` uses the whole frame, while
-``'ellipse'`` inscribes an ellipse in those dimensions and blacks out the
-corners around it:
+field its outer dimensions ``(width, height)``, and ``aperture`` gives it its
+shape: the default ``'rectangle'`` uses the whole frame, while ``'ellipse'``
+inscribes an ellipse in those dimensions:
 
 .. code-block:: python
 
@@ -474,8 +501,12 @@ corners around it:
 
 A square ``fov`` therefore renders as a disc, and a 60 x 40 one as an ellipse
 reaching 30 degrees sideways and 20 degrees up. Like the scotoma and the
-eccentricity rings, it is eye-centered, so gaze moves it through the scene. It
-changes the rendered scene only.
+eccentricity rings, it is eye-centered, so gaze moves it through the scene.
+
+The aperture is support, not scene content: ``plot`` clips its artists to it,
+``render`` writes black outside it, and the source arrays are never modified.
+Scene sampling, device input and stimulation are untouched either way -- a
+camera does not go blind at the edge of an eye-shaped display aperture.
 
 Both eyes
 ~~~~~~~~~
@@ -545,9 +576,9 @@ time as the last axis in both::
     (Y, X, T)     perceived brightness in arbitrary units
     (Y, X, 3, T)  RGB intensities in [0, 1]
 
-Prosthesis models produce brightness percepts. When a
-:py:class:`~pulse2percept.vision.Scene` has a scotoma, scene-driven prediction
-composes that model output with residual vision and returns an RGB percept:
+Prosthesis models produce brightness percepts.
+:py:meth:`~pulse2percept.vision.Scene.render` composes one with residual
+vision and returns an RGB percept:
 
 .. code-block:: python
 

@@ -195,12 +195,14 @@ def test_scene_with_gaze_prediction_is_unchanged():
     assert_matches_reference('scene_gaze', percept)
 
 
-def test_scene_with_scotoma_prediction_is_unchanged():
+def test_scene_with_scotoma_composition_is_unchanged():
+    """The dense composition now lives in `Scene.render`, at the same numbers"""
     model = ScoreboardModel(implant=encoding_grid(), rho=200, **GRID).build()
     scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0,
                      scotoma_blend=0)
+    percept = model.predict_percept(scene)
     assert_matches_reference('scene_scotoma',
-                             model.predict_percept(scene, vmax=50))
+                             scene.render(percept=percept, vmax=50))
 
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, AxonMapModel])
