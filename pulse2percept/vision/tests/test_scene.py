@@ -721,18 +721,21 @@ def test_play_animates_a_video_scene_and_refuses_a_still_one():
 
 def test_the_fellow_eye_mirrors_an_asymmetric_scotoma():
     """Eye-centered anatomy is reflected; the world it looks at is not"""
-    scotoma = Scotoma.circle(3, center=(6, 0))
+    # Off both meridians, so a reflection is distinguishable from a rotation:
+    scotoma = Scotoma.circle(3, center=(6, -3))
     scene = ramp_scene(scotoma=scotoma, aperture='ellipse', background=0.25,
                        scotoma_fill=0.4, scotoma_blend=1.5)
     fellow = scene.fellow_eye()
     npt.assert_equal(fellow is scene, False)
     npt.assert_equal(isinstance(fellow, Scene), True)
-    # The loss is 6 degrees into the other hemifield now:
-    npt.assert_almost_equal(float(fellow.scotoma(-6, 0)), 1.0)
-    npt.assert_almost_equal(float(fellow.scotoma(6, 0)), 0.0)
+    # The loss is 6 degrees into the other hemifield now, and still below the
+    # horizontal meridian: x flips, y does not.
+    npt.assert_almost_equal(float(fellow.scotoma(-6, -3)), 1.0)
+    npt.assert_almost_equal(float(fellow.scotoma(-6, 3)), 0.0)
+    npt.assert_almost_equal(float(fellow.scotoma(6, -3)), 0.0)
     # ... and the original is untouched:
     npt.assert_equal(scene.scotoma is scotoma, True)
-    npt.assert_almost_equal(float(scene.scotoma(6, 0)), 1.0)
+    npt.assert_almost_equal(float(scene.scotoma(6, -3)), 1.0)
     # Everything that is not eye-specific carries over, source object included:
     npt.assert_equal(fellow.source is scene.source, True)
     npt.assert_equal(fellow.fov, scene.fov)

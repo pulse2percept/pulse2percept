@@ -148,19 +148,26 @@ def test_each_eye_keeps_its_own_aperture():
 
 
 def test_two_fovs_are_drawn_on_one_angular_scale():
-    """A 30-degree field must not be stretched to look like a 50-degree one"""
-    left, right = flat_scene(0.4, px=31), flat_scene(0.4, px=51)
-    npt.assert_equal(left.fov != right.fov, True)
+    """A 31-degree field must not be stretched to look like a 41-degree one
+
+    Both fields are oblong and oblong the other way round, so the widest one
+    horizontally is the shorter one vertically. Reading a single dimension for
+    both axes, or swapping width and height, lands on different numbers.
+    """
+    left = Scene(ImageStimulus(np.full((21, 31), 0.4)), fov=(31, 21))
+    right = Scene(ImageStimulus(np.full((51, 41), 0.4)), fov=(41, 51))
     ax_left, ax_right = BinocularScene(left=left, right=right).plot()
     npt.assert_almost_equal(ax_left.get_xlim(), ax_right.get_xlim())
     npt.assert_almost_equal(ax_left.get_ylim(), ax_right.get_ylim())
-    # Both axes span the wider field's stated outer extent, not the outermost
-    # pixel centers, and the images keep their own extents:
-    npt.assert_almost_equal(ax_right.get_xlim(), (-25.5, 25.5))
+    # Both axes span the wider field's stated outer extent, per dimension,
+    # rather than the outermost pixel centers:
+    npt.assert_almost_equal(ax_left.get_xlim(), (-20.5, 20.5))   # max width
+    npt.assert_almost_equal(ax_left.get_ylim(), (-25.5, 25.5))   # max height
+    # ... and the images keep the extents their own geometry gives them:
     npt.assert_almost_equal(ax_left.images[-1].get_extent(),
-                            (-15.5, 15.5, -15.5, 15.5))
+                            (-15.5, 15.5, -10.5, 10.5))
     npt.assert_almost_equal(ax_right.images[-1].get_extent(),
-                            (-25.5, 25.5, -25.5, 25.5))
+                            (-20.5, 20.5, -25.5, 25.5))
     plt.close('all')
 
 
