@@ -119,24 +119,27 @@ plt.title('Edge-filtered device input, intact vision around it')
 # The two are held together by a
 # :py:class:`~pulse2percept.vision.BinocularScene`.
 #
-# ``aperture='circle'`` renders each field as an eye-centered disc rather than
-# a rectangle, which reads as an ocular field. It changes the rendering only;
-# the implant is given the same scene values either way.
+# ``aperture='ellipse'`` inscribes an eye-centered ellipse in ``fov`` rather
+# than using the whole rectangle. This changes the rendering only.
+#
+# Differences in residual acuity are not modeled.
+#
+# Vision loss need not be identical in both eyes:
 
 implant.preprocess = False
 
 worse_eye = Scene(logo, fov=40 * dva, scotoma=scotoma, scotoma_fill=0,
-                  background=1, aperture='circle')
-fellow_eye = Scene(logo, fov=40 * dva, background=1, aperture='circle',
+                  background=1, aperture='ellipse')
+fellow_eye = Scene(logo, fov=40 * dva, background=1, aperture='ellipse',
                    scotoma=Scotoma.circle(3 * dva, center=center),
                    scotoma_fill=0.4)
 
 binocular = BinocularScene(left=worse_eye, right=fellow_eye)
 
 ###############################################################################
-# Differences in residual acuity or contrast sensitivity between the two eyes
-# are not currently modeled; the scenes differ only through explicitly
-# specified visual-field loss and source content.
+# For vision loss that is symmetric about the vertical meridian,
+# :py:meth:`~pulse2percept.vision.Scene.fellow_eye` builds the homologous
+# scene for the fellow eye.
 #
 # By default, models are monocular:
 

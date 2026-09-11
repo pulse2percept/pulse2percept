@@ -48,7 +48,8 @@ Highlights
   :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
   residual vision and retinal prostheses, and
   :py:class:`~pulse2percept.vision.BinocularScene` for the two eyes' views
-  side by side (:pull:`854`, :pull:`871`, :pull:`883`, :pull:`890`).
+  side by side (:pull:`854`, :pull:`871`, :pull:`883`, :pull:`890`,
+  :pull:`899`).
 
 * New photovoltaic stimulation pipeline for the PRIMA-style arrays, from image
   encoding to irradiance-based model input (:pull:`868`, :pull:`891`).
@@ -191,18 +192,13 @@ Topography
 Scene and plotting
 ~~~~~~~~~~~~~~~~~~
 
-* :py:class:`~pulse2percept.vision.Scene` supports softened scotoma boundaries,
-  configurable backgrounds, inpainting, eccentricity rings, and static or
-  animated visualization. Inpainting is intentionally unavailable when
-  composing prosthetic vision because its interaction with prosthetic
-  brightness is not modeled (:pull:`871`, :pull:`884`, :pull:`893`).
-
-* ``Scene(aperture='circle')`` renders an eye-centered disc of radius
-  ``min(fov) / 2`` instead of the full rectangle (:pull:`890`).
-
-* New :py:class:`~pulse2percept.vision.BinocularScene` holds a left and a
-  right :py:class:`~pulse2percept.vision.Scene` and plots them side by side
-  (:pull:`890`).
+* New :py:class:`~pulse2percept.vision.Scene` and
+  :py:class:`~pulse2percept.vision.BinocularScene` place images, video,
+  scotomas, and prosthetic percepts in visual-field coordinates. Scenes support
+  eye-centered gaze, rectangular or elliptical apertures, residual-vision
+  rendering, and fellow-eye geometry; binocular scenes keep the two monocular
+  views independent while plotting them on a common angular scale
+  (:pull:`871`, :pull:`884`, :pull:`890`, :pull:`893`, :pull:`899`).
 
 * New :py:mod:`pulse2percept.plotting` module provides combined
   stimulus/percept figures and animations. :py:mod:`pulse2percept.viz` is

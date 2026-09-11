@@ -461,16 +461,21 @@ The rendered field boundary
 
 .. versionadded:: 0.11.0
 
-A scene's source, pixel grid and sampling are rectangular. ``aperture='circle'``
-renders an eye-centered disc of radius ``min(fov) / 2`` instead, blacking out
-the corners around it and changing the rendered scene only:
+A scene's source, pixel grid and sampling are rectangular. ``fov`` gives the
+rendered field its outer dimensions ``(width, height)``, and ``aperture`` gives
+it its shape: the default ``'rectangle'`` uses the whole frame, while
+``'ellipse'`` inscribes an ellipse in those dimensions and blacks out the
+corners around it:
 
 .. code-block:: python
 
-    scene = p2p.vision.Scene(image, fov=40 * dva, aperture='circle')
+    disc = p2p.vision.Scene(image, fov=40 * dva, aperture='ellipse')
+    wide = p2p.vision.Scene(image, fov=(60, 40) * dva, aperture='ellipse')
 
-Like the scotoma and the eccentricity rings, the disc is
-eye-centered, so gaze moves it through the scene.
+A square ``fov`` therefore renders as a disc, and a 60 x 40 one as an ellipse
+reaching 30 degrees sideways and 20 degrees up. Like the scotoma and the
+eccentricity rings, it is eye-centered, so gaze moves it through the scene. It
+changes the rendered scene only.
 
 Both eyes
 ~~~~~~~~~
@@ -490,8 +495,20 @@ monocular views:
     ax_left, ax_right = binocular.plot(left_percept=percept, vmax=2)
 
 A bilateral loss is often symmetric about the vertical meridian.
-:py:meth:`~pulse2percept.vision.Scotoma.mirror` reflects a scotoma across it
-(``mirrored(x, y) == original(-x, y)``) and returns a new one:
+:py:meth:`~pulse2percept.vision.Scene.fellow_eye` builds the homologous scene
+for the other eye:
+
+.. code-block:: python
+
+    left = p2p.vision.Scene(image, fov=40 * dva, scotoma=scotoma)
+    binocular = p2p.vision.BinocularScene(left, left.fellow_eye())
+
+It reflects eye-specific geometry, such as a scotoma, across the vertical
+meridian. The image itself is not flipped, since both eyes look at the same
+world in the same orientation.
+
+:py:meth:`~pulse2percept.vision.Scotoma.mirror` is the same reflection on a
+scotoma alone (``mirrored(x, y) == original(-x, y)``):
 
 .. code-block:: python
 
