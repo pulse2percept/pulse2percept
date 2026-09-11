@@ -154,8 +154,9 @@ def test_two_fovs_are_drawn_on_one_angular_scale():
     ax_left, ax_right = BinocularScene(left=left, right=right).plot()
     npt.assert_almost_equal(ax_left.get_xlim(), ax_right.get_xlim())
     npt.assert_almost_equal(ax_left.get_ylim(), ax_right.get_ylim())
-    # Both axes span the wider field, and the images keep their own extents:
-    npt.assert_almost_equal(ax_right.get_xlim(), (-25.0, 25.0))
+    # Both axes span the wider field's stated outer extent, not the outermost
+    # pixel centers, and the images keep their own extents:
+    npt.assert_almost_equal(ax_right.get_xlim(), (-25.5, 25.5))
     npt.assert_almost_equal(ax_left.images[-1].get_extent(),
                             (-15.5, 15.5, -15.5, 15.5))
     npt.assert_almost_equal(ax_right.images[-1].get_extent(),

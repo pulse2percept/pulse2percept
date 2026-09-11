@@ -545,11 +545,11 @@ class Scene(PrettyPrint):
 
         """
         scotoma = None if self.scotoma is None else self.scotoma.mirror()
-        return type(self)(self.source, self.fov, scotoma=scotoma,
-                          scotoma_fill=self.scotoma_fill,
-                          scotoma_blend=self.scotoma_blend,
-                          background=self.background,
-                          aperture=self.aperture)
+        return Scene(self.source, self.fov, scotoma=scotoma,
+                     scotoma_fill=self.scotoma_fill,
+                     scotoma_blend=self.scotoma_blend,
+                     background=self.background,
+                     aperture=self.aperture)
 
     def _frames(self):
         """The source as a dense ``(rows, cols, channels, n_frames)`` array"""

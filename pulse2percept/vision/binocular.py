@@ -6,22 +6,15 @@ from .scene import Scene
 from ..utils import PrettyPrint
 
 
-def _share_visual_field(axes):
-    """Put both axes on the same degrees-per-inch scale
-
-    Each `Scene.plot` scales its axes to its own FOV, which would draw a
-    30-degree and a 50-degree field at the same size on screen. Widening both
-    to the union of the two ranges keeps one degree the same length in either
-    panel. Presentation only: each image keeps its own extent.
-    """
-    for axis in ('x', 'y'):
-        limits = [getattr(ax, f'get_{axis}lim')() for ax in axes]
-        lo = min(min(lim) for lim in limits)
-        hi = max(max(lim) for lim in limits)
+def _share_visual_field(axes, scenes):
+    """Put both axes on the same degrees-per-inch scale"""
+    half = [max(scene.fov[i] for scene in scenes) / 2 for i in (0, 1)]
+    for axis, extent in zip(('x', 'y'), half):
         for ax in axes:
-            getattr(ax, f'set_{axis}lim')(lo, hi)
+            getattr(ax, f'set_{axis}lim')(-extent, extent)
             # `Percept._label_axes` fixes five ticks across its own range:
-            getattr(ax, f'set_{axis}ticks')(np.linspace(lo, hi, num=5))
+            getattr(ax, f'set_{axis}ticks')(np.linspace(-extent, extent,
+                                                        num=5))
 
 
 class BinocularScene(PrettyPrint):
@@ -155,7 +148,7 @@ class BinocularScene(PrettyPrint):
                                     rings=rings, percept=percept, **scale,
                                     **kwargs))
             drawn[-1].set_title(f'{label} eye')
-        _share_visual_field(drawn)
+        _share_visual_field(drawn, (self.left, self.right))
         if fig is not None:
             fig.tight_layout()
         return tuple(drawn)
