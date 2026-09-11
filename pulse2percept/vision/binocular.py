@@ -67,8 +67,7 @@ class BinocularScene(PrettyPrint):
     >>> float(binocular.right.scotoma(-6, 0))
     1.0
 
-    Imagery that is already packed left-right side by side, split into the
-    two eyes by
+    Imagery already packed left-right side by side, split with
     :py:meth:`~pulse2percept.vision.BinocularScene.from_side_by_side`:
 
     >>> stereo = np.zeros((10, 40))
@@ -91,42 +90,38 @@ class BinocularScene(PrettyPrint):
 
     @classmethod
     def from_side_by_side(cls, source, fov, **scene_kwargs):
-        """Split one side-by-side stereo image into the two eyes
+        """Build a binocular scene from a side-by-side stereo image.
 
-        A side-by-side stereo image packs both views into one frame, the left
-        eye's in its left half and the right eye's in its right half. This
-        splits that frame exactly halfway along its width and hands each half
-        to a :py:class:`~pulse2percept.vision.Scene`.
+        The left half of the image becomes the left-eye scene and the right
+        half becomes the right-eye scene. The split is exact: neither view is
+        flipped, resampled, or interpolated.
 
-        Nothing is flipped, resampled, cropped or interpolated: the two halves
-        keep their pixel values and their grayscale/RGB/RGBA channels. This
-        loads existing stereo imagery; it neither creates disparity nor infers
-        depth, and the result remains two independent monocular views.
+        This method unpacks existing stereo imagery; it does not create
+        disparity or infer depth.
 
         .. versionadded:: 0.11.0
 
         Parameters
         ----------
         source : ImageStimulus or image
-            The packed stereo frame. Anything that is not already an
-            :py:class:`~pulse2percept.stimuli.ImageStimulus`, such as a file
-            name or a NumPy array, is handed to ``ImageStimulus``. Stereo
-            video is not supported.
+            Side-by-side stereo image. Filenames, NumPy arrays, and other
+            inputs accepted by
+            :py:class:`~pulse2percept.stimuli.ImageStimulus` are converted to
+            one first. Metadata is preserved in both eye images.
+            Stereo video is not supported.
         fov : float or (width, height)
-            How much of the visual field *one eye's* half covers, in degrees
-            of visual angle. The packed frame's width has no visual-field
-            meaning, so a scalar (horizontal) FOV gets its vertical extent
-            from the aspect ratio of a half, not of the packed frame.
+            Per-eye field of view in degrees of visual angle. For a scalar FOV,
+            the vertical extent is inferred from the aspect ratio of one half
+            of the image, not the packed stereo frame.
         **scene_kwargs :
-            Passed unchanged to both
-            :py:class:`~pulse2percept.vision.Scene` constructors, so the two
-            eyes get identical scotoma, background, aperture and blend
-            settings. Eye-specific geometry is neither inferred nor mirrored
-            here; build the two scenes yourself if they should differ.
+            Additional arguments passed unchanged to both
+            :py:class:`~pulse2percept.vision.Scene` constructors. Use separate
+            scenes when the two eyes need different scotomas or other settings.
 
         Returns
         -------
         binocular : :py:class:`~pulse2percept.vision.BinocularScene`
+            The left and right monocular scenes.
 
         Examples
         --------
@@ -134,11 +129,10 @@ class BinocularScene(PrettyPrint):
         >>> from pulse2percept.units import dva
         >>> from pulse2percept.vision import BinocularScene
         >>> stereo = np.zeros((10, 40))
-        >>> binocular = BinocularScene.from_side_by_side(stereo,
-        ...                                              fov=(60, 40) * dva)
+        >>> binocular = BinocularScene.from_side_by_side(
+        ...     stereo, fov=(60, 40) * dva)
         >>> binocular.left.shape, binocular.left.fov
         ((10, 20), (60.0, 40.0))
-
         """
         if isinstance(source, VideoStimulus):
             raise TypeError("'source' must be a still stereo image, not a "
@@ -151,7 +145,11 @@ class BinocularScene(PrettyPrint):
                              f"into a left and a right half, so its width "
                              f"must be even, not {n_cols}.")
         halves = np.split(source.data.reshape(source.img_shape), 2, axis=1)
-        return cls(*[Scene(ImageStimulus(half), fov=fov, **scene_kwargs)
+        # Each half is derived from the packed frame, so it inherits its
+        # metadata (including a `source_shape` of the packed frame), as
+        # `ImageStimulus.crop` does:
+        return cls(*[Scene(ImageStimulus(half, metadata=source.metadata),
+                           fov=fov, **scene_kwargs)
                      for half in halves])
 
     def _pprint_params(self):

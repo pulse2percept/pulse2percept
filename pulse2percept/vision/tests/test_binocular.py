@@ -283,6 +283,13 @@ def test_an_image_stimulus_is_a_stereo_source():
     npt.assert_almost_equal(binocular.right.source.data.min(), 1.0)
 
 
+def test_both_halves_inherit_the_packed_frame_metadata():
+    stereo = ImageStimulus(packed_stereo(), metadata={'foo': 'bar'})
+    binocular = BinocularScene.from_side_by_side(stereo, fov=40 * dva)
+    for eye in (binocular.left, binocular.right):
+        npt.assert_equal(eye.source.metadata['foo'], 'bar')
+
+
 def test_stereo_video_is_out_of_scope():
     video = VideoStimulus(np.zeros((10, 40, 3)), time=[0, 1, 2])
     with pytest.raises(TypeError):
