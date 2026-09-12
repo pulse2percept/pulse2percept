@@ -258,6 +258,26 @@ def test_spatial_drive_is_zero_outside_the_schedule():
     npt.assert_almost_equal(drive[4], 0)
 
 
+def test_spatial_drive_is_zero_before_a_delayed_first_pulse():
+    # A source whose time axis starts late puts the first pulse after t=0, so
+    # "before the schedule" is not the same as "negative time".
+    implant = tiny_implant()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        spatial = Ho2018Spatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                step=0.25, verbose=False)
+    video = VideoStimulus(np.ones((2, 2, 3)),
+                          time=np.array([100.0, 150.0, 200.0]))
+    stim = implant.prepare_stim(video)
+    npt.assert_almost_equal(stim.pulse_time[0], 100.0)
+    t = np.array([0.0, 99.0, 100.0, stim.duration])
+    drive = spatial.predict_percept(video, t_percept=t).data.max(axis=(0, 1))
+    npt.assert_almost_equal(drive[0], 0)
+    npt.assert_almost_equal(drive[1], 0)
+    npt.assert_array_less(0, drive[2])
+    npt.assert_almost_equal(drive[3], 0)
+
+
 def test_warns_about_ignored_electrode_distance():
     implant = tiny_implant()
     for electrode in implant.electrode_array.electrode_objects:
