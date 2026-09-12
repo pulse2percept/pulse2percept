@@ -486,10 +486,10 @@ canvas when no image is needed:
 
     scene = p2p.vision.Scene.blank(fov=45 * dva)
 
-Its backing raster (512 x 512 by default) is only the default render raster;
-prediction still happens on the model grid. Black is scene content, not
-blindness; use a :py:class:`~pulse2percept.vision.Scotoma` for vision that is
-lost.
+Its fixed 512 x 512 backing raster is only the raster ``render`` falls back
+to; ask ``render`` for another, and prediction still happens on the model grid
+regardless. Black is scene content, not blindness; use a
+:py:class:`~pulse2percept.vision.Scotoma` for vision that is lost.
 
 .. versionchanged:: 0.11.0
     Scene prediction returns the model percept rather than an RGB

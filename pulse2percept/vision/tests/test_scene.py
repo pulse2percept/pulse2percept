@@ -1420,8 +1420,8 @@ def test_a_blank_scene_is_a_black_elliptical_field_by_default():
 
 def test_a_blank_scene_is_an_ordinary_black_scene():
     """`blank` is convenience only, not a second Scene implementation"""
-    blank = Scene.blank(fov=45, shape=(32, 48), aperture='rectangle')
-    plain = Scene(np.zeros((32, 48)), fov=45, aperture='rectangle')
+    blank = Scene.blank(fov=45, aperture='rectangle')
+    plain = Scene(np.zeros(blank.shape), fov=45, aperture='rectangle')
     npt.assert_equal(blank.fov, plain.fov)
     npt.assert_equal(blank.shape, plain.shape)
     for x, y in [(0, 0), (-10, 4), (12, -8)]:
@@ -1431,16 +1431,21 @@ def test_a_blank_scene_is_an_ordinary_black_scene():
     npt.assert_almost_equal(rendered(blank), rendered(plain))
 
 
-def test_a_blank_scene_keeps_the_fov_and_shape_it_is_given():
-    scene = Scene.blank(fov=(60, 40) * dva, shape=(30, 50))
-    npt.assert_equal(scene.fov, (60.0, 40.0))
-    npt.assert_equal(scene.shape, (30, 50))
+def test_a_blank_scene_keeps_the_fov_it_is_given():
+    npt.assert_equal(Scene.blank(fov=(60, 40) * dva).fov, (60.0, 40.0))
+    # The backing raster is square, so a scalar fov stays square:
+    npt.assert_equal(Scene.blank(fov=60).fov, (60.0, 60.0))
 
 
-@pytest.mark.parametrize('shape', [(0, 4), (4, -1), (4, 4, 4), 4, (4.0, 4.0)])
-def test_a_blank_scene_needs_a_real_raster(shape):
-    with pytest.raises(ValueError):
-        Scene.blank(shape=shape)
+def test_the_blank_raster_is_not_the_callers_business():
+    """A display raster that could be set would set the aspect ratio too"""
+    with pytest.raises(TypeError):
+        Scene.blank(shape=(32, 48))
+    # Output resolution is `render`'s to choose, and it leaves the field
+    # geometry alone:
+    scene = Scene.blank(fov=45)
+    npt.assert_equal(scene.render(shape=(1080, 1920)).shape[:2], (1080, 1920))
+    npt.assert_equal(scene.fov, (45.0, 45.0))
 
 
 def test_an_explicit_aperture_overrides_the_blank_default():
