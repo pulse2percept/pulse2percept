@@ -326,6 +326,10 @@ class _BiphasicSpatialMixin:
     #: Amplitude may be given in multiples of perceptual threshold.
     extra_stimulus_units = (xTh,)
 
+    #: Effect models read pulse frequency, amplitude and phase duration off
+    #: the described pulse train, so the schedule has to survive routing.
+    _needs_structured_stim = True
+
     #: Spatial parameters mirrored to the effect model that scales them.
     _shared_with_effect = {'rho': 'size_model'}
 

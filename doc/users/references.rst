@@ -27,6 +27,11 @@ Studies referenced throughout the Documentation:
                  percepts elicited by retinal implants. *Scientific Reports*
                  9(1):9199, doi:`10.1038/s41598-019-45416-4
                  <https://doi.org/10.1038/s41598-019-45416-4>`_.
+.. [Chichilnisky2002] EJ Chichilnisky, RS Kalmar (2002). Functional
+                      asymmetries in ON and OFF ganglion cells of primate
+                      retina. *Journal of Neuroscience* 22(7):2737-2747,
+                      doi:`10.1523/JNEUROSCI.22-07-02737.2002
+                      <https://doi.org/10.1523/JNEUROSCI.22-07-02737.2002>`_.
 .. [Curcio1990] CA Curcio, KR Sloan, RE Kalina, AE Hendrickson (1990). Human
                 photoreceptor topography.
                 *Journal of Comparative Neurophysiology* 292:497-523,
@@ -64,6 +69,13 @@ Studies referenced throughout the Documentation:
 .. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
                simple tasks using simulated prosthetic vision.
                *Artificial Organs* 27, 1016-1028.
+.. [Ho2018] E Ho, R Smith, G Goetz, X Lei, L Galambos, TI Kamins, J Harris,
+            K Mathieson, D Palanker, A Sher (2018). Spatiotemporal
+            characteristics of retinal response to network-mediated
+            photovoltaic stimulation.
+            *Journal of Neurophysiology* 119(2):389-400,
+            doi:`10.1152/jn.00872.2016
+            <https://doi.org/10.1152/jn.00872.2016>`_.
 .. [Ho2019] E Ho et al. (2019). Characteristics of prosthetic vision in rats
             with subretinal flat and pillar electrode arrays. *Journal of
             Neural Engineering* 16(6):066027, doi:`10.1088/1741-2552/ab34b3

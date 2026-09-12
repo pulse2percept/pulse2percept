@@ -938,6 +938,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
     n_jobs = _n_jobs_alias()
 
+    #: Whether this model reads an encoded stimulus' schedule (pulse timing,
+    #: irradiance, durations) rather than the delivered waveform. Composite
+    #: models hand such a spatial stage the structured stimulus itself.
+    _needs_structured_stim = False
+
     def __init__(self, implant, **params):
         _check_implant(implant)
         self._implant = implant
@@ -1811,10 +1816,13 @@ class Model(Frozen, PrettyPrint):
                              f"have a time component.")
 
         if self.has_space and self.has_time:
-            # Custom temporal combiners need the structured stimulus:
             combine = getattr(self.spatial, '_combine_temporal', None)
+            # A spatial stage that reads the encoded schedule needs the
+            # structured stimulus; any other one gets the delivered waveform,
+            # which the temporal stage then integrates.
             resp = self.spatial._predict_prepared(
-                stim if combine is not None else _delivered(stim),
+                stim if self.spatial._needs_structured_stim
+                else _delivered(stim),
                 t_percept=None)
             if has_time_axis:
                 if resp.time is None and combine is not None:
