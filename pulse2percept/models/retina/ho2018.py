@@ -12,22 +12,21 @@ from ..base import (Model, TemporalModel, _require_stim_dimension,
                     _thread_params)
 from .beyeler2019 import ScoreboardSpatial
 
-#: Peak irradiance (mW/mm^2) of the [Ho2018]_ white-noise stimulation
-#: condition, which the activation law is normalized against.
+#: Peak irradiance (mW/mm^2) of the [Ho2018]_ white-noise condition, which the
+#: activation law normalizes against.
 REF_IRRADIANCE = 9.0
 
-#: ON duration (ms) of the [Ho2018]_ white-noise stimulation condition.
+#: ON duration (ms) of the [Ho2018]_ white-noise condition.
 REF_PULSE_DUR = 4.0
 
-#: Irradiance the model reads its stimulus in.
 _IRRADIANCE = mW / mm ** 2
 
 
 def _radiant_exposure(stim):
-    """Return per-pixel, per-pulse-period drive for an optical schedule.
+    """Return irradiance x ON duration per pixel and pulse period.
 
-    Radiant exposure (irradiance x ON duration) in multiples of the [Ho2018]_
-    reference pulse. Shape is electrodes x pulse periods.
+    In multiples of the [Ho2018]_ reference pulse. Shape is electrodes x
+    pulse periods.
     """
     reference = REF_IRRADIANCE * REF_PULSE_DUR
     drive = stim.irradiance * stim.pulse_dur / reference
@@ -37,8 +36,8 @@ def _radiant_exposure(stim):
 def _cascade(t, tau, n):
     """Return ``(t/tau)**n * exp(-n * (t/tau - 1))``, zero for ``t <= 0``.
 
-    Impulse response of a cascade of ``n`` low-pass filters, normalized to
-    peak at ``t = tau`` with unit amplitude.
+    Impulse response of ``n`` cascaded low-pass filters, peaking at
+    ``t = tau`` with unit amplitude.
     """
     t = np.asarray(t, dtype=np.float64)
     out = np.zeros(t.shape, dtype=np.float64)
@@ -51,9 +50,8 @@ def _cascade(t, tau, n):
 class Ho2018Temporal(TemporalModel):
     r"""Network-mediated temporal response of [Ho2018]_.
 
-    Photovoltaic spike-triggered-average time courses in [Ho2018]_ were
-    summarized by a difference of two cascades of low-pass filters
-    ([Chichilnisky2002]_):
+    [Ho2018]_ summarizes photovoltaic spike-triggered-average time courses as
+    a difference of two low-pass cascades [Chichilnisky2002]_:
 
     .. math::
 
@@ -64,57 +62,51 @@ class Ho2018Temporal(TemporalModel):
             e^{-n\left(t/\tau_2 - 1\right)},
         \qquad t \geq 0.
 
-    Each term peaks at :math:`t = \tau_i` with amplitude :math:`p_i`, so
-    :math:`\tau_1 < \tau_2` gives a biphasic, band-pass response.
+    Each term peaks at :math:`t = \tau_i` with amplitude :math:`p_i`;
+    :math:`\tau_1 < \tau_2` makes the filter biphasic and band-pass.
 
-    Every input sample is one pulse period's radiant-exposure drive and is
-    applied as an impulse at that sample time, so the response to a schedule
-    with drives :math:`d_k` at pulse onsets :math:`t_k` is
+    Each input sample is one pulse period's radiant-exposure drive, applied as
+    an impulse at that sample time. For drives :math:`d_k` at pulse onsets
+    :math:`t_k`,
 
     .. math::
 
         B(t) = \max\left[
             g \sum_k d_k \, h(t - t_k), \; 0 \right],
 
-    where :math:`g` normalizes :math:`h` to unit peak, so one reference pulse
-    (9 mW/mm^2 for 4 ms) produces a peak drive of 1. The response is evaluated
-    in closed form at the requested output times; ``dt`` only fixes the
-    lattice those times must lie on.
+    with :math:`g` normalizing :math:`h` to unit peak, so one reference pulse
+    (9 mW/mm^2 for 4 ms) peaks at a drive of 1. Evaluated in closed form at
+    the requested output times; ``dt`` only fixes the lattice they lie on.
 
-    Half-wave rectification represents the pON pathway: a negative filter
-    excursion is a drop below the spontaneous firing rate, which
-    :py:class:`~pulse2percept.percepts.Percept` brightness cannot express.
+    Rectification models the pON pathway: a negative excursion is a drop below
+    the spontaneous firing rate, which
+    :py:class:`~pulse2percept.percepts.Percept` brightness cannot represent.
 
-    Input is network-response drive, not stimulation: inside a
-    :py:class:`~pulse2percept.models.retina.Ho2018Model` it is the percept
-    :py:class:`~pulse2percept.models.retina.Ho2018Spatial` produces. Used on
-    its own, this model accepts that percept or a dimensionless normalized
-    drive; injected current and raw gray levels are refused, since neither is
-    a radiant exposure.
+    Input is network-response drive, not stimulation. In a
+    :py:class:`~pulse2percept.models.retina.Ho2018Model` that is the percept
+    :py:class:`~pulse2percept.models.retina.Ho2018Spatial` returns; used
+    alone, this model also accepts a dimensionless normalized drive. Injected
+    current and raw gray levels are refused.
 
     .. warning::
 
-        The functional form and the timing landmarks come from [Ho2018]_,
-        the default coefficients do not. [Ho2018]_ publishes no
-        population-average coefficient set, so ``tau1``, ``tau2`` and ``p2``
-        are a pulse2percept summary-matched parameterization: given ``n=6``,
-        ``p1=1`` and zero DC gain (:math:`p_1\tau_1 = p_2\tau_2`, which makes
-        the filter purely transient), they are the unique solution
-        reproducing Table 1 of [Ho2018]_, the per-cell RCS pON population
-        summary: a 50 +/- 3 ms first peak and a 94 +/- 5 ms first zero
-        crossing. Averaged per retina instead, the same paper reports
-        51 +/- 3 ms and 87 +/- 3 ms; either way the 20 Hz white-noise stimulus
-        sampled the time course only every 50 ms, so both landmarks are
-        coarse estimates. They are not fitted coefficients.
+        The functional form and the timing landmarks come from [Ho2018]_, the
+        coefficients do not: [Ho2018]_ publishes none. Given ``n=6``, ``p1=1``
+        and zero DC gain (:math:`p_1\tau_1 = p_2\tau_2`, which makes the
+        filter purely transient), ``tau1``, ``tau2`` and ``p2`` are the unique
+        solution reproducing Table 1 of [Ho2018]_ -- the per-cell RCS pON
+        summary of a 50 +/- 3 ms first peak and a 94 +/- 5 ms first zero
+        crossing. Averaged per retina the same paper reports 51 +/- 3 ms and
+        87 +/- 3 ms, and the 20 Hz white-noise stimulus sampled the time
+        course only every 50 ms, so both landmarks are coarse.
 
     .. versionadded:: 0.11.0
 
     Parameters
     ----------
     n : float, optional
-        Order of both low-pass cascades. The default 6 is a pulse2percept
-        modeling choice; other ``n >= 4`` values can reproduce the two timing
-        landmarks.
+        Order of both cascades. The default 6 is a pulse2percept choice; any
+        ``n >= 4`` can reproduce the two landmarks.
     tau1 : float or Quantity, optional
         Time constant (ms) of the fast, positive cascade.
     tau2 : float or Quantity, optional
@@ -124,8 +116,7 @@ class Ho2018Temporal(TemporalModel):
     p2 : float, optional
         Peak amplitude of the slow cascade.
     dt : float or Quantity, optional
-        Output time lattice (ms). The response itself is evaluated in closed
-        form, not integrated.
+        Lattice (ms) output times must be multiples of.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
     reduce : {'peak', 'last'}, optional
@@ -139,11 +130,10 @@ class Ho2018Temporal(TemporalModel):
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
-    #: Input is normalized network drive, not injected current.
+    #: Normalized network drive, not injected current.
     stimulus_unit = dimensionless
 
-    #: Brightness is driven by light, which the encoders emit as positive
-    #: irradiance.
+    #: Radiant exposure is nonnegative.
     _drive_sign = 1
 
     def __init__(self, *, n=6, tau1=51.3, tau2=137.1, p1=1.0, p2=0.3743,
@@ -153,7 +143,7 @@ class Ho2018Temporal(TemporalModel):
                          thresh_percept=thresh_percept, reduce=reduce,
                          verbose=verbose,
                          **_thread_params(n_threads, n_jobs))
-        # Peak-normalization factor; `_build` recomputes it.
+        # Peak normalization; `_build` sets it from the coefficients.
         self._gain = 1.0
 
     def get_default_params(self):
@@ -171,8 +161,6 @@ class Ho2018Temporal(TemporalModel):
             if getattr(self, name) <= 0:
                 raise ValueError(f'"{name}" must be positive, not '
                                  f'{getattr(self, name)}.')
-        # Peak of the impulse response, so that one reference pulse produces a
-        # peak drive of 1 whatever the coefficients are:
         t = np.arange(0, 10 * max(self.tau1, self.tau2), self.dt)
         peak = self.impulse_response(t).max()
         if not np.isfinite(peak) or peak <= 0:
@@ -199,8 +187,7 @@ class Ho2018Temporal(TemporalModel):
         drive = np.asarray(self._stim_values(stim),
                            dtype=np.float64).reshape((-1, t_pulse.size))
         t_out = np.asarray(t_percept, dtype=np.float64)
-        # One kernel column per output time; the same for every pixel, so the
-        # spatial dimension only enters the matrix product.
+        # The kernel does not depend on space, so one product covers all of it.
         kernel = self._gain * self.impulse_response(
             t_out[np.newaxis, :] - t_pulse[:, np.newaxis])
         resp = np.maximum(drive @ kernel, 0.0)
@@ -211,14 +198,13 @@ class Ho2018Temporal(TemporalModel):
 class Ho2018Spatial(ScoreboardSpatial):
     r"""Network-mediated spatial response of [Ho2018]_ (spatial module only).
 
-    Sums a circular Gaussian per illuminated pixel, as in
-    :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`, but drives it
-    with the optical schedule a photovoltaic encoder produced rather than with
-    normalized time-averaged drive. Use
-    :py:class:`~pulse2percept.models.retina.Ho2018Model` for a standalone
+    Sums a circular Gaussian per illuminated pixel like
+    :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`, but driven by
+    the encoder's optical schedule rather than by normalized time-averaged
+    drive. See :py:class:`~pulse2percept.models.retina.Ho2018Model` for the
     spatiotemporal model.
 
-    Each pulse period is reduced to a radiant-exposure drive per pixel,
+    Each pulse period reduces to a radiant-exposure drive per pixel,
 
     .. math::
 
@@ -226,27 +212,26 @@ class Ho2018Spatial(ScoreboardSpatial):
         \qquad E_\mathrm{ref} = 9\ \mathrm{mW/mm}^2, \;
         T_\mathrm{ref} = 4\ \mathrm{ms},
 
-    where :math:`E_e` is peak irradiance and :math:`T_e` the ON duration of
-    pixel :math:`e` in that period, and the Ho reference pulse has
-    :math:`d_e = 1`. Those drives are then summed over pixels,
+    for peak irradiance :math:`E_e` and ON duration :math:`T_e` of pixel
+    :math:`e` in that period, so the [Ho2018]_ reference pulse has
+    :math:`d_e = 1`. Drives are summed over pixels,
 
     .. math::
 
         I(x, y) = \sum_{e \in E} d_e
-        \exp\left(-\frac{(x-x_e)^2 + (y-y_e)^2}{2\rho^2}\right).
+        \exp\left(-\frac{(x-x_e)^2 + (y-y_e)^2}{2\rho^2}\right),
 
-    The result is one drive map per pulse period, on the schedule's own
-    pulse-period clock. The waveform behind the schedule is never rendered.
+    giving one drive map per pulse period, on the schedule's pulse-period
+    clock. The waveform behind the schedule is never rendered.
 
     .. warning::
 
-        The linear radiant-exposure law is a pulse2percept baseline
-        assumption, not a dose-response function reported by [Ho2018]_. It
-        reads no wavelength and no pixel design, so two devices delivering
-        the same radiant exposure drive the retina identically. Irradiance,
-        pulse duration, repetition rate and wavelength all stay available
-        separately on the stimulus so their effects can be fitted
-        independently later.
+        The linear radiant-exposure law is a pulse2percept assumption, not a
+        dose-response function reported by [Ho2018]_. It reads no wavelength
+        and no pixel design, so two devices delivering the same radiant
+        exposure drive the retina identically. Irradiance, pulse duration,
+        repetition rate and wavelength remain separately available on the
+        stimulus.
 
     .. versionadded:: 0.11.0
 
@@ -257,9 +242,9 @@ class Ho2018Spatial(ScoreboardSpatial):
         converts images and videos into an optical schedule.
     rho : float or Quantity, optional
         Gaussian spatial decay constant in microns. The default 97.5 um is one
-        standard deviation of the 195 um pON receptive-field diameter [Ho2018]_
-        reports for degenerate (RCS) rat retina, which is the diameter of the
-        fitted 1-sigma contour.
+        standard deviation of the 195 um pON receptive-field diameter
+        [Ho2018]_ reports for degenerate (RCS) rat retina, that diameter being
+        the 1-sigma contour of the fitted Gaussian.
 
         .. important::
 
@@ -279,16 +264,16 @@ class Ho2018Spatial(ScoreboardSpatial):
     thresh_percept : float, optional
         Drive values below this threshold are set to zero.
         :py:class:`~pulse2percept.models.retina.Ho2018Model` leaves this at 0
-        and thresholds the percept instead, since drive below threshold can
-        still sum over pulses.
+        and thresholds the percept instead, since subthreshold drive still
+        sums over pulses.
     min_current_spread : float, optional
         Fraction of peak Gaussian spread below which a pixel may be skipped at
         a grid point. Set to 0 to disable the cutoff.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates.
     n_gray : int or None, optional
-        Number of gray levels in the returned drive map. Quantizing the drive
-        a temporal stage integrates changes the response, so
+        Number of gray levels in the returned drive map. Quantizing drive
+        changes what a temporal stage integrates, so
         :py:class:`~pulse2percept.models.retina.Ho2018Model` does not expose
         it.
     implant_position : (x, y) or Quantity, optional
@@ -309,15 +294,14 @@ class Ho2018Spatial(ScoreboardSpatial):
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
-    #: Irradiance, not current: this model reads an optical schedule.
+    #: An optical schedule, not injected current.
     stimulus_unit = _IRRADIANCE
 
-    #: A normalized drive has already thrown away irradiance and ON duration,
-    #: which is exactly what the activation law needs.
+    #: A normalized drive no longer carries the irradiance and ON duration the
+    #: activation law requires.
     extra_stimulus_units = ()
 
-    #: The activation law reads peak irradiance and per-pixel ON duration off
-    #: the schedule, so it must not be reduced to a spatial view first.
+    #: The activation law reads irradiance and ON duration off the schedule.
     _needs_structured_stim = True
 
     def __init__(self, implant, *, rho=97.5, xrange=(-15, 15),
@@ -354,7 +338,7 @@ class Ho2018Spatial(ScoreboardSpatial):
         """Predict one drive map per pulse period.
 
         Output times are the schedule's pulse onsets. Explicit ``t_percept``
-        values are served by zero-order hold, since drive is constant within a
+        values are served by zero-order hold, drive being constant within a
         pulse period.
         """
         if not self.is_built:
@@ -380,8 +364,7 @@ class Ho2018Spatial(ScoreboardSpatial):
             time = np.sort(np.array([t_percept], dtype=np.float64).ravel())
             at = np.searchsorted(t_pulse, time, side='right') - 1
             resp = resp[..., np.clip(at, 0, t_pulse.size - 1)]
-        # The pulse-period clock is what a temporal stage should report on;
-        # `_frame_clock` picks it up from here.
+        # `_frame_clock` reads this to put a temporal stage on the pulse clock.
         return Percept(resp, space=self.grid, time=time,
                        time_unit=self.time_unit, n_gray=self.n_gray,
                        metadata={'stim': stim,
@@ -392,11 +375,10 @@ class Ho2018Spatial(ScoreboardSpatial):
 class Ho2018Model(Model):
     """Network-mediated photovoltaic response model of [Ho2018]_.
 
-    Pairs :py:class:`~pulse2percept.models.retina.Ho2018Spatial` with
-    :py:class:`~pulse2percept.models.retina.Ho2018Temporal`: an optical
-    schedule from a photovoltaic encoder becomes a per-pulse-period drive map,
-    which the temporal filter turns into a transient, spatially localized
-    percept.
+    :py:class:`~pulse2percept.models.retina.Ho2018Spatial` turns an encoder's
+    optical schedule into one drive map per pulse period;
+    :py:class:`~pulse2percept.models.retina.Ho2018Temporal` filters those into
+    a transient, spatially localized percept.
 
     .. code-block:: python
 
@@ -405,23 +387,20 @@ class Ho2018Model(Model):
                                               yrange=(-3, 3), step=0.05)
         percept = model.predict_percept(image)
 
-    Unlike
-    :py:class:`~pulse2percept.models.retina.ScoreboardModel` driven by a
-    :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder`, which visualizes
-    normalized optical drive, this model predicts a phenomenological
-    network-mediated retinal response.
+    :py:class:`~pulse2percept.models.retina.ScoreboardModel` on the same
+    encoder visualizes normalized optical drive; this model predicts a
+    phenomenological retinal response.
 
     .. warning::
 
-        This is a structural and timing-level reconstruction of [Ho2018]_,
-        not a validated model of PRIMA percepts. It models the pON center
-        response of degenerate (RCS) rat retina only: no antagonistic
-        surround, no pOFF pathway, a linear radiant-exposure activation law
-        with no fitted irradiance, pulse-duration or frequency nonlinearity,
-        no photovoltaic circuit or electric-field model, no electrode-retina
-        distance effect, no wavelength or device-specific conversion
-        efficiency, and no calibration to human brightness or contrast
-        perception.
+        This reconstructs the structure and timing of [Ho2018]_, not validated
+        PRIMA percepts. It covers the pON center response of degenerate (RCS)
+        rat retina only: no antagonistic surround, no pOFF pathway, a linear
+        radiant-exposure activation law with no fitted irradiance,
+        pulse-duration or frequency nonlinearity, no photovoltaic circuit or
+        electric-field model, no electrode-retina distance effect, no
+        wavelength or device-specific conversion efficiency, and no
+        calibration to human brightness or contrast perception.
 
     .. versionadded:: 0.11.0
 
@@ -462,14 +441,14 @@ class Ho2018Model(Model):
     p1, p2 : float, optional
         Peak amplitudes of the fast and slow cascade.
     dt : float or Quantity, optional
-        Output time lattice (ms).
+        Lattice (ms) output times must be multiples of.
     reduce : {'peak', 'last'}, optional
         How automatically chosen output points summarize the preceding
         interval.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero. Applied to the
-        returned percept only; the spatial stage passes its drive on
-        unthresholded so that weak drive can still sum over pulses.
+        returned percept only; the spatial stage passes drive on
+        unthresholded.
     verbose : bool, optional
         Whether to print status messages.
     n_threads : int, optional
@@ -486,9 +465,8 @@ class Ho2018Model(Model):
                  n=6, tau1=51.3, tau2=137.1, p1=1.0, p2=0.3743, dt=0.005,
                  reduce='peak', thresh_percept=0, verbose=True,
                  n_threads=None, n_jobs=None):
-        # The spatial stage hands on retinal drive, not brightness: quantizing
-        # or thresholding it there would change what the filter integrates,
-        # so both belong to the percept the temporal stage returns.
+        # The spatial stage passes on drive, not brightness: quantizing or
+        # thresholding it there would change what the filter integrates.
         super().__init__(
             spatial=Ho2018Spatial(
                 implant, rho=rho, xrange=xrange, yrange=yrange, step=step,

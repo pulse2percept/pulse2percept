@@ -148,13 +148,10 @@ Models
   
 * New :py:class:`~pulse2percept.models.retina.Ho2018Model` predicts a
   spatiotemporal, network-mediated response to photovoltaic subretinal
-  stimulation. It reads peak irradiance, per-pixel ON duration and pulse
-  timing off the optical schedule an encoder produced, rather than the
-  normalized drive Scoreboard visualizes. Anchored to [Ho2018]_ degenerate
-  rat retina in structure and timing only: pON center, no surround, no pOFF
-  pathway, a linear radiant-exposure activation law, no wavelength or
-  device-specific conversion efficiency, and no clinical calibration
-  (:pull:`892`).
+  stimulation. Anchored to [Ho2018]_ degenerate rat retina in
+  structure and timing only: pON center, no surround, no pOFF pathway, a
+  linear radiant-exposure activation law, no wavelength or device-specific
+  conversion efficiency, no clinical calibration (:pull:`892`).
 
 * New :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` and
   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` apply the

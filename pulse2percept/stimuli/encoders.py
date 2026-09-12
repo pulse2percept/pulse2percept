@@ -1271,11 +1271,7 @@ class _OpticalStimulus(Stimulus):
 
     @property
     def pulse_time(self):
-        """Onset time (ms) of every pulse period, one per ``pulse_dur`` column
-
-        The pulse-period clock a model reads the schedule on, without
-        rendering the waveform behind it.
-        """
+        """Onset (ms) of every pulse period, one per ``pulse_dur`` column"""
         return self._onsets * DT
 
     @property

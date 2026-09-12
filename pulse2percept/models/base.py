@@ -939,8 +939,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     n_jobs = _n_jobs_alias()
 
     #: Whether this model reads an encoded stimulus' schedule (pulse timing,
-    #: irradiance, durations) rather than the delivered waveform. Composite
-    #: models hand such a spatial stage the structured stimulus itself.
+    #: irradiance, durations) instead of the delivered waveform.
     _needs_structured_stim = False
 
     def __init__(self, implant, **params):
@@ -1817,9 +1816,8 @@ class Model(Frozen, PrettyPrint):
 
         if self.has_space and self.has_time:
             combine = getattr(self.spatial, '_combine_temporal', None)
-            # A spatial stage that reads the encoded schedule needs the
-            # structured stimulus; any other one gets the delivered waveform,
-            # which the temporal stage then integrates.
+            # Schedule-reading spatial stages need the structured stimulus;
+            # the rest integrate the delivered waveform downstream.
             resp = self.spatial._predict_prepared(
                 stim if self.spatial._needs_structured_stim
                 else _delivered(stim),

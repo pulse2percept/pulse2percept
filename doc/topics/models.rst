@@ -107,45 +107,41 @@ should be chosen when those assumptions are relevant.
 Photovoltaic stimulation
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-Photovoltaic subretinal arrays are driven by pulsed near-infrared light, which
 :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` and
-:py:class:`~pulse2percept.stimuli.PRIMAEncoder` produce from an image or a
-video. Two models consume that stimulation, and they answer different
-questions:
+:py:class:`~pulse2percept.stimuli.PRIMAEncoder` turn an image or video into
+the pulsed near-infrared schedule that drives a photovoltaic subretinal array.
+Two models consume it, and they answer different questions:
 
 :py:class:`~pulse2percept.models.retina.ScoreboardModel`
-    Visualizes normalized optical drive: where the light lands and how bright
-    it is relative to a fully lit pixel. No retinal response is modeled.
+    Visualizes normalized optical drive: where the light lands, relative to a
+    fully lit pixel. No retinal response.
 
 :py:class:`~pulse2percept.models.retina.Ho2018Model`
     Predicts a phenomenological network-mediated retinal response. Each pulse
     period's radiant exposure (irradiance x ON duration) drives a Gaussian of
-    ``rho=97.5`` um -- one standard deviation of the 195 um pON receptive
-    field [Ho2018]_ reports for degenerate rat retina -- and the resulting
-    per-pulse drive map is filtered by the difference of low-pass cascades
-    [Ho2018]_ used to summarize photovoltaic spike-triggered averages. The
-    response is transient: a static image at a fixed pulse rate produces an
-    onset response that then adapts.
+    ``rho=97.5`` um, one standard deviation of the 195 um pON receptive field
+    [Ho2018]_ reports for degenerate rat retina. A difference of low-pass
+    cascades then filters the per-pulse drive maps, so the response is
+    transient: a static image at a fixed pulse rate gives an onset response
+    that adapts.
 
 .. warning::
 
     :py:class:`~pulse2percept.models.retina.Ho2018Model` reconstructs the
-    structure and timing of [Ho2018]_, not validated PRIMA percepts. It models
+    structure and timing of [Ho2018]_, not validated PRIMA percepts:
 
-    *  the pON center response of degenerate (RCS) rat retina only, with no
+    *  pON center response of degenerate (RCS) rat retina only, with no
        antagonistic surround and no pOFF pathway;
-    *  a linear radiant-exposure activation law normalized to Ho's 9 mW/mm^2,
-       4 ms reference pulse, with no fitted irradiance, pulse-duration or
-       frequency nonlinearity;
+    *  a linear radiant-exposure activation law normalized to the 9 mW/mm^2,
+       4 ms reference pulse of [Ho2018]_, with no fitted irradiance,
+       pulse-duration or frequency nonlinearity;
     *  no photovoltaic circuit or electric-field model, no electrode-retina
        distance effect, and no wavelength or device-specific conversion
-       efficiency -- an 880 nm PRIMA pixel and a 915 nm pixel of a different
-       design produce the same response to the same radiant exposure.
-
-    Its default temporal coefficients reproduce the Table 1 population timing
-    landmarks of [Ho2018]_ but are not coefficients that paper publishes, and
-    nothing in the model is calibrated to human brightness or contrast
-    perception.
+       efficiency, so an 880 nm PRIMA pixel and a 915 nm pixel of another
+       design respond identically to the same radiant exposure;
+    *  default temporal coefficients matched to the Table 1 timing landmarks
+       of [Ho2018]_ rather than published by it, and no calibration to human
+       brightness or contrast perception.
 
 Cortical stimulation
 ~~~~~~~~~~~~~~~~~~~~

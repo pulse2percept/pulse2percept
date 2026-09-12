@@ -1,9 +1,4 @@
-"""Scientific regression tests for the [Ho2018]_ photovoltaic model (#892)
-
-The model reads an optical schedule -- peak irradiance, per-pixel ON duration
-and pulse-period timing -- rather than the normalized time-averaged drive a
-spatial-only model sees, and never renders the waveform behind it.
-"""
+"""Tests for the [Ho2018]_ photovoltaic model"""
 import inspect
 import warnings
 
@@ -21,7 +16,8 @@ from pulse2percept.models.retina import (Ho2018Model, Ho2018Spatial,
 from pulse2percept.models.retina.ho2018 import _radiant_exposure
 from pulse2percept.stimuli import (ImageStimulus, PhotovoltaicEncoder,
                                    PRIMAEncoder, Stimulus, VideoStimulus)
-from pulse2percept.stimuli.encoders import _OpticalStimulus
+from pulse2percept.stimuli.encoders import (_NormalizedStimulus,
+                                            _OpticalStimulus)
 from pulse2percept.topography.retina import Watson2014Map
 from pulse2percept.units import DimensionMismatchError
 from pulse2percept.vision import Scene
@@ -31,7 +27,7 @@ REF = {'irradiance': 9, 'pulse_dur': 4, 'freq': 20, 'wavelength': 880}
 
 
 class TinyArray(_PhotovoltaicRetinalImplant):
-    """A 2x2 photovoltaic array at 200 um pitch, wider than the default rho"""
+    """A 2x2 photovoltaic array whose 200 um pitch exceeds the default rho"""
     __slots__ = ()
 
     placement = 'subretinal'
@@ -58,7 +54,7 @@ def spot(n=4):
 
 
 def tiny_model(implant=None, **params):
-    """A Ho model on a small grid, without the pitch/rho chatter."""
+    """A Ho model on a small grid."""
     kwargs = {'xrange': (-2, 2), 'yrange': (-2, 2), 'step': 0.25,
               'verbose': False, **params}
     with warnings.catch_warnings():
@@ -79,7 +75,6 @@ def test_accepts_an_optical_schedule():
 
 
 def test_rejects_current():
-    # The model reads irradiance; injected current says nothing about it.
     array = ElectrodeGrid((2, 2), 200, electrode_type=PointSource)
     model = tiny_model(RetinalImplant(array))
     with pytest.raises(DimensionMismatchError) as excinfo:
@@ -88,10 +83,8 @@ def test_rejects_current():
 
 
 def test_rejects_gray_levels():
-    # A dimensionless normalized drive has already collapsed irradiance and
-    # duty cycle into the one number the activation law must not be handed.
-    # Checked on the prepared stimulus: handed the drive as a *source*, the
-    # implant's encoder would read it as a picture and encode it.
+    # Checked on the prepared stimulus: as a *source*, the encoder would
+    # read the drive as a picture and re-encode it.
     implant = tiny_implant()
     drive = implant.prepare_stim(spot())._spatial_view()
     npt.assert_equal(drive._is_normalized_drive, True)
@@ -111,8 +104,6 @@ def test_rejects_bare_irradiance():
 
 
 def test_temporal_stage_rejects_current():
-    # `Ho2018Temporal` reads network drive, not stimulation: a bare Stimulus
-    # is microamps, and reading it as radiant exposure would be nonsense.
     temporal = Ho2018Temporal(verbose=False)
     npt.assert_equal(temporal.stimulus_unit.dimension.is_dimensionless, True)
     current = Stimulus(np.array([[20.0, 0.0]]), electrodes=['A1'],
@@ -120,6 +111,26 @@ def test_temporal_stage_rejects_current():
     with pytest.raises(DimensionMismatchError) as excinfo:
         temporal.predict_percept(current)
     npt.assert_equal('dimensionless' in str(excinfo.value), True)
+
+
+def test_temporal_stage_rejects_gray_levels():
+    # Dimensionless, so the unit alone does not disqualify it. Time-varying
+    # on purpose: a still image would be refused for lacking a time axis.
+    temporal = Ho2018Temporal(verbose=False)
+    video = VideoStimulus(np.zeros((2, 2, 4)), time=np.arange(4) * 50.0)
+    npt.assert_equal(video.unit.dimension.is_dimensionless, True)
+    npt.assert_equal(video._is_normalized_drive, False)
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        temporal.predict_percept(video, t_percept=np.arange(4) * 50.0)
+    npt.assert_equal('gray levels' in str(excinfo.value), True)
+
+
+def test_temporal_stage_takes_a_normalized_drive():
+    drive = _NormalizedStimulus(np.ones((2, 4)), electrodes=['a', 'b'],
+                                time=np.arange(4) * 50.0)
+    percept = Ho2018Temporal(verbose=False).predict_percept(
+        drive, t_percept=np.arange(4) * 50.0)
+    npt.assert_equal(np.any(percept.data > 0), True)
 
 
 def test_temporal_stage_takes_the_spatial_percept():
@@ -159,8 +170,6 @@ def test_does_not_render_the_waveform(monkeypatch):
 
 
 def test_granley_still_gets_the_structured_stimulus():
-    # The routing flag replaced `_combine_temporal` as the switch; Granley
-    # opts into it and its behavior is unchanged.
     from pulse2percept.models.retina.granley2021 import _BiphasicSpatialMixin
     npt.assert_equal(_BiphasicSpatialMixin._needs_structured_stim, True)
     npt.assert_equal(Ho2018Spatial._needs_structured_stim, True)
@@ -183,7 +192,7 @@ def test_activation_follows_radiant_exposure(optics, factor):
 
 def test_uses_the_schedule_not_the_spatial_view():
     # `_spatial_view` normalizes irradiance x duty cycle away, so doubling
-    # both irradiance and pulse duration would leave it unchanged.
+    # both leaves it unchanged.
     implant = tiny_implant()
     brighter = tiny_implant(irradiance=18, pulse_dur=8)
     npt.assert_almost_equal(
@@ -195,7 +204,6 @@ def test_uses_the_schedule_not_the_spatial_view():
 
 
 def test_reference_condition_gives_unit_drive():
-    # 9 mW/mm^2 for 4 ms is the Ho white-noise condition.
     stim = tiny_implant().prepare_stim(spot())
     npt.assert_almost_equal(_radiant_exposure(stim).max(), 1.0)
     npt.assert_almost_equal(_radiant_exposure(stim).min(), 0.0)
@@ -206,15 +214,15 @@ def test_reference_condition_gives_unit_drive():
 # -- Spatial response -------------------------------------------------------
 
 def test_default_rho_is_one_sigma_of_the_ho_receptive_field():
-    # [Ho2018]_ reports a 195 um pON diameter as the diameter of the fitted
-    # 1-sigma contour, so sigma is half of it.
+    # The reported 195 um pON diameter is that of the fitted 1-sigma
+    # contour.
     npt.assert_almost_equal(Ho2018Spatial(tiny_implant()).rho, 97.5)
     npt.assert_almost_equal(Ho2018Model(tiny_implant()).spatial.rho, 97.5)
 
 
 def test_spatial_profile_is_a_gaussian_of_rho():
-    # Read the width off the kernel directly: `Percept.measure` reports an
-    # FWHM-like extent, which is not how Ho defines a receptive field.
+    # Read the width off the kernel: `Percept.measure` reports an FWHM-like
+    # extent, which is not how [Ho2018]_ defines a receptive field.
     implant = TinyArray(shape=(1, 1),
                         encoder=PhotovoltaicEncoder(**REF))
     rho = 97.5
@@ -242,7 +250,7 @@ def test_warns_about_ignored_electrode_distance():
 # -- Temporal response ------------------------------------------------------
 
 def kernel(temporal, dt=0.05, stop=400):
-    """Sample the normalized impulse response on a fine grid."""
+    """Return sample times (ms) and the normalized impulse response."""
     t = np.arange(0, stop, dt)
     return t, temporal.impulse_response(t) * temporal._gain
 
@@ -261,8 +269,8 @@ def test_impulse_response_is_biphasic_and_dc_free():
     temporal = Ho2018Temporal(verbose=False).build()
     t, h = kernel(temporal, stop=2000)
     npt.assert_array_less(h.min(), -0.1)
-    # Zero DC gain is what makes the filter purely transient: what is left
-    # is rounding in the coefficients and the truncated tail.
+    # Zero DC gain makes the filter purely transient; the residual is
+    # coefficient rounding plus the truncated tail.
     npt.assert_array_less(abs(np.trapezoid(h, t)),
                           0.01 * np.trapezoid(abs(h), t))
 
@@ -272,15 +280,12 @@ def test_response_adapts_to_a_sustained_pulse_train():
     percept = model.predict_percept(spot())
     peaks = percept.data.max(axis=(0, 1))
     npt.assert_equal(peaks.size > 4, True)
-    # Transient: the response rises, then decays well below its own peak
-    # even though every pulse period delivers the same drive.
+    # Every pulse period delivers the same drive, yet the response decays.
     npt.assert_array_less(peaks[-1], 0.2 * peaks.max())
     npt.assert_array_less(0, peaks.max())
 
 
 def test_response_is_never_negative():
-    # The pON pathway is half-wave rectified; the filter's negative lobe is a
-    # drop below the spontaneous rate, not negative brightness.
     percept = tiny_model().predict_percept(spot())
     npt.assert_equal(np.all(percept.data >= 0), True)
 
@@ -288,8 +293,7 @@ def test_response_is_never_negative():
 # -- Temporal input semantics -----------------------------------------------
 
 def test_static_image_produces_a_pulse_train_response():
-    # A static image is still delivered as repeated optical pulses, so it must
-    # not collapse into one timeless value.
+    # A static image is still delivered as repeated optical pulses.
     model = tiny_model()
     percept = model.predict_percept(spot())
     period = 1e3 / REF['freq']
@@ -311,12 +315,10 @@ def test_video_produces_a_changing_response():
     npt.assert_array_less(top_left[-1], bottom_right[-1])
 
 
-# -- What the wrapper does and does not forward -----------------------------
+# -- What the wrapper forwards ----------------------------------------------
 
 def test_model_does_not_quantize_the_retinal_drive():
-    # `n_gray` would quantize the drive *before* temporal filtering, which is
-    # not what "gray levels in the returned percept" means. The wrapper does
-    # not offer it; the spatial stage keeps it for standalone use.
+    # `n_gray` would quantize drive before temporal filtering.
     npt.assert_equal('n_gray' in inspect.signature(Ho2018Model).parameters,
                      False)
     npt.assert_equal('n_gray' in inspect.signature(Ho2018Spatial).parameters,
@@ -325,8 +327,7 @@ def test_model_does_not_quantize_the_retinal_drive():
 
 
 def test_threshold_applies_to_brightness_only():
-    # Thresholding drive before temporal summation would delete weak drive
-    # that repeated pulses still add up to.
+    # Thresholding drive first would delete what repeated pulses sum to.
     model = tiny_model(thresh_percept=0.5)
     npt.assert_almost_equal(model.spatial.thresh_percept, 0)
     npt.assert_almost_equal(model.temporal.thresh_percept, 0.5)
