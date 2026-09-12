@@ -48,8 +48,9 @@ Highlights
   :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
   residual vision and retinal prostheses, and
   :py:class:`~pulse2percept.vision.BinocularScene` for the two eyes' views
-  side by side (:pull:`854`, :pull:`871`, :pull:`883`, :pull:`890`,
-  :pull:`899`).
+  side by side. Image, simulation and display resolution are independent
+  (:pull:`854`, :pull:`871`, :pull:`883`, :pull:`890`, :pull:`899`,
+  :pull:`901`).
 
 * New photovoltaic stimulation pipeline for the PRIMA-style arrays, from image
   encoding to irradiance-based model input (:pull:`868`, :pull:`891`).
@@ -139,6 +140,8 @@ Models
   be specified in dva for single-region 2D maps (:pull:`862`, :pull:`879`,
   :pull:`884`). ``implant.plot()`` therefore shows device geometry, whereas
   ``model.plot(show_implant=True)`` shows the placed implant.
+  ``predict_percept`` always returns perceived brightness on the model grid,
+  a :py:class:`~pulse2percept.vision.Scene` included (:pull:`901`).
   
 * New :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` and
   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` apply the
@@ -200,7 +203,7 @@ Scene and plotting
   side-by-side stereo image and keep the two monocular views independent while
   plotting them on a common angular scale
   (:pull:`871`, :pull:`884`, :pull:`890`, :pull:`893`, :pull:`899`,
-  :pull:`900`).
+  :pull:`900`, :pull:`901`).
 
 * New :py:mod:`pulse2percept.plotting` module provides combined
   stimulus/percept figures and animations. :py:mod:`pulse2percept.viz` is

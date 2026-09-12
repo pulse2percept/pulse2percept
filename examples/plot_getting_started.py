@@ -229,12 +229,18 @@ model = p2p.models.retina.ScoreboardModel(
     step=0.1,
 )
 
-percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=2)
-percept.plot()
+###############################################################################
+# The model predicts on its own grid; drawing it back into the scene is a
+# separate step that keeps each layer at its own resolution:
+
+percept = model.predict_percept(scene, gaze=(0, 0) * dva)
+scene.plot(percept=percept, gaze=(0, 0) * dva, vmax=2)
 plt.title('Residual vision with a PRIMA percept in the scotoma')
 plt.show()
 
 ###############################################################################
+# ``scene.render(...)`` gives the same view as one dense RGB percept.
+#
 # A :class:`~pulse2percept.vision.Scene` can also represent gaze, videos,
 # backgrounds, and other residual-vision conditions.
 # The :ref:`example gallery <sphx_glr_examples>` contains complete simulations.

@@ -1732,8 +1732,7 @@ class Model(Frozen, PrettyPrint):
         if self.has_time and not self.temporal.is_built:
             self.temporal.build()
 
-    def predict_percept(self, source, t_percept=None, gaze=None, vmax=None,
-                        vmin=0):
+    def predict_percept(self, source, t_percept=None, gaze=None):
         """Predict a percept.
 
         Parameters
@@ -1747,47 +1746,38 @@ class Model(Frozen, PrettyPrint):
         gaze : (x, y) or (n_frames, 2), optional
             Scene location falling on the fovea, in degrees of visual angle,
             so that ``scene = eye-centered visual field + gaze``. Requires
-            ``source`` to be a scene. Gaze always moves the percept across
-            the scene; it moves the scene across the electrodes too unless the
-            implant's
+            ``source`` to be a scene. Gaze decides which part of the scene
+            reaches the electrodes unless the implant's
             :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is
-            ``'head'``.
-        vmax : float, optional
-            Percept brightness mapped to white when composing a scene with a
-            scotoma. Required for scotoma composition.
-        vmin : float, optional
-            Percept brightness mapped to black for scotoma composition.
+            ``'head'``; the percept itself stays on the model's eye-centered
+            grid either way.
 
         Returns
         -------
         percept : :py:class:`~pulse2percept.percepts.Percept` or None
-            Brightness percept for ordinary prediction. For a scene with a scotoma,
-            returns an RGB percept on the scene pixel grid.
+            Perceived brightness on the model's spatial grid, for a scene as
+            for any other source. A scene's scotoma describes residual
+            *native* vision and does not enter the model response; draw the
+            two together with :py:meth:`~pulse2percept.vision.Scene.plot` or
+            :py:meth:`~pulse2percept.vision.Scene.render`.
 
         .. versionchanged:: 0.11.0
-            ``source`` is now the presented stimulus or scene rather than an implant
-            carrying a stimulus.
+            ``source`` is now the presented stimulus or scene rather than an
+            implant carrying a stimulus. Scene prediction returns the model
+            percept; ``vmin`` and ``vmax`` moved to ``Scene.plot`` and
+            ``Scene.render``.
         """
         # Scene sampling depends on the current spatial build:
         self._build_stale()
         if not isinstance(source, Scene):
-            for name, value in (('gaze', gaze), ('vmax', vmax)):
-                if value is not None:
-                    raise ValueError(
-                        f"'{name}' says where an implanted eye is looking in "
-                        f"a scene, and this prediction is not about one. Pass "
-                        f"a Scene to place one.")
-            if vmin != 0:
-                raise ValueError("'vmin' maps a percept onto a display, which "
-                                 "only happens for a scene with a scotoma.")
+            if gaze is not None:
+                raise ValueError(
+                    "'gaze' says where an implanted eye is looking in a "
+                    "scene, and this prediction is not about one. Pass a "
+                    "Scene to place one.")
             return self._predict_percept(self._prepared(source), t_percept)
-        resp = self._predict_percept(_scene_stim(self, source, gaze),
+        return self._predict_percept(_scene_stim(self, source, gaze),
                                      t_percept)
-        if source.scotoma is None or resp is None:
-            # Nothing is lost, so there is nothing to compose the percept
-            # into: what the implant produces is the whole answer.
-            return resp
-        return source._compose(resp, vmax, vmin=vmin, gaze=gaze)
 
     def _prepared(self, source):
         """Prepare a source for the bound implant.

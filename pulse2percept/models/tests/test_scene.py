@@ -89,6 +89,16 @@ def model_for(implant, **kwargs):
     return ScoreboardModel(implant=implant, **params).build()
 
 
+def composed(model, scene, vmax, gaze=None, **kwargs):
+    """What the field shows: the model percept rendered into the scene
+
+    Prediction stops at the model grid, so putting the percept back in the
+    scene is a separate, explicit step.
+    """
+    percept = model.predict_percept(scene, gaze=gaze)
+    return scene.render(percept=percept, gaze=gaze, vmax=vmax, **kwargs).data
+
+
 def seen_by(model, scene, gaze=None):
     """The gray level each electrode was handed, in electrode order
 
@@ -180,15 +190,19 @@ def test_a_camera_driven_phosphene_still_travels_with_the_eye():
     model = model_for(implant_at(*Curcio1990Map().dva_to_ret(2.0, 0.0),
                                  input_frame='head'),
                       rho=100, xrange=(-4, 4), yrange=(-4, 4), step=0.5)
-    fixating = model.predict_percept(scene, vmax=2).data[..., 0]
-    shifted = model.predict_percept(scene, gaze=(5, 0) * dva,
-                                    vmax=2).data[..., 0]
+    fixating = composed(model, scene, vmax=2)[..., 0]
+    shifted = composed(model, scene, vmax=2, gaze=(5, 0) * dva)[..., 0]
     # Unchanged input, so the phosphene is the same one, five degrees right:
     npt.assert_almost_equal(shifted[HALF, HALF + 5 + 2],
                             fixating[HALF, HALF + 2], decimal=5)
-    npt.assert_almost_equal(model.predict_percept(scene, gaze=(0, 0),
-                                                  vmax=2).data[..., 0],
+    npt.assert_almost_equal(composed(model, scene, vmax=2, gaze=(0, 0))[...,
+                                                                       0],
                             fixating, decimal=6)
+    # The model response itself never moved: a head-fixed camera hands the
+    # electrodes the same input whatever the eye does.
+    npt.assert_array_equal(
+        model.predict_percept(scene, gaze=(5, 0) * dva).data,
+        model.predict_percept(scene).data)
 
 
 def test_y_orientation_survives_the_map():
@@ -277,13 +291,13 @@ def test_preprocessing_does_not_reach_native_vision():
     # look somewhere the inversion actually shows:
     npt.assert_almost_equal(seen_by(model, scene, gaze=(8, 0)),
                             [[1 - ramp_at(8.0)]], decimal=3)
-    percept = model.predict_percept(scene, gaze=(8, 0) * dva, vmax=100)
+    seen = composed(model, scene, vmax=100, gaze=(8, 0) * dva)
     # Outside the scotoma: the original scene, bit for bit and uninverted.
     original = np.repeat(source.data.reshape((SCENE_PX, SCENE_PX, 1)), 3,
                          axis=-1)
     x, y = scene._pixel_centers()
     intact = scene.scotoma(x - 8, y) == 0
-    npt.assert_array_equal(percept.data[..., 0][intact], original[intact])
+    npt.assert_array_equal(seen[..., 0][intact], original[intact])
     # ... and the caller's scene was not rewritten on the way through:
     npt.assert_array_equal(scene.source.data, source.data)
 
@@ -469,56 +483,83 @@ def test_without_a_scene_nothing_changes():
     percept = plain.predict_percept(BiphasicPulse(20, 0.45))
     npt.assert_equal(percept.is_rgb, False)
     npt.assert_equal(percept.data.ndim, 3)
-    for kwargs in ({'gaze': (1, 0)}, {'vmax': 20}, {'vmin': 3}):
-        with pytest.raises(ValueError):
+    with pytest.raises(ValueError):
+        plain.predict_percept(BiphasicPulse(20, 0.45), gaze=(1, 0))
+    # A display range is not a prediction argument at all any more:
+    for kwargs in ({'vmax': 20}, {'vmin': 3}):
+        with pytest.raises(TypeError):
             plain.predict_percept(BiphasicPulse(20, 0.45), **kwargs)
     # No stimulus at all still says nothing rather than raising:
     npt.assert_equal(plain.predict_percept(None), None)
 
 
-def test_a_scene_without_a_scotoma_returns_the_prosthetic_percept():
-    """Nothing is lost, so there is nothing to compose into"""
+def test_scene_prediction_returns_the_model_percept():
+    """A scene changes where the input comes from, not what is predicted"""
     model = model_for(implant_at(0, 0))
-    percept = model.predict_percept(scene_of())
-    npt.assert_equal(percept.is_rgb, False)
-    npt.assert_equal(percept.data.ndim, 3)
-    # On the model's grid, not the scene's:
-    npt.assert_equal(percept.shape[:2], model.spatial.grid.shape)
-    # `vmax` is meaningless here and is simply unused:
-    npt.assert_array_equal(
-        model.predict_percept(scene_of(), vmax=20).data, percept.data)
+    for scene in (scene_of(),
+                  scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)):
+        percept = model.predict_percept(scene)
+        npt.assert_equal(percept.is_rgb, False)
+        npt.assert_equal(percept.data.ndim, 3)
+        # On the model's grid, not the scene's:
+        npt.assert_equal(percept.shape[:2], model.spatial.grid.shape)
+        npt.assert_equal(percept.shape[:2] == (SCENE_PX, SCENE_PX), False)
+        npt.assert_almost_equal(percept.xdva, model.spatial.grid.x[0])
 
 
-def test_a_scene_with_a_scotoma_returns_a_composed_rgb_percept():
+def test_a_scotoma_does_not_touch_the_prosthetic_percept():
+    """The scotoma describes native vision, not the implant's response"""
+    model = model_for(implant_at(0, 0))
+    seeing = model.predict_percept(scene_of(), gaze=(3, -1) * dva)
+    for fill in (0.0, 0.6, 'inpaint'):
+        blind = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=fill,
+                         scotoma_blend=1.5)
+        npt.assert_array_equal(
+            model.predict_percept(blind, gaze=(3, -1) * dva).data,
+            seeing.data)
+    # The premise: the rendered field really does differ.
+    npt.assert_equal(np.allclose(
+        composed(model, scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0),
+                 vmax=20), scene_of().render().data), False)
+
+
+def test_display_range_is_not_a_prediction_argument():
+    """`vmin` and `vmax` belong to `Scene.plot` and `Scene.render`"""
+    scene = scene_of(scotoma=Scotoma.circle(6))
+    model = model_for(implant_at(0, 0))
+    for kwargs in ({'vmax': 20}, {'vmin': 3}):
+        with pytest.raises(TypeError):
+            model.predict_percept(scene, **kwargs)
+    # ... and rendering does require one, since brightness is arbitrary:
+    percept = model.predict_percept(scene)
+    with pytest.raises(ValueError) as excinfo:
+        scene.render(percept=percept)
+    npt.assert_equal('vmax' in str(excinfo.value), True)
+
+
+def test_rendering_a_scene_with_a_scotoma_gives_a_composed_rgb_percept():
     scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
-    percept = model_for(implant_at(0, 0)).predict_percept(scene, vmax=20)
-    npt.assert_equal(percept.is_rgb, True)
-    npt.assert_equal(percept.shape, (SCENE_PX, SCENE_PX, 3, 1))
-    npt.assert_equal(percept.data.min() >= 0, True)
-    npt.assert_equal(percept.data.max() <= 1, True)
-    # Reported on the scene's grid, in scene coordinates:
-    npt.assert_almost_equal(percept.xdva, np.arange(-HALF, HALF + 1),
+    model = model_for(implant_at(0, 0))
+    rendered = scene.render(percept=model.predict_percept(scene), vmax=20)
+    npt.assert_equal(rendered.is_rgb, True)
+    npt.assert_equal(rendered.shape, (SCENE_PX, SCENE_PX, 3, 1))
+    npt.assert_equal(rendered.data.min() >= 0, True)
+    npt.assert_equal(rendered.data.max() <= 1, True)
+    # Reported on the render grid, in scene coordinates:
+    npt.assert_almost_equal(rendered.xdva, np.arange(-HALF, HALF + 1),
                             decimal=4)
 
 
 def test_an_inpainted_scotoma_cannot_hold_a_prosthetic_percept():
     """Filling-in would floor the phosphene; a numeric fill still works"""
     model = model_for(implant_at(0, 0))
+    filled = scene_of(scotoma=Scotoma.circle(6), scotoma_fill='inpaint')
     with pytest.raises(ValueError):
-        model.predict_percept(scene_of(scotoma=Scotoma.circle(6),
-                                       scotoma_fill='inpaint'), vmax=20)
+        filled.render(percept=model.predict_percept(filled), vmax=20)
+    numeric = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
     npt.assert_equal(
-        model.predict_percept(scene_of(scotoma=Scotoma.circle(6),
-                                       scotoma_fill=0.0), vmax=20).is_rgb,
-        True)
-
-
-def test_vmax_is_required_for_a_composed_percept():
-    scene = scene_of(scotoma=Scotoma.circle(6))
-    model = model_for(implant_at(0, 0))
-    with pytest.raises(ValueError) as excinfo:
-        model.predict_percept(scene)
-    npt.assert_equal('vmax' in str(excinfo.value), True)
+        numeric.render(percept=model.predict_percept(numeric),
+                       vmax=20).is_rgb, True)
 
 
 def test_the_intact_periphery_is_the_scene_exactly():
@@ -526,11 +567,11 @@ def test_the_intact_periphery_is_the_scene_exactly():
     rng = np.random.default_rng(0)
     rgb = ImageStimulus(rng.random((SCENE_PX, SCENE_PX, 3)))
     scene = scene_of(rgb, scotoma=Scotoma.circle(6))
-    percept = model_for(implant_at(0, 0)).predict_percept(scene, vmax=20)
+    seen = composed(model_for(implant_at(0, 0)), scene, vmax=20)
     source = rgb.data.reshape((SCENE_PX, SCENE_PX, 3))
     x, y = scene._pixel_centers()
     intact = scene.scotoma(x, y) == 0
-    npt.assert_array_equal(percept.data[..., 0][intact], source[intact])
+    npt.assert_array_equal(seen[..., 0][intact], source[intact])
 
 
 def test_the_phosphene_lands_where_the_electrode_looks():
@@ -541,7 +582,7 @@ def test_the_phosphene_lands_where_the_electrode_looks():
         implant = implant_at(*visual_field_map.dva_to_ret(x_dva, y_dva))
         model = model_for(implant, rho=80, xrange=(-8, 8), yrange=(-8, 8),
                           step=0.5)
-        frame = model.predict_percept(scene, vmax=2).data[..., 0]
+        frame = composed(model, scene, vmax=2)[..., 0]
         row, col = int(round(HALF - y_dva)), int(round(x_dva + HALF))
         # Brightest where the electrode looks, dark on the opposite side:
         npt.assert_equal(frame[row, col].mean() > 0.5, True)
@@ -553,9 +594,8 @@ def test_gaze_moves_the_scotoma_and_the_phosphene_together():
     scene = scene_of(scotoma=Scotoma.circle(4), scotoma_fill=0.3)
     model = model_for(implant_at(0, 0), rho=100, xrange=(-2, 2),
                       yrange=(-2, 2), step=0.5)
-    fixating = model.predict_percept(scene, vmax=2).data[..., 0]
-    shifted = model.predict_percept(scene, gaze=(5, 0) * dva,
-                                    vmax=2).data[..., 0]
+    fixating = composed(model, scene, vmax=2)[..., 0]
+    shifted = composed(model, scene, vmax=2, gaze=(5, 0) * dva)[..., 0]
     # The whole eye-centered pair travelled 5 degrees right across the scene:
     npt.assert_almost_equal(shifted[HALF, HALF + 5], fixating[HALF, HALF],
                             decimal=5)
@@ -578,9 +618,8 @@ def test_a_fixed_vmax_does_not_renormalize_when_gaze_changes():
         ``gaze_x``. That pixel is pure phosphene; the intact periphery would
         otherwise dominate any whole-frame maximum.
         """
-        percept = model.predict_percept(scene, gaze=(gaze_x, 0) * dva,
-                                        **kwargs)
-        return float(percept.data[HALF, HALF + gaze_x, 0, 0])
+        seen = composed(model, scene, gaze=(gaze_x, 0) * dva, **kwargs)
+        return float(seen[HALF, HALF + gaze_x, 0, 0])
 
     dim, bright = phosphene(-16, vmax=200), phosphene(16, vmax=200)
     npt.assert_equal(0 < dim < bright < 1, True)
@@ -600,7 +639,7 @@ def test_a_video_scene_keeps_its_own_timing():
                      scotoma=Scotoma.circle(6), scotoma_fill=0.0)
     model = model_for(implant_at(0, 0), rho=150, xrange=(-4, 4),
                       yrange=(-4, 4), step=0.5)
-    percept = model.predict_percept(scene, vmax=200)
+    percept = scene.render(percept=model.predict_percept(scene), vmax=200)
     npt.assert_equal(percept.shape, (SCENE_PX, SCENE_PX, 3, 3))
     npt.assert_almost_equal(percept.time, [0, 100, 200])
     # Brighter frames make brighter phosphenes, in the right order. Read at
@@ -633,7 +672,8 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
     npt.assert_almost_equal(raw.time, [100, 200, 300])
     npt.assert_almost_equal(scene.time, [0, 100, 200])
 
-    percept = spatiotemporal().predict_percept(scene, vmax=5)
+    percept = scene.render(
+        percept=spatiotemporal().predict_percept(scene), vmax=5)
     npt.assert_equal(percept.shape, (SCENE_PX, SCENE_PX, 3, 3))
     # The percept's clock describes the output, not the video's onsets:
     npt.assert_almost_equal(percept.time, [100, 200, 300])
@@ -662,15 +702,15 @@ def test_a_single_timed_percept_is_not_broadcast_over_a_video():
                            yrange=(-2, 2), step=1).build().spatial.grid
     at_10 = Percept(np.full((5, 5, 1), 20.0), space=grid, time=[10])
     with pytest.raises(ValueError) as excinfo:
-        scene._compose(at_10, vmax=20)
+        scene.render(percept=at_10, vmax=20)
     npt.assert_equal('never simulated' in str(excinfo.value), True)
     # A percept with no clock at all did not happen at any instant, so it does
     # stand behind every frame:
     timeless = Percept(np.full((5, 5, 1), 20.0), space=grid)
     npt.assert_equal(timeless.time, None)
-    composed = scene._compose(timeless, vmax=20)
-    npt.assert_equal(composed.shape[-1], 3)
-    npt.assert_almost_equal(composed.time, [0, 10, 20])
+    seen = scene.render(percept=timeless, vmax=20)
+    npt.assert_equal(seen.shape[-1], 3)
+    npt.assert_almost_equal(seen.time, [0, 10, 20])
 
 
 def test_a_temporal_percept_must_cover_the_video():
@@ -682,14 +722,14 @@ def test_a_temporal_percept_must_cover_the_video():
                            yrange=(-2, 2), step=1).build().spatial.grid
     short = Percept(values, space=grid, time=[5, 15])
     with pytest.raises(ValueError) as excinfo:
-        scene._compose(short, vmax=20)
+        scene.render(percept=short, vmax=20)
     npt.assert_equal('never simulated' in str(excinfo.value), True)
     # A percept that does cover it composes, endpoints included:
     covering = Percept(values, space=grid, time=[0, 20])
-    npt.assert_equal(scene._compose(covering, vmax=20).shape[-1], 3)
+    npt.assert_equal(scene.render(percept=covering, vmax=20).shape[-1], 3)
     # ... and so does a still percept, which has no interval to run off:
     still = Percept(values[..., :1], space=grid)
-    npt.assert_equal(scene._compose(still, vmax=20).shape[-1], 3)
+    npt.assert_equal(scene.render(percept=still, vmax=20).shape[-1], 3)
 
 
 def test_the_time_range_check_crosses_units():
@@ -701,12 +741,12 @@ def test_the_time_range_check_crosses_units():
     values = np.stack([np.full((5, 5), b) for b in (0.0, 20.0)], axis=-1)
     # 0-20 ms is exactly 0-0.02 s:
     covering = Percept(values, space=grid, time=[0, 0.02], time_unit=s)
-    composed = scene._compose(covering, vmax=20)
-    npt.assert_equal(composed.time_unit, ms)
-    npt.assert_almost_equal(composed.time, [0, 10, 20])
+    seen = scene.render(percept=covering, vmax=20)
+    npt.assert_equal(seen.time_unit, ms)
+    npt.assert_almost_equal(seen.time, [0, 10, 20])
     short = Percept(values, space=grid, time=[0, 0.01], time_unit=s)
     with pytest.raises(ValueError):
-        scene._compose(short, vmax=20)
+        scene.render(percept=short, vmax=20)
 
 
 def test_per_frame_gaze_moves_the_eye_between_video_frames():
@@ -859,8 +899,8 @@ def test_implant_position_moves_scene_sampling_and_the_percept_alike():
                             seen_by(fovea, scene_of(), gaze=(4, -3) * dva),
                             decimal=4)
     # ... and the phosphene is drawn there too. Row is -y, column is +x:
-    here = fovea.predict_percept(scene, vmax=2).data[..., 0]
-    there = placed.predict_percept(scene, vmax=2).data[..., 0]
+    here = composed(fovea, scene, vmax=2)[..., 0]
+    there = composed(placed, scene, vmax=2)[..., 0]
     npt.assert_almost_equal(there[HALF + 3, HALF + 4], here[HALF, HALF],
                             decimal=4)
 

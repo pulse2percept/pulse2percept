@@ -83,31 +83,36 @@ model = ScoreboardModel(implant=implant, implant_position=center, rho=50,
                         xrange=(0, 12), yrange=(-8, 4), step=0.05)
 
 ###############################################################################
-# The scene is trial input, like any other stimulus:
+# The scene is trial input, like any other stimulus. The prediction is the
+# prosthetic percept on the model's own 0.05-degree grid; drawing it back into
+# the field is a separate step, and the source keeps its own 240 x 300 pixels.
 
-percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=2)
+percept = model.predict_percept(scene, gaze=(0, 0) * dva)
 
-percept.plot()
+scene.plot(percept=percept, gaze=(0, 0) * dva, vmax=2)
 plt.title('Native vision with a PRIMA percept in the scotoma')
 
 ###############################################################################
 # The lesion is eye-centered and the implant is on the retina, so both travel
 # together when the eye moves:
 
-percept = model.predict_percept(scene, gaze=(8, -4) * dva, vmax=2)
+percept = model.predict_percept(scene, gaze=(8, -4) * dva)
 
-percept.plot()
+scene.plot(percept=percept, gaze=(8, -4) * dva, vmax=2)
 plt.title('Looking 8 degrees right and 4 degrees down')
 
 ###############################################################################
+# ``scene.render(percept=percept, gaze=(8, -4) * dva, vmax=2, step=0.05*dva)``
+# rasterizes both layers onto one RGB grid, here 800 x 800 pixels. Ask for it
+# when a single image is needed; plotting does not pay that cost.
 
 implant.preprocess = lambda stim: stim.filter('sobel')
 
 # Edges drive far fewer pixels, so white sits much lower:
 
-percept = model.predict_percept(scene, gaze=(0, 0) * dva, vmax=0.3)
+percept = model.predict_percept(scene, gaze=(0, 0) * dva)
 
-percept.plot()
+scene.plot(percept=percept, gaze=(0, 0) * dva, vmax=0.3)
 plt.title('Edge-filtered device input, intact vision around it')
 
 ###############################################################################
