@@ -238,6 +238,26 @@ def test_spatial_profile_is_a_gaussian_of_rho():
     npt.assert_allclose(profile, expected, rtol=1e-4)
 
 
+def test_spatial_drive_is_zero_outside_the_schedule():
+    # Zero-order hold holds *within* the schedule; before the first pulse and
+    # after the stimulus ends nothing is delivered.
+    implant = tiny_implant()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        spatial = Ho2018Spatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                step=0.25, verbose=False)
+    stim = implant.prepare_stim(spot())
+    last = stim.pulse_time[-1]
+    t = np.array([-20.0, stim.pulse_time[0], last, stim.duration,
+                  stim.duration + 200.0])
+    drive = spatial.predict_percept(spot(), t_percept=t).data.max(axis=(0, 1))
+    npt.assert_almost_equal(drive[0], 0)
+    npt.assert_array_less(0, drive[1])
+    npt.assert_array_less(0, drive[2])
+    npt.assert_almost_equal(drive[3], 0)
+    npt.assert_almost_equal(drive[4], 0)
+
+
 def test_warns_about_ignored_electrode_distance():
     implant = tiny_implant()
     for electrode in implant.electrode_array.electrode_objects:
@@ -283,6 +303,18 @@ def test_response_adapts_to_a_sustained_pulse_train():
     # Every pulse period delivers the same drive, yet the response decays.
     npt.assert_array_less(peaks[-1], 0.2 * peaks.max())
     npt.assert_array_less(0, peaks.max())
+
+
+def test_automatic_output_times_are_exact():
+    # `reduce='peak'` would subsample each interval eight times; at 20 Hz that
+    # underestimates the true peak by tens of percent, so the default reports
+    # the instant it actually computes.
+    model = tiny_model()
+    npt.assert_equal(model.temporal.reduce, 'last')
+    npt.assert_equal(Ho2018Temporal().reduce, 'last')
+    auto = model.predict_percept(spot())
+    asked = model.predict_percept(spot(), t_percept=auto.time)
+    npt.assert_allclose(auto.data, asked.data, rtol=1e-6, atol=1e-7)
 
 
 def test_response_is_never_negative():

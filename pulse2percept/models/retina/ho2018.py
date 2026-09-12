@@ -119,9 +119,12 @@ class Ho2018Temporal(TemporalModel):
         Lattice (ms) output times must be multiples of.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
-    reduce : {'peak', 'last'}, optional
+    reduce : {'last', 'peak'}, optional
         How automatically chosen output points summarize the preceding
-        interval.
+        interval. ``'last'`` is the value at the output instant, which this
+        model computes exactly. ``'peak'`` is approximated by sampling each
+        interval eight times, and on a pulse train whose period is comparable
+        to ``tau1`` it can underestimate the true peak by tens of percent.
     verbose : bool, optional
         Whether to print status messages.
     n_threads : int, optional
@@ -137,7 +140,7 @@ class Ho2018Temporal(TemporalModel):
     _drive_sign = 1
 
     def __init__(self, *, n=6, tau1=51.3, tau2=137.1, p1=1.0, p2=0.3743,
-                 dt=0.005, thresh_percept=0, reduce='peak', verbose=True,
+                 dt=0.005, thresh_percept=0, reduce='last', verbose=True,
                  n_threads=None, n_jobs=None):
         super().__init__(n=n, tau1=tau1, tau2=tau2, p1=p1, p2=p2, dt=dt,
                          thresh_percept=thresh_percept, reduce=reduce,
@@ -149,8 +152,7 @@ class Ho2018Temporal(TemporalModel):
     def get_default_params(self):
         """Return all settable parameters of the temporal response."""
         return {**super().get_default_params(),
-                'n': 6, 'tau1': 51.3, 'tau2': 137.1, 'p1': 1.0, 'p2': 0.3743,
-                'reduce': 'peak'}
+                'n': 6, 'tau1': 51.3, 'tau2': 137.1, 'p1': 1.0, 'p2': 0.3743}
 
     def get_param_units(self):
         """Return units used to store model parameters."""
@@ -338,8 +340,8 @@ class Ho2018Spatial(ScoreboardSpatial):
         """Predict one drive map per pulse period.
 
         Output times are the schedule's pulse onsets. Explicit ``t_percept``
-        values are served by zero-order hold, drive being constant within a
-        pulse period.
+        values are served by zero-order hold within the schedule, drive being
+        constant within a pulse period, and are zero outside it.
         """
         if not self.is_built:
             self.build()
@@ -364,6 +366,9 @@ class Ho2018Spatial(ScoreboardSpatial):
             time = np.sort(np.array([t_percept], dtype=np.float64).ravel())
             at = np.searchsorted(t_pulse, time, side='right') - 1
             resp = resp[..., np.clip(at, 0, t_pulse.size - 1)]
+            # Before the first pulse and after the stimulus ends, nothing is
+            # delivered; holding the nearest period would invent light.
+            resp[..., (at < 0) | (time >= stim.duration)] = 0
         # `_frame_clock` reads this to put a temporal stage on the pulse clock.
         return Percept(resp, space=self.grid, time=time,
                        time_unit=self.time_unit, n_gray=self.n_gray,
@@ -442,9 +447,10 @@ class Ho2018Model(Model):
         Peak amplitudes of the fast and slow cascade.
     dt : float or Quantity, optional
         Lattice (ms) output times must be multiples of.
-    reduce : {'peak', 'last'}, optional
+    reduce : {'last', 'peak'}, optional
         How automatically chosen output points summarize the preceding
-        interval.
+        interval; see
+        :py:class:`~pulse2percept.models.retina.Ho2018Temporal`.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero. Applied to the
         returned percept only; the spatial stage passes drive on
@@ -463,7 +469,7 @@ class Ho2018Model(Model):
                  implant_position=(0, 0), implant_rotation=0, implant_depth=0,
                  location_noise=None, ndim=None,
                  n=6, tau1=51.3, tau2=137.1, p1=1.0, p2=0.3743, dt=0.005,
-                 reduce='peak', thresh_percept=0, verbose=True,
+                 reduce='last', thresh_percept=0, verbose=True,
                  n_threads=None, n_jobs=None):
         # The spatial stage passes on drive, not brightness: quantizing or
         # thresholding it there would change what the filter integrates.
