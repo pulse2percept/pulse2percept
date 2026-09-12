@@ -1406,3 +1406,66 @@ def test_repeated_pixel_center_queries_read_the_same_raster():
     # The pixel centers are the source raster's own axes:
     npt.assert_array_equal(x[0], scene._axes[0])
     npt.assert_array_equal(y[:, 0], scene._axes[1])
+
+
+def test_a_blank_scene_is_a_black_elliptical_field_by_default():
+    scene = Scene.blank()
+    npt.assert_equal(scene.fov, (45.0, 45.0))
+    npt.assert_equal(scene.shape, (512, 512))
+    npt.assert_equal(scene.aperture, 'ellipse')
+    data = scene.source.data
+    npt.assert_equal(np.all(np.isfinite(data)), True)
+    npt.assert_array_equal(data, 0.0)
+
+
+def test_a_blank_scene_is_an_ordinary_black_scene():
+    """`blank` is convenience only, not a second Scene implementation"""
+    blank = Scene.blank(fov=45, shape=(32, 48), aperture='rectangle')
+    plain = Scene(np.zeros((32, 48)), fov=45, aperture='rectangle')
+    npt.assert_equal(blank.fov, plain.fov)
+    npt.assert_equal(blank.shape, plain.shape)
+    for x, y in [(0, 0), (-10, 4), (12, -8)]:
+        npt.assert_almost_equal(blank._sample_at(x, y), plain._sample_at(x, y))
+        npt.assert_almost_equal(blank._device_input(x, y),
+                                plain._device_input(x, y))
+    npt.assert_almost_equal(rendered(blank), rendered(plain))
+
+
+def test_a_blank_scene_keeps_the_fov_and_shape_it_is_given():
+    scene = Scene.blank(fov=(60, 40) * dva, shape=(30, 50))
+    npt.assert_equal(scene.fov, (60.0, 40.0))
+    npt.assert_equal(scene.shape, (30, 50))
+
+
+@pytest.mark.parametrize('shape', [(0, 4), (4, -1), (4, 4, 4), 4, (4.0, 4.0)])
+def test_a_blank_scene_needs_a_real_raster(shape):
+    with pytest.raises(ValueError):
+        Scene.blank(shape=shape)
+
+
+def test_an_explicit_aperture_overrides_the_blank_default():
+    npt.assert_equal(Scene.blank(aperture='rectangle').aperture, 'rectangle')
+    npt.assert_equal(Scene.blank().aperture, 'ellipse')
+
+
+def test_a_blank_scene_does_not_resample_a_finer_percept():
+    """The backing raster is a display default, not the model's grid"""
+    scene = Scene.blank(fov=45 * dva)
+    # Deliberately finer than the 45 / 512 dva backing raster:
+    space = Grid2D((-2, 2), (-2, 2), step=0.02)
+    data = np.zeros(space.x.shape + (1,))
+    data[100, 100] = 5.0
+    ax = scene.plot(percept=Percept(data, space=space), vmax=5)
+    wide, patch = (image.get_array() for image in ax.images)
+    npt.assert_equal(wide.shape, (512, 512, 3))
+    npt.assert_equal(patch.shape, (201, 201, 3))
+    npt.assert_almost_equal(ax.images[1].get_extent(),
+                            (-2.01, 2.01, -2.01, 2.01), decimal=6)
+    npt.assert_almost_equal(patch[100, 100], [1.0, 1.0, 1.0], decimal=6)
+    plt.close('all')
+
+
+def test_a_blank_scene_gives_a_device_black():
+    scene = Scene.blank(fov=45 * dva)
+    for x, y in [(0, 0), (-20, 0), (0, 20), (10, -10), (22, 22)]:
+        npt.assert_almost_equal(seen_at(scene, x, y), 0.0)

@@ -479,6 +479,18 @@ The raster defaults to the source's own, which resamples nothing. ``step``
 ``shape`` chooses another; the two are mutually exclusive. A fine step over a
 wide field is expensive by construction.
 
+:py:meth:`~pulse2percept.vision.Scene.blank` provides a black visual-field
+canvas when no image is needed:
+
+.. code-block:: python
+
+    scene = p2p.vision.Scene.blank(fov=45 * dva)
+
+Its backing raster (512 x 512 by default) is only the default render raster;
+prediction still happens on the model grid. Black is scene content, not
+blindness; use a :py:class:`~pulse2percept.vision.Scotoma` for vision that is
+lost.
+
 .. versionchanged:: 0.11.0
     Scene prediction returns the model percept rather than an RGB
     composition. ``vmin`` and ``vmax`` moved to ``Scene.plot`` and the new

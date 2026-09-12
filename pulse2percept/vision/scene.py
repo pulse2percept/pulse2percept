@@ -59,6 +59,16 @@ def _resolve_fov(fov, n_rows, n_cols):
     return (width, height)
 
 
+def _check_shape(shape):
+    """Normalize a ``(rows, cols)`` raster shape to a pair of ints"""
+    shape = np.asarray(shape)
+    bad = shape.shape != (2,) or shape.dtype.kind not in 'iu'
+    if bad or shape.min() < 1:
+        raise ValueError(f"'shape' must be a (rows, cols) pair of positive "
+                         f"integers, not {np.ravel(shape)}.")
+    return (int(shape[0]), int(shape[1]))
+
+
 def _raster_axes(fov, shape):
     """Pixel-center coordinates of a raster spanning ``fov``
 
@@ -458,6 +468,12 @@ class Scene(PrettyPrint):
     >>> scene.fov
     (40.0, 32.0)
 
+    :py:meth:`~pulse2percept.vision.Scene.blank` gives a black field instead
+    of a picture -- darkness, not blindness:
+
+    >>> blank = Scene.blank()
+    >>> blank.plot()                                    # doctest: +SKIP
+
     """
 
     def __init__(self, source, fov, scotoma=None, scotoma_fill=0,
@@ -485,6 +501,45 @@ class Scene(PrettyPrint):
         self._cached_frames = None
         self._axes_cache = None
         self._pixel_centers_cache = None
+
+    @classmethod
+    def blank(cls, fov=45, shape=(512, 512), **kwargs):
+        """A uniformly black visual field
+
+        Black is scene content -- a dark world -- not blindness: a device
+        sampling it is given black. Use a
+        :py:class:`~pulse2percept.vision.Scotoma` for vision that is lost.
+
+        .. versionadded:: 0.11.0
+
+        Parameters
+        ----------
+        fov : float or (width, height), optional
+            Angular extent of the field, in dva. With the square default
+            ``shape``, the default 45 dva is a 45 x 45 dva disc.
+        shape : (rows, cols), optional
+            Backing raster of the black source, and the raster
+            :py:meth:`~pulse2percept.vision.Scene.render` defaults to. Display
+            resolution only: it does not set the grid a prosthetic model
+            predicts on.
+        **kwargs :
+            Any other :py:class:`~pulse2percept.vision.Scene` argument.
+            ``aperture`` defaults to ``'ellipse'`` rather than
+            ``'rectangle'``.
+
+        Examples
+        --------
+        >>> from pulse2percept.units import dva
+        >>> from pulse2percept.vision import Scene
+        >>> blank = Scene.blank(fov=60 * dva)
+        >>> blank.fov
+        (60.0, 60.0)
+
+        """
+        n_rows, n_cols = _check_shape(shape)
+        kwargs.setdefault('aperture', _ELLIPSE)
+        return cls(np.zeros((n_rows, n_cols), dtype=np.float32), fov=fov,
+                   **kwargs)
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
@@ -1055,12 +1110,7 @@ class Scene(PrettyPrint):
             raise ValueError("'step' and 'shape' both choose the render "
                              "raster; pass one or the other.")
         if shape is not None:
-            shape = np.asarray(shape)
-            bad = shape.shape != (2,) or shape.dtype.kind not in 'iu'
-            if bad or shape.min() < 1:
-                raise ValueError(f"'shape' must be a (rows, cols) pair of "
-                                 f"positive integers, not {np.ravel(shape)}.")
-            return (int(shape[0]), int(shape[1]))
+            return _check_shape(shape)
         if step is None:
             # The source's own raster, so rendering resamples nothing unless
             # it is asked to:
