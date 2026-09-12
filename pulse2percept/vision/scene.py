@@ -40,6 +40,11 @@ _INPAINT = 'inpaint'
 _RECTANGLE = 'rectangle'
 _ELLIPSE = 'ellipse'
 
+# Backing raster of a blank scene. Fixed: it is a display raster only, and
+# making it configurable would let it set the aspect ratio a scalar `fov`
+# resolves against. `Scene.render` chooses a render raster of its own.
+_BLANK_SHAPE = (512, 512)
+
 
 def _resolve_fov(fov, n_rows, n_cols):
     """Normalize a user-supplied ``fov`` to ``(width, height)`` in dva"""
@@ -458,6 +463,12 @@ class Scene(PrettyPrint):
     >>> scene.fov
     (40.0, 32.0)
 
+    :py:meth:`~pulse2percept.vision.Scene.blank` gives a black field instead
+    of a picture -- darkness, not blindness:
+
+    >>> blank = Scene.blank()
+    >>> blank.plot()                                    # doctest: +SKIP
+
     """
 
     def __init__(self, source, fov, scotoma=None, scotoma_fill=0,
@@ -485,6 +496,44 @@ class Scene(PrettyPrint):
         self._cached_frames = None
         self._axes_cache = None
         self._pixel_centers_cache = None
+
+    @classmethod
+    def blank(cls, fov=45, **kwargs):
+        """A uniformly black visual field
+
+        Black is scene content -- a dark world -- not blindness: a device
+        sampling it is given black. Use a
+        :py:class:`~pulse2percept.vision.Scotoma` for vision that is lost.
+
+        The black source sits on a fixed 512 x 512 raster, which is what
+        :py:meth:`~pulse2percept.vision.Scene.render` falls back to; ask
+        ``render`` for ``step`` or ``shape`` to get another output
+        resolution. Neither sets the grid a prosthetic model predicts on.
+
+        .. versionadded:: 0.11.0
+
+        Parameters
+        ----------
+        fov : float or (width, height), optional
+            Angular extent of the field, in dva. The backing raster is square,
+            so the default 45 dva is a 45 x 45 dva disc.
+        **kwargs :
+            Any other :py:class:`~pulse2percept.vision.Scene` argument.
+            ``aperture`` defaults to ``'ellipse'`` rather than
+            ``'rectangle'``.
+
+        Examples
+        --------
+        >>> from pulse2percept.units import dva
+        >>> from pulse2percept.vision import Scene
+        >>> blank = Scene.blank(fov=60 * dva)
+        >>> blank.fov
+        (60.0, 60.0)
+
+        """
+        kwargs.setdefault('aperture', _ELLIPSE)
+        return cls(np.zeros(_BLANK_SHAPE, dtype=np.float32), fov=fov,
+                   **kwargs)
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
