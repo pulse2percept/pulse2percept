@@ -6,7 +6,7 @@ import numpy as np
 
 from ...stimuli.encoders import _OpticalStimulus
 from ...topography.retina import Watson2014Map
-from ...units import as_value, mW, mm, ms
+from ...units import as_value, dimensionless, mW, mm, ms
 from ...percepts import Percept
 from ..base import (Model, TemporalModel, _require_stim_dimension,
                     _thread_params)
@@ -85,26 +85,36 @@ class Ho2018Temporal(TemporalModel):
     excursion is a drop below the spontaneous firing rate, which
     :py:class:`~pulse2percept.percepts.Percept` brightness cannot express.
 
+    Input is network-response drive, not stimulation: inside a
+    :py:class:`~pulse2percept.models.retina.Ho2018Model` it is the percept
+    :py:class:`~pulse2percept.models.retina.Ho2018Spatial` produces. Used on
+    its own, this model accepts that percept or a dimensionless normalized
+    drive; injected current and raw gray levels are refused, since neither is
+    a radiant exposure.
+
     .. warning::
 
         The functional form and the timing landmarks come from [Ho2018]_,
         the default coefficients do not. [Ho2018]_ publishes no
         population-average coefficient set, so ``tau1``, ``tau2`` and ``p2``
         are a pulse2percept summary-matched parameterization: given ``n=6``,
-        ``p1=1`` and zero DC
-        gain (:math:`p_1\tau_1 = p_2\tau_2`, which makes the filter purely
-        transient), they are the unique solution reproducing the reported
-        degenerate-retina pON landmarks of a 50 ms first peak and a 94 ms
-        first zero crossing. They are not fitted coefficients.
+        ``p1=1`` and zero DC gain (:math:`p_1\tau_1 = p_2\tau_2`, which makes
+        the filter purely transient), they are the unique solution
+        reproducing Table 1 of [Ho2018]_, the per-cell RCS pON population
+        summary: a 50 +/- 3 ms first peak and a 94 +/- 5 ms first zero
+        crossing. Averaged per retina instead, the same paper reports
+        51 +/- 3 ms and 87 +/- 3 ms; either way the 20 Hz white-noise stimulus
+        sampled the time course only every 50 ms, so both landmarks are
+        coarse estimates. They are not fitted coefficients.
 
     .. versionadded:: 0.11.0
 
     Parameters
     ----------
     n : float, optional
-        Order of both low-pass cascades. The default 6 is a typical cascade
-        order for ganglion-cell temporal filters of this form; the landmarks
-        above can be matched for any ``n >= 4``.
+        Order of both low-pass cascades. The default 6 is a pulse2percept
+        modeling choice; other ``n >= 4`` values can reproduce the two timing
+        landmarks.
     tau1 : float or Quantity, optional
         Time constant (ms) of the fast, positive cascade.
     tau2 : float or Quantity, optional
@@ -128,6 +138,9 @@ class Ho2018Temporal(TemporalModel):
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
+
+    #: Input is normalized network drive, not injected current.
+    stimulus_unit = dimensionless
 
     #: Brightness is driven by light, which the encoders emit as positive
     #: irradiance.
@@ -228,8 +241,10 @@ class Ho2018Spatial(ScoreboardSpatial):
     .. warning::
 
         The linear radiant-exposure law is a pulse2percept baseline
-        assumption, not a dose-response function reported by [Ho2018]_.
-        Irradiance, pulse duration and repetition rate stay available
+        assumption, not a dose-response function reported by [Ho2018]_. It
+        reads no wavelength and no pixel design, so two devices delivering
+        the same radiant exposure drive the retina identically. Irradiance,
+        pulse duration, repetition rate and wavelength all stay available
         separately on the stimulus so their effects can be fitted
         independently later.
 
@@ -263,13 +278,19 @@ class Ho2018Spatial(ScoreboardSpatial):
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Drive values below this threshold are set to zero.
+        :py:class:`~pulse2percept.models.retina.Ho2018Model` leaves this at 0
+        and thresholds the percept instead, since drive below threshold can
+        still sum over pulses.
     min_current_spread : float, optional
         Fraction of peak Gaussian spread below which a pixel may be skipped at
         a grid point. Set to 0 to disable the cutoff.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates.
     n_gray : int or None, optional
-        Number of gray levels in the returned percept.
+        Number of gray levels in the returned drive map. Quantizing the drive
+        a temporal stage integrates changes the response, so
+        :py:class:`~pulse2percept.models.retina.Ho2018Model` does not expose
+        it.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
     implant_rotation : float or Quantity, optional
@@ -392,13 +413,15 @@ class Ho2018Model(Model):
 
     .. warning::
 
-        This is a structural and timing-level reconstruction of [Ho2018]_, not
-        a validated model of PRIMA percepts. It models the pON center response
-        of degenerate (RCS) rat retina only: no antagonistic surround, no pOFF
-        pathway, a linear radiant-exposure activation law with no fitted
-        irradiance, pulse-duration or frequency nonlinearity, no photovoltaic
-        circuit or electric-field model, no electrode-retina distance effect,
-        and no calibration to human brightness or contrast perception.
+        This is a structural and timing-level reconstruction of [Ho2018]_,
+        not a validated model of PRIMA percepts. It models the pON center
+        response of degenerate (RCS) rat retina only: no antagonistic
+        surround, no pOFF pathway, a linear radiant-exposure activation law
+        with no fitted irradiance, pulse-duration or frequency nonlinearity,
+        no photovoltaic circuit or electric-field model, no electrode-retina
+        distance effect, no wavelength or device-specific conversion
+        efficiency, and no calibration to human brightness or contrast
+        perception.
 
     .. versionadded:: 0.11.0
 
@@ -422,8 +445,6 @@ class Ho2018Model(Model):
         a grid point.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates.
-    n_gray : int or None, optional
-        Number of gray levels in the returned percept.
     implant_position : (x, y) or Quantity, optional
         Position of the device-local origin, in tissue coordinates or dva.
     implant_rotation : float or Quantity, optional
@@ -446,7 +467,9 @@ class Ho2018Model(Model):
         How automatically chosen output points summarize the preceding
         interval.
     thresh_percept : float, optional
-        Brightness values below this threshold are set to zero.
+        Brightness values below this threshold are set to zero. Applied to the
+        returned percept only; the spatial stage passes its drive on
+        unthresholded so that weak drive can still sum over pulses.
     verbose : bool, optional
         Whether to print status messages.
     n_threads : int, optional
@@ -457,20 +480,21 @@ class Ho2018Model(Model):
 
     def __init__(self, implant, *, rho=97.5, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
-                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 min_current_spread=1e-8, visual_field_map=None,
                  implant_position=(0, 0), implant_rotation=0, implant_depth=0,
                  location_noise=None, ndim=None,
                  n=6, tau1=51.3, tau2=137.1, p1=1.0, p2=0.3743, dt=0.005,
                  reduce='peak', thresh_percept=0, verbose=True,
                  n_threads=None, n_jobs=None):
-        # `thresh_percept`, `verbose` and the thread count are declared by both
-        # components and are applied to both.
+        # The spatial stage hands on retinal drive, not brightness: quantizing
+        # or thresholding it there would change what the filter integrates,
+        # so both belong to the percept the temporal stage returns.
         super().__init__(
             spatial=Ho2018Spatial(
                 implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
-                grid_type=grid_type, thresh_percept=thresh_percept,
+                grid_type=grid_type, thresh_percept=0,
                 min_current_spread=min_current_spread,
-                visual_field_map=visual_field_map, n_gray=n_gray,
+                visual_field_map=visual_field_map, n_gray=None,
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,

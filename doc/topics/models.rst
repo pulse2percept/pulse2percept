@@ -123,9 +123,9 @@ questions:
     ``rho=97.5`` um -- one standard deviation of the 195 um pON receptive
     field [Ho2018]_ reports for degenerate rat retina -- and the resulting
     per-pulse drive map is filtered by the difference of low-pass cascades
-    [Ho2018]_ fitted to photovoltaic spike-triggered averages. The response is
-    transient: a static image at a fixed pulse rate produces an onset response
-    that then adapts.
+    [Ho2018]_ used to summarize photovoltaic spike-triggered averages. The
+    response is transient: a static image at a fixed pulse rate produces an
+    onset response that then adapts.
 
 .. warning::
 
@@ -137,12 +137,15 @@ questions:
     *  a linear radiant-exposure activation law normalized to Ho's 9 mW/mm^2,
        4 ms reference pulse, with no fitted irradiance, pulse-duration or
        frequency nonlinearity;
-    *  no photovoltaic circuit or electric-field model, and no
-       electrode-retina distance effect.
+    *  no photovoltaic circuit or electric-field model, no electrode-retina
+       distance effect, and no wavelength or device-specific conversion
+       efficiency -- an 880 nm PRIMA pixel and a 915 nm pixel of a different
+       design produce the same response to the same radiant exposure.
 
-    Its default temporal coefficients reproduce the reported population timing
-    landmarks but are not coefficients published by [Ho2018]_, and nothing in
-    it is calibrated to human brightness or contrast perception.
+    Its default temporal coefficients reproduce the Table 1 population timing
+    landmarks of [Ho2018]_ but are not coefficients that paper publishes, and
+    nothing in the model is calibrated to human brightness or contrast
+    perception.
 
 Cortical stimulation
 ~~~~~~~~~~~~~~~~~~~~

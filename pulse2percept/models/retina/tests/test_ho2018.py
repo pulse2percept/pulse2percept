@@ -4,6 +4,7 @@ The model reads an optical schedule -- peak irradiance, per-pixel ON duration
 and pulse-period timing -- rather than the normalized time-averaged drive a
 spatial-only model sees, and never renders the waveform behind it.
 """
+import inspect
 import warnings
 
 import numpy as np
@@ -107,6 +108,29 @@ def test_rejects_bare_irradiance():
     with pytest.raises(TypeError) as excinfo:
         tiny_model(implant).predict_percept(bare)
     npt.assert_equal('schedule' in str(excinfo.value), True)
+
+
+def test_temporal_stage_rejects_current():
+    # `Ho2018Temporal` reads network drive, not stimulation: a bare Stimulus
+    # is microamps, and reading it as radiant exposure would be nonsense.
+    temporal = Ho2018Temporal(verbose=False)
+    npt.assert_equal(temporal.stimulus_unit.dimension.is_dimensionless, True)
+    current = Stimulus(np.array([[20.0, 0.0]]), electrodes=['A1'],
+                       time=[0, 50])
+    with pytest.raises(DimensionMismatchError) as excinfo:
+        temporal.predict_percept(current)
+    npt.assert_equal('dimensionless' in str(excinfo.value), True)
+
+
+def test_temporal_stage_takes_the_spatial_percept():
+    implant = tiny_implant()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        spatial = Ho2018Spatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                step=0.25, verbose=False)
+    drive = spatial.predict_percept(spot())
+    percept = Ho2018Temporal(verbose=False).predict_percept(drive)
+    npt.assert_equal(np.any(percept.data > 0), True)
 
 
 # -- Structured stimulus routing --------------------------------------------
@@ -285,6 +309,30 @@ def test_video_produces_a_changing_response():
     bottom_right = percept.data[-8:, -8:, :].max(axis=(0, 1))
     npt.assert_array_less(bottom_right[2], top_left[2])
     npt.assert_array_less(top_left[-1], bottom_right[-1])
+
+
+# -- What the wrapper does and does not forward -----------------------------
+
+def test_model_does_not_quantize_the_retinal_drive():
+    # `n_gray` would quantize the drive *before* temporal filtering, which is
+    # not what "gray levels in the returned percept" means. The wrapper does
+    # not offer it; the spatial stage keeps it for standalone use.
+    npt.assert_equal('n_gray' in inspect.signature(Ho2018Model).parameters,
+                     False)
+    npt.assert_equal('n_gray' in inspect.signature(Ho2018Spatial).parameters,
+                     True)
+    npt.assert_equal(tiny_model().spatial.n_gray, None)
+
+
+def test_threshold_applies_to_brightness_only():
+    # Thresholding drive before temporal summation would delete weak drive
+    # that repeated pulses still add up to.
+    model = tiny_model(thresh_percept=0.5)
+    npt.assert_almost_equal(model.spatial.thresh_percept, 0)
+    npt.assert_almost_equal(model.temporal.thresh_percept, 0.5)
+    data = model.predict_percept(spot()).data
+    weak = data[(data > 0)]
+    npt.assert_equal(np.all(weak >= 0.5), True)
 
 
 # -- Devices and scenes -----------------------------------------------------
