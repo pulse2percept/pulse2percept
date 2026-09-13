@@ -162,7 +162,12 @@ def check_dependencies() -> list[str]:
 
 def check_model_builds() -> list[str]:
     """The install is only useful if a model actually builds."""
-    print("\nBuilding a model:")
+    print("\nBuilding models:")
+    return _check_scoreboard() + _check_prima_ho2018()
+
+
+def _check_scoreboard() -> list[str]:
+    """ArgusII + ScoreboardModel -> nonempty percept."""
     try:
         from pulse2percept.implants.retina import ArgusII
         from pulse2percept.models.retina import ScoreboardModel
@@ -180,7 +185,49 @@ def check_model_builds() -> list[str]:
             return ["ScoreboardModel produced an empty percept"]
         print(f"  ScoreboardModel -> percept {percept.data.shape}, ok")
     except Exception as exc:  # noqa: BLE001
-        return [f"model build failed ({exc.__class__.__name__}: {exc})"]
+        return [f"ScoreboardModel failed ({exc.__class__.__name__}: {exc})"]
+    return []
+
+
+def _check_prima_ho2018() -> list[str]:
+    """ImageStimulus -> PRIMAPivotal optical encoder -> Ho2018Model.
+
+    Skipped below 0.11, where Ho2018Model was added; this script also runs
+    against the released PyPI package. Skip by version, not by catching
+    ImportError, which on 0.11+ is the failure this check exists to report.
+    """
+    from packaging.version import InvalidVersion, Version
+
+    try:
+        installed = Version(metadata.version(PKG))
+    except (metadata.PackageNotFoundError, InvalidVersion):
+        installed = None
+    if installed is not None and installed < Version("0.11.0.dev0"):
+        print(f"  PRIMAPivotal + Ho2018Model: skipped, needs 0.11.0.dev0 or "
+              f"newer (installed {installed})")
+        return []
+
+    try:
+        import numpy as np
+
+        from pulse2percept.implants.retina import PRIMAPivotal
+        from pulse2percept.models.retina import Ho2018Model
+        from pulse2percept.stimuli import ImageStimulus
+
+        # Tiny grid and image: smoke test, not a numerical regression.
+        model = Ho2018Model(PRIMAPivotal(), xrange=(-1, 1), yrange=(-1, 1),
+                            step=0.5, verbose=False)
+        stim = ImageStimulus(np.ones((4, 4), dtype=np.float32))
+        percept = model.predict_percept(stim)
+        if percept is None or percept.data.size == 0:
+            return ["Ho2018Model produced an empty percept"]
+        if not np.any(percept.data > 0):
+            return ["Ho2018Model produced no positive brightness"]
+        print(f"  PRIMAPivotal + Ho2018Model -> percept "
+              f"{percept.data.shape}, ok")
+    except Exception as exc:  # noqa: BLE001
+        return [f"PRIMAPivotal + Ho2018Model failed "
+                f"({exc.__class__.__name__}: {exc})"]
     return []
 
 

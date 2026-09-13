@@ -91,6 +91,7 @@ from . import models
 from . import percepts
 from . import plotting
 from . import stimuli
+from . import topography
 from . import units
 from . import utils
 from . import vision
