@@ -1270,6 +1270,11 @@ class _OpticalStimulus(Stimulus):
         return self._dur * self._freq / MS_PER_S
 
     @property
+    def pulse_time(self):
+        """Onset (ms) of every pulse period, one per ``pulse_dur`` column"""
+        return self._onsets * DT
+
+    @property
     def grayscale(self):
         """Whether gray levels were pulse-width modulated, not binarized"""
         return self._grayscale

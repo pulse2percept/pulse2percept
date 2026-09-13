@@ -77,6 +77,9 @@ Retinal stimulation
    * - [Granley2021]_
      - :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
      - spatiotemporal
+   * - [Ho2018]_
+     - :py:class:`~pulse2percept.models.retina.Ho2018Model`
+     - spatiotemporal
 
 Every retinal spatial model derives from
 :py:class:`~pulse2percept.models.retina.RetinalSpatial`, which places
@@ -100,6 +103,47 @@ differ in what they model:
 
 The published models add assumptions specific to their experiments and
 should be chosen when those assumptions are relevant.
+
+Photovoltaic stimulation
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+:py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` and
+:py:class:`~pulse2percept.stimuli.PRIMAEncoder` turn an image or video into
+the pulsed near-infrared schedule that drives a photovoltaic subretinal array.
+Two models consume it, and they answer different questions:
+
+:py:class:`~pulse2percept.models.retina.ScoreboardModel`
+    Visualizes normalized optical drive: where the light lands, relative to a
+    fully lit pixel. No retinal response.
+
+:py:class:`~pulse2percept.models.retina.Ho2018Model`
+    Predicts a phenomenological network-mediated retinal response. Each pulse
+    period's radiant exposure (irradiance x ON duration) drives a Gaussian
+    whose default ``rho`` is half the implant's median pixel pitch. A
+    difference of low-pass cascades then filters the per-pulse drive maps, so
+    the response is transient: a static image at a fixed pulse rate gives an
+    onset response that adapts.
+
+.. warning::
+
+    :py:class:`~pulse2percept.models.retina.Ho2018Model` reconstructs the
+    structure and timing of [Ho2018]_, not validated PRIMA percepts:
+
+    *  pON center response of degenerate (RCS) rat retina only, with no
+       antagonistic surround and no pOFF pathway;
+    *  a device-scaled Gaussian spread, ``rho = pitch / 2``, which is a
+       pulse2percept convention rather than a measured point-spread function
+       or the receptive-field size [Ho2018]_ reports;
+    *  a linear radiant-exposure activation law normalized to the 9 mW/mm^2,
+       4 ms reference pulse of [Ho2018]_, with no fitted irradiance,
+       pulse-duration or frequency nonlinearity;
+    *  no photovoltaic circuit or electric-field model, no electrode-retina
+       distance effect, and no wavelength or device-specific conversion
+       efficiency, so an 880 nm PRIMA pixel and a 915 nm pixel of another
+       design respond identically to the same radiant exposure;
+    *  default temporal coefficients matched to the Table 1 timing landmarks
+       of [Ho2018]_ rather than published by it, and no calibration to human
+       brightness or contrast perception.
 
 Cortical stimulation
 ~~~~~~~~~~~~~~~~~~~~

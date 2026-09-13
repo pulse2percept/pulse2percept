@@ -7,6 +7,7 @@ from skimage import img_as_float
 import imageio
 from imageio import mimread
 from matplotlib.animation import FuncAnimation
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 import json
@@ -177,6 +178,64 @@ def test_Percept_play_single_frame():
     # Without a time axis it is not an animation at all:
     with pytest.raises(ValueError):
         Percept(np.random.rand(4, 4, 1)).play()
+
+
+@pytest.mark.parametrize('gridded', (True, False))
+def test_Percept_play_uses_visual_field_axes(gridded):
+    """An animated percept lands on the same axes as a plotted one"""
+    grid = Grid2D((-4, 4), (-2, 2), step=1) if gridded else None
+    shape = grid.x.shape if gridded else (5, 9)
+    percept = Percept(np.random.rand(*shape, 3), space=grid,
+                      time=[0., 10., 20.])
+    played = percept.play(colorbar=False)._layers[0].image.axes
+    plotted = percept.plot(ax=plt.subplots()[1])
+    # Without an extent the player would show array indices instead:
+    npt.assert_almost_equal(played.get_xlim(), plotted.get_xlim())
+    npt.assert_almost_equal(played.get_ylim(), plotted.get_ylim())
+    npt.assert_equal(played.get_xlabel(), 'x (degrees of visual angle)')
+    npt.assert_equal(played.get_ylabel(), 'y (degrees of visual angle)')
+    if gridded:
+        npt.assert_almost_equal(played.get_xlim(), (-4, 4))
+        npt.assert_almost_equal(played.get_ylim(), (-2, 2))
+        # The frames span the pixel edges, half a step outside the centers:
+        npt.assert_almost_equal(played.images[0].get_extent(),
+                                (-4.5, 4.5, -2.5, 2.5))
+
+
+def test_Percept_play_orientation_matches_plot():
+    """The first data row animates where `plot` draws it"""
+    grid = Grid2D((-4, 4), (-2, 2), step=1)
+    data = np.zeros((*grid.x.shape, 1))
+    data[0, 0, 0] = 1.0
+    percept = Percept(data, space=grid, time=[0.])
+
+    def brightest(ax):
+        # Its own Agg canvas: `play` closes its figure, which on some
+        # Matplotlib versions leaves it without a renderer to draw into.
+        canvas = FigureCanvasAgg(ax.figure)
+        canvas.draw()
+        img = np.asarray(canvas.buffer_rgba())[..., :3].mean(-1)
+        box, height = ax.get_window_extent(canvas.get_renderer()), img.shape[0]
+        r0, r1 = int(height - box.y1) + 2, int(height - box.y0) - 2
+        c0, c1 = int(box.x0) + 2, int(box.x1) - 2
+        patch = img[r0:r1, c0:c1]
+        # Centroid of the lit pixels, so antialiasing cannot tip the answer:
+        rows, cols = np.nonzero(patch >= 0.5 * patch.max())
+        return ax.transData.inverted().transform(
+            (c0 + cols.mean(), height - (r0 + rows.mean())))
+
+    animation = percept.play(colorbar=False, annotate_time=False)
+    animation._func(0)
+    played = brightest(animation._layers[0].image.axes)
+    plotted = brightest(percept.plot(ax=plt.subplots()[1]))
+    npt.assert_allclose(played, plotted, atol=0.3)
+    # `grid.x[0, 0], grid.y[0, 0]` is the top-left corner; a flipped row order
+    # would put the lit cell in the bottom-left instead. The centroid sits
+    # inside the corner cell rather than on its center, which the axis limits
+    # clip, so check the quadrant rather than the exact coordinate.
+    npt.assert_array_less(played[0], 0)
+    npt.assert_array_less(0, played[1])
+    npt.assert_equal((grid.x[0, 0] < 0, grid.y[0, 0] > 0), (True, True))
 
 
 def test_Percept_play_fmt():

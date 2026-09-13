@@ -24,6 +24,9 @@ MOVED = ['AxonMapModel', 'AxonMapSpatial', 'BiphasicAxonMapModel',
          'Nanduri2012Temporal', 'ScoreboardModel', 'ScoreboardSpatial',
          'Thompson2003Model', 'Thompson2003Spatial']
 
+#: Retinal names added since the reorganization.
+ADDED = ['Ho2018Model', 'Ho2018Spatial', 'Ho2018Temporal']
+
 #: Implementation modules that moved out of the root.
 MOVED_MODULES = ['beyeler2019', '_beyeler2019', 'granley2021', '_granley2021',
                  'horsager2009', '_horsager2009', 'nanduri2012',
@@ -45,7 +48,8 @@ def test_old_implementation_modules_are_gone(module):
 
 
 @pytest.mark.parametrize('module, names', [
-    ('pulse2percept.models.retina', sorted(MOVED + ['RetinalSpatial'])),
+    ('pulse2percept.models.retina',
+     sorted(MOVED + ADDED + ['RetinalSpatial'])),
     ('pulse2percept.models.cortex',
      ['CortexSpatial', 'DynaphosModel', 'ScoreboardModel',
       'ScoreboardSpatial']),
@@ -67,6 +71,9 @@ def test_canonical_imports(module, names):
     ('pulse2percept.models.retina.granley2021', 'BiphasicAxonMapModel'),
     ('pulse2percept.models.retina.granley2021', 'BiphasicScoreboardSpatial'),
     ('pulse2percept.models.retina.granley2021', 'BiphasicScoreboardModel'),
+    ('pulse2percept.models.retina.ho2018', 'Ho2018Spatial'),
+    ('pulse2percept.models.retina.ho2018', 'Ho2018Temporal'),
+    ('pulse2percept.models.retina.ho2018', 'Ho2018Model'),
     ('pulse2percept.models.retina.horsager2009', 'Horsager2009Temporal'),
     ('pulse2percept.models.retina.horsager2009', 'Horsager2009Model'),
     ('pulse2percept.models.retina.nanduri2012', 'Nanduri2012Spatial'),

@@ -16,6 +16,8 @@ from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
                                          BiphasicAxonMapSpatial,
                                          BiphasicScoreboardModel,
                                          BiphasicScoreboardSpatial,
+                                         Ho2018Model, Ho2018Spatial,
+                                         Ho2018Temporal,
                                          Horsager2009Model,
                                          Horsager2009Temporal,
                                          Nanduri2012Model, Nanduri2012Spatial,
@@ -38,6 +40,8 @@ IMPLANT_MODELS = [
     (BiphasicAxonMapModel, 'bright_model'),
     (BiphasicScoreboardSpatial, 'bright_model'),
     (BiphasicScoreboardModel, 'bright_model'),
+    (Ho2018Spatial, 'rho'),
+    (Ho2018Model, 'tau1'),
     (Thompson2003Spatial, 'radius'),
     (Thompson2003Model, 'radius'),
     (Nanduri2012Spatial, 'atten_a'),
@@ -54,6 +58,7 @@ STANDALONE_MODELS = [
     (Horsager2009Temporal, 'beta'),
     (Horsager2009Model, 'beta'),
     (Nanduri2012Temporal, 'asymptote'),
+    (Ho2018Temporal, 'tau1'),
 ]
 
 #: Granley effect models, and their own parameter.

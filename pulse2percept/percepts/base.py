@@ -774,21 +774,29 @@ class Percept(Data):
             fig = ax.figure
         # Show an empty frame. The color scale spans the whole percept, so
         # that it does not shift with the display rate:
+        # Drawn on the same visual-field axes as `plot()`; without an
+        # extent the player would show array indices.
+        spatial = self.xdva is not None and self.ydva is not None
+        extent = _pixel_extent(self.xdva, self.ydva) if spatial else None
         if self.is_rgb:
             if vmin is not None or vmax is not None:
                 raise _reject_rgb('vmin/vmax', ' Its RGB values are shown as '
                                                'they are.')
             # No colormap and no brightness colorbar: an RGB frame carries its
             # own colors, and there is no one scale to put next to it.
-            mat = ax.imshow(np.zeros_like(self.data[..., 0]))
+            mat = ax.imshow(np.zeros_like(self.data[..., 0]), origin='upper',
+                            extent=extent)
         else:
             vmin, vmax = _resolve_clim(self.data, vmin, vmax, auto_vmin=0)
             mat = ax.imshow(np.zeros_like(self.data[..., 0]), cmap='gray',
-                            vmin=vmin, vmax=vmax)
+                            vmin=vmin, vmax=vmax, origin='upper',
+                            extent=extent)
             if colorbar:
                 cbar = fig.colorbar(mat)
                 cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
                                    va='center')
+        if spatial:
+            self._label_axes(ax)
         plt.close(fig)
         # Create the animation. The frame data is handed to HTMLAnimation so
         # that it can render the HTML player without going through Matplotlib:

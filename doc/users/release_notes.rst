@@ -53,7 +53,10 @@ Highlights
   :pull:`901`).
 
 * New photovoltaic stimulation pipeline for the PRIMA-style arrays, from image
-  encoding to irradiance-based model input (:pull:`868`, :pull:`891`).
+  encoding to irradiance-based model input, ending in the new
+  :py:class:`~pulse2percept.models.retina.Ho2018Model` of the
+  network-mediated retinal response (:pull:`868`, :pull:`891`,
+  :pull:`903`).
 
 
 API changes and improvements
@@ -143,6 +146,13 @@ Models
   ``predict_percept`` always returns perceived brightness on the model grid,
   a :py:class:`~pulse2percept.vision.Scene` included (:pull:`901`).
   
+* New :py:class:`~pulse2percept.models.retina.Ho2018Model` predicts a
+  spatiotemporal, network-mediated response to photovoltaic subretinal
+  stimulation. Anchored to [Ho2018]_ degenerate rat retina in
+  structure and timing only: pON center, no surround, no pOFF pathway, a
+  linear radiant-exposure activation law, no wavelength or device-specific
+  conversion efficiency, no clinical calibration (:pull:`903`).
+
 * New :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` and
   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` apply the
   [Granley2021]_ pulse-dependent brightness and size fits without axonal
