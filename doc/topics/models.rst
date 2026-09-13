@@ -118,12 +118,11 @@ Two models consume it, and they answer different questions:
 
 :py:class:`~pulse2percept.models.retina.Ho2018Model`
     Predicts a phenomenological network-mediated retinal response. Each pulse
-    period's radiant exposure (irradiance x ON duration) drives a Gaussian of
-    ``rho=97.5`` um, one standard deviation of the 195 um pON receptive field
-    [Ho2018]_ reports for degenerate rat retina. A difference of low-pass
-    cascades then filters the per-pulse drive maps, so the response is
-    transient: a static image at a fixed pulse rate gives an onset response
-    that adapts.
+    period's radiant exposure (irradiance x ON duration) drives a Gaussian
+    whose default ``rho`` is half the implant's median pixel pitch. A
+    difference of low-pass cascades then filters the per-pulse drive maps, so
+    the response is transient: a static image at a fixed pulse rate gives an
+    onset response that adapts.
 
 .. warning::
 
@@ -132,6 +131,9 @@ Two models consume it, and they answer different questions:
 
     *  pON center response of degenerate (RCS) rat retina only, with no
        antagonistic surround and no pOFF pathway;
+    *  a device-scaled Gaussian spread, ``rho = pitch / 2``, which is a
+       pulse2percept convention rather than a measured point-spread function
+       or the receptive-field size [Ho2018]_ reports;
     *  a linear radiant-exposure activation law normalized to the 9 mW/mm^2,
        4 ms reference pulse of [Ho2018]_, with no fitted irradiance,
        pulse-duration or frequency nonlinearity;

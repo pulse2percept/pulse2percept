@@ -11,6 +11,7 @@ from pulse2percept.implants.retina import (Lorach2015Array, PRIMAPivotal,
                                            RetinalImplant)
 from pulse2percept.implants.retina.prima import _PhotovoltaicRetinalImplant
 from pulse2percept.models import Model
+from pulse2percept.models.base import _electrode_pitch
 from pulse2percept.models.retina import (Ho2018Model, Ho2018Spatial,
                                          Ho2018Temporal)
 from pulse2percept.models.retina.ho2018 import _radiant_exposure
@@ -213,11 +214,56 @@ def test_reference_condition_gives_unit_drive():
 
 # -- Spatial response -------------------------------------------------------
 
-def test_default_rho_is_one_sigma_of_the_ho_receptive_field():
-    # The reported 195 um pON diameter is that of the fitted 1-sigma
-    # contour.
-    npt.assert_almost_equal(Ho2018Spatial(tiny_implant()).rho, 97.5)
-    npt.assert_almost_equal(Ho2018Model(tiny_implant()).spatial.rho, 97.5)
+def test_default_rho_is_half_the_electrode_pitch():
+    # A pulse2percept convention, resolved against the bound implant when the
+    # model is built -- not the receptive-field size [Ho2018]_ reports.
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        spatial = Ho2018Spatial(PRIMAPivotal(), xrange=(-1, 1),
+                                yrange=(-1, 1), step=0.5, verbose=False)
+        npt.assert_equal(spatial.rho, None)
+        spatial.build()
+        model = Ho2018Model(PRIMAPivotal(), xrange=(-1, 1), yrange=(-1, 1),
+                            step=0.5, verbose=False).build()
+    pitch = _electrode_pitch(spatial)
+    npt.assert_almost_equal(pitch, 100, decimal=6)
+    npt.assert_almost_equal(spatial.rho, pitch / 2)
+    npt.assert_almost_equal(model.spatial.rho, pitch / 2)
+
+
+def test_explicit_rho_is_left_alone():
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        spatial = Ho2018Spatial(PRIMAPivotal(), rho=250, xrange=(-1, 1),
+                                yrange=(-1, 1), step=0.5,
+                                verbose=False).build()
+        model = Ho2018Model(PRIMAPivotal(), rho=250, xrange=(-1, 1),
+                            yrange=(-1, 1), step=0.5, verbose=False).build()
+    npt.assert_almost_equal(spatial.rho, 250)
+    npt.assert_almost_equal(model.spatial.rho, 250)
+
+
+def test_rho_re_resolves_when_the_implant_changes():
+    spatial = Ho2018Spatial(tiny_implant(), xrange=(-1, 1), yrange=(-1, 1),
+                            step=0.5, verbose=False).build()
+    npt.assert_almost_equal(spatial.rho, 100)
+    spatial.implant = TinyArray(spacing=400,
+                                encoder=PhotovoltaicEncoder(**REF))
+    spatial.build()
+    npt.assert_almost_equal(spatial.rho, 200)
+
+
+def test_rho_needs_a_pitch_or_a_value():
+    # One electrode has no nearest neighbor to measure a pitch against.
+    single = TinyArray(shape=(1, 1), encoder=PhotovoltaicEncoder(**REF))
+    with pytest.raises(ValueError) as excinfo:
+        Ho2018Spatial(single, xrange=(-1, 1), yrange=(-1, 1), step=0.5,
+                      verbose=False).build()
+    npt.assert_equal('pitch' in str(excinfo.value), True)
+    # An explicit rho is all it takes:
+    spatial = Ho2018Spatial(single, rho=97.5, xrange=(-1, 1), yrange=(-1, 1),
+                            step=0.5, verbose=False).build()
+    npt.assert_almost_equal(spatial.rho, 97.5)
 
 
 def test_spatial_profile_is_a_gaussian_of_rho():

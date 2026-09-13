@@ -179,6 +179,55 @@ def test_Percept_play_single_frame():
         Percept(np.random.rand(4, 4, 1)).play()
 
 
+@pytest.mark.parametrize('gridded', (True, False))
+def test_Percept_play_uses_visual_field_axes(gridded):
+    """An animated percept lands on the same axes as a plotted one"""
+    grid = Grid2D((-4, 4), (-2, 2), step=1) if gridded else None
+    shape = grid.x.shape if gridded else (5, 9)
+    percept = Percept(np.random.rand(*shape, 3), space=grid,
+                      time=[0., 10., 20.])
+    played = percept.play(colorbar=False)._layers[0].image.axes
+    plotted = percept.plot(ax=plt.subplots()[1])
+    # Without an extent the player would show array indices instead:
+    npt.assert_almost_equal(played.get_xlim(), plotted.get_xlim())
+    npt.assert_almost_equal(played.get_ylim(), plotted.get_ylim())
+    npt.assert_equal(played.get_xlabel(), 'x (degrees of visual angle)')
+    npt.assert_equal(played.get_ylabel(), 'y (degrees of visual angle)')
+    if gridded:
+        npt.assert_almost_equal(played.get_xlim(), (-4, 4))
+        npt.assert_almost_equal(played.get_ylim(), (-2, 2))
+        # The frames span the pixel edges, half a step outside the centers:
+        npt.assert_almost_equal(played.images[0].get_extent(),
+                                (-4.5, 4.5, -2.5, 2.5))
+
+
+def test_Percept_play_orientation_matches_plot():
+    """The first data row animates where `plot` draws it"""
+    grid = Grid2D((-4, 4), (-2, 2), step=1)
+    data = np.zeros((*grid.x.shape, 1))
+    data[0, 0, 0] = 1.0
+    percept = Percept(data, space=grid, time=[0.])
+
+    def brightest(ax):
+        fig = ax.figure
+        fig.canvas.draw()
+        img = np.array(fig.canvas.renderer.buffer_rgba())[..., :3].mean(-1)
+        box, height = ax.get_window_extent(), img.shape[0]
+        r0, r1 = int(height - box.y1) + 2, int(height - box.y0) - 2
+        c0, c1 = int(box.x0) + 2, int(box.x1) - 2
+        row, col = np.unravel_index(np.argmax(img[r0:r1, c0:c1]),
+                                    (r1 - r0, c1 - c0))
+        return ax.transData.inverted().transform(
+            (c0 + col, height - (r0 + row)))
+
+    animation = percept.play(colorbar=False, annotate_time=False)
+    animation._func(0)
+    played = brightest(animation._layers[0].image.axes)
+    plotted = brightest(percept.plot(ax=plt.subplots()[1]))
+    npt.assert_allclose(played, plotted, atol=0.3)
+    npt.assert_allclose(played, (grid.x[0, 0], grid.y[0, 0]), atol=0.3)
+
+
 def test_Percept_play_fmt():
     percept = Percept(np.random.rand(8, 8, 4))
     # A percept is scalar, so the lossless default already costs only one byte

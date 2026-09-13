@@ -8,8 +8,8 @@ from ...stimuli.encoders import _OpticalStimulus
 from ...topography.retina import Watson2014Map
 from ...units import as_value, dimensionless, mW, mm, ms
 from ...percepts import Percept
-from ..base import (Model, TemporalModel, _require_stim_dimension,
-                    _thread_params)
+from ..base import (Model, TemporalModel, _electrode_pitch,
+                    _require_stim_dimension, _thread_params)
 from .beyeler2019 import ScoreboardSpatial
 
 #: Peak irradiance (mW/mm^2) of the [Ho2018]_ white-noise condition, which the
@@ -243,15 +243,18 @@ class Ho2018Spatial(ScoreboardSpatial):
         Photovoltaic implant whose pixel geometry is modeled. Its encoder
         converts images and videos into an optical schedule.
     rho : float or Quantity, optional
-        Gaussian spatial decay constant in microns. The default 97.5 um is one
-        standard deviation of the 195 um pON receptive-field diameter
-        [Ho2018]_ reports for degenerate (RCS) rat retina, that diameter being
-        the 1-sigma contour of the fitted Gaussian.
+        Gaussian spatial decay constant in microns. ``None`` (default) uses
+        half the implant's median nearest-neighbor pitch, resolved when the
+        model is built, and raises if the implant has no pitch (fewer than two
+        electrodes at distinct positions).
 
         .. important::
 
-            Electrode-retina distance (``z``) does not affect ``rho``, and
-            nonzero ``z`` raises a warning.
+            ``rho = pitch / 2`` is a pulse2percept convention: a spread on the
+            scale of the device, so that neighboring pixels stay resolvable.
+            It is neither a measured perceptual point-spread function nor the
+            receptive-field size [Ho2018]_ reports. Electrode-retina distance
+            (``z``) does not affect it, and nonzero ``z`` raises a warning.
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle, or a
@@ -306,7 +309,7 @@ class Ho2018Spatial(ScoreboardSpatial):
     #: The activation law reads irradiance and ON duration off the schedule.
     _needs_structured_stim = True
 
-    def __init__(self, implant, *, rho=97.5, xrange=(-15, 15),
+    def __init__(self, implant, *, rho=None, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
                  visual_field_map=None,
@@ -328,7 +331,28 @@ class Ho2018Spatial(ScoreboardSpatial):
     def get_default_params(self):
         """Return all settable parameters of the spatial response."""
         return {**super().get_default_params(),
-                'rho': 97.5, 'visual_field_map': Watson2014Map()}
+                'rho': None, 'visual_field_map': Watson2014Map()}
+
+    def __setattr__(self, name, value):
+        """Set a parameter, tracking whether ``rho`` is still deferred."""
+        super().__setattr__(name, value)
+        if name == 'rho':
+            object.__setattr__(self, '_rho_from_pitch', value is None)
+
+    def _build(self):
+        if self._rho_from_pitch:
+            pitch = _electrode_pitch(self)
+            if pitch is None:
+                raise ValueError(
+                    f"rho=None spreads activation over half this implant's "
+                    f"median electrode pitch, and "
+                    f"{type(self.implant).__name__} has none: that needs at "
+                    f"least two electrodes at distinct positions. Pass 'rho' "
+                    f"explicitly.")
+            # Past the parameter setter, so resolving neither invalidates the
+            # build in progress nor clears the sentinel.
+            object.__setattr__(self, 'rho', pitch / 2)
+        super()._build()
 
     def _stim_values(self, stim):
         """Return radiant-exposure drive for an optical schedule."""
@@ -381,7 +405,8 @@ class Ho2018Model(Model):
     """Network-mediated photovoltaic response model of [Ho2018]_.
 
     :py:class:`~pulse2percept.models.retina.Ho2018Spatial` turns an encoder's
-    optical schedule into one drive map per pulse period;
+    optical schedule into one drive map per pulse period, spread over half the
+    implant's pixel pitch;
     :py:class:`~pulse2percept.models.retina.Ho2018Temporal` filters those into
     a transient, spatially localized percept.
 
@@ -414,7 +439,9 @@ class Ho2018Model(Model):
     implant : :py:class:`~pulse2percept.implants.Implant`
         Photovoltaic implant whose pixel geometry is modeled.
     rho : float or Quantity, optional
-        Gaussian spatial decay constant in microns; see
+        Gaussian spatial decay constant in microns. ``None`` (default) uses
+        half the implant's median nearest-neighbor pitch, a pulse2percept
+        convention rather than a measured spread; see
         :py:class:`~pulse2percept.models.retina.Ho2018Spatial`.
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle.
@@ -463,7 +490,7 @@ class Ho2018Model(Model):
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
-    def __init__(self, implant, *, rho=97.5, xrange=(-15, 15),
+    def __init__(self, implant, *, rho=None, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  min_current_spread=1e-8, visual_field_map=None,
                  implant_position=(0, 0), implant_rotation=0, implant_depth=0,
