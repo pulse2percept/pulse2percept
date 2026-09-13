@@ -29,11 +29,7 @@ from pulse2percept.units import Hz, ms, xTh
 
 
 retinal_implant = p2p.implants.retina.ArgusII()
-retinal_model = p2p.models.retina.BiphasicAxonMapModel(
-    retinal_implant,
-    rho=200,
-    lam=800,
-)
+retinal_model = p2p.models.retina.BiphasicAxonMapModel(retinal_implant)
 
 stim = {
     'C5': p2p.stimuli.BiphasicPulseTrain(

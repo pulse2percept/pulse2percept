@@ -1,298 +1,191 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-Nanduri et al. (2012): Frequency vs. amplitude modulation
+Nanduri et al. (2012): Amplitude and frequency are not interchangeable
 ===============================================================================
 
-This example shows how to use the
-:py:class:`~pulse2percept.models.retina.Nanduri2012Model`.
+Turning a phosphene up can mean two things: more current per pulse, or more
+pulses per second. [Nanduri2012]_ showed that the two are not equivalent.
+Argus I users rated brightness and size while either the amplitude or the
+frequency of a 0.45 ms cathodic-first pulse train was varied from a common
+reference of 1.25x threshold at 20 Hz.
 
-The model introduced in [Nanduri2012]_ assumes that electrical stimulation
-leads to percepts that quickly increase in brightness (over the time course
-of ~100ms) and then slowly fade away (over the time course of seconds).
-The model also assumes that amplitude and frequency modulation have different
-effects on the perceived brightness and size of a phosphene.
-
-Generating a pulse train
-------------------------
-
-The first step is to build a pulse train using the
-:py:class:`~pulse2percept.stimuli.PulseTrain` class.
-We want to generate a 20Hz pulse train (0.45ms pulse duration, cathodic-first)
-at 30uA that lasts for a second:
-
+The reported result is an asymmetry: **brightness saturates with amplitude but
+keeps growing with frequency, while phosphene size grows mainly with
+amplitude.** This example reproduces that asymmetry with
+:py:class:`~pulse2percept.models.retina.Nanduri2012Model`, and recreates
+Figs. 7 and 8 of the paper.
 """
-# sphinx_gallery_thumbnail_number = 4
-from pulse2percept.stimuli import BiphasicPulseTrain, Stimulus
-tsample = 0.005  # sampling time step (ms)
-phase_dur = 0.45  # duration of the cathodic/anodic phase (ms)
-stim_dur = 1000  # stimulus duration (ms)
-amp_th = 30  # threshold current (uA)
-stim = BiphasicPulseTrain(20, amp_th, phase_dur, interphase_dur=phase_dur,
-                          stim_dur=stim_dur)
+# sphinx_gallery_thumbnail_number = 3
 
-# Configure Matplotlib:
 import matplotlib.pyplot as plt
-plt.style.use('ggplot')
-from matplotlib import rc
-rc('font', size=12)
+import numpy as np
 
-# Plot the stimulus in the range t=[0, 60] ms:
-stim.plot(time=(0, 60))
-
-###############################################################################
-# Creating an implant
-# -------------------
-#
-# Before we can run the Nanduri model, we need to create a retinal implant to
-# which we can assign the above pulse train.
-#
-# For the purpose of this exercise, we will create an
-# :py:class:`~pulse2percept.implants.ElectrodeArray` consisting of a single
-# :py:class:`~pulse2percept.implants.DiskElectrode` with radius=260um at the
-# array's local origin:
-
-from pulse2percept.implants import DiskElectrode, ElectrodeArray
-electrode_array = ElectrodeArray(DiskElectrode(0, 0, 0, 260))
-
-###############################################################################
-# Usually we would use a predefined retinal implant such as
-# :py:class:`~pulse2percept.implants.retina.ArgusII` or
-# :py:class:`~pulse2percept.implants.retina.AlphaIMS`. Alternatively, we can
-# wrap the
-# electrode array created above with a
-# :py:class:`~pulse2percept.implants.Implant` to create our own
-# retinal implant:
-
-from pulse2percept.implants import Implant
-implant = Implant(electrode_array)
-
-###############################################################################
-# Running the model
-# -----------------
-#
-# Interacting with a model always involves two steps:
-#
-# 1.  **Initalize** the model, bound to the implant it describes, by passing
-#     the desired parameters.
-# 2.  **Predict** the percept for a given stimulus.
-#
-# In the following, we will run the Nanduri model on a single pixel, (0, 0):
-
+from pulse2percept.datasets import load_nanduri2012
+from pulse2percept.implants import DiskElectrode, ElectrodeArray, Implant
 from pulse2percept.models.retina import Nanduri2012Model
+from pulse2percept.stimuli import BiphasicPulseTrain
+
+###############################################################################
+# The stimulated electrode
+# ------------------------
+#
+# The experiment stimulated one Argus I disk electrode at a time. That is what
+# the simulation represents: a single 260 um radius
+# :py:class:`~pulse2percept.implants.DiskElectrode` at the array origin, rather
+# than a named multi-electrode device. Amplitudes are expressed as multiples of
+# that electrode's threshold, taken here as 30 uA.
+
+AMP_TH = 30       # threshold current (uA)
+PHASE_DUR = 0.45  # cathodic/anodic phase duration (ms)
+STIM_DUR = 500    # stimulus duration (ms), as in the experiment
+
+implant = Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+
+###############################################################################
+# Brightness over time
+# --------------------
+#
+# The model is a cascade of linear filters and a stationary nonlinearity.
+# Predicted at a single point, (0, 0), it produces the time course the paper
+# describes: brightness rises within about 100 ms, then fades. "Brightness of a
+# stimulus" below always means the maximum of that time course.
+
 model = Nanduri2012Model(implant=implant, xrange=(0, 0), yrange=(0, 0))
 
-###############################################################################
-# .. note::
-#
-#     You can also directly instantiate
-#     :py:class:`~pulse2percept.models.retina.Nanduri2012Temporal` and pass a stimulus
-#     to it. However, please note that there might be subtle differences; e.g.,
-#     :py:class:`~pulse2percept.models.retina.Nanduri2012Model` will pass the stimulus
-#     through the spatial model first.
-#
-# The input to the model is the stimulus (usually a pulse train), which the
-# implant delivers and which is then processed in time by a number of linear
-# filtering steps as well as a stationary nonlinearity (a sigmoid). The model
-# performs its one-time setup computations on this first call:
-import numpy as np
-percept = model.predict_percept(stim, t_percept=np.arange(1000))
-
-###############################################################################
-# The output of the model is a :py:class:`~pulse2percept.percepts.Percept`
-# object that contains a time series with the predicted brightness of the
-# visual percept at every time step.
-#
-# "Brightness of a stimulus" is defined as the maximum brightness value
-# encountered over time:
-
-bright_th = percept.data.max()
-bright_th
-
-###############################################################################
-# Plotting the percept next to the applied stimulus reveals that the model
-# predicts the perceived brightness to increase rapidly (within ~100ms) and
-# then drop off slowly (over the time course of seconds).
-# This is consistent with behavioral reports from Argus II users.
-
-# What the device actually delivers, rather than the description above:
+stim = BiphasicPulseTrain(20, AMP_TH, PHASE_DUR, interphase_dur=PHASE_DUR,
+                          stim_dur=STIM_DUR)
+percept = model.predict_percept(stim, t_percept=np.arange(STIM_DUR))
 delivered = implant.prepare_stim(stim)
 
-fig, ax = plt.subplots(figsize=(12, 5))
+fig, ax = plt.subplots(figsize=(10, 4))
 ax.plot(delivered.time,
         -0.02 + 0.01 * delivered.data[0, :] / delivered.data.max(),
-        linewidth=3, label='pulse')
-ax.plot(percept.time, percept.data[0, 0, :], linewidth=3, label='percept')
-ax.plot([0, stim_dur], [bright_th, bright_th], 'k--', label='max brightness')
-ax.plot([0, stim_dur], [0, 0], 'k')
-
-ax.set_xlabel('time (s)')
+        linewidth=2, label='pulse train')
+ax.plot(percept.time, percept.data[0, 0, :], linewidth=2, label='percept')
+ax.axhline(percept.data.max(), color='k', linestyle='--',
+           label='max brightness')
+ax.axhline(0, color='k')
+ax.set_xlabel('time (ms)')
 ax.set_ylabel('predicted brightness (a.u.)')
-ax.set_yticks(np.arange(0, 0.14, 0.02))
-ax.set_xlim(0, stim_dur)
-fig.legend(loc='center')
+ax.set_xlim(0, STIM_DUR)
+ax.legend(loc='center right')
 fig.tight_layout()
 
 ###############################################################################
-# .. note::
+# The brightness asymmetry
+# ------------------------
 #
-#     In psychophysical experiments, brightness is usually expressed in
-#     relative terms; i.e., compared to a reference stimulus. In the model,
-#     brightness has arbitrary units.
-#
-# Brightness as a function of frequency/amplitude
-# -----------------------------------------------
-#
-# The Nanduri paper reports that amplitude and frequency have different effects
-# on the perceived brightness of a phosphene.
-#
-# To study these effects, we will apply the model to a number of amplitudes and
-# frequencies:
+# The dataset holds the measured ratings for both modulation directions, each
+# relative to the same 1.25xTh / 20 Hz reference. Re-simulating exactly those
+# conditions gives the model's counterpart:
 
-# Use the following pulse duration (ms):
-pdur = 0.45
-# Generate values in the range [0, 50] uA with a step size of 5 uA or smaller:
-amps = np.linspace(0, 50, 11)
-# Initialize an empty list that will contain the predicted brightness values:
-bright_amp = []
-for amp in amps:
-    # For each value in the `amps` vector, now stored as `amp`, do the
-    # following:
-    # 1. Generate a pulse train with amplitude `amp`, 20 Hz frequency, 0.5 s
-    #    duration, pulse duration `pdur`, and interphase gap `pdur`:
-    trial = BiphasicPulseTrain(20, amp, pdur, interphase_dur=pdur,
-                               stim_dur=stim_dur)
-    # 2. Run the temporal model:
-    percept = model.predict_percept(trial)
-    # 3. Find the largest value in percept, this will be the predicted
-    # brightness:
-    bright_pred = percept.data.max()
-    # 4. Append this value to `bright_amp`:
-    bright_amp.append(bright_pred)
+data = load_nanduri2012(task='rate')
+amp_rows = data[data.varied_param == 'amp']
+freq_rows = data[data.varied_param == 'freq']
+
+amp_factors = sorted(amp_rows.amp_factor.unique())
+freqs = sorted(freq_rows.freq.unique())
+
+
+def brightness(amp_factor, freq):
+    """Peak predicted brightness for one pulse-train condition"""
+    train = BiphasicPulseTrain(freq, amp_factor * AMP_TH, PHASE_DUR,
+                               interphase_dur=PHASE_DUR, stim_dur=STIM_DUR)
+    return model.predict_percept(train).data.max()
+
+
+reference = brightness(1.25, 20)
+model_amp = np.array([brightness(f, 20) for f in amp_factors]) / reference
+model_freq = np.array([brightness(1.25, f) for f in freqs]) / reference
 
 ###############################################################################
-# We then repeat the procedure for a whole range of frequencies:
+# Measured ratings and model predictions are on unrelated scales -- one is a
+# subject's rating relative to a reference stimulus, the other is in arbitrary
+# model units -- so they are shown normalized to that shared reference and in
+# separate rows, each row on its own shared axis. What is being compared is
+# the *shape* of each curve, not its gain:
 
-# Generate values in the range [0, 100] Hz with a step size of 10 Hz or
-# smaller:
-freqs = np.linspace(0, 100, 11)
-# Initialize an empty list that will contain the predicted brightness values:
-bright_freq = []
-for freq in freqs:
-    # For each value in the `amps` vector, now stored as `amp`, do the
-    # following:
-    # 1. Generate a pulse train with amplitude `amp`, 20 Hz frequency, 0.5 s
-    #    duration, pulse duration `pdur`, and interphase gap `pdur`:
-    trial = BiphasicPulseTrain(freq, 20, pdur, interphase_dur=pdur,
-                               stim_dur=stim_dur)
-    # 2. Run the temporal model
-    percept = model.predict_percept(trial)
-    # 3. Find the largest value in percept, this will be the predicted
-    # brightness:
-    bright_pred = percept.data.max()
-    # 4. Append this value to `bright_amp`:
-    bright_freq.append(bright_pred)
+fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharey='row')
 
-###############################################################################
-# Plotting the two curves side-by-side reveals that the model predicts
-# brightness to saturate quickly with increasing amplitude, but to scale
-# linearly with stimulus frequency:
+for electrode, group in amp_rows.groupby('electrode'):
+    group = group.sort_values('amp_factor')
+    ref = group[group.amp_factor == 1.25].brightness.values[0]
+    axes[0, 0].plot(group.amp_factor, group.brightness / ref, 'o-',
+                    color='0.6', markersize=4, linewidth=1)
+for electrode, group in freq_rows.groupby('electrode'):
+    group = group.sort_values('freq')
+    ref = group[group.freq == 20].brightness.values[0]
+    axes[0, 1].plot(group.freq, group.brightness / ref, 'o-',
+                    color='0.6', markersize=4, linewidth=1)
 
-fig, ax = plt.subplots(ncols=2, sharey=True, figsize=(12, 5))
+axes[1, 0].plot(amp_factors, model_amp, 'ko-', linewidth=2)
+axes[1, 1].plot(freqs, model_freq, 'ko-', linewidth=2)
 
-ax[0].plot(amps, bright_amp, 'o-', linewidth=4)
-ax[0].set_xlabel('amplitude (uA)')
-ax[0].set_ylabel('predicted brightness (a.u.)')
-
-ax[1].plot(freqs, bright_freq, 'o-', linewidth=4)
-ax[1].set_xlabel('frequency (Hz)')
-
+axes[0, 0].set_title('amplitude modulation (20 Hz)')
+axes[0, 1].set_title('frequency modulation (1.25xTh)')
+axes[0, 0].set_ylabel('rated brightness\n(re reference)')
+axes[1, 0].set_ylabel('predicted brightness\n(re reference)')
+axes[1, 0].set_xlabel('amplitude (xTh)')
+axes[1, 1].set_xlabel('frequency (Hz)')
 fig.tight_layout()
 
 ###############################################################################
-# Phosphene size as a function of amplitude/frequency
-# ---------------------------------------------------
+# Both rows show the same asymmetry: raising amplitude buys progressively less
+# brightness, while raising frequency keeps buying it. The model is steeper in
+# frequency and flatter in amplitude than the ratings, which is expected --
+# the parameters here are the published defaults, not refit to these eight
+# electrodes, and a subject's rating scale is not linear in model brightness.
 #
-# The paper also reports that phosphene size is affected differently by
-# amplitude vs. frequency modulation.
+# Phosphene size (Fig. 7)
+# -----------------------
 #
-# To introduce space into the model, we need to re-instantiate the model and
-# this time provide a range of (x,y) values to simulate. These values are
-# specified in degrees of visual angle (dva). They are sampled at ``xydva``
-# dva:
+# Size needs space, so the model is rebuilt over a patch of visual field rather
+# than a single point. The conditions are those of Fig. 7:
 
 model = Nanduri2012Model(implant=implant, step=0.5, xrange=(-4, 4),
                          yrange=(-4, 4))
 
-###############################################################################
-# We will again apply the model to a whole range of amplitude and frequency
-# values taken directly from the paper:
+t_percept = np.arange(0, STIM_DUR, 1)
+fig7_amps = [1, 1.25, 1.5, 2, 4, 6]
+fig7_freqs = [40.0 / 3, 20, 2.0 * 40 / 3, 40, 80, 120]
 
-# Use the amplitude values from the paper:
-amp_factors = [1, 1.25, 1.5, 2, 4, 6]
+frames_amp = [model.predict_percept(
+    BiphasicPulseTrain(20, a * AMP_TH, PHASE_DUR, interphase_dur=PHASE_DUR,
+                       stim_dur=STIM_DUR),
+    t_percept=t_percept).max(axis='frames') for a in fig7_amps]
 
-# Output brightness in 1ms time steps:
-t_percept = np.arange(0, stim_dur, 1)
+frames_freq = [model.predict_percept(
+    BiphasicPulseTrain(f, 1.25 * AMP_TH, PHASE_DUR, interphase_dur=PHASE_DUR,
+                       stim_dur=STIM_DUR),
+    t_percept=t_percept).max(axis='frames') for f in fig7_freqs]
 
-# Initialize an empty list that will contain the brightest frames:
-frames_amp = []
-
-for amp_f in amp_factors:
-    # For each value in the `amp_factors` vector, now stored as `amp_f`, do:
-    # 1. Generate a pulse train with amplitude `amp_f` * `amp_th`, frequency
-    #    20Hz, 0.5s duration, pulse duration `pdur`, and interphase gap `pdur`:
-    trial = BiphasicPulseTrain(20, amp_f * amp_th, pdur,
-                               interphase_dur=pdur, stim_dur=stim_dur)
-    # 2. Run the temporal model:
-    percept = model.predict_percept(trial, t_percept=t_percept)
-    # 3. Save the brightest frame:
-    frames_amp.append(percept.max(axis='frames'))
-
-# Use the amplitude values from the paper:
-freqs = [40.0 / 3, 20, 2.0 * 40 / 3, 40, 80, 120]
-
-# Initialize an empty list that will contain the brightest frames:
-frames_freq = []
-
-for freq in freqs:
-    # For each value in the `freqs` vector, now stored as `freq`, do:
-    # 1. Generate a pulse train with amplitude 1.25 * `amp_th`, frequency
-    #    `freq`, 0.5s duration, pulse duration `pdur`, and interphase gap
-    #    `pdur`:
-    trial = BiphasicPulseTrain(freq, 1.25 * amp_th, pdur,
-                               interphase_dur=pdur, stim_dur=stim_dur)
-    # 2. Run the temporal model:
-    percept = model.predict_percept(trial, t_percept=t_percept)
-    # 3. Save the brightest frame:
-    frames_freq.append(percept.max(axis='frames'))
-
-###############################################################################
-# This allows us to reproduce Fig. 7 of [Nanduri2012]_:
-
-fig, axes = plt.subplots(nrows=2, ncols=len(amp_factors), figsize=(16, 6))
-
-for ax, amp, frame in zip(axes[0], amp_factors, frames_amp):
+fig, axes = plt.subplots(nrows=2, ncols=len(fig7_amps), figsize=(14, 5))
+for ax, amp, frame in zip(axes[0], fig7_amps, frames_amp):
     ax.imshow(frame, vmin=0, vmax=0.3, cmap='gray')
-    ax.set_title(f'{amp:.2g} xTh / 20 Hz', fontsize=16)
+    ax.set_title(f'{amp:.2g}xTh / 20 Hz', fontsize=11)
     ax.set_xticks([])
     ax.set_yticks([])
 axes[0][0].set_ylabel('amplitude\nmodulation')
 
-for ax, freq, frame in zip(axes[1], freqs, frames_freq):
+for ax, freq, frame in zip(axes[1], fig7_freqs, frames_freq):
     ax.imshow(frame, vmin=0, vmax=0.3, cmap='gray')
-    ax.set_title(f'1.25xTh / {freq} Hz', fontsize=16)
+    ax.set_title(f'1.25xTh / {freq:.0f} Hz', fontsize=11)
     ax.set_xticks([])
     ax.set_yticks([])
 axes[1][0].set_ylabel('frequency\nmodulation')
+fig.tight_layout()
 
 ###############################################################################
-# Phosphene size as a function of brightness
-# ------------------------------------------
+# Size vs brightness (Fig. 8)
+# ---------------------------
 #
-# Lastly, the above data can also be visualized as a function of brightness to
-# highlight the difference between frequency and amplitude modulation (see
-# Fig.8 of [Nanduri2012]_):
+# Plotting suprathreshold area against brightness separates the two
+# modulations: amplitude buys area, frequency mostly does not.
 
+bright_th = brightness(1, 20)
+
+plt.figure()
 plt.plot([np.max(frame) for frame in frames_amp],
          [np.sum(frame >= bright_th) for frame in frames_amp],
          'o-', label='amplitude modulation')
@@ -300,5 +193,20 @@ plt.plot([np.max(frame) for frame in frames_freq],
          [np.sum(frame >= bright_th) for frame in frames_freq],
          'o-', label='frequency modulation')
 plt.xlabel('brightness (a.u.)')
-plt.ylabel('area (# pixels)')
+plt.ylabel('area (# suprathreshold pixels)')
 plt.legend()
+
+###############################################################################
+# What this does not establish
+# ----------------------------
+#
+# * Model brightness is in arbitrary units and is not calibrated to a
+#   psychophysical rating scale. Only relative comparisons within one figure
+#   are meaningful.
+# * The 30 uA threshold and the single 260 um disk electrode stand in for one
+#   Argus I electrode. Thresholds vary by more than an order of magnitude
+#   across electrodes and subjects.
+# * [Nanduri2012]_ measured 1 subject on 8 electrodes in the rating task. The
+#   asymmetry is a group-level trend, not a per-electrode prediction.
+# * Area here is counted in model pixels above the reference brightness, which
+#   is not the drawn phosphene size the subjects reported.
