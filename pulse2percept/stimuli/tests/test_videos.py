@@ -348,6 +348,40 @@ def test_VideoStimulus_crop(tmp_path):
         stim.crop(idx_space=[5, 10, 25, 9])
 
 
+def test_VideoStimulus_crop_full_extent(tmp_path):
+    # y1/x1 are exclusive slice endpoints, so the full frame extent must be
+    # accepted (see Issue #867):
+    fname = str(tmp_path / 'test.mp4')
+    shape = (10, 48, 32)
+    ndarray = np.random.rand(*shape)
+    mimwrite(fname, (255 * ndarray).astype(np.uint8), fps=1)
+    stim = VideoStimulus(fname, as_gray=True)
+    height, width, n_frames = stim.vid_shape
+
+    # Time-only crop must leave the spatial extent (and thus the electrode
+    # names) untouched:
+    cropped = stim.crop(front=3)
+    npt.assert_equal(cropped.vid_shape, (height, width, n_frames - 3))
+    npt.assert_almost_equal(cropped.data,
+                            stim.data.reshape(stim.vid_shape)[..., 3:]
+                            .reshape(height * width, -1))
+    npt.assert_equal(cropped.time, stim.time[3:])
+    npt.assert_array_equal(cropped.electrodes, stim.electrodes)
+
+    # The same via an explicit full-extent rectangle:
+    cropped = stim.crop(idx_space=[0, 0, height, width])
+    npt.assert_equal(cropped.vid_shape, stim.vid_shape)
+    npt.assert_almost_equal(cropped.data, stim.data)
+    npt.assert_equal(cropped.time, stim.time)
+    npt.assert_array_equal(cropped.electrodes, stim.electrodes)
+
+    # One past the full extent is still out of range:
+    with pytest.raises(ValueError):
+        stim.crop(idx_space=[0, 0, height + 1, width])
+    with pytest.raises(ValueError):
+        stim.crop(idx_space=[0, 0, height, width + 1])
+
+
 def test_VideoStimulus_rotate():
     # Create a horizontal bar:
     shape = (5, 5, 3)

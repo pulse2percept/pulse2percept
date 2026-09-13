@@ -2678,9 +2678,10 @@ class VideoStimulus(Stimulus):
         if y0 < 0 or x0 < 0:
             raise ValueError(f"Top-left corner (y0,x0)=({y0},{x0}) lies "
                              f"outside the video frame.")
-        if y1 >= self.vid_shape[0] or x1 >= self.vid_shape[1]:
-            raise ValueError(f"Bottom-right corner (y1,x1)=({y1},{x1}) lies "
-                             f"outside the video frame.")
+        if y1 > self.vid_shape[0] or x1 > self.vid_shape[1]:
+            raise ValueError(f"Bottom-right corner "
+                             f"(y1-1,x1-1)=({y1-1},{x1-1}) lies outside the "
+                             f"video frame.")
         if t1 <= t0:
             raise ValueError(f"Start and stop frame do not form a valid range: "
                              f"t0={t0}, t1={t1}.")
