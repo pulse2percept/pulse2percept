@@ -7,6 +7,7 @@ from skimage import img_as_float
 import imageio
 from imageio import mimread
 from matplotlib.animation import FuncAnimation
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 import json
@@ -209,23 +210,32 @@ def test_Percept_play_orientation_matches_plot():
     percept = Percept(data, space=grid, time=[0.])
 
     def brightest(ax):
-        fig = ax.figure
-        fig.canvas.draw()
-        img = np.array(fig.canvas.renderer.buffer_rgba())[..., :3].mean(-1)
-        box, height = ax.get_window_extent(), img.shape[0]
+        # Its own Agg canvas: `play` closes its figure, which on some
+        # Matplotlib versions leaves it without a renderer to draw into.
+        canvas = FigureCanvasAgg(ax.figure)
+        canvas.draw()
+        img = np.asarray(canvas.buffer_rgba())[..., :3].mean(-1)
+        box, height = ax.get_window_extent(canvas.get_renderer()), img.shape[0]
         r0, r1 = int(height - box.y1) + 2, int(height - box.y0) - 2
         c0, c1 = int(box.x0) + 2, int(box.x1) - 2
-        row, col = np.unravel_index(np.argmax(img[r0:r1, c0:c1]),
-                                    (r1 - r0, c1 - c0))
+        patch = img[r0:r1, c0:c1]
+        # Centroid of the lit pixels, so antialiasing cannot tip the answer:
+        rows, cols = np.nonzero(patch >= 0.5 * patch.max())
         return ax.transData.inverted().transform(
-            (c0 + col, height - (r0 + row)))
+            (c0 + cols.mean(), height - (r0 + rows.mean())))
 
     animation = percept.play(colorbar=False, annotate_time=False)
     animation._func(0)
     played = brightest(animation._layers[0].image.axes)
     plotted = brightest(percept.plot(ax=plt.subplots()[1]))
     npt.assert_allclose(played, plotted, atol=0.3)
-    npt.assert_allclose(played, (grid.x[0, 0], grid.y[0, 0]), atol=0.3)
+    # `grid.x[0, 0], grid.y[0, 0]` is the top-left corner; a flipped row order
+    # would put the lit cell in the bottom-left instead. The centroid sits
+    # inside the corner cell rather than on its center, which the axis limits
+    # clip, so check the quadrant rather than the exact coordinate.
+    npt.assert_array_less(played[0], 0)
+    npt.assert_array_less(0, played[1])
+    npt.assert_equal((grid.x[0, 0] < 0, grid.y[0, 0] > 0), (True, True))
 
 
 def test_Percept_play_fmt():
