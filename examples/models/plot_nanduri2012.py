@@ -12,9 +12,13 @@ reference of 1.25x threshold at 20 Hz.
 
 The reported result is an asymmetry: **brightness saturates with amplitude but
 keeps growing with frequency, while phosphene size grows mainly with
-amplitude.** This example reproduces that asymmetry with
-:py:class:`~pulse2percept.models.retina.Nanduri2012Model`, and recreates
-Figs. 7 and 8 of the paper.
+amplitude.** This example reproduces the frequency half of that result with
+:py:class:`~pulse2percept.models.retina.Nanduri2012Model` and recreates
+Figs. 7 and 8. The amplitude half cannot be compared quantitatively here, for
+a reason worth stating up front: the model's amplitude nonlinearity spans only
+about a factor of 3.5 in retinal current, while the experiment swept a factor
+of 6, so the predicted amplitude curve is governed by where perceptual
+threshold is assumed to sit rather than by the measured ratings.
 """
 # sphinx_gallery_thumbnail_number = 3
 
@@ -30,17 +34,24 @@ from pulse2percept.stimuli import BiphasicPulseTrain
 # The stimulated electrode
 # ------------------------
 #
-# The experiment stimulated one Argus I disk electrode at a time. That is what
-# the simulation represents: a single 260 um radius
-# :py:class:`~pulse2percept.implants.DiskElectrode` at the array origin, rather
-# than a named multi-electrode device. Amplitudes are expressed as multiples of
-# that electrode's threshold, taken here as 30 uA.
+# The experiment stimulated one Argus I disk electrode at a time, so the
+# simulation is a single :py:class:`~pulse2percept.implants.DiskElectrode` at
+# the array origin rather than a named multi-electrode device. Five of the
+# eight electrodes in the rating task are Argus I's larger type, 500 um across,
+# so the radius is 250 um. The Nanduri spatial model activates the retina
+# uniformly beneath a disk and decays from its edge, so this radius sets
+# phosphene size but has no effect on brightness directly under the electrode.
+#
+# ``AMP_TH`` is a stand-in threshold, not a published value: the electrode sits
+# at ``z = 0``, in the retinal plane, where the current-spread term is exactly
+# 1, so the model receives the full electrode current. See the caveats at the
+# end for what this costs.
 
-AMP_TH = 30       # threshold current (uA)
+AMP_TH = 30       # assumed threshold current (uA)
 PHASE_DUR = 0.45  # cathodic/anodic phase duration (ms)
 STIM_DUR = 500    # stimulus duration (ms), as in the experiment
 
-implant = Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260)))
+implant = Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 250)))
 
 ###############################################################################
 # Brightness over time
@@ -120,6 +131,9 @@ for electrode, group in freq_rows.groupby('electrode'):
                     color='0.6', markersize=4, linewidth=1)
 
 axes[1, 0].plot(amp_factors, model_amp, 'ko-', linewidth=2)
+axes[1, 0].axvspan(2, 6, color='0.9', zorder=0)
+axes[1, 0].text(2.2, 0.92, 'nonlinearity saturated', fontsize=8, color='0.4',
+                transform=axes[1, 0].get_xaxis_transform())
 axes[1, 1].plot(freqs, model_freq, 'ko-', linewidth=2)
 
 axes[0, 0].set_title('amplitude modulation (20 Hz)')
@@ -131,11 +145,26 @@ axes[1, 1].set_xlabel('frequency (Hz)')
 fig.tight_layout()
 
 ###############################################################################
-# Both rows show the same asymmetry: raising amplitude buys progressively less
-# brightness, while raising frequency keeps buying it. The model is steeper in
-# frequency and flatter in amplitude than the ratings, which is expected --
-# the parameters here are the published defaults, not refit to these eight
-# electrodes, and a subject's rating scale is not linear in model brightness.
+# The **frequency** comparison is a real reproduction. The model predicts
+# 0.79 / 1.00 / 1.20 / 1.84 / 3.47 / 5.00 at 15-120 Hz against measured means
+# of 0.76 / 1.00 / 1.12 / 1.72 / 2.39 / 3.03 (SD 0.15-1.38 across the eight
+# electrodes): the same monotone growth, steeper than the ratings but inside
+# the spread of the data. This curve does not depend on ``AMP_TH`` at all,
+# because the model's gain is renormalized by the peak of its own fast
+# response, which divides the amplitude dependence back out.
+#
+# The **amplitude** comparison is not a reproduction, and the flat curve should
+# not be read as the model agreeing with "brightness saturates". The
+# nonlinearity is a logistic in the peak fast response, which for a 0.45 ms
+# phase is about 0.66x the retinal current; with the published midpoint of 16
+# and slope of 3, it runs from threshold to full saturation between roughly
+# 12 and 45 uA. At ``AMP_TH = 30`` the sweep therefore *starts* 86% saturated
+# and is fully clipped by 2xTh. The predicted 6xTh / 1.25xTh ratio is entirely
+# a function of the assumed threshold -- 38.6 at 5 uA, 6.5 at 15 uA, 2.7 at
+# 20 uA, 1.5 at 25 uA, 1.15 at 30 uA, 1.0 at 40 uA -- against a measured
+# 1.83 +/- 0.67. No threshold reproduces the measured shape, because the
+# experiment swept a factor of 6 in amplitude through a nonlinearity that
+# spans a factor of about 3.5.
 #
 # Phosphene size (Fig. 7)
 # -----------------------
@@ -203,9 +232,14 @@ plt.legend()
 # * Model brightness is in arbitrary units and is not calibrated to a
 #   psychophysical rating scale. Only relative comparisons within one figure
 #   are meaningful.
-# * The 30 uA threshold and the single 260 um disk electrode stand in for one
-#   Argus I electrode. Thresholds vary by more than an order of magnitude
-#   across electrodes and subjects.
+# * ``AMP_TH = 30`` uA is an assumption, and the amplitude figure is a
+#   statement about that assumption rather than about the data. A physically
+#   placed electrode would sit above the retina, where the current-spread term
+#   attenuates; that rescales the current reaching the nonlinearity but cannot
+#   widen it, so no geometry recovers the measured amplitude curve either.
+# * Real Argus I thresholds vary by more than an order of magnitude across
+#   electrodes and subjects, and the eight electrodes pooled in the top row
+#   have thresholds of their own that the dataset does not report.
 # * [Nanduri2012]_ measured 1 subject on 8 electrodes in the rating task. The
 #   asymmetry is a group-level trend, not a per-electrode prediction.
 # * Area here is counted in model pixels above the reference brightness, which
