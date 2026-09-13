@@ -7,30 +7,35 @@
 
    Overview <self>
    install
-   Getting Started <examples/plot_getting_started>
-   examples/index
+   Quickstart <examples/plot_getting_started>
 
 .. toctree::
-   :caption: Basic concepts
+   :caption: Core concepts
    :hidden:
 
    topics/implants
-   topics/stimuli
+   topics/stimulation
    topics/models
-   topics/encoders
-   topics/rasters
+   topics/vision
+   topics/coordinates
    topics/units
    topics/datasets
 
 .. toctree::
-   :caption: User Guide
+   :caption: Scientific examples
+   :hidden:
+
+   examples/index
+
+.. toctree::
+   :caption: Reference
    :hidden:
 
    users/api
    users/faq
-   users/news
    users/release_notes
    users/references
+   users/news
 
 .. toctree::
    :caption: Developer Guide
@@ -64,12 +69,15 @@ Compatibility
 Where to go from here
 =====================
 
-*  Start with the :doc:`Getting Started <examples/plot_getting_started>` guide.
-*  Explore the :doc:`Example Gallery <examples/index>` for complete simulations and use cases.
-* Learn about :doc:`visual implants <topics/implants>`,
-  :doc:`electrical stimuli <topics/stimuli>`, and our
-  :doc:`computational models <topics/models>`.
-* Check the :doc:`FAQ <users/faq>` for common questions.
+*  Start with the :doc:`Quickstart <examples/plot_getting_started>` guide.
+*  Learn the core concepts: :doc:`visual prostheses <topics/implants>`,
+   :doc:`stimulation <topics/stimulation>`,
+   :doc:`models and percepts <topics/models>`,
+   :doc:`visual input <topics/vision>`, and
+   :doc:`coordinates <topics/coordinates>`.
+*  Explore the :doc:`Example Gallery <examples/index>` for complete simulations
+   and use cases.
+*  Check the :doc:`FAQ <users/faq>` for common questions.
 *  Request features or report bugs on the `Issue Tracker`_.
 
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

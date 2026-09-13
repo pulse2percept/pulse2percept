@@ -68,7 +68,7 @@ plt.show()
 # Where to go next
 # ----------------
 #
-# The :ref:`basic concepts <topics-index>` explain implants, stimuli, models,
-# encoders, units, and other pieces in more detail. The
+# The :ref:`core concepts <topics-index>` explain implants, stimulation,
+# models, visual input, coordinates, and units in more detail. The
 # :ref:`example gallery <examples>` contains complete scientific
 # workflows.

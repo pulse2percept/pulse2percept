@@ -1,116 +1,119 @@
 .. _topics-models:
 
 ====================
-Computational Models
+Models and Percepts
 ====================
 
-A model with a spatial component predicts the response to stimulation *by a
-particular device*, so it is bound to an implant and handed the stimulus.
-A temporal-only model describes one location's response over time and needs
-no implant. Most users work with
-:py:class:`~pulse2percept.models.Model`, which can contain a spatial component,
-a temporal component, or both:
+A model turns stimulation into a predicted percept. A model with a spatial
+component predicts the response to stimulation *by a particular device*, so it
+is bound to an implant and handed the stimulus. A temporal-only model
+describes one location's response over time and needs no implant.
 
-* :py:class:`~pulse2percept.models.SpatialModel` determines where stimulation
-  appears in the visual field.
-* :py:class:`~pulse2percept.models.TemporalModel` determines how the response
-  evolves over time.
+.. code-block:: python
 
-Available models
+    import pulse2percept as p2p
+
+    implant = p2p.implants.retina.ArgusII()
+    model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
+    percept = model.predict_percept({'A8': 30})
+
+Models build automatically on first prediction, and rebuild the affected
+component when a parameter or the implant changes. The result of
+``predict_percept`` is a :py:class:`~pulse2percept.percepts.Percept`.
+
+The full pipeline distinguishes the source you provide, the stimulation the
+device delivers, and the percept::
+
+    source -> implant -> delivered stimulation -> model -> percept
+
+Models call ``implant.prepare_stim(source)`` internally; see
+:ref:`topics-stimulation` to inspect or control that step.
+
+Choosing a model
 ----------------
 
 Models are grouped by the tissue they stimulate. The root
-:py:mod:`pulse2percept.models` namespace holds only the abstract classes a
-model is assembled from and temporal models that are not tied to a stimulation
-site; models of a particular target live in
-:py:mod:`pulse2percept.models.retina` and
-:py:mod:`pulse2percept.models.cortex`.
+:py:mod:`pulse2percept.models` namespace holds the abstract classes a model is
+assembled from and temporal models that are not tied to a stimulation site;
+models of a particular target live in :py:mod:`pulse2percept.models.retina`
+and :py:mod:`pulse2percept.models.cortex`.
 
-Generic model components
-~~~~~~~~~~~~~~~~~~~~~~~~
+Which model to use depends on the scientific question. The published models
+add assumptions specific to their experiments and should be chosen when those
+assumptions are relevant. The API reference for each model documents its
+assumptions, parameters, input requirements, and numerical units.
 
-.. list-table::
-   :header-rows: 1
-
-   * - Reference
-     - Model
-     - Type
-   * - generic
-     - :py:class:`~pulse2percept.models.FadingTemporal`
-     - temporal
-   * - generic
-     - :py:class:`~pulse2percept.models.AlphaTemporal`
-     - temporal
-
-Both describe how one location's response decays after a pulse, without
-committing to where that location is. They are the temporal half of a
-:py:class:`~pulse2percept.models.Model` whose spatial half may be retinal or
-cortical.
-
-Retinal stimulation
-~~~~~~~~~~~~~~~~~~~
+Retinal models
+~~~~~~~~~~~~~~
 
 .. list-table::
    :header-rows: 1
+   :widths: 30 20 16 34
 
-   * - Reference
-     - Model
+   * - Model
+     - Reference
      - Type
-   * - [Thompson2003]_
-     - :py:class:`~pulse2percept.models.retina.Thompson2003Model`
+     - Use it for
+   * - :py:class:`~pulse2percept.models.retina.ScoreboardModel`
+     - [Beyeler2019]_
      - spatial
-   * - [Horsager2009]_
-     - :py:class:`~pulse2percept.models.retina.Horsager2009Model`
-     - temporal
-   * - [Nanduri2012]_
-     - :py:class:`~pulse2percept.models.retina.Nanduri2012Model`
+     - A round phosphene per electrode; the simplest spatial baseline
+   * - :py:class:`~pulse2percept.models.retina.AxonMapModel`
+     - [Beyeler2019]_
+     - spatial
+     - Elongated phosphenes that follow retinal nerve fiber bundles
+   * - :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`
+     - derived from [Granley2021]_
+     - spatiotemporal
+     - Round phosphenes whose brightness and size depend on the pulse train
+   * - :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
+     - [Granley2021]_
+     - spatiotemporal
+     - Pulse-dependent phosphenes with axonal elongation
+   * - :py:class:`~pulse2percept.models.retina.Nanduri2012Model`
+     - [Nanduri2012]_
      - spatial + temporal
-   * - [Beyeler2019]_
-     - :py:class:`~pulse2percept.models.retina.ScoreboardModel`
+     - Brightness and size as a function of amplitude and frequency
+   * - :py:class:`~pulse2percept.models.retina.Horsager2009Model`
+     - [Horsager2009]_
+     - temporal
+     - Single-electrode threshold as a function of pulse timing
+   * - :py:class:`~pulse2percept.models.retina.Thompson2003Model`
+     - [Thompson2003]_
      - spatial
-   * - [Beyeler2019]_
-     - :py:class:`~pulse2percept.models.retina.AxonMapModel`
-     - spatial
-   * - derived from [Granley2021]_
-     - :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`
+     - Early scoreboard-style simulation with electrode dropout
+   * - :py:class:`~pulse2percept.models.retina.Ho2018Model`
+     - [Ho2018]_
      - spatiotemporal
-   * - [Granley2021]_
-     - :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
-     - spatiotemporal
-   * - [Ho2018]_
-     - :py:class:`~pulse2percept.models.retina.Ho2018Model`
-     - spatiotemporal
+     - Photovoltaic subretinal stimulation (see below)
 
-Every retinal spatial model derives from
-:py:class:`~pulse2percept.models.retina.RetinalSpatial`, which places
-electrodes through a retinotopic map and accepts a physical retinal extent as
-shorthand for ``xrange``/``yrange``.
-
-Which one to use depends on the scientific question. The three main choices
-differ in what they model:
+The three most common spatial choices differ in what they commit to:
 
 :py:class:`~pulse2percept.models.retina.ScoreboardModel`
-    Fixed-width Gaussian per electrode; amplitude scales brightness.
+    Fixed-width Gaussian per electrode; amplitude scales brightness. ``rho``
+    is an effective perceptual spread fitted to subject reports, not a
+    physical current-spread constant.
 
 :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`
     Adds [Granley2021]_-derived pulse-dependent brightness and width.
-    Requires a described biphasic pulse train rather than a bare
-    amplitude.
+    Requires a described biphasic pulse train rather than a bare amplitude.
 
 :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
     Additionally models axonal elongation, whose length follows phase
-    duration [Granley2021]_.
+    duration [Granley2021]_. ``rho`` spreads across axons and ``lam`` along
+    them.
 
-The published models add assumptions specific to their experiments and
-should be chosen when those assumptions are relevant.
+Every retinal spatial model derives from
+:py:class:`~pulse2percept.models.retina.RetinalSpatial`, which places
+electrodes through a retinotopic map (see :ref:`topics-coordinates`) and
+accepts a physical retinal extent as shorthand for ``xrange``/``yrange``.
 
 Photovoltaic stimulation
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-:py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` and
-:py:class:`~pulse2percept.stimuli.PRIMAEncoder` turn an image or video into
-the pulsed near-infrared schedule that drives a photovoltaic subretinal array.
-Two models consume it, and they answer different questions:
+Photovoltaic arrays are driven by a pulsed near-infrared schedule rather than
+injected current (see :ref:`topics-stimulation`). Two models consume it, and
+they answer different questions:
 
 :py:class:`~pulse2percept.models.retina.ScoreboardModel`
     Visualizes normalized optical drive: where the light lands, relative to a
@@ -145,49 +148,102 @@ Two models consume it, and they answer different questions:
        of [Ho2018]_ rather than published by it, and no calibration to human
        brightness or contrast perception.
 
-Cortical stimulation
-~~~~~~~~~~~~~~~~~~~~
+Cortical models
+~~~~~~~~~~~~~~~
 
 .. list-table::
    :header-rows: 1
+   :widths: 32 22 16 30
 
-   * - Reference
-     - Model
+   * - Model
+     - Reference
      - Type
-   * - [Beyeler2019]_, adapted
-     - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+     - Use it for
+   * - :py:class:`~pulse2percept.models.cortex.ScoreboardModel`
+     - [Beyeler2019]_, adapted
      - spatial
-   * - [vanderGrinten2023]_
-     - :py:class:`~pulse2percept.models.cortex.DynaphosModel`
+     - A spatial baseline where phosphene size follows cortical magnification
+   * - :py:class:`~pulse2percept.models.cortex.DynaphosModel`
+     - [vanderGrinten2023]_
      - spatiotemporal
+     - Charge accumulation, thresholds, and phosphene dynamics over time
 
 Cortical spatial models derive from
 :py:class:`~pulse2percept.models.cortex.CortexSpatial`, which simulates one or
-more visual areas ('v1', 'v2', 'v3') and maps them through cortical
-retinotopy. The cortical
-:py:class:`~pulse2percept.models.cortex.ScoreboardModel` is a spatial baseline:
-it spreads current in cortex rather than in the retina, so phosphene size in
-the visual field follows cortical magnification.
-:py:class:`~pulse2percept.models.cortex.DynaphosModel` adds the temporal
-dynamics of the [vanderGrinten2023]_ phosphene model, including charge
-accumulation and a stimulation threshold.
+more visual areas (``'v1'``, ``'v2'``, ``'v3'``) and maps them through
+cortical retinotopy. The cortical
+:py:class:`~pulse2percept.models.cortex.ScoreboardModel` spreads current in
+cortex rather than in the retina, so a fixed cortical ``rho`` produces
+phosphenes whose visual-field size depends on eccentricity.
 
-Basic usage
------------
+Generic temporal components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Models follow the same workflow: choose an implant, bind a model to it, then
-predict a percept from a stimulus.
+:py:class:`~pulse2percept.models.FadingTemporal` and
+:py:class:`~pulse2percept.models.AlphaTemporal` describe how one location's
+response decays after a pulse, without committing to where that location is.
+They are the temporal half of a :py:class:`~pulse2percept.models.Model` whose
+spatial half may be retinal or cortical.
+
+Model limitations
+-----------------
+
+Electrode-tissue distance
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:py:class:`~pulse2percept.models.retina.ScoreboardModel`,
+:py:class:`~pulse2percept.models.retina.AxonMapModel` and
+:py:class:`~pulse2percept.models.retina.Thompson2003Model` use electrode ``x``
+and ``y`` coordinates only. Nonzero ``z`` values therefore do not affect their
+output and produce a warning.
+
+This is a model limitation. Electrode-target distance is expected to affect
+stimulation threshold and spatial recruitment, but pulse2percept does not
+currently parameterize that relationship because the required psychophysical
+evidence is insufficient. In the Scoreboard and AxonMap models, ``rho``
+remains an effective perceptual spread parameter fitted to subject reports
+rather than inferred from electrode-retina distance.
+
+Monocular prediction
+~~~~~~~~~~~~~~~~~~~~
+
+Models are monocular in v0.11. A prediction is about one eye, and binocular
+material is composed afterwards; see :ref:`topics-vision`.
+
+Percepts
+--------
+
+A :py:class:`~pulse2percept.percepts.Percept` holds one of two layouts, with
+time as the last axis in both::
+
+    (Y, X, T)     perceived brightness in arbitrary units
+    (Y, X, 3, T)  RGB intensities in [0, 1]
+
+Prosthesis models produce brightness percepts.
+:py:meth:`~pulse2percept.vision.Scene.render` composes one with residual
+vision and returns an RGB percept:
 
 .. code-block:: python
 
-    import pulse2percept as p2p
+    import numpy as np
+    from pulse2percept.percepts import Percept
 
-    implant = p2p.implants.retina.ArgusII()
-    model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
-    percept = model.predict_percept({'A8': 30})
+    rgb = Percept(np.zeros((60, 80, 3, 1)))
+    rgb.is_rgb                  # True
+    rgb[..., 0].shape           # (60, 80, 3): one frame, still in color
+    rgb.plot()                  # drawn as RGB, without a colormap
 
-The result of ``predict_percept`` is a
-:py:class:`~pulse2percept.percepts.Percept`.
+RGB values are display intensities and must be finite and lie in ``[0, 1]``;
+anything else raises at construction rather than saturating quietly later. The
+RGB axis is not a spatial dimension: ``space`` still describes ``(Y, X)``.
+
+Operations defined on perceived brightness (i.e., ``n_gray``, ``argmax``,
+``max``, ``vmin``, ``vmax``) raise a ``ValueError`` for an RGB percept rather
+than inventing a conversion from color to brightness. Ranking three channels
+by one number would have to pick a color metric, which is also why a
+multi-frame RGB percept has no brightest frame to ``plot()``; animate it with
+``play()`` instead. ``percept.data`` is always available for the plain
+numerical answer.
 
 Measuring a percept
 -------------------
@@ -197,7 +253,7 @@ Measuring a percept
 Prediction stops at the percept. Measurement is optional post-processing,
 performed on call and not part of the model::
 
-    stimulus → model → Percept → optional measurement
+    stimulus -> model -> Percept -> optional measurement
 
 :py:meth:`~pulse2percept.percepts.Percept.measure` reports the brightness and
 geometry of the phosphenes in each frame:
@@ -303,387 +359,22 @@ visual acuity, phosphene discriminability, pairwise separability, behavioral
 resolution, or object-recognition performance.
 
 ``measure()`` applies to model-produced brightness percepts and raises for the
-RGB percepts :py:meth:`~pulse2percept.vision.Scene.render` returns, whose values
-are display
-intensities. Positions and sizes are in degrees of visual angle, so the percept
-must have been built on a
+RGB percepts :py:meth:`~pulse2percept.vision.Scene.render` returns, whose
+values are display intensities. Positions and sizes are in degrees of visual
+angle, so the percept must have been built on a
 :py:class:`~pulse2percept.topography.Grid2D`; a percept holding bare pixel
 indices is rejected.
 
-
-Source, delivered stimulation, percept
---------------------------------------
-
-The prediction pipeline distinguishes the source, delivered stimulation, and
-percept::
-
-    source → implant → delivered stimulation → model → percept
-
-**Source**
-    Input presented to the device: a
-    :py:class:`~pulse2percept.stimuli.Stimulus` (or compatible scalar, array,
-    or dict), :py:class:`~pulse2percept.stimuli.ImageStimulus`,
-    :py:class:`~pulse2percept.stimuli.VideoStimulus`, or
-    :py:class:`~pulse2percept.vision.Scene`.
-
-**Delivered stimulation**
-    Electrical stimulation after implant preprocessing, encoding, raster
-    scheduling, threshold calibration, and safety checks. Models call
-    ``implant.prepare_stim(source)`` internally; call it directly to inspect
-    the delivered stimulus.
-
-**Percept**
-    Model output from ``model.predict_percept(source)``.
-
-Building
---------
-
-Models build automatically on first prediction. Changing a model parameter
-invalidates the affected component, which is rebuilt when needed:
-
-.. code-block:: python
-
-    model = p2p.models.retina.AxonMapModel(implant=implant)
-
-    # Builds automatically:
-    percept = model.predict_percept(stim)
-
-    # Rebuilds the spatial component:
-    model.spatial.rho = 250
-    percept = model.predict_percept(stim)
-
-Rebinding the implant also invalidates the spatial build because it depends on
-device geometry. ``model.build()`` forces a full rebuild; to set parameters as
-you build a component, use ``model.spatial.build(rho=250)``.
-
-Electrode-retina distance
--------------------------
-
-:py:class:`~pulse2percept.models.retina.ScoreboardModel`,
-:py:class:`~pulse2percept.models.retina.AxonMapModel` and
-:py:class:`~pulse2percept.models.retina.Thompson2003Model` use electrode ``x`` and
-``y`` coordinates only. Nonzero ``z`` values therefore do not affect their
-output and produce a warning.
-
-This is a model limitation. Electrode-target distance is expected to affect
-stimulation threshold and spatial recruitment, but pulse2percept does not
-currently parameterize that relationship because the required psychophysical
-evidence is insufficient. In the Scoreboard and AxonMap models, ``rho`` remains
-an effective perceptual spread parameter fitted to subject reports rather than
-inferred from electrode-retina distance.
-
-.. _topics-models-scene:
-
-Simulating a visual scene
--------------------------
-
-.. versionadded:: 0.11.0
-
-The workflow above starts from a stimulus you built yourself. To start from
-what someone is *looking at* instead, give the model a
-:py:class:`~pulse2percept.vision.Scene`. A scene is **one monocular visual
-field**, not the person's final vision: it says what is present in front of
-one eye, and where that eye's native vision is lost.
-
-.. code-block:: python
-
-    from pulse2percept.units import dva
-
-    scene = p2p.vision.Scene(p2p.stimuli.samples.logo_bvl(), fov=40 * dva)
-
-    implant = p2p.implants.retina.ArgusII()
-    implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
-
-    model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
-    percept = model.predict_percept(scene, gaze=(0, 0) * dva)
-
-Scene prediction separates four responsibilities:
-
-=========  ==================================================================
-Scene      What is visually present, and where native vision is lost.
-Implant    Device geometry and encoding constraints.
-Model      Knows the retinotopy, and so connects Scene to Implant.
-Percept    What the simulated observer sees.
-=========  ==================================================================
-
-The model maps implant coordinates into the visual field through its
-retinotopic map. Each electrode follows this chain::
-
-    retinal coordinate (um)
-      -> visual_field_map.ret_to_dva -> eye-centered visual field (dva)
-      -> + gaze, for eye-coupled input only -> scene coordinate (dva)
-      -> sample the scene
-
-``gaze`` is the scene location that currently falls on the fovea, so
-``scene = eye-centered visual field + gaze``. Gaze always decides where the
-percept lands in scene coordinates. Whether it also decides what the
-electrodes are given depends on the implant's
-:py:attr:`~pulse2percept.implants.Implant.scene_input_frame`:
-
-==========  =================================================================
-``'eye'``   Input passes through the eye's optics (Alpha, PRIMA), so gaze
-            moves the scene across the implant as well as moving the percept
-            across the scene. This is the default.
-``'head'``  Input comes from a head-fixed camera (Argus, BVT, IMIE) that the
-            eye cannot move: the electrodes are handed the same scene
-            whatever the gaze, and only the percept moves.
-==========  =================================================================
-
-Neither the implant nor an eye-centered
-:py:class:`~pulse2percept.vision.Scotoma` moves when gaze does. Pass one
-``(x, y)`` to fixate, or one per video frame to move the eye between frames.
-
-For a ``'head'`` system, the sampling locations above are still the electrodes'
-own visual-field positions, which assumes the device's camera-to-electrode
-registration is aligned with them. Real systems configure that mapping
-separately and it is not modeled here.
-
-``scene_input_frame`` follows the device class but is a property of the
-system, so one implant can be run the other way -- an Argus II with eye
-tracking, which shifts the camera ROI with gaze:
-
-.. code-block:: python
-
-    implant = p2p.implants.retina.ArgusII()
-    implant.scene_input_frame = 'eye'
-
-The sampled values are passed to ``implant.encoder``, which maps gray levels
-to current and applies device timing constraints. A scene is per-prediction
-input and is not stored on the model or implant.
-
-An implant's ``preprocess`` -- an edge filter, an inversion, a contrast
-stretch -- is applied to the **prosthetic input branch only**, before the
-scene is sampled at the electrode locations, because an image operation needs
-an image and by sampling time there is one number per electrode. Native and
-residual vision always use the original scene: what the device does to its
-own input is not something the eye goes through. Spatial preprocessing
-operates at the scene source's pixel resolution.
-
-.. code-block:: python
-
-    implant.preprocess = lambda stim: stim.filter('sobel')
-
-For scene input, ``preprocess`` must return an
-:py:class:`~pulse2percept.stimuli.ImageStimulus` or
-:py:class:`~pulse2percept.stimuli.VideoStimulus`; conversion to electrical
-stimulation belongs to the encoder. Pixel values and channels may change, but
-spatial shape and frame timing must remain unchanged because ``fov`` and the
-frame clock refer to the original scene.
-
-Scene registration is a spatial-model capability: a model has to say where in
-the visual field each of its electrodes lands. Only retinal models
-(:py:class:`~pulse2percept.models.retina.RetinalSpatial`) implement it, through
-their retinotopy; any other spatial model raises ``NotImplementedError``. A
-retinal model given a non-retinotopic ``visual_field_map``, or an implant
-without an ``encoder``, raises ``ValueError``.
-
-Residual vision
-~~~~~~~~~~~~~~~
-
-``predict_percept`` always returns perceived brightness on the model grid,
-with or without a :py:class:`~pulse2percept.vision.Scotoma`. A scotoma
-describes residual *native* vision, so it does not enter the model response,
-and prosthetic encoding samples the unmasked scene including locations inside
-it. Drawing the two together is a separate step:
-
-.. code-block:: python
-
-    scene = p2p.vision.Scene(p2p.stimuli.samples.logo_bvl(), fov=40 * dva,
-                             scotoma=p2p.vision.Scotoma.circle(8 * dva))
-    model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
-
-    percept = model.predict_percept(scene, gaze=(0, 0) * dva)
-    scene.plot(percept=percept, gaze=(0, 0) * dva, vmax=50)
-
-Inside the loss the two compose as
-``(1 - loss) * native + loss * max(scotoma_fill, phosphene)``. With no
-scotoma the percept is drawn alone on black, because superimposing it on
-intact native vision would assert an unmodeled interaction.
-
-``vmax`` is required: model brightness is in arbitrary units, so which
-brightness counts as white is a display choice. Hold it fixed to keep
-separate calls comparable.
-
-Source and percept need not share a resolution. ``plot`` draws the source at
-its own raster and the percept as a local patch on the model grid, so a fine
-simulation in a wide field costs the model grid's pixels rather than the whole
-field at the model's step.
-
-:py:meth:`~pulse2percept.vision.Scene.render` is the explicit dense
-composition, for when one RGB raster is needed (saving, downstream image
-processing):
-
-.. code-block:: python
-
-    rgb = scene.render(percept=percept, gaze=(0, 0) * dva, vmax=50)
-    fine = scene.render(percept=percept, vmax=50, step=0.02 * dva)
-
-The raster defaults to the source's own, which resamples nothing. ``step``
-(dva per pixel, rounded up so pixels are never coarser than asked) or
-``shape`` chooses another; the two are mutually exclusive. A fine step over a
-wide field is expensive by construction.
-
-:py:meth:`~pulse2percept.vision.Scene.blank` provides a black visual-field
-canvas when no image is needed:
-
-.. code-block:: python
-
-    scene = p2p.vision.Scene.blank(fov=45 * dva)
-
-Its fixed 512 x 512 backing raster is only the raster ``render`` falls back
-to; ask ``render`` for another, and prediction still happens on the model grid
-regardless. Black is scene content, not blindness; use a
-:py:class:`~pulse2percept.vision.Scotoma` for vision that is lost.
-
-.. versionchanged:: 0.11.0
-    Scene prediction returns the model percept rather than an RGB
-    composition. ``vmin`` and ``vmax`` moved to ``Scene.plot`` and the new
-    ``Scene.render``.
-
-The field boundary
-~~~~~~~~~~~~~~~~~~
-
-.. versionadded:: 0.11.0
-
-A scene's source, pixel grid and sampling are rectangular. ``fov`` gives the
-field its outer dimensions ``(width, height)``, and ``aperture`` gives it its
-shape: the default ``'rectangle'`` uses the whole frame, while ``'ellipse'``
-inscribes an ellipse in those dimensions:
-
-.. code-block:: python
-
-    disc = p2p.vision.Scene(image, fov=40 * dva, aperture='ellipse')
-    wide = p2p.vision.Scene(image, fov=(60, 40) * dva, aperture='ellipse')
-
-A square ``fov`` therefore renders as a disc, and a 60 x 40 one as an ellipse
-reaching 30 degrees sideways and 20 degrees up. Like the scotoma and the
-eccentricity rings, it is eye-centered, so gaze moves it through the scene.
-
-The aperture is support, not scene content: ``plot`` clips its artists to it,
-``render`` writes black outside it, and the source arrays are never modified.
-Scene sampling, device input and stimulation are untouched either way -- a
-camera does not go blind at the edge of an eye-shaped display aperture.
-
-Both eyes
-~~~~~~~~~
-
-.. versionadded:: 0.11.0
-
-:py:class:`~pulse2percept.vision.BinocularScene` holds the left and right
-monocular views:
-
-.. code-block:: python
-
-    binocular = p2p.vision.BinocularScene(
-        left=p2p.vision.Scene(image, fov=40 * dva, scotoma=scotoma),
-        right=p2p.vision.Scene(image, fov=40 * dva),
-    )
-
-    ax_left, ax_right = binocular.plot(left_percept=percept, vmax=2)
-
-Imagery already packed left-right side by side splits into the two eyes with
-:py:meth:`~pulse2percept.vision.BinocularScene.from_side_by_side`:
-
-.. code-block:: python
-
-    binocular = p2p.vision.BinocularScene.from_side_by_side(
-        stereo_image,
-        fov=(60, 40) * dva,
-    )
-
-The left half becomes the left eye and the right half the right eye. ``fov``
-describes one eye's half, splitting does not flip, resample, or interpolate
-either half, and no disparity or depth is inferred.
-
-A bilateral loss is often symmetric about the vertical meridian.
-:py:meth:`~pulse2percept.vision.Scene.fellow_eye` builds the homologous scene
-for the other eye:
-
-.. code-block:: python
-
-    left = p2p.vision.Scene(image, fov=40 * dva, scotoma=scotoma)
-    binocular = p2p.vision.BinocularScene(left, left.fellow_eye())
-
-It reflects eye-specific geometry, such as a scotoma, across the vertical
-meridian. The image itself is not flipped, since both eyes look at the same
-world in the same orientation.
-
-:py:meth:`~pulse2percept.vision.Scotoma.mirror` is the same reflection on a
-scotoma alone (``mirrored(x, y) == original(-x, y)``):
-
-.. code-block:: python
-
-    left_scotoma = p2p.vision.Scotoma.circle(3 * dva, center=(6, 0) * dva)
-    right_scotoma = left_scotoma.mirror()
-
-Models are monocular in v0.11, so a prediction names the eye it is about:
-
-.. code-block:: python
-
-    percept = model.predict_percept(binocular.left)
-
-
-Percept data layouts
+Combining components
 --------------------
 
-A :py:class:`~pulse2percept.percepts.Percept` holds one of two layouts, with
-time as the last axis in both::
-
-    (Y, X, T)     perceived brightness in arbitrary units
-    (Y, X, 3, T)  RGB intensities in [0, 1]
-
-Prosthesis models produce brightness percepts.
-:py:meth:`~pulse2percept.vision.Scene.render` composes one with residual
-vision and returns an RGB percept:
-
-.. code-block:: python
-
-    import numpy as np
-    from pulse2percept.percepts import Percept
-
-    rgb = Percept(np.zeros((60, 80, 3, 1)))
-    rgb.is_rgb                  # True
-    rgb[..., 0].shape           # (60, 80, 3): one frame, still in color
-    rgb.plot()                  # drawn as RGB, without a colormap
-
-RGB values are display intensities and must be finite and lie in ``[0, 1]``;
-anything else raises at construction rather than saturating quietly later. The
-RGB axis is not a spatial dimension: ``space`` still describes ``(Y, X)``.
-
-Operations defined on perceived brightness (i.e., ``n_gray``, ``argmax``,
-``max``, ``vmin``, ``vmax``) raise a ``ValueError`` for an RGB
-percept rather than inventing a conversion from color to brightness. 
-Ranking three channels by one number would have to pick a
-color metric, which is also why a multi-frame RGB percept has no brightest
-frame to ``plot()``; animate it with ``play()`` instead. ``percept.data`` is
-always available for the plain numerical answer.
-
-Spatial and temporal components
--------------------------------
-
 Classes ending in ``Model`` are complete models with explicit constructor
-parameters:
-
-.. code-block:: python
-
-    model = p2p.models.retina.AxonMapModel(
-        implant,
-        rho=300,
-        lam=500,
-    )
-    percept = model.predict_percept(stim)
-
-Classes ending in ``Spatial`` or ``Temporal`` are components, and
+parameters. Classes ending in ``Spatial`` or ``Temporal`` are components, and
 :py:class:`~pulse2percept.models.Model` combines two of them:
 
 .. code-block:: python
 
-    spatial = p2p.models.retina.AxonMapSpatial(
-        implant,
-        rho=300,
-        lam=500,
-    )
-
+    spatial = p2p.models.retina.AxonMapSpatial(implant, rho=300, lam=500)
     temporal = p2p.models.FadingTemporal(tau=100)
 
     model = p2p.models.Model(spatial, temporal)
@@ -692,19 +383,13 @@ Use ``Model`` to combine spatial and temporal components from different
 models. At least one component is required, and each must already be
 constructed. The implant belongs to the spatial component.
 
-Parameters
-----------
-
-Component parameters are accessed directly:
+Component parameters are accessed directly, and changing one rebuilds that
+component on the next prediction:
 
 .. code-block:: python
 
     model.spatial.rho = 250
     model.temporal.tau = 50
 
-Named-model constructors expose the same parameters directly. After
-construction, access them through the component. Parameters declared by both
-components, such as ``thresh_percept``, remain independent.
-
-The API reference for each model documents its assumptions, parameters, input
-requirements, and numerical units.
+Named-model constructors expose the same parameters directly. Parameters
+declared by both components, such as ``thresh_percept``, remain independent.

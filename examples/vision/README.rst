@@ -9,4 +9,4 @@ visual field: what is present in it, and where native vision is lost
 (:py:class:`~pulse2percept.vision.Scotoma`). A
 :py:class:`~pulse2percept.vision.BinocularScene` holds one such field per eye,
 side by side and uncombined. A model registers a scene against an implant and
-returns what the person sees; see :ref:`topics-models-scene`.
+returns what the person sees; see :ref:`topics-vision`.
