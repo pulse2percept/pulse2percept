@@ -286,6 +286,21 @@ def test_VideoStimulus_crop(tmp_path):
                      stim.data.reshape(stim.vid_shape)[16, 19, 6])
     npt.assert_equal(stim_cropped2.time, stim.time[5:8])
 
+    # y1/x1 are exclusive, so cropping time only must leave the spatial extent
+    # (and thus the electrode names) untouched (Issue #867):
+    stim_cropped3 = stim.crop(front=3)
+    npt.assert_equal(stim_cropped3.vid_shape, (48, 32, 7))
+    npt.assert_almost_equal(stim_cropped3.data,
+                            stim.data.reshape(stim.vid_shape)[..., 3:]
+                            .reshape(48 * 32, -1))
+    npt.assert_equal(stim_cropped3.time, stim.time[3:])
+    npt.assert_array_equal(stim_cropped3.electrodes, stim.electrodes)
+    # The full frame extent is a valid rectangle:
+    stim_cropped4 = stim.crop(idx_space=[0, 0, 48, 32])
+    npt.assert_equal(stim_cropped4.vid_shape, stim.vid_shape)
+    npt.assert_almost_equal(stim_cropped4.data, stim.data)
+    npt.assert_array_equal(stim_cropped4.electrodes, stim.electrodes)
+
     # crop-time and crop-length (start, end) cannot be existed at the same time
     with pytest.raises(ValueError):
         stim.crop(idx_time=[0, 1], front=3)
