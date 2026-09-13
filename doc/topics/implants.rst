@@ -427,23 +427,3 @@ into one system. Its
 :py:meth:`~pulse2percept.implants.EnsembleImplant.from_visual_field_map`
 places one constituent per visual field location, through any 2D
 :py:class:`~pulse2percept.topography.VisualFieldMap`.
-
-Migrating from v0.10
---------------------
-
-* Retinal devices moved out of the root namespace: ``p2p.implants.ArgusII()``
-  becomes ``p2p.implants.retina.ArgusII()``. There is no forwarding alias.
-  Electrodes, arrays, rasters and ensembles stay at the root, so a mixed
-  import becomes two.
-* ``eye`` moved off :py:class:`~pulse2percept.implants.Implant` and
-  :py:class:`~pulse2percept.implants.GridImplant` onto
-  :py:class:`~pulse2percept.implants.retina.RetinalImplant`. Wrap an
-  :py:class:`~pulse2percept.implants.ElectrodeGrid` in a ``RetinalImplant``
-  where a custom grid relied on the old implicit ``eye='right'``;
-  :py:class:`~pulse2percept.models.retina.AxonMapModel` requires one.
-* ``EnsembleImplant.from_cortical_map`` became
-  :py:meth:`~pulse2percept.implants.EnsembleImplant.from_visual_field_map`,
-  which takes any 2D visual field map. ``region`` now defaults to the map's
-  only region rather than to ``'v1'``, so a multi-region map needs it stated.
-* ``RectangleImplant``, deprecated in v0.11, was removed; use
-  :py:class:`~pulse2percept.implants.GridImplant`.
