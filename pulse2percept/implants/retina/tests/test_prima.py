@@ -521,9 +521,6 @@ def test_PRIMA_plot_passthrough(implant_type):
     """Check the implant plot override."""
     implant = implant_type()
     fig, ax = plt.subplots()
-    # `stim_cmap` is not exercised here: colouring a PhotovoltaicPixel is
-    # broken upstream of this override, since it draws two patches and
-    # `ElectrodeArray.plot` colours only single-patch electrodes.
     implant.plot(ax=ax, annotate=True)
     npt.assert_equal(len(ax.texts), implant.n_electrodes)
     npt.assert_equal(len(ax.collections), 1)
@@ -535,6 +532,26 @@ def test_PRIMA_plot_passthrough(implant_type):
         npt.assert_almost_equal(unitful.center, bare.center)
     else:
         npt.assert_almost_equal(unitful.get_xy(), bare.get_xy())
+
+
+def test_PRIMA_plot_stim_cmap():
+    """Stimulus coloring reaches the active circle, not the pixel body"""
+    implant = PRIMAPivotal()
+    stim = implant.prepare_stim(samples.logo_bvl())
+    fig, ax = plt.subplots()
+    implant.plot(ax=ax, stim=stim, stim_cmap=True)
+    fc = ax.collections[0].get_facecolor()
+    # Each pixel draws its hex body first, then its active circle:
+    npt.assert_equal(len(fc), 2 * implant.n_electrodes)
+    bodies, actives = fc[0::2], fc[1::2]
+    npt.assert_equal(len(np.unique(bodies, axis=0)), 1)
+    npt.assert_almost_equal(np.unique(bodies, axis=0)[0], (0, 0, 0, 0.2))
+    amp = np.max(stim.data, axis=1)
+    npt.assert_almost_equal(actives[np.argmax(amp)][:3],
+                            plt.get_cmap('YlOrRd')(1.0)[:3])
+    # A dark pixel keeps the ordinary black electrode fill:
+    npt.assert_almost_equal(actives[np.argmin(amp)][:3], (0, 0, 0))
+    plt.close(fig)
 
 
 def test_PRIMA40_reshape_stim():

@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+import matplotlib.pyplot as plt
 from collections import OrderedDict
+from matplotlib.patches import Circle, RegularPolygon
 
 from pulse2percept.implants import (DiskElectrode, HexElectrode,
                                     PointSource, ElectrodeArray,
@@ -828,3 +830,28 @@ def test_ElectrodeGrid_is_a_container(gtype):
             grid[item]
 
 
+def test_ElectrodeArray_plot_color_stim():
+    """Stimulus coloring reaches the last patch of a multi-patch electrode"""
+    array = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 50),
+                            'A2': DiskElectrode(200, 0, 0, 50)})
+    # Give A2 a structural body plus an active patch drawn on top of it:
+    body_fc = (0, 0, 0, 0.2)
+    array['A2'].plot_patch = [RegularPolygon, Circle]
+    array['A2'].plot_kwargs = [{'numVertices': 6, 'radius': 60,
+                                'fc': body_fc, 'ec': 'k'},
+                               {'radius': 20, 'linewidth': 0, 'fc': 'w'}]
+    stim = Stimulus({'A1': 1, 'A2': 2})
+    fig, ax = plt.subplots()
+    array.plot(ax=ax, color_stim=stim, cmap='OrRd')
+    fc = ax.collections[0].get_facecolor()
+    npt.assert_equal(len(fc), 3)
+    cmap = plt.get_cmap('OrRd')
+    # Single-patch electrode: colored as before.
+    npt.assert_almost_equal(fc[0], cmap(0.5, alpha=0.8))
+    # Multi-patch electrode: body untouched, active patch colored.
+    npt.assert_almost_equal(fc[1], body_fc)
+    npt.assert_almost_equal(fc[2], cmap(1.0, alpha=0.8))
+    # Stored kwargs must not be mutated:
+    npt.assert_equal(array['A2'].plot_kwargs[-1]['fc'], 'w')
+    npt.assert_equal(array['A1'].plot_kwargs['fc'], (1, 1, 1, 0.8))
+    plt.close(fig)

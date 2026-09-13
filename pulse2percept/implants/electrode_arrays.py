@@ -217,7 +217,9 @@ class ElectrodeArray(PrettyPrint):
             (if exists) or create a new Axes object.
         color_stim : ``pulse2percept.stimuli.Stimulus``, or None
             If provided, colors the electrode_array based on the stimulus
-            amplitudes
+            amplitudes. A multi-patch electrode (e.g.,
+            :py:class:`~pulse2percept.implants.retina.PhotovoltaicPixel`)
+            colors only its last patch; earlier patches are structural.
         cmap : str
             Matplotlib colormap to use for stimulus coloring.
 
@@ -243,7 +245,11 @@ class ElectrodeArray(PrettyPrint):
                 if color_stim is not None and name in color_stim.electrodes:
                     amp = np.max(color_stim[name])
                     if amp != 0:
-                        kwargs['fc'] = cm(norm(amp), alpha=0.8)
+                        # Only the last patch is colored (see docstring):
+                        fc_kwargs = (kwargs[-1]
+                                     if isinstance(kwargs, list)
+                                     else kwargs)
+                        fc_kwargs['fc'] = cm(norm(amp), alpha=0.8)
             else:
                 kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
