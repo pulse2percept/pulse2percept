@@ -151,6 +151,10 @@ Scene and plotting
   coordinates (:pull:`871`, :pull:`884`, :pull:`890`, :pull:`893`,
   :pull:`899`, :pull:`900`, :pull:`901`, :pull:`902`).
 
+* Added :py:class:`~pulse2percept.vision.Gaze` for sparse, timestamped
+  fixation events, each held until the next timestamp. Accepted wherever
+  ``Scene`` and ``predict_percept`` take a gaze array (:pull:`916`).
+
 * Added :py:mod:`pulse2percept.plotting` for stimulus/percept figures and
   animations. :py:mod:`pulse2percept.viz` is deprecated until v0.12.0
   (:issue:`872`).

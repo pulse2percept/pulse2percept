@@ -22,7 +22,7 @@ from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
                      dva, ms, um, uA)
 from ..units.base import has_units
 from ..vision import Scene
-from ..vision.scene import _gaze_points
+from ..vision.gaze import _gaze_points
 from ..utils import PrettyPrint, Frozen, Parametrized
 from ..utils.base import _is_constructing
 from ..utils.constants import ZORDER
@@ -292,8 +292,12 @@ def _scene_stim(model, scene, gaze):
         raise ValueError(
             f"'scene_input_frame' must be 'eye' or 'head', not {frame!r}.")
 
-    _gaze_points(gaze, device_scene.n_frames)
-    input_gaze = gaze if frame == 'eye' else None
+    # Against the source frame clock, not `t_percept`: gaze moves the scene
+    # across the electrodes, not the temporal model's output sampling.
+    points = _gaze_points(gaze, device_scene.n_frames,
+                          time=device_scene.time,
+                          time_unit=device_scene.time_unit)
+    input_gaze = points if frame == 'eye' else None
     gray = device_scene._device_input(x_vf, y_vf, gaze=input_gaze)
 
     if device_scene.time is None:
@@ -1773,10 +1777,13 @@ class Model(Frozen, PrettyPrint):
             visual scene.
         t_percept : float or array-like, optional
             Output times in ``time_unit``. Unitful times are accepted.
-        gaze : (x, y) or (n_frames, 2), optional
+        gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
             Scene location falling on the fovea, in degrees of visual angle,
             so that ``scene = eye-centered visual field + gaze``. Requires
-            ``source`` to be a scene. Gaze decides which part of the scene
+            ``source`` to be a scene. A
+            :py:class:`~pulse2percept.vision.Gaze` is resolved against the
+            scene's frame times, not against ``t_percept``. Gaze decides
+            which part of the scene
             reaches the electrodes unless the implant's
             :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is
             ``'head'``; the percept itself stays on the model's eye-centered
