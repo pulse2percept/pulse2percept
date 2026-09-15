@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.vision.Gaze`"""
 import numpy as np
 
-from ..units import Quantity, as_value, dva, ms
+from ..units import DimensionMismatchError, Quantity, as_value, dva, ms
 from ..utils import PrettyPrint
 
 
@@ -28,7 +28,7 @@ class Gaze(PrettyPrint):
         Unitful values are accepted.
     time : (n,) array_like
         When each fixation begins, in milliseconds unless given as a unitful
-        quantity. Must be finite and strictly increasing.
+        time. Must be finite and strictly increasing.
 
     Examples
     --------
@@ -43,18 +43,28 @@ class Gaze(PrettyPrint):
     __slots__ = ('_positions', '_time', '_time_unit')
 
     def __init__(self, positions, time):
-        positions = np.asarray(as_value(positions, dva, 'positions'),
-                               dtype=float)
+        # Copied, then frozen below: an array the caller can still mutate
+        # would silently change gaze that has already been resolved.
+        positions = np.array(as_value(positions, dva, 'positions'),
+                             dtype=float)
         if positions.ndim != 2 or positions.shape[1] != 2:
             raise ValueError(f"'positions' must be an (n, 2) array of (x, y) "
                              f"fixations in dva, not an array of shape "
                              f"{positions.shape}.")
+        if positions.shape[0] == 0:
+            raise ValueError("'positions' must hold at least one fixation; "
+                             "an empty trajectory says nothing about where "
+                             "the eye was pointing.")
         if not np.all(np.isfinite(positions)):
             raise ValueError(f"'positions' must be finite, not "
                              f"{positions.tolist()}.")
         # A quantity keeps the unit it was written in; a bare number is ms:
         unit = time.unit if isinstance(time, Quantity) else ms
-        time = np.asarray(as_value(time, unit, 'time'), dtype=float).ravel()
+        if unit.dimension != ms.dimension:
+            raise DimensionMismatchError(
+                f"'time' must be counted in a unit of time (e.g. ms, s), not "
+                f"{unit.dimension.name} ({unit}).")
+        time = np.array(as_value(time, unit, 'time'), dtype=float).ravel()
         if time.size != positions.shape[0]:
             raise ValueError(f"'time' needs one timestamp per fixation, so "
                              f"{positions.shape[0]} of them, not {time.size}.")
@@ -65,6 +75,8 @@ class Gaze(PrettyPrint):
             # fixations:
             raise ValueError(f"'time' must be strictly increasing, not "
                              f"{time.tolist()}.")
+        positions.flags.writeable = False
+        time.flags.writeable = False
         self._positions = positions
         self._time = time
         self._time_unit = unit
@@ -76,12 +88,12 @@ class Gaze(PrettyPrint):
 
     @property
     def positions(self):
-        """The ``(n, 2)`` fixations, in degrees of visual angle"""
+        """The ``(n, 2)`` fixations, in dva; read-only"""
         return self._positions
 
     @property
     def time(self):
-        """When each fixation begins, counted in ``time_unit``"""
+        """When each fixation begins, counted in ``time_unit``; read-only"""
         return self._time
 
     @property

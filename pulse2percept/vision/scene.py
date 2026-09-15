@@ -1026,39 +1026,41 @@ class Scene(PrettyPrint):
                                  "onto a display, and there is no percept "
                                  "here. Pass 'percept'.")
             # Without a percept the output frames are the source's own:
+            out_time, out_unit, _ = self._output_clock()
             return (self._native_on(xs, ys, gaze=gaze, frame=frame),
-                    _take_time(self.time, frame), self.time_unit)
+                    _take_time(out_time, frame), out_unit)
         if self.scotoma is None:
             return self._prosthetic_on(xs, ys, percept, vmax, vmin=vmin,
                                        gaze=gaze, frame=frame)
         return self._composed_on(xs, ys, percept, vmax, vmin=vmin, gaze=gaze,
                                  frame=frame)
 
-    def _n_display_frames(self, percept):
-        """How many frames a drawn or rendered result has
-
-        A video scene sets the clock, so a percept is read at its frame times;
-        a still scene has whatever frames the percept brought.
-        """
-        if percept is None or self.time is not None:
-            return self.n_frames
-        return percept.data.shape[-1]
-
     def _output_clock(self, percept=None):
-        """Frame times of a drawn or rendered result, and their unit"""
+        """``(time, time_unit, n_frames)`` the output frames happen on
+
+        The one place the display clock is decided: a video scene owns it, so
+        a percept is read at the scene's frame times; a still scene has no
+        clock of its own and takes the percept's, which may be ``None``.
+        These are the instants gaze resolves against. What a returned Percept
+        is *labeled* with can differ: see `_prosthetic_frames`.
+        """
         if self.time is not None:
-            return self.time, self.time_unit
-        if percept is not None and percept.time is not None:
-            return percept.time, percept.time_unit
-        return None, None
+            return self.time, self.time_unit, self.n_frames
+        if percept is None:
+            # No clock, but the source still names the unit one would count in:
+            return None, self.time_unit, self.n_frames
+        return percept.time, percept.time_unit, percept.data.shape[-1]
+
+    def _n_display_frames(self, percept):
+        """How many frames a drawn or rendered result has"""
+        return self._output_clock(percept)[2]
 
     def _resolve_gaze(self, gaze, percept=None):
         """A `Gaze` as one (x, y) per output frame; other forms pass through"""
         if not isinstance(gaze, Gaze):
             return gaze
-        time, unit = self._output_clock(percept)
-        return _gaze_points(gaze, self._n_display_frames(percept), time=time,
-                            time_unit=unit)
+        time, unit, n_out = self._output_clock(percept)
+        return _gaze_points(gaze, n_out, time=time, time_unit=unit)
 
     def _prosthetic_frames(self, prosthetic, frame=None):
         """Line a percept up with the output frames, and say when they happen
@@ -1066,19 +1068,21 @@ class Scene(PrettyPrint):
         ``frame`` narrows the result to that one output frame and aligns it
         alone; the timing checks are made against the whole video either way.
         """
+        out_time, out_unit, n_out = self._output_clock(prosthetic)
+        out_time = _take_time(out_time, frame)
         if self.time is None:
             # A still scene has no clock of its own, so the percept's frames
             # are the output frames:
-            return (_take_frame(prosthetic.data, frame),
-                    _take_time(prosthetic.time, frame), prosthetic.time_unit)
-        n_out = self.n_frames
+            return _take_frame(prosthetic.data, frame), out_time, out_unit
         n_pros = prosthetic.data.shape[-1]
-        out_time = _take_time(self.time, frame)
         if n_pros == 1 and prosthetic.time is None:
             # An untimed still percept stands behind every frame:
             return (np.repeat(prosthetic.data, 1 if frame is not None
-                              else n_out, axis=-1), out_time, self.time_unit)
+                              else n_out, axis=-1), out_time, out_unit)
         if n_pros == n_out:
+            # Frame for frame already, but labeled with the percept's own
+            # times: a temporal model reports when the response happened,
+            # which is not the same as the video's frame onsets.
             return (_take_frame(prosthetic.data, frame),
                     _take_time(prosthetic.time, frame), prosthetic.time_unit)
         unit = prosthetic.time_unit
@@ -1103,7 +1107,7 @@ class Scene(PrettyPrint):
             frames = prosthetic[..., Quantity(float(asked_time[0]),
                                               self.time_unit)]
             frames = frames[..., np.newaxis]
-        return frames, out_time, self.time_unit
+        return frames, out_time, out_unit
 
     def _grid(self):
         """A Grid2D on the scene's pixel centers, in scene coordinates"""

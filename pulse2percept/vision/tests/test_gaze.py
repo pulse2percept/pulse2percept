@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import ImageStimulus, VideoStimulus
 from pulse2percept.topography import Grid2D
-from pulse2percept.units import dva, ms, s
+from pulse2percept.units import DimensionMismatchError, dva, ms, s, um
 from pulse2percept.vision import Gaze, Scene, Scotoma
 
 SCENE_PX = 41
@@ -48,6 +48,36 @@ def test_gaze_validates_its_arguments():
         Gaze([(0, 0), (1, 1)] * dva, time=[10, 10] * ms)
     with pytest.raises(ValueError):
         Gaze([(0, 0), (1, 1)] * dva, time=[10, 0] * ms)
+
+
+def test_an_empty_trajectory_is_refused():
+    """No fixation at all says nothing about where the eye was pointing"""
+    with pytest.raises(ValueError):
+        Gaze(np.zeros((0, 2)) * dva, time=np.zeros(0) * ms)
+
+
+def test_time_must_be_counted_in_a_unit_of_time():
+    """As for Percept: a length or an angle is not a clock"""
+    with pytest.raises(DimensionMismatchError):
+        Gaze([(0, 0), (6, 2)] * dva, time=[0, 400] * um)
+    with pytest.raises(DimensionMismatchError):
+        Gaze([(0, 0), (6, 2)] * dva, time=[0, 400] * dva)
+
+
+def test_a_trajectory_cannot_be_edited_after_construction():
+    """Mutating it would change what an already-resolved gaze meant"""
+    positions = np.array(EVENTS, dtype=float)
+    times = np.array(EVENT_TIMES, dtype=float)
+    gaze = Gaze(positions * dva, time=times * ms)
+    with pytest.raises(ValueError):
+        gaze.positions[0, 0] = 99
+    with pytest.raises(ValueError):
+        gaze.time[0] = 99
+    # Nor through the arrays it was built from:
+    positions[0, 0] = 99
+    times[0] = 99
+    npt.assert_almost_equal(gaze.positions, EVENTS)
+    npt.assert_almost_equal(gaze.time, EVENT_TIMES)
 
 
 def test_a_fixation_starts_at_its_timestamp_and_is_held():
@@ -120,6 +150,41 @@ def test_a_still_scene_has_no_clock_to_resolve_against():
         with pytest.raises(ValueError):
             call(gaze=trajectory())
     plt.close('all')
+
+
+def test_the_output_clock_and_the_rendered_frames_never_disagree():
+    """One rule decides the frame count, whatever the scene and percept"""
+    grid = Grid2D((-4, 4), (-4, 4), step=1)
+    untimed = Percept(np.random.rand(9, 9, 1), space=grid)
+    timed = Percept(np.random.rand(9, 9, FRAME_TIMES.size), space=grid,
+                    time=FRAME_TIMES)
+    still = Scene(ImageStimulus(np.zeros((8, 8))), fov=(8, 8))
+    for scene in (video_scene(), still):
+        for percept in (None, untimed, timed):
+            kwargs = {} if percept is None else {'percept': percept,
+                                                 'vmax': 1}
+            n_drawn = scene.render(**kwargs).data.shape[-1]
+            time, _, n_clock = scene._output_clock(percept)
+            npt.assert_equal(n_clock, n_drawn)
+            npt.assert_equal(scene._n_display_frames(percept), n_drawn)
+            if time is not None:
+                npt.assert_equal(np.size(time), n_drawn)
+
+
+def test_gaze_resolves_on_scene_frames_not_on_percept_response_times():
+    """A temporal model's output times label the render, but not the gaze
+
+    Its frames are reported one frame period late, which would shift every
+    fixation by a frame if gaze were resolved against them.
+    """
+    scene = video_scene()
+    late = Percept(np.random.rand(9, 9, FRAME_TIMES.size),
+                   space=Grid2D((-4, 4), (-4, 4), step=1),
+                   time=FRAME_TIMES + 100.0)
+    npt.assert_almost_equal(scene._output_clock(late)[0], FRAME_TIMES)
+    npt.assert_array_equal(
+        scene.render(percept=late, gaze=trajectory(), vmax=1).data,
+        scene.render(percept=late, gaze=EXPANDED * dva, vmax=1).data)
 
 
 def test_a_still_scene_resolves_against_a_timed_percept():

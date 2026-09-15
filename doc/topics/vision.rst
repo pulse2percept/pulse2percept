@@ -105,6 +105,30 @@ Gaze
 ``scene = eye-centered visual field + gaze``. Pass one ``(x, y)`` to fixate,
 or one per video frame to move the eye between frames.
 
+:py:class:`~pulse2percept.vision.Gaze` records *when* fixation changes, and
+pulse2percept holds each fixation until the next timestamp:
+
+.. code-block:: python
+
+    from pulse2percept.units import dva, ms
+
+    scene = p2p.vision.Scene(p2p.stimuli.samples.ucsb_flyover(),
+                             fov=45 * dva,
+                             scotoma=p2p.vision.Scotoma.circle(5 * dva),
+                             scotoma_fill=0.5)
+
+    gaze = p2p.vision.Gaze([(0, 0), (6, 2), (-4, 3), (5, -3)] * dva,
+                           time=[0, 400, 900, 1400] * ms)
+
+    scene.play(gaze=gaze)
+    percept = model.predict_percept(scene, gaze=gaze)
+
+Timestamps are milliseconds unless given as a unitful time, and a fixation
+starting exactly on a frame time already applies to that frame. Events resolve
+against the scene's frame times, not ``t_percept``. Nothing is interpolated, so
+a saccade takes no time. Gaze before the first event is undefined, and a still
+scene without a timed percept has no clock to resolve against.
+
 Gaze always decides where the percept lands in scene coordinates. Whether it
 also decides what the electrodes are given depends on the implant's
 :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`:
