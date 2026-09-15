@@ -1,6 +1,7 @@
 """:py:class:`~pulse2percept.vision.Scene`"""
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.colors import to_rgb
 from matplotlib.figure import Figure
 from matplotlib.patches import Ellipse, Rectangle
 from scipy.interpolate import RegularGridInterpolator
@@ -32,7 +33,7 @@ _RING_STEP = 5.0
 # annotation rather than content
 _RING_COLOR = '0.3'
 
-# The only non-numeric `scotoma_fill`; see `_inpaint_rgb` for what it does.
+# The one `scotoma_fill` string that is not a color; see `_inpaint_rgb`.
 _INPAINT = 'inpaint'
 
 # The two `aperture` shapes; see `Scene._aperture_mask`. Both take their
@@ -205,19 +206,27 @@ def _percept_on(prosthetic, frames, xs, ys, gaze_xy):
 
 
 def _resolve_fill(scotoma_fill):
-    """Normalize ``scotoma_fill`` to a display intensity or ``_INPAINT``"""
+    """Normalize scotoma_fill to a gray level, RGB tuple, or _INPAINT."""
     if isinstance(scotoma_fill, str):
-        if scotoma_fill != _INPAINT:
-            raise ValueError(f"'scotoma_fill' is either a display intensity "
-                             f"in [0, 1] or {_INPAINT!r}, not "
-                             f"{scotoma_fill!r}.")
-        return _INPAINT
-    fill = float(as_value(scotoma_fill, dimensionless, 'scotoma_fill'))
-    if not np.isfinite(fill) or fill < 0 or fill > 1:
+        if scotoma_fill == _INPAINT:
+            return _INPAINT
+        try:
+            return tuple(float(c) for c in to_rgb(scotoma_fill))
+        except ValueError:
+            raise ValueError(f"'scotoma_fill' is a display intensity in "
+                             f"[0, 1], a Matplotlib color, or {_INPAINT!r}, "
+                             f"not {scotoma_fill!r}.") from None
+
+    fill = np.asarray(as_value(scotoma_fill, dimensionless, 'scotoma_fill'),
+                      dtype=float)
+    if fill.ndim != 0 and fill.shape != (3,):
+        raise ValueError(f"'scotoma_fill' is a display intensity in [0, 1], "
+                         f"an (r, g, b) triple, a Matplotlib color, or "
+                         f"{_INPAINT!r}, not {scotoma_fill!r}.")
+    if not np.all(np.isfinite(fill)) or fill.min() < 0 or fill.max() > 1:
         raise ValueError(f"'scotoma_fill' is a display intensity and must "
                          f"lie in [0, 1], not {scotoma_fill}.")
-    return fill
-
+    return float(fill) if fill.ndim == 0 else tuple(fill.tolist())
 
 def _resolve_background(background):
     """Normalize ``background`` to an ``(r, g, b)`` triple in [0, 1]"""
@@ -421,12 +430,12 @@ class Scene(PrettyPrint):
     scotoma : :py:class:`~pulse2percept.vision.Scotoma`, optional
         The region where native vision is lost. If None, native vision is
         intact everywhere and the scene is simply what is out there.
-    scotoma_fill : float or 'inpaint', optional
-        Gray level to fill the scotoma with (in [0, 1]). Default (0)  black.
-        ``'inpaint'`` instead fills the scotoma in from the vision around it
-        using :py:func:`skimage.restoration.inpaint_biharmonic` (ignoring
-        ``scotoma_blend``). ``'inpaint'`` is unavailable when composing a
-        prosthetic percept because that interaction is not modeled.
+    scotoma_fill : float, color, or 'inpaint', optional
+        Scotoma fill: a gray level in [0, 1] (default 0, black), an
+        `(r, g, b)` triple in [0, 1], or any Matplotlib color string.
+        `'inpaint'` fills from the surrounding image using
+        :py:func:`skimage.restoration.inpaint_biharmonic` and ignores
+        `scotoma_blend`. It cannot be used when composing a prosthetic percept.
     background : float or (r, g, b), optional
         Gray level or RGB value to use for transparent pixels. Defaults to
         black.
@@ -564,11 +573,12 @@ class Scene(PrettyPrint):
 
     @property
     def scotoma_fill(self):
-        """The display intensity complete loss shows as, or ``'inpaint'``
+        """Scotoma fill as a gray level, `(r, g, b)` triple, or `'inpaint'`.
 
-        Prosthetic composition requires a numeric fill.
+        Matplotlib color strings are stored as RGB triples.
         """
         return self._scotoma_fill
+
 
     @property
     def scotoma_blend(self):
@@ -850,7 +860,7 @@ class Scene(PrettyPrint):
         return np.clip(blurred[pads[0]:-pads[0], pads[1]:-pads[1]], 0, 1)
 
     def _fill_rgb(self, frame_rgb, loss):
-        """What complete loss shows for one ``(rows, cols, 3)`` frame"""
+        """Scotoma fill for one ``(rows, cols, 3)`` frame"""
         if self._scotoma_fill != _INPAINT:
             return self._scotoma_fill
         return _inpaint_rgb(frame_rgb, loss > 0)

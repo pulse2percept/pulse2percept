@@ -332,6 +332,29 @@ def test_a_complete_scotoma_shows_the_fill_and_nothing_else(fill):
     npt.assert_array_equal(native[intact], source[intact])
 
 
+@pytest.mark.parametrize('fill, rgb', [
+    ('gray', (128 / 255,) * 3),
+    ('red', (1.0, 0.0, 0.0)),
+    ('#336699', (0x33 / 255, 0x66 / 255, 0x99 / 255)),
+    ('0.5', (0.5, 0.5, 0.5)),
+])
+def test_a_matplotlib_color_fills_the_scotoma_with_that_color(fill, rgb):
+    scene = ramp_scene(scotoma=Scotoma.circle(3), scotoma_fill=fill)
+    npt.assert_almost_equal(scene.scotoma_fill, rgb, decimal=6)
+    # Rendered, the triple lands channel by channel, not as a gray average:
+    npt.assert_almost_equal(scene._native_rgb()[HALF, HALF, :, 0], rgb,
+                            decimal=6)
+
+
+def test_a_color_fill_survives_a_round_trip_through_the_constructor():
+    """`fellow_eye` and friends rebuild a Scene from its own parameters"""
+    scene = ramp_scene(scotoma=Scotoma.circle(3), scotoma_fill='red')
+    npt.assert_almost_equal(scene.fellow_eye().scotoma_fill, (1.0, 0.0, 0.0))
+    npt.assert_almost_equal(Scene(scene.source, fov=scene.fov,
+                                  scotoma_fill=(0.2, 0.4, 0.6)).scotoma_fill,
+                            (0.2, 0.4, 0.6))
+
+
 def test_a_graded_scotoma_mixes_linearly():
     scene = ramp_scene(scotoma=Scotoma(lambda x, y: np.full(np.shape(x), 0.5)),
                        scotoma_fill=0.4)
@@ -619,7 +642,10 @@ def test_scotoma_and_fill_are_validated():
     for blend in (-1, -0.1, np.nan, np.inf):
         with pytest.raises(ValueError):
             Scene(source, fov=8, scotoma_blend=blend)
-    for fill in ('blur', 'INPAINT', 'inpainting'):
+    for fill in ('blur', 'INPAINT', 'inpainting', 'definitely-not-a-color'):
+        with pytest.raises(ValueError):
+            Scene(source, fov=8, scotoma_fill=fill)
+    for fill in ((0.1, 0.2), (0.1, 0.2, 0.3, 0.4), (0.5, 1.5, 0.5)):
         with pytest.raises(ValueError):
             Scene(source, fov=8, scotoma_fill=fill)
     blind = Scene(source, fov=8, scotoma=Scotoma.circle(100),
@@ -809,6 +835,20 @@ def test_render_composes_by_the_documented_equation():
     npt.assert_almost_equal(fine.data[22, 22, 0, 0],
                             scene.render(percept=percept,
                                          vmax=4).data[4, 4, 0, 0], decimal=6)
+
+
+def test_a_color_fill_composes_a_percept_channel_by_channel():
+    """max(fill, phosphene) is per-channel, so a dim percept keeps the hue"""
+    native, fill, half = 0.8, (1.0, 0.0, 0.0), 0.5
+    scene = Scene(ImageStimulus(np.full((9, 9), native)), fov=(9, 9),
+                  scotoma=Scotoma(lambda x, y: np.full(np.shape(x), half)),
+                  scotoma_fill='red', scotoma_blend=0)
+    percept = Percept(np.full((9, 9, 1), 2.0), space=scene._grid())
+    phosphene = 2.0 / 4.0
+    lost = [max(c, phosphene) for c in fill]
+    npt.assert_almost_equal(
+        scene.render(percept=percept, vmax=4).data[4, 4, :, 0],
+        [(1 - half) * native + half * c for c in lost], decimal=6)
 
 
 def test_the_aperture_is_support_and_not_scene_data():
