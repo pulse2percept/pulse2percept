@@ -351,12 +351,12 @@ def test_EnsembleImplant_from_coords_is_physical():
 
 
 def _generic(dx=0):
-    """An anatomy-neutral implant, i.e. one belonging to neither family."""
+    """An anatomy-neutral implant, i.e. one with no anatomical target."""
     return GridImplant((2, 2), 500, x=dx, electrode_type=PointSource)
 
 
-def test_EnsembleImplant_anatomical_family():
-    # Same family (possibly different device types), or generic constituents:
+def test_EnsembleImplant_anatomical_target():
+    # Same target (possibly different device types), or generic constituents:
     for ensemble in [EnsembleImplant([ArgusI(), _shifted(ArgusI, 5000, 0)]),
                      EnsembleImplant([Cortivis(), Orion()]),
                      EnsembleImplant([ArgusI(), _generic()]),

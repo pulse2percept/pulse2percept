@@ -1,6 +1,6 @@
 """:py:class:`~pulse2percept.implants.EnsembleImplant`"""
 import numpy as np
-from .base import Implant, _ensemble_family
+from .base import Implant, _ensemble_target
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli._merge import unique_time_points
@@ -231,10 +231,7 @@ class EnsembleImplant(Implant):
         tandem implants, e.g. ICVP, Neuralink.
 
         Constituents may differ in device type, but retinal and cortical
-        implants cannot be mixed. A generic
-        :py:class:`~pulse2percept.implants.Implant` constituent does not
-        determine anatomical family, so an ensemble of only anatomy-neutral
-        implants stays anatomy-neutral and works with either family of model.
+        implants cannot be mixed.
 
         Parameters
         ----------
@@ -284,10 +281,8 @@ class EnsembleImplant(Implant):
         else:
             raise TypeError(f"'implants' must be a list or a dict object, not "
                             f"{type(implants)}.")
-        # Retinal and cortical constituents cannot be mixed. Checked before
-        # anything is assigned, so a rejected reassignment leaves the previous
-        # ensemble intact:
-        _ensemble_family(candidate.values())
+        # cannot mix retinal/cortical:
+        _ensemble_target(candidate.values())
         self._implants = candidate
         # Create the electrode array
         electrodes = {}

@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 
 from ..base import SpatialModel, _length_valued, _placed_coords
-from ...implants.base import _implant_family
+from ...implants.base import _implant_target
 from ...topography.retina import Curcio1990Map, RetinalMap
 from ...units import DimensionMismatchError, as_value
 
@@ -82,7 +82,7 @@ class RetinalSpatial(SpatialModel):
     def _validate_implant(self, implant):
         """Raise error unless ``implant`` is a non-cortical Implant"""
         super()._validate_implant(implant)
-        if _implant_family(implant) == 'cortex':
+        if _implant_target(implant) == 'cortex':
             raise TypeError(
                 f"{type(implant).__name__} is a cortical implant and cannot "
                 f"be used with a retinal model. Use a model from "

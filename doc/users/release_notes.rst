@@ -10,12 +10,12 @@ v0.11.0 Foundations (unreleased)
 Highlights
 ----------
 
-* **New backwards-incompatible model API for implants, models, and
-  topography:** Anatomical components now live under explicit ``retina`` and
-  ``cortex`` namespaces; models are bound to their implant, build
-  automatically, and receive the stimulus directly in ``predict_percept``;
-  and implant placement is handled by the model rather than by modifying
-  named device geometry (:pull:`862`, :pull:`879`, :pull:`880`, :pull:`884`,
+* **Backwards-incompatible API overhaul.** Retinal and cortical implants,
+  models, and topography now live under explicit `retina` and `cortex`
+  namespaces. Models are constructed with an implant, build automatically, and
+  take the stimulus directly in `predict_percept`. Implant placement moved
+  from device constructors to model parameters, so named implant geometry now
+  remains device-local (:pull:`862`, :pull:`879`, :pull:`880`, :pull:`884`,
   :pull:`887`).
 
   A typical workflow changes from:
@@ -34,29 +34,22 @@ Highlights
 
       # v0.11
       implant = p2p.implants.retina.ArgusII()
-
       model = p2p.models.retina.AxonMapModel(
           implant,
           implant_position=(1000, -500),
           implant_rotation=15,
       )
-
       percept = model.predict_percept(stim)
 
-* New :py:mod:`pulse2percept.vision` module with
-  :py:class:`~pulse2percept.vision.Scene`,
-  :py:class:`~pulse2percept.vision.Scotoma` for gaze-aware simulation of
-  residual vision and retinal prostheses, and
-  :py:class:`~pulse2percept.vision.BinocularScene` for the two eyes' views
-  side by side. Image, simulation and display resolution are independent
-  (:pull:`854`, :pull:`871`, :pull:`883`, :pull:`890`, :pull:`899`,
-  :pull:`901`).
+* Added :py:mod:`pulse2percept.vision` for composing scenes, scotomas,
+  residual vision, and prosthetic percepts in visual-field coordinates,
+  including binocular scenes (:pull:`854`, :pull:`871`, :pull:`883`,
+  :pull:`890`, :pull:`899`, :pull:`901`).
 
-* New photovoltaic stimulation pipeline for the PRIMA-style arrays, from image
-  encoding to irradiance-based model input, ending in the new
-  :py:class:`~pulse2percept.models.retina.Ho2018Model` of the
-  network-mediated retinal response (:pull:`868`, :pull:`891`,
-  :pull:`903`).
+* Added a photovoltaic stimulation pipeline for PRIMA-style arrays, from image
+  encoding through irradiance-based stimulation to the new
+  :py:class:`~pulse2percept.models.retina.Ho2018Model`
+  (:pull:`868`, :pull:`891`, :pull:`903`).
 
 
 API changes and improvements
@@ -65,59 +58,38 @@ API changes and improvements
 Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
-* The stimuli API was streamlined (:pull:`889`): core stimulus classes now live
-  in :py:mod:`pulse2percept.stimuli.base`, bundled images and videos are exposed
-  through :py:mod:`pulse2percept.stimuli.samples`, and visual psychophysics
-  stimuli such as Landolt C, Tumbling E, gratings, and bars are generated through
-  :py:mod:`pulse2percept.stimuli.psychophysics` in physical visual units.
-  ``LogoBVL``, ``LogoUCSB``, ``GratingStimulus``, and ``BarStimulus`` are
-  deprecated until v0.12; ``SnellenChart``, ``BostonTrain``, and ``GirlPool``
-  were removed. The old ``stimuli.names``, ``stimuli.images``, and
-  ``stimuli.videos`` module paths were also removed.
+* The stimuli API was simplified: bundled media moved to ``stimuli.samples``,
+  visual psychophysics stimuli to ``stimuli.psychophysics``, and several legacy
+  stimulus classes and module paths were deprecated or removed (:pull:`889`).
 
 
 Implants
 ~~~~~~~~
 
-* Implant classes were reorganized by anatomical target. Generic machinery
-remains in :py:mod:`pulse2percept.implants`; retinal and cortical devices
-moved to ``implants.retina`` and ``implants.cortex`` respectively
-(:pull:`887`).
+* Implant classes were reorganized by anatomical target. Retinal and cortical
+  devices moved to ``implants.retina`` and ``implants.cortex``; generic implant
+  machinery remains at the package root. Retinal implants carry ``eye`` and
+  cortical implants may carry ``hemisphere`` metadata (:pull:`887`).
 
-* ``eye`` (``left`` or ``right``) now belongs to
-:py:class:`~pulse2percept.implants.retina.RetinalImplant`, and
-:py:class:`~pulse2percept.implants.cortex.CorticalImplant` adds optional
-``hemisphere`` (``left`` or ``right``) metadata. 
-Generic implants carry neither. 
+* ``ProsthesisSystem`` was renamed
+  :py:class:`~pulse2percept.implants.Implant`; the old name is deprecated until
+  v0.12.0. ``RectangleImplant`` was removed in favor of
+  :py:class:`~pulse2percept.implants.GridImplant` (:pull:`859`, :pull:`876`).
 
-* ``ProsthesisSystem`` was renamed :py:class:`~pulse2percept.implants.Implant`;
-  the old name remains deprecated until v0.12.0. ``RectangleImplant`` was
-  removed in favor of :py:class:`~pulse2percept.implants.GridImplant`
-  (:pull:`859`, :pull:`876`).
+* Implant and electrode APIs were standardized with clearer parameter names,
+  consistent grid terminology, ``plot3d()``, and normal Python container
+  behavior (:pull:`880`).
 
-* Implant and electrode APIs were standardized: descriptive parameter names
-  replace abbreviations such as ``earray``, ``vfmap``, ``etype``, ``r``, and
-  ``a``; ``grid_type`` consistently uses ``'rect'`` / ``'hex'``; ``plot3D()``
-  becomes ``plot3d()``; and implants and electrode arrays follow normal
-  Python container conventions (:pull:`880`).
+* The PRIMA implant family was updated to reflect published device designs,
+  including :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`,
+  :py:class:`~pulse2percept.implants.retina.Lorach2015Array`,
+  :py:class:`~pulse2percept.implants.retina.Ho2019FlatArray`, and
+  :py:class:`~pulse2percept.implants.retina.Huang2021Array`
+  (:pull:`865`, :pull:`891`).
 
-* The PRIMA family was reorganized around the published devices:
-  ``PRIMA`` becomes :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`,
-  ``PRIMA75`` becomes :py:class:`~pulse2percept.implants.retina.Lorach2015Array`,
-  and new :py:class:`~pulse2percept.implants.retina.Ho2019FlatArray` and
-  :py:class:`~pulse2percept.implants.retina.Huang2021Array` classes capture other
-  photovoltaic designs (:pull:`865`).
-  The new :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` holds the
-  generic image-to-irradiance machinery, with 
-  :py:class:`~pulse2percept.stimuli.PRIMAEncoder` implementing the PRIMA
-  projector specialization (:pull:`891`).
-
-* :py:class:`~pulse2percept.implants.EnsembleImplant` can now be constructed
-  from physical coordinates with ``from_coords`` or from any 2D visual-field map
-  with ``from_visual_field_map``. The latter replaces ``from_cortical_map``;
-  multi-region maps require an explicit ``region``. An ensemble must stay
-  within one anatomical target: retinal and cortical implants cannot be
-  combined (:pull:`884`, :pull:`887`, :pull:`912`).
+* :py:class:`~pulse2percept.implants.EnsembleImplant` now supports placement
+  from physical coordinates or visual-field maps and enforces a single
+  anatomical target (:pull:`884`, :pull:`887`, :pull:`912`).
 
 * Implants now expose ``placement``, ``technology``, and ``family`` metadata
   and support per-electrode thresholds (:pull:`865`, :pull:`869`).
@@ -128,104 +100,60 @@ Models
 
 * Models were reorganized by anatomical target. Generic base and temporal models
   remain in :py:mod:`pulse2percept.models`; retinal and cortical models moved to
-  ``models.retina`` and ``models.cortex`` (:pull:`887`).
+  ``models.retina`` and ``models.cortex``. The generic
+  :py:class:`~pulse2percept.models.SpatialModel` is now anatomy-neutral, while
+  retinal and cortical models enforce compatible implant targets
+  (:pull:`887`, :pull:`895`, :pull:`912`).
 
-* The new :py:class:`~pulse2percept.models.retina.RetinalSpatial` contains
-  retina-specific behavior formerly embedded in the generic
-  :py:class:`~pulse2percept.models.SpatialModel`, including the default retinal
-  map, physical retinal extents, and scene registration. ``SpatialModel`` is now
-  anatomy-neutral. Retinal models reject cortical implants and an
-  eye-dependent ``visual_field_map`` whose eye disagrees with the bound
-  implant; cortical models reject retinal implants. A generic
-  :py:class:`~pulse2percept.implants.Implant` belongs to neither family and
-  remains usable on both sides, while an
-  :py:class:`~pulse2percept.implants.EnsembleImplant` takes the family of its
-  constituents (:pull:`895`, :pull:`912`).
+* Model construction and placement were simplified. Models now bind their
+  implant, build on demand, and take stimuli directly in ``predict_percept``.
+  ``implant_position``, ``implant_rotation``, and ``implant_depth`` place
+  device-local electrode coordinates in tissue; ``model.plot(show_implant=True)``
+  shows the resulting placement (:pull:`862`, :pull:`879`, :pull:`884`,
+  :pull:`901`).
 
-* Model construction and placement were simplified. Models bind their implant,
-  expose supported constructor parameters explicitly, build on demand, and take
-  the stimulus directly in ``predict_percept``. Named device coordinates are
-  now device-local; ``implant_position``, ``implant_rotation``, and 
-  ``implant_depth`` place the implant in tissue. ``implant_position`` may also
-  be specified in dva for single-region 2D maps (:pull:`862`, :pull:`879`,
-  :pull:`884`). ``implant.plot()`` therefore shows device geometry, whereas
-  ``model.plot(show_implant=True)`` shows the placed implant.
-  ``predict_percept`` always returns perceived brightness on the model grid,
-  a :py:class:`~pulse2percept.vision.Scene` included (:pull:`901`).
-  
-* New :py:class:`~pulse2percept.models.retina.Ho2018Model` predicts a
-  spatiotemporal, network-mediated response to photovoltaic subretinal
-  stimulation. Anchored to [Ho2018]_ degenerate rat retina in
-  structure and timing only: pON center, no surround, no pOFF pathway, a
-  linear radiant-exposure activation law, no wavelength or device-specific
-  conversion efficiency, no clinical calibration (:pull:`903`).
+* New :py:class:`~pulse2percept.models.retina.Ho2018Model` predicts the
+  spatiotemporal network-mediated response to photovoltaic subretinal
+  stimulation described by [Ho2018]_ (:pull:`903`).
 
-* New :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` and
-  :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` apply the
-  [Granley2021]_ pulse-dependent brightness and size fits without axonal
-  streaks. Retinal scoreboard and axon-map models also support the new encoding
-  workflows (:pull:`868`, :pull:`869`, :pull:`886`).
+* New :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` applies
+  the [Granley2021]_ pulse-dependent brightness and size relationships without
+  axonal streaks. Retinal scoreboard and axon-map models also support the new
+  encoding workflows (:pull:`868`, :pull:`869`, :pull:`886`).
 
-* New ``location_noise``
-  models fixed, electrode-specific uncertainty in phosphene location in
-  visual-field coordinates. The old generic ``noise`` parameter was removed
-  (:pull:`881`, :pull:`885`).
-  
-* ``find_threshold`` was removed; threshold
-  estimation belongs at the experiment level rather than in the model API
-  (:pull:`862`).
+* ``location_noise`` now models fixed electrode-specific uncertainty in
+  phosphene location. The old generic ``noise`` parameter and ``find_threshold``
+  model API were removed (:pull:`862`, :pull:`881`, :pull:`885`).
 
 
 Topography
 ~~~~~~~~~~
 
-* Visual-field maps were reorganized by anatomical target. Generic
-  :py:class:`~pulse2percept.topography.Grid2D` and
-  :py:class:`~pulse2percept.topography.VisualFieldMap` remain at the package
-  root, while retinal maps moved to ``topography.retina`` and cortical maps to
-  ``topography.cortex`` (:pull:`887`).
-
-  .. code-block:: python
-
-      # before
-      p2p.topography.Watson2014Map()
-      p2p.topography.Polimeni2006Map()
-
-      # v0.11
-      p2p.topography.retina.Watson2014Map()
-      p2p.topography.cortex.Polimeni2006Map()
+* Visual-field maps were reorganized by anatomical target: retinal maps moved
+  to ``topography.retina`` and cortical maps to ``topography.cortex``. Generic
+  map classes remain at the package root (:pull:`887`).
 
 * Added :py:class:`~pulse2percept.topography.retina.Montesano2020Map`, a
-  two-dimensional, meridian-dependent retinal ganglion-cell displacement map
-  reconstructed from [Montesano2020]_. It supports left and right eyes and an
-  inverse transform, including use with ``location_noise``. Retinal distances
-  remain on the ``Watson2014Map`` tissue scale. The reconstruction and
-  validation are documented in ``tools/generate_montesano2020_map.py``
-  (:pull:`897`).
+  two-dimensional retinal ganglion-cell displacement model based on
+  [Montesano2020]_, with eye-specific and inverse mappings (:pull:`897`).
 
 * :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap` now
-  supports ``eye='left'`` and ``eye='right'`` and correctly mirrors the
-  nasal/temporal assignment between eyes. It is now deprecated in favor of
-  ``Montesano2020Map`` (:pull:`895`).
+  supports both eyes and is deprecated in favor of ``Montesano2020Map``
+  (:pull:`895`).
 
 
 Scene and plotting
 ~~~~~~~~~~~~~~~~~~
 
-* New :py:class:`~pulse2percept.vision.Scene` and
-  :py:class:`~pulse2percept.vision.BinocularScene` place images, video,
-  scotomas, and prosthetic percepts in visual-field coordinates. Scenes support
-  eye-centered gaze, rectangular or elliptical apertures, residual-vision
-  rendering, and fellow-eye geometry; ``Scene.blank`` gives a black
-  visual-field canvas when no image is needed; binocular scenes can be built
-  from a side-by-side stereo image and keep the two monocular views
-  independent while plotting them on a common angular scale
-  (:pull:`871`, :pull:`884`, :pull:`890`, :pull:`893`, :pull:`899`,
-  :pull:`900`, :pull:`901`, :pull:`902`).
+* Added :py:class:`~pulse2percept.vision.Scene` and
+  :py:class:`~pulse2percept.vision.BinocularScene` for composing visual input,
+  scotomas, residual vision, and prosthetic percepts in visual-field
+  coordinates (:pull:`871`, :pull:`884`, :pull:`890`, :pull:`893`,
+  :pull:`899`, :pull:`900`, :pull:`901`, :pull:`902`).
 
-* New :py:mod:`pulse2percept.plotting` module provides combined
-  stimulus/percept figures and animations. :py:mod:`pulse2percept.viz` is
-  deprecated until v0.12.0 (:issue:`872`).
+* Added :py:mod:`pulse2percept.plotting` for stimulus/percept figures and
+  animations. :py:mod:`pulse2percept.viz` is deprecated until v0.12.0
+  (:issue:`872`).
 
 
 Bug fixes

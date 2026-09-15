@@ -2509,7 +2509,7 @@ def test_anatomy_neutral_implants_stay_usable():
 
 
 def test_models_read_an_ensemble_by_its_constituents():
-    # Generic constituents do not decide the family; the specific ones do.
+    # Generic constituents do not decide the target; the specific ones do.
     retinal = EnsembleImplant([ArgusII(), _implant_at([(0, 0)])])
     cortical = EnsembleImplant([Cortivis(), _implant_at([(0, 0)])])
     neutral = EnsembleImplant([_implant_at([(0, 0)]),

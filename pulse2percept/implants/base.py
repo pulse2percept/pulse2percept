@@ -18,17 +18,8 @@ from ..utils import PrettyPrint
 from ..utils.deprecation import _deprecated_names
 
 
-def _implant_family(implant):
-    """Return the anatomical family of ``implant``.
-
-    ``'retina'`` for a
-    :py:class:`~pulse2percept.implants.retina.RetinalImplant`, ``'cortex'``
-    for a :py:class:`~pulse2percept.implants.cortex.CorticalImplant`, and
-    ``None`` for an anatomy-neutral :py:class:`Implant`. An
-    :py:class:`~pulse2percept.implants.EnsembleImplant` takes the family of
-    its constituents.
-    """
-    # Local imports: both device subpackages and ``ensemble`` import from here
+def _implant_target(implant):
+    """Return the anatomical target of ``implant`` (retina, cortex, None)"""
     from .cortex import CorticalImplant
     from .ensemble import EnsembleImplant
     from .retina import RetinalImplant
@@ -37,24 +28,19 @@ def _implant_family(implant):
     if isinstance(implant, CorticalImplant):
         return 'cortex'
     if isinstance(implant, EnsembleImplant):
-        return _ensemble_family(implant.implants.values())
+        return _ensemble_target(implant.implants.values())
     return None
 
 
-def _ensemble_family(implants):
-    """Return the family shared by ``implants``, ignoring neutral ones.
-
-    Takes the constituents rather than the ensemble so that
-    :py:class:`~pulse2percept.implants.EnsembleImplant` can validate a
-    candidate collection before assigning it.
-    """
-    families = {family for family in map(_implant_family, implants)
-                if family is not None}
-    if len(families) > 1:
+def _ensemble_target(implants):
+    """Return the target shared by ``implants``, ignoring neutral ones"""
+    targets = {target for target in map(_implant_target, implants)
+               if target is not None}
+    if len(targets) > 1:
         raise TypeError("An EnsembleImplant cannot combine retinal and "
-                        "cortical implants: they stimulate different tissue, "
-                        "and no model spans both.")
-    return families.pop() if families else None
+                        "cortical implants since they stimulate different"
+                        "tissue.")
+    return targets.pop() if targets else None
 
 
 class Implant(PrettyPrint):
