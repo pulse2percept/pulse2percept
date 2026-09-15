@@ -471,6 +471,20 @@ def _as_layers(image, frame_data, frame_index):
     return [_Layer(*layer) for layer in zip(images, data, index)]
 
 
+def _compact_frames(data, index):
+    """Drop the frames an animation never shows, and renumber ``index``
+
+    Returns ``(frames, index)``, where ``frames`` is ``data`` itself if every
+    source frame is shown at least once, and a copy of just the used frames
+    otherwise. Either way each displayed frame is packed exactly once.
+    """
+    index = np.asarray(index, dtype=np.intp)
+    used, remap = np.unique(index, return_inverse=True)
+    if used.size == np.shape(data)[-1]:
+        return data, index
+    return data[..., used], np.ravel(remap).astype(np.intp)
+
+
 def _n_display_frames(layers):
     """The number of frames the animation shows, on which all layers agree"""
     counts = {int(np.size(layer.index)) if layer.index is not None
@@ -748,8 +762,12 @@ class HTMLAnimation(FuncAnimation):
 
     @property
     def _frame_data(self):
-        """The frames that image shows"""
-        return None if self._layers is None else self._layers[0].data
+        """The frames that image shows, one per display frame"""
+        if self._layers is None:
+            return None
+        layer = self._layers[0]
+        return (layer.data if layer.index is None
+                else layer.data[..., layer.index])
 
     def _display_intervals(self, fps, n_frames):
         """How long each frame stays up (in ms), one value per frame"""

@@ -16,7 +16,7 @@ from skimage.transform import resize
 
 from ..units import DimensionMismatchError, Hz, Quantity, Unit, as_value, ms
 from ..utils import Data, HTMLAnimation, frame_interval
-from ..utils.animation import _frame_timeline
+from ..utils.animation import _compact_frames, _frame_timeline
 from ..utils.array import _interp_rows, _slice_times
 from ..utils.constants import VIDEO_BLOCK_SIZE
 
@@ -803,11 +803,13 @@ class Percept(Data):
         labels = None
         if annotate_time:
             labels = [f't = {t:.2f} {self.time_unit}' for t in self.time[idx]]
+        # The player selects frames itself, so each one is packed once:
+        frames, frame_idx = _compact_frames(self.data, idx)
         return HTMLAnimation(fig, update, data_gen, repeat=repeat,
                              intervals=timeline.intervals,
                              save_count=idx.size, image=mat,
-                             frame_data=self.data[..., idx], labels=labels,
-                             fmt=fmt)
+                             frame_data=frames, frame_index=[frame_idx],
+                             labels=labels, fmt=fmt)
 
     def save(self, fname, shape=None, fps=None, vmin=None, vmax=None):
         """Save the percept to an image or video file.

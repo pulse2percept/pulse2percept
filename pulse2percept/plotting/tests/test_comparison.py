@@ -28,8 +28,16 @@ def percept(n_frames=4, time=None, **kwargs):
 
 
 def source_index(ani):
-    """Which source frame each display frame shows"""
-    return ani._layers[0].index
+    """Which source frame each display frame shows
+
+    Read off the pixel values, since frame ``i`` of the fixture video is
+    uniformly ``i``: the layer's own index is numbered against the frames that
+    were packed, not against the source.
+    """
+    layer = ani._layers[0]
+    if layer.data.shape[-1] == 1:
+        return list(layer.index)
+    return [int(round(float(layer.data[..., i].flat[0]))) for i in layer.index]
 
 
 def test_plot_stimulus_percept():
@@ -99,6 +107,8 @@ def test_play_stimulus_percept_zero_order_hold():
     # Source at 30 Hz, percept every 50 ms:
     ani = play_stimulus_percept(video(n_frames=5), percept(n_frames=4))
     npt.assert_equal(source_index(ani), [0, 1, 3, 4])
+    # Source frame 2 is never up, so it is not packed:
+    npt.assert_equal(ani._layers[0].data.shape[-1], 4)
     # A percept that outlasts its source holds the last frame:
     ani = play_stimulus_percept(video(n_frames=2), percept(n_frames=4))
     npt.assert_equal(source_index(ani), [0, 1, 1, 1])
