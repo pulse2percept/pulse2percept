@@ -4,6 +4,7 @@ import warnings
 import numpy as np
 
 from ..base import SpatialModel, _length_valued, _placed_coords
+from ...implants.cortex import CorticalImplant
 from ...topography.retina import Curcio1990Map, RetinalMap
 from ...units import DimensionMismatchError, as_value
 
@@ -77,6 +78,15 @@ class RetinalSpatial(SpatialModel):
         super().__init__(implant, **_visual_field_map_first(params))
         # Laterality the grid was last built for; see `is_built`.
         self._built_map_eye = None
+
+    def _validate_implant(self, implant):
+        """Raise error unless ``implant`` is a non-cortical Implant"""
+        super()._validate_implant(implant)
+        if isinstance(implant, CorticalImplant):
+            raise TypeError(
+                f"{type(implant).__name__} is a cortical implant and cannot "
+                f"be used with a retinal model. Use a model from "
+                f"pulse2percept.models.cortex instead.")
 
     def _validate_map_eye(self):
         """Require an eye-dependent visual_field_map to match the implant"""

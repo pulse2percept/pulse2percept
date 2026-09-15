@@ -2477,3 +2477,31 @@ def test_location_noise_refuses_an_unplaceable_electrode():
     displaced = _bounded_model(1300, 5.0, 7)
     with pytest.raises(ValueError, match='displaced'):
         displaced.predict_percept({'A0': 1})
+
+
+def test_retinal_model_refuses_a_cortical_implant():
+    with pytest.raises(TypeError, match='cortical implant'):
+        BiphasicAxonMapModel(Cortivis())
+    # Rebinding goes through the same check as construction:
+    model = ScoreboardModel(ArgusII())
+    with pytest.raises(TypeError, match='cortical implant'):
+        model.implant = Cortivis()
+    npt.assert_equal(isinstance(model.implant, ArgusII), True)
+
+
+@pytest.mark.parametrize('model_cls', [CortexScoreboardModel, DynaphosModel])
+def test_cortical_model_refuses_a_retinal_implant(model_cls):
+    with pytest.raises(TypeError, match='retinal implant'):
+        model_cls(ArgusII())
+    model = model_cls(Cortivis())
+    with pytest.raises(TypeError, match='retinal implant'):
+        model.implant = ArgusII()
+    npt.assert_equal(isinstance(model.implant, Cortivis), True)
+
+
+def test_anatomy_neutral_implants_stay_usable():
+    # A bare Implant belongs to neither family and remains the escape hatch
+    # for custom arrays on either side.
+    implant = _implant_at([(0, 0)])
+    ScoreboardSpatial(implant, visual_field_map=Curcio1990Map()).build()
+    CortexScoreboardSpatial(implant).build()

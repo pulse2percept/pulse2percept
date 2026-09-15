@@ -132,8 +132,11 @@ Models
   retina-specific behavior formerly embedded in the generic
   :py:class:`~pulse2percept.models.SpatialModel`, including the default retinal
   map, physical retinal extents, and scene registration. ``SpatialModel`` is now
-  anatomy-neutral. Retinal models reject an eye-dependent ``visual_field_map``
-  whose eye disagrees with the bound implant (:pull:`895`).
+  anatomy-neutral. Retinal models reject cortical implants and an
+  eye-dependent ``visual_field_map`` whose eye disagrees with the bound
+  implant; cortical models reject retinal implants. Generic
+  :py:class:`~pulse2percept.implants.Implant` objects remain usable with
+  either family (:pull:`895`, :pull:`907`).
 
 * Model construction and placement were simplified. Models bind their implant,
   expose supported constructor parameters explicitly, build on demand, and take
