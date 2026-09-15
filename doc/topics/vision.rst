@@ -124,10 +124,10 @@ pulse2percept holds each fixation until the next timestamp:
     percept = model.predict_percept(scene, gaze=gaze)
 
 Timestamps are milliseconds unless given as a unitful time, and a fixation
-starting exactly on a frame time already applies to that frame. Events resolve
-against the scene's frame times, not ``t_percept``. Nothing is interpolated, so
-a saccade takes no time. Gaze before the first event is undefined, and a still
-scene without a timed percept has no clock to resolve against.
+starting exactly on a frame time already applies to that frame.
+For a video scene, events resolve against the scene's frame times, not
+``t_percept``. When rendering a still scene with a timed percept, the percept
+provides the clock.
 
 Gaze always decides where the percept lands in scene coordinates. Whether it
 also decides what the electrodes are given depends on the implant's
