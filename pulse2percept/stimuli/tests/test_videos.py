@@ -363,6 +363,26 @@ def test_VideoStimulus_crop(tmp_path):
         stim.crop(idx_space=[5, 10, 25, 9])
 
 
+def test_VideoStimulus_crop_square():
+    vid = np.arange(6 * 4 * 3, dtype=np.float32).reshape(6, 4, 3)
+    vid /= vid.max()
+    time = np.array([0, 10, 20])
+    stim = VideoStimulus(vid, time=time)
+
+    cropped = stim.crop_square()
+
+    npt.assert_equal(cropped.vid_shape, (4, 4, 3))
+    npt.assert_almost_equal(
+        cropped.data.reshape(cropped.vid_shape),
+        vid[1:5, :, :],
+    )
+    npt.assert_array_equal(cropped.time, time)
+    npt.assert_array_equal(
+        cropped.electrodes,
+        stim.electrodes.reshape(6, 4)[1:5, :].ravel(),
+    )
+
+
 def test_VideoStimulus_rotate():
     # Create a horizontal bar:
     shape = (5, 5, 3)
