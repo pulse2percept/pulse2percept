@@ -1854,6 +1854,25 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(cropped_img, electrodes=electrodes,
                              metadata=self.metadata)
 
+    def crop_square(self):
+      """Crop the image to the largest centered square.
+  
+      The image is cropped without resizing. If its dimensions differ by an
+      odd number of pixels, the extra pixel is removed from the bottom or right.
+
+      .. versionadded:: 0.11
+  
+      Returns
+      -------
+      stim : `ImageStimulus`
+          A copy of the stimulus containing the centered square crop.
+      """
+      height, width = self.img_shape[:2]
+      size = min(height, width)
+      y0 = (height - size) // 2
+      x0 = (width - size) // 2
+      return self.crop(idx_rect=(y0, x0, y0 + size, x0 + size))
+      
     def trim(self, tol=0, electrodes=None):
         """Remove any black border around the image
 
@@ -2700,6 +2719,25 @@ class VideoStimulus(Stimulus):
         return VideoStimulus(cropped_vid, electrodes=electrodes, time=time,
                              metadata=self.metadata)
 
+    def crop_square(self):
+      """Crop each video frame to the largest centered square.
+  
+      Frames are cropped without resizing. If their dimensions differ by an
+      odd number of pixels, the extra pixel is removed from the bottom or right.
+
+      .. versionchanged:: 0.11
+  
+      Returns
+      -------
+      stim : `VideoStimulus`
+          A copy of the stimulus containing the centered square crop.
+      """
+      height, width = self.vid_shape[:2]
+      size = min(height, width)
+      y0 = (height - size) // 2
+      x0 = (width - size) // 2
+      return self.crop(idx_space=(y0, x0, y0 + size, x0 + size))
+      
     def trim(self, tol=0, electrodes=None):
         """Remove any black border around the video
 
