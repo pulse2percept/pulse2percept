@@ -226,6 +226,23 @@ def test_ImageStimulus_crop():
     os.remove(fname_bw)
 
 
+def test_ImageStimulus_crop_square():
+    img = np.arange(4 * 6, dtype=np.float32).reshape(4, 6) / (4 * 6 - 1)
+    stim = ImageStimulus(img)
+
+    cropped = stim.crop_square()
+
+    npt.assert_equal(cropped.img_shape, (4, 4))
+    npt.assert_almost_equal(
+        cropped.data.reshape(cropped.img_shape),
+        img[:, 1:5],
+    )
+    npt.assert_array_equal(
+        cropped.electrodes,
+        stim.electrodes.reshape(4, 6)[:, 1:5].ravel(),
+    )
+
+
 def test_ImageStimulus_trim():
     shape = (13, 29)
     ndarray = np.zeros(shape)
