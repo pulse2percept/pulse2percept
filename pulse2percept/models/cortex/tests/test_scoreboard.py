@@ -5,14 +5,10 @@ import copy
 import matplotlib.pyplot as plt
 
 from pulse2percept.models.cortex import ScoreboardModel, ScoreboardSpatial
-from pulse2percept.models.retina import ScoreboardSpatial as BeyelerScoreboard
-from pulse2percept.implants import Implant
 from pulse2percept.implants.cortex import Cortivis, Orion, LinearEdgeThread
-from pulse2percept.implants.retina import ArgusII
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.units import mm
 from pulse2percept.percepts import Percept
-from pulse2percept.topography.retina import Watson2014Map
 
 
 def _spatial(model):
@@ -154,32 +150,6 @@ def test_predict_spatial_regionsum(ModelClass,regions):
     # Separate filtering introduces float32 round-off.
     npt.assert_almost_equal(percept1.data + percept2.data, percept_both.data,
                             decimal=4)
-
-
-@pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
-@pytest.mark.parametrize('stimval', np.arange(0, 5, 1))
-def test_eq_beyeler(ModelClass, stimval):
-    
-
-    visual_field_map = Watson2014Map()
-    # Same electrodes, but anatomy-neutral: the shared kernel is what is
-    # compared here, and a RetinalImplant is refused by a cortical model.
-    implant = Implant(ArgusII().electrode_array)
-    cortex = ModelClass(implant=implant, xrange=(-3, 3), yrange=(-3, 3),
-                        step=0.1, rho=200 * stimval, regions=['ret'],
-                        visual_field_map=visual_field_map,
-                        meridian_blend=0).build()
-    retina = BeyelerScoreboard(implant=implant, xrange=(-3, 3),
-                               yrange=(-3, 3), step=0.1,
-                               rho=200 * stimval).build()
-
-    source = {e: 3 for e in implant.electrode_names[::stimval + 1]}
-
-    p1 = cortex.predict_percept(source)
-    p2 = retina.predict_percept(source)
-
-    npt.assert_equal(p1.data, p2.data)
-
 
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])

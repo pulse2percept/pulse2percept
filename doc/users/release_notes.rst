@@ -136,7 +136,7 @@ Models
   eye-dependent ``visual_field_map`` whose eye disagrees with the bound
   implant; cortical models reject retinal implants. Generic
   :py:class:`~pulse2percept.implants.Implant` objects remain usable with
-  either family (:pull:`895`, :pull:`907`).
+  either family (:pull:`895`, :pull:`912`).
 
 * Model construction and placement were simplified. Models bind their implant,
   expose supported constructor parameters explicitly, build on demand, and take
