@@ -4,5 +4,9 @@
 Example Gallery
 ===============
 
-This gallery contains a number of usage examples and case studies to highlight
-the ease-of-use and flexibility of pulse2percept.
+Complete scientific workflows: reproductions of published models and
+psychophysical data, and end-to-end simulated-vision experiments. Each example
+states the result it reproduces, the published data or parameters it uses, and
+what it does not establish.
+
+The concepts these workflows rely on are documented under Core Concepts.

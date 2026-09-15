@@ -1,276 +1,134 @@
 # -*- coding: utf-8 -*-
 """
-=========================================================================================
-Granley et al. (2021): Effects of Biphasic Pulse Parameters with the BiphasicAxonMapModel
-=========================================================================================
+===============================================================================
+Granley et al. (2021): Pulse parameters shape phosphene appearance
+===============================================================================
 
-This example shows how to use the
-:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel` to model the effects of 
-biphasic pulse train parameters phosphene appearance in an epiretinal
-implant such as :py:class:`~pulse2percept.implants.retina.ArgusII`. 
+The axon map model of [Beyeler2019]_ predicts one phosphene shape per
+electrode, no matter how that electrode is driven. [Granley2021]_ adds three
+stimulus-dependent scaling factors on top of it, fit to psychophysical and
+electrophysiological data: amplitude, frequency, and phase duration modulate
+brightness (:math:`F_\\mathrm{bright}`), spatial extent
+(:math:`F_\\mathrm{size}`, scaling :math:`\\rho`), and streak length
+(:math:`F_\\mathrm{streak}`, scaling :math:`\\lambda`).
 
-Biphasic pulse trains are a commonly used type of stimulus in visual prostheses. 
-This model enhances the :py:class:`~pulse2percept.models.retina.AxonMapModel` to reflect
-the effects of the amplitude, frequency, and pulse duration on threshold,
-phosphene size, brightness, and streak length, according to previous
-psychophysical and electrophysiological studies.
+This example is a qualitative recreation of Fig. 3 in [Granley2021]_ with the
+current pulse2percept parameterization. Each row sweeps one pulse parameter on
+a single Argus II electrode:
 
-The :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel` shares the same underlying 
-assumptions as the axon map model. Namely, an axon's sensitivity to electrical stimulation
-is assumed to decay exponentially with...
-
-*  distance along the axon from the soma (:math:`d_s`), with spatial decay
-   constant :math:`\\lambda`,
-*  distance from the stimulated electrode (:math:`d_e`), with spatial decay 
-   constant :math:`\\rho`.
-
-In the biphasic model, the radial decay rate :math:`\\rho` is scaled by :math:`F_{size}`,
-the axonal decay rate :math:`\\lambda` is scaled by :math:`F_{streak}`, and the brightness 
-contribution from each electrode is scaled by :math:`F_{bright}`. These 3 equations are called
-effect models. The final equation for the brightness intensity for a pixel located at polar 
-coordinates :math:`(r, \\theta)` is given by:
-
-.. math::
-
-    I =  \\max_{axon}\\sum_{elecs}F_\\mathrm{bright} \\exp\\left(\\frac{-d_{e}^2}{2\\rho^2 F_\\mathrm{size} } + 
-            \\frac{-d_{s}^2}{2\\lambda^2 F_\\mathrm{streak} }\\right).
-
-
-Basic Model Usage
------------------
-The biphasic axon map model can be instantiated and ran similarly to other models,
-with the exception that all stimuli are required to be :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
+* **amplitude** makes the phosphene brighter *and* larger,
+* **frequency** makes it brighter but not larger,
+* **phase duration** shortens the axonal streak.
 """
-# sphinx_gallery_thumbnail_number = 4
-
 import matplotlib.pyplot as plt
-import numpy as np
+
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models.retina import BiphasicAxonMapModel
 from pulse2percept.stimuli import BiphasicPulseTrain
-from pulse2percept.units import uA, xTh
+from pulse2percept.units import xTh
 
-# Models with an axon map are well suited for epiretinal implants, such as
-# Argus II. A model predicts what a particular device produces, so it is bound
-# to one:
-implant = ArgusII()
-model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
-
-##############################################################################
-# Parameters you don't specify will take on default values. You can inspect
-# all current model parameters as follows:
-
-print(model)
-
-##############################################################################
-# The most important parameters are ``rho`` and ``lam``, which control the 
-# radial and axonal current spread, respectively. The parameters ``a0``-``a9`` are 
-# coefficients for the size, streak, and bright models, which will be discussed
-# later in this example.
+###############################################################################
+# One electrode, one model
+# ------------------------
 #
-# The rest of the parameters are shared with 
-# :py:class:`~pulse2percept.models.retina.AxonMapModel`. For full details on these 
-# parameters, see the Axon Map Tutorial
-#
-#
-# Before it can predict anything, the model performs expensive, one-time
-# calculations (growing the axon map). That happens automatically the first
-# time you ask for a percept, and again whenever you change a model parameter
-# such as ``model.spatial.rho``. You can also trigger it yourself with
-# ``model.build()``, which is what the next line does so that the axon map
-# exists to be plotted:
+# ``rho`` and ``lam`` are the baseline spatial decay away from the axon and
+# along it. ``lam = 800`` um gives a baseline phosphene elongated enough
+# (about 2.5:1) for the streak effect in the bottom row to be visible; the
+# published figure used a shorter ``lam``. The grid is cropped to the corner of
+# the visual field that electrode A4 of a right-eye Argus II projects to.
 
+ELECTRODE = 'A4'
+BASE_FREQ = 5     # Hz
+BASE_AMP = 1      # xTh
+BASE_PDUR = 0.45  # ms
+
+model = BiphasicAxonMapModel(implant=ArgusII(), rho=200, lam=800,
+                             xrange=(-10.5, 1.5), yrange=(-2, 10), step=0.1)
 model.build()
 
-##############################################################################
-# You can visualize the location of the implant and the axon map
 
-model.plot(show_implant=True)
-plt.show()
+def predict(freq, amp, pdur):
+    """Brightest frame of the percept for one biphasic pulse train"""
+    train = BiphasicPulseTrain(freq, amp * xTh, pdur)
+    return model.predict_percept({ELECTRODE: train}).data[..., 0]
 
 
-##############################################################################
-# As mentioned above, the Biphasic Axon Map Model only accepts 
-# :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`
-# stimuli with no :py:attr:`~pulse2percept.stimuli.BiphasicPulseTrain.delay_dur`.
-# This model works in multiples of perceptual threshold, so amplitude is given
-# in :py:data:`~pulse2percept.units.xTh` ("times threshold"): ``1 * xTh`` is
-# threshold, ``3 * xTh`` is three times it. A bare number is microamps, which
-# this model cannot interpret without a threshold to measure it against.
+###############################################################################
+# The three sweeps
+# ----------------
 #
-# You can easily assign BiphasicPulseTrains to electrodes with a dictionary
-# The following creates a train with 20Hz frequency, 1xTh amplitude, and
-# 0.45ms phase duration.
-
-stim = {'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)}
-
-# What the device would deliver, which is also what the model reads:
-implant.prepare_stim(stim).plot()
-
-##############################################################################
-# The plot is in ``xTh``, not microamps: how much current 1xTh is depends on
-# the electrode, and no threshold has been given yet. See below.
-
-##############################################################################
-# Finally, you can predict the percept resulting from stimulation
-
-percept = model.predict_percept(stim)
-ax = percept.plot()
-ax.set_title('Predicted percept')
-plt.show()
-##############################################################################
-# Increasing the frequency will make phosphenes brighter
-fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-new_percept = model.predict_percept(
-    {'A4': BiphasicPulseTrain(50, 1 * xTh, 0.45)})
-new_percept.plot(ax=axes[1])
-percept.plot(ax=axes[0], vmax=new_percept.max())
-axes[0].set_title("20 Hz")
-axes[1].set_title("50 Hz")
-plt.show()
-##############################################################################
-# Note that without setting vmax, matplotlib automatically rescales images to
-# have the same max brightness and the difference isn't visible
-
-##############################################################################
-# Increasing amplitude increases both size and brightness
-fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-new_percept = model.predict_percept(
-    {'A4': BiphasicPulseTrain(20, 3 * xTh, 0.45)})
-new_percept.plot(ax=axes[1])
-percept.plot(ax=axes[0], vmax=new_percept.max())
-axes[0].set_title("1xTh")
-axes[1].set_title("3xTh")
-plt.show()
-
-##############################################################################
-# Increasing phase duration lowers threshold in the Granley model, so a fixed
-# ``xTh`` amplitude produces a larger and brighter percept
-fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-new_percept = model.predict_percept(
-    {'A4': BiphasicPulseTrain(20, 1 * xTh, 4)})
-new_percept.plot(ax=axes[1])
-percept.plot(ax=axes[0], vmax=new_percept.max())
-axes[0].set_title("0.45ms")
-axes[1].set_title("4ms")
-plt.show()
-
-##############################################################################
-# If you compensate for this threshold change by decreasing amplitude, the
-# remaining effect of increasing phase duration is a shorter streak
-fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-new_percept = model.predict_percept(
-    {'A4': BiphasicPulseTrain(20, 0.023835 * xTh, 20)})
-new_percept.plot(ax=axes[1])
-percept.plot(ax=axes[0], vmax=new_percept.max())
-axes[0].set_title("0.45ms")
-axes[1].set_title("20ms, 0.02xTh")
-plt.show()
-
-#################################################################################
-# This illustrates another important point: ``xTh`` here is relative to the
-# threshold current at 0.45ms phase duration. Since larger phase durations have
-# been shown to reduce the threshold amplitude needed, the 0.02xTh amplitude
-# used in the previous plot still is able to produce a phosphene.
-
-#################################################################################
-# Using measured thresholds
-# -------------------------
-# Give the implant the electrode's threshold and ``xTh`` becomes a current:
-# 2xTh on an 80 uA electrode delivers 160 uA. Threshold here is the current at
-# which a train of the same frequency and 0.45ms phase duration is detected
-# half the time, so a different frequency may call for a different threshold.
-
-calibrated = ArgusII()
-calibrated.thresholds = {'A4': 80 * uA}
-delivered = calibrated.prepare_stim({'A4': BiphasicPulseTrain(20, 2 * xTh,
-                                                              0.45)})
-print(f"{delivered.data.max():.0f} uA")
-
-#################################################################################
-# ``threshold_amp=80 * uA`` instead calibrates a single train. Calibration
-# also lets a current-valued train report its threshold multiple. Electrical
-# safety checks and current-based models require current units.
-
-################################################################################
+# Amplitude is in multiples of perceptual threshold (``xTh``), where threshold
+# is defined at 0.45 ms phase duration.
 #
-#
-# Changing Effect Models
-# ----------------------
-# All of the 'effects' plotted above (e.g. size increasing with amplitude)
-# are controlled by the effect models :math:`F_{bright}`, :math:`F_{size}`, and
-# :math:`F_{streak}`. The variables 
-# ``bright_model``, ``size_model``, and ``streak_model`` encode the 
-# effects models.
-# 
-# These default to :py:class:`~pulse2percept.models.granley2021.DefaultBrightModel`,
-# :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel`, and 
-# :py:class:`~pulse2percept.models.granley2021.DefaultStreakModel` respectively, which
-# implement the simple scaling functions described in `Granley et al. (2021) <[Granley2021]>`_.
-# 
-#
-# The coefficients ``a0``-``a9`` parametrize these effect models. While the default values
-# are likely to work for most cases, they can be customized to be patient specific. 
-# They belong to the effect model that reads them, and are set there:
-model.spatial.size_model.a5 = 0
-print(model.spatial.size_model.a5)
+# The phase-duration row needs a correction. In this model, threshold falls as
+# phase duration grows (``a0 * pdur + a1``, Eq. 3), so a fixed ``1 xTh`` at
+# 100 ms would deliver ~200x the threshold-scaled amplitude of the 0.45 ms
+# reference and the row would show one enormous saturated blob rather than a
+# streak. Dividing the nominal amplitude by that same factor holds
+# threshold-scaled amplitude constant, leaving phase duration to act only
+# through :math:`F_\mathrm{streak}`.
 
-##################################################################################
-# For example, ``a0`` and ``a1`` control how threshold changed with pulse duration: 
-# :math:`amp = (A_0*pdur + A_1)^{-1}*amp`. Thus, pulse duration threshold 
-# scaling can easily be disabled by setting ``a0`` to 0 and ``a1`` to 1. If we increase 
-# pulse duration like we did previously, we will now see that only streak length decreases, 
-# and we no longer have to change amplitude to account for change in threshold
-# ``a0`` and ``a1`` appear in both the brightness and the size model, so set
-# them on each:
-model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
-for effect in (model.spatial.bright_model, model.spatial.size_model):
-    effect.a0 = 0
-    effect.a1 = 1
-fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-percept = model.predict_percept({'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)})
-new_percept = model.predict_percept(
-    {'A4': BiphasicPulseTrain(20, 1 * xTh, 20)})
-new_percept.plot(ax=axes[1])
-percept.plot(ax=axes[0], vmax=new_percept.max())
-axes[0].set_title("0.45ms")
-axes[1].set_title("20ms")
-plt.show()
+AMPS = [1, 2, 3, 4, 5, 6]              # xTh, at 5 Hz / 0.45 ms
+FREQS = [5, 10, 20, 40, 80, 120]       # Hz, at 1 xTh / 0.45 ms
+PDURS = [0.1, 1, 5, 25, 50, 100]       # ms, at 5 Hz, amplitude compensated
 
-##################################################################################
-# Similarly, ``a2``-``a4`` control brightness scaling; ``a5``-``a6`` control size scaling, and
-# ``a7``-``a9`` control streak length scaling. For more details on these parameters,
-# see the effect models documentation, or [Granley2021]_ 
-#
-# Advanced Usage
-# ----------------------
-#
-# Custom Effect Models
-# =====================
-# For most cases, using the provided, default implementation of the effect models
-# will probably be enough. However, the effect models are completely modular, and 
-# can be replaced by any python callable with the parameters frequency, amplitude, 
-# and pulse duration. For example, we can easily change the model to no longer scale size
-model = BiphasicAxonMapModel(implant=implant, rho=200, lam=800)
-def size_modulation(freq, amp, pdur):
-    return 1
-model.spatial.size_model = size_modulation
+scale = model.spatial.bright_model.scale_threshold
+pdur_amps = [BASE_AMP * scale(BASE_PDUR) / scale(pdur) for pdur in PDURS]
 
-fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-percept = model.predict_percept({'A4': BiphasicPulseTrain(20, 1 * xTh, 0.45)})
-new_percept = model.predict_percept(
-    {'A4': BiphasicPulseTrain(20, 3 * xTh, 0.45)})
-new_percept.plot(ax=axes[1])
-percept.plot(ax=axes[0], vmax=new_percept.max())
-axes[0].set_title("1xTh")
-axes[1].set_title("3xTh")
-plt.show()
-######################################################################################
-# The stimuli with larger amplitude created a brighter, but equally-sized phosphene
+rows = [
+    ('Increasing amplitude',
+     [f'{a:g}' + r'$\times$Th' for a in AMPS],
+     [predict(BASE_FREQ, a, BASE_PDUR) for a in AMPS]),
+    ('Increasing frequency',
+     [f'{f:g} Hz' for f in FREQS],
+     [predict(f, BASE_AMP, BASE_PDUR) for f in FREQS]),
+    ('Increasing phase duration',
+     [f'{t:g} ms' for t in PDURS],
+     [predict(BASE_FREQ, a, t) for a, t in zip(pdur_amps, PDURS)]),
+]
+
+###############################################################################
+# All 18 panels share one grayscale range, ``[0, vmax]``, with ``vmax`` the
+# brightest pixel anywhere in the figure (the 120 Hz panel, ~9x the 5 Hz
+# reference, which is why the other two rows sit at the dim end). This
+# matters: ``Percept.plot()`` and Matplotlib both autoscale each image to its
+# own min and max by default, which would make every panel below equally
+# bright and erase the result.
+
+vmax = max(frame.max() for _, _, frames in rows for frame in frames)
+
+fig, axes = plt.subplots(3, 6, figsize=(11, 6.5), facecolor='k')
+for row_axes, (label, titles, frames) in zip(axes, rows):
+    for ax, title, frame in zip(row_axes, titles, frames):
+        ax.imshow(frame, cmap='gray', vmin=0, vmax=vmax)
+        ax.set_title(title, color='w', fontsize=10, pad=4)
+        ax.set_xticks([])
+        ax.set_yticks([])
+    row_axes[0].set_ylabel(label, color='w', fontsize=11)
+fig.tight_layout()
+
+###############################################################################
+# Amplitude (top) recruits a wider patch of retina and drives it harder, so the
+# phosphene grows in both size and brightness. Frequency (middle) leaves
+# :math:`F_\mathrm{size}` untouched: the outline is pixel-for-pixel identical
+# across the row, only brighter. Phase duration (bottom) is the opposite case,
+# with brightness and width held fixed by the amplitude compensation: the
+# streak along the axon shortens by about half between 0.1 and 100 ms.
 #
+# What this does not establish
+# ----------------------------
 #
-# The effect models can even be a class, and can have its own parameters, 
-# which can be shared with the overarching BiphasicAxonMapModel itself (e.g. an effect 
-# model can depend on ``rho``, and if ``model.spatial.rho`` is changed, ``rho``
-# will also change in the effect model). For an example of this,
-# see :py:class:`~pulse2percept.models.granley2021.DefaultSizeModel`
+# * The three factors are phenomenological fits to a handful of Argus I/II
+#   subjects, not a biophysical account of how pulse parameters drive ganglion
+#   cells. They are linear (or single-power-law) in their arguments and
+#   extrapolate poorly outside the ranges swept here.
+# * v0.11 uses an Argus II refit of the [Horsager2009]_ phase-duration
+#   threshold relation rather than the equation in the original publication, so
+#   the bottom row is not a bit-for-bit reproduction of the published panel.
+#   The compensating amplitudes here are derived from the current model's own
+#   ``scale_threshold``, not copied from the paper.
+# * Brightness is in arbitrary units. Only relative comparisons within this
+#   figure are meaningful.
+# * A single electrode is a best case. With many electrodes active, the
+#   summation across electrodes in the model is linear, which real
+#   multi-electrode percepts are not.

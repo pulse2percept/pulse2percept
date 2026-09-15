@@ -1,11 +1,7 @@
 .. _examples-datasets:
 
-Datasets
-========
+Model validation against measured percepts
+==========================================
 
-The :mod:`pulse2percept.datasets` module provides helper functions
-that can be used to load datasets from the bionic vision community,
-such as :py:func:`~pulse2percept.datasets.load_horsager2009`,
-:py:func:`~pulse2percept.datasets.fetch_beyeler2019`,
-:py:func:`~pulse2percept.datasets.load_nanduri2012` and
-:py:func:`~pulse2percept.datasets.load_fornos2012`.
+Workflows that compare model predictions against measured percepts from the
+bionic vision community, loaded through :mod:`pulse2percept.datasets`.

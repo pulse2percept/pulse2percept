@@ -1,216 +1,137 @@
+# -*- coding: utf-8 -*-
 """
 ===============================================================================
-Phosphene drawings from Beyeler et al. (2019)
+Beyeler et al. (2019): Phosphenes are not pixels
 ===============================================================================
 
-This example shows how to use the Beyeler et al. (2019) dataset.
+Simulated prosthetic vision is often drawn as a grid of independent dots, one
+per electrode. [Beyeler2019]_ tested that assumption directly: Argus I and
+Argus II users were asked to draw what they saw during single-electrode
+stimulation.
 
-[Beyeler2019]_ asked Argus I/II users to draw what they see in response to
-single-electrode stimulation.
+Two results follow from those drawings. Phosphenes are **elongated**, not
+round, and their orientation follows the trajectory of the retinal nerve fiber
+bundles (NFBs) passing under the stimulated electrode. This example reproduces
+both from the published data, and predicts the drawings with a
+subject-specific :py:class:`~pulse2percept.models.retina.AxonMapModel`.
 
 .. important ::
 
-    For this dataset you will need to install both
-    `Pandas <https://pandas.pydata.org>`_ (``pip install pandas``) and
-    `HDF4 for Python <https://www.h5py.org>`_ (``pip install h5py``).
-
-Loading the dataset
--------------------
-
-Due to its size (66 MB), the dataset is not included with pulse2percept, but
-can be downloaded from the Open Science Framework (OSF).
-
-By default, the dataset will be stored in a local directory
-‘~/pulse2percept_data/’ within your user directory (but a different path can be
-specified).
-This way, the datasets is only downloaded once, and future calls to the fetch
-function will load the dataset from your local copy.
-
-The data itself will be provided as a Pandas ``DataFrame``:
-
+    This dataset requires `Pandas <https://pandas.pydata.org>`_
+    (``pip install pandas``) and `h5py <https://www.h5py.org>`_
+    (``pip install h5py``). The 66 MB archive is downloaded from the Open
+    Science Framework on first use and cached in ``~/pulse2percept_data``.
 """
 # sphinx_gallery_thumbnail_number = 2
 
-from pulse2percept.datasets import fetch_beyeler2019
-
-data = fetch_beyeler2019()
-print(data)
-
-###############################################################################
-#
-# Inspecting the DataFrame tells us that there are 400 phosphene drawings
-# (the rows) each with 16 different attributes (the columns).
-#
-# These attributes include specifiers such as "subject", "electrode", and
-# "image". We can print all column names using:
-
-data.columns
-
-###############################################################################
-# .. note ::
-#
-#     The meaning of all column names is explained in the docstring of
-#     the :py:func:`~pulse2percept.datasets.fetch_beyeler2019` function.
-#
-# For example, "subject" contains the different subject IDs used in the study:
-
-data.subject.unique()
-
-###############################################################################
-# To select all drawings from Subject 2, we can index into the DataFrame as
-# follows:
-
-print(data[data.subject == 'S2'])
-
-###############################################################################
-# This leaves us with 110 rows, each of which correspond to one phosphene
-# drawings from a number of different electrodes and trials.
-#
-# An alternative to indexing into the DataFrame is to load only a subset of
-# the data:
-
-print(fetch_beyeler2019(subjects='S2'))
-
-###############################################################################
-# Plotting the data
-# -----------------
-#
-# Arguably the most important column is "image". This is the phosphene drawing
-# obtained during a particular trial.
-#
-# Each phosphene drawing is a 2D black-and-white NumPy array, so we can just
-# plot it using Matplotlib like any other image:
-
 import matplotlib.pyplot as plt
-plt.imshow(data.loc[0, 'image'], cmap='gray')
+import numpy as np
 
-###############################################################################
-# However, we might be more interested in seeing how phosphene shape differs
-# for different electrodes.
-# For this we can use :py:func:`~pulse2percept.plotting.plot_argus_phosphenes` from
-# the :py:mod:`~pulse2percept.plotting` module.
-# In addition to the ``data`` matrix, the function will also want an
-# :py:class:`~pulse2percept.implants.retina.ArgusII` object implanted at the
-# correct
-# location.
-#
-# [Beyeler2019]_ reports an implant position of ``(-1331, -850)`` um
-# and a rotation of -28.4 degrees:
-
+from pulse2percept.datasets import fetch_beyeler2019
 from pulse2percept.implants.retina import ArgusII
+from pulse2percept.models.retina import AxonMapModel
+from pulse2percept.plotting import (plot_argus_phosphenes,
+                                    plot_argus_simulated_phosphenes)
+from pulse2percept.stimuli import Stimulus
 from pulse2percept.units import um
-argus = ArgusII(eye='right')
-implant_position = (-1331, -850) * um
-implant_rotation = -28.4
 
 ###############################################################################
-# For now, let's focus on the data from Subject 2:
+# The measured drawings
+# ---------------------
+#
+# The dataset contains 400 drawings. Each row is one trial: the stimulated
+# electrode, the subject, the binary drawing itself, and shape descriptors
+# measured from it. We work with Subject 2:
 
 data = fetch_beyeler2019(subjects='S2')
 
 ###############################################################################
-# Passing both ``data`` and ``argus`` to
-# :py:func:`~pulse2percept.plotting.plot_argus_phosphenes` will then allow the
-# function to overlay the phosphene drawings over a schematic of the implant.
-# Here, phosphene drawings from different trials are averaged, and aligned with
-# the center of the electrode that was used to obtain the drawing:
+# [Beyeler2019]_ reports S2's Argus II as implanted at ``(-1331, -850)`` um
+# with a rotation of -28.4 degrees, and the optic disc center 16.2 degrees
+# nasally and 1.38 degrees superior to the fovea. Those four numbers are the
+# subject-specific anatomy everything below depends on:
 
-from pulse2percept.plotting import plot_argus_phosphenes
-plot_argus_phosphenes(data, argus)
+argus = ArgusII(eye='right')
+implant_position = (-1331, -850) * um
+implant_rotation = -28.4
+loc_od = (16.2, 1.38)
 
 ###############################################################################
-# Great! We have just reproduced a panel from Figure 2 in [Beyeler2019]_.
-#
-# As [Beyeler2019]_ went on to show, the orientation of these phosphenes is
-# well aligned with the map of nerve fiber bundles (NFBs) in each subject's
-# eye.
-#
-# To see how the phosphene drawings line up with the NFBs, we can also pass an
-# :py:class:`~pulse2percept.models.retina.AxonMapModel` to the function.
-# Of course, we need to make sure that we use the correct dimensions. Subject
-# S2 had their optic disc center located 16.2 deg nasally, 1.38 deg superior
-# from the fovea:
+# Drawings from repeated trials on the same electrode are averaged and drawn at
+# the electrode that produced them. This reproduces a panel of Fig. 2 in
+# [Beyeler2019]_, with the model's NFB trajectories overlaid:
 
-from pulse2percept.models.retina import AxonMapModel
-model = AxonMapModel(argus, loc_od=(16.2, 1.38))
+model = AxonMapModel(argus, loc_od=loc_od)
 plot_argus_phosphenes(data, argus, axon_map=model)
 
 ###############################################################################
-# Predicting phosphene shape
-# --------------------------
+# Phosphenes are not round, and they are not oriented arbitrarily: each one
+# runs along the bundle that passes under its electrode. Stimulating an
+# electrode activates passing axons, not just the cells beneath it.
 #
-# In addition, the :py:class:`~pulse2percept.models.retina.AxonMapModel` is well
-# suited to predict the shape of individual phosphenes. Using the values given
-# in [Beyeler2019]_, we can tailor the axon map parameters to Subject 2:
+# Predicting the drawings
+# -----------------------
+#
+# The axon map model formalizes that: current spreads by ``rho`` across
+# bundles and by ``lam`` along them. [Beyeler2019]_ fit both per subject; for
+# S2, ``rho = 315`` um and ``lam = 500`` um. ``thresh_percept`` is set to
+# :math:`1/\sqrt{e}`, the contour at which the paper measured phosphene shape.
 
-import numpy as np
-model = AxonMapModel(implant=argus, rho=315, lam=500, loc_od=(16.2, 1.38),
+model = AxonMapModel(implant=argus, rho=315, lam=500, loc_od=loc_od,
                      implant_position=implant_position,
                      implant_rotation=implant_rotation,
                      xrange=(-30, 30), yrange=(-22.5, 22.5),
                      thresh_percept=1 / np.sqrt(np.e))
 
 ###############################################################################
-# Now we need to activate one electrode at a time, and predict the resulting
-# percept. We could build a :py:class:`~pulse2percept.stimuli.Stimulus` object
-# with a for loop that does just that, or we can use the following trick.
-#
-# The stimulus' data container is a (electrodes, timepoints) shaped 2D NumPy
-# array. Activating one electrode at a time is therefore the same as an
-# identity matrix whose size is equal to the number of electrodes. In code:
+# A stimulus is an (electrodes, time points) array, so an identity matrix
+# activates exactly one electrode per frame. Each predicted frame is then the
+# percept from one electrode, matching one drawing:
 
-# Find the names of all the electrodes in the dataset:
 electrodes = data.electrode.unique()
-# Activate one electrode at a time:
-import numpy as np
-from pulse2percept.stimuli import Stimulus
 stim = Stimulus(np.eye(len(electrodes)), electrodes=electrodes)
-
-###############################################################################
-# Using the model's
-# :py:func:`~pulse2percept.models.retina.AxonMapModel.predict_percept`, we then get
-# a Percept object where each frame is the percept generated from activating
-# a single electrode:
-
 percepts = model.predict_percept(stim)
-percepts.play()
 
-###############################################################################
-# Finally, we can visualize the ground-truth and simulated phosphenes
-# side-by-side:
-
-from pulse2percept.plotting import plot_argus_simulated_phosphenes
 fig, (ax_data, ax_sim) = plt.subplots(ncols=2, figsize=(15, 5))
 plot_argus_phosphenes(data, argus, scale=0.75, ax=ax_data)
 plot_argus_simulated_phosphenes(percepts, argus, scale=1.25, ax=ax_sim,
                                 implant_position=implant_position,
                                 implant_rotation=implant_rotation)
-ax_data.set_title('Ground-truth phosphenes')
-ax_sim.set_title('Simulated phosphenes')
+ax_data.set_title('Drawn by S2')
+ax_sim.set_title('Predicted by the axon map model')
 
 ###############################################################################
-# Analyzing phosphene shape
-# -------------------------
+# The predicted phosphenes reproduce the orientation and elongation of the
+# drawings across the array, which is the claim the model was built to support.
+# Individual sizes are not expected to match trial by trial: ``rho`` and
+# ``lam`` are single per-subject fits, and the drawings themselves vary between
+# repetitions of the same electrode.
 #
-# The phosphene drawings also come annotated with different shape descriptors:
-# area, orientation, and elongation.
-# Elongation is also called eccentricity in the computer vision literature,
-# which is not to be confused with retinal eccentricity. It is simply a number
-# between 0 and 1, where 0 corresponds to a circle and 1 corresponds to an
-# infinitesimally thin line (note that the Methods section of [Beyeler2019]_
-# got it wrong).
+# Elongation across all subjects
+# ------------------------------
 #
-# [Beyeler2019]_ made the point that if each phosphene could be considered a
-# pixel (or essentially a blob), as is so often assumed in the literature, then
-# most phosphenes should have zero elongation.
-#
-# Instead, using Matplotlib's histogram function, we can convince ourselves
-# that most phosphenes are in fact elongated:
+# If phosphenes were pixels, their elongation would cluster at zero. The
+# dataset ships the shape descriptors measured from each drawing, so the claim
+# can be checked on all 400 trials at once. ``eccentricity`` here is the shape
+# descriptor from the computer-vision literature -- 0 is a circle, 1 an
+# infinitesimally thin line -- and has nothing to do with retinal eccentricity:
 
-data = fetch_beyeler2019()
-data.eccentricity.plot(kind='hist')
+all_data = fetch_beyeler2019()
+all_data.eccentricity.plot(kind='hist')
 plt.xlabel('phosphene elongation')
+plt.ylabel('number of drawings')
 
 ###############################################################################
-# Phosphenes are not pixels!
-# And with that we have just reproduced Fig. 3C of [Beyeler2019]_.
+# Most drawings are elongated, reproducing Fig. 3C of [Beyeler2019]_.
+#
+# What this does not establish
+# ----------------------------
+#
+# * A drawing is a subjective report produced on a touchscreen, not a
+#   measurement of the percept. Shape descriptors inherit that.
+# * ``rho``, ``lam``, the optic disc location and the implant placement were
+#   fit to each subject. The model is not predictive for a new subject without
+#   comparable data.
+# * The model describes single-electrode phosphene *shape*. It says nothing
+#   about brightness on an absolute scale, temporal dynamics, or how
+#   simultaneously stimulated electrodes combine.

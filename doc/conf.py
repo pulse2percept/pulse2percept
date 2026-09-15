@@ -75,13 +75,9 @@ sphinx_gallery_conf = {
     "thumbnail_size": (320, 224),
     "remove_config_comments": True,
     "subsection_order": ExplicitOrder([
-        "../examples/implants",
-        "../examples/stimuli",
         "../examples/models",
         "../examples/vision",
-        "../examples/plotting",
         "../examples/datasets",
-        "../examples/developers",
     ]),
     "only_warn_on_example_error": True,
 }
