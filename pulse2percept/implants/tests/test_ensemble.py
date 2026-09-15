@@ -348,3 +348,34 @@ def test_EnsembleImplant_from_coords_is_physical():
     with pytest.raises(DimensionMismatchError):
         EnsembleImplant.from_coords(Cortivis, xrange=(-2 * dva, 2 * dva),
                                     yrange=(0, 0), step=1)
+
+
+def _generic(dx=0):
+    """An anatomy-neutral implant, i.e. one belonging to neither family."""
+    return GridImplant((2, 2), 500, x=dx, electrode_type=PointSource)
+
+
+def test_EnsembleImplant_anatomical_family():
+    # Same family (possibly different device types), or generic constituents:
+    for ensemble in [EnsembleImplant([ArgusI(), _shifted(ArgusI, 5000, 0)]),
+                     EnsembleImplant([Cortivis(), Orion()]),
+                     EnsembleImplant([ArgusI(), _generic()]),
+                     EnsembleImplant([Cortivis(), _generic()]),
+                     EnsembleImplant([_generic(), _generic(5000)])]:
+        npt.assert_equal(len(ensemble.implants), 2)
+    with pytest.raises(TypeError, match='retinal and cortical'):
+        EnsembleImplant([ArgusI(), Cortivis()])
+    # Nested ensembles resolve recursively:
+    with pytest.raises(TypeError, match='retinal and cortical'):
+        EnsembleImplant([EnsembleImplant([ArgusI()]), Cortivis()])
+
+
+def test_EnsembleImplant_rejected_reassignment_keeps_constituents():
+    ensemble = EnsembleImplant([Cortivis(), Orion()])
+    before = list(ensemble.implants.values())
+    names = list(ensemble.electrode_names)
+    with pytest.raises(TypeError, match='retinal and cortical'):
+        ensemble.implants = [Cortivis(), ArgusI()]
+    npt.assert_equal([i is j for i, j in
+                      zip(ensemble.implants.values(), before)], [True, True])
+    npt.assert_equal(list(ensemble.electrode_names), names)

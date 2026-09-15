@@ -10,7 +10,8 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 import time
 
-from pulse2percept.implants import (DiskElectrode, ElectrodeArray, Implant,
+from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
+                                    EnsembleImplant, Implant,
                                     SquareElectrode)
 from pulse2percept.implants.retina import (ArgusI, ArgusII, PRIMAPivotal,
                                            RetinalImplant)
@@ -2505,3 +2506,23 @@ def test_anatomy_neutral_implants_stay_usable():
     implant = _implant_at([(0, 0)])
     ScoreboardSpatial(implant, visual_field_map=Curcio1990Map()).build()
     CortexScoreboardSpatial(implant).build()
+
+
+def test_models_read_an_ensemble_by_its_constituents():
+    # Generic constituents do not decide the family; the specific ones do.
+    retinal = EnsembleImplant([ArgusII(), _implant_at([(0, 0)])])
+    cortical = EnsembleImplant([Cortivis(), _implant_at([(0, 0)])])
+    neutral = EnsembleImplant([_implant_at([(0, 0)]),
+                               _implant_at([(500, 0)])])
+    ScoreboardModel(retinal)
+    CortexScoreboardModel(cortical)
+    DynaphosModel(cortical)
+    with pytest.raises(TypeError, match='cortical implant'):
+        ScoreboardModel(cortical)
+    with pytest.raises(TypeError, match='retinal implant'):
+        CortexScoreboardModel(retinal)
+    with pytest.raises(TypeError, match='retinal implant'):
+        DynaphosModel(retinal)
+    # An all-generic ensemble carries no anatomy and works on either side:
+    ScoreboardSpatial(neutral, visual_field_map=Curcio1990Map()).build()
+    CortexScoreboardSpatial(neutral).build()

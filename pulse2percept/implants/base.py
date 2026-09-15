@@ -18,6 +18,45 @@ from ..utils import PrettyPrint
 from ..utils.deprecation import _deprecated_names
 
 
+def _implant_family(implant):
+    """Return the anatomical family of ``implant``.
+
+    ``'retina'`` for a
+    :py:class:`~pulse2percept.implants.retina.RetinalImplant`, ``'cortex'``
+    for a :py:class:`~pulse2percept.implants.cortex.CorticalImplant`, and
+    ``None`` for an anatomy-neutral :py:class:`Implant`. An
+    :py:class:`~pulse2percept.implants.EnsembleImplant` takes the family of
+    its constituents.
+    """
+    # Local imports: both device subpackages and ``ensemble`` import from here
+    from .cortex import CorticalImplant
+    from .ensemble import EnsembleImplant
+    from .retina import RetinalImplant
+    if isinstance(implant, RetinalImplant):
+        return 'retina'
+    if isinstance(implant, CorticalImplant):
+        return 'cortex'
+    if isinstance(implant, EnsembleImplant):
+        return _ensemble_family(implant.implants.values())
+    return None
+
+
+def _ensemble_family(implants):
+    """Return the family shared by ``implants``, ignoring neutral ones.
+
+    Takes the constituents rather than the ensemble so that
+    :py:class:`~pulse2percept.implants.EnsembleImplant` can validate a
+    candidate collection before assigning it.
+    """
+    families = {family for family in map(_implant_family, implants)
+                if family is not None}
+    if len(families) > 1:
+        raise TypeError("An EnsembleImplant cannot combine retinal and "
+                        "cortical implants: they stimulate different tissue, "
+                        "and no model spans both.")
+    return families.pop() if families else None
+
+
 class Implant(PrettyPrint):
     """Visual prosthesis
 

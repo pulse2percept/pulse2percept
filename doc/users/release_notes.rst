@@ -115,7 +115,9 @@ Generic implants carry neither.
 * :py:class:`~pulse2percept.implants.EnsembleImplant` can now be constructed
   from physical coordinates with ``from_coords`` or from any 2D visual-field map
   with ``from_visual_field_map``. The latter replaces ``from_cortical_map``;
-  multi-region maps require an explicit ``region`` (:pull:`884`, :pull:`887`).
+  multi-region maps require an explicit ``region``. An ensemble must stay
+  within one anatomical target: retinal and cortical implants cannot be
+  combined (:pull:`884`, :pull:`887`, :pull:`912`).
 
 * Implants now expose ``placement``, ``technology``, and ``family`` metadata
   and support per-electrode thresholds (:pull:`865`, :pull:`869`).
@@ -134,9 +136,11 @@ Models
   map, physical retinal extents, and scene registration. ``SpatialModel`` is now
   anatomy-neutral. Retinal models reject cortical implants and an
   eye-dependent ``visual_field_map`` whose eye disagrees with the bound
-  implant; cortical models reject retinal implants. Generic
-  :py:class:`~pulse2percept.implants.Implant` objects remain usable with
-  either family (:pull:`895`, :pull:`912`).
+  implant; cortical models reject retinal implants. A generic
+  :py:class:`~pulse2percept.implants.Implant` belongs to neither family and
+  remains usable on both sides, while an
+  :py:class:`~pulse2percept.implants.EnsembleImplant` takes the family of its
+  constituents (:pull:`895`, :pull:`912`).
 
 * Model construction and placement were simplified. Models bind their implant,
   expose supported constructor parameters explicitly, build on demand, and take
