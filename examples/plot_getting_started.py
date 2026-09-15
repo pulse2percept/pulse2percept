@@ -10,7 +10,8 @@ A pulse2percept simulation has three main pieces:
 2. a **stimulus** describing what the implant delivers, and
 3. a **model** describing how stimulation becomes a percept.
 
-The pieces are deliberately swappable.
+The same workflow applies across supported retinal and cortical implants and
+models.
 
 Your first retinal percept
 --------------------------
@@ -32,7 +33,7 @@ retinal_implant = p2p.implants.retina.ArgusII()
 retinal_model = p2p.models.retina.BiphasicAxonMapModel(retinal_implant)
 
 stim = {
-    'C5': p2p.stimuli.BiphasicPulseTrain(
+    'A5': p2p.stimuli.BiphasicPulseTrain(
         freq=20 * Hz,
         amp=2 * xTh,
         phase_dur=0.45 * ms,
@@ -45,26 +46,37 @@ plt.title('Argus II: one stimulated electrode')
 plt.show()
 
 ###############################################################################
-# That is the whole user-facing workflow:
+# A cortical example
+# ------------------
 #
-# ``implant + model + stimulus -> percept``
+# Cortical simulations follow the same pattern: choose a cortical implant,
+# pair it with a cortical model, and provide a stimulus.
+
+cortical_implant = p2p.implants.cortex.Cortivis()
+cortical_model = p2p.models.cortex.ScoreboardModel(cortical_implant)
+
+stim = ...
+percept = cortical_model.predict_percept(stim)
+percept.plot()
+plt.title('Cortivis: one stimulated electrode')
+plt.show()
+
+###############################################################################
+# You can adapt each part of the simulation:
 #
-# Each piece owns a different scientific choice:
-#
-# * **Implant:** swap ``ArgusII`` for another retinal device, choose
-#   ``eye='left'`` or ``'right'``, provide measured electrode thresholds, or
-#   attach a different image/video encoder.
-# * **Model:** change ``rho`` (spread across axons), ``lam`` (spread along
-#   axons), the visual-field map, or the model-side implant placement. Swap in
-#   :class:`~pulse2percept.models.retina.BiphasicScoreboardModel` if your
-#   scientific question calls for round rather than axon-shaped phosphenes.
-# * **Stimulus:** change pulse amplitude, frequency, phase duration, electrode,
-#   or stimulation pattern.
+# * **Implant:** use a different retinal or cortical implant, change retinal
+#   laterality or cortical hemisphere, provide measured electrode thresholds,
+#   or attach a different encoder.
+# * **Model:** choose a model appropriate for the implant and question. For
+#   example, retinal scoreboard models produce round phosphenes, whereas
+#   axon-map models capture elongated retinal phosphenes.
+# * **Stimulus:** change the electrode, pulse amplitude, frequency, phase
+#   duration, or stimulation pattern. Images and videos can also be encoded
+#   into stimulation through the implant.
 #
 # Where to go next
 # ----------------
 #
-# The :ref:`core concepts <topics-index>` explain implants, stimulation,
-# models, visual input, coordinates, and units in more detail. The
-# :ref:`example gallery <examples>` contains complete scientific
-# workflows.
+# See :ref:`core concepts <topics-index>` for more on implants, stimulation,
+# models, visual input, coordinates, and units. See the
+# :ref:`example gallery <examples>` for complete workflows.
