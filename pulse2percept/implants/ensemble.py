@@ -325,14 +325,20 @@ class EnsembleImplant(Implant):
         ...                        1: 2 * np.ones(60)}).data.shape
         (120, 1)
         """
+        return self._prepare_stim(source)
+
+    def _prepare_stim(self, source, allow_dimensionless=False):
         if isinstance(source, dict) and source and \
                 all(key in self._implants for key in source):
-            prepared = {key: implant.prepare_stim(source.get(key))
-                        for key, implant in self._implants.items()}
+            prepared = {
+                key: implant._prepare_stim(
+                    source.get(key), allow_dimensionless=allow_dimensionless)
+                for key, implant in self._implants.items()}
             # Merge per-implant results before applying ensemble-level
             # preprocessing and safety checks.
             source = self._merged(prepared)
-        return super().prepare_stim(source)
+        return super()._prepare_stim(
+            source, allow_dimensionless=allow_dimensionless)
 
     def _structured_children(self, prepared):
         """One source per ensemble electrode, or ``None``"""

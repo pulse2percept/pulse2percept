@@ -119,7 +119,7 @@ Models
 * New :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` applies
   the [Granley2021]_ pulse-dependent brightness and size relationships without
   axonal streaks. Retinal scoreboard and axon-map models also support the new
-  encoding workflows (:pull:`868`, :pull:`869`, :pull:`886`).
+  encoding workflows (:pull:`868`, :pull:`869`, :pull:`886`, :pull:`914`).
 
 * ``location_noise`` now models fixed electrode-specific uncertainty in
   phosphene location. The old generic ``noise`` parameter and ``find_threshold``

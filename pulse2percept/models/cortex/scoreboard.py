@@ -115,6 +115,10 @@ class ScoreboardSpatial(CortexSpatial):
         next ``predict_percept`` builds it again.
 
     """
+    #: Spatial-only use may read dimensionless image or video values as
+    #: relative electrode drive, so an encoder is optional.
+    _accepts_dimensionless_drive = True
+
     def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
                  grid_type='rect', thresh_percept=0,
@@ -221,11 +225,17 @@ class ScoreboardModel(Model):
     cortical regions (e.g. v1/v2/v3) are added linearly. The `rho` parameter 
     modulates phosphene size.
 
-    .. note ::
+    .. note::
 
-        Use this class if you want a standalone model.
-        Use :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial` if you want
-        to combine the spatial model with a temporal model.
+        Use :class:`ScoreboardSpatial` to combine the spatial model with a
+        temporal model.
+
+    .. note::
+
+        For this spatial-only model, dimensionless image and video values are
+        treated as relative electrode amplitudes, so an implant encoder is not
+        required. Physical or pulse-dependent models still require encoded
+        stimulation.
 
     .. warning::
 

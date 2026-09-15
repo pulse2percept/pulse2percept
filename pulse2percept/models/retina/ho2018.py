@@ -309,6 +309,10 @@ class Ho2018Spatial(ScoreboardSpatial):
     #: The activation law reads irradiance and ON duration off the schedule.
     _needs_structured_stim = True
 
+    #: Network drive is dimensionless, but gray levels are not network
+    #: drive: this model reads the pulse schedule.
+    _accepts_dimensionless_drive = False
+
     def __init__(self, implant, *, rho=None, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
@@ -360,7 +364,8 @@ class Ho2018Spatial(ScoreboardSpatial):
             return _radiant_exposure(stim)
         return super()._stim_values(stim)
 
-    def _predict_prepared(self, stim, t_percept=None):
+    def _predict_prepared(self, stim, t_percept=None,
+                          allow_dimensionless=False):
         """Predict one drive map per pulse period.
 
         Output times are the schedule's pulse onsets. Explicit ``t_percept``
