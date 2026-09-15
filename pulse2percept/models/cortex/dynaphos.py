@@ -3,10 +3,11 @@ import numpy as np
 import warnings
 from copy import deepcopy, copy
 
-from ..base import (BaseModel, _check_implant, _draw_placed_implant,
+from ..base import (BaseModel, _draw_placed_implant,
                     _electrode_offsets, _latent_offsets,
                     _location_noise_sigma, _require_placed,
                     _require_stim_dimension, _validate_placement)
+from .base import _check_cortical_implant
 from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
 from ...units import (A, Quantity, as_value, deg, dva, Hz, mm, ms, uA, um)
@@ -160,7 +161,7 @@ class DynaphosModel(BaseModel):
                  implant_depth=0,
                  location_noise=None,
                  verbose=True):
-            _check_implant(implant)
+            _check_cortical_implant(implant)
             self._implant = implant
             self._regions = None
             super().__init__(
@@ -199,7 +200,7 @@ class DynaphosModel(BaseModel):
     @implant.setter
     def implant(self, implant):
         """Implant setter (called upon ``self.implant = implant``)"""
-        _check_implant(implant)
+        _check_cortical_implant(implant)
         if implant is not self._implant:
             self._is_built = False
             self._location_noise_z = None

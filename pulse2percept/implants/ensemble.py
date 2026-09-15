@@ -1,6 +1,6 @@
 """:py:class:`~pulse2percept.implants.EnsembleImplant`"""
 import numpy as np
-from .base import Implant
+from .base import Implant, _ensemble_target
 from .electrodes import Electrode
 from .electrode_arrays import ElectrodeArray
 from ..stimuli._merge import unique_time_points
@@ -226,8 +226,12 @@ class EnsembleImplant(Implant):
     def __init__(self, implants, preprocess=False, safe_mode=False):
         """Ensemble implant
 
-        An ensemble implant combines multiple implants into one larger electrode array
-        for the purpose of modeling tandem implants, e.g. ICVP, Neuralink
+        An ensemble implant combines multiple implants that occupy the same
+        anatomical target into a single implant for the purpose of modeling
+        tandem implants, e.g. ICVP, Neuralink.
+
+        Constituents may differ in device type, but retinal and cortical
+        implants cannot be mixed.
 
         Parameters
         ----------
@@ -239,6 +243,11 @@ class EnsembleImplant(Implant):
             function (callable).
         safe_mode : bool, optional
             If safe mode is enabled, only charge-balanced stimuli are allowed.
+
+        Raises
+        ------
+        TypeError
+            If ``implants`` mixes retinal and cortical implants.
         """
         self.preprocess = preprocess
         self.safe_mode = safe_mode
@@ -264,14 +273,17 @@ class EnsembleImplant(Implant):
         if isinstance(implants, list):
             if not all(isinstance(implant, Implant) for implant in implants):
                 raise TypeError(f"All elements in 'implants' must be Implant objects.")
-            self._implants = {i:implant for i,implant in enumerate(implants)}
+            candidate = {i:implant for i,implant in enumerate(implants)}
         elif isinstance(implants, dict):
             if not all(isinstance(implant, Implant) for implant in implants.values()):
                 raise TypeError(f"All elements in 'implants' must be Implant objects.")
-            self._implants = implants.copy()
+            candidate = implants.copy()
         else:
             raise TypeError(f"'implants' must be a list or a dict object, not "
                             f"{type(implants)}.")
+        # cannot mix retinal/cortical:
+        _ensemble_target(candidate.values())
+        self._implants = candidate
         # Create the electrode array
         electrodes = {}
         for i, implant in self._implants.items():

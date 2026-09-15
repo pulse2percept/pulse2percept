@@ -18,6 +18,31 @@ from ..utils import PrettyPrint
 from ..utils.deprecation import _deprecated_names
 
 
+def _implant_target(implant):
+    """Return the anatomical target of ``implant`` (retina, cortex, None)"""
+    from .cortex import CorticalImplant
+    from .ensemble import EnsembleImplant
+    from .retina import RetinalImplant
+    if isinstance(implant, RetinalImplant):
+        return 'retina'
+    if isinstance(implant, CorticalImplant):
+        return 'cortex'
+    if isinstance(implant, EnsembleImplant):
+        return _ensemble_target(implant.implants.values())
+    return None
+
+
+def _ensemble_target(implants):
+    """Return the target shared by ``implants``, ignoring neutral ones"""
+    targets = {target for target in map(_implant_target, implants)
+               if target is not None}
+    if len(targets) > 1:
+        raise TypeError("An EnsembleImplant cannot combine retinal and "
+                        "cortical implants since they stimulate different"
+                        "tissue.")
+    return targets.pop() if targets else None
+
+
 class Implant(PrettyPrint):
     """Visual prosthesis
 

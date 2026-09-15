@@ -275,7 +275,7 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         ScoreboardSpatial(implant=ArgusII(), step=100 * um)
     with pytest.raises(DimensionMismatchError):
-        CortexScoreboardSpatial(implant=ArgusII(),
+        CortexScoreboardSpatial(implant=Cortivis(),
                                 xrange=(-2 * mm, 2 * mm))
 
     # current -> time, and time -> current.

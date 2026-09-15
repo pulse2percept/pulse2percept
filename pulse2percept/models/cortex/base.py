@@ -1,9 +1,21 @@
 """:py:class:`~pulse2percept.models.cortex.CortexSpatial`"""
 
-from ..base import SpatialModel, _draw_placed_implant
+from ..base import SpatialModel, _check_implant, _draw_placed_implant
+from ...implants.base import _implant_target
 from ...topography.cortex import Polimeni2006Map
 from ...utils.constants import UM_PER_MM, ZORDER
 import numpy as np
+
+
+def _check_cortical_implant(implant):
+    """Raise error unless ``implant`` is a non-retinal Implant"""
+    _check_implant(implant)
+    if _implant_target(implant) == 'retina':
+        raise TypeError(
+            f"{type(implant).__name__} is a retinal implant and cannot be "
+            f"used with a cortical model. Use a model from "
+            f"pulse2percept.models.retina instead.")
+
 
 class CortexSpatial(SpatialModel):
     """Abstract base class for cortical models
@@ -103,6 +115,10 @@ class CortexSpatial(SpatialModel):
         if not isinstance(regions, list):
             regions = [regions]
         self._regions = regions
+
+    def _validate_implant(self, implant):
+        """Raise error unless ``implant`` is a non-retinal Implant"""
+        _check_cortical_implant(implant)
 
     def __init__(self, implant, *, regions=None, visual_field_map=None,
                  **params):

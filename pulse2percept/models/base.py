@@ -943,11 +943,20 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     _needs_structured_stim = False
 
     def __init__(self, implant, **params):
-        _check_implant(implant)
+        self._validate_implant(implant)
         self._implant = implant
         super().__init__(**params)
         self.grid = None
         self._location_noise_z = None
+
+    def _validate_implant(self, implant):
+        """Raise unless ``implant`` can be simulated by this model.
+
+        Called on construction and on every rebind of ``implant``. Subclasses
+        for a specific anatomy override this to reject implants of the wrong
+        family; see :py:class:`~pulse2percept.models.retina.RetinalSpatial`.
+        """
+        _check_implant(implant)
 
     @property
     def implant(self):
@@ -967,7 +976,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
 
         .. versionadded:: 0.11.0
         """
-        _check_implant(implant)
+        self._validate_implant(implant)
         if implant is not self._implant:
             # Spatial build state depends on implant geometry:
             self._is_built = False
