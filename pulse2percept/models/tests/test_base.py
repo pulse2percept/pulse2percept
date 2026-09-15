@@ -1302,6 +1302,14 @@ def test_spatial_only_model_reads_dimensionless_drive():
         by_hand = model.predict_percept(argus.reshape_stim(logo))
         npt.assert_allclose(percept.data, by_hand.data, rtol=1e-12)
 
+    # A picture is sampled onto the array whatever its resolution:
+    small = ImageStimulus(np.array([[1., 0.], [0., 1.]]))
+    npt.assert_equal(list(small.electrodes), ['A1', 'A2', 'B1', 'B2'])
+    npt.assert_allclose(
+        ScoreboardModel(argus, **grid).predict_percept(small).data,
+        ScoreboardModel(argus, **grid).predict_percept(
+            argus.reshape_stim(small)).data, rtol=1e-12)
+
     # A bare spatial model takes the same input as the standalone model:
     npt.assert_allclose(
         ScoreboardSpatial(argus, **grid).predict_percept(logo).data,
@@ -1324,10 +1332,10 @@ def test_spatial_only_model_reads_dimensionless_video():
     """Video drive keeps its frames, and each frame drives its own array"""
     argus = ArgusII(encoder=None)
     grid = {'xrange': (-5, 5), 'yrange': (-5, 5), 'step': 1}
-    # Two frames driving opposite halves of the array, at 10 fps:
-    frames = np.zeros((6, 10, 2), dtype=np.float32)
-    frames[:3, :, 0] = 1
-    frames[3:, :, 1] = 1
+    # Two frames lighting opposite halves of the field, at 10 fps:
+    frames = np.zeros((24, 40, 2), dtype=np.float32)
+    frames[:12, :, 0] = 1
+    frames[12:, :, 1] = 1
     video = VideoStimulus(frames, time=[0, 100])
     percept = ScoreboardModel(argus, **grid).predict_percept(video)
     npt.assert_equal(percept.data.shape[-1], 2)
@@ -1337,6 +1345,8 @@ def test_spatial_only_model_reads_dimensionless_video():
                      False)
     npt.assert_equal(percept.data[..., 0].max() > 0, True)
     npt.assert_equal(percept.data[..., 1].max() > 0, True)
+    npt.assert_equal(len(argus.reshape_stim(video).electrodes),
+                     argus.n_electrodes)
     # Same as driving the electrodes with the reshaped video by hand:
     npt.assert_allclose(
         percept.data,

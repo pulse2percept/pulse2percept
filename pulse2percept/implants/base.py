@@ -704,9 +704,12 @@ class Implant(PrettyPrint):
                 stim.unit.dimension != self.stimulus_unit.dimension):
             stim = self.encoder.encode(stim, implant=self)
 
-        # If the stim is larger than the number of electrodes, most commonly
-        # we're dealing with an image or video stim, so try to reshape:
-        if len(stim.electrodes) > self.n_electrodes:
+        # A picture is sampled onto the electrodes whatever its resolution:
+        if isinstance(stim, (ImageStimulus, VideoStimulus)):
+            stim = self.reshape_stim(stim)
+        elif len(stim.electrodes) > self.n_electrodes:
+            # More values than electrodes: the only thing that can be reshaped
+            # onto the array is a picture, so let `reshape_stim` say so.
             stim = self.reshape_stim(stim)
 
         if (allow_dimensionless and stim.unit.dimension.is_dimensionless and
