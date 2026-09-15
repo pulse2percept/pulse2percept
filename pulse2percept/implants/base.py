@@ -664,6 +664,18 @@ class Implant(PrettyPrint):
         >>> ArgusII().prepare_stim(samples.logo_bvl()).unit
         uA
         """
+        return self._prepare_stim(source)
+
+    def _prepare_stim(self, source, allow_dimensionless=False):
+        """Prepare ``source`` for the implant.
+
+        If ``allow_dimensionless`` is True, dimensionless electrode values are
+        allowed after preprocessing, encoding, and reshaping. They are validated
+        against the electrode array, but physical-unit checks, threshold
+        calibration, and electrical safety checks are skipped.
+
+        If an encoder is configured, it is still applied normally.
+        """
         # Empty input produces no stimulation:
         if source is None:
             return None
@@ -692,14 +704,31 @@ class Implant(PrettyPrint):
                 stim.unit.dimension != self.stimulus_unit.dimension):
             stim = self.encoder.encode(stim, implant=self)
 
-        # If the stim is larger than the number of electrodes, most commonly
-        # we're dealing with an image or video stim, so try to reshape:
-        if len(stim.electrodes) > self.n_electrodes:
+        # A picture is sampled onto the electrodes whatever its resolution:
+        if isinstance(stim, (ImageStimulus, VideoStimulus)):
             stim = self.reshape_stim(stim)
+        elif len(stim.electrodes) > self.n_electrodes:
+            # More values than electrodes: the only thing that can be reshaped
+            # onto the array is a picture, so let `reshape_stim` say so.
+            stim = self.reshape_stim(stim)
+
+        if (allow_dimensionless and stim.unit.dimension.is_dimensionless and
+                stim.unit.dimension != self.stimulus_unit.dimension):
+            # Relative drive rather than stimulation: there is no threshold to
+            # calibrate against, no charge to balance, and no current to limit.
+            return self._on_electrodes(stim)
 
         # Validate the physical quantity before inspecting stimulus values:
         self._require_deliverable_stim(stim)
+        stim = self._on_electrodes(stim)
+        # Calibrate a copy; do not mutate the caller's stimulus.
+        stim = self._calibrated(deepcopy(stim))
+        # Run safety checks on the calibrated delivered stimulus:
+        self.check_stim(stim)
+        return stim
 
+    def _on_electrodes(self, stim):
+        """Return ``stim`` restricted to this implant's activated electrodes."""
         # Make sure all electrode names are valid:
         for electrode in stim.electrodes:
             try:
@@ -710,13 +739,7 @@ class Implant(PrettyPrint):
         # Remove deactivated electrodes without modifying the caller's source:
         off = [name for (name, e) in self.electrodes.items()
                if not e.activated and name in stim.electrodes]
-        if off:
-            stim = stim._without_electrodes(off)
-        # Calibrate a copy; do not mutate the caller's stimulus.
-        stim = self._calibrated(deepcopy(stim))
-        # Run safety checks on the calibrated delivered stimulus:
-        self.check_stim(stim)
-        return stim
+        return stim._without_electrodes(off) if off else stim
 
     @property
     def n_electrodes(self):

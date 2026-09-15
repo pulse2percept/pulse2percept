@@ -182,6 +182,10 @@ class ScoreboardSpatial(RetinalSpatial):
     #: PhotovoltaicEncoder.
     extra_stimulus_units = (dimensionless,)
 
+    #: Spatial-only use may read dimensionless image or video values as
+    #: relative electrode drive, so an encoder is optional.
+    _accepts_dimensionless_drive = True
+
     def __init__(self, implant, *, rho=100, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
@@ -260,6 +264,13 @@ class ScoreboardModel(Model):
         provides normalized optical drive. Scoreboard visualizes the
         stimulation pattern; it does not model photovoltaic conversion or the
         retinal response.
+
+    .. note::
+
+        For this spatial-only model, dimensionless image and video values are
+        treated as relative electrode amplitudes, so an implant encoder is not
+        required. Physical or pulse-dependent models still require encoded
+        stimulation.
 
     .. warning::
 
@@ -506,6 +517,10 @@ class AxonMapSpatial(RetinalSpatial):
     -----
     ``ax_segments_range`` values above 90 are outside the range for which this
     axon-map construction is considered reliable."""
+
+    #: Spatial-only use may read dimensionless image or video values as
+    #: relative electrode drive, so an encoder is optional.
+    _accepts_dimensionless_drive = True
 
     def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
@@ -1188,6 +1203,14 @@ class AxonMapModel(Model):
     and :math:`d_{\mathrm{soma}}` is the path length along the axon from that
     segment to the ganglion cell body. Thus :math:`\rho` controls spread
     away from the axon, whereas :math:`\lambda` controls spread along it.
+
+    .. note::
+
+        Dimensionless image or video values are read as relative electrode
+        drive, so an implant ``encoder`` is optional when only the spatial
+        pattern matters. An encoder is required when physical amplitude, pulse
+        timing, safety constraints, or a temporal or pulse-dependent model
+        matters.
 
     .. important::
 

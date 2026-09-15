@@ -17,7 +17,8 @@ from pulse2percept.implants import (DiskElectrode, ElectrodeGrid,
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.implants.cortex import Cortivis
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
-from pulse2percept.models.retina import AxonMapSpatial, ScoreboardSpatial
+from pulse2percept.models.retina import (AxonMapSpatial, Nanduri2012Spatial,
+                                         ScoreboardSpatial)
 from pulse2percept.models.cortex import (ScoreboardSpatial as
                                          CortexScoreboardSpatial)
 from pulse2percept.percepts import Percept
@@ -241,16 +242,19 @@ def test_the_whole_rejection_matrix():
 
     # dimensionless -> model: gray levels are not small currents. The implant
     # above is the outer boundary; this is the one behind it, so it is reached
-    # through an implant that claims to deliver something else. Scoreboard does
-    # read one dimensionless quantity -- the normalized optical drive of a
-    # photovoltaic implant (see `PRIMAEncoder`) -- and still refuses a picture,
-    # because a picture does not claim to be an encoded drive.
+    # through an implant that claims to deliver something else.
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 
     with pytest.raises(DimensionMismatchError):
+        Nanduri2012Spatial(implant=Projector(preprocess=False), xrange=(-2, 2),
+                           yrange=(-2, 2), step=1).build().predict_percept(img)
+    # The exception is a scale-free spatial model used without a temporal
+    # stage, which reads gray levels as relative electrode drive:
+    npt.assert_equal(
         ScoreboardSpatial(implant=Projector(preprocess=False), xrange=(-2, 2),
-                          yrange=(-2, 2), step=1).build().predict_percept(img)
+                          yrange=(-2, 2), step=1).predict_percept(img) is None,
+        False)
 
     # current -> encoder: an encoder is what *makes* current out of pictures.
     with pytest.raises(DimensionMismatchError):

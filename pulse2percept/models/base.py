@@ -162,13 +162,17 @@ def _length_valued(value):
                for v in values)
 
 
-def _require_stim_dimension(model, stim):
+def _require_stim_dimension(model, stim, allow_dimensionless=False):
     """Require a stimulus with a physical dimension accepted by ``model``.
 
     Percepts are not checked because they represent model output rather
-    than electrical stimulation.
+    than electrical stimulation. ``allow_dimensionless`` admits ordinary
+    dimensionless values as relative electrode drive; see
+    ``SpatialModel._accepts_dimensionless_drive``.
     """
     if not isinstance(stim, Stimulus):
+        return
+    if allow_dimensionless and stim.unit.dimension.is_dimensionless:
         return
     accepted = (model.stimulus_unit,) + tuple(model.extra_stimulus_units)
     expected = ' or '.join(_describe_unit(unit) for unit in accepted)
@@ -695,6 +699,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     stimulus_unit = uA
     #: Additional stimulus units accepted by this model
     extra_stimulus_units = ()
+    #: Whether this spatial model accepts dimensionless input as relative
+    #: electrode drive. Only applies to spatial-only models.
+    _accepts_dimensionless_drive = False
     #: The unit spatial coordinates are expressed in
     space_unit = um
     #: The unit time is expressed in
@@ -723,6 +730,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         for unit in self.extra_stimulus_units:
             if stim.unit.dimension == unit.dimension:
                 return unit
+        if stim.unit.dimension.is_dimensionless:
+            # Relative drive: read the numbers as they are.
+            return stim.unit
         return self.stimulus_unit
 
     def _stim_values(self, stim):
@@ -733,7 +743,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         """
         if not isinstance(stim, Stimulus):
             return stim.data
-        _require_stim_dimension(self, stim)
+        _require_stim_dimension(
+            self, stim,
+            allow_dimensionless=self._accepts_dimensionless_drive)
         return stim.values(self._stim_unit(stim))
 
     def _stim_times(self, stim):
@@ -1190,8 +1202,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if not self.is_built:
             self.build()
-        return self._predict_prepared(self.implant.prepare_stim(source),
-                                      t_percept=t_percept)
+        return self._predict_prepared(
+            self.implant._prepare_stim(
+                source,
+                allow_dimensionless=self._accepts_dimensionless_drive),
+            t_percept=t_percept)
 
     def _predict_prepared(self, stim, t_percept=None):
         """Predict the spatial response to an already prepared stimulus.
@@ -1206,7 +1221,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Nothing to see here:
             return None
         source = _spatial_input(stim)
-        _require_stim_dimension(self, source)
+        _require_stim_dimension(
+            self, source,
+            allow_dimensionless=self._accepts_dimensionless_drive)
         if source.time is None and t_percept is not None:
             # Static modulation has no time axis even if its encoded pulse
             # train does:
@@ -1792,6 +1809,16 @@ class Model(Frozen, PrettyPrint):
         return self._predict_percept(_scene_stim(self, source, gaze),
                                      t_percept)
 
+    @property
+    def _accepts_dimensionless_drive(self):
+        """Whether dimensionless input counts as relative electrode drive.
+
+        Only a spatial-only composite of a scale-free spatial model qualifies;
+        a temporal stage needs physical stimulation.
+        """
+        return (self.has_space and not self.has_time and
+                self.spatial._accepts_dimensionless_drive)
+
     def _prepared(self, source):
         """Prepare a source for the bound implant.
 
@@ -1799,7 +1826,8 @@ class Model(Frozen, PrettyPrint):
         """
         if not self.has_space:
             return source
-        return self.implant.prepare_stim(source)
+        return self.implant._prepare_stim(
+            source, allow_dimensionless=self._accepts_dimensionless_drive)
 
     def _predict_percept(self, stim, t_percept=None):
         """Predict the percept a prepared stimulus produces"""
@@ -1811,9 +1839,10 @@ class Model(Frozen, PrettyPrint):
             # Nothing to see here:
             return None
         # Spatial-only models validate the spatial view, not the waveform.
+        spatial_only = self.has_space and not self.has_time
         _require_stim_dimension(
-            self, _spatial_input(stim) if self.has_space and not self.has_time
-            else stim)
+            self, _spatial_input(stim) if spatial_only else stim,
+            allow_dimensionless=self._accepts_dimensionless_drive)
         # `_has_time_axis`, not `stim.time`: whether there is a time axis is a
         # question a stimulus can answer from its structure, and asking it for
         # the axis itself would generate the waveform behind it.

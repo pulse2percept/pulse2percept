@@ -330,6 +330,10 @@ class _BiphasicSpatialMixin:
     #: described pulse train.
     _needs_structured_stim = True
 
+    #: Phosphene brightness and size follow pulse parameters, so a
+    #: dimensionless picture is not valid input.
+    _accepts_dimensionless_drive = False
+
     #: Spatial parameters mirrored to the effect model that scales them.
     _shared_with_effect = {'rho': 'size_model'}
 
