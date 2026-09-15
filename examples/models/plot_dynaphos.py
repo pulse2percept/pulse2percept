@@ -1,211 +1,150 @@
 # -*- coding: utf-8 -*-
 """
-===============================================================================================================
-van der Grinten, de Ruyter van Steveninck, Lozano et al. (2023): Phosphene simulation using cortical prostheses
-===============================================================================================================
+===============================================================================
+van der Grinten et al. (2023): Cortical phosphene dynamics
+===============================================================================
 
-This example shows how to apply the
-:py:class:`~pulse2percept.models.cortex.DynaphosModel` (original and official 
-implementation available `here <https://github.com/neuralcodinglab/dynaphos>`_) to an
-:py:class:`~pulse2percept.implants.cortex.Orion` implant.
+A cortical phosphene does not switch on and stay on. [vanderGrinten2023]_
+models it as the output of a charge-accumulation process: stimulation drives a
+tissue activation trace, the trace has to cross a threshold before anything is
+seen, and brightness then follows the trace through a sigmoid. The consequence
+is that phosphene brightness rises over a few hundred milliseconds and then
+fades under sustained stimulation, and that weak stimulation produces nothing
+at all.
 
-The Dynaphos model assumes that all stimuli are applied as biphasic pulse
-trains. Unlike other models in p2p, this model is not separated into spatial and temporal components, and
-must be run as a single composite model.
-
-The model can be instantiated and run in three steps.
-
-Creating the model
-------------------
-
-The first step is to choose the device: a model predicts what a *particular*
-implant produces, so it is bound to one. Here we use an
-:py:class:`~pulse2percept.implants.cortex.Orion` implant at the default
-location, and instantiate the
-:py:class:`~pulse2percept.models.cortex.DynaphosModel` class against it.
+This example applies
+:py:class:`~pulse2percept.models.cortex.DynaphosModel` to an
+:py:class:`~pulse2percept.implants.cortex.Orion` epicortical array and
+reproduces the brightness-over-time family of Fig. 3 of that paper. The
+reference implementation is available `here
+<https://github.com/neuralcodinglab/dynaphos>`_.
 """
-# sphinx_gallery_thumbnail_number = 4
+# sphinx_gallery_thumbnail_number = 3
 
-import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from pulse2percept.stimuli import BiphasicPulseTrain
+import numpy as np
+
 from pulse2percept.implants.cortex import Orion
 from pulse2percept.models.cortex import DynaphosModel
+from pulse2percept.stimuli import BiphasicPulseTrain
+
+###############################################################################
+# Where the array sits
+# --------------------
+#
+# Unlike the retinal models, Dynaphos is a single composite model rather than
+# separable spatial and temporal components, and it is defined for V1 only.
+# Phosphenes are small compared with the simulated field, so the visual field
+# is sampled finely:
 
 implant = Orion()
-model = DynaphosModel(implant=implant)
-
-##############################################################################
-# Parameters you don't specify will take on default values. You can inspect
-# all current model parameters as follows:
-
-print(model)
-
-##############################################################################
-# This reveals a number of other parameters to set, such as:
-#
-# * ``xrange``, ``yrange``: The extent of the visual field to be simulated,
-#   specified as a range of x and y coordinates (in degrees of visual angle,
-#   or dva). For example, we are currently sampling x values between -20 dva
-#   and +20dva, and y values between -15 dva and +15 dva.
-# * ``step``: The resolution (in dva) at which to sample the visual field.
-#   For example, we are currently sampling at 0.25 dva in both x and y
-#   direction.
-# * ``dt``: The time-step of the model in ms. This determines the frame-rate of the
-#   outputted percept.
-# * ``regions``: The regions of the visual cortex to simulate. Currently, the
-#   Dynaphos model is only defined for the v1 region.
-# * ``freq``, ``p_dur``: The default frequency and pulse duration for the 
-#   stimulus. This is used to encode a non-pulse train stimulus as a biphasic 
-#   pulse train.
-# * ``excitability``:  The excitability constant which determines current 
-#   spread, in uA/mm^2.
-# * ``rheobase``: The rheobase current constant, in uA.
-# * ``tau_trace``: The trace decay constant, in ms.
-# * ``kappa_trace``: The stimulus effect modifier
-# * ``tau_act``: The activation decay constant, in ms.
-# * ``a_thr``: The tissue activation threshold, under which a phosphene is not
-#   generated. Note that this is a threshold for the internal activation value, 
-#   unlike other models' ``thresh_percept`` which is a threshold for the final
-#   percept brightness.
-# * ``sig_slope``, ``a50``: The slope of the sigmoidal brightness curve and
-#   activation value for which the brightness reaches half of its maximum.
-#
-# To change parameter values, either pass them directly to the constructor
-# above or set them by hand, like this:
-
-model.step = 0.05
-
-##############################################################################
-# Before it can predict anything, the model performs a number of expensive
-# setup computations (building the grid). That happens automatically the first
-# time you ask for a percept, and again whenever you change a model parameter
-# -- as the ``model.step`` assignment above just did. You can also trigger it
-# yourself with ``model.build()``, which is what the next line does so that
-# the grid exists to be plotted:
-
+model = DynaphosModel(implant=implant, step=0.05)
 model.build()
-
-##############################################################################
-# You can inspect the location of the implant with respect to the visual
-# cortex using the built-in plot methods:
 
 model.plot(show_implant=True)
 
-##############################################################################
-# By default, the plots will be added to the current Axes object.
-# Alternatively, you can pass ``ax=`` to specify in which Axes to plot.
+###############################################################################
+# Each electrode maps to one visual-field location through cortical
+# retinotopy, so the array's arrangement on cortex is not the arrangement of
+# the phosphenes it produces.
 #
-# Predicting the percept
-# ----------------------
-# The second step is to describe the stimulus. The easiest kind is a NumPy
-# array that specifies the current amplitude to be applied to every electrode
-# in the implant.
+# The percept of a sustained train
+# --------------------------------
 #
-# Note that all stimuli passed to Dynaphos must have a time component.
-#
-# For example, the following sends 100 microamps to all electrodes of the
-# implant, at 300Hz with a phase duration of 0.17ms:
+# Dynaphos requires stimuli with a time course. Here every electrode receives
+# the same 300 Hz, 0.17 ms biphasic pulse train at 100 uA for 2 s:
 
-stim_freq = 300  # stimulus frequency (Hz)
-phase_dur = 0.17  # duration of the cathodic/anodic phase (ms)
-stim_dur = 2000  # stimulus duration (ms)
-stim_amp = 100  # stimulus current (uA)
-stim = {e: BiphasicPulseTrain(amp=stim_amp, freq=stim_freq,
-                              phase_dur=phase_dur, stim_dur=stim_dur)
+stim = {e: BiphasicPulseTrain(amp=100, freq=300, phase_dur=0.17,
+                              stim_dur=2000)
         for e in implant.electrode_names}
-
-##############################################################################
-# The third step is to apply the model to predict the percept resulting from
-# that stimulus. Note that this may take some time on your machine:
 
 percept = model.predict_percept(stim)
 
-###############################################################################
-# The output of the model is a :py:class:`~pulse2percept.percepts.Percept`
-# object that contains a time series with the predicted brightness of the
-# visual percept at every time step.
-#
-# We can view the brightest frame as follows:
-brightest_frame = percept.max(axis='frames')
-plt.imshow(brightest_frame, cmap='gray')
+plt.figure()
+plt.imshow(percept.max(axis='frames'), cmap='gray')
+plt.title('Brightest frame')
 
 ###############################################################################
-# Plotting the percept-over-time next to the applied stimulus reveals 
-# that the model predicts the perceived brightness to increase rapidly and
-# then drop off slowly (over the time course of seconds).
+# Following the brightest pixel over time shows the accumulate-then-fade
+# behavior the model is built around: brightness peaks early and decays while
+# stimulation continues.
 
-# What the device actually delivers, rather than the description above:
 delivered = implant.prepare_stim(stim)
+brightness = percept.data.max(axis=(0, 1))
 
-fig, ax = plt.subplots(figsize=(10, 5))
+fig, ax = plt.subplots(figsize=(10, 4))
 ax.plot(delivered.time,
         -0.02 + 0.01 * delivered.data[0, :] / delivered.data.max(),
-        linewidth=3, label='pulse')
-ax.plot(percept.time, np.max(np.max(percept.data, axis=1), axis=0), linewidth=3, label='percept')
-ax.plot([0, stim_dur], [percept.max(), percept.max()], 'k--', label='max brightness')
-ax.plot([0, stim_dur], [0, 0], 'k')
-
+        linewidth=2, label='pulse train')
+ax.plot(percept.time, brightness, linewidth=2, label='percept')
+ax.axhline(percept.max(), color='k', linestyle='--', label='max brightness')
+ax.axhline(0, color='k')
 ax.set_xlabel('time (ms)')
 ax.set_ylabel('predicted brightness (a.u.)')
-ax.set_yticks(np.arange(0, 1.01, 0.1))
-ax.set_xlim(0, stim_dur)
-fig.legend(loc='center')
+ax.set_xlim(0, 2000)
+ax.legend(loc='center right')
 fig.tight_layout()
 
 ###############################################################################
-# Brightness as a function of amplitude
-# -------------------------------------
+# Brightness over time vs amplitude (Fig. 3)
+# ------------------------------------------
 #
-# The paper reports that phosphene brightness is affected
-# by amplitude modulation.
+# Repeating a shorter 166 ms train across stimulation amplitudes reproduces the
+# family of brightness traces in Fig. 3 of [vanderGrinten2023]_. Low amplitudes
+# never cross the tissue activation threshold ``a_thr`` and produce no
+# phosphene at all:
 
-# Use the amplitude values from the paper:
 amps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-
-# Output brightness in 20ms time steps for 700ms:
 t_percept = np.arange(0, 700, 20)
 
-# Initialize an empty list that will contain the brightness-over-time
-# For each amplitude
-bright_over_time = []
-
+traces = []
 for amp in amps:
-    # For each value in the `amps` vector, now stored as `amp`, do:
-    # 1. Generate a pulse train with amplitude `amp`, frequency 300Hz,
-    #    166ms duration, and pulse duration 0.17ms
-    stim = {e: BiphasicPulseTrain(freq=300, amp=amp, phase_dur=0.17,
-                                  stim_dur=166)
-            for e in implant.electrode_names}
-    # 2. Run the model:
-    percept = model.predict_percept(stim, t_percept=t_percept)
-    # 3. Save the brightness over time
-    bright_over_time.append(np.max(np.max(percept.data, axis=1), axis=0))
+    trial = {e: BiphasicPulseTrain(freq=300, amp=amp, phase_dur=0.17,
+                                   stim_dur=166)
+             for e in implant.electrode_names}
+    traces.append(model.predict_percept(
+        trial, t_percept=t_percept).data.max(axis=(0, 1)))
 
-###############################################################################
-# This allows us to reproduce the brightness-over-time plot in Fig. 3: 
-
-fig, ax = plt.subplots(1, figsize=(7.5,3))
-
+fig, ax = plt.subplots(figsize=(8, 3.5))
 cmap = mpl.cm.YlOrBr
 norm = mpl.colors.Normalize(vmin=0, vmax=100)
-fig.colorbar(None,ax=ax,cmap=cmap,norm=norm,shrink=0.5,orientation='vertical',ticks=[0,100],label="Stim. Amplitude (uA)")
+fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, shrink=0.8,
+             ticks=[0, 100], label='stimulus amplitude (uA)')
 
-ax.set_yticks([0.2, 0.6, 1.0])
-ax.set_xticks([0.0, 0.2, 0.4, 0.6])
-ax.set_ylim([0,1.1])
-ax.set_xlim([0,0.7])
+for amp, trace in zip(amps, traces):
+    ax.plot(t_percept / 1000, trace, color=cmap(amp / 100), linewidth=3)
+
+ax.set_xlabel('time (s)')
+ax.set_ylabel('brightness')
+ax.set_xlim(0, 0.7)
+ax.set_ylim(0, 1.1)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
-ax.set(ylabel='Brightness', xlabel='Time [s]')
-
-for i, amp in enumerate(amps):
-    ax.plot(t_percept / 1000, bright_over_time[i], color=cmap(amp/100), linewidth=5)
+fig.tight_layout()
 
 ###############################################################################
-# Note: For the above plot, note that we plot the generated percept
-# brightness (which is limited by phosphene size & the tissue activation threshold)
-# while [vanderGrinten2023]_ plots the internal brightness state. The dashed lines in 
-# [vanderGrinten2023]_ represent time points at which a percept is not generated, 
-# as the activation threshold was not reached.
+# Correspondence with the publication
+# -----------------------------------
+#
+# The curves above are the **generated percept brightness**, which is bounded
+# by phosphene size and by the tissue activation threshold.
+# [vanderGrinten2023]_ plots the model's **internal brightness state**, and
+# draws it dashed at the time points where activation stayed below threshold
+# and no phosphene was generated. The two agree where a phosphene exists;
+# below threshold this figure reads zero where the paper's reads a dashed
+# continuation.
+#
+# What this does not establish
+# ----------------------------
+#
+# * Dynaphos is calibrated against phosphene reports from a small number of
+#   participants with cortical implants, and its brightness is in arbitrary
+#   units.
+# * The model covers V1 only. V2 and V3 stimulation is not represented.
+# * Cortical retinotopy here is the population-average
+#   :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`. Individual
+#   retinotopy varies substantially and changes where every phosphene lands.
+# * Stimulating all 60 Orion electrodes simultaneously is a modeling
+#   convenience; real systems raster their electrodes and interactions between
+#   simultaneously stimulated sites are not modeled.

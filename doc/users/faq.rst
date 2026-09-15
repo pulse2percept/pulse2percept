@@ -460,7 +460,7 @@ your own :py:class:`~pulse2percept.implants.ElectrodeArray` and
 The implant matters because electrode size, spacing, location, and orientation
 can all affect the predicted response.
 
-See :ref:`Basic Concepts: Implants <topics-implants>` for details.
+See :ref:`Visual Prostheses <topics-implants>` for details.
 
 
 How do I control which electrodes are stimulated?
@@ -482,7 +482,7 @@ For time-varying electrical stimulation, use objects such as
 :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`, or construct a
 :py:class:`~pulse2percept.stimuli.Stimulus` directly.
 
-See :ref:`Electrical Stimuli <topics-stimuli>` for details.
+See :ref:`Stimulation <topics-stimulation>` for details.
 
 
 Can I simulate images and videos?
