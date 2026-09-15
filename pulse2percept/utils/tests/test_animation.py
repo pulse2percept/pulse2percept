@@ -440,6 +440,38 @@ def test_HTMLAnimation_title_not_in_background():
                      True)
 
 
+def make_indexed(data, index):
+    """An HTMLAnimation whose display frames select from ``data``"""
+    fig, ax = plt.subplots(figsize=(8, 5))
+    mat = ax.imshow(np.zeros(data.shape[:-1]), cmap='gray', vmin=0,
+                    vmax=data.max())
+    plt.close(fig)
+    return HTMLAnimation(fig, lambda d: mat, iter(range(len(index))),
+                         save_count=len(index), image=mat, frame_data=data,
+                         frame_index=[index], interval=25.0, fmt='png')
+
+
+def test_HTMLAnimation_packs_each_frame_once():
+    """Only the source frames a display frame lands on reach the sheet"""
+    n_src = 6
+    data = np.linspace(0, 1, 4 * 5 * n_src).reshape((4, 5, n_src))
+    # Showing a frame twice costs an index, not a second tile:
+    repeated = np.repeat(np.arange(n_src), 2)
+    cfg, _, sheet = parse(make_indexed(data, repeated).to_jshtml())
+    npt.assert_equal(cfg['n'], 2 * n_src)
+    npt.assert_equal(cfg['map'], list(repeated))
+    # Skipped frames are left out, and the map is renumbered around them:
+    skipped = [0, 2, 4]
+    small_cfg, _, small = parse(make_indexed(data, skipped).to_jshtml())
+    npt.assert_equal(small_cfg['map'], [0, 1, 2])
+    for i, src in enumerate(skipped):
+        # Matplotlib quantizes to 256 levels before the colormap lookup:
+        expected = np.clip(data[..., src] / data.max() * 256, 0, 255)
+        npt.assert_equal(tile(small_cfg, small, i), expected.astype(np.uint8))
+    # Half the frames make for a smaller sheet:
+    npt.assert_equal(np.prod(small.size) < np.prod(sheet.size), True)
+
+
 def test_HTMLAnimation_playback():
     data = np.random.rand(4, 4, 3)
     # 'repeat' picks the default loop mode:

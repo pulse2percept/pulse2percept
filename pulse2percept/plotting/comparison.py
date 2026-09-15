@@ -12,7 +12,7 @@ from ..percepts.base import _reject_rgb, _resolve_clim
 from ..stimuli import ImageStimulus, VideoStimulus
 from ..units import ms
 from ..utils import HTMLAnimation
-from ..utils.animation import _compact_frames, _frame_timeline
+from ..utils.animation import _frame_timeline
 
 __all__ = ['play_stimulus_percept', 'plot_stimulus_percept']
 
@@ -249,13 +249,10 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
     plt.rcParams["animation.html"] = 'jshtml'
     plt.close(fig)
     # Both panels are handed to the player, which shows the source frame that
-    # the index holds at each display frame. Frames it never lands on are
-    # left out of the sprite sheet:
-    stim_frames, stim_map = _compact_frames(src, src_idx)
-    pct_frames, pct_map = _compact_frames(percept.data, idx)
+    # ``src_idx`` holds at each display frame:
     return HTMLAnimation(fig, update, data_gen, repeat=repeat,
                          intervals=timeline.intervals, save_count=idx.size,
                          image=[im_stim, im_percept],
-                         frame_data=[stim_frames, pct_frames],
-                         frame_index=[stim_map, pct_map], labels=labels,
+                         frame_data=[src, percept.data],
+                         frame_index=[src_idx, idx], labels=labels,
                          title=clock, fmt=fmt)

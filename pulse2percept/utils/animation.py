@@ -476,7 +476,8 @@ def _compact_frames(data, index):
 
     Returns ``(frames, index)``, where ``frames`` is ``data`` itself if every
     source frame is shown at least once, and a copy of just the used frames
-    otherwise. Either way each displayed frame is packed exactly once.
+    otherwise. Either way each source frame that is displayed is packed at
+    most once.
     """
     index = np.asarray(index, dtype=np.intp)
     used, remap = np.unique(index, return_inverse=True)
@@ -786,7 +787,12 @@ class HTMLAnimation(FuncAnimation):
             int(np.ceil(height - bbox.y0))
         rect = [left, top, max(1, right - left), max(1, bottom - top)]
         im = layer.image
-        sheet = _sprite_sheet(layer.data, im.norm, im.cmap, (rect[3], rect[2]),
+        data, index = layer.data, layer.index
+        if index is not None:
+            # Frames no display frame lands on stay out of the sheet. The
+            # compacted copy is dropped once the sheet is encoded:
+            data, index = _compact_frames(data, index)
+        sheet = _sprite_sheet(data, im.norm, im.cmap, (rect[3], rect[2]),
                               self._fmt, bg_color=_bg_color(im.axes))
         return {
             'src': (f'data:{sheet["mime"]};base64,'
@@ -801,8 +807,7 @@ class HTMLAnimation(FuncAnimation):
             # to nearest-neighbor once the image is strongly magnified:
             'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw'] and
                        rect[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
-            'map': (None if layer.index is None
-                    else [int(i) for i in layer.index]),
+            'map': None if index is None else [int(i) for i in index],
         }
 
     def _build_html(self, intervals, default_mode):
