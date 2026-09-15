@@ -471,6 +471,21 @@ def _as_layers(image, frame_data, frame_index):
     return [_Layer(*layer) for layer in zip(images, data, index)]
 
 
+def _compact_frames(data, index):
+    """Drop the frames an animation never shows, and renumber ``index``
+
+    Returns ``(frames, index)``, where ``frames`` is ``data`` itself if every
+    source frame is shown at least once, and a copy of just the used frames
+    otherwise. Either way each source frame that is displayed is packed at
+    most once.
+    """
+    index = np.asarray(index, dtype=np.intp)
+    used, remap = np.unique(index, return_inverse=True)
+    if used.size == np.shape(data)[-1]:
+        return data, index
+    return data[..., used], np.ravel(remap).astype(np.intp)
+
+
 def _n_display_frames(layers):
     """The number of frames the animation shows, on which all layers agree"""
     counts = {int(np.size(layer.index)) if layer.index is not None
@@ -748,8 +763,12 @@ class HTMLAnimation(FuncAnimation):
 
     @property
     def _frame_data(self):
-        """The frames that image shows"""
-        return None if self._layers is None else self._layers[0].data
+        """The frames that image shows, one per display frame"""
+        if self._layers is None:
+            return None
+        layer = self._layers[0]
+        return (layer.data if layer.index is None
+                else layer.data[..., layer.index])
 
     def _display_intervals(self, fps, n_frames):
         """How long each frame stays up (in ms), one value per frame"""
@@ -768,7 +787,12 @@ class HTMLAnimation(FuncAnimation):
             int(np.ceil(height - bbox.y0))
         rect = [left, top, max(1, right - left), max(1, bottom - top)]
         im = layer.image
-        sheet = _sprite_sheet(layer.data, im.norm, im.cmap, (rect[3], rect[2]),
+        data, index = layer.data, layer.index
+        if index is not None:
+            # Frames no display frame lands on stay out of the sheet. The
+            # compacted copy is dropped once the sheet is encoded:
+            data, index = _compact_frames(data, index)
+        sheet = _sprite_sheet(data, im.norm, im.cmap, (rect[3], rect[2]),
                               self._fmt, bg_color=_bg_color(im.axes))
         return {
             'src': (f'data:{sheet["mime"]};base64,'
@@ -783,8 +807,7 @@ class HTMLAnimation(FuncAnimation):
             # to nearest-neighbor once the image is strongly magnified:
             'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw'] and
                        rect[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
-            'map': (None if layer.index is None
-                    else [int(i) for i in layer.index]),
+            'map': None if index is None else [int(i) for i in index],
         }
 
     def _build_html(self, intervals, default_mode):

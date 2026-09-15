@@ -456,6 +456,22 @@ def test_Percept_play_fps_is_display_rate(fps):
     npt.assert_almost_equal(np.sum(native['intervals']), 1000.0, decimal=6)
 
 
+def test_Percept_play_does_not_resample_the_data():
+    """Display sampling picks frames by index; it never copies the percept"""
+    percept = Percept(np.random.rand(4, 4, 8), time=np.arange(8) * 10.0)
+    for fps, index in [(None, np.arange(8)),
+                       (200, np.repeat(np.arange(8), 2)),
+                       (50, [0, 2, 4, 6])]:
+        layer = percept.play(fps=fps)._layers[0]
+        npt.assert_equal(layer.data is percept.data, True)
+        npt.assert_equal(layer.index, index)
+    # Repeating and skipping still show the frames they always did:
+    npt.assert_almost_equal(percept.play(fps=200)._frame_data,
+                            np.repeat(percept.data, 2, axis=-1))
+    npt.assert_almost_equal(percept.play(fps=50)._frame_data,
+                            percept.data[..., ::2])
+
+
 def test_Percept_play_zero_order_hold():
     """Display resampling uses zero-order hold"""
     data = np.zeros((2, 2, 4))

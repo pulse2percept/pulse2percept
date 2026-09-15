@@ -803,11 +803,13 @@ class Percept(Data):
         labels = None
         if annotate_time:
             labels = [f't = {t:.2f} {self.time_unit}' for t in self.time[idx]]
+        # The player selects the frames itself, so it gets the percept's own
+        # array rather than a resampled copy of it:
         return HTMLAnimation(fig, update, data_gen, repeat=repeat,
                              intervals=timeline.intervals,
                              save_count=idx.size, image=mat,
-                             frame_data=self.data[..., idx], labels=labels,
-                             fmt=fmt)
+                             frame_data=self.data, frame_index=[idx],
+                             labels=labels, fmt=fmt)
 
     def save(self, fname, shape=None, fps=None, vmin=None, vmax=None):
         """Save the percept to an image or video file.
