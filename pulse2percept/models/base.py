@@ -1202,16 +1202,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if not self.is_built:
             self.build()
-        return self._predict_prepared(self.implant.prepare_stim(source),
-                                      t_percept=t_percept)
+        return self._predict_prepared(
+            self.implant._prepare_stim(
+                source,
+                allow_dimensionless=self._accepts_dimensionless_drive),
+            t_percept=t_percept)
 
-    def _predict_prepared(self, stim, t_percept=None,
-                          allow_dimensionless=False):
+    def _predict_prepared(self, stim, t_percept=None):
         """Predict the spatial response to an already prepared stimulus.
 
         Composite models use this path to prepare stimulation once before running
-        spatial and temporal stages. ``allow_dimensionless`` says the caller
-        prepared relative electrode drive rather than stimulation.
+        spatial and temporal stages.
         """
         if not self.is_built:
             self.build()
@@ -1220,8 +1221,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             # Nothing to see here:
             return None
         source = _spatial_input(stim)
-        _require_stim_dimension(self, source,
-                                allow_dimensionless=allow_dimensionless)
+        _require_stim_dimension(
+            self, source,
+            allow_dimensionless=self._accepts_dimensionless_drive)
         if source.time is None and t_percept is not None:
             # Static modulation has no time axis even if its encoded pulse
             # train does:
@@ -1869,9 +1871,7 @@ class Model(Frozen, PrettyPrint):
                     resp = self.temporal.predict_percept(resp,
                                                          t_percept=t_percept)
         elif self.has_space:
-            resp = self.spatial._predict_prepared(
-                stim, t_percept=t_percept,
-                allow_dimensionless=self._accepts_dimensionless_drive)
+            resp = self.spatial._predict_prepared(stim, t_percept=t_percept)
         else:
             resp = self.temporal.predict_percept(stim, t_percept=t_percept)
         return resp

@@ -394,8 +394,7 @@ class _BiphasicSpatialMixin:
                              f"greater than zero.")
         return factors
 
-    def _predict_prepared(self, stim, t_percept=None,
-                          allow_dimensionless=False):
+    def _predict_prepared(self, stim, t_percept=None):
         """Predict from an already prepared stimulus.
 
         This model summarizes the full pulse train as one spatial percept. If

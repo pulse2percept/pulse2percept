@@ -364,8 +364,7 @@ class Ho2018Spatial(ScoreboardSpatial):
             return _radiant_exposure(stim)
         return super()._stim_values(stim)
 
-    def _predict_prepared(self, stim, t_percept=None,
-                          allow_dimensionless=False):
+    def _predict_prepared(self, stim, t_percept=None):
         """Predict one drive map per pulse period.
 
         Output times are the schedule's pulse onsets. Explicit ``t_percept``

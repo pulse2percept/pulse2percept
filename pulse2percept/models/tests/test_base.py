@@ -1228,13 +1228,15 @@ def test_model_requires_a_current_stimulus():
     # by it (see `Implant.stimulus_unit`), so the model-side guard is
     # reached through an implant that claims to deliver something else. Both
     # are needed: the implant one catches the call that was actually wrong,
-    # and this one is what no model may be talked out of.
+    # and this one is what a current-reading model may not be talked out of.
+    # Scale-free models are the exception and are covered separately by
+    # `test_spatial_only_model_reads_dimensionless_drive`.
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 
     implant = Projector(preprocess=False)
-    spatial = ScoreboardSpatial(implant=implant, xrange=(-2, 2),
-                                yrange=(-2, 2), step=1).build()
+    spatial = ValidSpatialModel(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                step=1).build()
     temporal = FadingTemporal().build()
     composite = Model(spatial=ScoreboardSpatial(implant, xrange=(-2, 2),
                                                 yrange=(-2, 2), step=1),
@@ -1274,8 +1276,11 @@ def test_model_requires_a_current_stimulus():
     npt.assert_allclose(electrical.predict_percept(unitful).data,
                         electrical.predict_percept(bare).data, rtol=1e-12)
 
-    # A Percept is brightness, not current, and is not checked -- it is what a
-    # spatial model hands a temporal one:
+    # A scale-free model reads the same picture as relative drive:
+    npt.assert_equal(
+        ScoreboardSpatial(implant=implant, xrange=(-2, 2), yrange=(-2, 2),
+                          step=1).predict_percept(img) is None, False)
+
     percept = electrical.predict_percept(bare)
     npt.assert_equal(temporal.predict_percept(percept) is None, False)
 
@@ -1287,8 +1292,6 @@ def test_spatial_only_model_reads_dimensionless_drive():
     npt.assert_equal(percept.data.size > 0, True)
     npt.assert_equal(percept.data.max() > 0, True)
 
-    # Same for the retinal models, shown on an implant without an encoder so
-    # that the drive really is the picture:
     argus = ArgusII(encoder=None)
     grid = {'xrange': (-5, 5), 'yrange': (-5, 5), 'step': 1}
     for model in (ScoreboardModel(argus, **grid),
@@ -1298,6 +1301,11 @@ def test_spatial_only_model_reads_dimensionless_drive():
         # Reshaping the picture onto the electrodes by hand is the same thing:
         by_hand = model.predict_percept(argus.reshape_stim(logo))
         npt.assert_allclose(percept.data, by_hand.data, rtol=1e-12)
+
+    # A bare spatial model takes the same input as the standalone model:
+    npt.assert_allclose(
+        ScoreboardSpatial(argus, **grid).predict_percept(logo).data,
+        ScoreboardModel(argus, **grid).predict_percept(logo).data, rtol=1e-12)
 
     # The implant itself still refuses to call gray levels deliverable:
     with pytest.raises(DimensionMismatchError):
@@ -1312,12 +1320,37 @@ def test_spatial_only_model_reads_dimensionless_drive():
               temporal=FadingTemporal()).predict_percept(logo)
 
 
+def test_spatial_only_model_reads_dimensionless_video():
+    """Video drive keeps its frames, and each frame drives its own array"""
+    argus = ArgusII(encoder=None)
+    grid = {'xrange': (-5, 5), 'yrange': (-5, 5), 'step': 1}
+    # Two frames driving opposite halves of the array, at 10 fps:
+    frames = np.zeros((6, 10, 2), dtype=np.float32)
+    frames[:3, :, 0] = 1
+    frames[3:, :, 1] = 1
+    video = VideoStimulus(frames, time=[0, 100])
+    percept = ScoreboardModel(argus, **grid).predict_percept(video)
+    npt.assert_equal(percept.data.shape[-1], 2)
+    npt.assert_almost_equal(percept.time, [0, 100])
+    # Upper and lower half of the array:
+    npt.assert_equal(np.allclose(percept.data[..., 0], percept.data[..., 1]),
+                     False)
+    npt.assert_equal(percept.data[..., 0].max() > 0, True)
+    npt.assert_equal(percept.data[..., 1].max() > 0, True)
+    # Same as driving the electrodes with the reshaped video by hand:
+    npt.assert_allclose(
+        percept.data,
+        ScoreboardModel(argus, **grid).predict_percept(
+            argus.reshape_stim(video)).data, rtol=1e-12)
+
+
 def test_spatial_only_model_prefers_the_encoder():
     """An encoder, where there is one, still decides what is delivered"""
     logo = samples.logo_bvl()
     grid = {'xrange': (-5, 5), 'yrange': (-5, 5), 'step': 1}
     encoded = ScoreboardModel(ArgusII(), **grid).predict_percept(logo)
-    drive = ScoreboardModel(ArgusII(encoder=None), **grid).predict_percept(logo)
+    drive = ScoreboardModel(ArgusII(encoder=None),
+                            **grid).predict_percept(logo)
     npt.assert_equal(encoded.data.max() > 0, True)
     npt.assert_equal(np.allclose(encoded.data, drive.data), False)
 
