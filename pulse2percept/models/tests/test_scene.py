@@ -25,7 +25,7 @@ from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
                                              Watson2014Map)
 from pulse2percept.units import deg, dva, ms, s, um
-from pulse2percept.vision import Scene, Scotoma
+from pulse2percept.vision import Gaze, Scene, Scotoma
 
 #: A square scene laid out so that one pixel is exactly one degree and the
 #: center pixel sits on the origin.
@@ -166,6 +166,43 @@ def test_gaze_leaves_a_head_mounted_camera_looking_where_it_was():
     on_grid = model_for(grid_implant(input_frame='head'))
     npt.assert_almost_equal(seen_by(on_grid, scene, gaze=(3, -2)),
                             seen_by(on_grid, scene, gaze=(0, 0)), decimal=6)
+
+
+def ramp_video_scene(n_frames=4):
+    """The ramp, unchanging, on a 100 ms frame clock"""
+    frames = np.repeat(ramp_source().data.reshape(
+        (SCENE_PX, SCENE_PX, 1)), n_frames, axis=-1)
+    return scene_of(VideoStimulus(frames,
+                                  time=np.arange(n_frames) * 100.0))
+
+
+def test_a_gaze_trajectory_is_resolved_on_the_scenes_own_frames():
+    """Sparse fixation events stand in for one gaze per source frame"""
+    scene = ramp_video_scene()
+    model = model_for(implant_at(0, 0))
+    sparse = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
+    expanded = np.array([(0, 0), (0, 0), (6, 0), (6, 0)], dtype=float)
+    npt.assert_almost_equal(seen_by(model, scene, gaze=sparse).ravel(),
+                            ramp_at(expanded[:, 0]), decimal=4)
+    npt.assert_array_equal(model.predict_percept(scene, gaze=sparse).data,
+                           model.predict_percept(scene,
+                                                 gaze=expanded * dva).data)
+
+
+def test_a_gaze_trajectory_does_not_move_a_head_mounted_camera():
+    scene = ramp_video_scene()
+    model = model_for(implant_at(0, 0, input_frame='head'))
+    sparse = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
+    npt.assert_almost_equal(seen_by(model, scene, gaze=sparse),
+                            seen_by(model, scene), decimal=6)
+
+
+def test_a_gaze_trajectory_needs_a_scene_with_frame_times():
+    """A still scene has no clock the events could be resolved against"""
+    model = model_for(implant_at(0, 0))
+    gaze = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
+    with pytest.raises(ValueError):
+        model.predict_percept(scene_of(), gaze=gaze)
 
 
 def test_an_unknown_scene_input_frame_is_refused():

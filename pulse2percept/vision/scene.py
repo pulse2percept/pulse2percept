@@ -10,6 +10,7 @@ from scipy.ndimage import gaussian_filter
 from skimage.color import rgb2gray
 from skimage.restoration import inpaint_biharmonic
 
+from .gaze import Gaze, _gaze_points
 from .scotoma import Scotoma
 from ..percepts import Percept
 from ..stimuli import ImageStimulus, VideoStimulus
@@ -115,22 +116,6 @@ def _pixel_count(extent, step):
     n = extent / step
     # A ratio that is only integral up to rounding must not buy a pixel:
     return max(int(np.ceil(n - 1e-9 * max(n, 1.0))), 1)
-
-
-def _gaze_points(gaze, n_frames):
-    """Gaze as one (x, y) in dva, or one per frame"""
-    if gaze is None:
-        return np.zeros((1, 2))
-    gaze = np.atleast_2d(np.asarray(as_value(gaze, dva, 'gaze'), dtype=float))
-    if gaze.shape not in {(1, 2), (n_frames, 2)}:
-        raise ValueError(f"'gaze' must be an (x, y) pair in dva, or one per "
-                         f"frame ({n_frames} of them), not an array of shape "
-                         f"{gaze.shape}.")
-    if not np.all(np.isfinite(gaze)):
-        # Left to reach the interpolator, this would come back as a blank
-        # percept rather than as a question about where the eye was pointing:
-        raise ValueError(f"'gaze' must be finite, not {gaze.tolist()}.")
-    return gaze
 
 
 def _clip_to_frame(points, shape):
@@ -1041,23 +1026,41 @@ class Scene(PrettyPrint):
                                  "onto a display, and there is no percept "
                                  "here. Pass 'percept'.")
             # Without a percept the output frames are the source's own:
+            out_time, out_unit, _ = self._output_clock()
             return (self._native_on(xs, ys, gaze=gaze, frame=frame),
-                    _take_time(self.time, frame), self.time_unit)
+                    _take_time(out_time, frame), out_unit)
         if self.scotoma is None:
             return self._prosthetic_on(xs, ys, percept, vmax, vmin=vmin,
                                        gaze=gaze, frame=frame)
         return self._composed_on(xs, ys, percept, vmax, vmin=vmin, gaze=gaze,
                                  frame=frame)
 
-    def _n_display_frames(self, percept):
-        """How many frames a drawn or rendered result has
+    def _output_clock(self, percept=None):
+        """``(time, time_unit, n_frames)`` the output frames happen on
 
-        A video scene sets the clock, so a percept is read at its frame times;
-        a still scene has whatever frames the percept brought.
+        The one place the display clock is decided: a video scene owns it, so
+        a percept is read at the scene's frame times; a still scene has no
+        clock of its own and takes the percept's, which may be ``None``.
+        These are the instants gaze resolves against. What a returned Percept
+        is *labeled* with can differ: see `_prosthetic_frames`.
         """
-        if percept is None or self.time is not None:
-            return self.n_frames
-        return percept.data.shape[-1]
+        if self.time is not None:
+            return self.time, self.time_unit, self.n_frames
+        if percept is None:
+            # No clock, but the source still names the unit one would count in:
+            return None, self.time_unit, self.n_frames
+        return percept.time, percept.time_unit, percept.data.shape[-1]
+
+    def _n_display_frames(self, percept):
+        """How many frames a drawn or rendered result has"""
+        return self._output_clock(percept)[2]
+
+    def _resolve_gaze(self, gaze, percept=None):
+        """A `Gaze` as one (x, y) per output frame; other forms pass through"""
+        if not isinstance(gaze, Gaze):
+            return gaze
+        time, unit, n_out = self._output_clock(percept)
+        return _gaze_points(gaze, n_out, time=time, time_unit=unit)
 
     def _prosthetic_frames(self, prosthetic, frame=None):
         """Line a percept up with the output frames, and say when they happen
@@ -1065,19 +1068,21 @@ class Scene(PrettyPrint):
         ``frame`` narrows the result to that one output frame and aligns it
         alone; the timing checks are made against the whole video either way.
         """
+        out_time, out_unit, n_out = self._output_clock(prosthetic)
+        out_time = _take_time(out_time, frame)
         if self.time is None:
             # A still scene has no clock of its own, so the percept's frames
             # are the output frames:
-            return (_take_frame(prosthetic.data, frame),
-                    _take_time(prosthetic.time, frame), prosthetic.time_unit)
-        n_out = self.n_frames
+            return _take_frame(prosthetic.data, frame), out_time, out_unit
         n_pros = prosthetic.data.shape[-1]
-        out_time = _take_time(self.time, frame)
         if n_pros == 1 and prosthetic.time is None:
             # An untimed still percept stands behind every frame:
             return (np.repeat(prosthetic.data, 1 if frame is not None
-                              else n_out, axis=-1), out_time, self.time_unit)
+                              else n_out, axis=-1), out_time, out_unit)
         if n_pros == n_out:
+            # Frame for frame already, but labeled with the percept's own
+            # times: a temporal model reports when the response happened,
+            # which is not the same as the video's frame onsets.
             return (_take_frame(prosthetic.data, frame),
                     _take_time(prosthetic.time, frame), prosthetic.time_unit)
         unit = prosthetic.time_unit
@@ -1102,7 +1107,7 @@ class Scene(PrettyPrint):
             frames = prosthetic[..., Quantity(float(asked_time[0]),
                                               self.time_unit)]
             frames = frames[..., np.newaxis]
-        return frames, out_time, self.time_unit
+        return frames, out_time, out_unit
 
     def _grid(self):
         """A Grid2D on the scene's pixel centers, in scene coordinates"""
@@ -1161,9 +1166,12 @@ class Scene(PrettyPrint):
             with none it is rendered alone on black, because superimposing it
             on intact native vision would assert an unmodeled interaction.
             ``scotoma_fill='inpaint'`` cannot be composed with one.
-        gaze : (x, y) or (n_frames, 2), optional
+        gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
             Where the eye is pointing: the scene location that falls on the
-            fovea, in dva. Defaults to the origin.
+            fovea, in dva. Defaults to the origin. A
+            :py:class:`~pulse2percept.vision.Gaze` is resolved against the
+            output clock: a video scene's frame times, or a timed percept's
+            for a still scene.
         vmax : float, optional
             The percept brightness that displays as white. Required whenever
             ``percept`` is given: brightness is in arbitrary units.
@@ -1194,6 +1202,7 @@ class Scene(PrettyPrint):
         (120, 160, 3, 1)
 
         """
+        gaze = self._resolve_gaze(gaze, percept)
         xs, ys = _raster_axes(self._fov, self._render_shape(step, shape))
         frames, time, unit = self._display_on(xs, ys, percept=percept,
                                               vmax=vmax, vmin=vmin, gaze=gaze)
@@ -1224,9 +1233,11 @@ class Scene(PrettyPrint):
 
         Parameters
         ----------
-        gaze : (x, y), optional
+        gaze : (x, y) or :py:class:`~pulse2percept.vision.Gaze`, optional
             Where the eye is pointing: the scene location that falls on the
-            fovea, in dva. Defaults to the origin.
+            fovea, in dva. Defaults to the origin. A
+            :py:class:`~pulse2percept.vision.Gaze` is resolved against the
+            output clock, and the fixation held at ``frame`` is drawn.
         frame : int, optional
             Which frame of a video scene to draw. Ignored for a still scene.
         ax : matplotlib.axes.Axes, optional
@@ -1262,7 +1273,7 @@ class Scene(PrettyPrint):
         if not 0 <= frame < n_out:
             raise ValueError(f"'frame' must be in 0..{n_out - 1}, not "
                              f"{frame}.")
-        points = _gaze_points(gaze, n_out)
+        points = _gaze_points(self._resolve_gaze(gaze, percept), n_out)
         # One frame is drawn, so one gaze and one frame of each layer is all
         # the work there is; the others are never evaluated.
         gaze_xy = points[0] if len(points) == 1 else points[frame]
@@ -1314,9 +1325,11 @@ class Scene(PrettyPrint):
 
         Parameters
         ----------
-        gaze : (x, y) or (n_frames, 2), optional
+        gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
             Where the eye is pointing, in dva. One pair fixates throughout;
-            one pair per frame moves the eye between frames.
+            one pair per frame moves the eye between frames. A
+            :py:class:`~pulse2percept.vision.Gaze` is resolved against the
+            scene's frame times.
         rings : bool, float, or sequence, optional
             Eccentricity rings, as in
             :py:meth:`~pulse2percept.vision.Scene.plot`, painted into the
@@ -1336,6 +1349,7 @@ class Scene(PrettyPrint):
         """
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
+        gaze = self._resolve_gaze(gaze)
         radii = _ring_radii(rings, self.fov)
         # The player rasterizes its own frames, so this is display output:
         native = self.render(gaze=gaze)

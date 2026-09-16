@@ -44,9 +44,6 @@ Studies referenced throughout the Documentation:
 .. [Fernandez2017] E Fernandez & R Normann (2017). CORTIVIS Approach for an 
                    Intracortical Visual Prostheses. *Springer International Publishing*,
                    doi: `10.1007/978-3-319-41876-6_15 <https://doi.org/10.1007/978-3-319-41876-6_15>`_.
-.. [Han2021] N Han, S Srivastava, A Xu, D Klein, M Beyeler (2021). Deep Learning–Based
-             Scene Simplification for Bionic Vision. *Augmented Humans Conference* 2021,
-             45–54. <https://doi.org/10.1145/3458709.3458982>`_.
 .. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of 
                  Phosphene Appearance for Epiretinal Prostheses. *International
                  Conference of the IEEE Engineering in Medicine and Biology

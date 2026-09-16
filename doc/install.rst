@@ -6,6 +6,8 @@ Installation
 
 pulse2percept requires Python 3.11 or newer.
 
+.. _install-release:
+
 Stable release
 ==============
 
