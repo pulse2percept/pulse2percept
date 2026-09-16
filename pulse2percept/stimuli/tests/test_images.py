@@ -227,7 +227,9 @@ def test_ImageStimulus_crop():
 
 
 def test_ImageStimulus_crop_square():
-    img = np.arange(4 * 6, dtype=np.float32).reshape(4, 6) / (4 * 6 - 1)
+    # Odd width difference: one column comes off the left, two off the right
+    img = np.arange(4 * 7, dtype=np.float32).reshape(4, 7)
+    img /= img.max()
     stim = ImageStimulus(img)
 
     cropped = stim.crop_square()
@@ -239,7 +241,7 @@ def test_ImageStimulus_crop_square():
     )
     npt.assert_array_equal(
         cropped.electrodes,
-        stim.electrodes.reshape(4, 6)[:, 1:5].ravel(),
+        stim.electrodes.reshape(4, 7)[:, 1:5].ravel(),
     )
 
 

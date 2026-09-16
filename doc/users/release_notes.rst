@@ -62,6 +62,10 @@ Stimuli and encoding
   visual psychophysics stimuli to ``stimuli.psychophysics``, and several legacy
   stimulus classes and module paths were deprecated or removed (:pull:`889`).
 
+* :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+  :py:class:`~pulse2percept.stimuli.VideoStimulus` now provide
+  ``crop_square()`` for centered square crops (:pull:`916`).
+
 
 Implants
 ~~~~~~~~
