@@ -146,7 +146,7 @@ sampling or prediction:
     video = p2p.stimuli.samples.ucsb_pedestrians(resize=(173, 320))
     scene = p2p.vision.Scene(video, extent=45 * dva, fov=40 * dva,
                              scotoma=p2p.vision.Scotoma.circle(5 * dva),
-                             aperture='ellipse')
+                             aperture='round')
     gaze = p2p.vision.Gaze([(0, 0), (-15.5, -6), (12, -6)] * dva,
                            time=[0, 635, 1370] * ms)
 
@@ -291,13 +291,13 @@ The field boundary
 
 A scene's source, pixel grid and sampling are rectangular. ``fov`` gives the
 field its outer dimensions ``(width, height)``, and ``aperture`` gives it its
-shape: the default ``'rectangle'`` uses the whole frame, while ``'ellipse'``
+shape: the default ``'rectangular'`` uses the whole frame, while ``'round'``
 inscribes an ellipse in those dimensions:
 
 .. code-block:: python
 
-    disc = p2p.vision.Scene(image, fov=40 * dva, aperture='ellipse')
-    wide = p2p.vision.Scene(image, fov=(60, 40) * dva, aperture='ellipse')
+    disc = p2p.vision.Scene(image, fov=40 * dva, aperture='round')
+    wide = p2p.vision.Scene(image, fov=(60, 40) * dva, aperture='round')
 
 A square ``fov`` therefore renders as a disc, and a 60 x 40 one as an ellipse
 reaching 30 degrees sideways and 20 degrees up. Like the scotoma and the
