@@ -66,7 +66,7 @@ def test_the_two_eyes_are_independent_channels():
     """Different source, FOV, shape, scotoma and aperture on the two sides"""
     left = Scene(ImageStimulus(np.full((9, 9), 0.3)), fov=(30, 30),
                  scotoma=Scotoma.circle(6), scotoma_fill=0.0,
-                 aperture='ellipse')
+                 aperture='round')
     right = Scene(VideoStimulus(np.zeros((15, 21, 2)), time=[0, 10]),
                   fov=(42, 30), background=1)
     binocular = BinocularScene(left=left, right=right)
@@ -74,8 +74,8 @@ def test_the_two_eyes_are_independent_channels():
     npt.assert_equal(binocular.right.fov, (42.0, 30.0))
     npt.assert_equal(binocular.left.shape, (9, 9))
     npt.assert_equal(binocular.right.shape, (15, 21))
-    npt.assert_equal(binocular.left.aperture, 'ellipse')
-    npt.assert_equal(binocular.right.aperture, 'rectangle')
+    npt.assert_equal(binocular.left.aperture, 'round')
+    npt.assert_equal(binocular.right.aperture, 'rectangular')
     npt.assert_equal(binocular.right.scotoma, None)
 
 
@@ -173,7 +173,7 @@ def test_an_omitted_vmax_is_shared_by_both_eyes():
 
 def test_each_eye_keeps_its_own_aperture():
     """Support is geometry, so each panel is clipped to its own shape"""
-    left = flat_scene(0.6, aperture='ellipse')
+    left = flat_scene(0.6, aperture='round')
     right = flat_scene(0.6)
     ax_left, ax_right = BinocularScene(left=left, right=right).plot()
     # The corner is inside the rectangle but outside the ellipse, so it is
@@ -336,11 +336,11 @@ def test_an_explicit_fov_pair_goes_to_both_eyes():
 
 def test_scene_kwargs_reach_both_eyes():
     binocular = BinocularScene.from_side_by_side(packed_stereo(), fov=40 * dva,
-                                                 aperture='ellipse',
+                                                 aperture='round',
                                                  background=0.5,
                                                  scotoma=Scotoma.circle(8))
     for eye in (binocular.left, binocular.right):
-        npt.assert_equal(eye.aperture, 'ellipse')
+        npt.assert_equal(eye.aperture, 'round')
         npt.assert_almost_equal(eye.background, (0.5, 0.5, 0.5))
         npt.assert_equal(eye.scotoma is not None, True)
 

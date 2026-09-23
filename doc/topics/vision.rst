@@ -254,13 +254,13 @@ The field boundary
 
 A scene's source, pixel grid and sampling are rectangular. ``fov`` gives the
 field its outer dimensions ``(width, height)``, and ``aperture`` gives it its
-shape: the default ``'rectangle'`` uses the whole frame, while ``'ellipse'``
+shape: the default ``'rectangular'`` uses the whole frame, while ``'round'``
 inscribes an ellipse in those dimensions:
 
 .. code-block:: python
 
-    disc = p2p.vision.Scene(image, fov=40 * dva, aperture='ellipse')
-    wide = p2p.vision.Scene(image, fov=(60, 40) * dva, aperture='ellipse')
+    disc = p2p.vision.Scene(image, fov=40 * dva, aperture='round')
+    wide = p2p.vision.Scene(image, fov=(60, 40) * dva, aperture='round')
 
 A square ``fov`` therefore renders as a disc, and a 60 x 40 one as an ellipse
 reaching 30 degrees sideways and 20 degrees up. Like the scotoma and the

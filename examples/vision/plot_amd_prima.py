@@ -129,14 +129,14 @@ plt.title('Edge-filtered device input, intact vision around it')
 # A :py:class:`~pulse2percept.vision.BinocularScene` holds the pair. Vision
 # loss need not be symmetric: here the fellow eye has a smaller, partial loss.
 #
-# ``aperture='ellipse'`` inscribes an eye-centered ellipse in ``fov``; this
+# ``aperture='round'`` inscribes an eye-centered ellipse in ``fov``; this
 # affects rendering only.
 
 implant.preprocess = False
 
 worse_eye = Scene(logo, fov=40 * dva, scotoma=scotoma, scotoma_fill=0,
-                  background=1, aperture='ellipse')
-fellow_eye = Scene(logo, fov=40 * dva, background=1, aperture='ellipse',
+                  background=1, aperture='round')
+fellow_eye = Scene(logo, fov=40 * dva, background=1, aperture='round',
                    scotoma=Scotoma.circle(3 * dva, center=center),
                    scotoma_fill=0.4)
 
