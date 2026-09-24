@@ -6,20 +6,20 @@
    :maxdepth: 1
 
    Overview <self>
-   install
-   Quickstart <examples/plot_getting_started>
+   getting_started/install
+   Quickstart <examples/plot_quickstart>
 
 .. toctree::
    :caption: Core concepts
    :hidden:
 
-   topics/implants
-   topics/stimulation
-   topics/models
-   topics/vision
-   topics/coordinates
-   topics/units
-   topics/datasets
+   concepts/implants
+   concepts/stimulation
+   concepts/models
+   concepts/vision
+   concepts/coordinates
+   concepts/units
+   concepts/datasets
 
 .. toctree::
    :caption: Scientific examples
@@ -31,11 +31,11 @@
    :caption: Reference
    :hidden:
 
-   users/api
-   users/faq
-   users/release_notes
-   users/references
-   users/news
+   reference/api
+   reference/faq
+   reference/release_notes
+   reference/references
+   reference/news
 
 .. toctree::
    :caption: Developer Guide
@@ -69,16 +69,16 @@ Compatibility
 Where to go from here
 =====================
 
-*  Run the :doc:`Quickstart <examples/plot_getting_started>`.
-*  Read the core concepts in order: :doc:`implants <topics/implants>`,
-   :doc:`stimulation <topics/stimulation>`,
-   :doc:`models and percepts <topics/models>`,
-   :doc:`visual input <topics/vision>`,
-   :doc:`coordinates <topics/coordinates>`, :doc:`units <topics/units>`, and
-   :doc:`datasets <topics/datasets>`.
+*  Run the :doc:`Quickstart <examples/plot_quickstart>`.
+*  Read the core concepts in order: :doc:`implants <concepts/implants>`,
+   :doc:`stimulation <concepts/stimulation>`,
+   :doc:`models and percepts <concepts/models>`,
+   :doc:`visual input <concepts/vision>`,
+   :doc:`coordinates <concepts/coordinates>`, :doc:`units <concepts/units>`, and
+   :doc:`datasets <concepts/datasets>`.
 *  Work through the :doc:`Example Gallery <examples/index>`, starting with the
    key examples.
-*  Check the :doc:`FAQ <users/faq>` for common questions.
+*  Check the :doc:`FAQ <reference/faq>` for common questions.
 *  Request features or report bugs on the `Issue Tracker`_.
 
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

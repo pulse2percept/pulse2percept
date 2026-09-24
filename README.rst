@@ -67,7 +67,7 @@ To install the `current development version`_ directly from GitHub:
 
 ``pip`` installs the dependencies and selects a release that supports your
 Python version (see `Compatibility and Building from Source
-<https://pulse2percept.readthedocs.io/en/stable/install.html#install-compatibility>`__).
+<https://pulse2percept.readthedocs.io/en/latest/getting_started/install.html#install-compatibility>`__).
 
 .. _stable release: https://pulse2percept.readthedocs.io/en/stable/index.html
 .. _current development version: https://pulse2percept.readthedocs.io/en/latest/index.html
@@ -137,10 +137,10 @@ Where to go from here
 *  Check the `FAQ`_ for common questions.
 *  Request features or report bugs on the `Issue Tracker`_.
 
-.. _Quickstart: https://pulse2percept.readthedocs.io/en/latest/examples/plot_getting_started.html
-.. _implants: https://pulse2percept.readthedocs.io/en/latest/topics/implants.html
-.. _stimulation: https://pulse2percept.readthedocs.io/en/latest/topics/stimulation.html
-.. _models and percepts: https://pulse2percept.readthedocs.io/en/latest/topics/models.html
+.. _Quickstart: https://pulse2percept.readthedocs.io/en/latest/examples/plot_quickstart.html
+.. _implants: https://pulse2percept.readthedocs.io/en/latest/concepts/implants.html
+.. _stimulation: https://pulse2percept.readthedocs.io/en/latest/concepts/stimulation.html
+.. _models and percepts: https://pulse2percept.readthedocs.io/en/latest/concepts/models.html
 .. _Example Gallery: https://pulse2percept.readthedocs.io/en/latest/examples/index.html
-.. _FAQ: https://pulse2percept.readthedocs.io/en/latest/users/faq.html
+.. _FAQ: https://pulse2percept.readthedocs.io/en/latest/reference/faq.html
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues
