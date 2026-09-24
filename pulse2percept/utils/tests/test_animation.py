@@ -654,6 +654,33 @@ def test_HTMLAnimation_overlapping_layers(fmt):
                      draw.index('drawImage'), True)
 
 
+def test_HTMLAnimation_clips_images_to_their_axes():
+    """Pixel-edge extents reach half a pixel past axes set to pixel centers,
+    as in `Percept.play`; the player must not draw into the title band"""
+    fig, ax = plt.subplots()
+    data = np.random.rand(4, 8, 3)
+    im = ax.imshow(np.zeros((4, 8)), cmap='gray', vmin=0, vmax=1,
+                   extent=(-0.5, 7.5, -0.5, 3.5))
+    ax.set_xlim(0, 7)
+    ax.set_ylim(0, 3)
+    ax.set_title('t = 0')
+    plt.close(fig)
+    html = HTMLAnimation(fig, lambda i: im, iter(range(3)), save_count=3,
+                         image=im, frame_data=data, labels=['a', 'b', 'c'],
+                         fmt='png').to_jshtml()
+    cfg, _, _ = parse(html)
+    title, rect, crop = cfg['title'], cfg['rect'], cfg['crop']
+    # The drawn rect is the axes box, and stays clear of the title band:
+    box = ax.get_window_extent()
+    height = fig.bbox.height
+    npt.assert_allclose(rect, [box.x0, height - box.y1, box.width,
+                               box.height], atol=1)
+    npt.assert_equal(rect[1] >= title['rect'][1] + title['rect'][3], True)
+    # The source is cropped by half a data pixel on each side, not squeezed:
+    npt.assert_equal((cfg['fw'], cfg['fh']), (8, 4))
+    npt.assert_allclose(crop, [0.5, 0.5, 7, 3], atol=0.05)
+
+
 def test_HTMLAnimation_layers_agree_on_frame_count():
     src = np.random.rand(4, 5, 3)
     percept = np.random.rand(6, 6, 4)

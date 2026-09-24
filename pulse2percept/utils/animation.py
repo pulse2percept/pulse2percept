@@ -21,6 +21,7 @@ from uuid import uuid4
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import to_hex, to_rgba
+from matplotlib.transforms import Bbox
 from PIL import Image
 
 from ..units import Hz, as_value
@@ -449,6 +450,36 @@ def _layer_rect(bbox, height):
     return [left, top, max(1, right - left), max(1, bottom - top)]
 
 
+def _visible_rect(im, bbox, height):
+    """Canvas rect of the part of an image its axes do not clip away
+
+    ``[0, 0, 0, 0]`` if nothing is visible.
+    """
+    if not im.get_clip_on():
+        return _layer_rect(bbox, height)
+    visible = Bbox.intersection(bbox, im.axes.bbox)
+    if visible is None or visible.width <= 0 or visible.height <= 0:
+        return [0, 0, 0, 0]
+    return _layer_rect(visible, height)
+
+
+def _source_crop(bbox, rect, height, fw, fh):
+    """``[x, y, width, height]`` of a sprite frame that lands on ``rect``
+
+    ``bbox`` is the whole image in display pixels, which the ``fw`` x ``fh``
+    frame spans; ``rect`` is the visible canvas rect.
+    """
+    def span(start, size, lo, extent, n):
+        # Frame pixels per canvas pixel, clamped onto the frame:
+        a = np.clip((start - lo) / extent * n, 0, n)
+        b = np.clip((start + size - lo) / extent * n, 0, n)
+        return float(a), float(b - a)
+
+    x, w = span(rect[0], rect[2], bbox.x0, bbox.width, fw)
+    y, h = span(rect[1], rect[3], height - bbox.y1, bbox.height, fh)
+    return [x, y, w, h]
+
+
 def _overlap(a, b):
     """Whether two ``[left, top, width, height]`` rects share any pixel"""
     return (a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and
@@ -591,8 +622,10 @@ _PLAYER = Template("""
       var f = layer.map ? layer.map[frame] : frame;
       var col = f % layer.ncols, row = (f - col) / layer.ncols;
       ctx.imageSmoothingEnabled = layer.smooth;
-      ctx.drawImage(sheet, col * layer.sw, row * layer.sh, layer.fw, layer.fh,
-                    layer.rect[0], layer.rect[1], layer.rect[2],
+      // Only the part of the frame the axes leave visible:
+      var c = layer.crop;
+      ctx.drawImage(sheet, col * layer.sw + c[0], row * layer.sh + c[1],
+                    c[2], c[3], layer.rect[0], layer.rect[1], layer.rect[2],
                     layer.rect[3]);
     });
     if (cfg.title) {
@@ -797,12 +830,16 @@ class HTMLAnimation(FuncAnimation):
             return self._intervals
         return np.full(n_frames, float(self._interval))
 
-    def _layer_config(self, layer, rect, overlaid):
+    def _layer_config(self, layer, bbox, rect, height, overlaid):
         """Where one animated image sits, and how its frames are packed
 
-        ``overlaid`` says whether it is drawn over an earlier layer, in which
-        case RGBA frames stay PNG: JPEG would flatten them to opaque.
+        ``bbox`` is the whole image in display pixels and ``rect`` the canvas
+        rect its axes leave visible. ``overlaid`` says whether it is drawn
+        over an earlier layer, in which case RGBA frames stay PNG: JPEG would
+        flatten them to opaque.
         """
+        # The sheet is sized and smoothed for the whole, unclipped image:
+        full = _layer_rect(bbox, height)
         im = layer.image
         data, index = layer.data, layer.index
         if index is not None:
@@ -811,7 +848,7 @@ class HTMLAnimation(FuncAnimation):
             data, index = _compact_frames(data, index)
         rgba = np.ndim(data) == 4 and np.shape(data)[-2] == 4
         fmt = 'png' if rgba and overlaid else self._fmt
-        sheet = _sprite_sheet(data, im.norm, im.cmap, (rect[3], rect[2]),
+        sheet = _sprite_sheet(data, im.norm, im.cmap, (full[3], full[2]),
                               fmt, bg_color=_bg_color(im.axes))
         return {
             'src': (f'data:{sheet["mime"]};base64,'
@@ -822,10 +859,12 @@ class HTMLAnimation(FuncAnimation):
             'sw': sheet['sw'],
             'sh': sheet['sh'],
             'rect': rect,
+            'crop': _source_crop(bbox, rect, height, sheet['fw'],
+                                 sheet['fh']),
             # Mirror Matplotlib's 'antialiased' interpolation, which switches
             # to nearest-neighbor once the image is strongly magnified:
-            'smooth': (rect[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw'] and
-                       rect[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
+            'smooth': (full[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw'] and
+                       full[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
             'map': None if index is None else [int(i) for i in index],
         }
 
@@ -856,13 +895,16 @@ class HTMLAnimation(FuncAnimation):
                 title = _title_geometry(title_artist, width, height, fig.dpi)
         finally:
             title_artist.set_text(old_title)
-        rects = [_layer_rect(bbox, height) for bbox in boxes]
+        # Matplotlib clips an image to its axes, and so does the player:
+        rects = [_visible_rect(im, bbox, height)
+                 for im, bbox in zip(images, boxes)]
         overlaid = [any(_overlap(rect, below) for below in rects[:k])
                     for k, rect in enumerate(rects)]
         config = {
             'n': self._n_frames,
-            'layers': [self._layer_config(*args)
-                       for args in zip(self._layers, rects, overlaid)],
+            'layers': [self._layer_config(layer, bbox, rect, height, over)
+                       for layer, bbox, rect, over
+                       in zip(self._layers, boxes, rects, overlaid)],
             # The player advances frame by frame, so it needs every delay;
             # the scalar is kept for whoever reads the config:
             'interval': float(np.mean(intervals)),
