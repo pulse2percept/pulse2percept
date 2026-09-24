@@ -43,9 +43,10 @@ if "%1" == "help" (
 if "%1" == "clean" (
 	for /d %%i in (%BUILDDIR%\*) do rmdir /q /s %%i
 	del /q /s %BUILDDIR%\*
-	del /q /s _api
-	del /q /s examples
-	del /q /s savefig
+	if exist reference\_api rmdir /q /s reference\_api
+	if exist examples rmdir /q /s examples
+	if exist savefig rmdir /q /s savefig
+	if exist sg_execution_times.rst del /q sg_execution_times.rst
 	goto end
 )
 
