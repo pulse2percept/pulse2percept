@@ -152,6 +152,94 @@ def test_Percept_plot():
         percept.plot(ax='invalid')
 
 
+def grid_lines(ax, linestyle):
+    """Drawn rings ('--') or meridians ('-') as (2, n) coordinate arrays"""
+    return [np.asarray(line.get_data()) for line in ax.get_lines()
+            if line.get_linestyle() == linestyle]
+
+
+def test_Percept_plot_grid_is_centered_on_the_visual_field_origin():
+    """Not on the middle of an asymmetric grid"""
+    grid = Grid2D((-15, 5), (-4, 10), step=0.5)
+    percept = Percept(np.random.rand(*grid.x.shape, 1), space=grid)
+    ax = percept.plot(ax=plt.subplots()[1], rings=True,
+                      meridians=[0, 90, 180, 270])
+    # Automatic rings stop at the nearest edge (y = -4):
+    radii = [np.hypot(*ring).mean() for ring in grid_lines(ax, '--')]
+    npt.assert_almost_equal(radii, [1.25, 2.5])
+    npt.assert_equal([t.get_text() for t in ax.texts],
+                     ['1.25\N{DEGREE SIGN}', '2.5\N{DEGREE SIGN}'])
+    # 0 deg is +x, 90 deg is +y; each runs from the fovea to the field edge:
+    ends = [line[:, [0, -1]].T for line in grid_lines(ax, '-')]
+    npt.assert_almost_equal(ends, [[(0, 0), (5, 0)], [(0, 0), (0, 10)],
+                                   [(0, 0), (-15, 0)], [(0, 0), (0, -4)]])
+    # Annotation only:
+    npt.assert_equal(len(ax.collections), 1)
+    plt.close('all')
+
+
+def test_Percept_plot_grid_on_a_field_that_excludes_the_fovea():
+    grid = Grid2D((-15, -3), (-2, 10), step=0.5)
+    percept = Percept(np.random.rand(*grid.x.shape, 1), space=grid)
+    ax = percept.plot(ax=plt.subplots()[1], rings=True, meridians=True)
+    # Rings span the eccentricities the field covers (3 to ~18 dva):
+    radii = [np.hypot(*ring).mean() for ring in grid_lines(ax, '--')]
+    npt.assert_almost_equal(radii, [5, 10])
+    # Only meridians that cross the field are drawn, from where they enter:
+    meridians = grid_lines(ax, '-')
+    angles = [np.rad2deg(np.arctan2(m[1, -1], m[0, -1])) % 360
+              for m in meridians]
+    npt.assert_almost_equal(angles, [135, 180])
+    for m in meridians:
+        npt.assert_equal(np.all(m[0] <= -3 + 1e-9), True)
+    plt.close('all')
+
+
+def test_Percept_grid_needs_visual_field_coordinates():
+    """Pixel indices are not visual angle"""
+    bare = Percept(np.random.rand(3, 5, 2), time=[0, 10])
+    temporal = Percept(np.random.rand(1, 1, 4), time=[0, 1, 2, 3])
+    for percept in (bare, temporal):
+        for grid in ({'rings': True}, {'meridians': True}):
+            with pytest.raises(ValueError):
+                percept.plot(ax=plt.subplots()[1], **grid)
+            with pytest.raises(ValueError):
+                percept.play(**grid)
+    # Nothing requested, nothing refused or drawn:
+    ax = bare.plot(ax=plt.subplots()[1], rings=False, meridians=None)
+    npt.assert_equal(len(ax.lines) + len(ax.texts), 0)
+    npt.assert_equal(len(bare.play(rings=None)._layers), 1)
+    plt.close('all')
+
+
+def test_Percept_play_shows_the_grid_as_a_still_layer():
+    """The player's canvas covers ordinary artists, so the grid is image data"""
+    grid = Grid2D((-4, 4), (-2, 2), step=0.5)
+    percept = Percept(np.random.rand(*grid.x.shape, 3), space=grid,
+                      time=[0, 10, 20])
+    plain = percept.play()
+    ruled = percept.play(meridians=[0], grid_color='red')
+    npt.assert_equal(len(ruled._layers), 2)
+    frames, overlay = ruled._layers
+    npt.assert_equal(frames.data is percept.data, True)
+    npt.assert_array_equal(overlay.index, 0)
+    npt.assert_equal(overlay.data.shape[2:], (4, 1))
+    # 0 deg runs along the middle row from the fovea to the right edge:
+    alpha = overlay.data[..., 3, 0]
+    n_rows, n_cols = alpha.shape
+    middle = alpha[n_rows // 2 - 2:n_rows // 2 + 2]
+    npt.assert_equal(middle[:, n_cols // 2 + 2:].max(axis=0).min() > 0.2, True)
+    npt.assert_almost_equal(middle[:, :n_cols // 2 - 2].max(), 0)
+    npt.assert_almost_equal(alpha[:n_rows // 4].max(), 0)
+    # ... in red, and it reaches the HTML player as one more sprite sheet:
+    npt.assert_almost_equal(overlay.data[alpha > 0.5, :3, 0].mean(0),
+                            (1, 0, 0), decimal=2)
+    count = 'data:image/png;base64'
+    npt.assert_equal(ruled.to_jshtml().count(count),
+                     plain.to_jshtml().count(count) + 1)
+    plt.close('all')
+
+
 @ pytest.mark.parametrize('n_frames', (2, 3, 10, 14))
 def test_Percept_play(n_frames):
     ndarray = np.random.rand(2, 4, n_frames)

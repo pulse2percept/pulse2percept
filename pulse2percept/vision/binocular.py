@@ -167,7 +167,8 @@ class BinocularScene(PrettyPrint):
         return self._right
 
     def plot(self, left_percept=None, right_percept=None, gaze=None, frame=0,
-             rings=False, vmax=None, vmin=0, axes=None, **kwargs):
+             rings=False, meridians=False, vmax=None, vmin=0, axes=None,
+             **kwargs):
         """Plot the two eyes side by side
 
         Each panel is its own :py:meth:`~pulse2percept.vision.Scene.plot`: an
@@ -185,8 +186,8 @@ class BinocularScene(PrettyPrint):
             One gaze is shared: vergence is not modeled.
         frame : int, optional
             Which frame of a video scene to draw. Ignored for still scenes.
-        rings : bool, float, or sequence, optional
-            Eccentricity rings, as in
+        rings, meridians : bool, float, or sequence, optional
+            Visual-field grid about each eye's fovea, as in
             :py:meth:`~pulse2percept.vision.Scene.plot`.
         vmax : float, optional
             The percept brightness that displays as white, shared by both
@@ -221,7 +222,8 @@ class BinocularScene(PrettyPrint):
             # for; `Scene.plot` refuses one it has nothing to map.
             scale = {'vmax': vmax, 'vmin': vmin} if percept is not None else {}
             drawn.append(scene.plot(gaze=gaze, frame=frame, ax=ax,
-                                    rings=rings, percept=percept, **scale,
+                                    rings=rings, meridians=meridians,
+                                    percept=percept, **scale,
                                     **kwargs))
             drawn[-1].set_title(f'{label} eye')
         _share_visual_field(drawn, (self.left, self.right))

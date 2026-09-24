@@ -16,6 +16,7 @@ from skimage.transform import resize
 
 from ..units import DimensionMismatchError, Hz, Quantity, Unit, as_value, ms
 from ..utils import Data, HTMLAnimation, frame_interval
+from ..utils import _visual_field as vf
 from ..utils.animation import _frame_timeline
 from ..utils.array import _interp_rows, _slice_times
 from ..utils.constants import VIDEO_BLOCK_SIZE
@@ -580,7 +581,8 @@ class Percept(Data):
         self._next_frame += 1
         return self.data[..., this_frame]
 
-    def plot(self, kind='pcolor', ax=None, **kwargs):
+    def plot(self, kind='pcolor', ax=None, rings=False, meridians=False,
+             grid_color=vf.GRID_COLOR, **kwargs):
         """Plot the percept
 
         For a spatial percept, will plot the perceived brightness across the
@@ -606,6 +608,19 @@ class Percept(Data):
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object
+        rings : bool, float, or sequence, optional
+            Eccentricity rings (dva) about the fovea at visual-field (0, 0).
+            True draws 1.25, 2.5, 5, 10, 20, ... dva, a number is a spacing,
+            and a sequence is the eccentricities themselves. Automatic rings
+            stop at the field edge nearest the fovea, or, for a field that
+            excludes the fovea, span the eccentricities it covers.
+        meridians : bool, float, or sequence, optional
+            Polar-angle meridians (geometric deg) from the fovea to the field
+            edge: 0 is +x, 90 is +y, counterclockwise. True is every 45 deg,
+            a number is a spacing from 0, and a sequence is the angles
+            themselves.
+        grid_color : color, optional
+            Matplotlib color of rings, meridians, and ring labels.
         **kwargs :
             Other optional arguments passed down to the Matplotlib function
 
@@ -614,7 +629,14 @@ class Percept(Data):
         ax : matplotlib.axes.Axes
             Returns the axes with the plot on it
 
+        Notes
+        -----
+        Rings and meridians are display annotations. They require a percept
+        built with ``space`` (``ValueError`` otherwise), since pixel indices
+        are not visual angle.
+
         """
+        grid = self._grid_geometry(rings, meridians)
         if ax is None:
             ax = plt.gca()
             if 'figsize' in kwargs:
@@ -656,7 +678,7 @@ class Percept(Data):
             ax.imshow(self.data[..., 0], origin='upper',
                       extent=_pixel_extent(self.xdva, self.ydva),
                       **other_kwargs)
-            return self._label_axes(ax)
+            return self._draw_grid(self._label_axes(ax), grid, grid_color)
 
         # A spatial or spatiotemporal percept: Find the brightest frame
         idx = np.argmax(np.max(self.data, axis=(0, 1)))
@@ -691,7 +713,52 @@ class Percept(Data):
         else:
             raise ValueError(f"Unknown plot option '%s'. Choose either 'pcolor'"
                              f"or '{kind}'.")
-        return self._label_axes(ax)
+        return self._draw_grid(self._label_axes(ax), grid, grid_color)
+
+    def _grid_geometry(self, rings, meridians):
+        """Ring radii (dva), meridian angles (deg), and visible extent, or
+        None if no grid is requested"""
+        if vf._is_off(rings) and vf._is_off(meridians):
+            return None
+        if not self._has_space or self.xdva is None or self.ydva is None:
+            raise ValueError("Rings and meridians require visual-field "
+                             "coordinates, and this percept has none: its "
+                             "xdva/ydva are pixel indices or absent. Pass "
+                             "'space' when building it, or predict it on a "
+                             "model grid.")
+        extent = (float(np.min(self.xdva)), float(np.max(self.xdva)),
+                  float(np.min(self.ydva)), float(np.max(self.ydva)))
+        r_min, r_max = vf.visible_band((0, 0), extent)
+        return (vf.ring_radii(rings, r_max, r_min=r_min),
+                vf.meridian_angles(meridians), extent)
+
+    @staticmethod
+    def _draw_grid(ax, grid, color):
+        """Draw a `_grid_geometry` result on ``ax``, centered at (0, 0)"""
+        if grid is not None:
+            radii, angles, extent = grid
+            vf.draw(ax, radii, angles, (0, 0), extent, color=color)
+        return ax
+
+    @staticmethod
+    def _grid_layer(ax, grid, color, zorder):
+        """Rasterize a `_grid_geometry` result over the visible axes, at the
+        axes' on-screen size, and show it as an RGBA image"""
+        radii, angles, extent = grid
+        left, right, bottom, top = extent
+        ax.apply_aspect()
+        bbox = ax.get_window_extent()
+        shape = (max(int(round(bbox.height)), 1),
+                 max(int(round(bbox.width)), 1))
+
+        def to_pixel(x, y):
+            col = (np.asarray(x) - left) / (right - left) * shape[1] - 0.5
+            row = (top - np.asarray(y)) / (top - bottom) * shape[0] - 0.5
+            return col, row
+
+        rgba = vf.rasterize(shape, radii, angles, (0, 0), extent, to_pixel,
+                            color=color, dpi=ax.figure.dpi)
+        return ax.imshow(rgba, origin='upper', extent=extent, zorder=zorder)
 
     def _label_axes(self, ax):
         """Put a drawn percept on the visual-field axes it belongs on"""
@@ -705,7 +772,8 @@ class Percept(Data):
         return ax
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
-            colorbar=True, fmt='png', vmin=None, vmax=None):
+            colorbar=True, fmt='png', vmin=None, vmax=None, rings=False,
+            meridians=False, grid_color=vf.GRID_COLOR):
         """Animate the percept in an interactive HTML player.
 
         Parameters
@@ -732,6 +800,11 @@ class Percept(Data):
             whose values are shown as they are (clipped to [0, 1]).
 
             .. versionadded:: 0.10.0
+        rings, meridians, grid_color : optional
+            Visual-field grid about (0, 0), as in :py:meth:`plot`, drawn as a
+            static layer over every frame.
+
+            .. versionadded:: 0.11.0
 
         Returns
         -------
@@ -750,6 +823,7 @@ class Percept(Data):
         if self.time is None:
             raise ValueError("Cannot animate a percept with time=None. Use "
                              "percept.plot() instead.")
+        grid = self._grid_geometry(rings, meridians)
         # Convert percept times to wall-clock milliseconds:
         timeline = _frame_timeline(self.times(ms), fps=fps)
         idx = timeline.indices
@@ -797,6 +871,14 @@ class Percept(Data):
                                    va='center')
         if spatial:
             self._label_axes(ax)
+        images, frames, index = [mat], [self.data], [idx]
+        if grid is not None:
+            # The player's frame canvas covers ordinary artists, so the grid
+            # becomes one more (still) image layer:
+            images.append(self._grid_layer(ax, grid, grid_color,
+                                           mat.get_zorder() + 1))
+            frames.append(np.asarray(images[-1].get_array())[..., np.newaxis])
+            index.append(np.zeros_like(idx))
         plt.close(fig)
         # Create the animation. The frame data is handed to HTMLAnimation so
         # that it can render the HTML player without going through Matplotlib:
@@ -807,8 +889,8 @@ class Percept(Data):
         # array rather than a resampled copy of it:
         return HTMLAnimation(fig, update, data_gen, repeat=repeat,
                              intervals=timeline.intervals,
-                             save_count=idx.size, image=mat,
-                             frame_data=self.data, frame_index=[idx],
+                             save_count=idx.size, image=images,
+                             frame_data=frames, frame_index=index,
                              labels=labels, fmt=fmt)
 
     def save(self, fname, shape=None, fps=None, vmin=None, vmax=None):
