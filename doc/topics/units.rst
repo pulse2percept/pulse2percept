@@ -6,10 +6,9 @@ Physical Units
 
 .. versionadded:: 0.10.0
 
-Many pulse2percept parameters represent physical quantities. The
-:py:mod:`~pulse2percept.units` module adds dimensional checking and automatic
-conversion while keeping bare numbers fully supported and consistent with
-older p2p versions.
+The :py:mod:`~pulse2percept.units` module adds dimensional checking and
+conversion to physical parameters. Bare numbers remain valid and use the
+canonical unit below.
 
 .. code-block:: python
 
@@ -18,8 +17,6 @@ older p2p versions.
 
     BiphasicPulse(50, 0.45)
     BiphasicPulse(0.05 * mA, 450 * us)  # equivalent
-
-Bare numbers use the canonical unit documented by the API.
 
 Canonical units
 ---------------
@@ -44,8 +41,8 @@ Canonical units
    * - image and video intensity
      - dimensionless
 
-Objects that use a different unit, such as a Percept with its own time base,
-record that unit explicitly.
+Objects that store a different unit (e.g. a Percept with another time base)
+record it in an attribute such as ``time_unit``.
 
 Quantities and conversion
 -------------------------
@@ -68,58 +65,43 @@ Compatible quantities can be added, multiplied, divided, and raised to powers.
 Dimensional boundaries
 ----------------------
 
-Units prevent physically different quantities from being confused. For
-example, retinal distance is not visual angle, and image intensity is not
-current.
+Some quantities never convert into each other, and mixing them raises a
+``DimensionMismatchError``:
 
-``dva`` therefore does not convert directly to ``um``. Use a
-:py:class:`~pulse2percept.topography.VisualFieldMap` when mapping between
-visual-field and tissue coordinates:
-
-.. code-block:: python
-
-    from pulse2percept.topography.retina import Watson2014Map
-    from pulse2percept.units import dva
-
-    x_um, y_um = Watson2014Map().dva_to_ret(2 * dva, 3 * dva)
-
-Likewise, :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-:py:class:`~pulse2percept.stimuli.VideoStimulus` are dimensionless. A
-:py:class:`~pulse2percept.stimuli.StimulusEncoder` defines how their gray
-levels become electrical stimulation.
+*  ``dva`` and ``um``: convert through a
+   :py:class:`~pulse2percept.topography.VisualFieldMap`
+   (see :ref:`topics-coordinates`).
+*  Gray levels and current: images and videos are dimensionless; an encoder
+   converts them (see :ref:`topics-encoders`).
+*  ``dva`` and ``deg``: see below.
 
 Geometric angle
 ---------------
 
-``deg`` and ``rad`` measure ordinary geometric angle: implant rotation, image
-rotation, grating direction and phase, and axon polar angle. They convert into
-each other freely, and bare numbers still mean degrees:
+``deg`` and ``rad`` measure geometric angle: implant and image rotation,
+grating direction and phase, axon polar angle. They convert into each other;
+bare numbers mean degrees:
 
 .. code-block:: python
 
     import numpy as np
-    from pulse2percept.implants.retina import ArgusII
+    from pulse2percept.implants import ElectrodeGrid
     from pulse2percept.units import deg, rad
 
-    ElectrodeGrid((6, 10), 575, rot=45)              # degrees, as before
-    ElectrodeGrid((6, 10), 575, rot=45 * deg)        # equivalent
-    ElectrodeGrid((6, 10), 575, rot=np.pi / 4 * rad) # equivalent
+    ElectrodeGrid((6, 10), 575, rot=45)               # degrees
+    ElectrodeGrid((6, 10), 575, rot=45 * deg)         # equivalent
+    ElectrodeGrid((6, 10), 575, rot=np.pi / 4 * rad)  # equivalent
 
-``dva`` is deliberately a different dimension: it describes coordinates or
-extent in the visual field, whereas ``deg`` and ``rad`` describe geometric
-rotation.
-A visual field map converts visual-field coordinates to retinal or cortical
-positions; it does not make ``dva`` interchangeable with geometric angle.
+``dva`` is a separate dimension: a position or extent in the visual field,
+not a rotation.
 
 Threshold-relative amplitude
 ----------------------------
 
-Some models (e.g., :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`)
-operate on ``xTh``, which means a multiple of perceptual threshold, rather
-than raw current.
-
-Thresholds can be stored in ``implant.thresholds``. When they are set,
-pulses expressed in ``xTh`` will be automatically converted to microamps:
+``xTh`` is a multiple of perceptual threshold. Some models (e.g.
+:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`) take amplitude
+in ``xTh``. With ``implant.thresholds`` set, ``xTh`` amplitudes are converted
+to uA when stimulation is prepared:
 
 .. code-block:: python
 
@@ -131,27 +113,24 @@ pulses expressed in ``xTh`` will be automatically converted to microamps:
     implant.thresholds = {'A4': 80 * uA}
     implant.prepare_stim({'A4': train})  # calibrated to 160 uA
 
-Without a threshold, the train remains in ``xTh``. Current-based safety checks
-and models require calibration to a physical current.
+Without a threshold, the amplitude stays in ``xTh``. Current-based models
+and safety checks require a threshold.
 
 Documented shorthands
 ---------------------
 
-A few APIs accept another dimension when there is one unambiguous physical
-interpretation. In particular:
+A few parameters accept a second dimension where the meaning is
+unambiguous. These are not general conversions:
 
-* retinal-model ``xrange`` and ``yrange`` may be specified as retinal lengths;
-  the model's visual-field map converts the endpoints to visual angle;
-* frame-rate arguments such as ``fps`` accept frequency quantities such as
-  ``30 * Hz``.
-
-These are API-level interpretations, not general unit conversions.
+*  Retinal-model ``xrange`` and ``yrange`` accept retinal lengths (converted
+   to dva through the model's map).
+*  Frame-rate arguments such as ``fps`` accept frequencies (``30 * Hz``).
 
 Inspecting units
 ----------------
 
-Objects expose the units of their stored numbers and methods for reading them
-in another compatible unit:
+Objects expose the units of their stored numbers and return them in any
+compatible unit:
 
 .. code-block:: python
 
@@ -169,6 +148,5 @@ in another compatible unit:
 Model parameter units are available through
 :py:meth:`~pulse2percept.utils.Parametrized.get_param_units`.
 
-The unit system is intentionally small. It has no unit registry, string
-parsing, or automatic NumPy propagation, and physical units do not enter
-Cython or Torch kernels.
+The unit system is small: no unit registry, no string parsing, no automatic
+NumPy propagation. Cython and Torch kernels receive plain numbers.

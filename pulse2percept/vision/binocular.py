@@ -109,7 +109,7 @@ class BinocularScene(PrettyPrint):
             :py:class:`~pulse2percept.stimuli.ImageStimulus` are converted to
             one first. Metadata is preserved in both eye images.
             Stereo video is not supported.
-        fov : float or (width, height)
+        fov : float or ``(width, height)``
             Per-eye field of view in degrees of visual angle. Unless
             ``extent`` is passed, each eye's extent is inferred from one half
             of the image, not the packed stereo frame.

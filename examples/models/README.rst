@@ -1,8 +1,7 @@
 .. _examples-models:
 
-Published models
-================
+Model reproductions
+===================
 
-Reproductions of published computational models against the psychophysical
-data they were fit to. Each example recreates a specific figure or reported
-relationship and states the assumptions that come with it.
+Figures from published models, recreated against the psychophysical data they
+were fit to.

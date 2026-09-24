@@ -563,6 +563,7 @@ class DynaphosModel(BaseModel):
     def plot(self, use_dva=False, style=None, autoscale=True, ax=None,
              figsize=None, fc=None, show_implant=False):
         """Plot the model
+
         Parameters
         ----------
         use_dva : bool, optional

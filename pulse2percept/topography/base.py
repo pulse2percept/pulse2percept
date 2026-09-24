@@ -536,6 +536,7 @@ class Grid2D(PrettyPrint):
         """
         Plots grid points in 3D space.
         Note, you must have a 3D visual field map to use this method.
+
         Parameters
         ----------
         style : {'scatter', 'cell'}, optional

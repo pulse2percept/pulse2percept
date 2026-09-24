@@ -5,16 +5,15 @@ Granley et al. (2021): Pulse parameters shape phosphene appearance
 ===============================================================================
 
 The axon map model of [Beyeler2019]_ predicts one phosphene shape per
-electrode, no matter how that electrode is driven. [Granley2021]_ adds three
-stimulus-dependent scaling factors on top of it, fit to psychophysical and
-electrophysiological data: amplitude, frequency, and phase duration modulate
+electrode, regardless of the pulse train. [Granley2021]_ adds three scaling
+factors, fit to psychophysical and electrophysiological data: amplitude,
+frequency, and phase duration modulate
 brightness (:math:`F_\\mathrm{bright}`), spatial extent
 (:math:`F_\\mathrm{size}`, scaling :math:`\\rho`), and streak length
 (:math:`F_\\mathrm{streak}`, scaling :math:`\\lambda`).
 
-This example is a qualitative recreation of Fig. 3 in [Granley2021]_ with the
-current pulse2percept parameterization. Each row sweeps one pulse parameter on
-a single Argus II electrode:
+This example qualitatively recreates Fig. 3 of [Granley2021]_. Each row
+sweeps one pulse parameter on one Argus II electrode:
 
 * **amplitude** makes the phosphene brighter *and* larger,
 * **frequency** makes it brighter but not larger,
@@ -31,11 +30,10 @@ from pulse2percept.units import xTh
 # One electrode, one model
 # ------------------------
 #
-# ``rho`` and ``lam`` are the baseline spatial decay away from the axon and
-# along it. ``lam = 800`` um gives a baseline phosphene elongated enough
-# (about 2.5:1) for the streak effect in the bottom row to be visible; the
-# published figure used a shorter ``lam``. The grid is cropped to the corner of
-# the visual field that electrode A4 of a right-eye Argus II projects to.
+# ``rho`` and ``lam`` (um) are the baseline spread across and along axons.
+# ``lam = 800`` um (longer than in the paper) elongates the baseline phosphene
+# to about 2.5:1, so the streak effect in the bottom row is visible. The grid
+# covers the region electrode A4 of a right-eye Argus II projects to.
 
 ELECTRODE = 'A4'
 BASE_FREQ = 5     # Hz
@@ -57,16 +55,14 @@ def predict(freq, amp, pdur):
 # The three sweeps
 # ----------------
 #
-# Amplitude is in multiples of perceptual threshold (``xTh``), where threshold
-# is defined at 0.45 ms phase duration.
+# Amplitude is in multiples of perceptual threshold (``xTh``), defined at
+# 0.45 ms phase duration.
 #
-# The phase-duration row needs a correction. In this model, threshold falls as
-# phase duration grows (``a0 * pdur + a1``, Eq. 3), so a fixed ``1 xTh`` at
-# 100 ms would deliver ~200x the threshold-scaled amplitude of the 0.45 ms
-# reference and the row would show one enormous saturated blob rather than a
-# streak. Dividing the nominal amplitude by that same factor holds
-# threshold-scaled amplitude constant, leaving phase duration to act only
-# through :math:`F_\mathrm{streak}`.
+# In this model, threshold falls as phase duration grows (``a0 * pdur + a1``,
+# Eq. 3): a fixed ``1 xTh`` at 100 ms would be ~200x the threshold-scaled
+# amplitude at 0.45 ms and saturate. The phase-duration row therefore divides
+# amplitude by the same factor, so phase duration acts only through
+# :math:`F_\mathrm{streak}`.
 
 AMPS = [1, 2, 3, 4, 5, 6]              # xTh, at 5 Hz / 0.45 ms
 FREQS = [5, 10, 20, 40, 80, 120]       # Hz, at 1 xTh / 0.45 ms
@@ -88,12 +84,9 @@ rows = [
 ]
 
 ###############################################################################
-# All 18 panels share one grayscale range, ``[0, vmax]``, with ``vmax`` the
-# brightest pixel anywhere in the figure (the 120 Hz panel, ~9x the 5 Hz
-# reference, which is why the other two rows sit at the dim end). This
-# matters: ``Percept.plot()`` and Matplotlib both autoscale each image to its
-# own min and max by default, which would make every panel below equally
-# bright and erase the result.
+# All 18 panels share one gray scale, ``[0, vmax]``, with ``vmax`` the
+# brightest pixel in the figure (the 120 Hz panel, ~9x the 5 Hz reference).
+# Per-panel autoscaling would make every panel equally bright.
 
 vmax = max(frame.max() for _, _, frames in rows for frame in frames)
 
@@ -108,27 +101,21 @@ for row_axes, (label, titles, frames) in zip(axes, rows):
 fig.tight_layout()
 
 ###############################################################################
-# Amplitude (top) recruits a wider patch of retina and drives it harder, so the
-# phosphene grows in both size and brightness. Frequency (middle) leaves
-# :math:`F_\mathrm{size}` untouched: the outline is pixel-for-pixel identical
-# across the row, only brighter. Phase duration (bottom) is the opposite case,
-# with brightness and width held fixed by the amplitude compensation: the
-# streak along the axon shortens by about half between 0.1 and 100 ms.
+# Amplitude (top) increases size and brightness. Frequency (middle) increases
+# brightness only; the outline is identical across the row. Phase duration
+# (bottom), with brightness and width held fixed, shortens the streak by about
+# half between 0.1 and 100 ms.
 #
 # What this does not establish
 # ----------------------------
 #
-# * The three factors are phenomenological fits to a handful of Argus I/II
-#   subjects, not a biophysical account of how pulse parameters drive ganglion
-#   cells. They are linear (or single-power-law) in their arguments and
-#   extrapolate poorly outside the ranges swept here.
+# * The three factors are phenomenological fits to a few Argus I/II subjects,
+#   not a biophysical model. They are linear or single power laws and
+#   extrapolate poorly beyond the ranges swept here.
 # * v0.11 uses an Argus II refit of the [Horsager2009]_ phase-duration
-#   threshold relation rather than the equation in the original publication, so
-#   the bottom row is not a bit-for-bit reproduction of the published panel.
-#   The compensating amplitudes here are derived from the current model's own
-#   ``scale_threshold``, not copied from the paper.
-# * Brightness is in arbitrary units. Only relative comparisons within this
-#   figure are meaningful.
-# * A single electrode is a best case. With many electrodes active, the
-#   summation across electrodes in the model is linear, which real
-#   multi-electrode percepts are not.
+#   threshold relation, so the bottom row does not exactly reproduce the
+#   published panel. The compensating amplitudes come from the model's own
+#   ``scale_threshold``.
+# * Brightness is in arbitrary units; compare only within this figure.
+# * With several electrodes active, the model sums linearly; real
+#   multi-electrode percepts do not.

@@ -69,14 +69,15 @@ Compatibility
 Where to go from here
 =====================
 
-*  Start with the :doc:`Quickstart <examples/plot_getting_started>` guide.
-*  Learn the core concepts: :doc:`visual prostheses <topics/implants>`,
+*  Run the :doc:`Quickstart <examples/plot_getting_started>`.
+*  Read the core concepts in order: :doc:`implants <topics/implants>`,
    :doc:`stimulation <topics/stimulation>`,
    :doc:`models and percepts <topics/models>`,
-   :doc:`visual input <topics/vision>`, and
-   :doc:`coordinates <topics/coordinates>`.
-*  Explore the :doc:`Example Gallery <examples/index>` for complete simulations
-   and use cases.
+   :doc:`visual input <topics/vision>`,
+   :doc:`coordinates <topics/coordinates>`, :doc:`units <topics/units>`, and
+   :doc:`datasets <topics/datasets>`.
+*  Work through the :doc:`Example Gallery <examples/index>`, starting with the
+   key examples.
 *  Check the :doc:`FAQ <users/faq>` for common questions.
 *  Request features or report bugs on the `Issue Tracker`_.
 
