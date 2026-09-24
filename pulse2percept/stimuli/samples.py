@@ -62,7 +62,7 @@ def big_buck_bunny(resize=None, electrodes=None, metadata=None,
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of each video
         frame.
 
@@ -125,7 +125,7 @@ def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
@@ -189,7 +189,7 @@ def cajal_retina(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
@@ -240,7 +240,7 @@ def logo_bvl(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
@@ -281,7 +281,7 @@ def logo_ucsb(resize=None, electrodes=None, metadata=None):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
@@ -331,7 +331,7 @@ def ucsb_bike(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
@@ -409,7 +409,7 @@ def ucsb_flyover(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of each video
         frame.
 
@@ -479,7 +479,7 @@ def ucsb_pedestrians(resize=None, electrodes=None, metadata=None,
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of each video
         frame.
 
@@ -540,7 +540,7 @@ def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
@@ -607,7 +607,7 @@ def zebrafish_retina(resize=None, electrodes=None, metadata=None,
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
@@ -660,7 +660,7 @@ class LogoBVL(ImageStimulus):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 
@@ -699,7 +699,7 @@ class LogoUCSB(ImageStimulus):
 
     Parameters
     ----------
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         A tuple specifying the desired height and the width of the image
         stimulus.
 

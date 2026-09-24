@@ -4,10 +4,10 @@
 Models and Percepts
 ====================
 
-A model turns stimulation into a predicted percept. A model with a spatial
-component predicts the response to stimulation *by a particular device*, so it
-is bound to an implant and handed the stimulus. A temporal-only model
-describes one location's response over time and needs no implant.
+A model converts delivered stimulation into a predicted
+:py:class:`~pulse2percept.percepts.Percept`. A model with a spatial component
+is bound to an implant; a temporal-only model describes one location's
+response over time and needs none.
 
 .. code-block:: python
 
@@ -17,31 +17,23 @@ describes one location's response over time and needs no implant.
     model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
     percept = model.predict_percept({'A8': 30})
 
-Models build automatically on first prediction, and rebuild the affected
-component when a parameter or the implant changes. The result of
-``predict_percept`` is a :py:class:`~pulse2percept.percepts.Percept`.
+``predict_percept`` calls ``implant.prepare_stim(source)`` first (see
+:ref:`topics-stimulation`). Models build on first prediction and rebuild the
+affected component when a parameter or the implant changes.
 
-The full pipeline distinguishes the source you provide, the stimulation the
-device delivers, and the percept::
-
-    source -> implant -> delivered stimulation -> model -> percept
-
-Models call ``implant.prepare_stim(source)`` internally; see
-:ref:`topics-stimulation` to inspect or control that step.
+The simulated visual field is a grid set by ``xrange``, ``yrange`` (dva) and
+``step`` (dva per pixel). Retinal models default to 30 x 30 dva at 0.25 dva,
+cortical models to 10 x 10 dva, both centered on the fovea. Widen the grid if
+a percept touches its edge; refine ``step`` for small phosphenes.
 
 Choosing a model
 ----------------
 
-Models are grouped by the tissue they stimulate. The root
-:py:mod:`pulse2percept.models` namespace holds the abstract classes a model is
-assembled from and temporal models that are not tied to a stimulation site;
-models of a particular target live in :py:mod:`pulse2percept.models.retina`
-and :py:mod:`pulse2percept.models.cortex`.
-
-Which model to use depends on the scientific question. The published models
-add assumptions specific to their experiments and should be chosen when those
-assumptions are relevant. The API reference for each model documents its
-assumptions, parameters, input requirements, and numerical units.
+Models live under the tissue they stimulate,
+:py:mod:`pulse2percept.models.retina` and
+:py:mod:`pulse2percept.models.cortex`. The root namespace holds generic
+temporal models and the base classes. Each model's API page lists its
+assumptions, parameters, and units.
 
 Retinal models
 ~~~~~~~~~~~~~~
@@ -87,65 +79,51 @@ Retinal models
      - spatiotemporal
      - Photovoltaic subretinal stimulation (see below)
 
-The three most common spatial choices differ in what they commit to:
-
-:py:class:`~pulse2percept.models.retina.ScoreboardModel`
-    Fixed-width Gaussian per electrode; amplitude scales brightness. ``rho``
-    is an effective perceptual spread fitted to subject reports, not a
-    physical current-spread constant.
-
-:py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`
-    Adds [Granley2021]_-derived pulse-dependent brightness and width.
-    Requires a described biphasic pulse train rather than a bare amplitude.
-
-:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
-    Additionally models axonal elongation, whose length follows phase
-    duration [Granley2021]_. ``rho`` spreads across axons and ``lam`` along
-    them.
-
-Every retinal spatial model derives from
-:py:class:`~pulse2percept.models.retina.RetinalSpatial`, which places
-electrodes through a retinotopic map (see :ref:`topics-coordinates`) and
-accepts a physical retinal extent as shorthand for ``xrange``/``yrange``.
+*  ``rho`` (um) in the scoreboard and axon map models is an effective
+   perceptual spread fitted to subject reports, not a physical current-spread
+   constant. Axon map models add ``lam`` (um), the spread along an axon.
+*  The Biphasic models require a biphasic pulse train with amplitude in
+   ``xTh``, or ``implant.thresholds`` to convert uA. Amplitude scales
+   phosphene brightness and size; frequency scales brightness; phase duration
+   shortens axonal streaks.
+*  Retinal spatial models derive from
+   :py:class:`~pulse2percept.models.retina.RetinalSpatial` and place
+   electrodes through a retinotopic map (see :ref:`topics-coordinates`).
+   ``xrange``/``yrange`` may also be given as retinal lengths.
 
 Photovoltaic stimulation
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-Photovoltaic arrays are driven by a pulsed near-infrared schedule rather than
-injected current (see :ref:`topics-stimulation`). Two models consume it, and
-they answer different questions:
+Two models accept the near-infrared schedule of a photovoltaic array:
 
 :py:class:`~pulse2percept.models.retina.ScoreboardModel`
-    Visualizes normalized optical drive: where the light lands, relative to a
+    Shows normalized optical drive: where the light lands, relative to a
     fully lit pixel. No retinal response.
 
 :py:class:`~pulse2percept.models.retina.Ho2018Model`
     Predicts a phenomenological network-mediated retinal response. Each pulse
     period's radiant exposure (irradiance x ON duration) drives a Gaussian
-    whose default ``rho`` is half the implant's median pixel pitch. A
-    difference of low-pass cascades then filters the per-pulse drive maps, so
-    the response is transient: a static image at a fixed pulse rate gives an
-    onset response that adapts.
+    with default ``rho`` of half the median pixel pitch. A difference of
+    low-pass cascades filters the result, so a static image at a fixed pulse
+    rate gives an onset response that adapts.
 
 .. warning::
 
     :py:class:`~pulse2percept.models.retina.Ho2018Model` reconstructs the
     structure and timing of [Ho2018]_, not validated PRIMA percepts:
 
-    *  pON center response of degenerate (RCS) rat retina only, with no
-       antagonistic surround and no pOFF pathway;
-    *  a device-scaled Gaussian spread, ``rho = pitch / 2``, which is a
-       pulse2percept convention rather than a measured point-spread function
-       or the receptive-field size [Ho2018]_ reports;
-    *  a linear radiant-exposure activation law normalized to the 9 mW/mm^2,
-       4 ms reference pulse of [Ho2018]_, with no fitted irradiance,
-       pulse-duration or frequency nonlinearity;
-    *  no photovoltaic circuit or electric-field model, no electrode-retina
-       distance effect, and no wavelength or device-specific conversion
-       efficiency, so an 880 nm PRIMA pixel and a 915 nm pixel of another
-       design respond identically to the same radiant exposure;
-    *  default temporal coefficients matched to the Table 1 timing landmarks
-       of [Ho2018]_ rather than published by it, and no calibration to human
+    *  pON center response of degenerate (RCS) rat retina only; no
+       antagonistic surround and no pOFF pathway.
+    *  ``rho = pitch / 2`` is a pulse2percept convention, not a measured
+       point-spread function or the receptive-field size of [Ho2018]_.
+    *  Activation is linear in radiant exposure, normalized to the
+       9 mW/mm^2, 4 ms reference pulse of [Ho2018]_, with no fitted
+       irradiance, pulse-duration, or frequency nonlinearity.
+    *  No photovoltaic circuit, electric field, electrode-retina distance, or
+       wavelength dependence: an 880 nm PRIMA pixel and a 915 nm pixel of
+       another design respond identically to the same radiant exposure.
+    *  Temporal coefficients are matched to the Table 1 timing landmarks of
+       [Ho2018]_, not published by it, and are not calibrated to human
        brightness or contrast perception.
 
 Cortical models
@@ -169,208 +147,149 @@ Cortical models
      - Charge accumulation, thresholds, and phosphene dynamics over time
 
 Cortical spatial models derive from
-:py:class:`~pulse2percept.models.cortex.CortexSpatial`, which simulates one or
-more visual areas (``'v1'``, ``'v2'``, ``'v3'``) and maps them through
-cortical retinotopy. The cortical
-:py:class:`~pulse2percept.models.cortex.ScoreboardModel` spreads current in
-cortex rather than in the retina, so a fixed cortical ``rho`` produces
-phosphenes whose visual-field size depends on eccentricity.
+:py:class:`~pulse2percept.models.cortex.CortexSpatial`, simulate one or more
+of ``'v1'``, ``'v2'``, ``'v3'`` (``regions``), and map them through cortical
+retinotopy. The cortical ``rho`` (um) is a spread on cortex, so phosphene
+size in dva grows with eccentricity.
 
-Generic temporal components
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Generic temporal models
+~~~~~~~~~~~~~~~~~~~~~~~
 
 :py:class:`~pulse2percept.models.FadingTemporal` and
 :py:class:`~pulse2percept.models.AlphaTemporal` describe how one location's
-response decays after a pulse, without committing to where that location is.
-They are the temporal half of a :py:class:`~pulse2percept.models.Model` whose
-spatial half may be retinal or cortical.
+response decays after a pulse. They combine with retinal or cortical spatial
+components (see `Combining components`_).
 
-Model limitations
------------------
+Limitations
+~~~~~~~~~~~
 
-Electrode-tissue distance
-~~~~~~~~~~~~~~~~~~~~~~~~~
+*  :py:class:`~pulse2percept.models.retina.ScoreboardModel`,
+   :py:class:`~pulse2percept.models.retina.AxonMapModel` and
+   :py:class:`~pulse2percept.models.retina.Thompson2003Model` ignore
+   electrode ``z`` and emit a warning if it is nonzero. Electrode-retina
+   distance is expected to affect threshold and spread, but the
+   psychophysical evidence is insufficient to parameterize it.
+*  Models are monocular: a prediction is about one eye (see
+   :ref:`topics-vision`).
 
-:py:class:`~pulse2percept.models.retina.ScoreboardModel`,
-:py:class:`~pulse2percept.models.retina.AxonMapModel` and
-:py:class:`~pulse2percept.models.retina.Thompson2003Model` use electrode ``x``
-and ``y`` coordinates only. Nonzero ``z`` values therefore do not affect their
-output and produce a warning.
+Percept timing
+--------------
 
-This is a model limitation. Electrode-target distance is expected to affect
-stimulation threshold and spatial recruitment, but pulse2percept does not
-currently parameterize that relationship because the required psychophysical
-evidence is insufficient. In the Scoreboard and AxonMap models, ``rho``
-remains an effective perceptual spread parameter fitted to subject reports
-rather than inferred from electrode-retina distance.
+Spatial-only models return one frame per stimulus time point (one frame for
+a timeless stimulus or an image). For temporal models, ``t_percept`` sets the
+output times (ms):
 
-Monocular prediction
-~~~~~~~~~~~~~~~~~~~~
-
-Models are monocular in v0.11. A prediction is about one eye, and binocular
-material is composed afterwards; see :ref:`topics-vision`.
-
-Percepts
---------
-
-A :py:class:`~pulse2percept.percepts.Percept` holds one of two layouts, with
-time as the last axis in both::
-
-    (Y, X, T)     perceived brightness in arbitrary units
-    (Y, X, 3, T)  RGB intensities in [0, 1]
-
-Prosthesis models produce brightness percepts.
-:py:meth:`~pulse2percept.vision.Scene.render` composes one with residual
-vision and returns an RGB percept:
+*  **Given explicitly**, it returns those exact instants.
+*  **Omitted**, output frames follow the encoder's frame clock for encoded
+   video, and are 20 ms apart (50 Hz) otherwise. ``reduce`` sets what each
+   frame reports: ``'last'`` (default) the brightness at the end of its
+   interval, ``'peak'`` the maximum within it.
 
 .. code-block:: python
 
     import numpy as np
-    from pulse2percept.percepts import Percept
 
-    rgb = Percept(np.zeros((60, 80, 3, 1)))
-    rgb.is_rgb                  # True
-    rgb[..., 0].shape           # (60, 80, 3): one frame, still in color
-    rgb.plot()                  # drawn as RGB, without a colormap
+    percept = model.predict_percept(stim, t_percept=np.arange(0, 500, 10))
 
-RGB values are display intensities and must be finite and lie in ``[0, 1]``;
-anything else raises at construction rather than saturating quietly later. The
-RGB axis is not a spatial dimension: ``space`` still describes ``(Y, X)``.
+Percepts
+--------
 
-Operations defined on perceived brightness (i.e., ``n_gray``, ``argmax``,
-``max``, ``vmin``, ``vmax``) raise a ``ValueError`` for an RGB percept rather
-than inventing a conversion from color to brightness. Ranking three channels
-by one number would have to pick a color metric, which is also why a
-multi-frame RGB percept has no brightest frame to ``plot()``; animate it with
-``play()`` instead. ``percept.data`` is always available for the plain
-numerical answer.
+A :py:class:`~pulse2percept.percepts.Percept` stores ``data`` with time as
+the last axis, the grid coordinates ``xdva`` and ``ydva``, and ``time`` (in
+``time_unit``, ms by default; ``None`` for a single timeless frame):
+
+.. code-block:: text
+
+    (Y, X, T)     perceived brightness, arbitrary units
+    (Y, X, 3, T)  RGB display intensities in [0, 1]
+
+.. code-block:: python
+
+    percept.plot()               # brightest frame
+    percept.play()               # animation
+    percept.save('percept.mp4')  # image or video, by extension
+
+Prosthesis models produce brightness percepts.
+:py:meth:`~pulse2percept.vision.Scene.render` returns an RGB percept (see
+:ref:`topics-vision`). RGB values must be finite and lie in ``[0, 1]``;
+anything else is rejected at construction with a ``ValueError``.
+Brightness-only operations (``n_gray``, ``argmax``, ``max``, ``vmin``,
+``vmax``, and ``plot()`` of a multi-frame percept) are rejected for RGB
+percepts with a ``ValueError``, because ranking colors needs a color metric.
+Use ``play()`` or ``percept.data`` instead.
 
 Measuring a percept
 -------------------
 
 .. versionadded:: 0.11.0
 
-Prediction stops at the percept. Measurement is optional post-processing,
-performed on call and not part of the model::
-
-    stimulus -> model -> Percept -> optional measurement
-
-:py:meth:`~pulse2percept.percepts.Percept.measure` reports the brightness and
-geometry of the phosphenes in each frame:
+:py:meth:`~pulse2percept.percepts.Percept.measure` reports brightness and
+geometry of the phosphenes in each frame. It is post-processing, not part of
+the model:
 
 .. code-block:: python
 
-    percept = model.predict_percept({'A8': 30})
     metrics = percept.measure()
 
     metrics.peak.diameter               # dva
     metrics.peak.centroid               # (x, y) in dva
     metrics.peak.integrated_brightness  # brightness units x dva^2
 
-Support
-~~~~~~~
+Negative values are clipped to zero. Geometry is measured on the *support*:
+pixels at or above ``threshold`` (default 0.5) times that frame's own
+maximum. The threshold is relative, so scaling brightness does not change
+measured shape. Lower it to include more of the falloff:
+``percept.measure(threshold=0.25)``.
 
-Each frame is clipped at zero, so negative model output does not contribute.
-Geometry is then measured on the *support*: the pixels at or above 50% of that
-frame's own positive maximum. The threshold is relative and re-evaluated per
-frame, so scaling a percept's brightness does not change its measured shape.
-Lower it to include more of the falloff:
+``max_brightness``
+    Largest pixel value (model units).
 
-.. code-block:: python
+``integrated_brightness``
+    Pixel sum times pixel area (brightness units x dva^2); approximately
+    independent of grid resolution.
 
-    metrics = percept.measure(threshold=0.25)
+``area``
+    Support area (dva^2).
 
-What is measured
-~~~~~~~~~~~~~~~~
-
-``max_brightness`` is the largest positive pixel value, in the model's
-arbitrary units. ``integrated_brightness`` is the pixel sum scaled by pixel
-area (brightness units x dva^2), which approximates a spatial integral and is
-therefore insensitive to sampling resolution. Neither is on a psychophysical
-absolute scale.
-
-The remaining measurements describe the support as a binary set of pixels;
-brightness enters only through where the threshold falls. For a sufficiently
-sampled circular phosphene, ``major_axis``, ``minor_axis`` and ``diameter``
-approximately agree.
-
-**area**
-    Area of the support (dva^2).
-
-**diameter**
+``diameter``
     Diameter (dva) of the circle of equal area. At ``threshold=0.5`` this
-    approximates the FWHM of a sufficiently sampled circular Gaussian.
+    approximates the FWHM of a well-sampled circular Gaussian.
 
-**centroid**
-    Mean position ``(x, y)`` of the support pixels, in dva.
+``centroid``
+    Mean ``(x, y)`` of the support pixels (dva).
 
-**major_axis**, **minor_axis**
-    Axes (dva) of the ellipse with the same second moments as the support.
+``major_axis``, ``minor_axis``, ``elongation``
+    Axes (dva) of the ellipse with the support's second moments, and their
+    ratio (1 for a circle).
 
-**elongation**
-    ``major_axis / minor_axis``; approaches 1 for a circular phosphene.
+``n_components``
+    Number of disconnected suprathreshold regions. Other measurements
+    describe their union, so an ``elongation`` of 4 can be one elongated
+    phosphene or two round ones; ``n_components`` distinguishes them.
 
-**n_components**
-    Number of disconnected suprathreshold regions.
+``touches_edge``
+    Whether the support reaches the grid border. If so, measurements cover
+    only the part inside the grid; widen ``xrange`` and ``yrange``.
 
-**touches_edge**
-    Whether the support reaches the simulated field boundary.
+A frame without positive brightness has zero brightness, area, and
+components, and ``NaN`` position and shape.
 
-A frame without positive brightness has no phosphene: brightness, area and
-component count are zero, and position and shape are ``NaN``.
-
-Multiple components and clipping
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Model output need not form a single connected phosphene. ``n_components``
-counts the disconnected suprathreshold regions; the largest is not selected,
-and every other measurement describes the combined support. An ``elongation``
-of 4 is consistent with one elongated phosphene or with two round ones some
-distance apart, which ``n_components`` distinguishes.
-
-``touches_edge`` flags support reaching the border of the simulated visual
-field. Where it is True, the measurements describe only the portion inside the
-field, and no extrapolation is performed. Widen the model's ``xrange`` and
-``yrange`` to capture the full percept.
-
-Temporal percepts
-~~~~~~~~~~~~~~~~~
-
-Frames are measured independently, and each measurement is also available as
-an array over frames:
-
-.. code-block:: python
-
-    metrics = percept.measure()
-
-    metrics.integrated_brightness  # one value per frame
-    metrics.peak_frame             # index of the brightest frame
-    metrics.peak                   # that frame's measurements
-
-``peak_frame`` ranks frames by integrated positive brightness, taking the
-earliest on a tie. Frame timing remains in ``percept.time``; no time
+For a temporal percept, each measurement is also an array over frames.
+``metrics.peak_frame`` is the frame with the largest integrated brightness
+(earliest on a tie), and ``metrics.peak`` its measurements. No time
 integration or duration metrics are computed.
 
-Scope
-~~~~~
-
-These measurements describe the modeled percept *image*. They do not estimate
-visual acuity, phosphene discriminability, pairwise separability, behavioral
-resolution, or object-recognition performance.
-
-``measure()`` applies to model-produced brightness percepts and raises for the
-RGB percepts :py:meth:`~pulse2percept.vision.Scene.render` returns, whose
-values are display intensities. Positions and sizes are in degrees of visual
-angle, so the percept must have been built on a
-:py:class:`~pulse2percept.topography.Grid2D`; a percept holding bare pixel
-indices is rejected.
+``measure()`` requires a brightness percept on a
+:py:class:`~pulse2percept.topography.Grid2D`; RGB percepts and percepts
+without dva coordinates are rejected. The measurements describe the percept
+image only, not acuity, discriminability, or task performance.
 
 Combining components
 --------------------
 
-Classes ending in ``Model`` are complete models with explicit constructor
-parameters. Classes ending in ``Spatial`` or ``Temporal`` are components, and
-:py:class:`~pulse2percept.models.Model` combines two of them:
+Classes ending in ``Model`` are complete models. Classes ending in
+``Spatial`` or ``Temporal`` are components, which
+:py:class:`~pulse2percept.models.Model` combines:
 
 .. code-block:: python
 
@@ -379,17 +298,9 @@ parameters. Classes ending in ``Spatial`` or ``Temporal`` are components, and
 
     model = p2p.models.Model(spatial, temporal)
 
-Use ``Model`` to combine spatial and temporal components from different
-models. At least one component is required, and each must already be
-constructed. The implant belongs to the spatial component.
-
-Component parameters are accessed directly, and changing one rebuilds that
-component on the next prediction:
-
-.. code-block:: python
-
-    model.spatial.rho = 250
+    model.spatial.rho = 250    # rebuilds the spatial component
     model.temporal.tau = 50
 
-Named-model constructors expose the same parameters directly. Parameters
-declared by both components, such as ``thresh_percept``, remain independent.
+One of the two may be ``None``. Components must be constructed before they
+are passed. The implant belongs to the spatial component. Parameters declared by
+both components, such as ``thresh_percept``, stay independent.

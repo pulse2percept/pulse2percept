@@ -1527,7 +1527,7 @@ class ImageStimulus(Stimulus):
             A :py:class:`pathlib.Path` is accepted wherever a filename is.
             ``metadata['source']`` is always a string.
 
-    resize : (height, width) or None, optional
+    resize : ``(height, width)`` or None, optional
         Shape of the resized image. If one of the dimensions is set to -1,
         its value will be inferred by keeping a constant aspect ratio.
 
@@ -1917,16 +1917,15 @@ class ImageStimulus(Stimulus):
             *  'minimum': Threshold image based on the minimum method, where
                           the histogram of the input image is computed and
                           smoothed until there are only two maxima.
-            *  'local': Threshold image based on `local pixel neighborhood`_.
-                        Requires ``block_size``: odd number of pixels in the
-                        neighborhood.
-            *  'otsu': `Otsu's method`_
-            *  'isodata': `ISODATA method`_, also known as the Ridler-Calvard 
-                          method or intermeans.
-
-        .. _local pixel neighborhood: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_local
-        .. _Otsu's method: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_otsu
-        .. _ISODATA method: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata
+            *  'local': Threshold image based on `local pixel neighborhood
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_local>`__.
+               Requires ``block_size``: odd number of pixels in the
+               neighborhood.
+            *  'otsu': `Otsu's method
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_otsu>`__
+            *  'isodata': `ISODATA method
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata>`__,
+               also known as the Ridler-Calvard method or intermeans.
 
         Returns
         -------
@@ -2078,18 +2077,17 @@ class ImageStimulus(Stimulus):
             Image filter. Additional parameters can be passed as keyword
             arguments. The following filters are supported:
 
-            *  'sobel': Edge filter the image using the `Sobel filter`_.
-            *  'scharr': Edge filter the image using the `Scharr filter`_.
-            *  'canny': Edge filter the image using the `Canny algorithm`_.
+            *  'sobel': Edge filter the image using the `Sobel filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel>`__.
+            *  'scharr': Edge filter the image using the `Scharr filter
+               <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr>`__.
+            *  'canny': Edge filter the image using the `Canny algorithm
+               <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>`__.
                You can also specify ``sigma``, ``low_threshold``,
                ``high_threshold``, ``mask``, and ``use_quantiles``.
             *  'median': Return local median of the image.
         **kwargs :
             Additional parameters passed to the filter
-
-        .. _Sobel filter: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.sobel
-        .. _Scharr filter: https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.scharr
-        .. _Canny algorithm: https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny
 
         Returns
         -------
@@ -2302,7 +2300,7 @@ class VideoStimulus(Stimulus):
         For a full list of supported formats, see
         https://imageio.readthedocs.io/en/stable/formats.html.
 
-    resize : (height, width) or None, optional, default: None
+    resize : ``(height, width)`` or None, optional, default: None
         A tuple specifying the desired height and the width of each video frame
 
     as_gray : bool, optional

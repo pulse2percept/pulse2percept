@@ -16,14 +16,15 @@ def parse_3d_orient(orient, orient_mode='direction'):
     orient : np.ndarray with shape (3) or (3, 3)
         Orientation of the electrode in 3D space.
         orient can be:
-            - A length 3 vector specifying the direction that the 
-              thread should extend in (if orient_mode == 'direction')
-            - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation 
-              in degrees (or as angle quantities) about each axis
-              (x rotation performed first). (If orient_mode == 'angle')
-            - 3D rotation matrix, specifying the direction that the thread 
-              should extend in (i.e. a unit vector in the z direction will
-              point in the direction after being rotated by this matrix)
+
+        - A length 3 vector specifying the direction that the
+          thread should extend in (if orient_mode == 'direction')
+        - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation
+          in degrees (or as angle quantities) about each axis
+          (x rotation performed first). (If orient_mode == 'angle')
+        - 3D rotation matrix, specifying the direction that the thread
+          should extend in (i.e. a unit vector in the z direction will
+          point in the direction after being rotated by this matrix)
     orient_mode : str
         If 'direction', orient is a vector specifying the direction that the
         electrode should extend in. If 'angle', orient is a vector of 3 angles,

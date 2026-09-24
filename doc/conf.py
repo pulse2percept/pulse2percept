@@ -38,6 +38,8 @@ extensions = [
     "sphinx_gallery.gen_gallery",
     "versionwarning.extension",
     "IPython.sphinxext.ipython_directive",
+    # Provides :rc:, used by docstrings HTMLAnimation inherits from matplotlib
+    "matplotlib.sphinxext.roles",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx.ext.extlinks",
     "sphinx.ext.mathjax",
@@ -47,6 +49,15 @@ extensions = [
 ]
 
 autosummary_generate = True
+# Their public API is re-exported by the parent package, whose page is indexed.
+# Indexing both makes short type names (e.g. ``Quantity``) ambiguous.
+autosummary_context = {
+    "no_index_modules": [
+        "pulse2percept.percepts.base",
+        "pulse2percept.topography.base",
+        "pulse2percept.units.base",
+    ],
+}
 autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
@@ -57,13 +68,17 @@ todo_include_todos = True
 source_suffix = ".rst"
 master_doc = "index"
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "**/.ipynb_checkpoints"]
+# "**/" requires a parent directory, so the top-level folder needs its own entry
+exclude_patterns = ["_build", ".ipynb_checkpoints", "**/.ipynb_checkpoints"]
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
 
-intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "matplotlib": ("https://matplotlib.org/stable", None),
+}
 
 # Sphinx-Gallery: keep execution on (your examples produce images),
 # but never fail the build if an example hiccups.
@@ -75,9 +90,8 @@ sphinx_gallery_conf = {
     "thumbnail_size": (320, 224),
     "remove_config_comments": True,
     "subsection_order": ExplicitOrder([
+        "../examples/workflows",
         "../examples/models",
-        "../examples/vision",
-        "../examples/datasets",
     ]),
     "only_warn_on_example_error": True,
 }

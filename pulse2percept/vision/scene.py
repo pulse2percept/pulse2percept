@@ -463,10 +463,10 @@ class Scene(PrettyPrint):
         :py:class:`~pulse2percept.stimuli.ImageStimulus` or a
         :py:class:`~pulse2percept.stimuli.VideoStimulus`, such as a file name
         or a NumPy array, is handed to ``ImageStimulus``.
-    fov : float or (width, height)
+    fov : float or ``(width, height)``
         Size of the viewing window, in degrees of visual angle, centered on
         the fovea (e.g. ``40 * dva``). A scalar is a square window.
-    extent : float or (left, right, bottom, top), optional
+    extent : float or ``(left, right, bottom, top)``, optional
         Where the source sits in scene coordinates, in dva. A scalar is the
         span of the shorter source dimension, centered with square pixels
         (e.g., ``45 * dva`` on a 173 x 320 source is 83.2 x 45 dva). If None,
@@ -581,7 +581,7 @@ class Scene(PrettyPrint):
 
         Parameters
         ----------
-        fov : float or (width, height), optional
+        fov : float or ``(width, height)``, optional
             Viewing window, in dva. The default 45 dva is a 45 x 45 dva disc.
         **kwargs :
             Any other :py:class:`~pulse2percept.vision.Scene` argument.

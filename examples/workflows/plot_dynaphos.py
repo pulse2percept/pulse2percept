@@ -4,20 +4,16 @@
 van der Grinten et al. (2023): Cortical phosphene dynamics
 ===============================================================================
 
-A cortical phosphene does not switch on and stay on. [vanderGrinten2023]_
-models it as the output of a charge-accumulation process: stimulation drives a
-tissue activation trace, the trace has to cross a threshold before anything is
-seen, and brightness then follows the trace through a sigmoid. The consequence
-is that phosphene brightness rises over a few hundred milliseconds and then
-fades under sustained stimulation, and that weak stimulation produces nothing
-at all.
+[vanderGrinten2023]_ models a cortical phosphene as the output of charge
+accumulation: stimulation drives a tissue activation trace, the trace must
+cross a threshold, and brightness follows it through a sigmoid. Brightness
+therefore rises over a few hundred ms, fades under sustained stimulation, and
+stays at zero for weak stimulation.
 
-This example applies
-:py:class:`~pulse2percept.models.cortex.DynaphosModel` to an
-:py:class:`~pulse2percept.implants.cortex.Orion` epicortical array and
-reproduces the brightness-over-time family of Fig. 3 of that paper. The
-reference implementation is available `here
-<https://github.com/neuralcodinglab/dynaphos>`_.
+This example applies :py:class:`~pulse2percept.models.cortex.DynaphosModel`
+to an :py:class:`~pulse2percept.implants.cortex.Orion` epicortical array and
+reproduces the brightness-over-time family of Fig. 3. The authors' reference
+implementation is `on GitHub <https://github.com/neuralcodinglab/dynaphos>`_.
 """
 # sphinx_gallery_thumbnail_number = 3
 
@@ -33,10 +29,9 @@ from pulse2percept.stimuli import BiphasicPulseTrain
 # Where the array sits
 # --------------------
 #
-# Unlike the retinal models, Dynaphos is a single composite model rather than
-# separable spatial and temporal components, and it is defined for V1 only.
-# Phosphenes are small compared with the simulated field, so the visual field
-# is sampled finely:
+# Dynaphos is one composite model, not separate spatial and temporal
+# components, and covers V1 only. Phosphenes are small relative to the field,
+# so the grid is fine (0.05 dva):
 
 implant = Orion()
 model = DynaphosModel(implant=implant, step=0.05)
@@ -45,15 +40,14 @@ model.build()
 model.plot(show_implant=True)
 
 ###############################################################################
-# Each electrode maps to one visual-field location through cortical
-# retinotopy, so the array's arrangement on cortex is not the arrangement of
-# the phosphenes it produces.
+# Cortical retinotopy distorts the array layout: the phosphene arrangement
+# differs from the electrode arrangement on cortex.
 #
 # The percept of a sustained train
 # --------------------------------
 #
-# Dynaphos requires stimuli with a time course. Here every electrode receives
-# the same 300 Hz, 0.17 ms biphasic pulse train at 100 uA for 2 s:
+# Dynaphos requires stimuli with a time course. Every electrode receives the
+# same biphasic pulse train: 300 Hz, 0.17 ms phases, 100 uA, 2 s:
 
 stim = {e: BiphasicPulseTrain(amp=100, freq=300, phase_dur=0.17,
                               stim_dur=2000)
@@ -66,9 +60,8 @@ plt.imshow(percept.max(axis='frames'), cmap='gray')
 plt.title('Brightest frame')
 
 ###############################################################################
-# Following the brightest pixel over time shows the accumulate-then-fade
-# behavior the model is built around: brightness peaks early and decays while
-# stimulation continues.
+# The brightest pixel over time peaks early and decays while stimulation
+# continues:
 
 delivered = implant.prepare_stim(stim)
 brightness = percept.data.max(axis=(0, 1))
@@ -90,10 +83,9 @@ fig.tight_layout()
 # Brightness over time vs amplitude (Fig. 3)
 # ------------------------------------------
 #
-# Repeating a shorter 166 ms train across stimulation amplitudes reproduces the
-# family of brightness traces in Fig. 3 of [vanderGrinten2023]_. Low amplitudes
-# never cross the tissue activation threshold ``a_thr`` and produce no
-# phosphene at all:
+# A 166 ms train at 10-100 uA reproduces the traces of Fig. 3 in
+# [vanderGrinten2023]_. Low amplitudes never cross the activation threshold
+# ``a_thr`` and produce no phosphene:
 
 amps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 t_percept = np.arange(0, 700, 20)
@@ -127,24 +119,20 @@ fig.tight_layout()
 # Correspondence with the publication
 # -----------------------------------
 #
-# The curves above are the **generated percept brightness**, which is bounded
-# by phosphene size and by the tissue activation threshold.
-# [vanderGrinten2023]_ plots the model's **internal brightness state**, and
-# draws it dashed at the time points where activation stayed below threshold
-# and no phosphene was generated. The two agree where a phosphene exists;
-# below threshold this figure reads zero where the paper's reads a dashed
-# continuation.
+# These curves show percept brightness. [vanderGrinten2023]_ plots the
+# model's internal brightness state, dashed where activation is below
+# threshold. The two agree where a phosphene exists; below threshold this
+# figure shows zero where the paper shows a dashed line.
 #
 # What this does not establish
 # ----------------------------
 #
-# * Dynaphos is calibrated against phosphene reports from a small number of
-#   participants with cortical implants, and its brightness is in arbitrary
-#   units.
-# * The model covers V1 only. V2 and V3 stimulation is not represented.
-# * Cortical retinotopy here is the population-average
+# * Dynaphos is calibrated against reports from a few participants with
+#   cortical implants. Brightness is in arbitrary units.
+# * V1 only; V2 and V3 stimulation is not modeled.
+# * Retinotopy is the population-average
 #   :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`. Individual
-#   retinotopy varies substantially and changes where every phosphene lands.
-# * Stimulating all 60 Orion electrodes simultaneously is a modeling
-#   convenience; real systems raster their electrodes and interactions between
-#   simultaneously stimulated sites are not modeled.
+#   retinotopy varies substantially.
+# * All 60 electrodes are stimulated simultaneously for simplicity. Real
+#   systems raster their electrodes, and interactions between simultaneously
+#   stimulated sites are not modeled.

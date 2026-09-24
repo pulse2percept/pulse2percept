@@ -135,7 +135,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
         Returns
         -------
-        group : (n_electrodes,) int array
+        group : ``(n_electrodes,)`` int array
             The group each electrode belongs to, in ``0..n_groups-1``.
 
         """
@@ -262,7 +262,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
         Returns
         -------
-        offset : (n_electrodes,) float array
+        offset : ``(n_electrodes,)`` float array
             Time (ms) between the start of a sweep and the start of this
             electrode's slot.
 
