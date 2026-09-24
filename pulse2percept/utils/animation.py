@@ -441,6 +441,20 @@ def _title_geometry(title, width, height, dpi):
     }
 
 
+def _layer_rect(bbox, height):
+    """``[left, top, width, height]`` canvas pixels of a display bbox"""
+    left, right = int(np.floor(bbox.x0)), int(np.ceil(bbox.x1))
+    top, bottom = int(np.floor(height - bbox.y1)), \
+        int(np.ceil(height - bbox.y0))
+    return [left, top, max(1, right - left), max(1, bottom - top)]
+
+
+def _overlap(a, b):
+    """Whether two ``[left, top, width, height]`` rects share any pixel"""
+    return (a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and
+            a[1] < b[1] + b[3] and b[1] < a[1] + a[3])
+
+
 #: One animated image: the artist (``image``), its frames as an (Y, X[, C], T)
 #: array (``data``), and which of those frames each display frame shows
 #: (``index``, or None to advance one frame per display frame).
@@ -562,6 +576,13 @@ _PLAYER = Template("""
   });
 
   function draw() {
+    // Frames with an alpha channel are composited onto the static
+    // background, so the previous frame has to go first or they stack up.
+    // All layers are cleared before any is drawn: layers may overlap.
+    cfg.layers.forEach(function (layer) {
+      ctx.clearRect(layer.rect[0], layer.rect[1], layer.rect[2],
+                    layer.rect[3]);
+    });
     cfg.layers.forEach(function (layer, k) {
       var sheet = sheets[k];
       if (!sheet.complete || !sheet.naturalWidth) { return; }
@@ -570,10 +591,6 @@ _PLAYER = Template("""
       var f = layer.map ? layer.map[frame] : frame;
       var col = f % layer.ncols, row = (f - col) / layer.ncols;
       ctx.imageSmoothingEnabled = layer.smooth;
-      // Frames with an alpha channel are composited onto the static
-      // background, so the previous frame has to go first or they stack up:
-      ctx.clearRect(layer.rect[0], layer.rect[1], layer.rect[2],
-                    layer.rect[3]);
       ctx.drawImage(sheet, col * layer.sw, row * layer.sh, layer.fw, layer.fh,
                     layer.rect[0], layer.rect[1], layer.rect[2],
                     layer.rect[3]);
@@ -780,20 +797,22 @@ class HTMLAnimation(FuncAnimation):
             return self._intervals
         return np.full(n_frames, float(self._interval))
 
-    def _layer_config(self, layer, bbox, height):
-        """Where one animated image sits, and how its frames are packed"""
-        left, right = int(np.floor(bbox.x0)), int(np.ceil(bbox.x1))
-        top, bottom = int(np.floor(height - bbox.y1)), \
-            int(np.ceil(height - bbox.y0))
-        rect = [left, top, max(1, right - left), max(1, bottom - top)]
+    def _layer_config(self, layer, rect, overlaid):
+        """Where one animated image sits, and how its frames are packed
+
+        ``overlaid`` says whether it is drawn over an earlier layer, in which
+        case RGBA frames stay PNG: JPEG would flatten them to opaque.
+        """
         im = layer.image
         data, index = layer.data, layer.index
         if index is not None:
             # Frames no display frame lands on stay out of the sheet. The
             # compacted copy is dropped once the sheet is encoded:
             data, index = _compact_frames(data, index)
+        rgba = np.ndim(data) == 4 and np.shape(data)[-2] == 4
+        fmt = 'png' if rgba and overlaid else self._fmt
         sheet = _sprite_sheet(data, im.norm, im.cmap, (rect[3], rect[2]),
-                              self._fmt, bg_color=_bg_color(im.axes))
+                              fmt, bg_color=_bg_color(im.axes))
         return {
             'src': (f'data:{sheet["mime"]};base64,'
                     f'{base64.b64encode(sheet["data"]).decode("ascii")}'),
@@ -837,10 +856,13 @@ class HTMLAnimation(FuncAnimation):
                 title = _title_geometry(title_artist, width, height, fig.dpi)
         finally:
             title_artist.set_text(old_title)
+        rects = [_layer_rect(bbox, height) for bbox in boxes]
+        overlaid = [any(_overlap(rect, below) for below in rects[:k])
+                    for k, rect in enumerate(rects)]
         config = {
             'n': self._n_frames,
-            'layers': [self._layer_config(layer, bbox, height)
-                       for layer, bbox in zip(self._layers, boxes)],
+            'layers': [self._layer_config(*args)
+                       for args in zip(self._layers, rects, overlaid)],
             # The player advances frame by frame, so it needs every delay;
             # the scalar is kept for whoever reads the config:
             'interval': float(np.mean(intervals)),

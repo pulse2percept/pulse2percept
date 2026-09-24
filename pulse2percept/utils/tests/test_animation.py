@@ -624,6 +624,36 @@ def test_HTMLAnimation_layers():
                      True)
 
 
+@pytest.mark.parametrize('fmt', ('png', 'jpg'))
+def test_HTMLAnimation_overlapping_layers(fmt):
+    """A transparent layer drawn over another one must not hide it"""
+    fig, ax = plt.subplots()
+    frames = np.random.rand(6, 8, 3)
+    overlay = np.zeros((6, 8, 4, 1), dtype=np.float32)
+    overlay[2, :, :, 0] = (1, 0, 0, 1)
+    images = [ax.imshow(np.zeros((6, 8)), cmap='gray', vmin=0, vmax=1),
+              ax.imshow(overlay[..., 0])]
+    plt.close(fig)
+    html = HTMLAnimation(fig, lambda i: images, iter(range(3)), save_count=3,
+                         image=images, frame_data=[frames, overlay],
+                         frame_index=[None, [0, 0, 0]], fmt=fmt).to_jshtml()
+    cfg, (under, over) = parse_layers(html)
+    npt.assert_equal(cfg['layers'][0]['rect'], cfg['layers'][1]['rect'])
+    # The top layer keeps its alpha even when the frames under it are JPEG:
+    npt.assert_equal(under.format, 'JPEG' if fmt == 'jpg' else 'PNG')
+    npt.assert_equal((over.format, over.mode), ('PNG', 'RGBA'))
+    alpha = tile(cfg['layers'][1], over, 0)[..., 3]
+    npt.assert_equal(alpha[2].min(), 255)
+    npt.assert_equal(np.delete(alpha, 2, axis=0).max(), 0)
+    # Every layer is cleared before any is drawn, so a later layer's clear
+    # cannot erase an earlier layer's frame:
+    draw = re.search(r'function draw\(\) \{(.*?)\n  \}', html, re.S).group(1)
+    loops = [m.start() for m in re.finditer(r'cfg\.layers\.forEach', draw)]
+    npt.assert_equal(len(loops), 2)
+    npt.assert_equal(loops[0] < draw.index('clearRect') < loops[1] <
+                     draw.index('drawImage'), True)
+
+
 def test_HTMLAnimation_layers_agree_on_frame_count():
     src = np.random.rand(4, 5, 3)
     percept = np.random.rand(6, 6, 4)

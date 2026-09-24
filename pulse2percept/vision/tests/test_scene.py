@@ -581,8 +581,10 @@ def test_grid_is_centered_on_the_fovea_so_it_follows_gaze():
     scene = ramp_scene()
     ax = drawn_on_fresh_axes(scene, gaze=(3, -2) * dva, rings=True,
                              meridians=True)
+    # Automatic rings stop at the frame edge nearest the fovea (17.5 dva
+    # away), so the 20-degree ring of a centered gaze is left out:
     npt.assert_almost_equal(ring_radii(ax, center=(3, -2)),
-                            [1.25, 2.5, 5, 10, 20], decimal=6)
+                            [1.25, 2.5, 5, 10], decimal=6)
     for start, _ in meridian_ends(ax):
         npt.assert_almost_equal(start, (3, -2))
     npt.assert_array_equal(ax.images[-1].get_array(),
@@ -1231,8 +1233,11 @@ def test_rings_still_land_on_the_fovea_the_aperture_is_centered_on():
     xs, ys = ring.get_xdata(), ring.get_ydata()
     npt.assert_almost_equal([xs.min(), xs.max()], [-3.0, 17.0], decimal=6)
     npt.assert_almost_equal([ys.min(), ys.max()], [-13.0, 7.0], decimal=6)
-    # The outermost ring `rings=True` asks for sits inside that same boundary:
-    npt.assert_almost_equal(scene._grid_geometry(True, False)[0].max(), 20.0)
+    # The outermost ring `rings=True` asks for sits inside both the aperture
+    # and the frame, wherever gaze points:
+    for gaze, outermost in (((0, 0), 20.0), ((7, -3), 10.0)):
+        radii = scene._grid_geometry(True, False, gaze)[0]
+        npt.assert_almost_equal(radii.max(), outermost)
     plt.close('all')
 
 

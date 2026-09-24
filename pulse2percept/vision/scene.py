@@ -1168,7 +1168,7 @@ class Scene(PrettyPrint):
             Eccentricity rings (dva) about the fovea, which ``gaze`` places
             in the scene. True draws 1.25, 2.5, 5, 10, 20, ... dva, a number
             is a spacing, and a sequence is the eccentricities themselves.
-            Automatic rings stop at the largest one wholly inside the FOV.
+            Automatic rings stop at the frame edge nearest the fovea.
         meridians : bool, float, or sequence, optional
             Polar-angle meridians (geometric deg) from the fovea to the field
             edge: 0 is +x, 90 is +y, counterclockwise. True is every 45 deg,
@@ -1194,7 +1194,6 @@ class Scene(PrettyPrint):
         """
         if percept is not None:
             _check_prosthetic(percept)
-        radii, angles, extent = self._grid_geometry(rings, meridians)
         n_out = self._n_display_frames(percept)
         if not 0 <= frame < n_out:
             raise ValueError(f"'frame' must be in 0..{n_out - 1}, not "
@@ -1203,6 +1202,7 @@ class Scene(PrettyPrint):
         # One frame is drawn, so one gaze and one frame of each layer is all
         # the work there is; the others are never evaluated.
         gaze_xy = points[0] if len(points) == 1 else points[frame]
+        radii, angles, extent = self._grid_geometry(rings, meridians, gaze_xy)
         xs, ys = self._axes
         src_frame = self._source_frame(frame)
         patch = None
@@ -1243,12 +1243,15 @@ class Scene(PrettyPrint):
         self._clip_to_support(artists, gaze_xy, ax.transData)
         return ax
 
-    def _grid_geometry(self, rings, meridians):
+    def _grid_geometry(self, rings, meridians, gaze_xy):
         """Ring radii (dva), meridian angles (deg), and the frame extent"""
         width, height = self._fov
-        radii = vf.ring_radii(rings, min(width, height) / 2)
         extent = (-width / 2, width / 2, -height / 2, height / 2)
-        return radii, vf.meridian_angles(meridians), extent
+        # The nearest frame edge also bounds an elliptical aperture, whose
+        # semi-axes are fov / 2 about the same fovea:
+        r_min, r_max = vf.visible_band(gaze_xy, extent)
+        return (vf.ring_radii(rings, r_max, r_min=r_min),
+                vf.meridian_angles(meridians), extent)
 
     def play(self, gaze=None, rings=False, meridians=False,
              grid_color=vf.GRID_COLOR, ax=None, **kwargs):
@@ -1279,12 +1282,13 @@ class Scene(PrettyPrint):
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
         gaze = self._resolve_gaze(gaze)
-        radii, angles, extent = self._grid_geometry(rings, meridians)
+        points = _gaze_points(gaze, self.n_frames)
+        radii, angles, extent = self._grid_geometry(rings, meridians,
+                                                    points[0])
         # The player rasterizes its own frames, so this is display output:
         native = self.render(gaze=gaze)
         if not radii.size and not angles.size:
             return native.play(ax=ax, **kwargs)
-        points = _gaze_points(gaze, self.n_frames)
         if len(points) > 1:
             raise ValueError(
                 "Rings and meridians are centered on the fovea, so a gaze "
