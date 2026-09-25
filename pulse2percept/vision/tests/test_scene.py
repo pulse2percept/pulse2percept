@@ -1017,7 +1017,7 @@ def test_render_samples_no_coarser_than_the_step_asked_for():
 
 def test_render_leaves_the_source_alone():
     scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0,
-                       aperture='ellipse')
+                       aperture='round')
     before = scene.source.data.copy()
     bright = Percept(np.ones((SCENE_PX, SCENE_PX, 1)), space=scene._grid())
     scene.render(percept=bright, vmax=1, step=0.5)
@@ -1067,7 +1067,7 @@ def test_the_aperture_is_support_and_not_scene_data():
     # and a black source pixel cannot be confused:
     data = np.ones((21, 21))
     data[9:12, 9:12] = 0.0
-    scene = Scene(ImageStimulus(data), fov=(21, 21), aperture='ellipse')
+    scene = Scene(ImageStimulus(data), fov=(21, 21), aperture='round')
     before = scene.source.data.copy()
     drawn = scene.render().data[..., 0]
     npt.assert_array_equal(scene.source.data, before)
@@ -1181,7 +1181,7 @@ def test_the_fellow_eye_mirrors_an_asymmetric_scotoma():
     """Eye-centered anatomy is reflected; the world it looks at is not"""
     # Off both meridians, so a reflection is distinguishable from a rotation:
     scotoma = Scotoma.circle(3, center=(6, -3))
-    scene = ramp_scene(scotoma=scotoma, aperture='ellipse', background=0.25,
+    scene = ramp_scene(scotoma=scotoma, aperture='round', background=0.25,
                        scotoma_fill=0.4, scotoma_blend=1.5)
     fellow = scene.fellow_eye()
     npt.assert_equal(fellow is scene, False)
@@ -1210,14 +1210,14 @@ def test_the_fellow_eye_of_an_intact_field_is_intact_too():
     npt.assert_array_equal(fellow._native_rgb(), ramp_scene()._native_rgb())
 
 
-def ellipse_scene(**kwargs):
-    """`ramp_scene` seen through an elliptical aperture (here, a disc)"""
-    return ramp_scene(aperture='ellipse', **kwargs)
+def round_scene(**kwargs):
+    """`ramp_scene` seen through a round aperture (here, a disc)"""
+    return ramp_scene(aperture='round', **kwargs)
 
 
 def test_a_rectangular_aperture_is_the_default_and_fills_the_frame():
     scene = ramp_scene()
-    npt.assert_equal(scene.aperture, 'rectangle')
+    npt.assert_equal(scene.aperture, 'rectangular')
     npt.assert_equal('aperture' in repr(scene), False)
     # Every pixel of the rectangle still shows the ramp, corners included:
     native = scene._native_rgb()[..., 0]
@@ -1227,9 +1227,9 @@ def test_a_rectangular_aperture_is_the_default_and_fills_the_frame():
 
 def test_a_square_fov_ellipse_keeps_the_center_and_blacks_out_the_corners():
     """Blacking out is `render`'s doing: a display result, not scene data"""
-    scene = ellipse_scene()
-    npt.assert_equal(scene.aperture, 'ellipse')
-    npt.assert_equal("aperture='ellipse'" in repr(scene), True)
+    scene = round_scene()
+    npt.assert_equal(scene.aperture, 'round')
+    npt.assert_equal("aperture='round'" in repr(scene), True)
     rect = rendered(ramp_scene())[..., 0]
     circ = rendered(scene)[..., 0]
     # Inside the disc nothing changed; the four corners went black:
@@ -1245,8 +1245,8 @@ def test_a_square_fov_ellipse_keeps_the_center_and_blacks_out_the_corners():
     npt.assert_array_equal(scene._native_rgb(), ramp_scene()._native_rgb())
 
 
-@pytest.mark.parametrize('aperture', ['circle', 'circular', 'ELLIPSE', '',
-                                      None, 0, ['ellipse']])
+@pytest.mark.parametrize('aperture', ['circle', 'ellipse', 'ROUND', '',
+                                      None, 0, ['round']])
 def test_a_bad_aperture_is_refused(aperture):
     with pytest.raises(ValueError):
         ramp_scene(aperture=aperture)
@@ -1255,7 +1255,7 @@ def test_a_bad_aperture_is_refused(aperture):
 def test_an_ellipse_takes_a_semiaxis_from_each_side_of_the_field():
     """A 61 x 41 field is apertured by both dimensions, not by the shorter"""
     data = np.tile(np.linspace(0.2, 1, 61), (41, 1))
-    scene = Scene(ImageStimulus(data), fov=(61, 41), aperture='ellipse')
+    scene = Scene(ImageStimulus(data), fov=(61, 41), aperture='round')
     lit = rendered(scene)[..., 0, 0] > 0
     x, y = scene._pixel_centers()
     npt.assert_array_equal(lit, (x / 30.5) ** 2 + (y / 20.5) ** 2 <= 1)
@@ -1274,7 +1274,7 @@ def test_an_ellipse_takes_a_semiaxis_from_each_side_of_the_field():
 def test_the_aperture_is_eye_centered_and_stays_on_the_fovea():
     world = (-40.5, 40.5, -40.5, 40.5)
     scene = Scene(ImageStimulus(np.tile(np.linspace(0.2, 1, 81), (81, 1))),
-                  fov=(SCENE_PX, SCENE_PX), extent=world, aperture='ellipse')
+                  fov=(SCENE_PX, SCENE_PX), extent=world, aperture='round')
     lit = rendered(scene, gaze=(8, -5) * dva)[..., 0, 0] > 0
     x, y = np.meshgrid(*scene._view_axes())
     # The disc is inscribed in the FOV, whatever the gaze:
@@ -1283,7 +1283,7 @@ def test_the_aperture_is_eye_centered_and_stays_on_the_fovea():
 
 def test_a_transparent_background_does_not_leak_outside_the_aperture():
     """Outside the aperture is black even when the scene's ground is white"""
-    scene = Scene(rgba_source(), fov=(8, 8), background=1, aperture='ellipse')
+    scene = Scene(rgba_source(), fov=(8, 8), background=1, aperture='round')
     native = rendered(scene)[..., 0]
     npt.assert_almost_equal(native[0, 0], 0.0)
     # ... while the background still shows through inside it:
@@ -1294,7 +1294,7 @@ def test_the_aperture_does_not_change_what_a_device_is_given():
     """The critical invariant: a rendering boundary, not a sampling geometry"""
     x = np.array([-19.0, -8.0, 0.0, 6.5, 18.0, 30.0])
     y = np.array([17.0, -3.0, 0.0, 11.25, -19.0, 0.0])
-    rect, ellip = ramp_scene(), ellipse_scene()
+    rect, ellip = ramp_scene(), round_scene()
     for gaze in (None, (6, -4) * dva, (-9.5, 12) * dva):
         npt.assert_array_equal(ellip._sample_at(x, y, gaze=gaze),
                                rect._sample_at(x, y, gaze=gaze))
@@ -1308,7 +1308,7 @@ def test_the_aperture_does_not_change_what_a_device_is_given():
 def test_the_aperture_leaves_the_scotoma_alone_inside_it():
     scotoma = Scotoma.circle(6)
     rect = ramp_scene(scotoma=scotoma, scotoma_fill=0.5)
-    ellip = ramp_scene(scotoma=scotoma, scotoma_fill=0.5, aperture='ellipse')
+    ellip = ramp_scene(scotoma=scotoma, scotoma_fill=0.5, aperture='round')
     npt.assert_array_equal(ellip.scotoma(0.0, 0.0), rect.scotoma(0.0, 0.0))
     inside = np.hypot(*ellip._pixel_centers()) <= 20.5
     npt.assert_array_equal(ellip._native_rgb()[..., 0][inside],
@@ -1320,7 +1320,7 @@ def test_the_aperture_clips_a_composed_percept_only_when_it_is_drawn():
     bright = Percept(np.ones((SCENE_PX, SCENE_PX, 1)),
                      space=ramp_scene()._grid())
     rect = ramp_scene(scotoma=scotoma, scotoma_fill=0.0)
-    ellip = ramp_scene(scotoma=scotoma, scotoma_fill=0.0, aperture='ellipse')
+    ellip = ramp_scene(scotoma=scotoma, scotoma_fill=0.0, aperture='round')
     seen_rect = rendered(rect, percept=bright, vmax=1)[..., 0]
     seen_ellip = rendered(ellip, percept=bright, vmax=1)[..., 0]
     inside = np.hypot(*ellip._pixel_centers()) <= 20.5
@@ -1342,7 +1342,7 @@ def test_a_percept_can_be_plotted_in_the_context_of_the_whole_field():
     data = np.zeros((9, 9, 1))
     data[4, 4] = 20.0
     phosphene = Percept(data, space=space)
-    scene = ellipse_scene()
+    scene = round_scene()
     ax = scene.plot(percept=phosphene, vmax=20)
     wide, patch = (image.get_array() for image in ax.images)
     # Each layer keeps its own resolution:
@@ -1383,7 +1383,7 @@ def test_plotting_a_percept_over_a_scotoma_is_the_composed_view():
 
 
 def test_rings_still_land_on_the_fovea_the_aperture_is_centered_on():
-    scene = ellipse_scene()
+    scene = round_scene()
     ax = scene.plot(gaze=(7, -3) * dva, rings=[10])
     # The ring is a circle of radius 10 about the fovea at the FOV center:
     ring = ax.lines[-1]
@@ -1396,7 +1396,7 @@ def test_rings_still_land_on_the_fovea_the_aperture_is_centered_on():
 
 
 def test_the_grid_is_clipped_to_an_elliptical_aperture():
-    scene = ellipse_scene()
+    scene = round_scene()
     ax = scene.plot(gaze=(7, -3) * dva, rings=[10, 30], meridians=True)
     for artist in ax.get_lines() + list(ax.texts):
         npt.assert_equal(artist.get_clip_path() is not None, True)
@@ -1404,7 +1404,7 @@ def test_the_grid_is_clipped_to_an_elliptical_aperture():
     # The player's overlay is blanked outside the aperture, like the frames:
     frames = np.stack([np.ones((SCENE_PX, SCENE_PX))] * 2, axis=-1)
     video = Scene(VideoStimulus(frames, time=[0, 1000]),
-                  fov=(SCENE_PX, SCENE_PX), aperture='ellipse')
+                  fov=(SCENE_PX, SCENE_PX), aperture='round')
     ruled = video.play(meridians=True)._frame_data
     outside = video._aperture_mask(*video._view_axes())
     npt.assert_array_equal(ruled[outside], 0)
@@ -1414,7 +1414,7 @@ def test_the_grid_is_clipped_to_an_elliptical_aperture():
 def test_the_aperture_reaches_the_frames_the_player_shows():
     frames = np.stack([np.full((9, 9), v) for v in (0.4, 0.8)], axis=-1)
     scene = Scene(VideoStimulus(frames, time=[0, 10]), fov=(9, 9),
-                  aperture='ellipse')
+                  aperture='round')
     ani = scene.play()
     npt.assert_almost_equal(ani._frame_data[0, 0, :, 0], 0.0)
     npt.assert_almost_equal(ani._frame_data[4, 4, :, 1], 0.8, decimal=6)
@@ -1537,7 +1537,7 @@ def test_a_static_gaze_composes_every_frame_of_a_video():
 def test_an_elliptical_aperture_survives_composing_a_video():
     n = 3
     scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.0,
-                             aperture='ellipse')
+                             aperture='round')
     percept = ramped_percept(scene, n)
     seen = rendered(scene, percept=percept, vmax=1)
     npt.assert_equal(seen.shape, (SCENE_PX, SCENE_PX, 3, n))
@@ -1679,7 +1679,7 @@ def test_a_blank_scene_is_a_black_elliptical_field_by_default():
     scene = Scene.blank()
     npt.assert_equal(scene.fov, (45.0, 45.0))
     npt.assert_equal(scene.shape, (512, 512))
-    npt.assert_equal(scene.aperture, 'ellipse')
+    npt.assert_equal(scene.aperture, 'round')
     data = scene.source.data
     npt.assert_equal(np.all(np.isfinite(data)), True)
     npt.assert_array_equal(data, 0.0)
@@ -1687,8 +1687,8 @@ def test_a_blank_scene_is_a_black_elliptical_field_by_default():
 
 def test_a_blank_scene_is_an_ordinary_black_scene():
     """`blank` is convenience only, not a second Scene implementation"""
-    blank = Scene.blank(fov=45, aperture='rectangle')
-    plain = Scene(np.zeros(blank.shape), fov=45, aperture='rectangle')
+    blank = Scene.blank(fov=45, aperture='rectangular')
+    plain = Scene(np.zeros(blank.shape), fov=45, aperture='rectangular')
     npt.assert_equal(blank.fov, plain.fov)
     npt.assert_equal(blank.shape, plain.shape)
     for x, y in [(0, 0), (-10, 4), (12, -8)]:
@@ -1716,8 +1716,9 @@ def test_the_blank_raster_is_not_the_callers_business():
 
 
 def test_an_explicit_aperture_overrides_the_blank_default():
-    npt.assert_equal(Scene.blank(aperture='rectangle').aperture, 'rectangle')
-    npt.assert_equal(Scene.blank().aperture, 'ellipse')
+    npt.assert_equal(Scene.blank(aperture='rectangular').aperture,
+                     'rectangular')
+    npt.assert_equal(Scene.blank().aperture, 'round')
 
 
 def test_a_blank_scene_does_not_resample_a_finer_percept():
@@ -1861,7 +1862,7 @@ def test_gaze_moves_the_window_through_a_fixed_world():
 
 
 def test_the_aperture_is_inscribed_in_the_fov_and_stays_on_fixation():
-    scene = world_scene(aperture='ellipse')
+    scene = world_scene(aperture='round')
     x, y = np.meshgrid(*scene._view_axes())
     for gaze in ((0, 0), (10, -5)):
         lit = scene.render(gaze=gaze).data[..., 0].sum(axis=-1) > 0
@@ -1947,7 +1948,7 @@ def test_the_device_reads_the_world_outside_the_fov():
     expected = [(25 + 40) / 80, (-17 + 40) / 80, 0.0]
     scenes = [world_scene(fov=fov, aperture=aperture)
               for fov in ((21, 21), (5, 5), (81, 81))
-              for aperture in ('rectangle', 'ellipse')]
+              for aperture in ('rectangular', 'round')]
     sampled = [scene._sample_at(x, y, gaze=gaze) for scene in scenes]
     for values in sampled:
         npt.assert_almost_equal(np.ravel(values), expected, decimal=6)

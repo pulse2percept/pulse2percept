@@ -102,7 +102,7 @@ def plot_stimulus_percept(stim, percept, axes=None, figsize=None,
         The percept the model predicted.
     axes : list of two matplotlib.axes.Axes, optional
         Axes to draw into, stimulus first. If None, a new figure is created.
-    figsize : (width, height), optional
+    figsize : ``(width, height)``, optional
         Size of that new figure (in inches). Ignored if ``axes`` is given.
     titles : (str, str), optional
         Titles for the two panels.
@@ -173,7 +173,7 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
         May also be given as a unitful frequency (e.g., ``30 * Hz``).
     axes : list of two matplotlib.axes.Axes, optional
         Axes to animate in, stimulus first. If None, a new figure is created.
-    figsize : (width, height), optional
+    figsize : ``(width, height)``, optional
         Size of that new figure (in inches). Ignored if ``axes`` is given.
     titles : (str, str), optional
         Titles for the two panels.

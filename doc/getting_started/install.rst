@@ -43,25 +43,19 @@ To install the current development version directly from GitHub:
 
     pip install git+https://github.com/pulse2percept/pulse2percept
 
-or with ``uv``:
-
-.. code-block:: bash
-
-    uv pip install git+https://github.com/pulse2percept/pulse2percept
-
 This installs the latest code from the ``master`` branch. Unlike a PyPI wheel,
 a GitHub installation builds pulse2percept locally, so it requires Git and a
 working C compiler.
 
 If you plan to modify pulse2percept itself, see the
-:doc:`Developer Guide <developers/contributing>` instead. It covers cloning the
+:doc:`Developer Guide </developers/contributing>` instead. It covers cloning the
 repository, editable installs, tests, and the contribution workflow.
 
 
 Compatibility
 =============
 
-.. include:: ../README.rst
+.. include:: ../../README.rst
     :start-after: .. compat-begin
     :end-before: .. compat-end
 
@@ -75,23 +69,11 @@ Upgrade to the latest stable release with:
 
     pip install -U pulse2percept
 
-or:
-
-.. code-block:: bash
-
-    uv pip install -U pulse2percept
-
 To uninstall:
 
 .. code-block:: bash
 
     pip uninstall pulse2percept
-
-or:
-
-.. code-block:: bash
-
-    uv pip uninstall pulse2percept
 
 
 Troubleshooting

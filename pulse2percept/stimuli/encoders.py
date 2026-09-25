@@ -283,7 +283,7 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
 
         Returns
         -------
-        gray : (n_electrodes, n_frames) array
+        gray : ``(n_electrodes, n_frames)`` array
             Gray levels clipped to [0, 1].
         electrodes : array
             Electrode names.
@@ -435,7 +435,7 @@ class StimulusEncoder(Encoder):
 
         Parameters
         ----------
-        gray : (n_electrodes, n_frames) array
+        gray : ``(n_electrodes, n_frames)`` array
             Gray levels in [0, 1].
 
         Returns
@@ -510,9 +510,9 @@ class StimulusEncoder(Encoder):
 
         Returns
         -------
-        firing : (n_electrodes, n_frames) bool array
+        firing : ``(n_electrodes, n_frames)`` bool array
             Whether the pulse clock is running at all.
-        period : (n_electrodes, n_frames) float array
+        period : ``(n_electrodes, n_frames)`` float array
             The period, in ticks, or 0 where the clock is not running.
 
         """
@@ -545,7 +545,7 @@ class StimulusEncoder(Encoder):
 
         Returns
         -------
-        offset : (n_electrodes,) float array
+        offset : ``(n_electrodes,)`` float array
             How far behind group 0 (in ticks) each electrode may start a pulse.
         cycle : float or None
             The sweep in ticks. Periods that differ from one another are

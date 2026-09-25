@@ -4,16 +4,14 @@
 Beyeler et al. (2019): Phosphenes are not pixels
 ===============================================================================
 
-Simulated prosthetic vision is often drawn as a grid of independent dots, one
-per electrode. [Beyeler2019]_ tested that assumption directly: Argus I and
-Argus II users were asked to draw what they saw during single-electrode
-stimulation.
+Simulated prosthetic vision is often drawn as one dot per electrode.
+[Beyeler2019]_ tested this: Argus I and II users drew what they saw during
+single-electrode stimulation. Phosphenes were **elongated**, and oriented
+along the retinal nerve fiber bundles (NFBs) passing under the electrode.
 
-Two results follow from those drawings. Phosphenes are **elongated**, not
-round, and their orientation follows the trajectory of the retinal nerve fiber
-bundles (NFBs) passing under the stimulated electrode. This example reproduces
-both from the published data, and predicts the drawings with a
-subject-specific :py:class:`~pulse2percept.models.retina.AxonMapModel`.
+This example reproduces both results from the published data and predicts the
+drawings with a subject-specific
+:py:class:`~pulse2percept.models.retina.AxonMapModel`.
 
 .. important ::
 
@@ -39,17 +37,15 @@ from pulse2percept.units import um
 # The measured drawings
 # ---------------------
 #
-# The dataset contains 400 drawings. Each row is one trial: the stimulated
-# electrode, the subject, the binary drawing itself, and shape descriptors
-# measured from it. We work with Subject 2:
+# The dataset contains 400 drawings. Each row is one trial: electrode,
+# subject, binary drawing, and shape descriptors. This example uses subject S2:
 
 data = fetch_beyeler2019(subjects='S2')
 
 ###############################################################################
-# [Beyeler2019]_ reports S2's Argus II as implanted at ``(-1331, -850)`` um
-# with a rotation of -28.4 degrees, and the optic disc center 16.2 degrees
-# nasally and 1.38 degrees superior to the fovea. Those four numbers are the
-# subject-specific anatomy everything below depends on:
+# [Beyeler2019]_ reports S2's Argus II at ``(-1331, -850)`` um, rotated
+# -28.4 deg, with the optic disc center 16.2 dva nasal and 1.38 dva superior
+# to the fovea:
 
 argus = ArgusII(eye='right')
 implant_position = (-1331, -850) * um
@@ -65,17 +61,16 @@ model = AxonMapModel(argus, loc_od=loc_od)
 plot_argus_phosphenes(data, argus, axon_map=model)
 
 ###############################################################################
-# Phosphenes are not round, and they are not oriented arbitrarily: each one
-# runs along the bundle that passes under its electrode. Stimulating an
-# electrode activates passing axons, not just the cells beneath it.
+# Each phosphene runs along the bundle under its electrode: stimulation
+# activates passing axons, not only the cells beneath the electrode.
 #
 # Predicting the drawings
 # -----------------------
 #
-# The axon map model formalizes that: current spreads by ``rho`` across
-# bundles and by ``lam`` along them. [Beyeler2019]_ fit both per subject; for
-# S2, ``rho = 315`` um and ``lam = 500`` um. ``thresh_percept`` is set to
-# :math:`1/\sqrt{e}`, the contour at which the paper measured phosphene shape.
+# In the axon map model, activation spreads by ``rho`` across bundles and by
+# ``lam`` along them. The per-subject fits for S2 are ``rho = 315`` um and
+# ``lam = 500`` um. ``thresh_percept`` is :math:`1/\sqrt{e}`, the contour at
+# which the paper measured shape.
 
 model = AxonMapModel(implant=argus, rho=315, lam=500, loc_od=loc_od,
                      implant_position=implant_position,
@@ -101,20 +96,15 @@ ax_data.set_title('Drawn by S2')
 ax_sim.set_title('Predicted by the axon map model')
 
 ###############################################################################
-# The predicted phosphenes reproduce the orientation and elongation of the
-# drawings across the array, which is the claim the model was built to support.
-# Individual sizes are not expected to match trial by trial: ``rho`` and
-# ``lam`` are single per-subject fits, and the drawings themselves vary between
-# repetitions of the same electrode.
+# The predictions reproduce the orientation and elongation of the drawings.
+# Sizes do not match trial by trial: ``rho`` and ``lam`` are per-subject fits,
+# and drawings vary across repetitions of the same electrode.
 #
 # Elongation across all subjects
 # ------------------------------
 #
-# If phosphenes were pixels, their elongation would cluster at zero. The
-# dataset ships the shape descriptors measured from each drawing, so the claim
-# can be checked on all 400 trials at once. ``eccentricity`` here is the shape
-# descriptor from the computer-vision literature -- 0 is a circle, 1 an
-# infinitesimally thin line -- and has nothing to do with retinal eccentricity:
+# Round phosphenes would cluster at zero elongation. ``eccentricity`` is the
+# shape descriptor (0: circle, 1: line), not retinal eccentricity:
 
 all_data = fetch_beyeler2019()
 all_data.eccentricity.plot(kind='hist')

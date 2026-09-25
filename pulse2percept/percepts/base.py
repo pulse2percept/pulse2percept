@@ -909,7 +909,7 @@ class Percept(Data):
         ----------
         fname : str
             Output filename. The extension determines the file format.
-        shape : (height, width), optional
+        shape : ``(height, width)``, optional
             Output size in pixels. Either dimension may be ``None`` to preserve
             the percept's aspect ratio.
         fps : float, optional

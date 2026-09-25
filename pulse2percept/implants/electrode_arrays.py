@@ -126,7 +126,7 @@ class ElectrodeArray(PrettyPrint):
 
         Returns
         -------
-        coords : (n_electrodes, 3) np.ndarray
+        coords : ``(n_electrodes, 3)`` np.ndarray
             One ``[x, y, z]`` row per electrode
 
         Examples

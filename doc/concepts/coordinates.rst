@@ -4,8 +4,8 @@
 Coordinates and Visual Field Maps
 =================================
 
-A simulation moves between four coordinate systems. Keeping them apart is what
-lets device geometry, anatomy, and the visual world be specified independently.
+A simulation uses four coordinate systems, so device geometry, anatomy, and
+the visual world can be specified independently.
 
 .. list-table::
    :header-rows: 1
@@ -20,8 +20,8 @@ lets device geometry, anatomy, and the visual world be specified independently.
        device, wherever it is implanted.
    * - Tissue
      - um
-     - Retinal or cortical position. The fovea for the retina; V1 anatomy for
-       cortex.
+     - Retinal or cortical position, measured from the fovea or its cortical
+       representation.
    * - Visual field
      - dva
      - Eye-centered. The fovea is ``(0, 0)``; this is where phosphenes and a
@@ -31,16 +31,14 @@ lets device geometry, anatomy, and the visual world be specified independently.
      - Fixed to the world in front of the eye; related to the visual field by
        gaze.
 
-Degrees of visual angle are not a length, and a length is not an angle:
-``dva`` does not convert to ``um`` without a
-:py:class:`~pulse2percept.topography.VisualFieldMap` (see
+``dva`` and ``um`` convert only through a
+:py:class:`~pulse2percept.topography.VisualFieldMap`, never directly (see
 :ref:`topics-units`).
 
 Device to tissue: placement
 ---------------------------
 
-Electrode coordinates are device-local, so placing a device is a model
-parameter rather than a device attribute:
+Electrode coordinates are device-local. The model places the device:
 
 .. code-block:: python
 
@@ -62,17 +60,17 @@ parameter rather than a device attribute:
 ``implant_depth``
     Signed offset (um) along the normal of a 2D tissue map.
 
-The same array can therefore be placed in different eyes, different subjects,
-or different cortical positions without rebuilding the device.
+Retinal positions are measured from the fovea. Cortical positions are
+measured from the foveal representation of the right hemisphere; the left
+hemisphere is offset by ``left_offset`` (default -20 mm) along x.
 
 Tissue to visual field: the maps
 --------------------------------
 
-A :py:class:`~pulse2percept.topography.VisualFieldMap` converts between visual
-field and tissue. Every map provides ``from_dva`` and, where the mapping is
-invertible, ``to_dva``; retinal maps expose them as ``dva_to_ret`` and
-``ret_to_dva``, and cortical maps as ``dva_to_v1`` / ``v1_to_dva`` and the
-corresponding V2 and V3 pairs.
+A :py:class:`~pulse2percept.topography.VisualFieldMap` converts between
+visual field and tissue: ``dva_to_ret`` / ``ret_to_dva`` for retinal maps,
+``dva_to_v1`` / ``v1_to_dva`` (and V2, V3) for cortical maps. The inverse
+exists only where the mapping is invertible.
 
 .. code-block:: python
 
@@ -80,7 +78,7 @@ corresponding V2 and V3 pairs.
 
     x_um, y_um = Watson2014Map().dva_to_ret(2 * dva, 3 * dva)
 
-A model holds one map, samples the visual field on a
+A model holds one map (``visual_field_map``), samples the visual field on a
 :py:class:`~pulse2percept.topography.Grid2D`, and maps that grid onto tissue
 during ``build``.
 
@@ -132,9 +130,9 @@ under each map:
         ax.axis('equal')
     fig.tight_layout()
 
-:py:class:`~pulse2percept.topography.retina.Montesano2020Map` additionally
-separates where a ganglion cell's *body* sits from where its receptive field
-looks, which matters within roughly 15 dva of the fovea:
+:py:class:`~pulse2percept.topography.retina.Montesano2020Map` also
+separates the position of a ganglion cell body from that of its receptive
+field, which differ within about 15 dva of the fovea:
 
 .. plot::
 
@@ -161,28 +159,27 @@ looks, which matters within roughly 15 dva of the fovea:
     ax.legend(title='retinal meridian')
     fig.tight_layout()
 
-The displacement zone reaches 14.1 dva temporally and superiorly, 10.5 dva
-inferiorly, and 9.5 dva nasally. Displacement is reconstructed from
-[Montesano2020]_ in degrees of visual angle, then converted to retinal microns
-with ``Watson2014Map``, which keeps the tissue coordinates consistent with the
-other retinal maps. The field represents population-average anatomy from
-[Montesano2020]_ and [Curcio1990]_, not subject-specific retinal anatomy. The
-deprecated ``Watson2014DisplaceMap`` uses horizontal-meridian fits across
-entire hemifields and provides no reverse mapping.
+*  The displacement zone reaches 14.1 dva temporally and superiorly,
+   10.5 dva inferiorly, and 9.5 dva nasally.
+*  Displacement is reconstructed from [Montesano2020]_ in dva, then converted
+   to microns with ``Watson2014Map`` for consistency with the other retinal
+   maps.
+*  It is population-average anatomy ([Montesano2020]_, [Curcio1990]_), not
+   subject-specific.
+*  The deprecated ``Watson2014DisplaceMap`` uses horizontal-meridian fits
+   across entire hemifields and has no inverse.
 
 Laterality
 ~~~~~~~~~~
 
-The visual field mirrors the retina, so anatomical laterality has to be
-stated. ``eye`` on a
-:py:class:`~pulse2percept.implants.retina.RetinalImplant` records the
-implanted eye; models read it to place the optic disc, and
+The visual field is mirrored on the retina. In a right eye, a retinal
+meridian lies at the negated visual-field polar angle: nasal retina maps to
+the temporal visual field. ``eye`` on a
+:py:class:`~pulse2percept.implants.retina.RetinalImplant` sets where models
+place the optic disc.
 :py:class:`~pulse2percept.topography.retina.Montesano2020Map` takes its own
-``eye`` because its displacement field is meridian-dependent. The left-eye map
-is the horizontal mirror of the right-eye map.
-
-In a right eye, a retinal meridian sits at the negated visual-field polar
-angle: nasal retina is the temporal visual field.
+``eye``, because its displacement field depends on the meridian; the left-eye
+map is the horizontal mirror of the right-eye map.
 
 Cortical maps
 ~~~~~~~~~~~~~
@@ -228,21 +225,17 @@ Cortical maps derive from
     fig.tight_layout()
 
 :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` has six
-parameters: the global scale ``k``, wedge-dipole parameters ``a`` and ``b``,
-and azimuthal shear parameters ``alpha1``, ``alpha2`` and ``alpha3`` for
-V1-V3. The defaults come from [Polimeni2006]_, but cortical retinotopy varies
-substantially across people.
+parameters: global scale ``k``, wedge-dipole parameters ``a`` and ``b``, and
+azimuthal shear ``alpha1``, ``alpha2``, ``alpha3`` for V1-V3. Defaults are from
+[Polimeni2006]_; individual retinotopy varies substantially.
 
-:py:class:`~pulse2percept.topography.cortex.NeuropythyMap` provides an
-individualized mapping where subject anatomy is available. It requires the
-optional ``neuropythy`` package (``pip install neuropythy``) and a subject:
-``'fsaverage'``, a subject from the Benson-Winawer 2018 dataset
-(``'S1201'``-``'S1208'``), or a FreeSurfer subject directory. Unless the data
-is already cached, the first use downloads it. Unlike the other maps it also
-takes a cortical surface (``'midgray'`` by default, or ``'white'``,
-``'pial'``), and its points are genuinely three-dimensional, so
-:py:meth:`~pulse2percept.topography.Grid2D.plot3d` is the honest way to
-look at them.
+:py:class:`~pulse2percept.topography.cortex.NeuropythyMap` gives
+subject-specific retinotopy. It requires the optional ``neuropythy`` package
+(``pip install neuropythy``) and a subject: ``'fsaverage'``, a Benson-Winawer
+2018 subject (``'S1201'``-``'S1208'``), or a FreeSurfer subject directory.
+Subject data is downloaded on first use. It also takes a cortical surface
+(``'midgray'`` by default, ``'white'``, or ``'pial'``); its points are 3D, so
+plot them with :py:meth:`~pulse2percept.topography.Grid2D.plot3d`.
 
 .. code-block:: python
 
@@ -255,11 +248,9 @@ look at them.
 Subject-specific phosphene locations
 ------------------------------------
 
-A map describes a canonical relationship between tissue and visual-field
-location. An individual phosphene may appear somewhere else. ``location_noise``
-models that variability without changing the underlying ``visual_field_map``.
-
-For electrode :math:`i`, pulse2percept draws a fixed visual-field offset:
+A map gives the canonical visual-field location of each electrode; measured
+phosphenes scatter around it. ``location_noise`` (dva) adds a fixed random
+offset per electrode:
 
 .. math::
 
@@ -267,9 +258,8 @@ For electrode :math:`i`, pulse2percept draws a fixed visual-field offset:
    \qquad
    \boldsymbol{\epsilon}_i \sim \mathcal{N}(0, \sigma^2 I),
 
-where :math:`\mathbf{p}_i` is the canonical phosphene location and
-:math:`\sigma` is ``location_noise`` in dva. The offsets remain fixed for a
-model instance.
+where :math:`\mathbf{p}_i` is the canonical location and :math:`\sigma` is
+``location_noise``. Offsets are drawn once per model instance.
 
 .. plot::
 
@@ -297,40 +287,30 @@ model instance.
         ax.set_title(title)
     fig.tight_layout()
 
-The phosphenes move; they do not change shape. On cortex the same is true of
-coherence but not of size: a displaced electrode samples a different cortical
-magnification, so its phosphene covers a different extent of the visual field.
-
-``location_noise`` changes the predicted percept, not the physical electrode
-locations or the canonical visual-field map. It requires an invertible map, so
-one without an inverse (such as the deprecated ``Watson2014DisplaceMap``) is
-not supported.
+Retinal phosphenes move without changing shape. On cortex, a displaced
+electrode samples a different cortical magnification, so its phosphene size
+changes too. Electrode positions and the map are unchanged. ``location_noise``
+requires an invertible map.
 
 Visual field to scene: gaze
 ---------------------------
 
-Visual-field coordinates are eye-centered and scene coordinates are fixed to
-the world, so the two differ by gaze::
-
-    (x_scene, y_scene) = (x_eye, y_eye) + (x_gaze, y_gaze)
-
-Each electrode therefore follows this chain::
+Scene coordinates are eye-centered coordinates plus gaze. Each electrode
+follows this chain::
 
     device coordinate (um)
       -> implant_position / rotation / depth -> tissue coordinate (um)
       -> visual_field_map.ret_to_dva -> eye-centered visual field (dva)
       -> + gaze, for eye-coupled input only -> scene coordinate (dva)
 
-What ``gaze`` does and does not move is covered in :ref:`topics-vision`.
+See :ref:`topics-vision` for what gaze moves.
 
 Custom maps
 -----------
 
 A custom retinal map subclasses
 :py:class:`~pulse2percept.topography.retina.RetinalMap` and implements
-``dva_to_ret``. Provide ``ret_to_dva`` as well when the mapping can be
-inverted; features such as ``location_noise`` and scene registration require
-it.
+``dva_to_ret``. ``location_noise`` and scenes also require ``ret_to_dva``.
 
 .. code-block:: python
 

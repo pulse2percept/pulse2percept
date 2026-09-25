@@ -4,14 +4,13 @@
 Horsager et al. (2009): Temporal sensitivity of the epiretinal percept
 ===============================================================================
 
-How much current does it take to see something? The answer depends on how the
-charge is delivered in time. [Horsager2009]_ measured detection thresholds in
-Argus I users while varying pulse duration and pulse-train frequency, and fit
-a cascade of linear filters and a nonlinearity to the result.
+Detection threshold depends on how charge is delivered in time.
+[Horsager2009]_ measured thresholds in Argus I users while varying pulse
+duration and pulse-train frequency, and fit a cascade of linear filters and a
+nonlinearity.
 
-This example reproduces Figs. 3B and 4B of that paper: threshold current as a
-function of pulse duration, and as a function of stimulation frequency, for
-Subject S05 on electrode C3.
+This example reproduces Figs. 3B and 4B: threshold current against pulse
+duration and against frequency, for subject S05, electrode C3.
 """
 # sphinx_gallery_thumbnail_number = 2
 
@@ -27,12 +26,11 @@ from pulse2percept.stimuli import BiphasicPulse, BiphasicPulseTrain
 # What the model does
 # -------------------
 #
-# The model is purely temporal: it describes one stimulated location's response
-# over time, so it needs no implant. Brightness rises over roughly 100 ms and
-# then decays over seconds, and it is this integration window that makes
+# The model is temporal only, so it needs no implant. Brightness rises over
+# about 100 ms and decays over seconds; this integration window makes
 # threshold depend on pulse timing.
 #
-# A single cathodic-first biphasic pulse, 0.075 ms per phase at 180 uA:
+# A single cathodic-first biphasic pulse, 0.075 ms per phase, 180 uA:
 
 model = Horsager2009Temporal()
 model.build()
@@ -59,16 +57,11 @@ fig.tight_layout()
 # Defining threshold
 # ------------------
 #
-# Behaviorally, threshold is the amplitude detected on 50% of trials. The model
-# has no notion of trials: [Horsager2009]_ instead assumes threshold is reached
-# when the peak model response equals a constant :math:`\theta`, fit per
-# subject and electrode. The dataset ships that :math:`\theta` alongside each
-# measured threshold.
-#
-# Finding the threshold is therefore a one-dimensional root search over
-# stimulus amplitude, not a model operation: rebuild the stimulus at each
-# candidate amplitude and solve for the one whose peak response is
-# :math:`\theta`.
+# Behavioral threshold is the amplitude detected on 50% of trials.
+# [Horsager2009]_ equates it with the amplitude at which the peak model
+# response reaches a constant :math:`\theta`, fit per subject and electrode
+# and included in the dataset. Threshold is then a 1D root search over
+# amplitude:
 
 
 def threshold_amp(make_stim, theta, amp_range=(0, 300)):
@@ -85,8 +78,7 @@ def threshold_amp(make_stim, theta, amp_range=(0, 300)):
 # Threshold vs pulse duration (Fig. 3B)
 # -------------------------------------
 #
-# Longer pulses need less current, because the charge is spread across more of
-# the integration window. Each measured condition is re-simulated at its own
+# Longer pulses need less current. Each condition is simulated at its
 # published pulse and interphase duration:
 
 single_pulse = load_horsager2009(subjects='S05', electrodes='C3',
@@ -115,10 +107,9 @@ plt.title('Fig. 3B: S05, electrode C3')
 # Threshold vs frequency (Fig. 4B)
 # --------------------------------
 #
-# For pulse trains of fixed total duration, higher frequencies deliver more
-# pulses into the same window, so less current per pulse is needed. The same
-# root search applies, with the stimulus now a
-# :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`:
+# At fixed train duration, higher frequencies deliver more pulses into the
+# integration window, so less current per pulse is needed. The stimulus is now
+# a :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`:
 
 fixed_dur = load_horsager2009(subjects='S05', electrodes='C3',
                               stim_types='fixed_duration')
@@ -144,23 +135,18 @@ plt.legend()
 plt.title('Fig. 4B: S05, electrode C3, 0.075 ms pulses')
 
 ###############################################################################
-# Both curves follow the measured thresholds across roughly two orders of
-# magnitude in pulse duration and frequency, using the published per-electrode
-# :math:`\theta` and no further fitting here.
+# Both curves follow the measured thresholds over about two orders of
+# magnitude, using the published :math:`\theta` without further fitting.
 #
 # What this does not establish
 # ----------------------------
 #
-# * The model is temporal only. It predicts *when* a percept reaches
-#   threshold, not where it appears or what shape it has.
+# * Temporal only: no phosphene location or shape.
 # * :math:`\theta` and the filter parameters were fit per subject and
-#   electrode in [Horsager2009]_. Thresholds for a new electrode are not
-#   predicted without comparable measurements.
-# * Thresholds were measured on Argus I with cathodic-first pulses in a small
-#   number of subjects; brightness above threshold is not modeled here.
-# * The paper's remaining conditions -- bursting pulse triplets, variable
-#   duration trains, and the latent-addition stimuli of the supplement -- use
-#   the same procedure with
-#   :py:class:`~pulse2percept.stimuli.BiphasicTripletTrain`, an
-#   ``n_pulses``-limited pulse train, and appended
-#   :py:class:`~pulse2percept.stimuli.MonophasicPulse` objects respectively.
+#   electrode; thresholds for a new electrode require comparable data.
+# * Measured on Argus I, cathodic-first pulses, few subjects. Brightness
+#   above threshold is not modeled here.
+# * The paper's other conditions use the same procedure: bursting triplets
+#   (:py:class:`~pulse2percept.stimuli.BiphasicTripletTrain`), variable
+#   duration trains (``n_pulses``), and latent addition (appended
+#   :py:class:`~pulse2percept.stimuli.MonophasicPulse` objects).
