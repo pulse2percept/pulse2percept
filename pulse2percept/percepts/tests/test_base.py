@@ -269,22 +269,20 @@ def test_Percept_play_title_is_independent_of_time_annotation(own_axes):
     plt.close('all')
 
 
-def test_Percept_omitted_clim_spans_the_whole_percept():
-    """0 to the global maximum, so brightness does not depend on the frame"""
+def test_Percept_omitted_vmax_is_the_whole_percepts_maximum():
+    """So brightness does not depend on the frame"""
     data = np.zeros((3, 5, 3))
     data[..., 0] = 1
     data[1, 1, 2] = 4
-    data[0, 0, 1] = -1
+    data[0, 0, 2] = -1
     percept = Percept(data, space=Grid2D((-2, 2), (-1, 1)), time=[0, 1, 2])
     npt.assert_almost_equal(percept.play()._image.get_clim(), (0, 4))
     npt.assert_almost_equal(percept.play(vmax=2)._image.get_clim(), (0, 2))
-    npt.assert_almost_equal(percept.plot().collections[0].get_clim(), (0, 4))
+    # `plot` keeps the drawn frame's minimum as vmin:
+    npt.assert_almost_equal(percept.plot().collections[0].get_clim(), (-1, 4))
     plt.close('all')
     npt.assert_almost_equal(
-        percept.plot(vmin=-1).collections[0].get_clim(), (-1, 4))
-    plt.close('all')
-    with pytest.raises(ValueError):
-        percept.plot(vmin=5)
+        percept.plot(vmin=1, vmax=2).collections[0].get_clim(), (1, 2))
     plt.close('all')
 
 

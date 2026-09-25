@@ -11,6 +11,7 @@ from skimage.restoration import inpaint_biharmonic
 from .gaze import Gaze, _gaze_points
 from .scotoma import Scotoma
 from ..percepts import Percept
+from ..percepts.base import _resolve_clim
 from ..stimuli import ImageStimulus, VideoStimulus
 from ..topography import Grid2D
 from ..units import Quantity, as_value, dimensionless, dva, ms
@@ -270,18 +271,15 @@ def _inpaint_rgb(image, mask):
 def _check_range(data, vmin, vmax):
     """Brightness limits for displaying ``data``, omitted ones filled in
 
-    Omitted limits are 0 and the maximum over all of ``data`` (as in
-    `_resolve_clim`), so every frame shares one scale.
+    Omitted limits are 0 and the maximum over all of ``data``, so every frame
+    shares one scale.
     """
     auto = vmax is None
-    vmin = 0.0 if vmin is None else float(vmin)
-    vmax = float(np.max(data)) if auto else float(vmax)
-    if not np.isfinite([vmin, vmax]).all():
-        raise ValueError(f"'vmin' ({vmin}) and 'vmax' ({vmax}) must be "
-                         f"finite.")
-    if vmax <= vmin and auto:
-        raise ValueError(f"The percept's maximum brightness ({vmax:g}) is "
-                         f"not above 'vmin' ({vmin:g}). Pass 'vmax'.")
+    vmin, vmax = _resolve_clim(data, vmin, vmax, auto_vmin=0)
+    if auto and vmax == vmin:
+        # A constant percept at vmin. Any positive span maps it to black, as
+        # Matplotlib does for vmin == vmax:
+        return vmin, vmin + 1.0
     if vmax <= vmin:
         raise ValueError(f"'vmax' ({vmax}) must be greater than 'vmin' "
                          f"({vmin}); the percept is in arbitrary brightness "
@@ -1276,7 +1274,7 @@ class Scene(PrettyPrint):
     def play(self, gaze=None, rings=False, meridians=False,
              grid_color=vf.GRID_COLOR, ax=None, *, percept=None, vmax=None,
              vmin=None, fps=None, repeat=True, annotate_time=True,
-             colorbar=True, fmt='png', title=None):
+             fmt='png', title=None):
         """Animate a video scene, optionally with a prosthetic percept
 
         Shows the frames :py:meth:`~pulse2percept.vision.Scene.render`
@@ -1308,10 +1306,6 @@ class Scene(PrettyPrint):
         fps, repeat, annotate_time, fmt, title : optional
             Player options, as in
             :py:meth:`~pulse2percept.percepts.Percept.play`.
-        colorbar : bool, optional
-            Accepted for parity with
-            :py:meth:`~pulse2percept.percepts.Percept.play`. The displayed
-            frames are RGB, so no colorbar is drawn.
 
         Returns
         -------
@@ -1329,7 +1323,7 @@ class Scene(PrettyPrint):
                               vmin=vmin)
         # Brightness scaling is done by `render`; the player gets RGB:
         player = dict(fps=fps, repeat=repeat, annotate_time=annotate_time,
-                      ax=ax, colorbar=colorbar, fmt=fmt, title=title)
+                      ax=ax, fmt=fmt, title=title)
         if not radii.size and not angles.size:
             return display.play(**player)
         if len(points) > 1:

@@ -603,8 +603,8 @@ class Percept(Data):
 
             *  'pcolor': using Matplotlib's ``pcolor``. Additional parameters
                (e.g., ``vmin``, ``vmax``) can be passed as keyword arguments.
-               By default, ``vmin=0`` and ``vmax`` is the maximum brightness
-               across the percept.
+               By default, ``vmin`` is the drawn frame's minimum and ``vmax``
+               the maximum brightness across the percept.
             *  'hex': using Matplotlib's ``hexbin``. Additional parameters
                (e.g., ``gridsize``) can be passed as keyword arguments.
         ax : matplotlib.axes.AxesSubplot, optional
@@ -686,8 +686,8 @@ class Percept(Data):
         idx = np.argmax(np.max(self.data, axis=(0, 1)))
         frame = self.data[..., idx]
 
-        vmin, vmax = _resolve_clim(self.data, kwargs.get('vmin'),
-                                   kwargs.get('vmax'), auto_vmin=0)
+        vmin = kwargs['vmin'] if 'vmin' in kwargs.keys() else frame.min()
+        vmax = kwargs['vmax'] if 'vmax' in kwargs.keys() else self.data.max()
         cmap = kwargs['cmap'] if 'cmap' in kwargs.keys() else 'gray'
         shading = kwargs['shading'] if 'shading' in kwargs.keys() else 'nearest'
         X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')

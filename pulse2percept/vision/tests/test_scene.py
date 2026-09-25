@@ -771,15 +771,16 @@ def test_play_keeps_its_positional_arguments():
 @pytest.mark.parametrize('rings', [False, [3]])
 def test_play_passes_its_player_options_explicitly(played, rings):
     scene = video_scene()
-    options = dict(fps=2, repeat=False, annotate_time=False, colorbar=False,
-                   fmt='jpg', title='PRIMA')
+    options = dict(fps=2, repeat=False, annotate_time=False, fmt='jpg',
+                   title='PRIMA')
     ani = scene.play(rings=rings, **options)
     npt.assert_equal(played['kwargs'], {**options, 'ax': None})
     npt.assert_equal(ani._fig._suptitle.get_text(), 'PRIMA')
     npt.assert_equal(ani._labels, None)
     # No catch-all: an unknown option is not silently forwarded
-    with pytest.raises(TypeError):
-        scene.play(cmap='hot')
+    for name in ('cmap', 'colorbar'):
+        with pytest.raises(TypeError):
+            scene.play(**{name: False})
     plt.close('all')
 
 
@@ -803,14 +804,18 @@ def test_an_omitted_vmax_is_the_whole_percepts_maximum():
     clipped = scene.play(percept=percept, vmax=1)._frame_data
     auto = scene.play(percept=percept)._frame_data
     npt.assert_equal(np.abs(clipped - auto).max() > 0.1, True)
-    # A blank percept has no maximum above vmin to use:
+    # A blank percept is drawn blank, as with any vmax above 0:
     blank = Percept(np.zeros_like(percept.data), space=Grid2D((-8, 8), (-8, 8),
                                                               step=1),
                     time=percept.time, metadata=percept.metadata)
+    npt.assert_array_equal(scene.play(percept=blank)._frame_data,
+                           scene.play(percept=blank, vmax=1)._frame_data)
+    auto = scene.plot(percept=blank).images[1].get_array()
+    fixed = scene.plot(percept=blank, vmax=1).images[1].get_array()
+    npt.assert_array_equal(auto, fixed)
+    # ... but an explicit empty range is still refused:
     with pytest.raises(ValueError):
-        scene.play(percept=blank)
-    npt.assert_equal(scene.play(percept=blank, vmax=1)._frame_data.shape,
-                     scene.play(percept=percept)._frame_data.shape)
+        scene.plot(percept=blank, vmin=0, vmax=0)
     plt.close('all')
 
 

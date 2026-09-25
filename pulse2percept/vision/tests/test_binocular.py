@@ -145,6 +145,26 @@ def test_two_percepts_stay_two_percepts():
     plt.close('all')
 
 
+def test_an_omitted_vmax_is_shared_by_both_eyes():
+    """One automatic scale, so the two eyes' brightness stays comparable"""
+    left, right = flat_scene(0.0), flat_scene(0.0)
+    binocular = BinocularScene(left=left, right=right)
+    dim = spot_percept(left, x_dva=-6.0, brightness=5.0)
+    bright = spot_percept(right, x_dva=6.0, brightness=10.0)
+    ax_left, ax_right = binocular.plot(left_percept=dim, right_percept=bright)
+    npt.assert_almost_equal(ax_left.images[-1].get_array()[HALF, HALF - 6],
+                            [0.5] * 3, decimal=6)
+    npt.assert_almost_equal(ax_right.images[-1].get_array()[HALF, HALF + 6],
+                            [1.0] * 3, decimal=6)
+    plt.close('all')
+    # Blank percepts in both eyes are drawn black, not refused:
+    blank = spot_percept(left, brightness=0.0)
+    ax_left, ax_right = binocular.plot(left_percept=blank, right_percept=blank)
+    npt.assert_almost_equal(ax_left.images[-1].get_array(), 0.0)
+    npt.assert_almost_equal(ax_right.images[-1].get_array(), 0.0)
+    plt.close('all')
+
+
 def test_each_eye_keeps_its_own_aperture():
     """Support is geometry, so each panel is clipped to its own shape"""
     left = flat_scene(0.6, aperture='ellipse')

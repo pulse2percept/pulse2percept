@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .scene import Scene
+from .scene import Scene, _check_prosthetic
 from ..stimuli import ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
 
@@ -191,7 +191,7 @@ class BinocularScene(PrettyPrint):
             :py:meth:`~pulse2percept.vision.Scene.plot`.
         vmax : float, optional
             The percept brightness that displays as white, shared by both
-            eyes. Required whenever either percept is given.
+            eyes. Defaults to the maximum across both percepts.
         vmin : float, optional
             The percept brightness that displays as black. Defaults to 0.
         axes : sequence of two matplotlib.axes.Axes, optional
@@ -214,6 +214,14 @@ class BinocularScene(PrettyPrint):
         if len(axes) != 2:
             raise ValueError(f"'axes' must be one axes per eye (2 of them), "
                              f"not {len(axes)}.")
+        percepts = [p for p in (left_percept, right_percept) if p is not None]
+        for percept in percepts:
+            _check_prosthetic(percept)
+        if vmax is None and percepts:
+            # One scale for both eyes, so their brightness is comparable. Both
+            # constant at vmin is left to `Scene.plot`, which draws it black:
+            shared = max(np.max(p.data) for p in percepts)
+            vmax = shared if shared > vmin else None
         drawn = []
         for ax, label, scene, percept in zip(axes, ('left', 'right'),
                                              (self.left, self.right),
