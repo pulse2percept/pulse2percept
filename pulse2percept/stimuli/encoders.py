@@ -95,7 +95,15 @@ class _EncodedStimulus(Stimulus):
         self._defer(electrodes, unit=amp_unit)
         self.metadata['encoder'] = {'frame_time': self._frame_time,
                                     'frame_dur': self._frame_dur,
-                                    'cycle': cycle}
+                                    'cycle': cycle, **self._source_clock()}
+
+    def _source_clock(self):
+        """Source-video frame onsets and duration (ms); empty for a still"""
+        # Electrical pulse trains are scheduled per source frame.
+        if self._frame_time.size < 2:
+            return {}
+        return {'source_frame_time': self._frame_time,
+                'source_frame_dur': self._frame_dur}
 
     @property
     def _firing(self):
@@ -113,7 +121,8 @@ class _EncodedStimulus(Stimulus):
         else:
             stim = Stimulus(data.ravel(), electrodes=self.electrodes)
         stim.metadata['encoder'] = {'frame_time': self._frame_time,
-                                    'frame_dur': self._frame_dur}
+                                    'frame_dur': self._frame_dur,
+                                    **self._source_clock()}
         return stim._inherit_units(self)
 
     def _rebuilt(self, electrodes, amp, sched, freq, amp_unit=None):
@@ -1211,11 +1220,12 @@ class _OpticalStimulus(Stimulus):
 
     __slots__ = ('_dur', '_ticks', '_onsets', '_irradiance', '_freq',
                  '_wavelength', '_grayscale', '_total', '_ref_drive',
-                 '_static', '_frame_time', '_frame_dur', '_time')
+                 '_static', '_frame_time', '_frame_dur', '_time',
+                 '_source_time', '_source_dur')
 
     def __init__(self, electrodes, dur, ticks, onsets, irradiance, freq,
                  wavelength, grayscale, total, static, frame_time, frame_dur,
-                 ref_drive):
+                 ref_drive, source_time=None, source_dur=None):
         irradiance = float(irradiance)
         # Rebuilt/scaled schedules must also have physical irradiance.
         if not math.isfinite(irradiance) or irradiance < 0:
@@ -1235,14 +1245,27 @@ class _OpticalStimulus(Stimulus):
         self._static = bool(static)
         # The time-averaged irradiance `_spatial_view` calls 1.0:
         self._ref_drive = float(ref_drive)
+        # Projector clock (pulse periods), not the source-video clock:
         self._frame_time = self._own(frame_time, np.float64)
         self._frame_dur = float(frame_dur)
+        # Source-video frame onsets and duration (ms); None for a still:
+        self._source_time = (None if source_time is None else
+                             self._own(source_time, np.float64))
+        self._source_dur = None if source_dur is None else float(source_dur)
         # Built lazily without rendering the waveform:
         self._time = None
         self._defer(electrodes, unit=_IRRADIANCE)
         # Metadata stores frame timing; optical settings remain schedule state.
         self.metadata['encoder'] = {'frame_time': self._frame_time,
-                                    'frame_dur': self._frame_dur}
+                                    'frame_dur': self._frame_dur,
+                                    **self._source_clock()}
+
+    def _source_clock(self):
+        """Source-video frame onsets and duration (ms); empty for a still"""
+        if self._source_time is None:
+            return {}
+        return {'source_frame_time': self._source_time,
+                'source_frame_dur': self._source_dur}
 
     @property
     def wavelength(self):
@@ -1305,7 +1328,8 @@ class _OpticalStimulus(Stimulus):
             stim = _NormalizedStimulus(drive, electrodes=self.electrodes,
                                        time=self._frame_time)
         stim.metadata['encoder'] = {'frame_time': self._frame_time,
-                                    'frame_dur': self._frame_dur}
+                                    'frame_dur': self._frame_dur,
+                                    **self._source_clock()}
         return stim
 
     def _rebuilt(self, electrodes, dur, irradiance):
@@ -1313,7 +1337,8 @@ class _OpticalStimulus(Stimulus):
         rebuilt = _OpticalStimulus(
             electrodes, dur, self._ticks, self._onsets, irradiance, self._freq,
             self._wavelength, self._grayscale, self._total, self._static,
-            self._frame_time, self._frame_dur, self._ref_drive)
+            self._frame_time, self._frame_dur, self._ref_drive,
+            self._source_time, self._source_dur)
         rebuilt.metadata['user'] = deepcopy(self.metadata.get('user'))
         return rebuilt
 
@@ -1589,7 +1614,8 @@ class PhotovoltaicEncoder(Encoder):
             electrodes, dur, ticks, onsets, self.irradiance, self.freq,
             self.wavelength, self.grayscale, total, static,
             np.zeros(1) if static else onset_ms,
-            total if static else period, self.ref_drive)
+            total if static else period, self.ref_drive,
+            None if static else frame_time, None if static else frame_dur)
 
 
 class PRIMAEncoder(PhotovoltaicEncoder):

@@ -397,12 +397,14 @@ class Ho2018Spatial(ScoreboardSpatial):
             # Before the first pulse and after the stimulus ends, nothing is
             # delivered; holding the nearest period would invent light.
             resp[..., (at < 0) | (time >= stim.duration)] = 0
-        # `_frame_clock` reads this to put a temporal stage on the pulse clock.
+        # Drive stays on the pulse clock. `_frame_clock` reports a video on
+        # its source clock and a still image on the pulse clock.
         return Percept(resp, space=self.grid, time=time,
                        time_unit=self.time_unit, n_gray=self.n_gray,
                        metadata={'stim': stim,
                                  'encoder': {'frame_time': t_pulse,
-                                             'frame_dur': 1e3 / stim.freq}})
+                                             'frame_dur': 1e3 / stim.freq,
+                                             **stim._source_clock()}})
 
 
 class Ho2018Model(Model):
