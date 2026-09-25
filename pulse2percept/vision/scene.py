@@ -36,8 +36,8 @@ _RECTANGLE = 'rectangle'
 _ELLIPSE = 'ellipse'
 
 # Backing raster of a blank scene. Fixed: it is a display raster only, and
-# making it configurable would let it set the aspect ratio a scalar `fov`
-# resolves against. `Scene.render` chooses a render raster of its own.
+# making it configurable would let it set the aspect ratio the inferred
+# `extent` follows. `Scene.render` chooses a render raster of its own.
 _BLANK_SHAPE = (512, 512)
 
 
@@ -1159,8 +1159,9 @@ class Scene(PrettyPrint):
         Parameters
         ----------
         percept : :py:class:`~pulse2percept.percepts.Percept`, optional
-            A brightness percept to place in this field, positioned by
-            ``gaze``. With a scotoma it is composed into the loss as
+            An eye-centered brightness percept, drawn at its visual-field
+            coordinates within the FOV. With a scotoma it is composed into
+            the loss as
             ``(1 - loss) * native + loss * max(scotoma_fill, phosphene)``;
             with none it is rendered alone on black, because superimposing it
             on intact native vision would assert an unmodeled interaction.
@@ -1257,8 +1258,8 @@ class Scene(PrettyPrint):
         grid_color : color, optional
             Matplotlib color of rings, meridians, and ring labels.
         percept : :py:class:`~pulse2percept.percepts.Percept`, optional
-            A brightness percept to draw in this field, placed by ``gaze`` and
-            drawn at its own resolution over the source.
+            An eye-centered brightness percept, drawn at its visual-field
+            coordinates at its own resolution over the source.
         vmax : float, optional
             The percept brightness that displays as white. Defaults to the
             maximum brightness across the whole ``percept``.
@@ -1305,7 +1306,7 @@ class Scene(PrettyPrint):
                 wide = self._native_on(xs, ys, gaze=gaze_xy,
                                        frame=src_frame)[..., 0]
         still = Percept(wide[..., np.newaxis], space=self._grid())
-        ax = still.plot(ax=ax, **kwargs)
+        ax = self._label_fov(still.plot(ax=ax, **kwargs))
         artists = [ax.images[-1]]
         if patch is not None:
             # `imshow` must not renegotiate the limits the wide layer set:
@@ -1318,6 +1319,19 @@ class Scene(PrettyPrint):
         artists += vf.draw(ax, radii, angles, (0, 0), extent,
                            color=grid_color)
         self._clip_to_support(artists, ax.transData)
+        return ax
+
+    def _label_fov(self, ax):
+        """Set limits and ticks to the FOV's outer edges
+
+        `Percept` limits its axes to the outermost pixel centers, which would
+        clip half of each edge pixel.
+        """
+        left, right, bottom, top = self._view_extent
+        ax.set_xlim(left, right)
+        ax.set_xticks(np.linspace(left, right, num=5))
+        ax.set_ylim(bottom, top)
+        ax.set_yticks(np.linspace(bottom, top, num=5))
         return ax
 
     def _grid_geometry(self, rings, meridians):
@@ -1379,7 +1393,7 @@ class Scene(PrettyPrint):
         player = dict(fps=fps, repeat=repeat, annotate_time=annotate_time,
                       ax=ax, fmt=fmt, title=title)
         if not radii.size and not angles.size:
-            return display.play(**player)
+            return self._fov_player(display.play(**player))
         # Painted into the displayed frames rather than left as an artist
         # behind the player's canvas, which would hide them. Eye-centered, so
         # one overlay holds for any gaze:
@@ -1397,4 +1411,10 @@ class Scene(PrettyPrint):
         decorated = Percept(_over(display.data, overlay),
                             space=_raster_grid(xs, ys),
                             time=display.time, time_unit=display.time_unit)
-        return decorated.play(**player)
+        return self._fov_player(decorated.play(**player))
+
+    def _fov_player(self, ani):
+        """Show the full FOV in a player; its crop is read from the axes when
+        the HTML is built"""
+        self._label_fov(ani._image.axes)
+        return ani

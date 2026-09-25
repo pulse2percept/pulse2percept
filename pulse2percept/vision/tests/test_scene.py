@@ -1149,7 +1149,7 @@ def test_plot_draws_native_vision_where_the_eye_is_pointing():
                             decimal=6)
     # Row 0 of the drawn array is the top of the field, and the axes say dva:
     npt.assert_equal(ax.images[-1].origin, 'upper')
-    npt.assert_almost_equal(ax.get_xlim(), (-HALF, HALF))
+    npt.assert_almost_equal(ax.get_xlim(), (-HALF - 0.5, HALF + 0.5))
     npt.assert_equal('degrees of visual angle' in ax.get_xlabel(), True)
     plt.close('all')
 
@@ -1902,14 +1902,20 @@ def test_render_plot_and_play_show_the_same_window():
                         scotoma=Scotoma.circle(3), scotoma_fill=0.2)
     gaze = [(10, -5), (-17, 12)]
     rendered_frames = scene.render(gaze=gaze).data
-    npt.assert_array_equal(scene.play(gaze=gaze)._frame_data,
-                           rendered_frames)
+    # The full 21-degree FOV, edge pixels included:
+    fov = (-10.5, 10.5)
+    for grid in ({}, {'rings': [5]}):
+        ani = scene.play(gaze=gaze, **grid)
+        if not grid:
+            npt.assert_array_equal(ani._frame_data, rendered_frames)
+        npt.assert_almost_equal(ani._image.axes.get_xlim(), fov)
+        npt.assert_almost_equal(ani._image.axes.get_ylim(), fov)
     for f in range(2):
         ax = scene.plot(gaze=gaze, frame=f, ax=plt.subplots()[1])
         npt.assert_almost_equal(ax.images[0].get_array(),
                                 rendered_frames[..., f], decimal=6)
-        npt.assert_almost_equal(ax.get_xlim(), (-10, 10))
-        npt.assert_almost_equal(ax.get_ylim(), (-10, 10))
+        npt.assert_almost_equal(ax.get_xlim(), fov)
+        npt.assert_almost_equal(ax.get_ylim(), fov)
     plt.close('all')
 
 
@@ -1949,6 +1955,23 @@ def test_the_device_reads_the_world_outside_the_fov():
     npt.assert_array_equal(
         world_scene(fov=(5, 5))._device_input(x, y, gaze=gaze),
         world_scene(fov=(81, 81))._device_input(x, y, gaze=gaze))
+
+
+def test_gaze_finds_a_source_placed_off_center():
+    """Nothing recenters the source: it is where `extent` puts it"""
+    source = np.random.default_rng(0).uniform(0.1, 1.0, (21, 21))
+    # Pixel centers at scene x = 30..50, y = -10..10:
+    scene = Scene(ImageStimulus(source), fov=(21, 21),
+                  extent=(29.5, 50.5, -10.5, 10.5))
+    # Straight ahead there is nothing:
+    npt.assert_array_equal(scene.render().data, 0.0)
+    # Looking at its center shows all of it, one for one:
+    npt.assert_almost_equal(scene.render(gaze=(40, 0)).data[..., 0, 0],
+                            source, decimal=6)
+    # Looking at its left edge shows its left half on the right of the FOV:
+    seen = scene.render(gaze=(30, 0)).data[..., 0, 0]
+    npt.assert_array_equal(seen[:, :10], 0.0)
+    npt.assert_almost_equal(seen[:, 10:], source[:, :11], decimal=6)
 
 
 def test_a_fov_past_the_edge_of_the_world_is_black():
