@@ -110,8 +110,8 @@ class BinocularScene(PrettyPrint):
             one first. Metadata is preserved in both eye images.
             Stereo video is not supported.
         fov : float or (width, height)
-            Per-eye field of view in degrees of visual angle. For a scalar FOV,
-            the vertical extent is inferred from the aspect ratio of one half
+            Per-eye field of view in degrees of visual angle. Unless
+            ``extent`` is passed, each eye's extent is inferred from one half
             of the image, not the packed stereo frame.
         **scene_kwargs :
             Additional arguments passed unchanged to both

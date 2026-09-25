@@ -180,11 +180,11 @@ def test_plot_draws_the_fixation_held_at_that_frame(frame):
     plt.close('all')
 
 
-def test_play_accepts_a_trajectory_but_still_refuses_moving_rings():
+def test_play_accepts_a_trajectory_with_or_without_rings():
     scene = video_scene()
     scene.play(gaze=trajectory())
-    with pytest.raises(ValueError):
-        scene.play(gaze=trajectory(), rings=True)
+    # Rings are eye-centered, like the displayed FOV, so they hold still:
+    scene.play(gaze=trajectory(), rings=True)
     plt.close('all')
 
 
