@@ -257,6 +257,37 @@ def test_Percept_play(n_frames):
     npt.assert_equal(f't = {percept.time[-1]:.2f} ms' in html, False)
 
 
+@pytest.mark.parametrize('own_axes', (True, False))
+def test_Percept_play_title_is_independent_of_time_annotation(own_axes):
+    percept = Percept(np.random.rand(2, 4, 3))
+    for annotate_time in (True, False):
+        ax = None if own_axes else plt.subplots()[1]
+        ani = percept.play(title='PRIMA', annotate_time=annotate_time, ax=ax)
+        npt.assert_equal(ani._fig._suptitle.get_text(), 'PRIMA')
+        npt.assert_equal(ani._labels is not None, annotate_time)
+    npt.assert_equal(percept.play()._fig._suptitle, None)
+    plt.close('all')
+
+
+def test_Percept_omitted_clim_spans_the_whole_percept():
+    """0 to the global maximum, so brightness does not depend on the frame"""
+    data = np.zeros((3, 5, 3))
+    data[..., 0] = 1
+    data[1, 1, 2] = 4
+    data[0, 0, 1] = -1
+    percept = Percept(data, space=Grid2D((-2, 2), (-1, 1)), time=[0, 1, 2])
+    npt.assert_almost_equal(percept.play()._image.get_clim(), (0, 4))
+    npt.assert_almost_equal(percept.play(vmax=2)._image.get_clim(), (0, 2))
+    npt.assert_almost_equal(percept.plot().collections[0].get_clim(), (0, 4))
+    plt.close('all')
+    npt.assert_almost_equal(
+        percept.plot(vmin=-1).collections[0].get_clim(), (-1, 4))
+    plt.close('all')
+    with pytest.raises(ValueError):
+        percept.plot(vmin=5)
+    plt.close('all')
+
+
 def test_Percept_play_single_frame():
     """A percept with a single time point has no frame rate of its own"""
     percept = Percept(np.random.rand(4, 4, 1), time=[3.5])

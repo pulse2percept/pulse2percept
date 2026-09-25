@@ -267,16 +267,21 @@ def _inpaint_rgb(image, mask):
     return np.clip(filled, 0, 1).astype(np.float32)
 
 
-def _check_range(vmin, vmax):
-    """Reject a brightness-to-display mapping that cannot be drawn"""
-    if vmax is None:
-        raise ValueError("'vmax' is required: a percept is in arbitrary "
-                         "brightness units, so nothing here can guess which "
-                         "of them displays as white.")
-    vmin, vmax = float(vmin), float(vmax)
+def _check_range(data, vmin, vmax):
+    """Brightness limits for displaying ``data``, omitted ones filled in
+
+    Omitted limits are 0 and the maximum over all of ``data`` (as in
+    `_resolve_clim`), so every frame shares one scale.
+    """
+    auto = vmax is None
+    vmin = 0.0 if vmin is None else float(vmin)
+    vmax = float(np.max(data)) if auto else float(vmax)
     if not np.isfinite([vmin, vmax]).all():
         raise ValueError(f"'vmin' ({vmin}) and 'vmax' ({vmax}) must be "
                          f"finite.")
+    if vmax <= vmin and auto:
+        raise ValueError(f"The percept's maximum brightness ({vmax:g}) is "
+                         f"not above 'vmin' ({vmin:g}). Pass 'vmax'.")
     if vmax <= vmin:
         raise ValueError(f"'vmax' ({vmax}) must be greater than 'vmin' "
                          f"({vmin}); the percept is in arbitrary brightness "
@@ -858,7 +863,7 @@ class Scene(PrettyPrint):
         """Residual native vision on the source raster, aperture not applied"""
         return self._native_on(*self._axes, gaze=gaze)
 
-    def _composed_on(self, xs, ys, prosthetic, vmax, vmin=0, gaze=None,
+    def _composed_on(self, xs, ys, prosthetic, vmax, vmin=None, gaze=None,
                      frame=None):
         """Native vision on a raster with a prosthetic percept in the loss
 
@@ -872,7 +877,7 @@ class Scene(PrettyPrint):
                 f"prosthetic percept because their interaction is not "
                 f"modeled. Use a numeric 'scotoma_fill' to compose one.")
         _check_prosthetic(prosthetic)
-        vmin, vmax = _check_range(vmin, vmax)
+        vmin, vmax = _check_range(prosthetic.data, vmin, vmax)
         pframes, out_time, out_unit = self._prosthetic_frames(prosthetic,
                                                               frame=frame)
         n_out = pframes.shape[-1]
@@ -906,7 +911,7 @@ class Scene(PrettyPrint):
         return (np.ascontiguousarray(np.moveaxis(out, 0, -1)), out_time,
                 out_unit)
 
-    def _prosthetic_on(self, xs, ys, prosthetic, vmax, vmin=0, gaze=None,
+    def _prosthetic_on(self, xs, ys, prosthetic, vmax, vmin=None, gaze=None,
                        frame=None):
         """A prosthetic percept alone on black, on a scene-coordinate raster
 
@@ -917,7 +922,7 @@ class Scene(PrettyPrint):
         one output frame, in which case ``gaze`` is the single pair for it.
         """
         _check_prosthetic(prosthetic)
-        vmin, vmax = _check_range(vmin, vmax)
+        vmin, vmax = _check_range(prosthetic.data, vmin, vmax)
         pframes, out_time, out_unit = self._prosthetic_frames(prosthetic,
                                                               frame=frame)
         n_out = pframes.shape[-1]
@@ -932,7 +937,7 @@ class Scene(PrettyPrint):
         rgb = np.repeat(scaled[:, :, np.newaxis, :], 3, axis=2)
         return np.asarray(rgb, dtype=np.float32), out_time, out_unit
 
-    def _display_on(self, xs, ys, percept=None, vmax=None, vmin=0, gaze=None,
+    def _display_on(self, xs, ys, percept=None, vmax=None, vmin=None, gaze=None,
                     frame=None):
         """Display-ready RGB on a scene-coordinate raster, and its clock
 
@@ -943,7 +948,7 @@ class Scene(PrettyPrint):
         it.
         """
         if percept is None:
-            if vmax is not None or vmin != 0:
+            if vmax is not None or vmin is not None:
                 raise ValueError("'vmin' and 'vmax' map percept brightness "
                                  "onto a display, and there is no percept "
                                  "here. Pass 'percept'.")
@@ -1078,7 +1083,7 @@ class Scene(PrettyPrint):
         return (_pixel_count(self._fov[1], step[1]),
                 _pixel_count(self._fov[0], step[0]))
 
-    def render(self, percept=None, gaze=None, vmax=None, vmin=0, step=None,
+    def render(self, percept=None, gaze=None, vmax=None, vmin=None, step=None,
                shape=None):
         """Rasterize this field onto one dense RGB percept
 
@@ -1110,8 +1115,8 @@ class Scene(PrettyPrint):
             output clock: a video scene's frame times, or a timed percept's
             for a still scene.
         vmax : float, optional
-            The percept brightness that displays as white. Required whenever
-            ``percept`` is given: brightness is in arbitrary units.
+            The percept brightness that displays as white. Defaults to the
+            maximum brightness across the whole ``percept``.
         vmin : float, optional
             The percept brightness that displays as black. Defaults to 0.
         step : float or (dx, dy), optional
@@ -1147,7 +1152,7 @@ class Scene(PrettyPrint):
                        space=_raster_grid(xs, ys), time=time, time_unit=unit)
 
     def plot(self, gaze=None, frame=0, ax=None, rings=False, meridians=False,
-             grid_color=vf.GRID_COLOR, percept=None, vmax=None, vmin=0,
+             grid_color=vf.GRID_COLOR, percept=None, vmax=None, vmin=None,
              **kwargs):
         """Plot what is left of native vision
 
@@ -1195,8 +1200,8 @@ class Scene(PrettyPrint):
             A brightness percept to draw in this field, placed by ``gaze`` and
             drawn at its own resolution over the source.
         vmax : float, optional
-            The percept brightness that displays as white. Required whenever
-            ``percept`` is given: brightness is in arbitrary units.
+            The percept brightness that displays as white. Defaults to the
+            maximum brightness across the whole ``percept``.
         vmin : float, optional
             The percept brightness that displays as black. Defaults to 0.
         **kwargs :
@@ -1270,7 +1275,8 @@ class Scene(PrettyPrint):
 
     def play(self, gaze=None, rings=False, meridians=False,
              grid_color=vf.GRID_COLOR, ax=None, *, percept=None, vmax=None,
-             vmin=0, **kwargs):
+             vmin=None, fps=None, repeat=True, annotate_time=True,
+             colorbar=True, fmt='png', title=None):
         """Animate a video scene, optionally with a prosthetic percept
 
         Shows the frames :py:meth:`~pulse2percept.vision.Scene.render`
@@ -1295,12 +1301,17 @@ class Scene(PrettyPrint):
             A brightness percept composed into the scene as in
             :py:meth:`~pulse2percept.vision.Scene.render`.
         vmax : float, optional
-            The percept brightness that displays as white. Required whenever
-            ``percept`` is given: brightness is in arbitrary units.
+            The percept brightness that displays as white. Defaults to the
+            maximum brightness across the whole ``percept``.
         vmin : float, optional
             The percept brightness that displays as black. Defaults to 0.
-        **kwargs :
-            Passed on to :py:meth:`~pulse2percept.percepts.Percept.play`.
+        fps, repeat, annotate_time, fmt, title : optional
+            Player options, as in
+            :py:meth:`~pulse2percept.percepts.Percept.play`.
+        colorbar : bool, optional
+            Accepted for parity with
+            :py:meth:`~pulse2percept.percepts.Percept.play`. The displayed
+            frames are RGB, so no colorbar is drawn.
 
         Returns
         -------
@@ -1316,8 +1327,11 @@ class Scene(PrettyPrint):
         # The player rasterizes its own frames, so this is display output:
         display = self.render(percept=percept, gaze=gaze, vmax=vmax,
                               vmin=vmin)
+        # Brightness scaling is done by `render`; the player gets RGB:
+        player = dict(fps=fps, repeat=repeat, annotate_time=annotate_time,
+                      ax=ax, colorbar=colorbar, fmt=fmt, title=title)
         if not radii.size and not angles.size:
-            return display.play(ax=ax, **kwargs)
+            return display.play(**player)
         if len(points) > 1:
             raise ValueError(
                 "Rings and meridians are centered on the fovea, so a gaze "
@@ -1334,4 +1348,4 @@ class Scene(PrettyPrint):
         # The rendered clock: a temporal percept may label frame ends.
         decorated = Percept(_over(display.data, overlay), space=self._grid(),
                             time=display.time, time_unit=display.time_unit)
-        return decorated.play(ax=ax, **kwargs)
+        return decorated.play(**player)

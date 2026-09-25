@@ -100,16 +100,16 @@ class CustomReferencesResolver(ReferencesResolver):
         # Override "any" class with the actual role type to get the styling
         # approximately correct.
         res_domain = res_role.split(':')[0]
-        if (len(newnode) > 0 and isinstance(newnode[0], nodes.Element)
-                and newnode[0].get('classes')):
+        if (len(newnode) > 0 and isinstance(newnode[0], nodes.Element) and
+                newnode[0].get('classes')):
             newnode[0]['classes'].append(res_domain)
             newnode[0]['classes'].append(res_role.replace(':', '-'))
         return newnode
 
 
 def setup(app):
-    if (hasattr(app.registry, "get_post_transforms")
-            and callable(app.registry.get_post_transforms)):
+    if (hasattr(app.registry, "get_post_transforms") and
+            callable(app.registry.get_post_transforms)):
         post_transforms = app.registry.get_post_transforms()
     else:
         # Support sphinx 1.6.*

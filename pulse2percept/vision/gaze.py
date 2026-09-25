@@ -23,26 +23,37 @@ class Gaze(PrettyPrint):
 
     Parameters
     ----------
-    positions : (n, 2) array_like
+    positions : (n, 2) or (n, 3) array_like
         Scene locations that fall on the fovea, in degrees of visual angle.
-        Unitful values are accepted.
-    time : (n,) array_like
+        Unitful values are accepted. Without ``time``, each row is
+        ``(x, y, time)``: x and y in dva, time in ms, unless unitful. Each
+        entry converts on its own, so a bare 0 needs no unit.
+    time : (n,) array_like, optional
         When each fixation begins, in milliseconds unless given as a unitful
-        time. Must be finite and strictly increasing.
+        time. Must be finite and strictly increasing. Required for ``(n, 2)``
+        positions; not allowed for ``(x, y, time)`` rows.
 
     Examples
     --------
-    >>> from pulse2percept.units import dva, ms
+    >>> from pulse2percept.units import dva, ms, s
     >>> from pulse2percept.vision import Gaze
     >>> gaze = Gaze([(0, 0), (6, 2)] * dva, time=[0, 400] * ms)
     >>> gaze.positions
     array([[0., 0.],
            [6., 2.]])
+    >>> gaze = Gaze([(0, 0, 0), (6 * dva, 2 * dva, 0.4 * s)])
+    >>> gaze.time
+    array([  0., 400.])
 
     """
     __slots__ = ('_positions', '_time', '_time_unit')
 
-    def __init__(self, positions, time):
+    def __init__(self, positions, time=None):
+        if time is None:
+            positions, time = _split_rows(positions)
+        elif _row_width(positions) == 3:
+            raise ValueError("'positions' has (x, y, time) rows and 'time' "
+                             "is given too. Pass one or the other.")
         # Copied, then frozen below: an array the caller can still mutate
         # would silently change gaze that has already been resolved.
         positions = np.array(as_value(positions, dva, 'positions'),
@@ -120,6 +131,39 @@ class Gaze(PrettyPrint):
                 f"{events[0]:g} {unit}, and this asks for {first:g} {unit}. "
                 f"Start the trajectory at or before the first frame.")
         return self.positions[idx]
+
+
+def _row_width(rows):
+    """Common length of the rows of ``rows``, or None if there is none"""
+    if isinstance(rows, Quantity):
+        rows = as_value(rows, rows.unit)
+    try:
+        widths = {len(row) for row in rows}
+    except TypeError:
+        return None
+    return widths.pop() if len(widths) == 1 else None
+
+
+def _split_rows(rows):
+    """Split ``(x, y, time)`` rows into dva positions and ms timestamps"""
+    width = _row_width(rows)
+    if width == 2:
+        raise ValueError("(x, y) positions require 'time'. Pass time=..., "
+                         "or give (x, y, time) rows.")
+    if width != 3:
+        raise ValueError("Without 'time', 'positions' must be (x, y, time) "
+                         "rows, at least one of them.")
+    if isinstance(rows, Quantity):
+        # One unit cannot be both visual angle and time:
+        raise DimensionMismatchError(
+            f"(x, y, time) rows carry one unit ({rows.unit}) for all three "
+            f"columns. Give each entry its own unit, e.g. "
+            f"(x * dva, y * dva, t * ms).")
+    rows = [tuple(row) for row in rows]
+    positions = [(as_value(x, dva, 'positions'), as_value(y, dva, 'positions'))
+                 for x, y, _ in rows]
+    time = [as_value(t, ms, 'time') for _, _, t in rows]
+    return positions, time
 
 
 def _gaze_points(gaze, n_frames, time=None, time_unit=None):

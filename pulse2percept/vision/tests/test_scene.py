@@ -768,6 +768,52 @@ def test_play_keeps_its_positional_arguments():
     plt.close('all')
 
 
+@pytest.mark.parametrize('rings', [False, [3]])
+def test_play_passes_its_player_options_explicitly(played, rings):
+    scene = video_scene()
+    options = dict(fps=2, repeat=False, annotate_time=False, colorbar=False,
+                   fmt='jpg', title='PRIMA')
+    ani = scene.play(rings=rings, **options)
+    npt.assert_equal(played['kwargs'], {**options, 'ax': None})
+    npt.assert_equal(ani._fig._suptitle.get_text(), 'PRIMA')
+    npt.assert_equal(ani._labels, None)
+    # No catch-all: an unknown option is not silently forwarded
+    with pytest.raises(TypeError):
+        scene.play(cmap='hot')
+    plt.close('all')
+
+
+def test_an_omitted_vmax_is_the_whole_percepts_maximum():
+    """Not frame-local, so one frame drawn or played keeps the global scale"""
+    scene = video_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.2,
+                        scotoma_blend=0)
+    percept = aligned_percept()
+    # Frame 0 peaks at 1, frame 1 at 3:
+    npt.assert_almost_equal(percept.data[..., 0].max(), 1)
+    npt.assert_almost_equal(percept.data.max(), 3)
+    npt.assert_array_equal(scene.play(percept=percept)._frame_data,
+                           scene.play(percept=percept, vmax=3)._frame_data)
+    for frame in (0, 1):
+        auto = scene.plot(percept=percept, frame=frame).images[1]
+        fixed = scene.plot(percept=percept, frame=frame, vmax=3,
+                           vmin=0).images[1]
+        npt.assert_array_equal(auto.get_array(), fixed.get_array())
+        plt.close('all')
+    # Explicit limits still win:
+    clipped = scene.play(percept=percept, vmax=1)._frame_data
+    auto = scene.play(percept=percept)._frame_data
+    npt.assert_equal(np.abs(clipped - auto).max() > 0.1, True)
+    # A blank percept has no maximum above vmin to use:
+    blank = Percept(np.zeros_like(percept.data), space=Grid2D((-8, 8), (-8, 8),
+                                                              step=1),
+                    time=percept.time, metadata=percept.metadata)
+    with pytest.raises(ValueError):
+        scene.play(percept=blank)
+    npt.assert_equal(scene.play(percept=blank, vmax=1)._frame_data.shape,
+                     scene.play(percept=percept)._frame_data.shape)
+    plt.close('all')
+
+
 def test_play_inherits_the_composition_rules_of_render():
     scene = video_scene(scotoma=Scotoma.circle(6), scotoma_fill='inpaint')
     with pytest.raises(ValueError) as excinfo:
@@ -1293,10 +1339,11 @@ def test_a_percept_can_be_plotted_in_the_context_of_the_whole_field():
     # ... and native vision is not underneath it, since nothing is lost here:
     npt.assert_almost_equal(wide, 0.0)
     plt.close('all')
-    # Brightness is in arbitrary units, so a display range is required:
-    with pytest.raises(ValueError):
-        scene.plot(percept=phosphene)
-    # ... and a display range with nothing to map onto it is not silently
+    # An omitted vmax is the percept's maximum:
+    auto = scene.plot(percept=phosphene).images[1].get_array()
+    npt.assert_almost_equal(auto, patch, decimal=6)
+    plt.close('all')
+    # A display range with nothing to map onto it is not silently
     # ignored, either way round:
     with pytest.raises(ValueError):
         scene.plot(vmax=20)

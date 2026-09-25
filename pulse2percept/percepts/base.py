@@ -603,6 +603,8 @@ class Percept(Data):
 
             *  'pcolor': using Matplotlib's ``pcolor``. Additional parameters
                (e.g., ``vmin``, ``vmax``) can be passed as keyword arguments.
+               By default, ``vmin=0`` and ``vmax`` is the maximum brightness
+               across the percept.
             *  'hex': using Matplotlib's ``hexbin``. Additional parameters
                (e.g., ``gridsize``) can be passed as keyword arguments.
         ax : matplotlib.axes.AxesSubplot, optional
@@ -684,8 +686,8 @@ class Percept(Data):
         idx = np.argmax(np.max(self.data, axis=(0, 1)))
         frame = self.data[..., idx]
 
-        vmin = kwargs['vmin'] if 'vmin' in kwargs.keys() else frame.min()
-        vmax = kwargs['vmax'] if 'vmax' in kwargs.keys() else frame.max()
+        vmin, vmax = _resolve_clim(self.data, kwargs.get('vmin'),
+                                   kwargs.get('vmax'), auto_vmin=0)
         cmap = kwargs['cmap'] if 'cmap' in kwargs.keys() else 'gray'
         shading = kwargs['shading'] if 'shading' in kwargs.keys() else 'nearest'
         X, Y = np.meshgrid(self.xdva, self.ydva, indexing='xy')
@@ -773,7 +775,7 @@ class Percept(Data):
 
     def play(self, fps=None, repeat=True, annotate_time=True, ax=None,
             colorbar=True, fmt='png', vmin=None, vmax=None, rings=False,
-            meridians=False, grid_color=vf.GRID_COLOR):
+            meridians=False, grid_color=vf.GRID_COLOR, title=None):
         """Animate the percept in an interactive HTML player.
 
         Parameters
@@ -803,6 +805,11 @@ class Percept(Data):
         rings, meridians, grid_color : optional
             Visual-field grid about (0, 0), as in :py:meth:`plot`, drawn as a
             static layer over every frame.
+
+            .. versionadded:: 0.11.0
+        title : str, optional
+            Figure title (``fig.suptitle``), shown independently of
+            ``annotate_time``.
 
             .. versionadded:: 0.11.0
 
@@ -879,6 +886,8 @@ class Percept(Data):
                                            mat.get_zorder() + 1))
             frames.append(np.asarray(images[-1].get_array())[..., np.newaxis])
             index.append(np.zeros_like(idx))
+        if title is not None:
+            fig.suptitle(title)
         plt.close(fig)
         # Create the animation. The frame data is handed to HTMLAnimation so
         # that it can render the HTML player without going through Matplotlib:
