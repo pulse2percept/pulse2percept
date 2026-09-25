@@ -1,4 +1,4 @@
-"""Visual prostheses, e.g. Argus II, Alpha-IMS, BVT-24, PRIMA, Cortivis
+"""Visual prostheses, e.g. Argus II, Alpha-IMS, PRIMA, NeuroPortArray
 
 Generic device machinery lives at the root; devices live under the anatomical
 target they stimulate.

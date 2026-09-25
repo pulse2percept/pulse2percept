@@ -6,7 +6,7 @@ from pulse2percept.units import dva
 import pytest
 from pulse2percept.implants import (EnsembleImplant, GridImplant, Implant,
                                     PointSource)
-from pulse2percept.implants.cortex import Cortivis, Orion
+from pulse2percept.implants.cortex import NeuroPortArray, Orion
 from pulse2percept.implants.retina import ArgusI
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.topography.retina import Curcio1990Map
@@ -34,9 +34,9 @@ def test_EnsembleImplant():
     with pytest.raises(TypeError):
         EnsembleImplant(implants="this can't happen")
     with pytest.raises(TypeError):
-        EnsembleImplant(implants=[3,Cortivis()])
+        EnsembleImplant(implants=[3,NeuroPortArray()])
     with pytest.raises(TypeError):
-        EnsembleImplant(implants={'1': Cortivis(), '2': 'abcd'})
+        EnsembleImplant(implants={'1': NeuroPortArray(), '2': 'abcd'})
 
     # Instantiate with list
     p1 = Implant(PointSource(0,0,0))
@@ -63,18 +63,18 @@ def test_EnsembleImplant():
 # (electrode placement, etc) is determined by the implants passed in
 # and thus already tested
 # but we'll test it again just to make sure
-def test_ensemble_cortivis():
-    cortivis = Cortivis()
+def test_ensemble_neuroport():
+    neuroport = NeuroPortArray()
 
-    ensemble = EnsembleImplant.from_coords(Cortivis,
+    ensemble = EnsembleImplant.from_coords(NeuroPortArray,
                                            locs=np.array([(0, 0),
                                                           (10000, 0)]))
 
     # Each device keeps its own geometry, offset into the ensemble's frame:
-    npt.assert_equal(ensemble['0-1'].x, cortivis['1'].x)
-    npt.assert_equal(ensemble['0-1'].y, cortivis['1'].y)
-    npt.assert_equal(ensemble['1-1'].x, cortivis['1'].x + 10000)
-    npt.assert_equal(ensemble['1-1'].y, cortivis['1'].y)
+    npt.assert_equal(ensemble['0-1'].x, neuroport['1'].x)
+    npt.assert_equal(ensemble['0-1'].y, neuroport['1'].y)
+    npt.assert_equal(ensemble['1-1'].x, neuroport['1'].x + 10000)
+    npt.assert_equal(ensemble['1-1'].y, neuroport['1'].y)
 
 # test from_coords initialization (physical coords in um)
 def test_from_coords():
@@ -82,12 +82,12 @@ def test_from_coords():
 
     # check invalid instantiations
     with pytest.raises(TypeError):
-        EnsembleImplant.from_coords(Cortivis(0), locs=locs)
+        EnsembleImplant.from_coords(NeuroPortArray(0), locs=locs)
 
     locs = np.array([(0,0), (10000,0), (0, 10000)])
 
-    device = Cortivis()
-    ensemble = EnsembleImplant.from_coords(Cortivis, locs=locs)
+    device = NeuroPortArray()
+    ensemble = EnsembleImplant.from_coords(NeuroPortArray, locs=locs)
 
     # Every device is the same hardware, shifted to its own location:
     for i, (dx, dy) in enumerate(locs):
@@ -106,7 +106,7 @@ class _Grid2x2(GridImplant):
 def test_from_coords_translates_every_kind_of_constituent():
     """Placement in an ensemble does not depend on a constructor's spelling"""
     locs = np.array([(0, 0), (10000, -4000)])
-    for implant_type in (Cortivis, _Grid2x2):
+    for implant_type in (NeuroPortArray, _Grid2x2):
         device = implant_type()
         name = device.electrode_names[0]
         ensemble = EnsembleImplant.from_coords(implant_type, locs=locs)
@@ -130,11 +130,11 @@ def test_from_visual_field_map():
     dva_list = [(x,y) for x,y in zip(dva_x, dva_y)]
     dva_locs = np.array(dva_list)
 
-    device = Cortivis()
+    device = NeuroPortArray()
 
     # use dva coords to create ensemble
     ensemble = EnsembleImplant.from_visual_field_map(
-        Cortivis, visual_field_map, dva_locs)
+        NeuroPortArray, visual_field_map, dva_locs)
 
     # The dva locations round-trip back to the physical ones they came from:
     for i, (dx, dy) in enumerate(locs):
@@ -220,8 +220,8 @@ def test_prepare_stim_merges_per_implant_input():
     # their own way, so merging their time axes needs a tolerance:
     npt.assert_equal(np.all(np.diff(stim.time) > 0.95 * DT), True)
 
-    # with cortivis and orion
-    mixed = EnsembleImplant([Orion(), _shifted(Cortivis, 10000, 0)])
+    # with NeuroPortArray and Orion
+    mixed = EnsembleImplant([Orion(), _shifted(NeuroPortArray, 10000, 0)])
     npt.assert_equal(
         mixed.prepare_stim({0: np.ones(60), 1: np.ones(96) * 2}).data.shape,
         (156, 1))
@@ -253,25 +253,25 @@ def test_prepare_stim_merged_goes_through_the_ensemble_pipeline():
 def test_EnsembleImplant_from_coords_units():
     """`from_coords` takes physical coordinates, so they may be unitful"""
     locs = np.array([[0., 0.], [10000., -5000.]])
-    bare = EnsembleImplant.from_coords(Cortivis, locs=locs)
-    unitful = EnsembleImplant.from_coords(Cortivis,
+    bare = EnsembleImplant.from_coords(NeuroPortArray, locs=locs)
+    unitful = EnsembleImplant.from_coords(NeuroPortArray,
                                           locs=locs / 1000 * mm)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
     # ... and so may the range form:
-    ranged = EnsembleImplant.from_coords(Cortivis,
+    ranged = EnsembleImplant.from_coords(NeuroPortArray,
                                          xrange=(-10 * mm, 10 * mm),
                                          yrange=(0, 0), step=10000 * um)
     npt.assert_allclose(
         ranged.electrode_array.coordinates(),
-        EnsembleImplant.from_coords(Cortivis, xrange=(-10000, 10000),
+        EnsembleImplant.from_coords(NeuroPortArray, xrange=(-10000, 10000),
                                     yrange=(0, 0),
                                     step=10000).electrode_array.coordinates(),
         rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
-        EnsembleImplant.from_coords(Cortivis, locs=locs * ms)
+        EnsembleImplant.from_coords(NeuroPortArray, locs=locs * ms)
     with pytest.raises(DimensionMismatchError):
-        EnsembleImplant.from_coords(Cortivis, xrange=(0, 1 * ms),
+        EnsembleImplant.from_coords(NeuroPortArray, xrange=(0, 1 * ms),
                                     yrange=(0, 0), step=1)
 
 
@@ -283,34 +283,35 @@ def test_EnsembleImplant_from_coords_needs_a_specification():
     the visual field map.
     """
     with pytest.raises(ValueError):
-        EnsembleImplant.from_coords(Cortivis)
+        EnsembleImplant.from_coords(NeuroPortArray)
     # A partial grid is not a grid:
     with pytest.raises(ValueError) as excinfo:
-        EnsembleImplant.from_coords(Cortivis, xrange=(-1 * mm, 1 * mm),
+        EnsembleImplant.from_coords(NeuroPortArray, xrange=(-1 * mm, 1 * mm),
                                     step=500 * um)
     npt.assert_equal('yrange' in str(excinfo.value), True)
     for kwargs in ({'yrange': (0, 0), 'step': 1000},
                    {'xrange': (0, 0), 'step': 1000},
                    {'xrange': (0, 0), 'yrange': (0, 0)}):
         with pytest.raises(ValueError):
-            EnsembleImplant.from_coords(Cortivis, **kwargs)
+            EnsembleImplant.from_coords(NeuroPortArray, **kwargs)
 
 
 def test_EnsembleImplant_from_visual_field_map_units():
     """`from_visual_field_map` places implants by visual field location"""
     bare = EnsembleImplant.from_visual_field_map(
-        Cortivis, Polimeni2006Map(), xrange=(-2, 2), yrange=(0, 0), step=2)
+        NeuroPortArray, Polimeni2006Map(), xrange=(-2, 2), yrange=(0, 0),
+        step=2)
     unitful = EnsembleImplant.from_visual_field_map(
-        Cortivis, Polimeni2006Map(), xrange=(-2 * dva, 2 * dva),
+        NeuroPortArray, Polimeni2006Map(), xrange=(-2 * dva, 2 * dva),
         yrange=(0 * dva, 0 * dva), step=2 * dva)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
     # Locations, too:
     locs = np.array([[-2.0, 0.0], [2.0, 0.0]])
     unitful = EnsembleImplant.from_visual_field_map(
-        Cortivis, Polimeni2006Map(), locs=locs * dva)
+        NeuroPortArray, Polimeni2006Map(), locs=locs * dva)
     bare = EnsembleImplant.from_visual_field_map(
-        Cortivis, Polimeni2006Map(), locs=locs)
+        NeuroPortArray, Polimeni2006Map(), locs=locs)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
     # These are degrees, not microns: the whole point of the map is that the
@@ -319,7 +320,7 @@ def test_EnsembleImplant_from_visual_field_map_units():
                    {'locs': locs * um}):
         with pytest.raises(DimensionMismatchError):
             EnsembleImplant.from_visual_field_map(
-                Cortivis, Polimeni2006Map(),
+                NeuroPortArray, Polimeni2006Map(),
                 **{'xrange': (-2, 2), 'yrange': (0, 0), 'step': 2, **kwargs})
 
 
@@ -331,10 +332,11 @@ def test_EnsembleImplant_from_coords_is_physical():
     `Grid2D` reads its ranges as degrees.
     """
     # A range and the equivalent explicit locations must agree:
-    ranged = EnsembleImplant.from_coords(Cortivis, xrange=(-10000, 10000),
+    ranged = EnsembleImplant.from_coords(NeuroPortArray,
+                                         xrange=(-10000, 10000),
                                          yrange=(0, 0), step=10000)
     listed = EnsembleImplant.from_coords(
-        Cortivis, locs=np.array([[-10000., 0.], [0., 0.], [10000., 0.]]))
+        NeuroPortArray, locs=np.array([[-10000., 0.], [0., 0.], [10000., 0.]]))
     npt.assert_equal(len(ranged.implants), 3)
     npt.assert_allclose(ranged.electrode_array.coordinates(),
                         listed.electrode_array.coordinates(), rtol=1e-12)
@@ -342,11 +344,11 @@ def test_EnsembleImplant_from_coords_is_physical():
     # `from_visual_field_map`:
     npt.assert_allclose(
         EnsembleImplant.from_coords(
-            Cortivis, xrange=(-10 * mm, 10 * mm), yrange=(0, 0),
+            NeuroPortArray, xrange=(-10 * mm, 10 * mm), yrange=(0, 0),
             step=10000 * um).electrode_array.coordinates(),
         ranged.electrode_array.coordinates(), rtol=1e-12)
     with pytest.raises(DimensionMismatchError):
-        EnsembleImplant.from_coords(Cortivis, xrange=(-2 * dva, 2 * dva),
+        EnsembleImplant.from_coords(NeuroPortArray, xrange=(-2 * dva, 2 * dva),
                                     yrange=(0, 0), step=1)
 
 
@@ -358,24 +360,24 @@ def _generic(dx=0):
 def test_EnsembleImplant_anatomical_target():
     # Same target (possibly different device types), or generic constituents:
     for ensemble in [EnsembleImplant([ArgusI(), _shifted(ArgusI, 5000, 0)]),
-                     EnsembleImplant([Cortivis(), Orion()]),
+                     EnsembleImplant([NeuroPortArray(), Orion()]),
                      EnsembleImplant([ArgusI(), _generic()]),
-                     EnsembleImplant([Cortivis(), _generic()]),
+                     EnsembleImplant([NeuroPortArray(), _generic()]),
                      EnsembleImplant([_generic(), _generic(5000)])]:
         npt.assert_equal(len(ensemble.implants), 2)
     with pytest.raises(TypeError, match='retinal and cortical'):
-        EnsembleImplant([ArgusI(), Cortivis()])
+        EnsembleImplant([ArgusI(), NeuroPortArray()])
     # Nested ensembles resolve recursively:
     with pytest.raises(TypeError, match='retinal and cortical'):
-        EnsembleImplant([EnsembleImplant([ArgusI()]), Cortivis()])
+        EnsembleImplant([EnsembleImplant([ArgusI()]), NeuroPortArray()])
 
 
 def test_EnsembleImplant_rejected_reassignment_keeps_constituents():
-    ensemble = EnsembleImplant([Cortivis(), Orion()])
+    ensemble = EnsembleImplant([NeuroPortArray(), Orion()])
     before = list(ensemble.implants.values())
     names = list(ensemble.electrode_names)
     with pytest.raises(TypeError, match='retinal and cortical'):
-        ensemble.implants = [Cortivis(), ArgusI()]
+        ensemble.implants = [NeuroPortArray(), ArgusI()]
     npt.assert_equal([i is j for i, j in
                       zip(ensemble.implants.values(), before)], [True, True])
     npt.assert_equal(list(ensemble.electrode_names), names)

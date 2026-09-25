@@ -8,7 +8,7 @@ from scipy.spatial import cKDTree
 from pulse2percept.implants import (CheckerboardRaster, CustomRaster,
                                     ElectrodeGrid, Implant, Raster,
                                     SequentialRaster)
-from pulse2percept.implants.retina import (AlphaIMS, ArgusII, BVT24,
+from pulse2percept.implants.retina import (AlphaIMS, ArgusII, Suprachoroidal24,
                                            PRIMAPivotal)
 from pulse2percept.implants import rasters
 from pulse2percept.units import (DimensionMismatchError, Quantity, mA,
@@ -208,7 +208,7 @@ def test_CheckerboardRaster_grids():
 
     # An implant whose electrodes are not on a grid cannot be checkered:
     with pytest.raises(NotImplementedError):
-        CheckerboardRaster(2).bind(BVT24())
+        CheckerboardRaster(2).bind(Suprachoroidal24())
     # Neither can a count that leaves no pattern even enough to be worth
     # having. PRIMA's trimmed edges are what put 20 groups out of reach, and
     # allowing bigger groups is what buys it back:
@@ -366,7 +366,7 @@ def test_Raster_plot():
     plt.close('all')
 
     # Any raster can be plotted on any implant it covers, grid or not:
-    for r, imp in [(SequentialRaster(3), BVT24()),
+    for r, imp in [(SequentialRaster(3), Suprachoroidal24()),
                    (CheckerboardRaster(7).bind(PRIMAPivotal()),
                     PRIMAPivotal()),
                    (CustomRaster({n: 0 for n in ArgusII().electrode_names}),
@@ -469,7 +469,7 @@ def test_Implant_raster_binds():
         raster.groups(implant.electrode_names)
     # A raster that cannot be laid out on an array leaves the implant alone:
     with pytest.raises(NotImplementedError):
-        BVT24().raster = CheckerboardRaster(2)
+        Suprachoroidal24().raster = CheckerboardRaster(2)
     # The other two bind too, even though there is no geometry to work out:
     for r in [SequentialRaster(6), CustomRaster([implant.electrode_names])]:
         implant.raster = r

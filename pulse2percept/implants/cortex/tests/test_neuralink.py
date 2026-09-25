@@ -10,7 +10,8 @@ from matplotlib.patches import Ellipse
 
 from pulse2percept.implants import Implant
 from pulse2percept.implants.cortex import (EllipsoidElectrode, LinearEdgeThread,
-                                           NeuralinkThread, Neuralink, Cortivis)
+                                           NeuralinkThread, Neuralink,
+                                           NeuroPortArray)
 from pulse2percept.topography import Grid2D
 from pulse2percept.topography.cortex import (CorticalMap, NeuropythyMap,
                                              Polimeni2006Map)
@@ -326,9 +327,9 @@ def test_Neuralink_requires_threads():
     thread = LinearEdgeThread(n_elecs=2)
     # Neither a list nor a dict may hold anything but NeuralinkThreads:
     with pytest.raises(TypeError):
-        Neuralink([thread, Cortivis()])
+        Neuralink([thread, NeuroPortArray()])
     with pytest.raises(TypeError):
-        Neuralink({'A': thread, 'B': Cortivis()})
+        Neuralink({'A': thread, 'B': NeuroPortArray()})
     with pytest.raises(TypeError):
         Neuralink([thread, 'not a thread'])
     with pytest.raises(TypeError):
@@ -566,7 +567,7 @@ def test_Neuralink_from_neuropythy_surface_mismatch():
 
 def test_Neuralink_from_visual_field_map_requires_thread():
     # Only NeuralinkThreads can go into a Neuralink:
-    for implant_type in (Cortivis, Implant):
+    for implant_type in (NeuroPortArray, Implant):
         with pytest.raises(TypeError):
             Neuralink.from_visual_field_map(implant_type, Polimeni2006Map())
 

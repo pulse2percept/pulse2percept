@@ -15,7 +15,7 @@ from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
                                     SquareElectrode)
 from pulse2percept.implants.retina import (ArgusI, ArgusII, PRIMAPivotal,
                                            RetinalImplant)
-from pulse2percept.implants.cortex import Cortivis, Orion
+from pulse2percept.implants.cortex import NeuroPortArray, Orion
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
                                    ImageStimulus, Stimulus, VideoStimulus,
                                    samples)
@@ -489,7 +489,7 @@ def test_SpatialModel_retinal_range_needs_a_retinal_map():
     # ... or is the model's own default, which a cortical model installs only
     # after its parameters have been applied:
     with pytest.raises(DimensionMismatchError):
-        CortexScoreboardSpatial(Cortivis(), yrange=(-2 * mm, 2 * mm))
+        CortexScoreboardSpatial(NeuroPortArray(), yrange=(-2 * mm, 2 * mm))
 
     # A retinal map without an inverse cannot answer either, and says so:
     class NoInverse(RetinalMap):
@@ -844,8 +844,8 @@ def test_predict_percept_builds_what_it_needs(make_model):
 @pytest.mark.parametrize('ModelClass, ImplantType', [
     (ScoreboardModel, ArgusII), (AxonMapModel, ArgusII),
     (Thompson2003Model, ArgusII), (Nanduri2012Model, ArgusII),
-    (BiphasicAxonMapModel, ArgusII), (CortexScoreboardModel, Cortivis),
-    (DynaphosModel, Cortivis)])
+    (BiphasicAxonMapModel, ArgusII), (CortexScoreboardModel, NeuroPortArray),
+    (DynaphosModel, NeuroPortArray)])
 def test_a_standalone_spatial_model_needs_an_implant(ModelClass, ImplantType):
     """Which device is modeled is not something to fill in later"""
     with pytest.raises(TypeError):
@@ -2244,7 +2244,7 @@ def test_location_noise_keeps_the_axon_map_kernel_joint():
 
 
 def test_cortical_location_noise_moves_the_phosphene():
-    implant = Cortivis()
+    implant = NeuroPortArray()
     electrode = implant.electrode_names[10]
     offset = 1.0 * _latents(len(implant.electrode_names), 3)[10]
     kwargs = dict(implant_position=(20, -5) * mm,
@@ -2267,7 +2267,7 @@ def test_cortical_location_noise_moves_the_phosphene():
 
 
 def test_cortical_location_noise_ignores_region_order():
-    implant = Cortivis()
+    implant = NeuroPortArray()
     source = {implant.electrode_names[10]: 100}
     percepts = []
     for regions in (['v1', 'v2'], ['v2', 'v1']):
@@ -2582,11 +2582,11 @@ def test_location_noise_refuses_an_unplaceable_electrode():
 
 def test_retinal_model_refuses_a_cortical_implant():
     with pytest.raises(TypeError, match='cortical implant'):
-        BiphasicAxonMapModel(Cortivis())
+        BiphasicAxonMapModel(NeuroPortArray())
     # Rebinding goes through the same check as construction:
     model = ScoreboardModel(ArgusII())
     with pytest.raises(TypeError, match='cortical implant'):
-        model.implant = Cortivis()
+        model.implant = NeuroPortArray()
     npt.assert_equal(isinstance(model.implant, ArgusII), True)
 
 
@@ -2594,10 +2594,10 @@ def test_retinal_model_refuses_a_cortical_implant():
 def test_cortical_model_refuses_a_retinal_implant(model_cls):
     with pytest.raises(TypeError, match='retinal implant'):
         model_cls(ArgusII())
-    model = model_cls(Cortivis())
+    model = model_cls(NeuroPortArray())
     with pytest.raises(TypeError, match='retinal implant'):
         model.implant = ArgusII()
-    npt.assert_equal(isinstance(model.implant, Cortivis), True)
+    npt.assert_equal(isinstance(model.implant, NeuroPortArray), True)
 
 
 def test_anatomy_neutral_implants_stay_usable():
@@ -2611,7 +2611,7 @@ def test_anatomy_neutral_implants_stay_usable():
 def test_models_read_an_ensemble_by_its_constituents():
     # Generic constituents do not decide the target; the specific ones do.
     retinal = EnsembleImplant([ArgusII(), _implant_at([(0, 0)])])
-    cortical = EnsembleImplant([Cortivis(), _implant_at([(0, 0)])])
+    cortical = EnsembleImplant([NeuroPortArray(), _implant_at([(0, 0)])])
     neutral = EnsembleImplant([_implant_at([(0, 0)]),
                                _implant_at([(500, 0)])])
     ScoreboardModel(retinal)

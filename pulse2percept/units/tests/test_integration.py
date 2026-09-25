@@ -15,7 +15,7 @@ import pytest
 from pulse2percept.implants import (DiskElectrode, ElectrodeGrid,
                                     EnsembleImplant, Implant)
 from pulse2percept.implants.retina import ArgusII
-from pulse2percept.implants.cortex import Cortivis
+from pulse2percept.implants.cortex import NeuroPortArray
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
 from pulse2percept.models.retina import (AxonMapSpatial, Nanduri2012Spatial,
                                          ScoreboardSpatial)
@@ -188,7 +188,7 @@ def test_every_spelling_builds_the_same_object():
           lambda m: m.predict_percept(source).data,
           'ScoreboardSpatial.xrange')
     _same(lambda a: EnsembleImplant.from_visual_field_map(
-        Cortivis, Polimeni2006Map(), xrange=(-a, a), yrange=(-a, a),
+        NeuroPortArray, Polimeni2006Map(), xrange=(-a, a), yrange=(-a, a),
         step=2 * a), angle, angles,
         lambda e: np.array([[el.x, el.y]
                             for el in e.electrode_array.electrode_objects]),
@@ -279,7 +279,7 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         ScoreboardSpatial(implant=ArgusII(), step=100 * um)
     with pytest.raises(DimensionMismatchError):
-        CortexScoreboardSpatial(implant=Cortivis(),
+        CortexScoreboardSpatial(implant=NeuroPortArray(),
                                 xrange=(-2 * mm, 2 * mm))
 
     # current -> time, and time -> current.

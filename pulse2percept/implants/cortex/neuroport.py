@@ -1,20 +1,21 @@
-""":py:class:`~pulse2percept.implants.cortex.Cortivis`"""
+""":py:class:`~pulse2percept.implants.cortex.NeuroPortArray`"""
 import numpy as np
 
 from .base import CorticalImplant
 from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 
-class Cortivis(CorticalImplant):
-    """Create a Cortivis array
-    
+class NeuroPortArray(CorticalImplant):
+    """96-channel Utah (NeuroPort) intracortical array
+
+    The human Utah/NeuroPort array used in the CORTIVIS studies
+    [Fernandez2017]_. CORTIVIS is the project/consortium, not the implant.
+
+    96 electrodes on a 10x10 grid (corners unused) with 400 um spacing and
+    80 um diameter at the base; shank tips sit 1.5 mm deep (``z=-1500``).
     Electrode coordinates are device-local, with the base centered at
     ``(0, 0)``.
 
-    Cortivis is a Utah electrode array containing 96 electrodes in a 10x10 array
-    with 400 um spacing, and electrode diameter of 80 um at the base
-    [Fernandez2017]_.
-    
     .. note::
 
         Implant the array with the model's ``implant_position``, e.g.
@@ -34,17 +35,17 @@ class Cortivis(CorticalImplant):
 
     Examples
     --------
-    Create a Cortivis array in its own coordinate frame:
+    Create the array in its own coordinate frame:
 
-    >>> from pulse2percept.implants.cortex import Cortivis
-    >>> Cortivis() # doctest: +NORMALIZE_WHITESPACE
-    Cortivis(electrode_array=ElectrodeGrid, preprocess=False, 
+    >>> from pulse2percept.implants.cortex import NeuroPortArray
+    >>> NeuroPortArray() # doctest: +NORMALIZE_WHITESPACE
+    NeuroPortArray(electrode_array=ElectrodeGrid, preprocess=False,
          safe_mode=False, shape=(10, 10))
 
     Get access to electrode '11':
 
-    >>> cortivis = Cortivis()
-    >>> cortivis['11'] # doctest: +NORMALIZE_WHITESPACE
+    >>> implant = NeuroPortArray()
+    >>> implant['11'] # doctest: +NORMALIZE_WHITESPACE
     DiskElectrode(activated=True, name='11', radius=40.0,
                   x=1400.0, y=-1000.0, z=-1500.0)
     """

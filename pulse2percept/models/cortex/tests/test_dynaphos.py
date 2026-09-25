@@ -9,7 +9,7 @@ from pulse2percept.models.cortex.dynaphos import _pulse_train_clocks
 from pulse2percept.models.base import _placement_shift
 from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
                                     EnsembleImplant, Implant)
-from pulse2percept.implants.cortex import Cortivis, Orion
+from pulse2percept.implants.cortex import NeuroPortArray, Orion
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder,
@@ -20,7 +20,7 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, dva,
                                  mA, mm, ms, s, uA, um)
 
 def test_DynaphosModel():
-    model = DynaphosModel(implant=Cortivis(), implant_position=(20, -5) * mm,
+    model = DynaphosModel(implant=NeuroPortArray(), implant_position=(20, -5) * mm,
                           xrange=(-3, 3), yrange=(-3, 3), step=0.1).build()
 
     npt.assert_equal(model.regions, ['v1'])
@@ -35,7 +35,7 @@ def test_DynaphosModel():
     # Nothing in, None out:
     npt.assert_equal(model.predict_percept(None), None)
 
-    source = {e:BiphasicPulseTrain(freq=300,amp=0,phase_dur=1) for e in Cortivis().electrode_names}
+    source = {e:BiphasicPulseTrain(freq=300,amp=0,phase_dur=1) for e in NeuroPortArray().electrode_names}
     # Zero in = zero out:
     percept = model.predict_percept(source)
     npt.assert_equal(isinstance(percept, Percept), True)
@@ -44,7 +44,7 @@ def test_DynaphosModel():
 
     # Can't pass stimulus with no time component
     with pytest.raises(ValueError):
-        model.predict_percept([300 for e in Cortivis().electrode_names])
+        model.predict_percept([300 for e in NeuroPortArray().electrode_names])
 
 def test_predict_spatial():
     # test that no current can spread between hemispheres
@@ -107,7 +107,7 @@ def test_phosphene_size_matches_the_model_equations():
 
 
 def test_temporal_predict():
-    model = DynaphosModel(implant=Cortivis(), step=0.1).build()
+    model = DynaphosModel(implant=NeuroPortArray(), step=0.1).build()
     # User can set params
     model.dt = 40
     npt.assert_equal(model.dt, 40)
@@ -143,7 +143,7 @@ def test_temporal_predict():
     npt.assert_equal(np.all(np.diff(bright_amp) >= 0), True)
 
 def test_deepcopy_Dynaphos():
-    original = DynaphosModel(implant=Cortivis())
+    original = DynaphosModel(implant=NeuroPortArray())
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects
@@ -166,7 +166,7 @@ def test_deepcopy_Dynaphos():
 
 def test_dynaphos_plot():
     # make sure that plotting works before and after building
-    m = DynaphosModel(implant=Cortivis())
+    m = DynaphosModel(implant=NeuroPortArray())
     m.plot()
     plt.close()
     m.build()
@@ -182,8 +182,8 @@ def test_DynaphosModel_units():
     with a tolerance rather than for equality.
     """
     kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), step=0.5)
-    bare = DynaphosModel(implant=Cortivis(), rheobase=23.9, **kwargs).build()
-    unitful = DynaphosModel(implant=Cortivis(), rheobase=0.0239 * mA, **kwargs).build()
+    bare = DynaphosModel(implant=NeuroPortArray(), rheobase=23.9, **kwargs).build()
+    unitful = DynaphosModel(implant=NeuroPortArray(), rheobase=0.0239 * mA, **kwargs).build()
     npt.assert_allclose(unitful.rheobase, 23.9, rtol=1e-12)
     npt.assert_equal(isinstance(unitful.rheobase, Quantity), False)
     source = {'11': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)}
@@ -193,12 +193,12 @@ def test_DynaphosModel_units():
     npt.assert_equal((bare.stimulus_unit, bare.space_unit, bare.time_unit),
                      (uA, um, ms))
     with pytest.raises(DimensionMismatchError):
-        DynaphosModel(implant=Cortivis(), rheobase=5 * ms)
+        DynaphosModel(implant=NeuroPortArray(), rheobase=5 * ms)
 
 
 def test_DynaphosModel_t_percept_units():
     """This model overrides `predict_percept`, so it normalizes for itself"""
-    model = DynaphosModel(implant=Cortivis(), implant_position=(20, -5) * mm,
+    model = DynaphosModel(implant=NeuroPortArray(), implant_position=(20, -5) * mm,
                           xrange=(-3, 3), yrange=(-3, 3), step=1).build()
     source = {'11': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)}
     bare = model.predict_percept(source, t_percept=[0, 20, 40])
@@ -219,8 +219,8 @@ def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
     it would have been meaningless.
     """
     source = {'11': BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)}
-    delivered = Cortivis().prepare_stim(source)
-    kwargs = dict(implant=Cortivis(), implant_position=(20, -5) * mm,
+    delivered = NeuroPortArray().prepare_stim(source)
+    kwargs = dict(implant=NeuroPortArray(), implant_position=(20, -5) * mm,
                   xrange=(-2, 2), yrange=(-2, 2), step=1)
 
     # Coarser than a millisecond, which is the case the literal was written
@@ -366,7 +366,7 @@ def test_dynaphos_clocks_are_not_read_when_structure_says_otherwise():
 def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
     # An encoder's schedule can change frequency from frame to frame, so there
     # is no per-electrode clock to take from it. The model stays on its own:
-    implant = Cortivis()
+    implant = NeuroPortArray()
     encoded = AmplitudeEncoder().encode(
         ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
     npt.assert_equal(_pulse_train_clocks(encoded), None)
@@ -387,7 +387,7 @@ def _brightest_dva(percept, grid):
 
 def test_dynaphos_places_an_implant_by_visual_field_position():
     """A dva `implant_position` names the cortical image of that location"""
-    implant = Cortivis()
+    implant = NeuroPortArray()
     model = DynaphosModel(implant=implant, implant_position=(6, -2) * dva)
     npt.assert_almost_equal(
         _placement_shift(model, um)[:2],
@@ -401,7 +401,7 @@ def test_dynaphos_places_an_implant_by_visual_field_position():
 
 
 def test_location_noise():
-    implant = Cortivis()
+    implant = NeuroPortArray()
     electrode = implant.electrode_names[10]
     source = {electrode: BiphasicPulseTrain(freq=300, amp=200,
                                             phase_dur=0.17)}

@@ -1,4 +1,4 @@
-"""Retinal implants such as Argus II, Alpha-IMS, BVT-24, IMIE and PRIMA
+"""Retinal implants: Argus, Alpha, suprachoroidal, IMIE, and PRIMA arrays
 
 .. autosummary::
     :toctree: _api
@@ -6,7 +6,7 @@
     base
     argus
     alpha
-    bvt
+    suprachoroidal
     imie
     prima
 
@@ -17,7 +17,7 @@
 from .base import RetinalImplant
 from .argus import ArgusI, ArgusII
 from .alpha import AlphaIMS, AlphaAMS
-from .bvt import BVT24, BVT44
+from .suprachoroidal import Suprachoroidal24, Suprachoroidal44
 from .imie import IMIE
 from .prima import (PhotovoltaicPixel, PRIMAPivotal, Lorach2015Array,
                     Ho2019FlatArray, Huang2021Array, PRIMA, PRIMA75,
@@ -28,8 +28,8 @@ __all__ = [
     'AlphaIMS',
     'ArgusI',
     'ArgusII',
-    'BVT24',
-    'BVT44',
+    'Suprachoroidal24',
+    'Suprachoroidal44',
     'Ho2019FlatArray',
     'Huang2021Array',
     'IMIE',

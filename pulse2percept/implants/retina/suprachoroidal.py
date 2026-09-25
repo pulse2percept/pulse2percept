@@ -1,5 +1,8 @@
-""":py:class:`~pulse2percept.implants.retina.BVT24`, 
-   :py:class:`~pulse2percept.implants.retina.BVT44`"""
+"""Suprachoroidal retinal prostheses by Bionic Vision Australia/Technologies
+
+:py:class:`~pulse2percept.implants.retina.Suprachoroidal24`,
+:py:class:`~pulse2percept.implants.retina.Suprachoroidal44`
+"""
 import numpy as np
 
 from .base import RetinalImplant
@@ -8,15 +11,16 @@ from ..electrode_arrays import ElectrodeArray, ElectrodeGrid
 from ...units import as_value, um
 
 
-class BVT24(RetinalImplant):
-    """24-channel suprachoroidal retinal prosthesis
+class Suprachoroidal24(RetinalImplant):
+    """First-generation 24-channel suprachoroidal retinal prosthesis
 
-    This class creates a 24-channel suprachoroidal retinal prosthesis
-    [Layton2014]_, which was developed by the Bionic Vision Australia
-    Consortium and commercialized by Bionic Vision Technologies (BVT).
-    Electrode coordinates are device-local, centered on ``(0, 0)``.
+    First-generation suprachoroidal system [Layton2014]_ developed by Bionic
+    Vision Australia and later Bionic Vision Technologies. Electrode
+    coordinates are device-local, centered on ``(0, 0)``.
 
-    The array consists of:
+    "24" is the published channel count, not the number of physical
+    electrodes. This model has 35 electrodes, each individually addressable;
+    ganging (e.g., of C21a-m) is not applied automatically:
 
     -   33 platinum stimulating electrodes:
 
@@ -119,12 +123,12 @@ class BVT24(RetinalImplant):
 
 
 
-class BVT44(RetinalImplant):
-    """    44-channel suprachoroidal retinal prosthesis
+class Suprachoroidal44(RetinalImplant):
+    """Second-generation 44-channel suprachoroidal retinal prosthesis
 
-    This class creates a 44-channel suprachoroidal retinal prosthesis
-    [Petoe2021]_, which was developed by the Bionic Vision Australia
-    Consortium and commercialized by Bionic Vision Technologies (BVT).
+    Second-generation suprachoroidal system [Petoe2021]_ developed by Bionic
+    Vision Australia and Bionic Vision Technologies. The 44 channels are the
+    44 stimulating electrodes; the model adds 2 return electrodes (46 total).
 
     The device-local origin lies at the center of electrodes D4, D5, C4
     and E4.
@@ -148,7 +152,7 @@ class BVT44(RetinalImplant):
     ----------
     z : float, list, or Quantity, optional
         Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 35 entries gives each its own.
+        applies to every electrode, a list of 46 entries gives each its own.
         May be given as unitful quantities (e.g. ``z=100 * um``); see
         :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
@@ -173,8 +177,8 @@ class BVT44(RetinalImplant):
         self.safe_mode = safe_mode
         self.electrode_array = ElectrodeArray([])
         n_elecs = 46
-        # Placed by hand, like BVT24, once the hex grid has supplied the
-        # in-array positions:
+        # Placed by hand, like Suprachoroidal24, once the hex grid has
+        # supplied the in-array positions:
         z = as_value(z, um, 'z')
 
         # The 44 stimulating electrodes are arranged in a hex grid; two return

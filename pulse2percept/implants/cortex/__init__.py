@@ -5,7 +5,7 @@
 
     base
     orion
-    cortivis
+    neuroport
     icvp
     neuralink
 
@@ -16,14 +16,14 @@
 
 from .base import CorticalImplant
 from .orion import Orion
-from .cortivis import Cortivis
+from .neuroport import NeuroPortArray
 from .icvp import ICVP
 from .neuralink import EllipsoidElectrode, NeuralinkThread, LinearEdgeThread, Neuralink
 
 __all__ = [
     "CorticalImplant",
     "Orion",
-    "Cortivis",
+    "NeuroPortArray",
     "ICVP",
     "EllipsoidElectrode",
     "NeuralinkThread",
