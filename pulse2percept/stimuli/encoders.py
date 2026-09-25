@@ -118,7 +118,7 @@ class _EncodedStimulus(Stimulus):
         """One column per frame of the source and one row per electrode"""
         data = np.where(self._firing, self._amp, np.float32(0)).astype(
             np.float32)
-        # A source with a single frame has no time axis of its own
+        # The spatial view represents a single frame as timeless:
         if self._frame_time.size > 1:
             stim = Stimulus(data, electrodes=self.electrodes,
                             time=self._frame_time)
