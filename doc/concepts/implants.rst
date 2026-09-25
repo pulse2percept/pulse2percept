@@ -287,14 +287,14 @@ models, :py:class:`~pulse2percept.models.cortex.ScoreboardModel` and
      - epicortical
      - 60
      - Orion cortical visual prosthesis
-   * - :py:class:`~pulse2percept.implants.cortex.Cortivis`
+   * - :py:class:`~pulse2percept.implants.cortex.NeuroPortArray`
      - intracortical
      - 96
-     - CORTIVIS Utah-style array
+     - CORTIVIS NeuroPort array
    * - :py:class:`~pulse2percept.implants.cortex.ICVP`
      - intracortical
      - 18
-     - Intracortical Visual Prosthesis
+     - Intracortical Visual Prosthesis (ICVP)
    * - :py:class:`~pulse2percept.implants.cortex.Neuralink`
      - intracortical
      - per thread

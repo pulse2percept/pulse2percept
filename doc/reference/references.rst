@@ -19,6 +19,12 @@ Studies referenced throughout the Documentation:
 .. [Al-Atabany2010] WT Al-Atabany, T Tong, PA Degenaar (2010). Improved 
                     content aware scene retargeting for retinitis pigmentosa
                     patients. *BioMedical Engineering OnLine*, 9(1), 52. 
+.. [Beauchamp2020] MS Beauchamp, D Oswalt, P Sun, BL Foster, JF Magnotti,
+                   S Niketeghad, N Pouratian, WH Bosking, D Yoshor (2020).
+                   Dynamic Stimulation of Visual Cortex Produces Form Vision
+                   in Sighted and Blind Humans. *Cell* 181(4):774-783.e5,
+                   doi:`10.1016/j.cell.2020.04.033
+                   <https://doi.org/10.1016/j.cell.2020.04.033>`_.
 .. [Benson2018] Benson NC, Winawer J (2018) Bayesian Analysis of Retinotopic Maps. 
                 eLife 2018, doi:`10.1101/325597
                 <https://www.biorxiv.org/content/10.1101/325597v4>`_.
