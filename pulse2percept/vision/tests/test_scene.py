@@ -1933,6 +1933,24 @@ def test_a_percept_stays_registered_with_what_the_device_samples():
                                 np.ravel(gray)[0], decimal=6)
 
 
+def test_the_device_reads_the_world_outside_the_fov():
+    """`fov` is a display window; it does not limit what a device samples"""
+    # Eye (15, -12) at gaze (10, -5) is scene (25, -17): inside the 81-degree
+    # world, outside a 21-degree FOV.
+    x, y, gaze = 15.0, -12.0, (10, -5)
+    expected = [(25 + 40) / 80, (-17 + 40) / 80, 0.0]
+    scenes = [world_scene(fov=fov, aperture=aperture)
+              for fov in ((21, 21), (5, 5), (81, 81))
+              for aperture in ('rectangle', 'ellipse')]
+    sampled = [scene._sample_at(x, y, gaze=gaze) for scene in scenes]
+    for values in sampled:
+        npt.assert_almost_equal(np.ravel(values), expected, decimal=6)
+        npt.assert_array_equal(values, sampled[0])
+    npt.assert_array_equal(
+        world_scene(fov=(5, 5))._device_input(x, y, gaze=gaze),
+        world_scene(fov=(81, 81))._device_input(x, y, gaze=gaze))
+
+
 def test_a_fov_past_the_edge_of_the_world_is_black():
     """Nothing is out there, so nothing is shown -- not the background"""
     source = np.ones((WORLD_PX, WORLD_PX, 4))
