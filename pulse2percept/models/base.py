@@ -255,14 +255,14 @@ def _device_scene(scene, implant):
     def refuse(what, before, after):
         raise ValueError(
             f"This implant's 'preprocess' changed the scene's {what} from "
-            f"{before} to {after}. A scene's 'fov' describes the geometry of "
-            f"the source it was given, so preprocessing may change pixel "
+            f"{before} to {after}. A scene's 'extent' describes the geometry "
+            f"of the source it was given, so preprocessing may change pixel "
             f"values and channels, but not spatial shape or timing.")
 
     if isinstance(source, VideoStimulus) != isinstance(scene.source,
                                                        VideoStimulus):
         refuse('kind', type(scene.source).__name__, type(source).__name__)
-    device = Scene(source, fov=scene.fov)
+    device = Scene(source, fov=scene.fov, extent=scene.extent)
     if device.shape != scene.shape:
         refuse('shape', scene.shape, device.shape)
     if scene.time is not None:

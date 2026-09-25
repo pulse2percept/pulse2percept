@@ -241,7 +241,7 @@ def test_a_shared_gaze_moves_both_eyes_together():
     plt.close('all')
 
 
-def test_the_grid_reaches_both_eyes_about_the_shared_gaze():
+def test_the_grid_reaches_both_eyes_about_each_fovea():
     binocular = BinocularScene(left=flat_scene(), right=flat_scene())
     axes = binocular.plot(gaze=(2, 1) * dva, rings=[4], meridians=[0, 90],
                           grid_color='red')
@@ -249,10 +249,11 @@ def test_the_grid_reaches_both_eyes_about_the_shared_gaze():
         lines = ax.get_lines()
         npt.assert_equal([line.get_linestyle() for line in lines],
                          ['--', '-', '-'])
+        # Eye-centered, so gaze does not move it:
         ring = np.asarray(lines[0].get_data())
-        npt.assert_almost_equal(np.hypot(ring[0] - 2, ring[1] - 1), 4)
+        npt.assert_almost_equal(np.hypot(ring[0], ring[1]), 4)
         for line in lines[1:]:
-            npt.assert_almost_equal(np.asarray(line.get_data())[:, 0], (2, 1))
+            npt.assert_almost_equal(np.asarray(line.get_data())[:, 0], (0, 0))
         npt.assert_equal({line.get_color() for line in lines}, {'red'})
     plt.close('all')
 
@@ -321,8 +322,9 @@ def test_a_scalar_fov_describes_one_eye_not_the_packed_frame():
     binocular = BinocularScene.from_side_by_side(packed_stereo(), fov=40)
     for eye in (binocular.left, binocular.right):
         npt.assert_equal(eye.shape, (10, 20))
-        # 40 degrees across 20 columns, so 20 degrees down 10 rows:
-        npt.assert_almost_equal(eye.fov, (40.0, 20.0))
+        # 40 degrees down 10 rows, so 80 degrees across 20 columns:
+        npt.assert_almost_equal(eye.fov, (40.0, 40.0))
+        npt.assert_almost_equal(eye.extent, (-40.0, 40.0, -20.0, 20.0))
 
 
 def test_an_explicit_fov_pair_goes_to_both_eyes():

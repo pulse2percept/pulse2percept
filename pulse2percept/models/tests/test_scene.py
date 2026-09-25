@@ -229,8 +229,9 @@ def test_a_camera_driven_phosphene_still_travels_with_the_eye():
                       rho=100, xrange=(-4, 4), yrange=(-4, 4), step=0.5)
     fixating = composed(model, scene, vmax=2)[..., 0]
     shifted = composed(model, scene, vmax=2, gaze=(5, 0) * dva)[..., 0]
-    # Unchanged input, so the phosphene is the same one, five degrees right:
-    npt.assert_almost_equal(shifted[HALF, HALF + 5 + 2],
+    # Unchanged input, so the phosphene is the same one, still 2 degrees
+    # right of the fovea in the eye-centered display:
+    npt.assert_almost_equal(shifted[HALF, HALF + 2],
                             fixating[HALF, HALF + 2], decimal=5)
     npt.assert_almost_equal(composed(model, scene, vmax=2, gaze=(0, 0))[...,
                                                                        0],
@@ -329,12 +330,13 @@ def test_preprocessing_does_not_reach_native_vision():
     npt.assert_almost_equal(seen_by(model, scene, gaze=(8, 0)),
                             [[1 - ramp_at(8.0)]], decimal=3)
     seen = composed(model, scene, vmax=100, gaze=(8, 0) * dva)
-    # Outside the scotoma: the original scene, bit for bit and uninverted.
+    # Outside the scotoma: the original scene, 8 degrees left, uninverted.
     original = np.repeat(source.data.reshape((SCENE_PX, SCENE_PX, 1)), 3,
                          axis=-1)
     x, y = scene._pixel_centers()
-    intact = scene.scotoma(x - 8, y) == 0
-    npt.assert_array_equal(seen[..., 0][intact], original[intact])
+    intact = (scene.scotoma(x, y) == 0)[:, :-8]
+    npt.assert_almost_equal(seen[:, :-8, :, 0][intact],
+                            original[:, 8:][intact], decimal=6)
     # ... and the caller's scene was not rewritten on the way through:
     npt.assert_array_equal(scene.source.data, source.data)
 
@@ -633,13 +635,15 @@ def test_gaze_moves_the_scotoma_and_the_phosphene_together():
                       yrange=(-2, 2), step=0.5)
     fixating = composed(model, scene, vmax=2)[..., 0]
     shifted = composed(model, scene, vmax=2, gaze=(5, 0) * dva)[..., 0]
-    # The whole eye-centered pair travelled 5 degrees right across the scene:
-    npt.assert_almost_equal(shifted[HALF, HALF + 5], fixating[HALF, HALF],
+    # The eye-centered pair stays at the center of the FOV:
+    npt.assert_almost_equal(shifted[HALF, HALF], fixating[HALF, HALF],
                             decimal=5)
-    # ... and where the eye used to point is native vision again:
+    # ... while the scene moved 5 degrees left past it:
     source = scene.source.data.reshape((SCENE_PX, SCENE_PX))
-    npt.assert_almost_equal(shifted[HALF, HALF], [source[HALF, HALF]] * 3,
-                            decimal=5)
+    npt.assert_almost_equal(shifted[HALF, HALF - 10],
+                            [source[HALF, HALF - 5]] * 3, decimal=5)
+    npt.assert_almost_equal(shifted[HALF, HALF - 10],
+                            fixating[HALF, HALF - 5], decimal=5)
 
 
 def test_a_fixed_vmax_does_not_renormalize_when_gaze_changes():
@@ -651,12 +655,12 @@ def test_a_fixed_vmax_does_not_renormalize_when_gaze_changes():
     def phosphene(gaze_x, **kwargs):
         """The composed pixel the foveal electrode paints
 
-        The scotoma travels with the eye, so the fovea sits at scene x =
-        ``gaze_x``. That pixel is pure phosphene; the intact periphery would
-        otherwise dominate any whole-frame maximum.
+        The display is eye-centered, so the fovea is the center pixel. That
+        pixel is pure phosphene; the intact periphery would otherwise
+        dominate any whole-frame maximum.
         """
         seen = composed(model, scene, gaze=(gaze_x, 0) * dva, **kwargs)
-        return float(seen[HALF, HALF + gaze_x, 0, 0])
+        return float(seen[HALF, HALF, 0, 0])
 
     dim, bright = phosphene(-16, vmax=200), phosphene(16, vmax=200)
     npt.assert_equal(0 < dim < bright < 1, True)

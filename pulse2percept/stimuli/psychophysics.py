@@ -316,7 +316,11 @@ def _resolve_shape_fov(shape, fov):
     # Local import: `vision` imports `stimuli`, so this cannot be top-level.
     from ..vision.scene import _resolve_fov
     n_rows, n_cols = _check_shape(shape)
-    return (n_rows, n_cols), _resolve_fov(fov, n_rows, n_cols)
+    fov = np.asarray(as_value(fov, dva, 'fov'), dtype=float)
+    if fov.ndim == 0:
+        # Here a scalar is the horizontal extent of the raster:
+        fov = np.array([fov, fov * n_rows / n_cols])
+    return (n_rows, n_cols), _resolve_fov(fov)
 
 
 def _visual_grid(shape, fov):
@@ -606,7 +610,7 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
 
     """
     # Local import: `vision` imports `stimuli`, so this cannot be top-level.
-    from ..vision.scene import Scene
+    from ..vision.scene import Scene, _centered
     spatial_freq = float(as_value(spatial_freq, dva ** -1, 'spatial_freq'))
     if not np.isfinite(spatial_freq) or spatial_freq <= 0:
         raise ValueError(f"'spatial_freq' is a spatial frequency in "
@@ -639,7 +643,7 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
                 'fov': fov}
     source = _raster_source(_to_gray(pattern, contrast, window), time,
                             metadata)
-    return Scene(source, fov=fov)
+    return Scene(source, fov=fov, extent=_centered(fov))
 
 
 def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
@@ -734,7 +738,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
 
     """
     # Local import: `vision` imports `stimuli`, so this cannot be top-level.
-    from ..vision.scene import Scene
+    from ..vision.scene import Scene, _centered
     width = float(as_value(width, dva, 'width'))
     if not np.isfinite(width) or width <= 0:
         raise ValueError(f"'width' is an angular width and must be finite "
@@ -780,7 +784,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
                 'contrast': contrast, 'mask': mask, 'fov': fov}
     source = _raster_source(_to_gray(2.0 * profile - 1.0, contrast, window),
                             time, metadata)
-    return Scene(source, fov=fov)
+    return Scene(source, fov=fov, extent=_centered(fov))
 
 
 def _landolt_mask(x, y, gap, position, orientation):
@@ -852,7 +856,7 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
 
     """
     # Local import: `vision` imports `stimuli`, so this cannot be top-level.
-    from ..vision.scene import Scene
+    from ..vision.scene import Scene, _centered
     gap = float(as_value(gap, dva, 'gap'))
     if not np.isfinite(gap) or gap <= 0:
         raise ValueError(f"'gap' is an angular width and must be finite and "
@@ -893,7 +897,8 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
                 'position': (float(center[0]), float(center[1])),
                 'orientation': orientation, 'polarity': polarity,
                 'fov': (width, height)}
-    return Scene(ImageStimulus(img, metadata=metadata), fov=(width, height))
+    return Scene(ImageStimulus(img, metadata=metadata), fov=(width, height),
+                 extent=_centered((width, height)))
 
 
 def _tumbling_e_mask(x, y, stroke, position, orientation):
@@ -981,7 +986,7 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
 
     """
     # Local import: `vision` imports `stimuli`, so this cannot be top-level.
-    from ..vision.scene import Scene
+    from ..vision.scene import Scene, _centered
     stroke = float(as_value(stroke, dva, 'stroke'))
     if not np.isfinite(stroke) or stroke <= 0:
         raise ValueError(f"'stroke' is an angular width and must be finite "
@@ -1027,4 +1032,5 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
                 'position': (float(center[0]), float(center[1])),
                 'orientation': orientation, 'polarity': polarity,
                 'fov': (width, height)}
-    return Scene(ImageStimulus(img, metadata=metadata), fov=(width, height))
+    return Scene(ImageStimulus(img, metadata=metadata), fov=(width, height),
+                 extent=_centered((width, height)))
