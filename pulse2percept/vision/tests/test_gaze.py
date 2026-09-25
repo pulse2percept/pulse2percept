@@ -188,6 +188,19 @@ def test_gaze_resolves_on_scene_frames_not_on_percept_response_times():
         scene.render(percept=late, gaze=EXPANDED * dva, vmax=1).data)
 
 
+def test_play_resolves_gaze_as_render_does():
+    scene = video_scene()
+    late = Percept(np.random.rand(9, 9, FRAME_TIMES.size),
+                   space=Grid2D((-4, 4), (-4, 4), step=1),
+                   time=FRAME_TIMES + 100.0,
+                   metadata={'source_frame_time': FRAME_TIMES})
+    npt.assert_allclose(
+        scene.play(percept=late, gaze=trajectory(), vmax=1)._frame_data,
+        scene.render(percept=late, gaze=EXPANDED * dva, vmax=1).data,
+        atol=1e-6)
+    plt.close('all')
+
+
 def test_a_still_scene_resolves_against_a_timed_percept():
     """With no scene clock the percept's own frame times are the output clock"""
     scene = Scene(ImageStimulus(np.zeros((8, 8))), fov=(8, 8),

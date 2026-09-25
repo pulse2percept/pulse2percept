@@ -686,6 +686,99 @@ def test_play_refuses_a_grid_on_a_gaze_that_moves():
     plt.close('all')
 
 
+def aligned_percept():
+    """A percept on `video_scene`'s source frames, labeled at frame ends"""
+    grid = Grid2D((-8, 8), (-8, 8), step=1)
+    ramp = (grid.x + 8) / 16
+    return Percept(np.stack([ramp, 3 * ramp[::-1]], axis=-1), space=grid,
+                   time=[1000, 2000],
+                   metadata={'source_frame_time': [0, 1000]})
+
+
+@pytest.fixture
+def played(monkeypatch):
+    """Records the Percept that `Percept.play` animates, and its kwargs"""
+    seen = {}
+    original = Percept.play
+
+    def play(self, *args, **kwargs):
+        seen.update(percept=self, kwargs=kwargs)
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(Percept, 'play', play)
+    return seen
+
+
+@pytest.mark.parametrize('rings', [False, [3]])
+def test_play_shows_what_render_composes(played, rings):
+    scene = video_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.2,
+                        scotoma_blend=0)
+    percept = aligned_percept()
+    frames = []
+    for vmin, vmax in ((0, 3), (1, 2)):
+        rendered = scene.render(percept=percept, vmax=vmax, vmin=vmin)
+        ani = scene.play(percept=percept, vmax=vmax, vmin=vmin, rings=rings)
+        if not rings:
+            npt.assert_allclose(ani._frame_data, rendered.data, atol=1e-6)
+        frames.append(ani._frame_data)
+        # Range is a rendering parameter, not one for the RGB player:
+        npt.assert_equal('vmax' in played['kwargs'], False)
+        npt.assert_equal('vmin' in played['kwargs'], False)
+        # The rendered clock survives, frame-end labels included:
+        npt.assert_almost_equal(played['percept'].time, [1000, 2000])
+        npt.assert_equal(played['percept'].time_unit, ms)
+    npt.assert_equal(np.abs(frames[0] - frames[1]).max() > 0.1, True)
+    # The percept is composed in, not just the native scene:
+    npt.assert_equal(np.abs(frames[0] - scene.play()._frame_data).max() > 0.1,
+                     True)
+    plt.close('all')
+
+
+def test_play_paints_the_grid_over_the_composed_frames():
+    scene = video_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.2,
+                        scotoma_blend=0)
+    percept = aligned_percept()
+    composed = scene.render(percept=percept, vmax=3).data
+    ringed = scene.play(percept=percept, vmax=3, rings=[3])._frame_data
+    changed = np.abs(ringed - composed).max(axis=(2, 3)) > 0.1
+    rows, cols = np.nonzero(changed)
+    # A 3-dva ring lies inside the 6-dva scotoma, over the phosphenes:
+    npt.assert_equal(rows.size > 0, True)
+    npt.assert_equal(np.hypot(rows - HALF, cols - HALF).min() < 6, True)
+    # Below the ring and its label, the frames are the composed ones:
+    far = np.zeros((SCENE_PX, SCENE_PX), dtype=bool)
+    far[HALF + 6:] = True
+    npt.assert_allclose(ringed[far], composed[far], atol=1e-6)
+    plt.close('all')
+
+
+def test_play_forwards_gaze_to_render():
+    scene = video_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.2)
+    percept = aligned_percept()
+    for gaze in ((3, -2), [(0, 0), (4, 1)]):
+        npt.assert_allclose(
+            scene.play(percept=percept, vmax=3, gaze=gaze)._frame_data,
+            scene.render(percept=percept, vmax=3, gaze=gaze).data, atol=1e-6)
+    plt.close('all')
+
+
+def test_play_keeps_its_positional_arguments():
+    scene = video_scene()
+    npt.assert_array_equal(scene.play((0, 0), [10])._frame_data,
+                           scene.play(gaze=(0, 0), rings=[10])._frame_data)
+    plt.close('all')
+
+
+def test_play_inherits_the_composition_rules_of_render():
+    scene = video_scene(scotoma=Scotoma.circle(6), scotoma_fill='inpaint')
+    with pytest.raises(ValueError) as excinfo:
+        scene.play(percept=aligned_percept(), vmax=3)
+    npt.assert_equal('inpaint' in str(excinfo.value), True)
+    with pytest.raises(ValueError):
+        # A display range with no percept to map:
+        video_scene().play(vmax=3)
+    plt.close('all')
+
+
 def test_scotoma_and_fill_are_validated():
     source = ImageStimulus(np.zeros((8, 8)))
     with pytest.raises(TypeError):

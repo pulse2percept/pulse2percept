@@ -1269,8 +1269,13 @@ class Scene(PrettyPrint):
                 vf.meridian_angles(meridians), extent)
 
     def play(self, gaze=None, rings=False, meridians=False,
-             grid_color=vf.GRID_COLOR, ax=None, **kwargs):
-        """Animate a video scene as it is natively seen
+             grid_color=vf.GRID_COLOR, ax=None, *, percept=None, vmax=None,
+             vmin=0, **kwargs):
+        """Animate a video scene, optionally with a prosthetic percept
+
+        Shows the frames :py:meth:`~pulse2percept.vision.Scene.render`
+        returns for the same ``percept``, ``gaze``, ``vmax`` and ``vmin``,
+        on that result's clock.
 
         Parameters
         ----------
@@ -1286,6 +1291,14 @@ class Scene(PrettyPrint):
             still; the scene's own data is not touched.
         ax : matplotlib.axes.Axes, optional
             Axes to animate on. If None, the player makes its own.
+        percept : :py:class:`~pulse2percept.percepts.Percept`, optional
+            A brightness percept composed into the scene as in
+            :py:meth:`~pulse2percept.vision.Scene.render`.
+        vmax : float, optional
+            The percept brightness that displays as white. Required whenever
+            ``percept`` is given: brightness is in arbitrary units.
+        vmin : float, optional
+            The percept brightness that displays as black. Defaults to 0.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.percepts.Percept.play`.
 
@@ -1296,14 +1309,15 @@ class Scene(PrettyPrint):
         """
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
-        gaze = self._resolve_gaze(gaze)
+        gaze = self._resolve_gaze(gaze, percept)
         points = _gaze_points(gaze, self.n_frames)
         radii, angles, extent = self._grid_geometry(rings, meridians,
                                                     points[0])
         # The player rasterizes its own frames, so this is display output:
-        native = self.render(gaze=gaze)
+        display = self.render(percept=percept, gaze=gaze, vmax=vmax,
+                              vmin=vmin)
         if not radii.size and not angles.size:
-            return native.play(ax=ax, **kwargs)
+            return display.play(ax=ax, **kwargs)
         if len(points) > 1:
             raise ValueError(
                 "Rings and meridians are centered on the fovea, so a gaze "
@@ -1317,6 +1331,7 @@ class Scene(PrettyPrint):
         if self._aperture == _ELLIPSE:
             xs, ys = self._axes
             overlay[self._aperture_mask(xs, ys, points[0]), 3] = 0
-        decorated = Percept(_over(native.data, overlay), space=self._grid(),
-                            time=self.time, time_unit=self.time_unit)
+        # The rendered clock: a temporal percept may label frame ends.
+        decorated = Percept(_over(display.data, overlay), space=self._grid(),
+                            time=display.time, time_unit=display.time_unit)
         return decorated.play(ax=ax, **kwargs)
