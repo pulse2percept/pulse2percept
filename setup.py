@@ -84,8 +84,8 @@ class OpenMPBuildExt(build_ext):
     def build_extensions(self):
         # Disable OMP if explicitly requested *or* when building on RTD
         disable_omp = (
-            os.environ.get("P2P_DISABLE_OPENMP", "0") == "1"
-            or os.environ.get("READTHEDOCS") == "True"
+            os.environ.get("P2P_DISABLE_OPENMP", "0") == "1" or
+            os.environ.get("READTHEDOCS") == "True"
         )
 
         for ext in self.extensions:

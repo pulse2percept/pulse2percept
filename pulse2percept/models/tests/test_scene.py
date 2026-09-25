@@ -567,11 +567,11 @@ def test_display_range_is_not_a_prediction_argument():
     for kwargs in ({'vmax': 20}, {'vmin': 3}):
         with pytest.raises(TypeError):
             model.predict_percept(scene, **kwargs)
-    # ... and rendering does require one, since brightness is arbitrary:
+    # ... and rendering defaults vmax to the percept's maximum:
     percept = model.predict_percept(scene)
-    with pytest.raises(ValueError) as excinfo:
-        scene.render(percept=percept)
-    npt.assert_equal('vmax' in str(excinfo.value), True)
+    npt.assert_array_equal(
+        scene.render(percept=percept).data,
+        scene.render(percept=percept, vmax=percept.data.max()).data)
 
 
 def test_rendering_a_scene_with_a_scotoma_gives_a_composed_rgb_percept():

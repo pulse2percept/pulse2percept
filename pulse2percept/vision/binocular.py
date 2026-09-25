@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .scene import Scene
+from .scene import Scene, _check_prosthetic
 from ..stimuli import ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
 
@@ -167,7 +167,7 @@ class BinocularScene(PrettyPrint):
         return self._right
 
     def plot(self, left_percept=None, right_percept=None, gaze=None, frame=0,
-             rings=False, meridians=False, vmax=None, vmin=0, axes=None,
+             rings=False, meridians=False, vmax=None, vmin=None, axes=None,
              **kwargs):
         """Plot the two eyes side by side
 
@@ -191,7 +191,7 @@ class BinocularScene(PrettyPrint):
             :py:meth:`~pulse2percept.vision.Scene.plot`.
         vmax : float, optional
             The percept brightness that displays as white, shared by both
-            eyes. Required whenever either percept is given.
+            eyes. Defaults to the maximum across both percepts.
         vmin : float, optional
             The percept brightness that displays as black. Defaults to 0.
         axes : sequence of two matplotlib.axes.Axes, optional
@@ -214,6 +214,15 @@ class BinocularScene(PrettyPrint):
         if len(axes) != 2:
             raise ValueError(f"'axes' must be one axes per eye (2 of them), "
                              f"not {len(axes)}.")
+        percepts = [p for p in (left_percept, right_percept) if p is not None]
+        for percept in percepts:
+            _check_prosthetic(percept)
+        if vmax is None and percepts:
+            # One scale for both eyes, so their brightness is comparable:
+            vmax = max(np.max(p.data) for p in percepts)
+            if vmin is None and vmax == 0:
+                # Blank under the default range: `Scene.plot` draws it black
+                vmax = None
         drawn = []
         for ax, label, scene, percept in zip(axes, ('left', 'right'),
                                              (self.left, self.right),

@@ -109,6 +109,50 @@ def test_bare_times_are_milliseconds_and_units_convert():
     npt.assert_almost_equal(in_seconds._at(FRAME_TIMES / 1000.0, s), EXPANDED)
 
 
+def test_rows_carry_their_own_timestamps():
+    """(x, y, time) rows describe the same trajectory as positions + time"""
+    reference = trajectory()
+    rows = [(0, 0, 0), (6 * dva, 2 * dva, 200 * ms),
+            (-4 * dva, 3 * dva, 0.3 * s)]
+    for gaze in (Gaze(rows), Gaze([(0, 0, 0), (6, 2, 200), (-4, 3, 300)]),
+                 Gaze(np.array([(0, 0, 0), (6, 2, 200), (-4, 3, 300)]))):
+        npt.assert_almost_equal(gaze.positions, reference.positions)
+        npt.assert_almost_equal(gaze.time, EVENT_TIMES)
+        npt.assert_equal(gaze.time_unit, ms)
+        npt.assert_almost_equal(gaze._at(FRAME_TIMES, ms), EXPANDED)
+        with pytest.raises(ValueError):
+            gaze.time[0] = 99
+    # A nonzero bare entry keeps its default unit (dva, ms):
+    mixed = Gaze([(1, 0, 0), (2 * dva, 0, 1 * s)])
+    npt.assert_almost_equal(mixed.positions, [(1, 0), (2, 0)])
+    npt.assert_almost_equal(mixed.time, [0, 1000])
+
+
+def test_rows_are_validated():
+    with pytest.raises(ValueError):  # (x, y) without time
+        Gaze([(0, 0), (1, 1)])
+    with pytest.raises(ValueError):  # ragged rows
+        Gaze([(0, 0, 0), (1, 1)])
+    with pytest.raises(ValueError):  # not rows at all
+        Gaze([0, 0, 0])
+    with pytest.raises(ValueError):  # empty
+        Gaze([])
+    with pytest.raises(ValueError):  # rows with time, and time too
+        Gaze([(0, 0, 0), (1, 1, 10)], time=[0, 10])
+    with pytest.raises(ValueError):
+        Gaze([(0, 0, 0), (1 * dva, 1 * dva, 10 * ms)], time=[0, 10] * ms)
+    with pytest.raises(ValueError):  # strictly increasing
+        Gaze([(0, 0, 10), (1, 1, 10)])
+    with pytest.raises(ValueError):  # finite
+        Gaze([(0, np.nan, 0), (1, 1, 10)])
+    with pytest.raises(DimensionMismatchError):  # time column in dva
+        Gaze([(0, 0, 0), (1 * dva, 1 * dva, 10 * dva)])
+    with pytest.raises(DimensionMismatchError):  # position in ms
+        Gaze([(0, 0, 0), (1 * ms, 1 * dva, 10 * ms)])
+    with pytest.raises(DimensionMismatchError):  # one unit for all columns
+        Gaze([(0, 0, 0), (1, 1, 10)] * dva)
+
+
 def test_sparse_events_render_like_the_expanded_trajectory():
     """Sparse events stand in for one gaze per frame"""
     scene = video_scene()

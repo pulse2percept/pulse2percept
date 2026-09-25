@@ -153,11 +153,12 @@ Scene and plotting
   :py:class:`~pulse2percept.vision.BinocularScene` for composing visual input,
   scotomas, residual vision, and prosthetic percepts in visual-field
   coordinates (:pull:`871`, :pull:`884`, :pull:`890`, :pull:`893`,
-  :pull:`899`, :pull:`900`, :pull:`901`, :pull:`902`).
+  :pull:`899`, :pull:`900`, :pull:`901`, :pull:`902`, :pull:`923`).
 
 * Added :py:class:`~pulse2percept.vision.Gaze` for sparse, timestamped
-  fixation events, each held until the next timestamp. Accepted wherever
-  ``Scene`` and ``predict_percept`` take a gaze array (:pull:`917`).
+  fixation events, each held until the next timestamp, given as positions
+  plus ``time`` or as ``(x, y, time)`` rows. Accepted wherever ``Scene`` and
+  ``predict_percept`` take a gaze array (:pull:`917`, :pull:`923`).
 
 * Added :py:mod:`pulse2percept.plotting` for stimulus/percept figures and
   animations. :py:mod:`pulse2percept.viz` is deprecated until v0.12.0

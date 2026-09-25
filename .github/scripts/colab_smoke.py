@@ -98,8 +98,8 @@ def explain(names: list[str],
             # Whoever asked for it first is the one holding the constraint.
             immediate = REQ_NAME.match(chain.split("->")[0].strip()) if chain else None
             specifier = req[len(REQ_NAME.match(req).group(0)):]
-            if (immediate and canonicalize(immediate.group(0)) == DIST_NAME
-                    and HAS_SPECIFIER.search(specifier)):
+            if (immediate and canonicalize(immediate.group(0)) == DIST_NAME and
+                    HAS_SPECIFIER.search(specifier)):
                 rows.append(f"    ^ that bound is declared by {DIST_NAME} "
                             f"itself -- ours to fix, in pyproject.toml")
     return rows
