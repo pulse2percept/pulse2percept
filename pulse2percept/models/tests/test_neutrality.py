@@ -9,7 +9,7 @@ import numpy.testing as npt
 import pytest
 
 from pulse2percept.implants.retina import ArgusII
-from pulse2percept.implants.cortex import Cortivis
+from pulse2percept.implants.cortex import NeuroPortArray
 from pulse2percept.models import SpatialModel
 from pulse2percept.models.cortex import ScoreboardSpatial as CortexScoreboard
 from pulse2percept.models.retina import (RetinalSpatial, ScoreboardSpatial,
@@ -91,13 +91,13 @@ def test_retinal_length_shorthand_is_retinal_only():
 
 def test_cortical_model_refuses_a_retinal_extent():
     with pytest.raises(DimensionMismatchError) as excinfo:
-        CortexScoreboard(Cortivis(), xrange=(-2 * mm, 2 * mm))
+        CortexScoreboard(NeuroPortArray(), xrange=(-2 * mm, 2 * mm))
     npt.assert_equal('dva' in str(excinfo.value), True)
     with pytest.raises(DimensionMismatchError):
-        CortexScoreboard(Cortivis(), yrange=(-2 * mm, 2 * mm))
+        CortexScoreboard(NeuroPortArray(), yrange=(-2 * mm, 2 * mm))
     # The cortical default map is unaffected:
-    npt.assert_equal(isinstance(CortexScoreboard(Cortivis()).visual_field_map,
-                                Polimeni2006Map), True)
+    vfmap = CortexScoreboard(NeuroPortArray()).visual_field_map
+    npt.assert_equal(isinstance(vfmap, Polimeni2006Map), True)
 
 
 def test_retinal_shorthand_needs_a_retinal_map():

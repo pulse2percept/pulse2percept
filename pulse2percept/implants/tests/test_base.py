@@ -384,8 +384,8 @@ def test_implant_geometry_units():
          {'pixel_size': 40, 'z': -100}),
         (retina.Huang2021Array, {'pixel_size': 0.03 * mm, 'z': -0.1 * mm},
          {'pixel_size': 30, 'z': -100}),
-        (retina.BVT24, {'z': 50 * um}, {'z': 50}),
-        (retina.BVT44, {'z': 50 * um}, {'z': 50}),
+        (retina.Suprachoroidal24, {'z': 50 * um}, {'z': 50}),
+        (retina.Suprachoroidal44, {'z': 50 * um}, {'z': 50}),
         (retina.IMIE, {'z': 100 * um}, {'z': 100}),
     ]
     for cls, unitful, bare in cases:
@@ -426,7 +426,7 @@ def test_implant_per_electrode_z_units():
 
 def test_implant_dimension_errors():
     for cls in (retina.ArgusII, retina.PRIMAPivotal,
-                retina.BVT24):
+                retina.Suprachoroidal24):
         with pytest.raises(DimensionMismatchError):
             cls(z=10 * uA)
     with pytest.raises(DimensionMismatchError):
@@ -1005,9 +1005,9 @@ def test_Implant_partial_calibration_of_xTh_is_refused():
     (retina.IMIE, 'epiretinal'),
     (retina.AlphaAMS, 'subretinal'),
     (retina.Lorach2015Array, 'subretinal'),
-    (retina.BVT24, 'suprachoroidal'),
+    (retina.Suprachoroidal24, 'suprachoroidal'),
     (cortex.Orion, 'epicortical'),
-    (cortex.Cortivis, 'intracortical'),
+    (cortex.NeuroPortArray, 'intracortical'),
     (cortex.ICVP, 'intracortical'),
 ])
 def test_named_devices_say_where_they_sit(cls, expected):
@@ -1019,8 +1019,8 @@ def test_named_devices_say_where_they_sit(cls, expected):
     # Driven by a camera the eye cannot move:
     (retina.ArgusI, 'head'),
     (retina.ArgusII, 'head'),
-    (retina.BVT24, 'head'),
-    (retina.BVT44, 'head'),
+    (retina.Suprachoroidal24, 'head'),
+    (retina.Suprachoroidal44, 'head'),
     (retina.IMIE, 'head'),
     # Photodiode arrays are illuminated through the eye's own optics, and
     # PRIMA projects its camera image through the eye onto the array:
@@ -1100,9 +1100,10 @@ def test_Implant_is_a_container():
 #: Every named device, which must describe hardware about its own origin.
 NAMED_IMPLANTS = [
     retina.ArgusI, retina.ArgusII, retina.AlphaIMS, retina.AlphaAMS,
-    retina.BVT24, retina.BVT44, retina.IMIE, retina.PRIMAPivotal,
+    retina.Suprachoroidal24, retina.Suprachoroidal44, retina.IMIE,
+    retina.PRIMAPivotal,
     retina.Lorach2015Array, partial(retina.Ho2019FlatArray, 55),
-    partial(retina.Huang2021Array, 55), cortex.Cortivis, cortex.ICVP,
+    partial(retina.Huang2021Array, 55), cortex.NeuroPortArray, cortex.ICVP,
     cortex.Orion,
 ]
 
@@ -1124,9 +1125,9 @@ def test_a_named_implant_has_no_whole_device_placement(implant_type):
 def test_a_named_implant_is_built_around_its_own_origin(implant_type):
     """Named implant footprints include the device-local origin."""
     xy = implant_type().electrode_array.coordinates()[:, :2]
-    # BVT's return electrodes sit far off to one side, so the bounding box is
-    # not the landmark; what every device shares is that its own origin lies
-    # inside the footprint rather than thousands of microns away from it.
+    # The suprachoroidal arrays' return electrodes sit far off to one side,
+    # so the bounding box is not the landmark; what every device shares is
+    # that its own origin lies inside the footprint rather than thousands of microns away from it.
     npt.assert_array_less(xy.min(axis=0), 1e-9,
                           err_msg=_name_of(implant_type))
     npt.assert_array_less(-1e-9, xy.max(axis=0),
@@ -1179,8 +1180,9 @@ def test_one_implant_serves_two_models_at_different_depths():
 def test_a_flat_named_array_is_flat_in_its_own_frame():
     """Flat named retinal arrays use z=0 in their local frame."""
     for implant_type in (retina.AlphaIMS, retina.AlphaAMS,
-                         retina.ArgusI, retina.ArgusII, retina.BVT24,
-                         retina.BVT44, retina.IMIE,
+                         retina.ArgusI, retina.ArgusII,
+                         retina.Suprachoroidal24, retina.Suprachoroidal44,
+                         retina.IMIE,
                          retina.PRIMAPivotal, retina.Lorach2015Array,
                          partial(retina.Ho2019FlatArray, 55),
                          partial(retina.Huang2021Array, 55)):
@@ -1188,7 +1190,7 @@ def test_a_flat_named_array_is_flat_in_its_own_frame():
         npt.assert_almost_equal(z, 0, decimal=9,
                                 err_msg=_name_of(implant_type))
     # Fixed shank lengths are real device geometry and stay:
-    for implant_type, depths in [(cortex.Cortivis, {-1500.0}),
+    for implant_type, depths in [(cortex.NeuroPortArray, {-1500.0}),
                                  (cortex.ICVP, {-650.0, -850.0})]:
         z = implant_type().electrode_array.coordinates()[:, 2]
         npt.assert_equal(set(np.round(z, 6)), depths)

@@ -5,7 +5,8 @@ import copy
 import matplotlib.pyplot as plt
 
 from pulse2percept.models.cortex import ScoreboardModel, ScoreboardSpatial
-from pulse2percept.implants.cortex import Cortivis, Orion, LinearEdgeThread
+from pulse2percept.implants.cortex import (NeuroPortArray, Orion,
+                                           LinearEdgeThread)
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.units import mm
 from pulse2percept.percepts import Percept
@@ -23,7 +24,7 @@ def _spatial(model):
 def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     # ScoreboardSpatial automatically sets `regions`
     visual_field_map = Polimeni2006Map(k=15, a=.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(implant=Cortivis(), implant_position=(20, -5) * mm,
+    model = ModelClass(implant=NeuroPortArray(), implant_position=(20, -5) * mm,
                        xrange=(-3, 3), yrange=(-3, 3), step=0.1,
                        visual_field_map=visual_field_map).build()
     spatial = _spatial(model)
@@ -41,7 +42,7 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
 
     # Converting ret <=> dva
     visual_field_map = Polimeni2006Map(k=15, a=0.5, b=90, jitter_boundary=jitter_boundary, regions=regions)
-    model = ModelClass(implant=Cortivis(), implant_position=(20, -5) * mm,
+    model = ModelClass(implant=NeuroPortArray(), implant_position=(20, -5) * mm,
                        xrange=(-3, 3), yrange=(-3, 3), step=1,
                        visual_field_map=visual_field_map).build()
     spatial = _spatial(model)
@@ -101,7 +102,7 @@ def test_predict_spatial(ModelClass, regions):
 
     # implant only in v1, shouldnt change with v2/v3
     visual_field_map = Polimeni2006Map(k=15, a=0.5, b=90)
-    model = ModelClass(implant=Cortivis(), implant_position=(30, 0) * mm,
+    model = ModelClass(implant=NeuroPortArray(), implant_position=(30, 0) * mm,
                        xrange=(-5, 0),
                        yrange=(-3, 3), step=0.1, rho=400,
                        visual_field_map=visual_field_map).build()
@@ -154,7 +155,7 @@ def test_predict_spatial_regionsum(ModelClass,regions):
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 def test_deepcopy_Scoreboard(ModelClass):
-    original = ModelClass(implant=Cortivis())
+    original = ModelClass(implant=NeuroPortArray())
     copied = copy.deepcopy(original)
 
     # Assert these are two different objects
@@ -177,7 +178,7 @@ def test_deepcopy_Scoreboard(ModelClass):
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 def test_plot(ModelClass):
     # make sure that plotting works before and after building
-    m = ModelClass(implant=Cortivis())
+    m = ModelClass(implant=NeuroPortArray())
     m.plot()
     plt.close()
     m.build()
@@ -213,7 +214,7 @@ def test_CortexSpatial_meridian_blend(ModelClass):
                           rho=800, **params).build()
 
     # Close to the midline, so the phosphenes land on the vertical meridian
-    implant = Cortivis()
+    implant = NeuroPortArray()
     source = {e: 1 for e in implant.electrode_names}
     plain = make(implant=implant, implant_position=(5, 0) * mm,
                  meridian_blend=0)
@@ -257,7 +258,7 @@ def test_CortexSpatial_meridian_blend(ModelClass):
 def test_CortexSpatial_meridian_blend_reapplies_threshold():
     # Blending pulls brightness across the meridian, which could otherwise
     # lift a point that `thresh_percept` had zeroed back off zero.
-    implant = Cortivis()
+    implant = NeuroPortArray()
     model = ScoreboardModel(implant=implant, implant_position=(5, 0) * mm,
                             xrange=(-5, 5), yrange=(-5, 5),
                             step=0.2, rho=800, meridian_blend=0.5,
@@ -290,13 +291,14 @@ def _cortex_grid(ndim):
 def test_cortical_scoreboard_warns_when_rho_is_wider_than_the_pitch(ndim):
     """The same Gaussian spread as the retinal model, so the same warning"""
     grid = _cortex_grid(ndim)
-    # Cortivis' 400 um pitch, against a current spread three times as wide:
+    # NeuroPortArray's 400 um pitch, against a current spread three times as
+    # wide:
     said = _user_warnings(
-        ScoreboardModel(implant=Cortivis(), rho=1200, **grid).build)
+        ScoreboardModel(implant=NeuroPortArray(), rho=1200, **grid).build)
     npt.assert_equal(any('pitch (400 um)' in w for w in said), True)
     npt.assert_equal(any('ratio of 3.00' in w for w in said), True)
     npt.assert_equal(
-        _user_warnings(ScoreboardModel(implant=Cortivis(), rho=400,
+        _user_warnings(ScoreboardModel(implant=NeuroPortArray(), rho=400,
                                        **grid).build), [])
 
 

@@ -17,20 +17,21 @@ import pytest
 import pulse2percept.implants as implants
 from pulse2percept.implants import (ElectrodeGrid, GridImplant, Implant,
                                     PointSource)
-from pulse2percept.implants.cortex import (Cortivis, CorticalImplant, ICVP,
-                                           LinearEdgeThread, Neuralink, Orion)
+from pulse2percept.implants.cortex import (NeuroPortArray, CorticalImplant,
+                                           ICVP, LinearEdgeThread, Neuralink,
+                                           Orion)
 from pulse2percept.implants.retina import (AlphaAMS, AlphaIMS, ArgusI, ArgusII,
-                                           BVT24, BVT44, Ho2019FlatArray,
-                                           Huang2021Array, IMIE,
-                                           Lorach2015Array, PRIMAPivotal,
+                                           Suprachoroidal24, Suprachoroidal44,
+                                           Ho2019FlatArray, Huang2021Array,
+                                           IMIE, Lorach2015Array, PRIMAPivotal,
                                            RetinalImplant)
 
-RETINAL_DEVICES = [ArgusI, ArgusII, AlphaIMS, AlphaAMS, BVT24, BVT44, IMIE,
-                   PRIMAPivotal, Lorach2015Array]
+RETINAL_DEVICES = [ArgusI, ArgusII, AlphaIMS, AlphaAMS, Suprachoroidal24,
+                   Suprachoroidal44, IMIE, PRIMAPivotal, Lorach2015Array]
 #: Retinal devices whose electrode naming or geometry depends on the eye.
-EYE_SENSITIVE_DEVICES = [ArgusI, ArgusII, AlphaIMS, AlphaAMS, BVT24, BVT44,
-                         IMIE]
-CORTICAL_DEVICES = [Orion, Cortivis, ICVP]
+EYE_SENSITIVE_DEVICES = [ArgusI, ArgusII, AlphaIMS, AlphaAMS,
+                         Suprachoroidal24, Suprachoroidal44, IMIE]
+CORTICAL_DEVICES = [Orion, NeuroPortArray, ICVP]
 
 GENERIC = ['CheckerboardRaster', 'cortex', 'CustomRaster', 'DiskElectrode',
            'Electrode', 'ElectrodeArray', 'ElectrodeGrid', 'EnsembleImplant',
@@ -44,17 +45,18 @@ def test_root_namespace_is_anatomy_neutral():
     for name in ('Implant', 'GridImplant', 'retina', 'cortex'):
         npt.assert_equal(hasattr(implants, name), True, err_msg=name)
     # No device, retinal or cortical, and no anatomical base class:
-    for name in ('ArgusI', 'ArgusII', 'AlphaIMS', 'AlphaAMS', 'BVT24', 'BVT44',
-                 'IMIE', 'PRIMAPivotal', 'PRIMA', 'PRIMA75', 'PRIMA55',
+    for name in ('ArgusI', 'ArgusII', 'AlphaIMS', 'AlphaAMS',
+                 'Suprachoroidal24', 'Suprachoroidal44', 'IMIE', 'PRIMAPivotal', 'PRIMA', 'PRIMA75', 'PRIMA55',
                  'PRIMA40', 'Lorach2015Array', 'Ho2019FlatArray',
                  'Huang2021Array', 'PhotovoltaicPixel', 'RectangleImplant',
-                 'RetinalImplant', 'CorticalImplant', 'Orion', 'Cortivis',
-                 'ICVP', 'Neuralink'):
+                 'RetinalImplant', 'CorticalImplant', 'Orion',
+                 'NeuroPortArray', 'ICVP', 'Neuralink'):
         with pytest.raises(AttributeError):
             getattr(implants, name)
 
 
-@pytest.mark.parametrize('name', ['argus', 'alpha', 'bvt', 'imie', 'prima'])
+@pytest.mark.parametrize('name', ['argus', 'alpha', 'suprachoroidal', 'imie',
+                                  'prima'])
 def test_flat_device_modules_are_gone(name):
     """Device implementations live under the target they stimulate"""
     with pytest.raises(ImportError):
@@ -64,13 +66,14 @@ def test_flat_device_modules_are_gone(name):
 
 @pytest.mark.parametrize('module, names', [
     ('pulse2percept.implants.retina',
-     ['AlphaAMS', 'AlphaIMS', 'ArgusI', 'ArgusII', 'BVT24', 'BVT44',
+     ['AlphaAMS', 'AlphaIMS', 'ArgusI', 'ArgusII',
       'Ho2019FlatArray', 'Huang2021Array', 'IMIE', 'Lorach2015Array',
       'PRIMA', 'PRIMA40', 'PRIMA55', 'PRIMA75', 'PRIMAPivotal',
-      'PhotovoltaicPixel', 'RetinalImplant']),
+      'PhotovoltaicPixel', 'RetinalImplant', 'Suprachoroidal24',
+      'Suprachoroidal44']),
     ('pulse2percept.implants.cortex',
-     ['CorticalImplant', 'Cortivis', 'EllipsoidElectrode', 'ICVP',
-      'LinearEdgeThread', 'Neuralink', 'NeuralinkThread', 'Orion']),
+     ['CorticalImplant', 'EllipsoidElectrode', 'ICVP', 'LinearEdgeThread',
+      'Neuralink', 'NeuralinkThread', 'NeuroPortArray', 'Orion']),
 ])
 def test_canonical_imports(module, names):
     mod = importlib.import_module(module)
@@ -88,14 +91,14 @@ def test_canonical_imports(module, names):
     ('pulse2percept.implants.retina.argus', 'ArgusII'),
     ('pulse2percept.implants.retina.alpha', 'AlphaIMS'),
     ('pulse2percept.implants.retina.alpha', 'AlphaAMS'),
-    ('pulse2percept.implants.retina.bvt', 'BVT24'),
-    ('pulse2percept.implants.retina.bvt', 'BVT44'),
+    ('pulse2percept.implants.retina.suprachoroidal', 'Suprachoroidal24'),
+    ('pulse2percept.implants.retina.suprachoroidal', 'Suprachoroidal44'),
     ('pulse2percept.implants.retina.imie', 'IMIE'),
     ('pulse2percept.implants.retina.prima', 'PRIMAPivotal'),
     ('pulse2percept.implants.retina.prima', 'PhotovoltaicPixel'),
     ('pulse2percept.implants.cortex.base', 'CorticalImplant'),
     ('pulse2percept.implants.cortex.orion', 'Orion'),
-    ('pulse2percept.implants.cortex.cortivis', 'Cortivis'),
+    ('pulse2percept.implants.cortex.neuroport', 'NeuroPortArray'),
     ('pulse2percept.implants.cortex.icvp', 'ICVP'),
     ('pulse2percept.implants.cortex.neuralink', 'Neuralink'),
 ])
@@ -175,9 +178,9 @@ def test_canonicalized_eye_drives_the_geometry(implant_type, eye):
 def test_a_retinal_device_is_a_retinal_implant(implant_type):
     implant = implant_type()
     npt.assert_equal(isinstance(implant, RetinalImplant), True)
-    # BVT44 is the one device published for the left eye:
+    # Suprachoroidal44 is the one device published for the left eye:
     npt.assert_equal(implant.eye,
-                     'left' if implant_type is BVT44 else 'right')
+                     'left' if implant_type is Suprachoroidal44 else 'right')
     npt.assert_equal(implant_type(eye='left').eye, 'left')
     npt.assert_equal(f"eye='{implant.eye}'" in repr(implant), True)
 
