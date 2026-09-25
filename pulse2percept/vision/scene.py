@@ -1,8 +1,6 @@
 """:py:class:`~pulse2percept.vision.Scene`"""
 import numpy as np
-from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.colors import to_rgb
-from matplotlib.figure import Figure
 from matplotlib.patches import Ellipse, Rectangle
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
@@ -17,6 +15,7 @@ from ..stimuli import ImageStimulus, VideoStimulus
 from ..topography import Grid2D
 from ..units import Quantity, as_value, dimensionless, dva
 from ..utils import PrettyPrint
+from ..utils import _visual_field as vf
 
 # How many sigmas of the blur kernel are kept; also how far off-frame the loss
 # map is rasterized, so the cropped result is free of edge effects:
@@ -26,13 +25,6 @@ _TRUNCATE = 4.0
 # works in float64, so a fine raster sampled in one go costs several times the
 # float32 result it is written into.
 _SAMPLE_BLOCK = 1 << 20
-
-# Eccentricity spacing, in dva, that `rings=True` asks for
-_RING_STEP = 5.0
-
-# Ring color: dark enough to read on a light scene, gray enough to stay
-# annotation rather than content
-_RING_COLOR = '0.3'
 
 # The one `scotoma_fill` string that is not a color; see `_inpaint_rgb`.
 _INPAINT = 'inpaint'
@@ -252,76 +244,6 @@ def _check_prosthetic(prosthetic):
                          "so there is nowhere in the scene to put it. "
                          "Predict it on a model grid, or pass 'space' "
                          "when building it.")
-
-
-def _ring_radii(rings, fov):
-    """Eccentricities, in dva, that a ``rings`` argument asks for
-
-    True is ``_RING_STEP``-degree spacing, a number is that spacing, and a
-    sequence is the eccentricities themselves. False or None is none.
-    """
-    if rings is None or rings is False:
-        return np.zeros(0)
-    if rings is True:
-        rings = _RING_STEP
-    rings = np.asarray(as_value(rings, dva, 'rings'), dtype=float)
-    if rings.ndim == 0:
-        step = float(rings)
-        if not np.isfinite(step) or step <= 0:
-            raise ValueError(f"'rings' is a spacing in degrees and must be "
-                             f"finite and positive, not {step}.")
-        # The largest ring wholly inside a rectangular FOV is set by its
-        # shorter half-axis; 1e-9 keeps one that lands exactly on it:
-        return step * np.arange(1, int(min(fov) / 2 / step + 1e-9) + 1)
-    radii = np.sort(rings.ravel())
-    if radii.size == 0 or not np.all(np.isfinite(radii)) or radii.min() <= 0:
-        raise ValueError(f"'rings' must be finite positive eccentricities in "
-                         f"degrees, not {rings.tolist()}.")
-    return radii
-
-
-def _identity(x, y):
-    """Axes already in degrees need no conversion"""
-    return x, y
-
-
-def _draw_rings(ax, radii, center, to_axes=_identity,
-                color=_RING_COLOR):
-    """Thin dashed eccentricity rings about ``center``, labelled at the top"""
-    cx, cy = center
-    theta = np.linspace(0, 2 * np.pi, 181)
-    for radius in radii:
-        # maps scene degrees onto whatever the axes are drawn in
-        ax.plot(*to_axes(cx + radius * np.cos(theta),
-                         cy + radius * np.sin(theta)),
-                color=color, linestyle='--', linewidth=0.8, alpha=0.9)
-        # `va='bottom'` keeps the label above the ring on screen either way:
-        ax.text(*to_axes(cx, cy + radius), f'{radius:g}\N{DEGREE SIGN} ecc',
-                color=color, fontsize=8, alpha=0.95, ha='center',
-                va='bottom')
-
-
-def _rings_overlay(shape, radii, center, to_pixel, color=_RING_COLOR):
-    """The same rings, rasterized into a transparent ``(rows, cols, 4)`` RGBA
-
-    The HTML player lays its frame canvas over the figure, so an annotation
-    left as a Matplotlib artist would be covered. Drawing it offscreen through
-    `_draw_rings` keeps one definition of the style.
-    """
-    n_rows, n_cols = shape
-    dpi = 100.0
-    fig = Figure(figsize=(n_cols / dpi, n_rows / dpi), dpi=dpi)
-    FigureCanvasAgg(fig)
-    fig.patch.set_alpha(0)
-    ax = fig.add_axes((0, 0, 1, 1))
-    ax.patch.set_alpha(0)
-    ax.set_axis_off()
-    # One axes unit per pixel, y running down, as `imshow` draws a frame:
-    ax.set_xlim(-0.5, n_cols - 0.5)
-    ax.set_ylim(n_rows - 0.5, -0.5)
-    _draw_rings(ax, radii, center, to_pixel, color=color)
-    fig.canvas.draw()
-    return np.asarray(fig.canvas.buffer_rgba(), dtype=np.float32) / 255.0
 
 
 def _over(frames, overlay):
@@ -1209,8 +1131,8 @@ class Scene(PrettyPrint):
         return Percept(self._apply_aperture(frames, xs, ys, gaze=gaze),
                        space=_raster_grid(xs, ys), time=time, time_unit=unit)
 
-    def plot(self, gaze=None, frame=0, ax=None, rings=False,
-             ring_color=_RING_COLOR, percept=None, vmax=None, vmin=0,
+    def plot(self, gaze=None, frame=0, ax=None, rings=False, meridians=False,
+             grid_color=vf.GRID_COLOR, percept=None, vmax=None, vmin=0,
              **kwargs):
         """Plot what is left of native vision
 
@@ -1243,14 +1165,17 @@ class Scene(PrettyPrint):
         ax : matplotlib.axes.Axes, optional
             The axes to draw on. If None, uses the current axes.
         rings : bool, float, or sequence, optional
-            Eccentricity rings about the fovea, which ``gaze`` places in the
-            scene. True draws them every 5 degrees out to the edge of the
-            field, a number is that spacing instead, and a sequence is the
-            eccentricities themselves. Decoration only: the scene data is
-            untouched.
-        ring_color : color, optional
-            Any Matplotlib color for those rings and their labels. Defaults to
-            a mid-gray that reads on a light scene.
+            Eccentricity rings (dva) about the fovea, which ``gaze`` places
+            in the scene. True draws 1.25, 2.5, 5, 10, 20, ... dva, a number
+            is a spacing, and a sequence is the eccentricities themselves.
+            Automatic rings stop at the frame edge nearest the fovea.
+        meridians : bool, float, or sequence, optional
+            Polar-angle meridians (geometric deg) from the fovea to the field
+            edge: 0 is +x, 90 is +y, counterclockwise. True is every 45 deg,
+            a number is a spacing from 0, and a sequence is the angles
+            themselves. Rings and meridians are display annotations only.
+        grid_color : color, optional
+            Matplotlib color of rings, meridians, and ring labels.
         percept : :py:class:`~pulse2percept.percepts.Percept`, optional
             A brightness percept to draw in this field, placed by ``gaze`` and
             drawn at its own resolution over the source.
@@ -1277,6 +1202,7 @@ class Scene(PrettyPrint):
         # One frame is drawn, so one gaze and one frame of each layer is all
         # the work there is; the others are never evaluated.
         gaze_xy = points[0] if len(points) == 1 else points[frame]
+        radii, angles, extent = self._grid_geometry(rings, meridians, gaze_xy)
         xs, ys = self._axes
         src_frame = self._source_frame(frame)
         patch = None
@@ -1311,16 +1237,24 @@ class Scene(PrettyPrint):
                                      zorder=artists[0].get_zorder() + 1))
             ax.set_xlim(xlim)
             ax.set_ylim(ylim)
+        # Fovea-centered: at the gaze point, like the scotoma
+        artists += vf.draw(ax, radii, angles, gaze_xy, extent,
+                           color=grid_color)
         self._clip_to_support(artists, gaze_xy, ax.transData)
-        radii = _ring_radii(rings, self.fov)
-        if radii.size:
-            # The fovea sits wherever gaze points, which is where the scotoma
-            # is drawn too; at the default gaze that is the scene's center.
-            _draw_rings(ax, radii, gaze_xy, color=ring_color)
         return ax
 
-    def play(self, gaze=None, rings=False, ring_color=_RING_COLOR, ax=None,
-             **kwargs):
+    def _grid_geometry(self, rings, meridians, gaze_xy):
+        """Ring radii (dva), meridian angles (deg), and the frame extent"""
+        width, height = self._fov
+        extent = (-width / 2, width / 2, -height / 2, height / 2)
+        # The nearest frame edge also bounds an elliptical aperture, whose
+        # semi-axes are fov / 2 about the same fovea:
+        r_min, r_max = vf.visible_band(gaze_xy, extent)
+        return (vf.ring_radii(rings, r_max, r_min=r_min),
+                vf.meridian_angles(meridians), extent)
+
+    def play(self, gaze=None, rings=False, meridians=False,
+             grid_color=vf.GRID_COLOR, ax=None, **kwargs):
         """Animate a video scene as it is natively seen
 
         Parameters
@@ -1330,13 +1264,11 @@ class Scene(PrettyPrint):
             one pair per frame moves the eye between frames. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved against the
             scene's frame times.
-        rings : bool, float, or sequence, optional
-            Eccentricity rings, as in
+        rings, meridians, grid_color : optional
+            Visual-field grid, as in
             :py:meth:`~pulse2percept.vision.Scene.plot`, painted into the
-            displayed frames. Drawn once, so this needs a gaze that holds
+            displayed frames. Drawn once, so this requires a gaze that holds
             still; the scene's own data is not touched.
-        ring_color : color, optional
-            Any Matplotlib color for those rings and their labels.
         ax : matplotlib.axes.Axes, optional
             Axes to animate on. If None, the player makes its own.
         **kwargs :
@@ -1350,22 +1282,26 @@ class Scene(PrettyPrint):
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
         gaze = self._resolve_gaze(gaze)
-        radii = _ring_radii(rings, self.fov)
+        points = _gaze_points(gaze, self.n_frames)
+        radii, angles, extent = self._grid_geometry(rings, meridians,
+                                                    points[0])
         # The player rasterizes its own frames, so this is display output:
         native = self.render(gaze=gaze)
-        if not radii.size:
+        if not radii.size and not angles.size:
             return native.play(ax=ax, **kwargs)
-        points = _gaze_points(gaze, self.n_frames)
         if len(points) > 1:
             raise ValueError(
-                "Rings mark eccentricity from the fovea, so a gaze that moves "
-                "between frames would have to move them too, and the player "
-                "draws them once into the frames. Pass a single gaze, or "
-                "rings=False.")
+                "Rings and meridians are centered on the fovea, so a gaze "
+                "that moves between frames would have to move them too, and "
+                "the player draws them once into the frames. Pass a single "
+                "gaze, or rings=False and meridians=False.")
         # Painted into the displayed frames rather than left as an artist
         # behind the player's canvas, which would hide them:
-        overlay = _rings_overlay(self._frame_shape, radii, points[0],
-                                 self.dva_to_pixel, color=ring_color)
+        overlay = vf.rasterize(self._frame_shape, radii, angles, points[0],
+                               extent, self.dva_to_pixel, color=grid_color)
+        if self._aperture == _ELLIPSE:
+            xs, ys = self._axes
+            overlay[self._aperture_mask(xs, ys, points[0]), 3] = 0
         decorated = Percept(_over(native.data, overlay), space=self._grid(),
                             time=self.time, time_unit=self.time_unit)
         return decorated.play(ax=ax, **kwargs)

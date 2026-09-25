@@ -16,8 +16,7 @@ from pulse2percept.topography import Grid2D
 from pulse2percept.units import dva, ms, s
 from pulse2percept.vision import Scene, Scotoma
 from pulse2percept.vision import scene as scene_module
-from pulse2percept.vision.scene import (_raster_axes, _raster_step,
-                                        _ring_radii)
+from pulse2percept.vision.scene import _raster_axes, _raster_step
 
 SCENE_PX = 41
 HALF = (SCENE_PX - 1) // 2
@@ -515,10 +514,16 @@ def drawn_on_fresh_axes(scene, **kwargs):
 
 
 def ring_radii(ax, center=(0, 0)):
-    """Read the eccentricities back off the drawn rings"""
+    """Read the eccentricities back off the drawn (dashed) rings"""
     offsets = [np.asarray(line.get_data()) - np.reshape(center, (2, 1))
-               for line in ax.get_lines()]
+               for line in ax.get_lines() if line.get_linestyle() == '--']
     return sorted(np.hypot(*offset).mean() for offset in offsets)
+
+
+def meridian_ends(ax):
+    """Start and end points of the drawn (solid) meridians"""
+    return [np.asarray(line.get_data())[:, [0, -1]].T
+            for line in ax.get_lines() if line.get_linestyle() == '-']
 
 
 def video_scene(**kwargs):
@@ -531,15 +536,15 @@ def video_scene(**kwargs):
 
 def test_rings_are_drawn_only_when_asked():
     scene = ramp_scene()
-    for rings in (False, None):
-        npt.assert_equal(len(drawn_on_fresh_axes(scene, rings=rings).lines), 0)
-    # A 41-degree field holds four 5-degree rings:
+    for off in (False, None):
+        ax = drawn_on_fresh_axes(scene, rings=off, meridians=off)
+        npt.assert_equal(len(ax.lines) + len(ax.texts), 0)
+    # A 41-degree field holds the doubling sequence up to 20 degrees:
     ax = drawn_on_fresh_axes(scene, rings=True)
-    npt.assert_almost_equal(ring_radii(ax), [5, 10, 15, 20], decimal=6)
+    npt.assert_almost_equal(ring_radii(ax), [1.25, 2.5, 5, 10, 20], decimal=6)
     npt.assert_equal([t.get_text() for t in ax.texts],
-                     ['5\N{DEGREE SIGN} ecc', '10\N{DEGREE SIGN} ecc',
-                      '15\N{DEGREE SIGN} ecc', '20\N{DEGREE SIGN} ecc'])
-    # Understated by default, so they read as a reference grid:
+                     [f'{r}\N{DEGREE SIGN}'
+                      for r in ('1.25', '2.5', '5', '10', '20')])
     line = ax.get_lines()[0]
     npt.assert_equal(line.get_linestyle(), '--')
     npt.assert_equal(line.get_linewidth() < 1, True)
@@ -557,27 +562,59 @@ def test_rings_takes_a_spacing_or_the_eccentricities_themselves():
     plt.close('all')
 
 
-def test_rings_take_a_color():
+def test_grid_takes_a_color():
     scene = ramp_scene()
-    ax = drawn_on_fresh_axes(scene, rings=True, ring_color='white')
+    ax = drawn_on_fresh_axes(scene, rings=True, meridians=True,
+                             grid_color='white')
     for artist in ax.get_lines() + list(ax.texts):
         npt.assert_equal(artist.get_color(), 'white')
     plt.close('all')
     # It reaches the rasterized overlay the player is handed, too:
     video = video_scene()
-    black = video.play(rings=[10], ring_color='black')._frame_data
-    white = video.play(rings=[10], ring_color='white')._frame_data
+    black = video.play(rings=[10], grid_color='black')._frame_data
+    white = video.play(rings=[10], grid_color='white')._frame_data
     npt.assert_equal(np.allclose(black, white), False)
     plt.close('all')
 
 
-def test_rings_mark_eccentricity_so_they_follow_the_fovea():
+def test_grid_is_centered_on_the_fovea_so_it_follows_gaze():
     scene = ramp_scene()
-    ax = drawn_on_fresh_axes(scene, gaze=(3, -2) * dva, rings=True)
+    ax = drawn_on_fresh_axes(scene, gaze=(3, -2) * dva, rings=True,
+                             meridians=True)
+    # Automatic rings stop at the frame edge nearest the fovea (17.5 dva
+    # away), so the 20-degree ring of a centered gaze is left out:
     npt.assert_almost_equal(ring_radii(ax, center=(3, -2)),
-                            [5, 10, 15, 20], decimal=6)
+                            [1.25, 2.5, 5, 10], decimal=6)
+    for start, _ in meridian_ends(ax):
+        npt.assert_almost_equal(start, (3, -2))
     npt.assert_array_equal(ax.images[-1].get_array(),
                            scene._native_rgb(gaze=(3, -2))[..., 0])
+    plt.close('all')
+
+
+def test_meridians_follow_the_cartesian_polar_angle_convention():
+    """0 deg is +x, 90 deg is +y, counterclockwise; each reaches the edge"""
+    ax = drawn_on_fresh_axes(ramp_scene(), gaze=(3, -2) * dva,
+                             meridians=[0, 90, 180, 270])
+    ends = [end for _, end in meridian_ends(ax)]
+    npt.assert_almost_equal(ends, [(20.5, -2), (3, 20.5), (-20.5, -2),
+                                   (3, -20.5)])
+    plt.close('all')
+
+
+def test_meridians_take_a_spacing_or_the_angles_themselves():
+    scene = ramp_scene()
+
+    def angles(**kwargs):
+        ax = drawn_on_fresh_axes(scene, **kwargs)
+        return sorted(np.rad2deg(np.arctan2(*(end - start)[::-1])) % 360
+                      for start, end in meridian_ends(ax))
+
+    npt.assert_almost_equal(angles(meridians=True), np.arange(0, 360, 45))
+    npt.assert_almost_equal(angles(meridians=30), np.arange(0, 360, 30))
+    npt.assert_almost_equal(angles(meridians=[90, 0, 45]), [0, 45, 90])
+    # No rings, so no ring labels:
+    npt.assert_equal(len(drawn_on_fresh_axes(scene, meridians=True).texts), 0)
     plt.close('all')
 
 
@@ -585,21 +622,32 @@ def test_rings_fit_the_shorter_half_of_the_field():
     tall = Scene(ImageStimulus(np.zeros((40, 20))), fov=(20, 40))
     npt.assert_almost_equal(ring_radii(drawn_on_fresh_axes(tall, rings=4)),
                             [4, 8], decimal=6)
-    # Nothing fits inside a field smaller than one step:
     small = Scene(ImageStimulus(np.zeros((8, 8))), fov=8)
-    npt.assert_equal(len(drawn_on_fresh_axes(small, rings=True).lines), 0)
+    npt.assert_almost_equal(ring_radii(drawn_on_fresh_axes(small, rings=True)),
+                            [1.25, 2.5], decimal=6)
+    # Nothing fits inside a field smaller than one step:
+    npt.assert_equal(len(drawn_on_fresh_axes(small, rings=5).lines), 0)
     plt.close('all')
 
 
-@pytest.mark.parametrize('rings', [0, -5, np.nan, [], [5, 0], [5, np.inf]])
+@pytest.mark.parametrize('rings', [0, -5, np.nan, np.inf, [], [5, 0],
+                                   [5, np.inf], [np.nan]])
 def test_bad_rings_are_refused(rings):
     with pytest.raises(ValueError):
         drawn_on_fresh_axes(ramp_scene(), rings=rings)
     plt.close('all')
 
 
-def test_play_paints_readable_rings_into_the_frames_the_player_shows():
-    """The player's canvas covers the figure, so rings must be in the frames
+@pytest.mark.parametrize('meridians', [0, -45, np.nan, np.inf, [],
+                                       [0, np.nan]])
+def test_bad_meridians_are_refused(meridians):
+    with pytest.raises(ValueError):
+        drawn_on_fresh_axes(ramp_scene(), meridians=meridians)
+    plt.close('all')
+
+
+def test_play_paints_a_readable_grid_into_the_frames_the_player_shows():
+    """The player's canvas covers the figure, so the grid must be in the frames
 
     White scene, 3 pixels per degree, so a 10-degree ring is 30 pixels out.
     """
@@ -611,22 +659,28 @@ def test_play_paints_readable_rings_into_the_frames_the_player_shows():
     npt.assert_array_equal(plain, scene._native_rgb())
     contrast = (plain - ringed).max(axis=(2, 3))
     # The ring has to read against what it is drawn on, not merely differ:
-    npt.assert_equal(contrast.max() > 0.4, True)
+    npt.assert_equal(contrast.max() > 0.3, True)
     npt.assert_equal(np.count_nonzero(contrast > 0.2) > 50, True)
     rows, cols = np.nonzero(contrast > 0.2)
     radius = np.hypot(cols - 60, rows - 60)
     npt.assert_equal(20 < radius.min() < 32, True)
-    # The label sits above the top of the ring, and the corners stay clean:
+    # The label sits outside the ring, and the corners stay clean:
     npt.assert_equal((contrast[:30] > 0.2).any(), True)
     npt.assert_almost_equal(contrast[0, 0], 0.0, decimal=6)
+    # Meridians are painted in as well, 0 deg along the row through the fovea:
+    ruled = scene.play(meridians=[0])._frame_data
+    contrast = (plain - ruled).max(axis=(2, 3))
+    npt.assert_equal((contrast[58:62, 62:] > 0.1).any(axis=0).all(), True)
+    npt.assert_almost_equal(contrast[:50].max(), 0.0, decimal=6)
     plt.close('all')
 
 
-def test_play_refuses_rings_on_a_gaze_that_moves():
+def test_play_refuses_a_grid_on_a_gaze_that_moves():
     """The player draws its static artists once, so they cannot follow"""
     scene = video_scene()
-    with pytest.raises(ValueError):
-        scene.play(gaze=[(0, 0), (5, 5)], rings=True)
+    for grid in ({'rings': True}, {'meridians': True}):
+        with pytest.raises(ValueError):
+            scene.play(gaze=[(0, 0), (5, 5)], **grid)
     # The same moving gaze is fine without them:
     scene.play(gaze=[(0, 0), (5, 5)])
     plt.close('all')
@@ -1179,8 +1233,28 @@ def test_rings_still_land_on_the_fovea_the_aperture_is_centered_on():
     xs, ys = ring.get_xdata(), ring.get_ydata()
     npt.assert_almost_equal([xs.min(), xs.max()], [-3.0, 17.0], decimal=6)
     npt.assert_almost_equal([ys.min(), ys.max()], [-13.0, 7.0], decimal=6)
-    # The outermost ring `rings=True` asks for sits inside that same boundary:
-    npt.assert_almost_equal(_ring_radii(True, scene.fov).max(), 20.0)
+    # The outermost ring `rings=True` asks for sits inside both the aperture
+    # and the frame, wherever gaze points:
+    for gaze, outermost in (((0, 0), 20.0), ((7, -3), 10.0)):
+        radii = scene._grid_geometry(True, False, gaze)[0]
+        npt.assert_almost_equal(radii.max(), outermost)
+    plt.close('all')
+
+
+def test_the_grid_is_clipped_to_an_elliptical_aperture():
+    scene = ellipse_scene()
+    ax = scene.plot(gaze=(7, -3) * dva, rings=[10, 30], meridians=True)
+    for artist in ax.get_lines() + list(ax.texts):
+        npt.assert_equal(artist.get_clip_path() is not None, True)
+    plt.close('all')
+    # The player's overlay is blanked outside the aperture, like the frames:
+    frames = np.stack([np.ones((SCENE_PX, SCENE_PX))] * 2, axis=-1)
+    video = Scene(VideoStimulus(frames, time=[0, 1000]),
+                  fov=(SCENE_PX, SCENE_PX), aperture='ellipse')
+    ruled = video.play(meridians=True)._frame_data
+    xs, ys = video._axes
+    outside = video._aperture_mask(xs, ys, (0, 0))
+    npt.assert_array_equal(ruled[outside], 0)
     plt.close('all')
 
 

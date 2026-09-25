@@ -215,6 +215,22 @@ def test_a_shared_gaze_moves_both_eyes_together():
     plt.close('all')
 
 
+def test_the_grid_reaches_both_eyes_about_the_shared_gaze():
+    binocular = BinocularScene(left=flat_scene(), right=flat_scene())
+    axes = binocular.plot(gaze=(2, 1) * dva, rings=[4], meridians=[0, 90],
+                          grid_color='red')
+    for ax in axes:
+        lines = ax.get_lines()
+        npt.assert_equal([line.get_linestyle() for line in lines],
+                         ['--', '-', '-'])
+        ring = np.asarray(lines[0].get_data())
+        npt.assert_almost_equal(np.hypot(ring[0] - 2, ring[1] - 1), 4)
+        for line in lines[1:]:
+            npt.assert_almost_equal(np.asarray(line.get_data())[:, 0], (2, 1))
+        npt.assert_equal({line.get_color() for line in lines}, {'red'})
+    plt.close('all')
+
+
 def test_it_has_no_implant_or_model_behavior():
     """A container for two views, not a dispatcher"""
     binocular = BinocularScene(left=flat_scene(), right=flat_scene())
