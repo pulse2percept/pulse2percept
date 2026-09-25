@@ -1222,6 +1222,30 @@ ENCODED = [
 ]
 
 
+def test_electrical_source_clock_follows_the_source_time_axis():
+    frames = np.linspace(0, 1, 192).reshape(8, 8, 3)
+    # One timed frame still has a source clock:
+    one = AmplitudeEncoder().encode(VideoStimulus(frames[..., :1],
+                                                  time=[0]))
+    npt.assert_array_equal(one.metadata['encoder']['source_frame_time'], [0])
+    video = AmplitudeEncoder().encode(
+        VideoStimulus(frames, time=np.arange(3) * 40.0))
+    npt.assert_array_equal(video.metadata['encoder']['source_frame_time'],
+                           [0, 40, 80])
+    npt.assert_array_equal(
+        video._spatial_view().metadata['encoder']['source_frame_time'],
+        [0, 40, 80])
+    npt.assert_array_equal(
+        (video * 0.5).metadata['encoder']['source_frame_time'], [0, 40, 80])
+    # An image has none, and `frame_dur` retimes a video off its source clock:
+    still = AmplitudeEncoder().encode(ImageStimulus(frames[..., 0]))
+    retimed = AmplitudeEncoder(frame_dur=50).encode(
+        VideoStimulus(frames, time=np.arange(3) * 40.0))
+    for stim in (still, retimed):
+        npt.assert_equal('source_frame_time' in stim.metadata['encoder'],
+                         False)
+
+
 @pytest.mark.parametrize('name, build', ENCODED, ids=[c[0] for c in ENCODED])
 def test_encoded_stimulus_defers_only_the_waveform(name, build):
     stim = build()
@@ -1230,8 +1254,11 @@ def test_encoded_stimulus_defers_only_the_waveform(name, build):
     npt.assert_equal(len(stim.electrodes) > 0, True)
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.time_unit, ms)
+    # A video also records its source clock, which here is the frame clock.
+    video = [] if 'video' not in name else ['source_frame_dur',
+                                            'source_frame_time']
     npt.assert_equal(sorted(stim.metadata['encoder']),
-                     ['cycle', 'frame_dur', 'frame_time'])
+                     ['cycle', 'frame_dur', 'frame_time'] + video)
     npt.assert_equal(stim.duration > 0, True)
     repr(stim)
     copies = [copy(stim), deepcopy(stim)]
@@ -1719,6 +1746,23 @@ def test_PRIMAEncoder_repeats_slow_frames_and_skips_fast_ones(fps):
                                lit.reshape(-1, 2)[:, 1])
     else:
         npt.assert_equal(lit.all(), True)
+
+
+@pytest.mark.parametrize('fps', [15, 29.97, 60])
+def test_PRIMAEncoder_keeps_the_source_clock_apart(fps):
+    video = VideoStimulus(np.ones((8, 8, 6)),
+                          time=np.arange(6) * (1000 / fps))
+    stim = PRIMAEncoder().encode(video, implant=PRIMAPivotal())
+    meta = stim.metadata['encoder']
+    # The projector clock is unchanged:
+    npt.assert_allclose(meta['frame_time'], stim.pulse_time, atol=DT)
+    npt.assert_almost_equal(meta['frame_dur'], 1000 / 30)
+    # The source clock is recorded next to it:
+    npt.assert_array_equal(meta['source_frame_time'], video.time)
+    npt.assert_almost_equal(meta['source_frame_dur'], 1000 / fps)
+    for other in (stim * 0.5, stim._spatial_view()):
+        npt.assert_array_equal(
+            other.metadata['encoder']['source_frame_time'], video.time)
 
 
 def test_PRIMAEncoder_starts_where_the_source_does():

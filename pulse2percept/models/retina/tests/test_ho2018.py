@@ -16,12 +16,13 @@ from pulse2percept.models.retina import (Ho2018Model, Ho2018Spatial,
                                          Ho2018Temporal)
 from pulse2percept.models.retina.ho2018 import _radiant_exposure
 from pulse2percept.stimuli import (ImageStimulus, PhotovoltaicEncoder,
-                                   PRIMAEncoder, Stimulus, VideoStimulus)
+                                   PRIMAEncoder, Stimulus, VideoStimulus,
+                                   samples)
 from pulse2percept.stimuli.encoders import (_NormalizedStimulus,
                                             _OpticalStimulus)
 from pulse2percept.topography.retina import Watson2014Map
-from pulse2percept.units import DimensionMismatchError
-from pulse2percept.vision import Scene
+from pulse2percept.units import DimensionMismatchError, dva
+from pulse2percept.vision import Scene, Scotoma
 
 #: The stimulation condition [Ho2018]_ normalizes against.
 REF = {'irradiance': 9, 'pulse_dur': 4, 'freq': 20, 'wavelength': 880}
@@ -399,6 +400,8 @@ def test_static_image_produces_a_pulse_train_response():
     npt.assert_allclose(np.diff(percept.time), period, rtol=1e-3)
     frames = np.round(percept.data.max(axis=(0, 1)), 6)
     npt.assert_equal(np.unique(frames).size > 1, True)
+    # A still has no source-video frames to report against.
+    npt.assert_equal('source_frame_time' in percept.metadata, False)
 
 
 def test_video_produces_a_changing_response():
@@ -411,6 +414,58 @@ def test_video_produces_a_changing_response():
     bottom_right = percept.data[-8:, -8:, :].max(axis=(0, 1))
     npt.assert_array_less(bottom_right[2], top_left[2])
     npt.assert_array_less(top_left[-1], bottom_right[-1])
+
+
+def prima_model():
+    """A Ho model of PRIMA (30 Hz projector) on a coarse grid."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        return Ho2018Model(PRIMAPivotal(), xrange=(-2, 2), yrange=(-2, 2),
+                           step=0.5, verbose=False)
+
+
+@pytest.mark.parametrize('fps', [15, 24.52, 29.97, 30, 60])
+def test_video_reports_on_the_source_clock(fps):
+    # The projector clock sets stimulation; the source clock sets reporting.
+    n = 12
+    frames = np.zeros((8, 8, n))
+    frames[..., ::2] = 1
+    video = VideoStimulus(frames, time=np.arange(n) * (1e3 / fps))
+    model = prima_model()
+    stim = model.implant.prepare_stim(video)
+    npt.assert_allclose(np.diff(stim.pulse_time), 1e3 / 30, atol=0.01)
+    # Drive stays on the pulse clock:
+    drive = model.spatial.predict_percept(video)
+    npt.assert_allclose(drive.time, stim.pulse_time)
+    percept = model.predict_percept(video)
+    npt.assert_equal(percept.time.size, n)
+    npt.assert_allclose(percept.time, video.time + 1e3 / fps,
+                        atol=n * model.temporal.dt)
+    npt.assert_allclose(percept.metadata['source_frame_time'], video.time)
+    # Automatic output equals explicit evaluation at the same times:
+    asked = model.predict_percept(video, t_percept=percept.time)
+    npt.assert_allclose(asked.data, percept.data, rtol=1e-6, atol=1e-7)
+    npt.assert_equal('source_frame_time' in asked.metadata, False)
+    # Explicit `t_percept` always wins:
+    npt.assert_almost_equal(
+        model.predict_percept(video, t_percept=[0, 10, 20]).time, [0, 10, 20])
+
+
+def test_pedestrian_scene_reports_on_the_video_clock():
+    # 24.52 Hz source through the 30 Hz PRIMA projector.
+    video = samples.ucsb_pedestrians(resize=(43, 80))
+    scene = Scene(video, fov=40 * dva, scotoma=Scotoma.circle(5 * dva),
+                  scotoma_fill=0)
+    percept = prima_model().predict_percept(scene, gaze=(0, 0) * dva)
+    rendered = scene.render(percept=percept, gaze=(0, 0) * dva,
+                            vmax=percept.data.max())
+    npt.assert_equal(rendered.data.shape[-1], video.time.size)
+    npt.assert_allclose(rendered.time, percept.time)
+    npt.assert_equal(percept.time.size, video.time.size)
+    npt.assert_allclose(percept.metadata['source_frame_time'], video.time)
+    # Last output closes the last source frame, not the last pulse period:
+    npt.assert_allclose(percept.time[-1],
+                        video.time[-1] + np.diff(video.time).mean(), atol=0.5)
 
 
 # -- What the wrapper forwards ----------------------------------------------

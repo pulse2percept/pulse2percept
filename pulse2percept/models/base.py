@@ -104,10 +104,11 @@ def _subsample(t_out, dt, n_sub, start=None):
 
 
 def _frame_clock(stim, dt, unit=ms):
-    """Return percept output times for an encoded video stimulus.
+    """Return percept output times for an encoded stimulus.
 
-    Encoders record source-frame timing in stimulus metadata. Output
-    times are rounded to the model's ``dt`` grid.
+    Uses the source-video frame clock if the encoder recorded one, else the
+    encoder frame clock (e.g., projector pulse periods of a still image).
+    Output times are rounded to the model's ``dt`` grid.
 
     Returns
     -------
@@ -115,6 +116,9 @@ def _frame_clock(stim, dt, unit=ms):
         Frame-end times in ``unit``.
     start : float
         Start time of the first frame.
+    source : array or None
+        Source-video frame onsets (ms), one per entry of ``t``; None if the
+        clock is not a source-video clock.
 
     Returns None for stimuli without encoder frame metadata.
 
@@ -134,11 +138,13 @@ def _frame_clock(stim, dt, unit=ms):
         return _frame_clock(meta['stim'], dt, unit=unit)
     if not isinstance(enc, dict):
         return None
+    prefix = 'source_frame_' if 'source_frame_time' in enc else 'frame_'
     try:
-        frame_time = np.asarray(enc['frame_time'], dtype=np.float64)
-        frame_dur = float(enc['frame_dur'])
+        frame_time = np.asarray(enc[prefix + 'time'], dtype=np.float64)
+        frame_dur = float(enc[prefix + 'dur'])
     except (KeyError, TypeError, ValueError):
         return None
+    source = frame_time if prefix == 'source_frame_' else None
     if frame_time.size == 0 or not np.isfinite(frame_dur) or frame_dur <= 0:
         return None
     # Encoder frame metadata is stored in milliseconds; convert it to the
@@ -152,7 +158,7 @@ def _frame_clock(stim, dt, unit=ms):
     step = max(1, int(round(frame_dur / dt)))
     start = int(round(float(frame_time[0]) / dt))
     ends = start + np.arange(1, frame_time.size + 1, dtype=np.int64) * step
-    return ends * dt, start * dt
+    return ends * dt, start * dt, source
 
 
 def _length_valued(value):
@@ -1500,7 +1506,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         # In `time_unit`: `_frame_clock`, `dt` and `t_percept` all count in it
         _time = self._stim_times(stim)
 
-        reduce, t_out, sub_idx = 'last', None, None
+        reduce, t_out, sub_idx, source = 'last', None, None, None
         if t_percept is None:
             # With automatic output times, `reduce` summarizes each interval.
             reduce = self.reduce
@@ -1518,7 +1524,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                 t_out = np.arange(0, np.nextafter(end, np.inf), frame_dur)
                 first = None
             else:
-                t_out, first = frames
+                t_out, first, source = frames
             t_percept = t_out
             if reduce == 'peak' and not self._reduces_intervals:
                 # This model can only be asked for instants, so approximate the
@@ -1552,11 +1558,16 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Preserve pulse-driven peaks rather than averaging them over gaps.
             resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
             t_percept = t_out
+        metadata = {'stim': stim}
+        if source is not None:
+            # Output frame k summarizes the source-video frame starting at
+            # source_frame_time[k] (ms); percept.time marks its end.
+            metadata['source_frame_time'] = source
         # A temporal model rewrites a spatial percept frame by frame; it does
         # not move it in the visual field, so it hands the grid back on:
         return Percept(resp, space=None, time=t_percept,
                        time_unit=self.time_unit,
-                       metadata={'stim': stim})._inherit_space(stim)
+                       metadata=metadata)._inherit_space(stim)
 
     def _warn_if_blank(self, stim, resp):
         """Warn when stimulus polarity explains an all-zero response.

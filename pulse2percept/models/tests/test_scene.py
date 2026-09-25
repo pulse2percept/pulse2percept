@@ -708,6 +708,8 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
     # The premise: the two clocks really do differ, frame for frame.
     npt.assert_almost_equal(raw.time, [100, 200, 300])
     npt.assert_almost_equal(scene.time, [0, 100, 200])
+    # Frames are paired through provenance, not through frame count:
+    npt.assert_almost_equal(raw.metadata['source_frame_time'], [0, 100, 200])
 
     percept = scene.render(
         percept=spatiotemporal().predict_percept(scene), vmax=5)
@@ -716,6 +718,24 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
     npt.assert_almost_equal(percept.time, [100, 200, 300])
     # ... and the native frames come through in order, one per output frame:
     npt.assert_almost_equal(percept.data[0, 0, 0], [0.2, 0.5, 0.9], decimal=5)
+
+
+def test_a_one_frame_video_keeps_its_source_clock():
+    """One timed frame is a video, not a still"""
+    source = VideoStimulus(np.full((SCENE_PX, SCENE_PX, 1), 0.5), time=[0])
+    scene = Scene(source, fov=(SCENE_PX, SCENE_PX),
+                  scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    model = Model(spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
+                                            xrange=(-4, 4), yrange=(-4, 4),
+                                            step=0.5,
+                                            visual_field_map=Curcio1990Map()),
+                  temporal=FadingTemporal()).build()
+    percept = model.predict_percept(scene)
+    npt.assert_almost_equal(percept.metadata['source_frame_time'], [0])
+    # Labeled at the frame end, paired through provenance:
+    rendered = scene.render(percept=percept, vmax=5)
+    npt.assert_equal(rendered.shape[-1], 1)
+    npt.assert_almost_equal(rendered.time, percept.time)
 
 
 def test_a_temporal_stage_does_not_lose_the_visual_field_grid():
@@ -784,6 +804,68 @@ def test_the_time_range_check_crosses_units():
     short = Percept(values, space=grid, time=[0, 0.01], time_unit=s)
     with pytest.raises(ValueError):
         scene.render(percept=short, vmax=20)
+
+
+def labeled_percept(time, source=None, time_unit=ms):
+    """Three frames of brightness 1, 2, 3, optionally tagged with provenance"""
+    grid = ScoreboardModel(implant=implant_at(0, 0), xrange=(-2, 2),
+                           yrange=(-2, 2), step=1).build().spatial.grid
+    values = np.stack([np.full((5, 5), b) for b in (1.0, 2.0, 3.0)], axis=-1)
+    meta = None if source is None else {'source_frame_time': source}
+    return Percept(values, space=grid, time=time, time_unit=time_unit,
+                   metadata=meta)
+
+
+def test_equal_frame_counts_do_not_pair_frames():
+    """Three frames against three frames is not a temporal correspondence"""
+    scene = Scene(VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20]),
+                  fov=(5, 5), scotoma=Scotoma.circle(3))
+    for source in (None, [0, 20, 40]):
+        percept = labeled_percept([5, 15, 25], source=source)
+        with pytest.raises(ValueError) as excinfo:
+            scene.render(percept=percept, vmax=3)
+        npt.assert_equal('never simulated' in str(excinfo.value), True)
+        # The whole clock is checked, even for one displayed frame:
+        with pytest.raises(ValueError):
+            scene._prosthetic_frames(percept, frame=1)
+
+
+def test_source_provenance_pairs_frames_by_index():
+    """Frame k was predicted from scene frame k, whatever its time label"""
+    scene = Scene(VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20]),
+                  fov=(5, 5), scotoma=Scotoma.circle(3))
+    percept = labeled_percept([5, 15, 25], source=[0, 10, 20])
+    frames, time, unit = scene._prosthetic_frames(percept)
+    npt.assert_almost_equal(frames[2, 2], [1, 2, 3])
+    npt.assert_almost_equal(time, [5, 15, 25])
+    frames, time, _ = scene._prosthetic_frames(percept, frame=1)
+    npt.assert_almost_equal(frames[2, 2], [2])
+    npt.assert_almost_equal(time, [15])
+    npt.assert_almost_equal(scene.render(percept=percept, vmax=3).time,
+                            [5, 15, 25])
+    # Provenance is in ms; the percept's own labels may be in seconds:
+    percept = labeled_percept([0.005, 0.015, 0.025], source=[0, 10, 20],
+                              time_unit=s)
+    frames, time, unit = scene._prosthetic_frames(percept)
+    npt.assert_almost_equal(frames[2, 2], [1, 2, 3])
+    npt.assert_almost_equal(time, [0.005, 0.015, 0.025])
+    npt.assert_equal(unit, s)
+    # ... and a scene given in seconds matches its ms provenance:
+    in_s = Scene(VideoStimulus(np.zeros((5, 5, 3)),
+                               time=np.array([0, 0.01, 0.02]) * s),
+                 fov=(5, 5), scotoma=Scotoma.circle(3))
+    frames, _, _ = in_s._prosthetic_frames(
+        labeled_percept([5, 15, 25], source=[0, 10, 20]))
+    npt.assert_almost_equal(frames[2, 2], [1, 2, 3])
+
+
+def test_a_covering_percept_is_interpolated_at_scene_times():
+    scene = Scene(VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20]),
+                  fov=(5, 5), scotoma=Scotoma.circle(3))
+    percept = labeled_percept([0, 20, 40])
+    frames, time, _ = scene._prosthetic_frames(percept)
+    npt.assert_almost_equal(frames[2, 2], [1, 1.5, 2])
+    npt.assert_almost_equal(time, [0, 10, 20])
 
 
 def test_per_frame_gaze_moves_the_eye_between_video_frames():

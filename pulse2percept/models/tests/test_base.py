@@ -954,6 +954,7 @@ def test_Model_predict_percept_frame_clock(fps):
     model = Model(temporal=ValidTemporalModel()).build()
     percept = model.predict_percept(stim)
     npt.assert_equal(percept.data.shape[-1], 6)
+    npt.assert_allclose(percept.metadata['source_frame_time'], vid.time)
     # Evenly spaced, and on the model's dt grid -- 1000/29.97 ms is neither a
     # whole number of dt nor, if rounded point by point, evenly spaced:
     npt.assert_almost_equal(np.diff(percept.time),
