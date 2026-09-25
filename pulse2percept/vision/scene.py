@@ -13,7 +13,7 @@ from .scotoma import Scotoma
 from ..percepts import Percept
 from ..stimuli import ImageStimulus, VideoStimulus
 from ..topography import Grid2D
-from ..units import Quantity, as_value, dimensionless, dva
+from ..units import Quantity, as_value, dimensionless, dva, ms
 from ..utils import PrettyPrint
 from ..utils import _visual_field as vf
 
@@ -984,6 +984,22 @@ class Scene(PrettyPrint):
         time, unit, n_out = self._output_clock(percept)
         return _gaze_points(gaze, n_out, time=time, time_unit=unit)
 
+    def _source_aligned(self, prosthetic):
+        """Whether percept frame k was predicted from this scene's frame k
+
+        Reads only the top-level ``metadata['source_frame_time']`` (ms) that
+        automatic temporal output records; equal frame counts are not enough.
+        """
+        meta = prosthetic.metadata
+        source = (meta.get('source_frame_time') if isinstance(meta, dict)
+                  else None)
+        if source is None:
+            return False
+        source = np.asarray(source, dtype=float).ravel()
+        mine = np.asarray(self.source.times(ms), dtype=float)
+        return (source.size == mine.size == prosthetic.data.shape[-1] and
+                np.allclose(source, mine, rtol=1e-9, atol=1e-6))
+
     def _prosthetic_frames(self, prosthetic, frame=None):
         """Line a percept up with the output frames, and say when they happen
 
@@ -1001,10 +1017,9 @@ class Scene(PrettyPrint):
             # An untimed still percept stands behind every frame:
             return (np.repeat(prosthetic.data, 1 if frame is not None
                               else n_out, axis=-1), out_time, out_unit)
-        if n_pros == n_out:
-            # Frame for frame already, but labeled with the percept's own
-            # times: a temporal model reports when the response happened,
-            # which is not the same as the video's frame onsets.
+        if self._source_aligned(prosthetic):
+            # Frame for frame, but labeled with the percept's own times: a
+            # temporal model may report each frame at its end, not its onset.
             return (_take_frame(prosthetic.data, frame),
                     _take_time(prosthetic.time, frame), prosthetic.time_unit)
         unit = prosthetic.time_unit

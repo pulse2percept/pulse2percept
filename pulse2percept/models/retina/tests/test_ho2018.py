@@ -457,6 +457,10 @@ def test_pedestrian_scene_reports_on_the_video_clock():
     scene = Scene(video, fov=40 * dva, scotoma=Scotoma.circle(5 * dva),
                   scotoma_fill=0)
     percept = prima_model().predict_percept(scene, gaze=(0, 0) * dva)
+    rendered = scene.render(percept=percept, gaze=(0, 0) * dva,
+                            vmax=percept.data.max())
+    npt.assert_equal(rendered.data.shape[-1], video.time.size)
+    npt.assert_allclose(rendered.time, percept.time)
     npt.assert_equal(percept.time.size, video.time.size)
     npt.assert_allclose(percept.metadata['source_frame_time'], video.time)
     # Last output closes the last source frame, not the last pulse period:

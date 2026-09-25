@@ -180,7 +180,8 @@ def test_gaze_resolves_on_scene_frames_not_on_percept_response_times():
     scene = video_scene()
     late = Percept(np.random.rand(9, 9, FRAME_TIMES.size),
                    space=Grid2D((-4, 4), (-4, 4), step=1),
-                   time=FRAME_TIMES + 100.0)
+                   time=FRAME_TIMES + 100.0,
+                   metadata={'source_frame_time': FRAME_TIMES})
     npt.assert_almost_equal(scene._output_clock(late)[0], FRAME_TIMES)
     npt.assert_array_equal(
         scene.render(percept=late, gaze=trajectory(), vmax=1).data,
