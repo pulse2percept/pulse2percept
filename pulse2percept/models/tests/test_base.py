@@ -949,8 +949,8 @@ def test_Model_predict_percept_frame_clock(fps):
     # to do with the source.
     implant = ArgusI()
     vid = VideoStimulus(np.random.rand(4, 4, 6), metadata={'fps': fps})
-    stim = AmplitudeEncoder(amp_range=(0, 50), freq=60).encode(
-        vid, implant=implant)
+    stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=60).encode(
+        vid)
     model = Model(temporal=ValidTemporalModel()).build()
     percept = model.predict_percept(stim)
     npt.assert_equal(percept.data.shape[-1], 6)
@@ -992,8 +992,8 @@ def test_Model_predict_percept_frame_peak():
     implant = ArgusI()
     rng = np.random.default_rng(0)
     vid = VideoStimulus(rng.random((4, 4, 16)), metadata={'fps': 29.97})
-    stim = AmplitudeEncoder(amp_range=(0, 50), freq=20).encode(
-        vid, implant=implant)
+    stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20).encode(
+        vid)
     model = Model(temporal=FadingTemporal(tau=100)).build()
     peak = model.predict_percept(stim)
     # Same frames, but sampled only at the instant each one ends:
@@ -1255,8 +1255,8 @@ def test_model_requires_a_current_stimulus():
         temporal.predict_percept(projected)
 
     # Encoded, it goes through:
-    encoded = AmplitudeEncoder(amp_range=(0, 50)).encode(
-        img, implant=ArgusII(raster=None))
+    encoded = AmplitudeEncoder(ArgusII(raster=None), amp_range=(0, 50)).encode(
+        img)
     npt.assert_equal(encoded.unit, uA)
     argus = ArgusII(encoder=None, raster=None)
     for model in (ScoreboardSpatial(implant=argus, xrange=(-2, 2),

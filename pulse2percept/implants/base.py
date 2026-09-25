@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.implants.Implant`,
    :py:class:`~pulse2percept.implants.GridImplant`"""
 import numpy as np
-from copy import deepcopy
+from copy import copy, deepcopy
 from scipy.interpolate import RegularGridInterpolator
 from skimage.color import rgb2gray
 
@@ -90,14 +90,15 @@ class Implant(PrettyPrint):
         Non-current-driven devices may override this check.
     encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         Maps image or video gray levels to device stimulation. If None,
-        dimensionless visual input is rejected.
+        dimensionless visual input is rejected. The implant stores a copy of
+        the encoder bound to itself (see
+        :py:attr:`~pulse2percept.implants.Implant.encoder`).
 
         .. versionadded:: 0.10.0
 
         .. versionchanged:: 0.11.0
             Accepts any :py:class:`~pulse2percept.stimuli.Encoder`, not only
-            an electrical
-            :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
+            an electrical :py:class:`~pulse2percept.stimuli.PulseEncoder`.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes that it cannot drive
         at the same time. If None, every electrode may fire at once. Assigning
@@ -228,15 +229,24 @@ class Implant(PrettyPrint):
 
         If None, dimensionless image/video stimuli are not encoded
         automatically.
+
+        Assigning an encoder whose ``implant`` is not this implant stores a
+        shallow copy bound to this implant; the assigned object is not
+        modified.
         """
         return getattr(self, '_encoder', None)
 
     @encoder.setter
     def encoder(self, encoder):
         """Encoder setter (called upon ``self.encoder = encoder``)"""
-        if encoder is not None and not isinstance(encoder, Encoder):
-            raise TypeError(f"'encoder' must be an Encoder object, not "
-                            f"{type(encoder)}.")
+        if encoder is not None:
+            if not isinstance(encoder, Encoder):
+                raise TypeError(f"'encoder' must be an Encoder object, not "
+                                f"{type(encoder)}.")
+            if encoder.implant is not self:
+                # Copy so that one encoder can configure several implants:
+                encoder = copy(encoder)
+                encoder.implant = self
         self._encoder = encoder
 
     @property
@@ -380,7 +390,7 @@ class Implant(PrettyPrint):
             f"Safety check '{check}' needs an electrical stimulus to "
             f"check, and this one is measured in "
             f"{_describe_unit(stim.unit)}. Encode it into current first "
-            f"(see pulse2percept.stimuli.StimulusEncoder), or give the "
+            f"(see pulse2percept.stimuli.PulseEncoder), or give the "
             f"implant a 'preprocess' function that does.")
 
     @classmethod
@@ -702,7 +712,7 @@ class Implant(PrettyPrint):
         if (self.encoder is not None and
                 stim.unit.dimension.is_dimensionless and
                 stim.unit.dimension != self.stimulus_unit.dimension):
-            stim = self.encoder.encode(stim, implant=self)
+            stim = self.encoder.encode(stim)
 
         # A picture is sampled onto the electrodes whatever its resolution:
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
@@ -840,7 +850,7 @@ class GridImplant(Implant):
         Whether to preprocess a stimulus whenever one is prepared.
     safe_mode : bool, optional
         Whether to enforce charge balance.
-    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         How the device turns a picture into stimulation.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes.

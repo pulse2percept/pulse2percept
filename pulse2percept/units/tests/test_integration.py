@@ -132,9 +132,9 @@ def test_every_spelling_builds_the_same_object():
           'Stimulus', rtol=1e-6)
     _same(lambda a: Implant(ArgusII().electrode_array, max_current=a),
           amp, amps, lambda p: p.max_current, 'Implant.max_current')
-    _same(lambda a: AmplitudeEncoder(amp_range=(0, a), freq=20).encode(
-              ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6))),
-              implant=ArgusII()),
+    _same(lambda a: AmplitudeEncoder(ArgusII(), amp_range=(0, a),
+                                     freq=20).encode(
+              ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6)))),
           amp, amps, lambda s: s.data, 'AmplitudeEncoder.amp_range',
           rtol=1e-6)
 
@@ -258,7 +258,7 @@ def test_the_whole_rejection_matrix():
 
     # current -> encoder: an encoder is what *makes* current out of pictures.
     with pytest.raises(DimensionMismatchError):
-        AmplitudeEncoder(amp_range=(0, 50)).encode(current, implant=ArgusII())
+        AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(current)
 
     # visual angle -> physical coordinate: retinotopy is a map, not a factor.
     with pytest.raises(DimensionMismatchError):

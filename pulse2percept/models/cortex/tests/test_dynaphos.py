@@ -367,8 +367,8 @@ def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
     # An encoder's schedule can change frequency from frame to frame, so there
     # is no per-electrode clock to take from it. The model stays on its own:
     implant = NeuroPortArray()
-    encoded = AmplitudeEncoder().encode(
-        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)), implant=implant)
+    encoded = AmplitudeEncoder(implant).encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
     npt.assert_equal(_pulse_train_clocks(encoded), None)
     # A single-electrode schedule is a structured source, and is refused on
     # the same grounds rather than read as a pulse train:

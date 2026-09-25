@@ -44,7 +44,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
     A raster partitions electrodes into groups that take turns
     stimulating. Different groups must not be active at the same time.
-    Raster timing is applied by :class:`~pulse2percept.stimuli.StimulusEncoder`.
+    Raster timing is applied by :class:`~pulse2percept.stimuli.PulseEncoder`.
 
     Assigning a raster to ``implant.raster`` binds it to that implant.
     Subclasses implement :meth:`groups` and may override :meth:`bind`

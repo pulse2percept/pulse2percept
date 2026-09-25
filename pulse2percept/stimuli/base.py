@@ -2147,8 +2147,8 @@ class ImageStimulus(Stimulus):
         """
         # Imported here because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
-        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
-                                **kwargs).encode(self, implant=implant)
+        return AmplitudeEncoder(implant, amp_range=amp_range, freq=freq,
+                                **kwargs).encode(self)
 
     def plot(self, ax=None, **kwargs):
         """Plot the stimulus
@@ -2973,8 +2973,8 @@ class VideoStimulus(Stimulus):
         """
         # Imported here because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
-        return AmplitudeEncoder(amp_range=amp_range, freq=freq,
-                                **kwargs).encode(self, implant=implant)
+        return AmplitudeEncoder(implant, amp_range=amp_range, freq=freq,
+                                **kwargs).encode(self)
 
     def __iter__(self):
         """Iterate over the video, one frame at a time

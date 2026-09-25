@@ -258,7 +258,7 @@ Encoding gray levels as stimulation
 
 An :py:class:`~pulse2percept.stimuli.Encoder` defines the mapping from gray
 level to stimulation.
-:py:class:`~pulse2percept.stimuli.StimulusEncoder` covers devices driven by a
+:py:class:`~pulse2percept.stimuli.PulseEncoder` covers devices driven by a
 current source; :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` covers
 subretinal photovoltaic arrays, which are driven by light.
 
@@ -281,11 +281,12 @@ bypass the encoder. Encoding can also be explicit:
 .. code-block:: python
 
     source = p2p.stimuli.VideoStimulus('movie.mp4')
-    stim = implant.encoder.encode(source, implant=implant)
+    encoder = p2p.stimuli.AmplitudeEncoder(implant, amp_range=(0, 50), freq=20)
+    stim = encoder.encode(source)
 
-Passing the implant samples the source at its electrode locations before pulse
-trains are constructed, so the resulting Stimulus has one row per implant
-electrode. That sampling is device-relative: the source is stretched across the
+An encoder constructed with an implant samples the source at its electrode
+locations before pulse trains are constructed, so the resulting Stimulus has
+one row per implant electrode. That sampling is device-relative: the source is stretched across the
 implant's bounding box. Registering a picture against the visual field instead
 is a model's job, not an encoder's; see :ref:`topics-vision`.
 

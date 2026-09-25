@@ -13,8 +13,9 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, Encoder,
                                    FrequencyEncoder, ImageStimulus,
                                    MonophasicPulse, PhotovoltaicEncoder,
-                                   PRIMAEncoder, Stimulus, StimulusEncoder,
+                                   PRIMAEncoder, PulseEncoder, Stimulus,
                                    VideoStimulus)
+from pulse2percept import stimuli as p2p_stimuli
 from pulse2percept.stimuli import encoders
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
@@ -59,12 +60,76 @@ def n_schedules_of(stim):
     return len(np.unique(np.abs(stim.data) > 0, axis=0))
 
 
-def test_StimulusEncoder_is_abstract():
+def test_PulseEncoder_is_abstract():
     with pytest.raises(TypeError):
-        StimulusEncoder()
+        PulseEncoder()
+    with pytest.raises(TypeError):
+        Encoder()
 
 
-def test_StimulusEncoder_warnings_point_at_the_caller(monkeypatch):
+def test_Encoder_hierarchy():
+    # Pulse modulation strategies share the electrical pulse machinery:
+    for cls in (AmplitudeEncoder, FrequencyEncoder):
+        npt.assert_equal(issubclass(cls, PulseEncoder), True)
+    npt.assert_equal(issubclass(PulseEncoder, Encoder), True)
+    # Photovoltaic encoding is optical, not an electrical pulse encoder:
+    for cls in (PhotovoltaicEncoder, PRIMAEncoder):
+        npt.assert_equal(issubclass(cls, Encoder), True)
+        npt.assert_equal(issubclass(cls, PulseEncoder), False)
+    npt.assert_equal(issubclass(PRIMAEncoder, PhotovoltaicEncoder), True)
+    npt.assert_equal(hasattr(p2p_stimuli, 'StimulusEncoder'), False)
+
+
+def _unrastered_argus():
+    """Argus II without a raster, so an unbound encoder schedules the same"""
+    return ArgusII(raster=None)
+
+
+@pytest.mark.parametrize('build, make_implant', [
+    (lambda i: AmplitudeEncoder(i, amp_range=(0, 30)), _unrastered_argus),
+    (lambda i: FrequencyEncoder(i, freq_range=(0, 60)), _unrastered_argus),
+    (lambda i: PhotovoltaicEncoder(i, irradiance=4, freq=40, pulse_dur=4,
+                                   wavelength=915), PRIMAPivotal),
+    (lambda i: PRIMAEncoder(i), PRIMAPivotal),
+])
+def test_Encoder_implant_is_constructor_state(build, make_implant):
+    implant = make_implant()
+    encoder = build(implant)
+    npt.assert_equal(encoder.implant is implant, True)
+    img = ImageStimulus(np.random.default_rng(0).random((12, 12)))
+    # Encoding repeatedly needs no implant, and samples at its electrodes:
+    first, second = encoder.encode(img), encoder.encode(img)
+    npt.assert_equal(encoder.implant is implant, True)
+    npt.assert_equal(list(first.electrodes), list(implant.electrode_names))
+    npt.assert_array_equal(first.data, second.data)
+    # Sampling at the implant is the same as encoding the sampled picture:
+    unbound = build(None)
+    npt.assert_equal(unbound.implant, None)
+    direct = unbound.encode(implant.reshape_stim(img))
+    npt.assert_array_equal(first.data, direct.data)
+    npt.assert_array_equal(first.time, direct.time)
+    # Implant-free encoding treats every pixel as a stimulation site:
+    npt.assert_equal(unbound.encode(img).shape[0], img.data.shape[0])
+    # The implant is no longer an `encode` argument:
+    with pytest.raises(TypeError):
+        encoder.encode(img, implant=implant)
+    # The implant pretty-prints its encoder without recursing:
+    implant.encoder = encoder
+    npt.assert_equal(type(implant).__name__ in str(implant.encoder), True)
+    npt.assert_equal('encoder' in str(implant), True)
+
+
+def test_Encoder_rejects_non_implant():
+    with pytest.raises(TypeError):
+        AmplitudeEncoder((0, 50))
+    with pytest.raises(TypeError):
+        PRIMAEncoder('PRIMA')
+    # Optical parameters are keyword-only:
+    with pytest.raises(TypeError):
+        PhotovoltaicEncoder(None, 4, 40, 4, 915)
+
+
+def test_PulseEncoder_warnings_point_at_the_caller(monkeypatch):
     """A warning is only actionable if it names the line that caused it
 
     All three of these are about the caller's own choice of source, frequency
@@ -86,13 +151,13 @@ def test_StimulusEncoder_warnings_point_at_the_caller(monkeypatch):
     # ... including the one about frames that never get a pulse:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
-        AmplitudeEncoder(freq=2).encode(vid, implant=ArgusII())
+        AmplitudeEncoder(ArgusII(), freq=2).encode(vid)
     npt.assert_equal([w.filename for w in caught], [__file__] * len(caught))
     npt.assert_equal(any('deliver no pulse' in str(w.message)
                          for w in caught), True)
 
 
-def test_StimulusEncoder_source():
+def test_PulseEncoder_source():
     enc = AmplitudeEncoder()
     with pytest.raises(TypeError):
         enc.encode(np.random.rand(4, 5))
@@ -100,7 +165,7 @@ def test_StimulusEncoder_source():
         enc.encode('not-a-stimulus')
 
 
-def test_StimulusEncoder_params():
+def test_PulseEncoder_params():
     with pytest.raises(ValueError):
         AmplitudeEncoder(phase_dur=DT / 2)
     with pytest.raises(ValueError):
@@ -285,7 +350,7 @@ def test_AmplitudeEncoder_implant(camera_video):
     # at the end.
     implant = ArgusII(raster=None)
     vid = camera_video
-    enc = AmplitudeEncoder(amp_range=(0, 50)).encode(vid, implant=implant)
+    enc = AmplitudeEncoder(implant, amp_range=(0, 50)).encode(vid)
     # The video is sampled at the electrode locations, so the stimulus has one
     # row per electrode rather than one per pixel:
     npt.assert_equal(enc.shape[0], implant.n_electrodes)
@@ -310,13 +375,12 @@ def test_AmplitudeEncoder_big_stim_warning(monkeypatch):
     # allocating the hundreds of megabytes it takes to cross it:
     monkeypatch.setattr(encoders, '_BIG_STIM', 100)
     vid = VideoStimulus(np.random.rand(8, 8, 4))
-    with pytest.warns(UserWarning, match="Pass 'implant'"):
+    with pytest.warns(UserWarning, match="with an 'implant'"):
         AmplitudeEncoder(freq=1000).encode(vid)
     # Passing an implant is the way out, so it does not warn:
     with warnings.catch_warnings():
         warnings.simplefilter('error')
-        AmplitudeEncoder(freq=1000).encode(vid,
-                                          implant=ArgusII(raster=None))
+        AmplitudeEncoder(ArgusII(raster=None), freq=1000).encode(vid)
 
 
 def whole_pulses(freq, frame_dur, pulse_dur=0.92):
@@ -391,7 +455,7 @@ def test_FrequencyEncoder_whole_pulses():
     npt.assert_equal(n_pulses_of(am), whole_pulses(60, frame_dur))
 
 
-def test_StimulusEncoder_clock():
+def test_PulseEncoder_clock():
     # A clock rounds the pulse period onto a whole number of cycles, so
     # frequencies that differ by less than that collapse onto one schedule:
     img = ImageStimulus(np.linspace(0.5, 1, 16).reshape((4, 4)))
@@ -413,7 +477,7 @@ def test_StimulusEncoder_clock():
         FrequencyEncoder(clock=DT / 10)
 
 
-def test_StimulusEncoder_n_levels():
+def test_PulseEncoder_n_levels():
     # Quantizing the gray levels quantizes whatever they are modulated onto:
     img = ImageStimulus(np.linspace(0, 1, 64).reshape((8, 8)))
     am = AmplitudeEncoder(amp_range=(0, 50), n_levels=4).encode(img)
@@ -427,7 +491,7 @@ def test_StimulusEncoder_n_levels():
     npt.assert_equal(fm4.shape[1] < fm.shape[1], True)
 
 
-def test_StimulusEncoder_big_time_warning(monkeypatch):
+def test_PulseEncoder_big_time_warning(monkeypatch):
     monkeypatch.setattr(encoders, '_BIG_TIME', 100)
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     with pytest.warns(UserWarning, match='time points'):
@@ -438,23 +502,22 @@ def test_FrequencyEncoder_implant(camera_video):
     # A 300 Hz period is 3.3 ms, which Argus II's own six-group 2 ms raster
     # sweep does not fit into, so this device drives every electrode at once:
     implant = ArgusII(raster=None)
-    enc = FrequencyEncoder(freq_range=(0, 300), amp=50, clock=1).encode(
-        camera_video, implant=implant)
+    enc = FrequencyEncoder(implant, freq_range=(0, 300), amp=50,
+                           clock=1).encode(camera_video)
     npt.assert_equal(enc.shape[0], implant.n_electrodes)
     npt.assert_almost_equal(np.abs(enc.data).max(), 50)
     npt.assert_equal(implant.prepare_stim(enc).shape, enc.shape)
     # The clock is what makes this tractable at all: without one, the same
     # clip needs several times as many time points:
-    unclocked = FrequencyEncoder(freq_range=(0, 300), amp=50).encode(
-        camera_video, implant=implant)
+    unclocked = FrequencyEncoder(implant, freq_range=(0, 300), amp=50).encode(
+        camera_video)
     npt.assert_equal(enc.shape[1] < unclocked.shape[1] / 5, True)
 
 
-def test_StimulusEncoder_raster():
+def test_PulseEncoder_raster():
     img = ImageStimulus(np.ones((2, 2)))
     implant = pixel_implant((2, 2), SequentialRaster(2, interleave=True))
-    enc = AmplitudeEncoder(freq=100, frame_dur=100).encode(img,
-                                                           implant=implant)
+    enc = AmplitudeEncoder(implant, freq=100, frame_dur=100).encode(img)
     # Rastering splits the electrodes across two pulse schedules. The cycle a
     # raster has to get through is the pulse *period*, not the frame, so the
     # two groups are offset by half a period:
@@ -487,8 +550,8 @@ def test_StimulusEncoder_raster():
     # Rounding each offset and the total cycle independently instead would give
     # a 9 ms cycle made of a 5 ms and a 4 ms turn, and 111 Hz:
     implant.raster = SequentialRaster(2, interleave=True, group_dur=4.6)
-    enc = AmplitudeEncoder(freq=100, frame_dur=100, clock=1).encode(
-        img, implant=implant)
+    enc = AmplitudeEncoder(implant, freq=100, frame_dur=100, clock=1).encode(
+        img)
     npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 5, decimal=3)
     npt.assert_almost_equal(np.diff(pulse_onsets(enc, 1)), 10, decimal=3)
     npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 10)
@@ -496,24 +559,24 @@ def test_StimulusEncoder_raster():
     # use. Two 5.1 ms slots do not fit into a 10 ms period, but on a 1 ms clock
     # they are 5 ms slots, and two of those fit exactly:
     implant.raster = SequentialRaster(2, interleave=True, group_dur=5.1)
-    enc = AmplitudeEncoder(freq=100, frame_dur=100, clock=1).encode(
-        img, implant=implant)
+    enc = AmplitudeEncoder(implant, freq=100, frame_dur=100, clock=1).encode(
+        img)
     npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 10)
     npt.assert_almost_equal(pulse_onsets(enc, 1)[0], 5, decimal=3)
     # Without a clock to round it there is nothing to round, and it is an error:
     with pytest.raises(ValueError):
-        AmplitudeEncoder(freq=100, frame_dur=100).encode(img, implant=implant)
+        AmplitudeEncoder(implant, freq=100, frame_dur=100).encode(img)
 
 
-def test_StimulusEncoder_raster_frequency_modulation():
+def test_PulseEncoder_raster_frequency_modulation():
     # Under frequency modulation electrodes want different periods, so they
     # can only be kept apart by quantizing every period onto a common raster
     # cycle. The fastest electrode pulses once per cycle, slower ones every
     # m-th cycle, and no two groups ever coincide:
     img = ImageStimulus(np.linspace(0.25, 1, 16).reshape((4, 4)))
     implant = pixel_implant((4, 4), SequentialRaster(4, interleave=True))
-    enc = FrequencyEncoder(freq_range=(0, 120), amp=10,
-                           frame_dur=200).encode(img, implant=implant)
+    enc = FrequencyEncoder(implant, freq_range=(0, 120), amp=10,
+                           frame_dur=200).encode(img)
     cycle = enc.metadata['encoder']['cycle']
     npt.assert_almost_equal(cycle, 1000 / 120)
     for e in range(16):
@@ -526,27 +589,28 @@ def test_StimulusEncoder_raster_frequency_modulation():
     # Multiplexing a fast train across many groups asks more of a stimulator
     # than it can give, and that is an error rather than a silent collision:
     with pytest.raises(ValueError, match='no room'):
-        FrequencyEncoder(freq_range=(0, 300), amp=10, frame_dur=200).encode(
-            img, implant=pixel_implant((4, 4), SequentialRaster(6)))
+        FrequencyEncoder(pixel_implant((4, 4), SequentialRaster(6)),
+                         freq_range=(0, 300), amp=10,
+                         frame_dur=200).encode(img)
 
 
-def test_StimulusEncoder_raster_from_implant():
+def test_PulseEncoder_raster_from_implant():
     # The implant is the one place device scheduling is described, so the
     # encoder holds no raster of its own and reads the implant's:
     implant = ArgusII()
     implant.raster = SequentialRaster(6)
     vid = VideoStimulus(np.ones((6, 10, 2)), metadata={'fps': 30})
-    enc = AmplitudeEncoder(freq=30).encode(vid, implant=implant)
+    enc = AmplitudeEncoder(implant, freq=30).encode(vid)
     npt.assert_equal(n_schedules_of(enc), 6)
     delays = [pulse_onsets(enc, e)[0] for e in (0, 10, 20, 30, 40, 50)]
     npt.assert_almost_equal(delays, np.arange(6) * 1000 / 30 / 6, decimal=2)
     # Trying another one out is a matter of giving it to the implant:
     implant.raster = SequentialRaster(2)
-    enc = AmplitudeEncoder(freq=30).encode(vid, implant=implant)
+    enc = AmplitudeEncoder(implant, freq=30).encode(vid)
     npt.assert_equal(n_schedules_of(enc), 2)
     # And no raster means every electrode fires at frame onset:
     implant.raster = None
-    enc = AmplitudeEncoder(freq=30).encode(vid, implant=implant)
+    enc = AmplitudeEncoder(implant, freq=30).encode(vid)
     npt.assert_equal(n_schedules_of(enc), 1)
     # Encoding for no implant at all is pixel resolution and no raster, even
     # though this encoder just encoded for a rastered device:
@@ -554,43 +618,40 @@ def test_StimulusEncoder_raster_from_implant():
     npt.assert_equal(n_schedules_of(bare), 1)
 
 
-def test_StimulusEncoder_raster_current_limit():
+def test_PulseEncoder_raster_current_limit():
     # 60 electrodes at 50 uA is 3000 uA if they all fire at once, but only
     # 500 uA if they take turns ten at a time:
     implant = ArgusII(raster=None)
     implant.max_current = 1000
     vid = VideoStimulus(np.ones((6, 10, 3)), metadata={'fps': 30})
     with pytest.raises(ValueError, match='raster'):
-        implant.prepare_stim(AmplitudeEncoder(amp_range=(50, 50),
-                                              freq=30).encode(vid,
-                                                              implant=implant))
+        implant.prepare_stim(AmplitudeEncoder(implant, amp_range=(50, 50),
+                                              freq=30).encode(vid))
     implant.raster = SequentialRaster(6)
     stim = implant.prepare_stim(
-        AmplitudeEncoder(amp_range=(50, 50), freq=30).encode(vid,
-                                                             implant=implant))
+        AmplitudeEncoder(implant, amp_range=(50, 50), freq=30).encode(vid))
     npt.assert_almost_equal(np.abs(stim.data).sum(axis=0).max(), 500)
     # A raster that cannot get through all its groups within a frame is not a
     # usable schedule:
     implant.raster = SequentialRaster(6, group_dur=20)
     with pytest.raises(ValueError):
-        AmplitudeEncoder(freq=30).encode(vid, implant=implant)
+        AmplitudeEncoder(implant, freq=30).encode(vid)
     # Neither is one whose groups get a turn too short to pulse in. Sixty
     # 0.92 ms pulses take 55 ms, which does not fit into a 33 ms frame, so
     # electrode-at-a-time rastering is impossible here rather than merely
     # dropping the electrodes that come last:
     implant.raster = SequentialRaster(60)
     with pytest.raises(ValueError, match='no room'):
-        AmplitudeEncoder(freq=30).encode(vid, implant=implant)
+        AmplitudeEncoder(implant, freq=30).encode(vid)
     # Halving the phase duration makes it fit:
-    enc = AmplitudeEncoder(freq=30, phase_dur=0.2).encode(vid,
-                                                          implant=implant)
+    enc = AmplitudeEncoder(implant, freq=30, phase_dur=0.2).encode(vid)
     npt.assert_equal(n_schedules_of(enc), 60)
     npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 50)
 
 
 @pytest.mark.parametrize('fps', [29.97, 30, 24, 59.94])
 @pytest.mark.parametrize('freq', [50, 100])
-def test_StimulusEncoder_freq_is_actual_freq(fps, freq):
+def test_PulseEncoder_freq_is_actual_freq(fps, freq):
     # The pulse clock runs independently of the frame clock, so the requested
     # frequency is the frequency delivered -- whatever the frame rate is, and
     # whether or not a frame holds a whole number of periods. Before, each
@@ -659,7 +720,7 @@ def test_FrequencyEncoder_rate_changes_between_frames():
                             [0, 10, 20, 30, 40, 50, 70, 90, 120], decimal=3)
 
 
-def test_StimulusEncoder_raster_slots_land_on_the_clock():
+def test_PulseEncoder_raster_slots_land_on_the_clock():
     # A stimulator can only start a pulse on a clock edge, so splitting a
     # period evenly between the groups has to be resolved onto that grid.
     # Rounding each group's offset independently could land two of them on the
@@ -669,12 +730,12 @@ def test_StimulusEncoder_raster_slots_land_on_the_clock():
     img = ImageStimulus(np.ones((6, 2)))
     implant = pixel_implant((6, 2), SequentialRaster(6))
     with pytest.raises(ValueError, match='clock'):
-        AmplitudeEncoder(freq=200, frame_dur=100, clock=1).encode(
-            img, implant=implant)
+        AmplitudeEncoder(implant, freq=200, frame_dur=100, clock=1).encode(
+            img)
     # Given room, every group gets its own whole number of clock cycles, and
     # the turns come out evenly spaced rather than jittered onto nearby edges:
-    enc = AmplitudeEncoder(freq=20, frame_dur=200, clock=1).encode(
-        img, implant=implant)
+    enc = AmplitudeEncoder(implant, freq=20, frame_dur=200, clock=1).encode(
+        img)
     starts = np.array([pulse_onsets(enc, e)[0] for e in range(0, 12, 2)])
     npt.assert_almost_equal(starts, np.arange(6) * 8.0, decimal=3)
     npt.assert_equal(np.unique(starts).size, 6)
@@ -685,7 +746,7 @@ def test_StimulusEncoder_raster_slots_land_on_the_clock():
     npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 100)
 
 
-def test_StimulusEncoder_raster_short_slot_keeps_the_rate():
+def test_PulseEncoder_raster_short_slot_keeps_the_rate():
     # A short explicit slot packs the groups into the start of each period.
     # That must not change the rate: when every electrode is on the same
     # period -- which is what amplitude modulation always produces -- two
@@ -697,8 +758,7 @@ def test_StimulusEncoder_raster_short_slot_keeps_the_rate():
                                                      group_dur=1.5))
     # 10 ms period against a 2 x 1.5 = 3 ms cycle: quantizing would round the
     # period up to 12 ms (83 Hz):
-    enc = AmplitudeEncoder(freq=100, frame_dur=200).encode(img,
-                                                           implant=implant)
+    enc = AmplitudeEncoder(implant, freq=100, frame_dur=200).encode(img)
     npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 3)
     for e, offset in enumerate([0, 1.5, 0, 1.5]):
         npt.assert_almost_equal(pulse_onsets(enc, e)[0], offset, decimal=3)
@@ -710,11 +770,10 @@ def test_StimulusEncoder_raster_short_slot_keeps_the_rate():
     npt.assert_almost_equal(np.abs(enc.data).sum(axis=0).max(), 100)
     # Frequency modulation still has to quantize, because electrodes on
     # different periods do drift onto each other:
-    fm = FrequencyEncoder(freq_range=(50, 100), amp=10,
+    fm = FrequencyEncoder(implant, freq_range=(50, 100), amp=10,
                           frame_dur=200).encode(
                               ImageStimulus(np.array([[1.0, 0.0],
-                                                      [1.0, 0.0]])),
-                              implant=implant)
+                                                      [1.0, 0.0]])))
     for e in range(4):
         period = np.diff(pulse_onsets(fm, e))
         npt.assert_allclose(period / 3, np.round(period / 3), atol=1e-3)
@@ -734,8 +793,8 @@ def test_FrequencyEncoder_rate_changes_with_raster_offset():
                         metadata={'fps': 50})
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        enc = FrequencyEncoder(freq_range=(0, 10), amp=10).encode(
-            vid, implant=implant)
+        enc = FrequencyEncoder(implant, freq_range=(0, 10), amp=10).encode(
+            vid)
     npt.assert_almost_equal(enc.metadata['encoder']['cycle'], 100)
     # Only the 20-40 ms frame asks for stimulation, and neither group has a
     # legal slot inside it -- group 0's fall on 0 and 100 ms, group 1's on 50
@@ -753,8 +812,8 @@ def test_FrequencyEncoder_rate_changes_with_raster_offset():
                         metadata={'fps': 50})
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        enc = FrequencyEncoder(freq_range=(0, 10), amp=10).encode(
-            vid, implant=implant)
+        enc = FrequencyEncoder(implant, freq_range=(0, 10), amp=10).encode(
+            vid)
     npt.assert_almost_equal(pulse_onsets(enc, 0), [0], decimal=3)
     npt.assert_almost_equal(pulse_onsets(enc, 1), [50], decimal=3)
     # A pulse is never delivered into a frame that asked for silence:
@@ -763,7 +822,7 @@ def test_FrequencyEncoder_rate_changes_with_raster_offset():
             npt.assert_equal(vid.data[e, int(t // 20)] > 0, True)
 
 
-def test_StimulusEncoder_clock_never_speeds_up():
+def test_PulseEncoder_clock_never_speeds_up():
     # Same invariant as the raster, for the stimulator's own time base: a
     # timing constraint may lower the rate an electrode ends up on, never raise
     # it, since raising it delivers more charge than was asked for. Realizable
@@ -790,8 +849,8 @@ def test_FrequencyEncoder_raster_never_speeds_up():
     grays = np.array([1.0, 0.67, 0.4, 0.2])
     img = ImageStimulus(grays.reshape((2, 2)))
     implant = pixel_implant((2, 2), SequentialRaster(4))
-    enc = FrequencyEncoder(freq_range=(0, 100), amp=10, frame_dur=200).encode(
-        img, implant=implant)
+    enc = FrequencyEncoder(implant, freq_range=(0, 100), amp=10,
+                           frame_dur=200).encode(img)
     cycle = enc.metadata['encoder']['cycle']
     npt.assert_almost_equal(cycle, 10)
     for e, gray in enumerate(grays):
@@ -805,7 +864,7 @@ def test_FrequencyEncoder_raster_never_speeds_up():
     npt.assert_almost_equal(np.diff(pulse_onsets(enc, 0)), 10, decimal=3)
 
 
-def test_StimulusEncoder_pulse_offset():
+def test_PulseEncoder_pulse_offset():
     # `Stimulus` only requires a time axis to be ordered, not to start at zero.
     # What an encoder borrows from a supplied pulse is its *shape*, so a pulse
     # whose time axis is shifted has to encode exactly like an unshifted one.
@@ -826,7 +885,7 @@ def test_StimulusEncoder_pulse_offset():
     npt.assert_almost_equal(shifted.time, [5, 5.01, 6, 6.01])
 
 
-def test_StimulusEncoder_zero_amp():
+def test_PulseEncoder_zero_amp():
     # An electrode delivering no current has nothing to schedule, so a dark
     # frame costs no pulses and no time points -- it used to build a full pulse
     # train and then multiply it by zero:
@@ -861,15 +920,15 @@ def test_StimulusEncoder_zero_amp():
     implant = ArgusII(raster=SequentialRaster(60))
     dark = VideoStimulus(np.zeros((6, 10, 3)), metadata={'fps': 30})
     with pytest.raises(ValueError, match='no room'):
-        AmplitudeEncoder(freq=30).encode(dark, implant=implant)
+        AmplitudeEncoder(implant, freq=30).encode(dark)
     # ... and a workable one costs a dark video nothing:
-    enc = AmplitudeEncoder(amp_range=(0, 50), freq=30, phase_dur=0.2).encode(
-        dark, implant=implant)
+    enc = AmplitudeEncoder(implant, amp_range=(0, 50), freq=30,
+                           phase_dur=0.2).encode(dark)
     npt.assert_equal(np.all(enc.data == 0), True)
     npt.assert_equal(enc.shape[1], 2)
 
 
-def test_StimulusEncoder_implant_reshape():
+def test_PulseEncoder_implant_reshape():
     # Passing an implant means "sample the source at the electrode locations".
     # Row count is not a usable test of whether that already happened: a 10x6
     # image and an RGB 4x5 image both have exactly as many rows as Argus II has
@@ -881,20 +940,21 @@ def test_StimulusEncoder_implant_reshape():
                 ImageStimulus(np.random.rand(6, 10)),
                 VideoStimulus(np.random.rand(10, 6, 2))]:
         npt.assert_equal(src.data.shape[0], implant.n_electrodes)
-        enc = AmplitudeEncoder(amp_range=(0, 50)).encode(src, implant=implant)
+        enc = AmplitudeEncoder(implant, amp_range=(0, 50)).encode(src)
         direct = AmplitudeEncoder(amp_range=(0, 50)).encode(
             implant.reshape_stim(src))
         npt.assert_almost_equal(enc.data, direct.data, decimal=4)
         npt.assert_equal(list(enc.electrodes), list(implant.electrode_names))
 
 
-def test_StimulusEncoder_spatial_view():
+def test_PulseEncoder_spatial_view():
     """The modulation half of encoding, with none of the device's timing in it
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     implant = pixel_implant((4, 4), SequentialRaster(4, interleave=True))
-    enc = AmplitudeEncoder(amp_range=(0, 50), freq=100, frame_dur=100)
-    delivered = enc.encode(img, implant=implant)
+    params = dict(amp_range=(0, 50), freq=100, frame_dur=100)
+    enc = AmplitudeEncoder(implant, **params)
+    delivered = enc.encode(img)
     spatial = delivered._spatial_view()
     # Asking for it does not expand the schedule into a waveform:
     npt.assert_equal(_rendered(delivered), False)
@@ -932,12 +992,12 @@ def test_StimulusEncoder_spatial_view():
     # `encode`):
     vid = VideoStimulus(np.random.default_rng(0).random((4, 4, 5)),
                         metadata={'fps': 20})
-    spatial = enc.encode(vid, implant=implant)._spatial_view()
+    spatial = enc.encode(vid)._spatial_view()
     npt.assert_equal(spatial.shape, (16, 5))
     npt.assert_almost_equal(spatial.time, np.arange(5) * 100.0)
 
     # Encoding for no implant at all works the same way, at pixel resolution:
-    bare = enc.encode(img)._spatial_view()
+    bare = AmplitudeEncoder(**params).encode(img)._spatial_view()
     npt.assert_equal(bare.shape, (16, 1))
     npt.assert_almost_equal(bare.data.ravel(), np.linspace(0, 1, 16) * 50,
                             decimal=4)
@@ -964,7 +1024,7 @@ def test_FrequencyEncoder_spatial_view():
     npt.assert_equal(np.all(np.diff(counts) > 0), True)
 
 
-def test_StimulusEncoder_metadata():
+def test_PulseEncoder_metadata():
     enc = AmplitudeEncoder(freq=50).encode(ImageStimulus(np.ones((2, 2))))
     npt.assert_almost_equal(enc.metadata['encoder']['frame_dur'], 500)
     npt.assert_almost_equal(enc.metadata['encoder']['frame_time'], [0])
@@ -977,7 +1037,7 @@ def test_StimulusEncoder_metadata():
     npt.assert_equal(n_schedules_of(fm), 4)
 
 
-def test_StimulusEncoder_degenerate_raster_is_no_raster():
+def test_PulseEncoder_degenerate_raster_is_no_raster():
     """A raster with one group has nothing to multiplex, so it changes nothing.
 
     This is the limiting case that says a raster only ever *staggers* onsets:
@@ -989,7 +1049,7 @@ def test_StimulusEncoder_degenerate_raster_is_no_raster():
     implant = ArgusII(raster=None)
     img = ImageStimulus(np.random.default_rng(0).random((6, 10)))
     kwargs = dict(amp_range=(0, 50), freq=20, frame_dur=200)
-    plain = AmplitudeEncoder(**kwargs).encode(img, implant=implant)
+    plain = AmplitudeEncoder(implant, **kwargs).encode(img)
     npt.assert_equal(plain.metadata['encoder']['cycle'], None)
 
     names = list(implant.electrode_names)
@@ -1000,7 +1060,7 @@ def test_StimulusEncoder_degenerate_raster_is_no_raster():
                    CustomRaster({n: 0 for n in names})):
         npt.assert_equal(raster.n_groups, 1)
         implant.raster = raster
-        got = AmplitudeEncoder(**kwargs).encode(img, implant=implant)
+        got = AmplitudeEncoder(implant, **kwargs).encode(img)
         npt.assert_array_equal(got.data, plain.data)
         npt.assert_array_equal(got.time, plain.time)
         npt.assert_equal(got.metadata['encoder']['cycle'], None)
@@ -1010,53 +1070,52 @@ def test_StimulusEncoder_degenerate_raster_is_no_raster():
                                 np.abs(plain.data).sum(axis=0).max())
 
 
-def test_StimulusEncoder_degenerate_ranges():
+def test_PulseEncoder_degenerate_ranges():
     """A modulation range of zero width stops the gray levels mattering."""
     implant = ArgusII(raster=None)
     img = ImageStimulus(np.random.default_rng(1).random((6, 10)))
     kwargs = dict(frame_dur=200)
 
     # One amplitude for every gray level is a constant-amplitude train...
-    flat = AmplitudeEncoder(amp_range=(30, 30), freq=20,
-                            **kwargs).encode(img, implant=implant)
+    flat = AmplitudeEncoder(implant, amp_range=(30, 30), freq=20,
+                            **kwargs).encode(img)
     npt.assert_almost_equal(np.abs(flat.data).max(axis=1), 30.0, decimal=4)
     # ... and one frequency for every gray level is the very same stimulus,
     # since frequency modulation at a constant rate *is* amplitude modulation
     # at a constant amplitude:
-    same = FrequencyEncoder(freq_range=(20, 20), amp=30,
-                            **kwargs).encode(img, implant=implant)
+    same = FrequencyEncoder(implant, freq_range=(20, 20), amp=30,
+                            **kwargs).encode(img)
     npt.assert_array_equal(same.data, flat.data)
     npt.assert_array_equal(same.time, flat.time)
     npt.assert_equal(n_schedules_of(same), 1)
 
     # A black image asks for no current at all, at either end of the range:
     black = ImageStimulus(np.zeros((6, 10)))
-    for enc in (AmplitudeEncoder(amp_range=(0, 50), **kwargs),
-                FrequencyEncoder(freq_range=(0, 200), amp=50, **kwargs)):
-        npt.assert_equal(np.any(enc.encode(black, implant=implant).data),
-                         False)
+    for enc in (AmplitudeEncoder(implant, amp_range=(0, 50), **kwargs),
+                FrequencyEncoder(implant, freq_range=(0, 200), amp=50,
+                                 **kwargs)):
+        npt.assert_equal(np.any(enc.encode(black).data), False)
 
 
-def test_StimulusEncoder_n_levels_converges():
+def test_PulseEncoder_n_levels_converges():
     """Quantizing onto enough gray levels is the same as not quantizing."""
     implant = ArgusII()
     img = ImageStimulus(np.random.default_rng(2).random((6, 10)))
     kwargs = dict(amp_range=(0, 50), freq=20, frame_dur=200)
-    ref = AmplitudeEncoder(**kwargs).encode(img, implant=implant)
-    err = [np.abs(AmplitudeEncoder(n_levels=n, **kwargs).encode(
-               img, implant=implant).data - ref.data).max()
+    ref = AmplitudeEncoder(implant, **kwargs).encode(img)
+    err = [np.abs(AmplitudeEncoder(implant, n_levels=n, **kwargs).encode(
+               img).data - ref.data).max()
            for n in (4, 16, 256, 1 << 16)]
     # Each step of 4x in the level count is a step of ~4x in accuracy, and the
     # finest is close enough to be irrelevant next to a 50 uA range:
     npt.assert_equal(np.all(np.diff(err) < 0), True)
     npt.assert_array_less(err[-1], 1e-2)
     # Two levels is the coarsest allowed, and it is a black-or-white encoding:
-    two = AmplitudeEncoder(n_levels=2, **kwargs).encode(img,
-                                                        implant=implant)
+    two = AmplitudeEncoder(implant, n_levels=2, **kwargs).encode(img)
     npt.assert_array_equal(np.unique(np.abs(two.data).max(axis=1)), [0.0, 50.0])
 
 
-def test_StimulusEncoder_frame_rate_does_not_move_the_pulses():
+def test_PulseEncoder_frame_rate_does_not_move_the_pulses():
     """The pulse clock is independent of the frame clock.
 
     Re-timing the same frames only changes how long the stimulus lasts and
@@ -1072,9 +1131,9 @@ def test_StimulusEncoder_frame_rate_does_not_move_the_pulses():
     for frame_dur in (100.0, 50.0, 25.0):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            stim = AmplitudeEncoder(amp_range=(50, 50), freq=20,
+            stim = AmplitudeEncoder(implant, amp_range=(50, 50), freq=20,
                                     frame_dur=frame_dur).encode(
-                                        vid, implant=implant)
+                                        vid)
         npt.assert_almost_equal(stim.time[-1], 4 * frame_dur)
         neg = stim.data[0] < 0
         onsets.append(stim.time[neg & ~np.concatenate(([False], neg[:-1]))])
@@ -1160,8 +1219,8 @@ def test_encoder_source_must_be_dimensionless():
     npt.assert_equal(sampled.unit, dimensionless)
     npt.assert_equal(enc.encode(sampled).unit, uA)
     # ... and the implant path inside the encoder gives the same answer:
-    npt.assert_equal(AmplitudeEncoder(amp_range=(0, 50)).encode(
-        img, implant=implant).unit, uA)
+    npt.assert_equal(AmplitudeEncoder(implant, amp_range=(0, 50)).encode(
+        img).unit, uA)
     # An electrical stimulus, no: `Stimulus([0.5])` is half a microamp, and
     # reading it as a gray level would clip and re-modulate it silently.
     with pytest.raises(DimensionMismatchError) as excinfo:
@@ -1209,9 +1268,8 @@ ENCODED = [
                       time=np.arange(3) * 40.0))),
     ('frequency', lambda: FrequencyEncoder(freq_range=(0, 60)).encode(
         ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))),
-    ('rastered', lambda: AmplitudeEncoder().encode(
-        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)),
-        implant=ArgusII())),
+    ('rastered', lambda: AmplitudeEncoder(ArgusII()).encode(
+        ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))),
     ('clocked', lambda: AmplitudeEncoder(clock=1.0).encode(
         ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))),
     ('custom-pulse', lambda: AmplitudeEncoder(
@@ -1369,7 +1427,7 @@ def test_encoded_stimulus_validates_while_it_schedules():
         AmplitudeEncoder(phase_dur=400).encode(img)
     with pytest.raises(ValueError):
         # A raster that cannot get through in one pulse period:
-        FrequencyEncoder(freq_range=(0, 300)).encode(img, implant=ArgusII())
+        FrequencyEncoder(ArgusII(), freq_range=(0, 300)).encode(img)
     with pytest.raises(ValueError):
         # A pulse whose time points DT cannot resolve:
         AmplitudeEncoder(pulse=Stimulus([[0, 1, 0]],
@@ -1387,8 +1445,7 @@ def test_encoded_stimulus_survives_preparation_unrendered():
     # reason to hold a waveform than the original did.
     implant = ArgusII()
     img = ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8))
-    stim = implant.prepare_stim(AmplitudeEncoder().encode(img,
-                                                          implant=implant))
+    stim = implant.prepare_stim(AmplitudeEncoder(implant).encode(img))
     npt.assert_equal(_rendered(stim), False)
     npt.assert_equal(len(stim.electrodes), 60)
     # Presenting the picture itself goes through the implant's own encoder,
@@ -1414,7 +1471,7 @@ def test_PhotovoltaicEncoder():
     npt.assert_almost_equal(encoder.ref_drive, 4 * 4 * 40 / 1000)
     npt.assert_equal(encoder.grayscale, True)
     npt.assert_equal(isinstance(encoder, Encoder), True)
-    npt.assert_equal(isinstance(encoder, StimulusEncoder), False)
+    npt.assert_equal(isinstance(encoder, PulseEncoder), False)
     npt.assert_equal('PhotovoltaicEncoder' in str(encoder), True)
     npt.assert_equal('wavelength' in str(encoder), True)
 
@@ -1455,10 +1512,9 @@ def test_PhotovoltaicEncoder_is_not_bound_to_the_PRIMA_grid(pulse_dur, freq):
     """Durations off the 0.7 ms PRIMA grid are ordinary optical protocols."""
     with pytest.raises(ValueError):
         PRIMAEncoder(pulse_dur=pulse_dur, freq=freq)
-    encoder = PhotovoltaicEncoder(irradiance=4, freq=freq,
+    encoder = PhotovoltaicEncoder(PRIMAPivotal(), irradiance=4, freq=freq,
                                   pulse_dur=pulse_dur, wavelength=915)
-    stim = encoder.encode(ImageStimulus(np.ones((16, 16))),
-                          implant=PRIMAPivotal())
+    stim = encoder.encode(ImageStimulus(np.ones((16, 16))))
     npt.assert_almost_equal(stim.pulse_dur.max(), pulse_dur)
     npt.assert_almost_equal(on_intervals(stim)[0], pulse_dur, decimal=6)
 
@@ -1467,9 +1523,9 @@ def test_PhotovoltaicEncoder_grayscale_is_continuous():
     """Gray levels scale ON duration linearly, without quantization."""
     implant = PRIMAPivotal()
     ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
-    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
+    encoder = PhotovoltaicEncoder(implant, irradiance=4, freq=40, pulse_dur=4,
                                   wavelength=915)
-    stim = encoder.encode(ImageStimulus(ramp), implant=implant)
+    stim = encoder.encode(ImageStimulus(ramp))
     gray = implant.reshape_stim(ImageStimulus(ramp)).data
     npt.assert_almost_equal(stim.pulse_dur[:, :1], gray * 4, decimal=6)
     # More distinct durations than PRIMA's 14 duration levels allow:
@@ -1479,31 +1535,29 @@ def test_PhotovoltaicEncoder_grayscale_is_continuous():
     npt.assert_almost_equal(np.unique(np.round(lit, 6)), np.array([4.0]))
 
     # Binary mode lights a pixel for the full duration or not at all.
-    binary = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
+    binary = PhotovoltaicEncoder(implant, irradiance=4, freq=40, pulse_dur=4,
                                  wavelength=915, grayscale=False,
                                  threshold=0.5)
-    dur = binary.encode(ImageStimulus(ramp), implant=implant).pulse_dur
+    dur = binary.encode(ImageStimulus(ramp)).pulse_dur
     npt.assert_almost_equal(np.unique(np.round(dur, 6)), np.array([0.0, 4.0]))
 
 
 def test_PhotovoltaicEncoder_spatial_view():
     implant = PRIMAPivotal()
     ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
-    encoder = PhotovoltaicEncoder(irradiance=4, freq=40, pulse_dur=4,
+    encoder = PhotovoltaicEncoder(implant, irradiance=4, freq=40, pulse_dur=4,
                                   wavelength=915)
-    view = encoder.encode(ImageStimulus(ramp),
-                          implant=implant)._spatial_view()
+    view = encoder.encode(ImageStimulus(ramp))._spatial_view()
     npt.assert_equal(view.unit, dimensionless)
     npt.assert_almost_equal(view.data.min(), 0)
     npt.assert_almost_equal(view.data.max(), 1, decimal=6)
     # 1.0 is a fully lit pixel at these settings, so halving the gray level
     # halves the drive, but halving the irradiance does not change the scale.
-    half = encoder.encode(ImageStimulus(np.full((8, 8), 0.5)),
-                          implant=implant)._spatial_view()
+    half = encoder.encode(ImageStimulus(np.full((8, 8), 0.5)))._spatial_view()
     npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
-    dim = PhotovoltaicEncoder(irradiance=2, freq=40, pulse_dur=4,
+    dim = PhotovoltaicEncoder(implant, irradiance=2, freq=40, pulse_dur=4,
                               wavelength=915).encode(
-        ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
+        ImageStimulus(np.ones((8, 8))))._spatial_view()
     npt.assert_almost_equal(dim.data.max(), 1, decimal=6)
 
 
@@ -1533,8 +1587,8 @@ def test_PRIMAEncoder():
     npt.assert_almost_equal(encoder.wavelength, 880)
     npt.assert_equal(encoder.n_levels, 14)
     npt.assert_equal(isinstance(encoder, Encoder), True)
-    # PRIMAEncoder is not an electrical StimulusEncoder.
-    npt.assert_equal(isinstance(encoder, StimulusEncoder), False)
+    # PRIMAEncoder is not an electrical PulseEncoder.
+    npt.assert_equal(isinstance(encoder, PulseEncoder), False)
     npt.assert_equal('PRIMAEncoder' in str(encoder), True)
 
     # Unitful and bare parameters are equivalent.
@@ -1562,13 +1616,12 @@ def test_PRIMAEncoder_rejects(kwargs):
 def test_PRIMAEncoder_takes_a_picture():
     implant = PRIMAPivotal()
     with pytest.raises(DimensionMismatchError):
-        PRIMAEncoder().encode(Stimulus([[1, 0]] * uA, time=[0, 10]),
-                              implant=implant)
+        PRIMAEncoder(implant).encode(Stimulus([[1, 0]] * uA, time=[0, 10]))
     with pytest.raises(TypeError):
-        PRIMAEncoder().encode(np.ones((4, 4)), implant=implant)
+        PRIMAEncoder(implant).encode(np.ones((4, 4)))
     # RGB input is converted to gray during implant sampling.
     rgb = ImageStimulus(np.ones((8, 8, 3)))
-    npt.assert_equal(PRIMAEncoder().encode(rgb, implant=implant).shape[0], 378)
+    npt.assert_equal(PRIMAEncoder(implant).encode(rgb).shape[0], 378)
 
 
 @pytest.mark.parametrize('grayscale', [True, False])
@@ -1576,8 +1629,8 @@ def test_PRIMAEncoder_takes_a_picture():
 def test_PRIMAEncoder_extremes(gray, n_lit, grayscale):
     # Black is off; white uses the maximum duration.
     implant = PRIMAPivotal()
-    stim = PRIMAEncoder(grayscale=grayscale).encode(
-        ImageStimulus(np.full((16, 16), gray)), implant=implant)
+    stim = PRIMAEncoder(implant, grayscale=grayscale).encode(
+        ImageStimulus(np.full((16, 16), gray)))
     npt.assert_equal(stim.shape[0], 378)
     npt.assert_equal(np.count_nonzero(stim.data.max(axis=1)), n_lit)
     # No raster limits simultaneous illumination.
@@ -1589,9 +1642,9 @@ def test_PRIMAEncoder_threshold(threshold):
     # Binary mode lights pixels at or above threshold.
     ramp = np.tile(np.linspace(0, 1, 32), (32, 1))
     implant = PRIMAPivotal()
-    encoder = PRIMAEncoder(grayscale=False, threshold=threshold)
+    encoder = PRIMAEncoder(implant, grayscale=False, threshold=threshold)
     gray = implant.reshape_stim(ImageStimulus(ramp)).data.ravel()
-    stim = encoder.encode(ImageStimulus(ramp), implant=implant)
+    stim = encoder.encode(ImageStimulus(ramp))
     dur = stim.pulse_dur
     # Static images repeat across projector periods.
     npt.assert_equal(dur.shape, (378, 15))
@@ -1604,8 +1657,7 @@ def test_PRIMAEncoder_threshold(threshold):
 
 def test_PRIMAEncoder_optical_waveform():
     implant = PRIMAPivotal()
-    stim = PRIMAEncoder().encode(ImageStimulus(np.ones((16, 16))),
-                                 implant=implant)
+    stim = PRIMAEncoder(implant).encode(ImageStimulus(np.ones((16, 16))))
     # Output is optical irradiance.
     npt.assert_equal(stim.unit, mW / mm ** 2)
     npt.assert_equal(stim.unit.dimension, (W / m ** 2).dimension)
@@ -1626,8 +1678,8 @@ def test_PRIMAEncoder_optical_waveform():
 def test_PRIMAEncoder_irradiance_is_not_modulated():
     implant = PRIMAPivotal()
     ramp = np.tile(np.linspace(0, 1, 32), (32, 1))
-    stim = PRIMAEncoder(grayscale=True, irradiance=2.0).encode(
-        ImageStimulus(ramp), implant=implant)
+    stim = PRIMAEncoder(implant, grayscale=True, irradiance=2.0).encode(
+        ImageStimulus(ramp))
     lit = stim.data[stim.data > 0]
     # Gray level changes duration, not peak irradiance.
     npt.assert_almost_equal(np.unique(np.round(lit, 6)), np.array([2.0]))
@@ -1636,8 +1688,7 @@ def test_PRIMAEncoder_irradiance_is_not_modulated():
 def test_PRIMAEncoder_grayscale():
     implant = PRIMAPivotal()
     ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
-    stim = PRIMAEncoder(grayscale=True).encode(ImageStimulus(ramp),
-                                               implant=implant)
+    stim = PRIMAEncoder(implant, grayscale=True).encode(ImageStimulus(ramp))
     dur = stim.pulse_dur[:, :1]
     # Durations lie on the 0.7 ms hardware grid.
     npt.assert_almost_equal(dur / 0.7, np.round(dur / 0.7))
@@ -1650,15 +1701,15 @@ def test_PRIMAEncoder_grayscale():
     npt.assert_almost_equal(dur, np.round(gray * 14) * 0.7, decimal=6)
 
     # pulse_dur limits the available duration levels.
-    coarse = PRIMAEncoder(grayscale=True, pulse_dur=2.1).encode(
-        ImageStimulus(ramp), implant=implant)
+    coarse = PRIMAEncoder(implant, grayscale=True, pulse_dur=2.1).encode(
+        ImageStimulus(ramp))
     levels = np.unique(coarse.pulse_dur)
     npt.assert_almost_equal(levels, np.array([0.0, 0.7, 1.4, 2.1]))
 
 
 def test_PRIMAEncoder_records_its_settings():
-    stim = PRIMAEncoder(grayscale=True).encode(
-        ImageStimulus(np.ones((8, 8))), implant=PRIMAPivotal())
+    stim = PRIMAEncoder(PRIMAPivotal(), grayscale=True).encode(
+        ImageStimulus(np.ones((8, 8))))
     # Projector settings are available without rendering.
     npt.assert_almost_equal(stim.wavelength, 880)
     npt.assert_almost_equal(stim.irradiance, 3.5)
@@ -1673,8 +1724,8 @@ def test_PRIMAEncoder_records_its_settings():
 def test_PRIMAEncoder_spatial_view():
     implant = PRIMAPivotal()
     ramp = np.tile(np.linspace(0, 1, 64), (64, 1))
-    view = PRIMAEncoder(grayscale=True).encode(
-        ImageStimulus(ramp), implant=implant)._spatial_view()
+    view = PRIMAEncoder(implant, grayscale=True).encode(
+        ImageStimulus(ramp))._spatial_view()
     # Normalized drive ranges from 0 to 1.
     npt.assert_equal(view.unit, dimensionless)
     npt.assert_equal(view.time, None)
@@ -1682,19 +1733,19 @@ def test_PRIMAEncoder_spatial_view():
     npt.assert_almost_equal(view.data.min(), 0)
     npt.assert_almost_equal(view.data.max(), 1, decimal=6)
     # Drive is proportional to ON duration at default settings.
-    dur = PRIMAEncoder(grayscale=True).encode(
-        ImageStimulus(ramp), implant=implant).pulse_dur[:, 0]
+    dur = PRIMAEncoder(implant, grayscale=True).encode(
+        ImageStimulus(ramp)).pulse_dur[:, 0]
     npt.assert_almost_equal(view.data.ravel(), dur / 9.8, decimal=6)
 
     # Drive scales with irradiance, frequency, and pulse duration.
-    half = PRIMAEncoder(irradiance=1.75).encode(
-        ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
+    half = PRIMAEncoder(implant, irradiance=1.75).encode(
+        ImageStimulus(np.ones((8, 8))))._spatial_view()
     npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
-    half = PRIMAEncoder(freq=15).encode(
-        ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
+    half = PRIMAEncoder(implant, freq=15).encode(
+        ImageStimulus(np.ones((8, 8))))._spatial_view()
     npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
-    half = PRIMAEncoder(pulse_dur=4.9).encode(
-        ImageStimulus(np.ones((8, 8))), implant=implant)._spatial_view()
+    half = PRIMAEncoder(implant, pulse_dur=4.9).encode(
+        ImageStimulus(np.ones((8, 8))))._spatial_view()
     npt.assert_almost_equal(half.data.max(), 0.5, decimal=6)
 
 
@@ -1704,7 +1755,7 @@ def test_PRIMAEncoder_video():
     frames = np.stack([np.ones((8, 8)), np.zeros((8, 8)), np.ones((8, 8))],
                       axis=-1)
     video = VideoStimulus(frames, time=np.arange(3) * 40.0)
-    stim = PRIMAEncoder().encode(video, implant=implant)
+    stim = PRIMAEncoder(implant).encode(video)
     # A 30 Hz projector samples the 120 ms source four times.
     npt.assert_almost_equal(stim.duration, 120)
     npt.assert_almost_equal(stim.metadata['encoder']['frame_dur'], 1000 / 30)
@@ -1724,7 +1775,7 @@ def test_PRIMAEncoder_samples_a_video_without_retiming_it(fps, n_source):
     gray = np.zeros((8, 8, n_source))
     gray[..., ::max(1, n_source // 5)] = 1.0
     video = VideoStimulus(gray, time=np.arange(n_source) * (1000.0 / fps))
-    stim = PRIMAEncoder().encode(video, implant=implant)
+    stim = PRIMAEncoder(implant).encode(video)
     npt.assert_almost_equal(stim.duration, 1000)
     npt.assert_equal(stim.pulse_dur.shape[1], 30)
     npt.assert_almost_equal(np.diff(stim._spatial_view().time), 1000 / 30,
@@ -1737,7 +1788,7 @@ def test_PRIMAEncoder_repeats_slow_frames_and_skips_fast_ones(fps):
     gray = np.zeros((8, 8, fps))
     gray[..., ::2] = 1.0
     video = VideoStimulus(gray, time=np.arange(fps) * (1000.0 / fps))
-    stim = PRIMAEncoder().encode(video, implant=implant)
+    stim = PRIMAEncoder(implant).encode(video)
     lit = stim.pulse_dur.max(axis=0) > 0
     npt.assert_equal(lit.size, 30)
     if fps == 15:
@@ -1752,7 +1803,7 @@ def test_PRIMAEncoder_repeats_slow_frames_and_skips_fast_ones(fps):
 def test_PRIMAEncoder_keeps_the_source_clock_apart(fps):
     video = VideoStimulus(np.ones((8, 8, 6)),
                           time=np.arange(6) * (1000 / fps))
-    stim = PRIMAEncoder().encode(video, implant=PRIMAPivotal())
+    stim = PRIMAEncoder(PRIMAPivotal()).encode(video)
     meta = stim.metadata['encoder']
     # The projector clock is unchanged:
     npt.assert_allclose(meta['frame_time'], stim.pulse_time, atol=DT)
@@ -1769,7 +1820,7 @@ def test_PRIMAEncoder_starts_where_the_source_does():
     implant = PRIMAPivotal()
     video = VideoStimulus(np.ones((8, 8, 3)),
                           time=100 + np.arange(3) * (1000 / 30))
-    stim = PRIMAEncoder().encode(video, implant=implant)
+    stim = PRIMAEncoder(implant).encode(video)
     npt.assert_almost_equal(stim.duration, 200, decimal=6)
     npt.assert_equal(stim.pulse_dur.shape[1], 3)
     npt.assert_almost_equal(stim._spatial_view().time[0], 100, decimal=6)
@@ -1781,7 +1832,7 @@ def test_PRIMAEncoder_starts_where_the_source_does():
     cropped = VideoStimulus(gray, time=np.arange(9) * (1000 / 30)).crop(
         front=3, back=3, bottom=1, right=1)
     npt.assert_almost_equal(cropped.time[0], 100, decimal=6)
-    stim = PRIMAEncoder().encode(cropped, implant=implant)
+    stim = PRIMAEncoder(implant).encode(cropped)
     npt.assert_almost_equal(stim._spatial_view().time[0], 100, decimal=6)
     npt.assert_almost_equal(stim.data[:, stim.time < 100].max(), 0)
 
@@ -1790,7 +1841,7 @@ def test_PRIMAEncoder_finishes_every_pulse_it_starts():
     # A 9.8 ms pulse does not fit in the final 6.7 ms of this source.
     implant = PRIMAPivotal()
     video = VideoStimulus(np.ones((8, 8, 2)), time=[0.0, 20.0])
-    stim = PRIMAEncoder().encode(video, implant=implant)
+    stim = PRIMAEncoder(implant).encode(video)
     npt.assert_almost_equal(stim.duration, 40)
     npt.assert_array_almost_equal(stim.pulse_dur.max(axis=0), [9.8, 0])
     npt.assert_almost_equal(stim.data[:, -1].max(), 0)
@@ -1800,8 +1851,7 @@ def test_PRIMAEncoder_finishes_every_pulse_it_starts():
 
 def test_PRIMAEncoder_defers_the_waveform():
     implant = PRIMAPivotal()
-    stim = PRIMAEncoder().encode(ImageStimulus(np.ones((16, 16))),
-                                 implant=implant)
+    stim = PRIMAEncoder(implant).encode(ImageStimulus(np.ones((16, 16))))
     npt.assert_equal(_rendered(stim), False)
     npt.assert_almost_equal(stim.duration, 500)
     npt.assert_equal(stim.unit, mW / mm ** 2)
@@ -1819,8 +1869,7 @@ def test_PRIMAEncoder_defers_the_waveform():
 
 
 def test_PRIMAEncoder_scales_the_power():
-    stim = PRIMAEncoder().encode(ImageStimulus(np.ones((8, 8))),
-                                 implant=PRIMAPivotal())
+    stim = PRIMAEncoder(PRIMAPivotal()).encode(ImageStimulus(np.ones((8, 8))))
     scaled = stim * 0.5
     npt.assert_equal(_rendered(scaled), False)
     npt.assert_almost_equal(scaled.irradiance, 1.75)
@@ -1877,7 +1926,7 @@ def test_AmplitudeEncoder_encodes_threshold_multiples():
 
 def test_AmplitudeEncoder_xTh_survives_the_schedule_operations():
     stim = AmplitudeEncoder(amp_range=(0 * xTh, 3 * xTh)).encode(
-        ImageStimulus(np.ones((4, 4))), implant=None)
+        ImageStimulus(np.ones((4, 4))))
     npt.assert_equal(stim._spatial_view().unit, xTh)
     npt.assert_almost_equal(stim._spatial_view().data.max(), 3)
     npt.assert_equal(stim._scaled(2).unit, xTh)
