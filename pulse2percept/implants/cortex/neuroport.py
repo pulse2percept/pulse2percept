@@ -8,8 +8,10 @@ from ..electrode_arrays import ElectrodeGrid
 class NeuroPortArray(CorticalImplant):
     """96-channel Utah (NeuroPort) intracortical array
 
-    The human Utah/NeuroPort array used in the CORTIVIS studies
-    [Fernandez2017]_. CORTIVIS is the project/consortium, not the implant.
+    The 96-channel Utah array used in the CORTIVIS studies [Fernandez2017]_.
+    This class uses Blackrock's NeuroPort Array name for the human-use
+    version of the Utah Array. CORTIVIS is the project/consortium, not the
+    implant.
 
     96 electrodes on a 10x10 grid (corners unused) with 400 um spacing and
     80 um diameter at the base; shank tips sit 1.5 mm deep (``z=-1500``).

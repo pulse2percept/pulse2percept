@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import numpy.testing as npt
 from pulse2percept.implants.base import Implant
+from pulse2percept.units import mm, um
 from pulse2percept.implants.retina.suprachoroidal import (Suprachoroidal24,
                                                           Suprachoroidal44)
 
@@ -103,3 +104,19 @@ def test_Suprachoroidal_rejects_rot(cls):
     """Orientation in tissue is the model's `implant_rotation`"""
     with pytest.raises(TypeError):
         cls(rot=30)
+
+
+@pytest.mark.parametrize('cls, n_elecs', ((Suprachoroidal24, 35),
+                                          (Suprachoroidal44, 46)))
+@pytest.mark.parametrize('eye', ('left', 'right'))
+def test_Suprachoroidal_per_electrode_z(cls, n_elecs, eye):
+    z = np.arange(n_elecs, dtype=float)
+    for z_in, z_um in ((list(z), z), (z, z), (z * um, z),
+                       (z / 1000 * mm, z)):
+        implant = cls(z=z_in, eye=eye)
+        npt.assert_almost_equal([e.z for e in implant.electrode_objects],
+                                z_um)
+    for bad in (np.ones(n_elecs - 1), np.ones(n_elecs + 1),
+                np.ones(n_elecs + 1) * um):
+        with pytest.raises(ValueError):
+            cls(z=bad)

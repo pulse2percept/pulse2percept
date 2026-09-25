@@ -19,8 +19,8 @@ class Suprachoroidal24(RetinalImplant):
     coordinates are device-local, centered on ``(0, 0)``.
 
     "24" is the published channel count, not the number of physical
-    electrodes. This model has 35 electrodes, each individually addressable;
-    ganging (e.g., of C21a-m) is not applied automatically:
+    electrodes. This model represents all 35 physical electrodes separately;
+    hardware ganging of C21a-m is not applied automatically:
 
     -   33 platinum stimulating electrodes:
 
@@ -93,7 +93,7 @@ class Suprachoroidal24(RetinalImplant):
                           -2280.0, -2280.0, -2280.0, 0, 0])
         if isinstance(z, (list, np.ndarray)):
             # Specify different height for every electrode in a list:
-            z_arr = np.asarray(self.z).flatten()
+            z_arr = np.asarray(z).flatten()
             if z_arr.size != n_elecs:
                 raise ValueError(f"If `z` is a list, it must have {n_elecs} entries, "
                                  f"not {len(z)}.")
@@ -192,7 +192,7 @@ class Suprachoroidal44(RetinalImplant):
         names = grid.electrode_names + ['R1', 'R2']
         if isinstance(z, (list, np.ndarray)):
             # Specify different height for every electrode in a list:
-            z_arr = np.asarray(self.z).flatten()
+            z_arr = np.asarray(z).flatten()
             if z_arr.size != n_elecs:
                 raise ValueError("If `z` is a list, it must have %d entries, "
                                  "not %d." % (n_elecs, len(z)))
