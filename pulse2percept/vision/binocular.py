@@ -167,7 +167,7 @@ class BinocularScene(PrettyPrint):
         return self._right
 
     def plot(self, left_percept=None, right_percept=None, gaze=None, frame=0,
-             rings=False, meridians=False, vmax=None, vmin=0, axes=None,
+             rings=False, meridians=False, vmax=None, vmin=None, axes=None,
              **kwargs):
         """Plot the two eyes side by side
 
@@ -218,10 +218,11 @@ class BinocularScene(PrettyPrint):
         for percept in percepts:
             _check_prosthetic(percept)
         if vmax is None and percepts:
-            # One scale for both eyes, so their brightness is comparable. Both
-            # constant at vmin is left to `Scene.plot`, which draws it black:
-            shared = max(np.max(p.data) for p in percepts)
-            vmax = shared if shared > vmin else None
+            # One scale for both eyes, so their brightness is comparable:
+            vmax = max(np.max(p.data) for p in percepts)
+            if vmin is None and vmax == 0:
+                # Blank under the default range: `Scene.plot` draws it black
+                vmax = None
         drawn = []
         for ax, label, scene, percept in zip(axes, ('left', 'right'),
                                              (self.left, self.right),

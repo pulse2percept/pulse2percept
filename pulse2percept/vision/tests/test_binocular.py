@@ -163,6 +163,12 @@ def test_an_omitted_vmax_is_shared_by_both_eyes():
     npt.assert_almost_equal(ax_left.images[-1].get_array(), 0.0)
     npt.assert_almost_equal(ax_right.images[-1].get_array(), 0.0)
     plt.close('all')
+    # A raised vmin still meets the shared maximum, not a per-eye one:
+    for peak in (5.0, 10.0):
+        spot = spot_percept(left, brightness=peak)
+        with pytest.raises(ValueError):
+            binocular.plot(left_percept=spot, right_percept=spot, vmin=10)
+        plt.close('all')
 
 
 def test_each_eye_keeps_its_own_aperture():
