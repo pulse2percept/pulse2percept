@@ -1222,6 +1222,30 @@ ENCODED = [
 ]
 
 
+def test_electrical_source_clock_follows_the_source_time_axis():
+    frames = np.linspace(0, 1, 192).reshape(8, 8, 3)
+    # One timed frame still has a source clock:
+    one = AmplitudeEncoder().encode(VideoStimulus(frames[..., :1],
+                                                  time=[0]))
+    npt.assert_array_equal(one.metadata['encoder']['source_frame_time'], [0])
+    video = AmplitudeEncoder().encode(
+        VideoStimulus(frames, time=np.arange(3) * 40.0))
+    npt.assert_array_equal(video.metadata['encoder']['source_frame_time'],
+                           [0, 40, 80])
+    npt.assert_array_equal(
+        video._spatial_view().metadata['encoder']['source_frame_time'],
+        [0, 40, 80])
+    npt.assert_array_equal(
+        (video * 0.5).metadata['encoder']['source_frame_time'], [0, 40, 80])
+    # An image has none, and `frame_dur` retimes a video off its source clock:
+    still = AmplitudeEncoder().encode(ImageStimulus(frames[..., 0]))
+    retimed = AmplitudeEncoder(frame_dur=50).encode(
+        VideoStimulus(frames, time=np.arange(3) * 40.0))
+    for stim in (still, retimed):
+        npt.assert_equal('source_frame_time' in stim.metadata['encoder'],
+                         False)
+
+
 @pytest.mark.parametrize('name, build', ENCODED, ids=[c[0] for c in ENCODED])
 def test_encoded_stimulus_defers_only_the_waveform(name, build):
     stim = build()

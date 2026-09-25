@@ -720,6 +720,24 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
     npt.assert_almost_equal(percept.data[0, 0, 0], [0.2, 0.5, 0.9], decimal=5)
 
 
+def test_a_one_frame_video_keeps_its_source_clock():
+    """One timed frame is a video, not a still"""
+    source = VideoStimulus(np.full((SCENE_PX, SCENE_PX, 1), 0.5), time=[0])
+    scene = Scene(source, fov=(SCENE_PX, SCENE_PX),
+                  scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    model = Model(spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
+                                            xrange=(-4, 4), yrange=(-4, 4),
+                                            step=0.5,
+                                            visual_field_map=Curcio1990Map()),
+                  temporal=FadingTemporal()).build()
+    percept = model.predict_percept(scene)
+    npt.assert_almost_equal(percept.metadata['source_frame_time'], [0])
+    # Labeled at the frame end, paired through provenance:
+    rendered = scene.render(percept=percept, vmax=5)
+    npt.assert_equal(rendered.shape[-1], 1)
+    npt.assert_almost_equal(rendered.time, percept.time)
+
+
 def test_a_temporal_stage_does_not_lose_the_visual_field_grid():
     """A percept rewritten frame by frame has not moved in the visual field"""
     model = Model(spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
