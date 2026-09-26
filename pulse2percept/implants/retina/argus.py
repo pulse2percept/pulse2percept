@@ -187,7 +187,7 @@ class ArgusII(RetinalImplant):
         function (callable).
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
-    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         How the device turns a picture into stimulation. Defaults to a fresh
         :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz, which is
         the rate Argus II runs its video at. Pass ``encoder=None`` to switch

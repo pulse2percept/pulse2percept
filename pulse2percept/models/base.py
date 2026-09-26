@@ -316,10 +316,9 @@ def _scene_stim(model, scene, gaze):
         metadata=device_scene.source.metadata,
     )
 
-    # Scene preprocessing has already been applied.
-    device = copy(implant)
-    device.preprocess = False
-    return device.prepare_stim(seen._inherit_units(device_scene.source))
+    # `_device_scene` already applied the implant's preprocessing:
+    return implant._prepare_stim(seen._inherit_units(device_scene.source),
+                                 preprocess=False)
 
 
 def _blend_meridian(resp, grid, meridian, width):

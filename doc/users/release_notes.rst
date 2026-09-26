@@ -58,6 +58,13 @@ API changes and improvements
 Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
+* The encoder API was cleaned up: :py:class:`~pulse2percept.stimuli.Encoder` is
+  now the general base class,
+  ``AmplitudeEncoder(amp_range=(0, 50)).encode(image, implant=implant)``
+  becomes ``AmplitudeEncoder(implant, amp_range=(0, 50)).encode(image)``,
+  and ``StimulusEncoder`` was renamed to
+  :py:class:`~pulse2percept.stimuli.PulseEncoder` (:pull:`925`).
+
 * The stimuli API was simplified: bundled media moved to ``stimuli.samples``,
   visual psychophysics stimuli to ``stimuli.psychophysics``, and several legacy
   stimulus classes and module paths were deprecated or removed (:pull:`889`).

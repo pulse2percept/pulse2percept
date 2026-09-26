@@ -529,9 +529,9 @@ def test_Raster_units_end_to_end():
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     plain = ArgusII(raster=SequentialRaster(6, group_dur=1))
     unitful_raster = ArgusII(raster=SequentialRaster(6, group_dur=1000 * us))
-    bare = AmplitudeEncoder(amp_range=(0, 50)).encode(img, implant=plain)
-    unitful = AmplitudeEncoder(amp_range=(0, 0.05 * mA)).encode(
-        img, implant=unitful_raster)
+    bare = AmplitudeEncoder(plain, amp_range=(0, 50)).encode(img)
+    unitful = AmplitudeEncoder(unitful_raster,
+                               amp_range=(0, 0.05 * mA)).encode(img)
     npt.assert_array_equal(bare.data, unitful.data)
     npt.assert_array_equal(bare.time, unitful.time)
 

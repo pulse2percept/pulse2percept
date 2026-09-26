@@ -225,7 +225,7 @@ nothing temporal.
 
 **An image is not a stimulus.** Gray levels are dimensionless, and both
 ``prepare_stim`` and ``predict_percept`` refuse them; user code turns an image
-into current with a ``StimulusEncoder``. A benchmark that did the same would
+into current with a ``PulseEncoder``. A benchmark that did the same would
 measure a pulse train per electrode rather than the single static frame the
 image scenarios exist for, so they call the ``as_current`` helper instead,
 which samples the picture onto the electrodes and says out loud what the

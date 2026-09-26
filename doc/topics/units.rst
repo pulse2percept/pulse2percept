@@ -85,7 +85,7 @@ visual-field and tissue coordinates:
 
 Likewise, :py:class:`~pulse2percept.stimuli.ImageStimulus` and
 :py:class:`~pulse2percept.stimuli.VideoStimulus` are dimensionless. A
-:py:class:`~pulse2percept.stimuli.StimulusEncoder` defines how their gray
+:py:class:`~pulse2percept.stimuli.PulseEncoder` defines how their gray
 levels become electrical stimulation.
 
 Geometric angle

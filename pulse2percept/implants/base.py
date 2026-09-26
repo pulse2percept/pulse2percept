@@ -90,14 +90,15 @@ class Implant(PrettyPrint):
         Non-current-driven devices may override this check.
     encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         Maps image or video gray levels to device stimulation. If None,
-        dimensionless visual input is rejected.
+        dimensionless visual input is rejected. An unbound encoder is bound
+        to this implant (see
+        :py:attr:`~pulse2percept.implants.Implant.encoder`).
 
         .. versionadded:: 0.10.0
 
         .. versionchanged:: 0.11.0
             Accepts any :py:class:`~pulse2percept.stimuli.Encoder`, not only
-            an electrical
-            :py:class:`~pulse2percept.stimuli.StimulusEncoder`.
+            an electrical :py:class:`~pulse2percept.stimuli.PulseEncoder`.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes that it cannot drive
         at the same time. If None, every electrode may fire at once. Assigning
@@ -228,15 +229,23 @@ class Implant(PrettyPrint):
 
         If None, dimensionless image/video stimuli are not encoded
         automatically.
+
+        Assigning an unbound encoder (``encoder.implant is None``) binds it
+        to this implant. An encoder bound to a different implant is rejected
+        with a ValueError.
         """
         return getattr(self, '_encoder', None)
 
     @encoder.setter
     def encoder(self, encoder):
         """Encoder setter (called upon ``self.encoder = encoder``)"""
-        if encoder is not None and not isinstance(encoder, Encoder):
-            raise TypeError(f"'encoder' must be an Encoder object, not "
-                            f"{type(encoder)}.")
+        if encoder is not None:
+            if not isinstance(encoder, Encoder):
+                raise TypeError(f"'encoder' must be an Encoder object, not "
+                                f"{type(encoder)}.")
+            # Before the slot is written to, so that a rejected encoder leaves
+            # the implant as it was:
+            encoder._bind(self)
         self._encoder = encoder
 
     @property
@@ -380,7 +389,7 @@ class Implant(PrettyPrint):
             f"Safety check '{check}' needs an electrical stimulus to "
             f"check, and this one is measured in "
             f"{_describe_unit(stim.unit)}. Encode it into current first "
-            f"(see pulse2percept.stimuli.StimulusEncoder), or give the "
+            f"(see pulse2percept.stimuli.PulseEncoder), or give the "
             f"implant a 'preprocess' function that does.")
 
     @classmethod
@@ -666,7 +675,8 @@ class Implant(PrettyPrint):
         """
         return self._prepare_stim(source)
 
-    def _prepare_stim(self, source, allow_dimensionless=False):
+    def _prepare_stim(self, source, allow_dimensionless=False,
+                      preprocess=True):
         """Prepare ``source`` for the implant.
 
         If ``allow_dimensionless`` is True, dimensionless electrode values are
@@ -674,7 +684,9 @@ class Implant(PrettyPrint):
         against the electrode array, but physical-unit checks, threshold
         calibration, and electrical safety checks are skipped.
 
-        If an encoder is configured, it is still applied normally.
+        If ``preprocess`` is False, ``source`` is taken as already preprocessed
+        (e.g., Scene input). If an encoder is configured, it is still applied
+        normally.
         """
         # Empty input produces no stimulation:
         if source is None:
@@ -684,7 +696,7 @@ class Implant(PrettyPrint):
         if isinstance(source, np.ndarray) and source.size == 0:
             return None
 
-        data = self._preprocess(source)
+        data = self._preprocess(source) if preprocess else source
         # Convert to stimulus object:
         if isinstance(data, Stimulus):
             # Already a stimulus object:
@@ -702,7 +714,7 @@ class Implant(PrettyPrint):
         if (self.encoder is not None and
                 stim.unit.dimension.is_dimensionless and
                 stim.unit.dimension != self.stimulus_unit.dimension):
-            stim = self.encoder.encode(stim, implant=self)
+            stim = self.encoder.encode(stim)
 
         # A picture is sampled onto the electrodes whatever its resolution:
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
@@ -840,7 +852,7 @@ class GridImplant(Implant):
         Whether to preprocess a stimulus whenever one is prepared.
     safe_mode : bool, optional
         Whether to enforce charge balance.
-    encoder : :py:class:`~pulse2percept.stimuli.StimulusEncoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         How the device turns a picture into stimulation.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes.

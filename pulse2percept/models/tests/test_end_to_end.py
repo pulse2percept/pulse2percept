@@ -75,8 +75,8 @@ def test_endtoend_amplitude_modulation():
     implant = make_implant(one_per_group())
     img = ImageStimulus(np.array([[0.25, 0.50], [0.75, 1.00]]))
     stim = implant.prepare_stim(
-        AmplitudeEncoder(amp_range=(0, 50), freq=20,
-                         frame_dur=200).encode(img, implant=implant))
+        AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
+                         frame_dur=200).encode(img))
     npt.assert_equal(list(stim.electrodes), NAMES)
 
     # --- what the encoder produced --------------------------------------
@@ -152,8 +152,8 @@ def test_endtoend_frequency_modulation():
     implant = make_implant(one_per_group())
     img = ImageStimulus(np.array([[0.25, 1 / 3], [0.5, 1.0]]))
     stim = implant.prepare_stim(
-        FrequencyEncoder(freq_range=(0, 200), amp=50,
-                         frame_dur=200).encode(img, implant=implant))
+        FrequencyEncoder(implant, freq_range=(0, 200), amp=50,
+                         frame_dur=200).encode(img))
 
     # --- what the encoder produced --------------------------------------
     # One amplitude for everyone; the gray level sets the rate instead:
@@ -225,8 +225,8 @@ def test_endtoend_raster_order(order):
     implant = make_implant(CustomRaster({n: g
                                          for n, g in zip(NAMES, order)}))
     stim = implant.prepare_stim(
-        AmplitudeEncoder(amp_range=(0, 50), freq=20,
-                         frame_dur=200).encode(img, implant=implant))
+        AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
+                         frame_dur=200).encode(img))
 
     # Each electrode starts in the slot its group was given -- 50 ms period
     # split four ways is 12.5 ms per slot:
@@ -269,8 +269,8 @@ def test_endtoend_raster_is_what_separates_the_groups():
     # `max_current` rejects the unrastered version of the very same image.
     img = ImageStimulus(np.array([[0.25, 0.50], [0.75, 1.00]]))
     implant = make_implant()
-    plain = AmplitudeEncoder(amp_range=(0, 50), freq=20,
-                             frame_dur=200).encode(img, implant=implant)
+    plain = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
+                             frame_dur=200).encode(img)
     # Every electrode fires at the same times, so the stimulator has to
     # source all of them at once:
     npt.assert_equal(len(np.unique(np.abs(plain.data) > 0, axis=0)), 1)
@@ -283,8 +283,8 @@ def test_endtoend_raster_is_what_separates_the_groups():
     # the same image now fits inside the current limit:
     implant.raster = one_per_group()
     rastered = implant.prepare_stim(
-        AmplitudeEncoder(amp_range=(0, 50), freq=20,
-                         frame_dur=200).encode(img, implant=implant))
+        AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
+                         frame_dur=200).encode(img))
     npt.assert_almost_equal(np.abs(rastered.data).sum(axis=0).max(), 50.0)
 
 

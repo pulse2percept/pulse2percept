@@ -342,7 +342,7 @@ def test_preprocessing_does_not_reach_native_vision():
 
 
 def test_preprocessing_runs_exactly_once():
-    """The stand-in implant must not put the picture through it again"""
+    """Scene sampling preprocesses once; preparation must not do it again"""
     calls = []
 
     def counted(stim):
@@ -359,9 +359,47 @@ def test_preprocessing_runs_exactly_once():
     # original ramp coming back:
     npt.assert_almost_equal(seen_by(model, scene, gaze=(8, 0)),
                             [[1 - ramp_at(8.0)]], decimal=3)
-    # The caller's implant still preprocesses; only the stand-in was told not
-    # to, and only because it had already happened:
+    # The implant's own setting is untouched:
     npt.assert_equal(implant.preprocess is counted, True)
+
+
+class _BindingCheck(AmplitudeEncoder):
+    """Records the implant each ``encode`` call is bound to"""
+    __slots__ = ('seen',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.seen = []
+
+    def encode(self, source):
+        self.seen.append(self.implant)
+        return super().encode(source)
+
+
+class _PreparingImplant(Implant):
+    """Records every implant object that prepares a stimulus"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.prepared = []
+
+    def _prepare_stim(self, *args, **kwargs):
+        self.prepared.append(self)
+        return super()._prepare_stim(*args, **kwargs)
+
+
+def test_scene_encodes_with_the_bound_implant():
+    """Scene input is prepared by the encoder's bound implant, not a copy"""
+    encoder = _BindingCheck(amp_range=(0, AMP_MAX))
+    implant = _PreparingImplant(PointSource(0, 0, 0), encoder=encoder)
+    model = model_for(implant)
+    model.predict_percept(scene_of())
+    npt.assert_equal(len(encoder.seen), 1)
+    npt.assert_equal(encoder.seen[0] is implant, True)
+    # The implant that prepared the stimulus is the one the encoder is bound
+    # to (a shallow copy would share `prepared` and record itself):
+    npt.assert_equal(len(implant.prepared), 1)
+    npt.assert_equal(implant.prepared[0] is encoder.implant, True)
 
 
 def test_a_video_scene_is_preprocessed_the_same_way():

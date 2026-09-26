@@ -1,5 +1,6 @@
 import numpy as np
 import collections as coll
+from copy import deepcopy
 from functools import partial
 from inspect import signature
 import pytest
@@ -317,7 +318,8 @@ def test_GridImplant_device_arguments_reach_Implant():
         implant.prepare_stim({'A1': BiphasicPulse(10, 1)}).electrodes, ['A1'])
     npt.assert_equal(implant.preprocess, True)
     npt.assert_equal(implant.safe_mode, True)
-    npt.assert_equal(implant.encoder, encoder)
+    npt.assert_equal(implant.encoder is encoder, True)
+    npt.assert_equal(encoder.implant is implant, True)
     npt.assert_equal(implant.raster, raster)
     npt.assert_almost_equal(implant.max_current, 100)
 
@@ -520,7 +522,7 @@ def test_Implant_requires_an_electrical_stimulus():
 
     # Encoded, the very same picture goes through:
     implant = ArgusII(encoder=None)
-    encoded = AmplitudeEncoder(amp_range=(0, 50)).encode(img, implant=implant)
+    encoded = AmplitudeEncoder(implant, amp_range=(0, 50)).encode(img)
     npt.assert_equal(implant.prepare_stim(encoded).unit, uA)
 
     # ... and so does everything that was electrical all along:
@@ -552,16 +554,37 @@ def test_Implant_encoder():
         Implant(ArgusII().electrode_array, encoder=ArgusII())
 
     # Giving it one is all it takes:
-    implant.encoder = AmplitudeEncoder(amp_range=(0, 50), freq=20)
+    unbound = AmplitudeEncoder(amp_range=(0, 50), freq=20)
+    implant.encoder = unbound
     npt.assert_equal('encoder' in str(implant), True)
     stim = implant.prepare_stim(img)
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.shape[0], implant.n_electrodes)
     npt.assert_almost_equal(np.abs(stim.data).max(), 50)
     # What comes back is exactly what encoding it by hand gives:
-    by_hand = implant.encoder.encode(img, implant=implant)
+    by_hand = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20).encode(img)
     npt.assert_almost_equal(stim.data, by_hand.data)
     npt.assert_almost_equal(stim.time, by_hand.time)
+    npt.assert_equal(list(stim.electrodes), list(by_hand.electrodes))
+
+    # The implant stores the encoder it was given, bound to itself:
+    npt.assert_equal(implant.encoder is unbound, True)
+    npt.assert_equal(unbound.implant is implant, True)
+    # An encoder already bound to this implant is stored as is:
+    bound = AmplitudeEncoder(implant)
+    implant.encoder = bound
+    npt.assert_equal(implant.encoder is bound, True)
+    # One bound to another implant cannot migrate:
+    other = Implant(ArgusII().electrode_array)
+    with pytest.raises(ValueError, match='already bound'):
+        other.encoder = bound
+    with pytest.raises(ValueError, match='already bound'):
+        Implant(ArgusII().electrode_array, encoder=unbound)
+    npt.assert_equal(other.encoder, None)
+    npt.assert_equal(bound.implant is implant, True)
+    # A deep copy of the implant carries an encoder bound to the copy:
+    clone = deepcopy(implant)
+    npt.assert_equal(clone.encoder.implant is clone, True)
 
     # A custom encoder is honored, and its parameters reach the stimulus:
     implant.encoder = AmplitudeEncoder(amp_range=(10, 30), freq=50,
@@ -628,7 +651,7 @@ def test_Implant_encoded_stim_is_one_object():
     # encoding by hand and preparing the result is the same thing as letting
     # the implant do it:
     by_hand = ArgusII(encoder=None).prepare_stim(
-        AmplitudeEncoder(amp_range=(0, 50)).encode(img, implant=ArgusII()))
+        AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(img))
     npt.assert_almost_equal(by_hand._spatial_view().data,
                             ArgusII().prepare_stim(img)._spatial_view().data)
     # A stimulus given as current has only the one description of itself:
@@ -653,19 +676,18 @@ def test_Implant_preprocess_crosses_the_boundary():
     """Preprocessing may turn a picture into current before the encoder sees it
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
-    encoder = AmplitudeEncoder(amp_range=(0, 20), freq=20)
     bare = ArgusII(encoder=None, raster=None)
+    encoder = AmplitudeEncoder(bare, amp_range=(0, 20), freq=20)
     implant = ArgusII(safe_mode=True, encoder=None, raster=None,
-                      preprocess=lambda x: encoder.encode(x, implant=bare))
+                      preprocess=encoder.encode)
     implant.max_current = 100 * mA
     stim = implant.prepare_stim(img)
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.is_charge_balanced, True)
     # Preprocessing that already crossed the boundary leaves the encoder with
     # nothing to do, so an installed one does not encode twice:
-    encoded = encoder.encode(img, implant=bare)
-    twice = ArgusII(raster=None,
-                    preprocess=lambda x: encoder.encode(x, implant=bare))
+    encoded = encoder.encode(img)
+    twice = ArgusII(raster=None, preprocess=encoder.encode)
     npt.assert_almost_equal(twice.prepare_stim(img).data, encoded.data)
     # The same chain, presented already-encoded, and this time with a limit
     # tight enough to matter:

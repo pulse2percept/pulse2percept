@@ -37,7 +37,7 @@ A typical workflow looks roughly like this::
 
     image / video
          |
-         |  optional StimulusEncoder (usually the implant's own)
+         |  optional PulseEncoder (usually the implant's own)
          v
       Stimulus
          |
@@ -329,7 +329,7 @@ Most pulse2percept simulations involve four objects, plus an optional encoder:
     The predicted visual percept, represented across visual space and,
     optionally, time.
 
-:py:class:`~pulse2percept.stimuli.StimulusEncoder`
+:py:class:`~pulse2percept.stimuli.PulseEncoder`
     An optional step that converts higher-level input such as an image or video
     into the electrical stimulus delivered by an implant.
 
@@ -353,13 +353,13 @@ from that stimulus.
     percept is its prediction.
 
 
-Do I need a StimulusEncoder?
+Do I need a PulseEncoder?
 ----------------------------
 
 Only if you are assigning image or video content to an implant that does not
 already have one.
 
-A :py:class:`~pulse2percept.stimuli.StimulusEncoder` translates image or video
+A :py:class:`~pulse2percept.stimuli.PulseEncoder` translates image or video
 content into electrical stimulation. For example,
 :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` maps image intensity onto
 pulse amplitude, whereas
@@ -493,7 +493,7 @@ stimulation**.
 
 :py:class:`~pulse2percept.stimuli.ImageStimulus` and
 :py:class:`~pulse2percept.stimuli.VideoStimulus` can represent image and video
-content. A :py:class:`~pulse2percept.stimuli.StimulusEncoder` can then sample
+content. A :py:class:`~pulse2percept.stimuli.PulseEncoder` can then sample
 that content at the electrode locations and convert the resulting intensities
 into electrical pulse trains.
 

@@ -10,14 +10,16 @@ import numpy.testing as npt
 import pytest
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants.retina import ArgusII
+from pulse2percept.implants.retina import (ArgusII, Lorach2015Array,
+                                           PRIMAPivotal)
 from pulse2percept.stimuli import (AmplitudeEncoder,
                                    AsymmetricBiphasicPulse,
                                    AsymmetricBiphasicPulseTrain,
                                    BiphasicPulse, BiphasicPulseTrain,
-                                   BiphasicTripletTrain, ImageStimulus,
-                                   MonophasicPulse, PulseTrain, Stimulus,
-                                   VideoStimulus)
+                                   BiphasicTripletTrain, FrequencyEncoder,
+                                   ImageStimulus, MonophasicPulse,
+                                   PhotovoltaicEncoder, PRIMAEncoder,
+                                   PulseTrain, Stimulus, VideoStimulus)
 
 
 def _fake_pulse():
@@ -170,10 +172,8 @@ def _encoded():
     img = ImageStimulus(rng.rand(60, 60).astype(np.float32))
     vid = VideoStimulus(rng.rand(60, 60, 4).astype(np.float32),
                         time=np.arange(4) * 50.0)
-    return [('amp-image', AmplitudeEncoder(freq=20).encode(img,
-                                                           implant=implant)),
-            ('amp-video', AmplitudeEncoder(freq=20).encode(vid,
-                                                           implant=implant))]
+    return [('amp-image', AmplitudeEncoder(implant, freq=20).encode(img)),
+            ('amp-video', AmplitudeEncoder(implant, freq=20).encode(vid))]
 
 
 @pytest.mark.parametrize('name, expected', [
@@ -191,3 +191,55 @@ def test_encoder_characterization(name, expected):
                       'frame_dur': float(meta['frame_dur'])}, expected)
     npt.assert_equal(stim.data.dtype, np.float32)
     npt.assert_equal(stim.time.dtype, np.float64)
+
+
+def _encoded_waveforms():
+    """Frequency and optical encodings, as {name: build}"""
+    rng = np.random.RandomState(0)
+    img = ImageStimulus(rng.rand(60, 60).astype(np.float32))
+    vid = VideoStimulus(rng.rand(60, 60, 4).astype(np.float32),
+                        time=np.arange(4) * 50.0)
+    return {
+        'freq-video': lambda: FrequencyEncoder(
+            ArgusII(raster=None), freq_range=(0, 100), clock=1).encode(vid),
+        'freq-raster': lambda: FrequencyEncoder(
+            ArgusII(), freq_range=(0, 60)).encode(vid),
+        'pv-image': lambda: PhotovoltaicEncoder(
+            Lorach2015Array(), irradiance=4, freq=40, pulse_dur=4,
+            wavelength=915).encode(img),
+        'prima-video': lambda: PRIMAEncoder(PRIMAPivotal()).encode(vid),
+    }
+
+
+@pytest.mark.parametrize('name, expected', [
+    ('freq-video',
+     {'shape': (60, 1233), 't_end': 200.0, 'n_edges': 704,
+      'first_edges': [0.001, 0.46, 0.461, 0.92, 11.001],
+      'last_edges': [199.461, 199.92], 'abs_area': 28228.498047,
+      'net_area': 3.817e-06, 'peak': (-50.0, 50.0),
+      'electrodes': ('A1', 'F10'), 'unit': 'uA'}),
+    ('freq-raster',
+     {'shape': (60, 638), 't_end': 200.0, 'n_edges': 364,
+      'first_edges': [0.001, 0.46, 0.461, 0.92, 2.001],
+      'last_edges': [198.461, 198.92], 'abs_area': 14229.0,
+      'net_area': 1.146e-06, 'peak': (-50.0, 50.0),
+      'electrodes': ('A1', 'F10'), 'unit': 'uA'}),
+    ('pv-image',
+     {'shape': (142, 5501), 't_end': 500.0, 'n_edges': 2820,
+      'first_edges': [0.001, 0.169, 0.273, 0.341, 0.39],
+      'last_edges': [478.593, 478.682], 'abs_area': 22058.160156,
+      'net_area': 22058.16015625, 'peak': (0.0, 4.0),
+      'electrodes': ('A5', 'L12'), 'unit': 'mW/mm^2'}),
+    ('prima-video',
+     {'shape': (378, 173), 't_end': 200.0, 'n_edges': 86,
+      'first_edges': [0.001, 0.7, 1.4, 2.1, 2.8],
+      'last_edges': [175.067, 175.767], 'abs_area': 37633.878906,
+      'net_area': 37633.87890625, 'peak': (0.0, 3.5),
+      'electrodes': ('A5', 'S18'), 'unit': 'mW/mm^2'}),
+])
+def test_encoder_waveform_characterization(name, expected):
+    stim = _encoded_waveforms()[name]()
+    got = _digest(stim)
+    got['electrodes'] = (str(stim.electrodes[0]), str(stim.electrodes[-1]))
+    got['unit'] = str(stim.unit)
+    npt.assert_equal(got, expected)
