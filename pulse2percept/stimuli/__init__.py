@@ -40,6 +40,7 @@ Convert visual stimuli to electrical stimulation.
     PulseEncoder
     AmplitudeEncoder
     FrequencyEncoder
+    TraceEncoder
     PhotovoltaicEncoder
     PRIMAEncoder
 
@@ -100,7 +101,7 @@ from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
 from .encoders import (Encoder, PulseEncoder, AmplitudeEncoder,
                        FrequencyEncoder, PhotovoltaicEncoder,
-                       PRIMAEncoder)
+                       PRIMAEncoder, TraceEncoder)
 from .psychophysics import BarStimulus, GratingStimulus
 from .samples import LogoBVL, LogoUCSB
 from . import psychophysics, samples
@@ -127,5 +128,6 @@ __all__ = [
     'PulseTrain',
     'samples',
     'Stimulus',
+    'TraceEncoder',
     'VideoStimulus'
 ]

@@ -2,17 +2,19 @@
    :py:class:`~pulse2percept.stimuli.PulseEncoder`,
    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`,
    :py:class:`~pulse2percept.stimuli.FrequencyEncoder`,
+   :py:class:`~pulse2percept.stimuli.TraceEncoder`,
    :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder`,
    :py:class:`~pulse2percept.stimuli.PRIMAEncoder`"""
 from abc import ABCMeta, abstractmethod
 import math
 import numpy as np
 from copy import deepcopy
+from scipy.spatial import cKDTree
 
 from .base import ImageStimulus, Stimulus, VideoStimulus, _adoptable
 from .pulses import BiphasicPulse
-from ..units import (DimensionMismatchError, Hz, as_value, dimensionless, mW,
-                     mm, ms, nm, uA, xTh)
+from ..units import (DimensionMismatchError, Hz, Quantity, as_value,
+                     dimensionless, dva, mW, mm, ms, nm, uA, xTh)
 from ..utils import PrettyPrint, frame_interval
 # Point encoder warnings at the caller.
 from ..utils.deprecation import _warn_external
@@ -1250,6 +1252,262 @@ frame_dur, stretch
         """Gray level in [0, 1] -> frequency in ``freq_range``"""
         freq_lo, freq_hi = self.freq_range
         return self.amp, freq_lo + gray * (freq_hi - freq_lo)
+
+
+class _GrayFrames(Stimulus):
+    """Dimensionless gray levels, one row per electrode and column per frame"""
+    _default_unit = dimensionless
+
+    __slots__ = ()
+
+
+class TraceEncoder(Encoder):
+    """Encode a visual-field trajectory as sequential single-electrode pulses
+
+    Stimulates one electrode at a time, in trajectory order, for ``step_dur``
+    each:
+
+    .. code-block:: text
+
+        (x, y) dva -> model.visual_field_map.from_dva()[region] -> tissue
+                   -> nearest activated electrode at model-side placement
+                   -> one step_dur pulse train per selected electrode
+
+    Consecutive samples that select the same electrode are collapsed into one
+    step, so dense sampling does not lengthen a dwell. A later revisit of the
+    same electrode is a new step.
+
+    Inspired by dynamic stimulation of visual cortex [Beauchamp2020]_. This
+    implementation uses physical electrodes only: it does not implement
+    current steering or virtual electrodes, and does not reproduce that
+    study's protocol.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    model : model
+        Model that places the implant in tissue. Requires ``implant``, a
+        ``visual_field_map`` with a ``from_dva`` mapping, and placed electrode
+        coordinates (``implant_position``, ``implant_rotation``,
+        ``implant_depth``). The encoder binds to ``model.implant``.
+    amp : float or Quantity, optional
+        Pulse amplitude (uA, or ``xTh`` for threshold multiples) on the
+        active electrode.
+    freq : float or Quantity, optional
+        Pulse train frequency (Hz).
+    phase_dur : float or Quantity, optional
+        Duration of each pulse phase (ms).
+    step_dur : float or Quantity, optional
+        Stimulation time (ms) per trajectory step.
+    interphase_dur : float or Quantity, optional
+        Gap between cathodic and anodic phases (ms).
+    cathodic_first : bool, optional
+        If True, deliver the cathodic phase first.
+    clock : float or Quantity, optional
+        Stimulator clock period (ms). See
+        :py:class:`~pulse2percept.stimuli.PulseEncoder`.
+    region : str, optional
+        Region of ``visual_field_map.from_dva()`` to map onto, e.g. 'v1'.
+        Required if the map has more than one region.
+
+    Notes
+    -----
+    *  Pulse trains are built by
+       :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` with
+       ``frame_dur=step_dur``, so the implant's raster applies.
+    *  Sparse vertices are not interpolated. To trace a line, pass samples
+       along it.
+    *  The electrode sequence is determined by retinotopy and placement, so the
+       path across the physical array can look unlike the visual trajectory.
+    *  :py:class:`~pulse2percept.models.cortex.DynaphosModel` simulates an
+       encoded stimulus at its own ``freq`` and ``p_dur``. Set ``freq`` and
+       ``phase_dur`` to match them.
+    *  Models with ``location_noise`` are not supported.
+
+    Examples
+    --------
+    Trace a horizontal line at 2 dva below fixation with Orion in the right
+    hemisphere (left visual field):
+
+    >>> import numpy as np
+    >>> import pulse2percept as p2p
+    >>> from pulse2percept.units import mm, uA, ms
+    >>> implant = p2p.implants.cortex.Orion()
+    >>> model = p2p.models.cortex.DynaphosModel(
+    ...     implant, implant_position=(20, -5) * mm)
+    >>> encoder = p2p.stimuli.TraceEncoder(model, amp=100 * uA,
+    ...                                    freq=model.freq,
+    ...                                    phase_dur=model.p_dur,
+    ...                                    step_dur=50 * ms)
+    >>> x = np.linspace(-6, -2, 41)
+    >>> stim = encoder.encode(np.column_stack([x, np.full_like(x, -2)]))
+
+    """
+    __slots__ = ('model', 'amp', 'amp_unit', 'freq', 'phase_dur', 'step_dur',
+                 'interphase_dur', 'cathodic_first', 'clock', 'region')
+
+    def __init__(self, model, *, amp=100 * uA, freq=300 * Hz,
+                 phase_dur=0.17 * ms, step_dur=50 * ms, interphase_dur=0 * ms,
+                 cathodic_first=True, clock=None, region=None):
+        for attr in ('implant', 'visual_field_map', '_electrode_coords'):
+            if getattr(model, attr, None) is None:
+                raise TypeError(
+                    f"TraceEncoder requires a model with '{attr}', which "
+                    f"{type(model).__name__} does not provide. For a "
+                    f"composite Model, pass its spatial model.")
+        super().__init__(model.implant)
+        self.model = model
+        self.amp_unit = (xTh if getattr(amp, 'dimension', None) ==
+                         xTh.dimension else uA)
+        self.amp = as_value(amp, self.amp_unit, 'amp')
+        self.freq = as_value(freq, Hz, 'freq')
+        self.phase_dur = as_value(phase_dur, ms, 'phase_dur')
+        self.step_dur = as_value(step_dur, ms, 'step_dur')
+        self.interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
+        self.cathodic_first = cathodic_first
+        self.clock = as_value(clock, ms, 'clock')
+        self.region = region
+        for name in ('amp', 'freq'):
+            value = getattr(self, name)
+            _finite(name, value)
+            if np.size(value) != 1 or value <= 0:
+                raise ValueError(f"'{name}' must be a positive scalar, not "
+                                 f"{value}.")
+        self._check_model()
+        # Validates the pulse parameters:
+        self._pulse_encoder()
+
+    def _pprint_params(self):
+        """Return a dict of class arguments to pretty-print"""
+        params = super()._pprint_params()
+        # Class name only: the model holds the implant, which holds encoders.
+        params.update({'model': type(self.model).__name__, 'amp': self.amp,
+                       'amp_unit': self.amp_unit, 'freq': self.freq,
+                       'phase_dur': self.phase_dur, 'step_dur': self.step_dur,
+                       'interphase_dur': self.interphase_dur,
+                       'cathodic_first': self.cathodic_first,
+                       'clock': self.clock, 'region': self.region})
+        return params
+
+    def _pulse_encoder(self):
+        """Return the AmplitudeEncoder that turns one-hot frames into pulses"""
+        return AmplitudeEncoder(
+            self.implant, amp_range=(0 * self.amp_unit,
+                                     self.amp * self.amp_unit),
+            freq=self.freq, phase_dur=self.phase_dur,
+            interphase_dur=self.interphase_dur,
+            cathodic_first=self.cathodic_first, clock=self.clock,
+            frame_dur=self.step_dur)
+
+    def _check_model(self):
+        """Reject a rebound implant or a model with location noise"""
+        model = self.model
+        if model.implant is not self.implant:
+            raise ValueError(
+                f"model.implant was rebound after this TraceEncoder was "
+                f"bound to a {type(self.implant).__name__}. Construct a new "
+                f"TraceEncoder for the new implant.")
+        noise = getattr(model, 'location_noise', None)
+        if noise is not None and noise != 0:
+            raise NotImplementedError(
+                f"TraceEncoder uses canonical retinotopy and implant "
+                f"placement. location_noise={noise} dva adds random "
+                f"phosphene offsets, which are not calibration data. Set "
+                f"location_noise=None.")
+        if model.visual_field_map is None:
+            raise ValueError(f"{type(model).__name__} has no "
+                             f"'visual_field_map'.")
+
+    def _mapping(self):
+        """Return the dva -> tissue transform for ``region``"""
+        vfmap = self.model.visual_field_map
+        try:
+            mappings = vfmap.from_dva()
+        except NotImplementedError:
+            raise NotImplementedError(
+                f"{type(vfmap).__name__} does not map dva onto tissue.") \
+                from None
+        if self.region is None:
+            if len(mappings) != 1:
+                raise ValueError(
+                    f"{type(vfmap).__name__} maps onto regions "
+                    f"{list(mappings)}. Pass 'region' to select one.")
+            return next(iter(mappings.values()))
+        if self.region not in mappings:
+            raise ValueError(
+                f"Region {self.region!r} is not available in "
+                f"{type(vfmap).__name__}, which maps onto {list(mappings)}.")
+        return mappings[self.region]
+
+    def _target_tissue(self, source):
+        """Return trace samples as (N, ndim) tissue coordinates (space_unit)"""
+        if isinstance(source, Stimulus):
+            raise TypeError("TraceEncoder encodes an (N, 2) trajectory in "
+                            "dva, not a Stimulus.")
+        xy = np.array(as_value(source, dva, 'source'), dtype=np.float64)
+        if xy.ndim != 2 or xy.shape[1] != 2 or xy.shape[0] == 0:
+            raise ValueError(f"The trajectory must have shape (N, 2) with "
+                             f"N >= 1, not {xy.shape}.")
+        _finite('source', xy)
+        vfmap = self.model.visual_field_map
+        try:
+            tissue = self._mapping()(xy[:, 0], xy[:, 1])
+        except NotImplementedError:
+            raise NotImplementedError(
+                f"{type(vfmap).__name__} does not map dva onto region "
+                f"{self.region!r}.") from None
+        tissue = np.column_stack([np.asarray(c, dtype=np.float64).ravel()
+                                  for c in tissue[:vfmap.ndim]])
+        lost = np.flatnonzero(~np.all(np.isfinite(tissue), axis=1))
+        if lost.size:
+            raise ValueError(
+                f"{type(vfmap).__name__} does not map trajectory sample(s) "
+                f"{lost[:5].tolist()} (e.g., {xy[lost[0]].tolist()} dva) onto "
+                f"tissue.")
+        return Quantity(tissue, vfmap.tissue_unit).to_value(
+            self.model.space_unit)
+
+    def _sequence(self, source):
+        """Return activated electrode names and the index of each trace step"""
+        array = self.implant.electrode_array
+        names = [n for n, e in array.electrodes.items() if e.activated]
+        if not names:
+            raise ValueError(f"{type(self.implant).__name__} has no activated "
+                             f"electrodes.")
+        target = self._target_tissue(source)
+        # Placed coordinates, in the map's tissue dimensions:
+        xyz = np.column_stack(self.model._electrode_coords(
+            array, None, electrodes=names)).astype(np.float64)
+        _, nearest = cKDTree(xyz[:, :target.shape[1]]).query(target)
+        # Collapse consecutive duplicates only; later revisits are kept:
+        keep = np.r_[True, nearest[1:] != nearest[:-1]]
+        return names, nearest[keep]
+
+    def encode(self, source):
+        """Encode a visual-field trajectory as sequential pulse trains
+
+        Parameters
+        ----------
+        source : (N, 2) array_like or Quantity
+            Ordered ``(x, y)`` samples in dva. Bare numbers are dva.
+
+        Returns
+        -------
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
+            Pulse trains in uA (or ``xTh``), one ``step_dur`` step per
+            selected electrode, lasting ``n_steps * step_dur`` ms. Rows are
+            the visited electrodes in electrode-array order.
+
+        """
+        self._check_model()
+        names, steps = self._sequence(source)
+        rows, which = np.unique(steps, return_inverse=True)
+        frames = np.zeros((rows.size, steps.size), dtype=np.float32)
+        frames[np.ravel(which), np.arange(steps.size)] = 1
+        frames = _GrayFrames(frames, electrodes=[names[i] for i in rows],
+                             time=np.arange(steps.size) * self.step_dur)
+        return self._pulse_encoder().encode(frames)
 
 
 #: The unit an optical encoder measures its output in

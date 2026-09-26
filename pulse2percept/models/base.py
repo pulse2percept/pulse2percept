@@ -782,18 +782,19 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def _electrode_coords(self, electrode_array, stim, electrodes=None):
         """Return placed electrode coordinates in ``space_unit``.
 
-        Coordinates follow ``stim.electrodes`` order and are returned as
-        contiguous float32 arrays for the numerical kernels.
+        Coordinates follow ``electrodes`` order, or ``stim.electrodes`` order
+        if ``electrodes`` is None, and are returned as contiguous float32
+        arrays for the numerical kernels.
 
         Parameters
         ----------
         electrode_array : :py:class:`~pulse2percept.implants.ElectrodeArray`
             Electrode array containing the named electrodes.
-        stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            Stimulus whose electrode ordering is required.
+        stim : :py:class:`~pulse2percept.stimuli.Stimulus` or None
+            Stimulus whose electrode ordering is required. May be None if
+            ``electrodes`` is given.
         electrodes : list of str, optional
-            Electrode names to return instead of ``stim.electrodes``, for a
-            model that reorders or drops rows before calling its kernel.
+            Electrode names to return instead of ``stim.electrodes``.
 
         Returns
         -------
@@ -801,6 +802,9 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
             Coordinate arrays with shape ``(n_electrodes,)``.
         """
         if electrodes is None:
+            if stim is None:
+                raise ValueError("_electrode_coords requires either 'stim' "
+                                 "or 'electrodes'.")
             electrodes = stim.electrodes
         xyz = _placed_coords(self, electrode_array, self.space_unit,
                              electrodes)
@@ -1148,9 +1152,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         ``location_noise`` is applied after implant placement. ``region``
         selects the visual-field-map region used for that displacement.
         """
+        xyz = super()._electrode_coords(electrode_array, stim, electrodes)
         if electrodes is None:
             electrodes = stim.electrodes
-        xyz = super()._electrode_coords(electrode_array, stim, electrodes)
         offsets = _electrode_offsets(self, electrodes)
         if offsets is None:
             return xyz
