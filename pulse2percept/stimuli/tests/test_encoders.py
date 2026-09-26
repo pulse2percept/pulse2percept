@@ -119,6 +119,30 @@ def test_Encoder_implant_is_constructor_state(build, make_implant):
     npt.assert_equal('encoder' in str(implant), True)
 
 
+def test_Encoder_binding_cannot_migrate():
+    implant_a, implant_b = ArgusII(encoder=None), ArgusII(encoder=None)
+    encoder = AmplitudeEncoder()
+    implant_a.encoder = encoder
+    # `implant` is read-only, so the binding cannot be overwritten:
+    with pytest.raises(AttributeError):
+        encoder.implant = implant_b
+    with pytest.raises(ValueError, match='already bound'):
+        encoder._bind(implant_b)
+    with pytest.raises(ValueError, match='already bound'):
+        implant_b.encoder = encoder
+    # Binding to the same implant again is allowed:
+    encoder._bind(implant_a)
+    implant_a.encoder = encoder
+    npt.assert_equal(encoder.implant is implant_a, True)
+    npt.assert_equal(implant_a.encoder is encoder, True)
+    npt.assert_equal(implant_b.encoder, None)
+    # ... and encoding still samples at implant A's electrodes:
+    img = ImageStimulus(np.random.default_rng(0).random((12, 12)))
+    npt.assert_array_equal(
+        implant_a.prepare_stim(img).data,
+        implant_a.prepare_stim(implant_a.reshape_stim(img)).data)
+
+
 def test_Encoder_rejects_non_implant():
     with pytest.raises(TypeError):
         AmplitudeEncoder((0, 50))

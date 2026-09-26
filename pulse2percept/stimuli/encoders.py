@@ -316,17 +316,35 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
     implant : :py:class:`~pulse2percept.implants.Implant`, optional
         The implant to encode for. Assigning an unbound encoder to
         :py:attr:`Implant.encoder <pulse2percept.implants.Implant.encoder>`
-        binds it to that implant.
+        binds it to that implant. Once bound, an encoder cannot be rebound.
     """
-    __slots__ = ('implant',)
+    __slots__ = ('_implant',)
 
     def __init__(self, implant=None):
+        self._implant = None
+        if implant is not None:
+            self._bind(implant)
+
+    @property
+    def implant(self):
+        """The implant this encoder is bound to, or None (read-only)"""
+        return self._implant
+
+    def _bind(self, implant):
+        """Bind to ``implant``; rebinding to a different implant fails"""
         # Imported here because `implants` imports this module:
         from ..implants.base import Implant
-        if implant is not None and not isinstance(implant, Implant):
+        if not isinstance(implant, Implant):
             raise TypeError(f"'implant' must be an Implant object, not "
                             f"{type(implant)}.")
-        self.implant = implant
+        if self._implant is None:
+            self._implant = implant
+        elif self._implant is not implant:
+            raise ValueError(
+                f"This {type(self).__name__} is already bound to another "
+                f"{type(self._implant).__name__}. Construct a separate "
+                f"encoder for each implant.")
+        return self
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""

@@ -243,13 +243,9 @@ class Implant(PrettyPrint):
             if not isinstance(encoder, Encoder):
                 raise TypeError(f"'encoder' must be an Encoder object, not "
                                 f"{type(encoder)}.")
-            if encoder.implant is None:
-                encoder.implant = self
-            elif encoder.implant is not self:
-                raise ValueError(
-                    f"This {type(encoder).__name__} is already bound to "
-                    f"another {type(encoder.implant).__name__}. Construct a "
-                    f"separate encoder for each implant.")
+            # Before the slot is written to, so that a rejected encoder leaves
+            # the implant as it was:
+            encoder._bind(self)
         self._encoder = encoder
 
     @property
