@@ -1977,12 +1977,14 @@ def test_AmplitudeEncoder_xTh_zero_amplitude_needs_no_threshold():
 
 
 def test_AmplitudeEncoder_xTh_fails_the_electrical_safety_checks():
-    encoder = AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh))
+    def encoder():
+        return AmplitudeEncoder(amp_range=(0 * xTh, 2 * xTh))
+
     img = ImageStimulus(np.ones((16, 16)))
-    limited = ArgusII(encoder=encoder)
+    limited = ArgusII(encoder=encoder())
     limited.max_current = 1000
-    for implant in (ArgusII(encoder=encoder, safe_mode=True), limited):
+    for implant in (ArgusII(encoder=encoder(), safe_mode=True), limited):
         with pytest.raises(DimensionMismatchError):
             implant.prepare_stim(img)
-    implant = ArgusII(encoder=encoder, thresholds=80, safe_mode=True)
+    implant = ArgusII(encoder=encoder(), thresholds=80, safe_mode=True)
     npt.assert_equal(implant.prepare_stim(img).unit, uA)

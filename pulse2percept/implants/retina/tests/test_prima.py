@@ -756,14 +756,14 @@ def test_PRIMAPivotal_safe_mode_checks_the_projector():
                      mW / mm ** 2)
     for encoder, msg in [(PRIMAEncoder(freq=60), 'duty cycle'),
                          (LooseEncoder(irradiance=5.0), 'exceeds the 3.5')]:
+        implant = PRIMAPivotal(safe_mode=True, encoder=encoder)
         with pytest.raises(ValueError) as excinfo:
-            PRIMAPivotal(safe_mode=True,
-                         encoder=encoder).prepare_stim(samples.logo_bvl())
+            implant.prepare_stim(samples.logo_bvl())
         npt.assert_equal(msg in str(excinfo.value), True)
         # Without safe_mode the envelope check is skipped:
-        npt.assert_equal(
-            PRIMAPivotal(encoder=encoder).prepare_stim(
-                samples.logo_bvl()).unit, mW / mm ** 2)
+        implant.safe_mode = False
+        npt.assert_equal(implant.prepare_stim(samples.logo_bvl()).unit,
+                         mW / mm ** 2)
 
 
 @pytest.mark.parametrize('implant_type', PHOTOVOLTAIC[1:])
@@ -815,9 +815,9 @@ def test_PRIMAPivotal_safe_mode_checks_the_wavelength():
     # wavelength is the only thing left to fault.
     off_color = PhotovoltaicEncoder(wavelength=915, irradiance=3.5, freq=30,
                                     pulse_dur=9.8, grayscale=False)
+    implant = PRIMAPivotal(safe_mode=True, encoder=off_color)
     with pytest.raises(ValueError) as excinfo:
-        PRIMAPivotal(safe_mode=True,
-                     encoder=off_color).prepare_stim(samples.logo_bvl())
+        implant.prepare_stim(samples.logo_bvl())
     npt.assert_equal('880 nm, not 915 nm' in str(excinfo.value), True)
     # The same settings at 880 nm pass, so only wavelength was at fault:
     on_color = PhotovoltaicEncoder(wavelength=880, irradiance=3.5, freq=30,
@@ -826,9 +826,9 @@ def test_PRIMAPivotal_safe_mode_checks_the_wavelength():
         PRIMAPivotal(safe_mode=True, encoder=on_color).prepare_stim(
             samples.logo_bvl()).unit, mW / mm ** 2)
     # Without safe_mode the wavelength check is skipped:
-    npt.assert_equal(
-        PRIMAPivotal(encoder=off_color).prepare_stim(
-            samples.logo_bvl()).unit, mW / mm ** 2)
+    implant.safe_mode = False
+    npt.assert_equal(implant.prepare_stim(samples.logo_bvl()).unit,
+                     mW / mm ** 2)
 
 
 @pytest.mark.parametrize('encoder, msg', [
@@ -846,9 +846,9 @@ def test_PRIMAPivotal_safe_mode_rejects(encoder, msg):
         implant.prepare_stim(samples.logo_bvl())
     npt.assert_equal(msg in str(excinfo.value), True)
     # The operating-envelope check is disabled when safe_mode=False.
-    npt.assert_equal(
-        PRIMAPivotal(encoder=encoder).prepare_stim(samples.logo_bvl()).unit,
-        mW / mm ** 2)
+    implant.safe_mode = False
+    npt.assert_equal(implant.prepare_stim(samples.logo_bvl()).unit,
+                     mW / mm ** 2)
 
 
 def test_PRIMAPivotal_safe_mode_reads_the_schedule_not_the_metadata():

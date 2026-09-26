@@ -314,9 +314,9 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`, optional
-        The implant to encode for. Assigning an encoder to
+        The implant to encode for. Assigning an unbound encoder to
         :py:attr:`Implant.encoder <pulse2percept.implants.Implant.encoder>`
-        stores a copy bound to that implant.
+        binds it to that implant.
     """
     __slots__ = ('implant',)
 

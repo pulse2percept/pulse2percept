@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.implants.Implant`,
    :py:class:`~pulse2percept.implants.GridImplant`"""
 import numpy as np
-from copy import copy, deepcopy
+from copy import deepcopy
 from scipy.interpolate import RegularGridInterpolator
 from skimage.color import rgb2gray
 
@@ -90,8 +90,8 @@ class Implant(PrettyPrint):
         Non-current-driven devices may override this check.
     encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
         Maps image or video gray levels to device stimulation. If None,
-        dimensionless visual input is rejected. The implant stores a copy of
-        the encoder bound to itself (see
+        dimensionless visual input is rejected. An unbound encoder is bound
+        to this implant (see
         :py:attr:`~pulse2percept.implants.Implant.encoder`).
 
         .. versionadded:: 0.10.0
@@ -230,9 +230,9 @@ class Implant(PrettyPrint):
         If None, dimensionless image/video stimuli are not encoded
         automatically.
 
-        Assigning an encoder whose ``implant`` is not this implant stores a
-        shallow copy bound to this implant; the assigned object is not
-        modified.
+        Assigning an unbound encoder (``encoder.implant is None``) binds it
+        to this implant. An encoder bound to a different implant is rejected
+        with a ValueError.
         """
         return getattr(self, '_encoder', None)
 
@@ -243,10 +243,13 @@ class Implant(PrettyPrint):
             if not isinstance(encoder, Encoder):
                 raise TypeError(f"'encoder' must be an Encoder object, not "
                                 f"{type(encoder)}.")
-            if encoder.implant is not self:
-                # Copy so that one encoder can configure several implants:
-                encoder = copy(encoder)
+            if encoder.implant is None:
                 encoder.implant = self
+            elif encoder.implant is not self:
+                raise ValueError(
+                    f"This {type(encoder).__name__} is already bound to "
+                    f"another {type(encoder.implant).__name__}. Construct a "
+                    f"separate encoder for each implant.")
         self._encoder = encoder
 
     @property

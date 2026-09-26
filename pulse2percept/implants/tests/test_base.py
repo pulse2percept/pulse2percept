@@ -318,10 +318,8 @@ def test_GridImplant_device_arguments_reach_Implant():
         implant.prepare_stim({'A1': BiphasicPulse(10, 1)}).electrodes, ['A1'])
     npt.assert_equal(implant.preprocess, True)
     npt.assert_equal(implant.safe_mode, True)
-    # The implant stores a copy of the encoder, bound to itself:
-    npt.assert_equal(type(implant.encoder), type(encoder))
-    npt.assert_equal(implant.encoder.amp_range, encoder.amp_range)
-    npt.assert_equal(implant.encoder.implant is implant, True)
+    npt.assert_equal(implant.encoder is encoder, True)
+    npt.assert_equal(encoder.implant is implant, True)
     npt.assert_equal(implant.raster, raster)
     npt.assert_almost_equal(implant.max_current, 100)
 
@@ -569,20 +567,20 @@ def test_Implant_encoder():
     npt.assert_almost_equal(stim.time, by_hand.time)
     npt.assert_equal(list(stim.electrodes), list(by_hand.electrodes))
 
-    # The implant stores a copy bound to itself; the assigned encoder stays
-    # unbound, so it can configure several implants:
-    npt.assert_equal(implant.encoder.implant is implant, True)
-    npt.assert_equal(unbound.implant, None)
-    other = Implant(ArgusII().electrode_array, encoder=unbound)
-    npt.assert_equal(other.encoder.implant is other, True)
-    npt.assert_equal(implant.encoder.implant is implant, True)
+    # The implant stores the encoder it was given, bound to itself:
+    npt.assert_equal(implant.encoder is unbound, True)
+    npt.assert_equal(unbound.implant is implant, True)
     # An encoder already bound to this implant is stored as is:
     bound = AmplitudeEncoder(implant)
     implant.encoder = bound
     npt.assert_equal(implant.encoder is bound, True)
-    # One bound elsewhere is rebound, not shared:
-    other.encoder = bound
-    npt.assert_equal(other.encoder.implant is other, True)
+    # One bound to another implant cannot migrate:
+    other = Implant(ArgusII().electrode_array)
+    with pytest.raises(ValueError, match='already bound'):
+        other.encoder = bound
+    with pytest.raises(ValueError, match='already bound'):
+        Implant(ArgusII().electrode_array, encoder=unbound)
+    npt.assert_equal(other.encoder, None)
     npt.assert_equal(bound.implant is implant, True)
     # A deep copy of the implant carries an encoder bound to the copy:
     clone = deepcopy(implant)
