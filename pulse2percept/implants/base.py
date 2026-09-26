@@ -679,7 +679,8 @@ class Implant(PrettyPrint):
         """
         return self._prepare_stim(source)
 
-    def _prepare_stim(self, source, allow_dimensionless=False):
+    def _prepare_stim(self, source, allow_dimensionless=False,
+                      preprocess=True):
         """Prepare ``source`` for the implant.
 
         If ``allow_dimensionless`` is True, dimensionless electrode values are
@@ -687,7 +688,9 @@ class Implant(PrettyPrint):
         against the electrode array, but physical-unit checks, threshold
         calibration, and electrical safety checks are skipped.
 
-        If an encoder is configured, it is still applied normally.
+        If ``preprocess`` is False, ``source`` is taken as already preprocessed
+        (e.g., Scene input). If an encoder is configured, it is still applied
+        normally.
         """
         # Empty input produces no stimulation:
         if source is None:
@@ -697,7 +700,7 @@ class Implant(PrettyPrint):
         if isinstance(source, np.ndarray) and source.size == 0:
             return None
 
-        data = self._preprocess(source)
+        data = self._preprocess(source) if preprocess else source
         # Convert to stimulus object:
         if isinstance(data, Stimulus):
             # Already a stimulus object:
