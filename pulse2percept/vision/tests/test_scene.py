@@ -2240,3 +2240,37 @@ def test_play_in_the_scene_view_keeps_the_display_clock(played):
     npt.assert_equal(played['percept'].time_unit, ms)
     npt.assert_almost_equal(outer_extent(played['percept']), scene.extent)
     plt.close('all')
+
+
+def test_inpainting_cannot_see_past_the_fov_in_either_view():
+    """A scotoma covering the whole FOV leaves nothing to inpaint from, even
+    though the world around the FOV is intact"""
+    kwargs = dict(scotoma=Scotoma.circle(20), scotoma_fill='inpaint')
+    scene, video = world_scene(**kwargs), world_video(**kwargs)
+    draws = (scene.render, lambda: scene.plot(view='eye'), scene.plot,
+             lambda: video.play(view='eye'), video.play)
+    for draw in draws:
+        with pytest.raises(ValueError):
+            draw()
+        plt.close('all')
+
+
+@pytest.mark.parametrize('gaze', [(10, -5), (35, 0)])
+def test_the_scene_view_inpaints_what_the_eye_view_does(gaze):
+    """Same eye-centered domain, including black past the edge of `extent`"""
+    scene = world_video(scotoma=Scotoma.circle(4), scotoma_fill='inpaint')
+    gx, gy = gaze
+    seen = scene.render(gaze=gaze).data[..., 0]
+    # Eye raster (row, col) is world (30 - gy + row, 30 + gx + col):
+    rows, cols = np.arange(21) + 30 - gy, np.arange(21) + 30 + gx
+    keep = cols < WORLD_PX
+    expected = seen[:, keep]
+    ax = drawn_on_fresh_axes(scene, gaze=gaze)
+    wide = ax.images[1].get_array()
+    npt.assert_almost_equal(wide[np.ix_(rows, cols[keep])], expected,
+                            decimal=6)
+    plt.close('all')
+    frames = scene.play(gaze=gaze)._frame_data[..., 0]
+    npt.assert_almost_equal(frames[np.ix_(rows, cols[keep])], expected,
+                            decimal=6)
+    plt.close('all')

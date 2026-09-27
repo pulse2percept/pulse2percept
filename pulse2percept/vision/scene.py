@@ -157,6 +157,17 @@ def _to_pixel(xs, ys):
     return to_pixel
 
 
+def _nodes_within(start, step, center, half):
+    """Indices ``n`` of the regular axis ``start + n * step``, extended past
+    its ends, whose nodes lie within ``half`` of ``center``"""
+    ends = sorted(((center - half - start) / step,
+                   (center + half - start) / step))
+    # A node exactly on the edge is inside, as in `Scene._outside_support`:
+    tol = 1e-9 * max(abs(ends[0]), abs(ends[1]), 1.0)
+    return np.arange(int(np.ceil(ends[0] - tol)),
+                     int(np.floor(ends[1] + tol)) + 1)
+
+
 def _imshow_within(ax, image, extent, zorder):
     """`imshow` an RGB layer at ``extent`` without changing the axis limits"""
     xlim, ylim = ax.get_xlim(), ax.get_ylim()
@@ -485,8 +496,10 @@ class Scene(PrettyPrint):
         default ``'rectangle'`` shows the whole window, while ``'ellipse'``
         inscribes an eye-centered ellipse of semi-axes ``fov / 2`` in it, so a
         square ``fov`` renders as a disc. The aperture is a display boundary:
-        :py:meth:`~pulse2percept.vision.Scene.plot` clips its artists to it and
-        :py:meth:`~pulse2percept.vision.Scene.render` writes black outside it,
+        :py:meth:`~pulse2percept.vision.Scene.plot` clips the full-intensity
+        FOV, percept and grid to it (scene-view context stays visible
+        outside), :py:meth:`~pulse2percept.vision.Scene.render` writes black
+        outside it,
         while scene sampling, device input, stimulation and the prosthetic
         model response are untouched.
 
@@ -1447,22 +1460,46 @@ class Scene(PrettyPrint):
         self._clip_to_support(artists, ax.transData)
         return ax
 
+    def _scene_nodes(self, gaze_xy):
+        """Eye-centered axes to evaluate a scene-view layer on, and a function
+        placing the result on the source raster
+
+        The source's own pixel centers, so `_source_on` does not resample.
+        An inpainted fill reads its surround, so it gets only the nodes inside
+        the FOV rectangle, extended past ``extent`` as in `render`: pixels the
+        eye cannot see must not feed it.
+        """
+        xs, ys = self._axes
+        gx, gy = gaze_xy
+        if self.scotoma is None or self._scotoma_fill != _INPAINT:
+            return xs - gx, ys - gy, lambda values: values
+        dx, dy = self._angular_pixel
+        cols = _nodes_within(xs[0], dx, gx, self._fov[0] / 2)
+        rows = _nodes_within(ys[0], -dy, gy, self._fov[1] / 2)
+        keep_c = (cols >= 0) & (cols < xs.size)
+        keep_r = (rows >= 0) & (rows < ys.size)
+
+        def place(values):
+            out = np.zeros((ys.size, xs.size) + values.shape[2:],
+                           dtype=np.float32)
+            out[np.ix_(rows[keep_r], cols[keep_c])] = values[np.ix_(keep_r,
+                                                                    keep_c)]
+            return out
+        return xs[0] + cols * dx - gx, ys[0] - rows * dy - gy, place
+
     def _plot_scene(self, gaze_xy, frame, ax, rings, meridians, grid_color,
                     percept, vmax, vmin, context_alpha, **kwargs):
         """`plot` on scene-centered axes spanning ``extent``"""
         radii, angles, extent = self._grid_geometry(rings, meridians,
                                                     center=gaze_xy)
         xs, ys = self._axes
-        gx, gy = gaze_xy
-        # Eye coordinates of the source's own pixel centers, so `_source_on`
-        # reads the source back without resampling it:
-        eye_xs, eye_ys = xs - gx, ys - gy
         patch = None
         if percept is not None:
             patch = self._percept_patch(percept, vmax, vmin, gaze_xy, frame,
                                         offset=gaze_xy)
-        wide = self._fov_layer(eye_xs, eye_ys, gaze_xy, frame, percept, vmax,
-                               vmin)
+        eye_xs, eye_ys, place = self._scene_nodes(gaze_xy)
+        wide = place(self._fov_layer(eye_xs, eye_ys, gaze_xy, frame, percept,
+                                     vmax, vmin))
         source = _as_rgb(self._frames()[..., self._source_frame(frame)])
         context = Percept((context_alpha * source)[..., np.newaxis],
                           space=_raster_grid(xs, ys))
@@ -1602,16 +1639,16 @@ class Scene(PrettyPrint):
         times, unit, overlays = [], None, {}
         for f in range(n_out):
             gx, gy = points[0] if len(points) == 1 else points[f]
-            # Eye coordinates of the source's own pixel centers:
-            eye_xs, eye_ys = xs - gx, ys - gy
+            eye_xs, eye_ys, place = self._scene_nodes((gx, gy))
             shown, time, unit = self._display_on(eye_xs, eye_ys,
                                                  percept=percept, vmax=vmax,
                                                  vmin=vmin, gaze=(gx, gy),
                                                  frame=f)
-            outside = self._outside_support(eye_xs, eye_ys)
+            outside = self._outside_support(xs - gx, ys - gy)
             context = context_alpha * _as_rgb(
                 source[..., self._source_frame(f)])
-            rgb = np.where(outside[..., np.newaxis], context, shown[..., 0])
+            rgb = np.where(outside[..., np.newaxis], context,
+                           place(shown[..., 0]))
             radii, angles, extent = self._grid_geometry(rings, meridians,
                                                         center=(gx, gy))
             if radii.size or angles.size:

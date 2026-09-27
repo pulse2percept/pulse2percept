@@ -303,8 +303,10 @@ A square ``fov`` therefore renders as a disc, and a 60 x 40 one as an ellipse
 reaching 30 degrees sideways and 20 degrees up. Like the scotoma and the
 eccentricity rings, it is eye-centered, so gaze moves it through the scene.
 
-The aperture is support, not scene content: ``plot`` clips its artists to it,
-``render`` writes black outside it, and the source arrays are never modified.
+The aperture is support, not scene content: ``plot`` and ``play`` clip the
+full-intensity FOV, the percept and the visual-field grid to it (the dimmed
+scene-view context stays visible outside it), ``render`` writes black outside
+it, and the source arrays are never modified.
 Scene sampling, device input and stimulation are untouched either way -- a
 camera does not go blind at the edge of an eye-shaped display aperture.
 
