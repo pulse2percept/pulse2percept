@@ -341,25 +341,28 @@ class EnsembleImplant(Implant):
             source, allow_dimensionless=allow_dimensionless)
 
     def _structured_children(self, prepared):
-        """One source per ensemble electrode, or ``None``"""
+        """One source per named ensemble electrode, or ``None``
+
+        Children may be sparse or missing; their other electrodes are
+        undriven.
+        """
         sources = {}
         for i, implant in self._implants.items():
             stim = prepared.get(i)
             if stim is None:
-                return None
+                continue
             child = stim._structured_sources()
             if child is None:
                 return None
-            child = {str(e): src for e, src in child}
-            names = [str(e) for e in implant.electrode_names]
-            if len(child) != len(names) or any(e not in child for e in names):
-                return None
-            for name in names:
-                sources[f"{i}-{name}"] = child[name]
-        if sorted(sources) != sorted(self.electrode_names):
+            child = dict(child)
+            for name in implant.electrode_names:
+                if name in child:
+                    sources[f"{i}-{name}"] = child[name]
+        if not sources:
             return None
         # Ensemble order, not the order the children happened to be built in:
-        return {name: sources[name] for name in self.electrode_names}
+        return {name: sources[name] for name in self.electrode_names
+                if name in sources}
 
     def _merged(self, prepared):
         """Combine one prepared stimulus per constituent implant into one"""
@@ -387,9 +390,9 @@ class EnsembleImplant(Implant):
 
         sources = self._structured_children(prepared)
         if sources is not None:
-            # Every electrode has a source of its own, so the ensemble is
-            # that collection
-            merged = Stimulus(sources, electrodes=self.electrode_names,
+            # Every driven electrode has a source of its own, so the ensemble
+            # is that collection
+            merged = Stimulus(sources, electrodes=list(sources),
                               metadata=user_metadata)
             return merged._inherit_units(present[0])
 
@@ -429,24 +432,26 @@ class EnsembleImplant(Implant):
         # Create a new list to hold interpolated stimuli
         new_stims = []
         num_timepoints = len(new_times) if new_times is not None else 1
-        for i, (stim, t) in enumerate(zip(stims, times)):
-            n_electrodes = len(self._implants[list(self._implants.keys())[i]].electrode_names)
-            if stim is None:
-                # If stim is None, create a zero array of shape (n_electrodes, len(new_times))
-                new_stim = np.zeros((n_electrodes, num_timepoints))
-            elif t is None:
-                # If stim exists but has no time information, assume all values correspond to first time point
-                # fill the rest with 0s
-                new_stim = np.zeros((n_electrodes, num_timepoints))
-                new_stim[:, 0] = stim.data[:, 0]
-            else:
-                # Interpolate the stim data to new_times
-                new_stim = np.zeros((n_electrodes, len(new_times)))
-                for j in range(stim.data.shape[0]):  # Interpolate each electrode separately
-                    # if the stim ends, make it 0 instead of repeating the last value. Only interpolate
-                    # for the times that are in the original stim
-                    new_stim[j] = np.interp(new_times, t, stim.data[j], left=0, right=0)
-            
+        for implant, stim, t in zip(self._implants.values(), stims, times):
+            names = implant.electrode_names
+            # Electrodes the child stimulus does not name stay at zero:
+            new_stim = np.zeros((len(names), num_timepoints))
+            if stim is not None:
+                # Rows are matched by name; a sparse stimulus need not follow
+                # the implant's electrode order:
+                row = {e: j for j, e in enumerate(stim.electrodes)}
+                data = stim.data
+                for k, name in enumerate(names):
+                    j = row.get(name)
+                    if j is None:
+                        continue
+                    if t is None:
+                        # A static stimulus lines up with the first time point:
+                        new_stim[k, 0] = data[j, 0]
+                    else:
+                        # Zero outside the child's own time span:
+                        new_stim[k] = np.interp(new_times, t, data[j],
+                                                left=0, right=0)
             new_stims.append(new_stim)
         
         # Combine all new_stims into a final array (stack along a new axis if needed)

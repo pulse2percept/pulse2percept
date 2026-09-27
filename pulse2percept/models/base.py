@@ -601,6 +601,38 @@ def _displaced_coords(model, region, electrodes, xyz, offsets):
     return tuple(out)
 
 
+def _home_regions(model, electrodes, xyz):
+    """Return the one region containing each electrode, for location_noise.
+
+    An electrode is in a region if that region's ``to_dva`` maps its placed
+    location to finite coordinates. Raises unless exactly one region does.
+    """
+    vfmap = model.visual_field_map
+    try:
+        inverses = vfmap.to_dva()
+    except NotImplementedError:
+        raise NotImplementedError(
+            f"location_noise places electrodes in the visual field, which "
+            f"requires an invertible visual field map. "
+            f"{type(vfmap).__name__} cannot map tissue coordinates back to "
+            f"dva.") from None
+    regions = [r for r in vfmap.from_dva() if r in inverses]
+    inside = np.array([np.all(np.isfinite(inverses[r](
+        *[np.array(c, dtype=np.float64) for c in xyz[:2]])), axis=0)
+        for r in regions]).reshape((len(regions), -1))
+    count = inside.sum(axis=0)
+    for bad, what in ((count == 0, f"lie in none of the regions {regions}"),
+                      (count > 1, f"lie in several of the regions {regions}")):
+        if np.any(bad):
+            lost = [e.item() if isinstance(e, np.generic) else e
+                    for e, b in zip(electrodes, bad) if b]
+            raise ValueError(
+                f"location_noise cannot displace electrode(s) "
+                f"{', '.join(repr(e) for e in lost[:5])} because they {what} "
+                f"of {type(vfmap).__name__}.")
+    return [regions[i] for i in np.argmax(inside, axis=0)]
+
+
 def _require_placed(model, region, electrodes, coords, which):
     """Raise if the map returned a non-finite coordinate for an electrode."""
     placed = np.ones(len(electrodes), dtype=bool)
@@ -1150,7 +1182,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Return coordinates used by the spatial kernel.
 
         ``location_noise`` is applied after implant placement. ``region``
-        selects the visual-field-map region used for that displacement.
+        selects the visual-field-map region used for that displacement. If
+        None, each electrode is displaced through the one region containing
+        it; the result is a single set of tissue coordinates for all regions.
         """
         xyz = super()._electrode_coords(electrode_array, stim, electrodes)
         if electrodes is None:
@@ -1158,14 +1192,22 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         offsets = _electrode_offsets(self, electrodes)
         if offsets is None:
             return xyz
-        if region is None:
-            regions = list(self.visual_field_map.from_dva())
-            if len(regions) != 1:
-                raise ValueError(f"location_noise needs a region to displace "
-                                 f"through, since {type(self).__name__} maps "
-                                 f"{regions}.")
-            region = regions[0]
-        return _displaced_coords(self, region, electrodes, xyz, offsets)
+        if region is not None:
+            return _displaced_coords(self, region, electrodes, xyz, offsets)
+        regions = list(self.visual_field_map.from_dva())
+        if len(regions) == 1:
+            return _displaced_coords(self, regions[0], electrodes, xyz,
+                                     offsets)
+        home = np.asarray(_home_regions(self, electrodes, xyz))
+        out = tuple(c.copy() for c in xyz)
+        for region in np.unique(home):
+            idx = np.flatnonzero(home == region)
+            moved = _displaced_coords(
+                self, str(region), [electrodes[i] for i in idx],
+                tuple(c[idx] for c in xyz), offsets[idx])
+            for c, m in zip(out, moved):
+                c[idx] = m
+        return out
 
     def _postprocess_spatial(self, resp):
         """Hook for spatial-model postprocessing."""

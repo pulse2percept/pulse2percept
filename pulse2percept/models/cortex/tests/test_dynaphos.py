@@ -357,12 +357,9 @@ def test_dynaphos_ensemble_prediction_uses_those_clocks():
     ensemble, source = _ensemble_of_two_clocks()
     model = DynaphosModel(implant=ensemble, xrange=(-3, 3), yrange=(-3, 3),
                           step=1).build()
-    # Members straddle the foveal confluence; drive only electrodes in V1
-    # (0 uA elsewhere, since partial member dicts are placed by position):
+    # Members straddle the foveal confluence; drive only electrodes in V1:
     in_v1 = set(_in_v1(model))
-    source = {m: {e: pt if f'{m}-{e}' in in_v1 else
-                  BiphasicPulseTrain(pt.freq, 0, pt.phase_dur, stim_dur=100)
-                  for e, pt in trains.items()}
+    source = {m: {e: pt for e, pt in trains.items() if f'{m}-{e}' in in_v1}
               for m, trains in source.items()}
     with_clocks = model.predict_percept(source).data
     npt.assert_equal(np.any(with_clocks), True)
