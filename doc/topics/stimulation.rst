@@ -256,11 +256,13 @@ deprecated until v0.12.
 Encoding gray levels as stimulation
 -----------------------------------
 
-An :py:class:`~pulse2percept.stimuli.Encoder` defines the mapping from gray
-level to stimulation.
+An :py:class:`~pulse2percept.stimuli.ImplantEncoder` defines the mapping from
+gray level to stimulation.
 :py:class:`~pulse2percept.stimuli.PulseEncoder` covers devices driven by a
 current source; :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` covers
-subretinal photovoltaic arrays, which are driven by light.
+subretinal photovoltaic arrays, which are driven by light. Model-aware
+encoders such as :py:class:`~pulse2percept.stimuli.TraceEncoder` are not
+implant encoders; call their ``encode`` directly.
 
 Attach an encoder to an implant, then hand it an image or video:
 

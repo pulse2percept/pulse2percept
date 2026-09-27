@@ -2,12 +2,16 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 from scipy.spatial import cKDTree
+from skimage.morphology import skeletonize
 
 from pulse2percept.implants import DiskElectrode, ElectrodeArray, Implant
 from pulse2percept.implants.cortex import Orion
 from pulse2percept.models.cortex import DynaphosModel
 from pulse2percept.models.retina import ScoreboardSpatial
-from pulse2percept.stimuli import Encoder, PulseEncoder, TraceEncoder
+from pulse2percept.stimuli import (Encoder, ImageStimulus, ImplantEncoder,
+                                   PulseEncoder, Stimulus, TraceEncoder,
+                                   VideoStimulus)
+from pulse2percept.stimuli.encoders import _ordered_path
 from pulse2percept.topography import VisualFieldMap
 from pulse2percept.units import (DimensionMismatchError, deg, dva, mm, ms, uA,
                                  um, xTh)
@@ -92,7 +96,12 @@ def test_TraceEncoder_is_an_Encoder():
     model = line_model()
     encoder = TraceEncoder(model)
     npt.assert_equal(isinstance(encoder, Encoder), True)
+    npt.assert_equal(isinstance(encoder, ImplantEncoder), False)
     npt.assert_equal(isinstance(encoder, PulseEncoder), False)
+    # Not installable on an implant; the rejected assignment changes nothing:
+    with pytest.raises(TypeError, match='ImplantEncoder'):
+        model.implant.encoder = encoder
+    npt.assert_equal(model.implant.encoder, None)
     npt.assert_equal(encoder.implant is model.implant, True)
     npt.assert_equal(encoder.model is model, True)
     # Nonrecursive: the model is printed by class name only.
@@ -125,6 +134,22 @@ def test_TraceEncoder_rejects_nonfinite_trace(bad):
         TraceEncoder(line_model()).encode([[0, 0], [bad, 0]])
 
 
+def test_TraceEncoder_trajectory():
+    encoder = TraceEncoder(line_model())
+    xy = encoder.trajectory([[1, 0], [2, 0.5]] * dva)
+    npt.assert_equal(isinstance(xy, np.ndarray), True)
+    npt.assert_almost_equal(xy, [[1, 0], [2, 0.5]])
+    # 'extent' belongs to image targets only:
+    for method in (encoder.trajectory, encoder.electrode_sequence,
+                   encoder.encode):
+        with pytest.raises(ValueError, match="'extent' applies"):
+            method([[0, 0]], extent=(-1, 1, -1, 1) * dva)
+    # Other stimuli are not targets:
+    for stim in (Stimulus([[1]]), VideoStimulus(np.zeros((2, 2, 3)))):
+        with pytest.raises(TypeError, match='ImageStimulus'):
+            encoder.trajectory(stim)
+
+
 def test_TraceEncoder_units():
     encoder = TraceEncoder(line_model())
     npt.assert_equal(sequence(encoder, [[1, 0]] * dva), ['B'])
@@ -135,6 +160,182 @@ def test_TraceEncoder_units():
             encoder.encode(np.array([[1, 0]]) * unit)
     with pytest.raises(DimensionMismatchError):
         TraceEncoder(line_model(), amp=5 * ms)
+
+
+def image(shape, pixels):
+    """ImageStimulus that is 1 at (row, col) ``pixels`` and 0 elsewhere"""
+    img = np.zeros(shape)
+    img[tuple(np.array(pixels).T)] = 1
+    return ImageStimulus(img)
+
+
+def test_TraceEncoder_image_pixel_centers():
+    # 8 x 4 dva over 2 x 4 pixels: 2 dva pixels, centers at x = -3, -1, 1,
+    # 3 and y = 1 (row 0), -1 (row 1):
+    encoder = TraceEncoder(line_model())
+    extent = (-4, 4, -2, 2) * dva
+    npt.assert_almost_equal(
+        encoder.trajectory(image((2, 4), [(1, 0), (1, 1), (1, 2), (1, 3)]),
+                           extent=extent),
+        [[-3, -1], [-1, -1], [1, -1], [3, -1]])
+    npt.assert_almost_equal(
+        encoder.trajectory(image((2, 4), [(0, 0), (1, 1)]), extent=extent),
+        [[-3, 1], [-1, -1]])
+    # Start is the endpoint first in row-major order:
+    npt.assert_almost_equal(
+        encoder.trajectory(image((2, 4), [(1, 2), (0, 3)]), extent=extent),
+        [[3, 1], [1, -1]])
+    # A single pixel is a one-sample trajectory:
+    npt.assert_almost_equal(
+        encoder.trajectory(image((2, 4), [(0, 2)]), extent=extent), [[1, 1]])
+
+
+@pytest.mark.parametrize('pixels, expected', [
+    # Horizontal, left to right:
+    ([(2, c) for c in range(1, 6)], [(2, c) for c in range(1, 6)]),
+    # Vertical, top to bottom:
+    ([(r, 3) for r in range(1, 6)], [(r, 3) for r in range(1, 6)]),
+    # Diagonal, from the top:
+    ([(5 - i, 1 + i) for i in range(5)], [(1 + i, 5 - i) for i in range(5)]),
+    # Right-angle bend; skeletonize removes the corner pixel:
+    ([(1, 1), (1, 2), (1, 3), (2, 3), (3, 3)],
+     [(1, 1), (1, 2), (2, 3), (3, 3)]),
+])
+def test_TraceEncoder_image_simple_paths(pixels, expected):
+    # extent puts pixel (row, col) at x = col, y = -row:
+    extent = (-0.5, 6.5, -6.5, 0.5) * dva
+    xy = TraceEncoder(line_model()).trajectory(image((7, 7), pixels),
+                                               extent=extent)
+    npt.assert_almost_equal(xy, [(c, -r) for r, c in expected])
+
+
+def test_ordered_path_bend():
+    # The diagonal (1, 2)-(2, 3) has bridge pixel (1, 3), so the corner is a
+    # path, not a branch:
+    skeleton = np.zeros((5, 5), dtype=bool)
+    bend = [(1, 1), (1, 2), (1, 3), (2, 3), (3, 3)]
+    skeleton[tuple(np.array(bend).T)] = True
+    npt.assert_equal(_ordered_path(skeleton), bend)
+    # A lone diagonal step still connects:
+    skeleton[1, 3] = False
+    npt.assert_equal(_ordered_path(skeleton),
+                     [(1, 1), (1, 2), (2, 3), (3, 3)])
+
+
+@pytest.mark.parametrize('pixels, match', [
+    ([], 'no trace'),
+    ([(1, 1), (1, 2), (4, 4), (4, 5)], 'disconnected'),
+    ([(3, c) for c in range(1, 6)] + [(1, 3), (2, 3), (4, 3), (5, 3)],
+     'branches'),
+    ([(1, c) for c in range(1, 6)] + [(5, c) for c in range(1, 6)] +
+     [(r, 1) for r in range(2, 5)] + [(r, 5) for r in range(2, 5)],
+     'closed loop'),
+])
+def test_TraceEncoder_image_rejects_topology(pixels, match):
+    target = (image((7, 7), pixels) if pixels
+              else ImageStimulus(np.zeros((7, 7))))
+    with pytest.raises(ValueError, match=match):
+        TraceEncoder(line_model()).trajectory(target,
+                                              extent=(-1, 1, -1, 1) * dva)
+
+
+def test_TraceEncoder_image_rejects_bad_input():
+    encoder = TraceEncoder(line_model())
+    target = image((3, 3), [(1, 0), (1, 1), (1, 2)])
+    with pytest.raises(ValueError, match='extent'):
+        encoder.trajectory(target)
+    for extent in [(-1, 1, -1) * dva, (1, -1, -1, 1) * dva,
+                   (-1, 1, 1, -1) * dva, (-1, 1, -1, np.inf) * dva]:
+        with pytest.raises(ValueError, match='extent'):
+            encoder.encode(target, extent=extent)
+    for unit in (deg, um):
+        with pytest.raises(DimensionMismatchError):
+            encoder.trajectory(target, extent=(-1, 1, -1, 1) * unit)
+    rgb = ImageStimulus(np.ones((3, 3, 3)))
+    with pytest.raises(ValueError, match='as_gray=True'):
+        encoder.trajectory(rgb, extent=(-1, 1, -1, 1) * dva)
+    for threshold in (-0.1, 1.1, np.nan, [0.2, 0.5]):
+        with pytest.raises(ValueError, match='threshold'):
+            TraceEncoder(line_model(), threshold=threshold)
+
+
+def test_TraceEncoder_image_threshold():
+    img = np.zeros((3, 5))
+    img[1, :] = 0.6
+    target = ImageStimulus(img)
+    extent = (-1, 1, -1, 1) * dva
+    npt.assert_equal(len(TraceEncoder(line_model()).trajectory(
+        target, extent=extent)), 5)
+    # Strictly above threshold:
+    with pytest.raises(ValueError, match='no trace'):
+        TraceEncoder(line_model(), threshold=0.6).trajectory(target,
+                                                             extent=extent)
+
+
+def thick_z(n=40, width=5, margin=4):
+    """A white letter Z on black, strokes ``width`` pixels thick"""
+    img = np.zeros((n, n))
+    img[margin:margin + width, margin:n - margin] = 1
+    img[n - margin - width:n - margin, margin:n - margin] = 1
+    for row in range(margin, n - margin):
+        col = n - 1 - row
+        img[row, max(col - width // 2, 0):col + width // 2 + 1] = 1
+    return img
+
+
+@pytest.mark.parametrize('width', [3, 5, 8])
+def test_TraceEncoder_image_thick_Z(width):
+    n = 40
+    img = thick_z(n, width)
+    # extent puts pixel (row, col) at x = col + 0.5, y = -(row + 0.5):
+    xy = TraceEncoder(line_model()).trajectory(
+        ImageStimulus(img), extent=(0, n, -n, 0) * dva)
+    rc = np.column_stack([-xy[:, 1] - 0.5, xy[:, 0] - 0.5])
+    npt.assert_almost_equal(rc, np.round(rc))
+    rc = np.round(rc).astype(int)
+    # Distinct skeleton pixels, each a neighbor of the next:
+    npt.assert_equal(np.all(skeletonize(img > 0.5)[tuple(rc.T)]), True)
+    npt.assert_equal(len({tuple(p) for p in rc}), len(rc))
+    npt.assert_equal(np.abs(np.diff(rc, axis=0)).max(axis=1), 1)
+    # Top-left to bottom-right:
+    npt.assert_equal(np.all(rc[0] < n // 4), True)
+    npt.assert_equal(np.all(rc[-1] >= 3 * n // 4), True)
+    # The middle of the path runs from upper right to lower left:
+    diagonal = rc[(rc[:, 0] > n // 4) & (rc[:, 0] < 3 * n // 4)]
+    npt.assert_equal(np.all(np.diff(diagonal[:, 0]) >= 0), True)
+    npt.assert_equal(np.all(np.diff(diagonal[:, 1]) <= 0), True)
+    npt.assert_equal(diagonal[0, 1] > 3 * n // 5, True)
+    npt.assert_equal(diagonal[-1, 1] < 2 * n // 5, True)
+
+
+def test_TraceEncoder_image_thick_T():
+    # Corner spurs are pruned, but a drawn fork is not:
+    img = np.zeros((30, 30))
+    img[3:8, 3:27] = 1
+    img[3:27, 13:18] = 1
+    with pytest.raises(ValueError, match='branches'):
+        TraceEncoder(line_model()).trajectory(ImageStimulus(img),
+                                              extent=(0, 30, -30, 0) * dva)
+
+
+def test_TraceEncoder_image_end_to_end():
+    # One row of 7 pixels, centered at x = 0, 1/3, ..., 2 dva and y = 0:
+    amp, step_dur = 60, 30
+    encoder = TraceEncoder(line_model(), amp=amp * uA, step_dur=step_dur * ms)
+    target = image((3, 7), [(1, c) for c in range(7)])
+    extent = (-1 / 6, 13 / 6, -0.5, 0.5) * dva
+    npt.assert_almost_equal(encoder.trajectory(target, extent=extent),
+                            np.column_stack([np.arange(7) / 3, np.zeros(7)]))
+    # Nearest: A, A, B, B, B, C, C, collapsed to A, B, C:
+    npt.assert_equal(encoder.electrode_sequence(target, extent=extent),
+                     ['A', 'B', 'C'])
+    stim = encoder.encode(target, extent=extent)
+    npt.assert_equal(list(stim.electrodes), ['A', 'B', 'C'])
+    npt.assert_almost_equal(stim._spatial_view().data, amp * np.eye(3))
+    npt.assert_almost_equal(stim.metadata['encoder']['frame_time'],
+                            step_dur * np.arange(3))
+    npt.assert_almost_equal(stim.duration, 3 * step_dur)
+    npt.assert_almost_equal(np.abs(stim.data).max(), amp)
 
 
 def test_TraceEncoder_regions():

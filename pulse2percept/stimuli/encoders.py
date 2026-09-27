@@ -1,4 +1,5 @@
 """:py:class:`~pulse2percept.stimuli.Encoder`,
+   :py:class:`~pulse2percept.stimuli.ImplantEncoder`,
    :py:class:`~pulse2percept.stimuli.PulseEncoder`,
    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`,
    :py:class:`~pulse2percept.stimuli.FrequencyEncoder`,
@@ -9,7 +10,9 @@ from abc import ABCMeta, abstractmethod
 import math
 import numpy as np
 from copy import deepcopy
+from scipy.ndimage import distance_transform_edt
 from scipy.spatial import cKDTree
+from skimage.morphology import skeletonize
 
 from .base import ImageStimulus, Stimulus, VideoStimulus, _adoptable
 from .pulses import BiphasicPulse
@@ -308,17 +311,19 @@ def _sampled_frames(source, implant=None, frame_dur=None):
 class Encoder(PrettyPrint, metaclass=ABCMeta):
     """Base class for encoders.
 
-    An encoder converts a visual target into the stimulus that drives a
-    prosthetic system. Subclasses implement :py:meth:`encode`.
+    An encoder converts a desired visual target into stimulation for a
+    prosthetic system. Each subclass defines the target representation it
+    accepts and implements :py:meth:`encode`.
+
+    Only an :py:class:`~pulse2percept.stimuli.ImplantEncoder` can be installed
+    on :py:attr:`Implant.encoder <pulse2percept.implants.Implant.encoder>`.
 
     .. versionadded:: 0.11.0
 
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`, optional
-        The implant to encode for. Assigning an unbound encoder to
-        :py:attr:`Implant.encoder <pulse2percept.implants.Implant.encoder>`
-        binds it to that implant. Once bound, an encoder cannot be rebound.
+        The implant to encode for. Once bound, an encoder cannot be rebound.
     """
     __slots__ = ('_implant',)
 
@@ -360,8 +365,9 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
 
         Parameters
         ----------
-        source : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The visual target to encode.
+        source
+            The visual target to encode, in the representation the subclass
+            accepts.
 
         Returns
         -------
@@ -371,7 +377,24 @@ class Encoder(PrettyPrint, metaclass=ABCMeta):
         raise NotImplementedError
 
 
-class PulseEncoder(Encoder):
+class ImplantEncoder(Encoder):
+    """Base class for encoders installable on an implant.
+
+    An implant encoder accepts the dimensionless
+    :py:class:`~pulse2percept.stimuli.Stimulus` (image or video gray levels)
+    that :py:meth:`Implant.prepare_stim
+    <pulse2percept.implants.Implant.prepare_stim>` produces, and can
+    therefore be assigned to :py:attr:`Implant.encoder
+    <pulse2percept.implants.Implant.encoder>`. Assigning an unbound encoder
+    binds it to that implant.
+
+    .. versionadded:: 0.11.0
+
+    """
+    __slots__ = ()
+
+
+class PulseEncoder(ImplantEncoder):
     """Abstract base class for electrical pulse-train encoders.
 
     Maps image or video gray levels onto the parameters of repeated
@@ -1261,17 +1284,145 @@ class _GrayFrames(Stimulus):
     __slots__ = ()
 
 
-class TraceEncoder(Encoder):
-    """Encode a visual-field trajectory as sequential single-electrode pulses
+def _pixel_graph(pixels):
+    """Return the 8-connected neighbor lists of (row, col) ``pixels``"""
+    index = {tuple(p): i for i, p in enumerate(pixels)}
+    neighbors = [[] for _ in pixels]
+    for i, (r, c) in enumerate(pixels):
+        for dr in (-1, 0, 1):
+            for dc in (-1, 0, 1):
+                j = index.get((r + dr, c + dc))
+                if j is None or j == i:
+                    continue
+                # A diagonal step next to an orthogonal bridge pixel would
+                # make every right-angle bend look like a branch:
+                bridged = (r + dr, c) in index or (r, c + dc) in index
+                if dr and dc and bridged:
+                    continue
+                neighbors[i].append(j)
+    return neighbors
 
-    Stimulates one electrode at a time, in trajectory order, for ``step_dur``
-    each:
+
+def _prune_spurs(skeleton, mask):
+    """Return ``skeleton`` without the spurs skeletonization adds at corners
+
+    At a sharp corner of a thick stroke, the skeleton continues past the
+    bend into the corner, reaching ``r / sin(angle / 2)`` from the junction,
+    where ``r`` is the junction's distance to the background of ``mask``. An
+    end branch whose tip lies within ``3 r`` (corners of 39 deg or wider) is
+    removed if it is the only such branch at its junction.
+    """
+    pixels = np.argwhere(skeleton)
+    neighbors = _pixel_graph(pixels)
+    degree = np.array([len(n) for n in neighbors])
+    radius = distance_transform_edt(mask)
+    spurs = {}
+    for end in np.flatnonzero(degree == 1):
+        branch, prev = [end], -1
+        while degree[branch[-1]] == 2 or len(branch) == 1:
+            nxt = [j for j in neighbors[branch[-1]] if j != prev]
+            if not nxt:
+                break
+            prev = branch[-1]
+            branch.append(nxt[0])
+        junction = branch[-1]
+        tip = np.hypot(*(pixels[end] - pixels[junction]))
+        if degree[junction] > 2 and tip <= 3 * radius[tuple(pixels[junction])]:
+            spurs.setdefault(junction, []).append(branch[:-1])
+    pruned = skeleton.copy()
+    for found in spurs.values():
+        # Two short end branches at one junction is a drawn fork, not a
+        # corner:
+        if len(found) == 1:
+            pruned[tuple(pixels[found[0]].T)] = False
+    return pruned
+
+
+def _ordered_path(skeleton):
+    """Return the (row, col) pixels of a one-pixel-wide open path, in order
+
+    Starts at the endpoint that comes first in row-major order. Rejects empty,
+    disconnected, branched, and closed skeletons.
+    """
+    pixels = np.argwhere(skeleton)
+    if not len(pixels):
+        raise ValueError("The image contains no trace. Trace pixels must be "
+                         "brighter than 'threshold'.")
+    neighbors = _pixel_graph(pixels)
+    degree = np.array([len(n) for n in neighbors])
+    # Connected components, by flood fill from pixel 0:
+    seen = {0}
+    todo = [0]
+    while todo:
+        for j in neighbors[todo.pop()]:
+            if j not in seen:
+                seen.add(j)
+                todo.append(j)
+    if len(seen) != len(pixels):
+        raise ValueError("The image contains more than one disconnected "
+                         "trace. TraceEncoder requires a single stroke.")
+    if np.any(degree > 2):
+        r, c = pixels[np.argmax(degree > 2)]
+        raise ValueError(f"The trace branches at pixel (row={r}, col={c}). "
+                         f"TraceEncoder requires a single nonbranching "
+                         f"stroke.")
+    if len(pixels) == 1:
+        return pixels
+    ends = np.flatnonzero(degree == 1)
+    if len(ends) != 2:
+        raise ValueError("The trace is a closed loop, which has no start "
+                         "point. Pass an (N, 2) trajectory instead.")
+    path = [ends[0]]
+    prev = -1
+    while len(path) < len(pixels):
+        nxt = [j for j in neighbors[path[-1]] if j != prev]
+        if not nxt:
+            break
+        prev = path[-1]
+        path.append(nxt[0])
+    if len(set(path)) != len(pixels) or path[-1] != ends[1]:
+        raise ValueError("The trace could not be ordered as a single path.")
+    return pixels[path]
+
+
+class TraceEncoder(Encoder):
+    """Encode a traced shape as sequential single-electrode pulses
+
+    A model-aware encoder: it uses the model's
+    :py:class:`~pulse2percept.topography.VisualFieldMap` and implant placement
+    to stimulate one electrode at a time, in trajectory order, for
+    ``step_dur`` each:
 
     .. code-block:: text
 
-        (x, y) dva -> model.visual_field_map.from_dva()[region] -> tissue
-                   -> nearest candidate electrode at model-side placement
-                   -> one step_dur pulse train per selected electrode
+        image or ordered trajectory in visual field
+                          |
+                ordered (x, y) trajectory in dva      <- trajectory()
+                          |
+          model.visual_field_map.from_dva()[region]
+                          |
+        nearest placed physical electrode per sample  <- electrode_sequence()
+                          |
+          one step_dur pulse train per electrode      <- encode()
+
+    Unlike an :py:class:`~pulse2percept.stimuli.ImplantEncoder`, it cannot be
+    installed on :py:attr:`Implant.encoder
+    <pulse2percept.implants.Implant.encoder>`; call :py:meth:`encode`
+    directly.
+
+    Accepted targets:
+
+    *  An ``(N, 2)`` array of ordered ``(x, y)`` positions in dva.
+    *  A grayscale :py:class:`~pulse2percept.stimuli.ImageStimulus` of a
+       single bright stroke on a dark background (e.g., a letter), placed in
+       the visual field by ``extent``. Pixels above ``threshold`` are
+       skeletonized to a one-pixel centerline, without the short spurs that
+       skeletonization adds at sharp corners (39 deg or wider). The
+       centerline must form one open, nonbranching path. The path starts at
+       its endpoint that comes first in row-major order (topmost, then
+       leftmost). Skeletonization can bend the end of a thick stroke by a
+       pixel, which can change that endpoint. Use :py:meth:`trajectory` to
+       check the direction, or pass an ``(N, 2)`` trajectory to set it.
 
     Candidates are activated electrodes whose placed location has a finite
     ``to_dva`` location, i.e. lies in the mapped region. Each sample is mapped
@@ -1279,10 +1430,9 @@ class TraceEncoder(Encoder):
 
     Consecutive samples that select the same electrode are collapsed into one
     step, so dense sampling does not lengthen a dwell. A later revisit of the
-    same electrode is a new step. :py:meth:`electrode_sequence` returns the
-    selected electrodes.
+    same electrode is a new step.
 
-    Inspired by dynamic stimulation of visual cortex [Beauchamp2020]_. This
+    Inspired by the dynamic letter-tracing paradigm of [Beauchamp2020]_. This
     implementation uses physical electrodes only: it does not implement
     current steering or virtual electrodes, and does not reproduce that
     study's protocol.
@@ -1316,6 +1466,8 @@ class TraceEncoder(Encoder):
     region : str, optional
         Region of ``visual_field_map.from_dva()`` to map onto, e.g. 'v1'.
         Required if the map has more than one region.
+    threshold : float, optional
+        Gray level in [0, 1] above which an image pixel is part of the trace.
 
     Notes
     -----
@@ -1323,7 +1475,8 @@ class TraceEncoder(Encoder):
        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` with
        ``frame_dur=step_dur``, so the implant's raster applies.
     *  Sparse vertices are not interpolated. To trace a line, pass samples
-       along it.
+       along it. An image trace has one sample per skeleton pixel, so the
+       image resolution sets the sampling density.
     *  The electrode sequence is determined by retinotopy and placement, so the
        path across the physical array can look unlike the visual trajectory.
     *  :py:class:`~pulse2percept.models.cortex.DynaphosModel` simulates an
@@ -1352,13 +1505,28 @@ class TraceEncoder(Encoder):
     ['41', '37', '38']
     >>> stim = encoder.encode(trace)
 
+    The same line drawn as an image, one pixel per 0.1 dva:
+
+    >>> from pulse2percept.units import dva
+    >>> line = np.zeros((9, 41))
+    >>> line[4, :] = 1
+    >>> target = p2p.stimuli.ImageStimulus(line)
+    >>> extent = (-6.05, -1.95, -2.45, -1.55) * dva
+    >>> encoder.trajectory(target, extent=extent)[[0, -1]]
+    array([[-6., -2.],
+           [-2., -2.]])
+    >>> encoder.electrode_sequence(target, extent=extent)
+    ['41', '37', '38']
+    >>> stim = encoder.encode(target, extent=extent)
+
     """
     __slots__ = ('model', 'amp', 'amp_unit', 'freq', 'phase_dur', 'step_dur',
-                 'interphase_dur', 'cathodic_first', 'clock', 'region')
+                 'interphase_dur', 'cathodic_first', 'clock', 'region',
+                 'threshold')
 
     def __init__(self, model, *, amp=100 * uA, freq=300 * Hz,
                  phase_dur=0.17 * ms, step_dur=50 * ms, interphase_dur=0 * ms,
-                 cathodic_first=True, clock=None, region=None):
+                 cathodic_first=True, clock=None, region=None, threshold=0.5):
         for attr in ('implant', 'visual_field_map', '_electrode_coords'):
             if getattr(model, attr, None) is None:
                 raise TypeError(
@@ -1383,6 +1551,11 @@ class TraceEncoder(Encoder):
             if np.size(value) != 1 or value <= 0:
                 raise ValueError(f"'{name}' must be a positive scalar, not "
                                  f"{value}.")
+        _finite('threshold', threshold)
+        if np.size(threshold) != 1 or not 0 <= threshold <= 1:
+            raise ValueError(f"'threshold' must be a scalar in [0, 1], not "
+                             f"{threshold}.")
+        self.threshold = float(threshold)
         self._check_model()
         # Validates the pulse parameters:
         self._pulse_encoder()
@@ -1396,7 +1569,8 @@ class TraceEncoder(Encoder):
                        'phase_dur': self.phase_dur, 'step_dur': self.step_dur,
                        'interphase_dur': self.interphase_dur,
                        'cathodic_first': self.cathodic_first,
-                       'clock': self.clock, 'region': self.region})
+                       'clock': self.clock, 'region': self.region,
+                       'threshold': self.threshold})
         return params
 
     def _pulse_encoder(self):
@@ -1468,16 +1642,69 @@ class TraceEncoder(Encoder):
                       for c in mapped[:n_out]]
         return out
 
-    def _target_tissue(self, source, region, forward):
-        """Return trace samples as (N, ndim) tissue coordinates"""
+    def _image_trajectory(self, image, extent):
+        """Return the ordered centerline of a one-stroke image in dva"""
+        if extent is None:
+            raise ValueError("An ImageStimulus has no angular size. Pass "
+                             "'extent' as (left, right, bottom, top) in dva.")
+        extent = np.array(as_value(extent, dva, 'extent'), dtype=np.float64)
+        if extent.shape != (4,) or not np.all(np.isfinite(extent)):
+            raise ValueError(f"'extent' must be four finite numbers (left, "
+                             f"right, bottom, top) in dva, not {extent}.")
+        left, right, bottom, top = extent
+        if not (left < right and bottom < top):
+            raise ValueError(f"'extent' requires left < right and bottom < "
+                             f"top, not {tuple(extent)}.")
+        if len(image.img_shape) != 2:
+            raise ValueError(f"TraceEncoder requires a grayscale image, not "
+                             f"shape {image.img_shape}. Construct it with "
+                             f"ImageStimulus(image, as_gray=True).")
+        n_rows, n_cols = image.img_shape
+        mask = np.asarray(image.data).reshape(image.img_shape) > self.threshold
+        row, col = _ordered_path(_prune_spurs(skeletonize(mask), mask)).T
+        # Pixel centers, as in Scene.pixel_to_dva; row 0 is the top:
+        return np.column_stack([
+            left + (col + 0.5) * (right - left) / n_cols,
+            top - (row + 0.5) * (top - bottom) / n_rows])
+
+    def trajectory(self, source, *, extent=None):
+        """Return the ordered visual-field trajectory of a target
+
+        Parameters
+        ----------
+        source : (N, 2) array_like, Quantity, or ImageStimulus
+            Ordered ``(x, y)`` samples in dva (bare numbers are dva), or a
+            grayscale image of a single stroke.
+        extent : (left, right, bottom, top) Quantity, optional
+            Outer edges of the image in dva, as in
+            :py:attr:`Scene.extent <pulse2percept.vision.Scene.extent>`.
+            Required for an image; not accepted for an ``(N, 2)`` trajectory.
+
+        Returns
+        -------
+        xy : (N, 2) np.ndarray
+            Ordered ``(x, y)`` samples in dva. For an image, one sample per
+            skeleton pixel center.
+
+        """
+        if isinstance(source, ImageStimulus):
+            return self._image_trajectory(source, extent)
         if isinstance(source, Stimulus):
-            raise TypeError("TraceEncoder encodes an (N, 2) trajectory in "
-                            "dva, not a Stimulus.")
+            raise TypeError(f"TraceEncoder encodes an (N, 2) trajectory in "
+                            f"dva or an ImageStimulus, not a "
+                            f"{type(source).__name__}.")
+        if extent is not None:
+            raise ValueError("'extent' applies to an ImageStimulus only. An "
+                             "(N, 2) trajectory is already in dva.")
         xy = np.array(as_value(source, dva, 'source'), dtype=np.float64)
         if xy.ndim != 2 or xy.shape[1] != 2 or xy.shape[0] == 0:
             raise ValueError(f"The trajectory must have shape (N, 2) with "
                              f"N >= 1, not {xy.shape}.")
         _finite('source', xy)
+        return xy
+
+    def _target_tissue(self, xy, region, forward):
+        """Return dva trace samples as (N, ndim) tissue coordinates"""
         vfmap = self.model.visual_field_map
         try:
             tissue = self._pointwise(forward, xy, vfmap.ndim)
@@ -1523,24 +1750,25 @@ class TraceEncoder(Encoder):
                 f"{type(vfmap).__name__} at this implant placement.")
         return [n for n, keep in zip(names, ok) if keep], xyz[ok]
 
-    def _sequence(self, source):
+    def _sequence(self, source, extent=None):
         """Return candidate electrode names and the index of each trace step"""
+        xy = self.trajectory(source, extent=extent)
         self._check_model()
         region, forward, inverse = self._transforms()
         names, xyz = self._candidates(region, inverse)
-        target = self._target_tissue(source, region, forward)
+        target = self._target_tissue(xy, region, forward)
         _, nearest = cKDTree(xyz).query(target)
         # Collapse consecutive duplicates only; later revisits are kept:
         keep = np.r_[True, nearest[1:] != nearest[:-1]]
         return names, nearest[keep]
 
-    def electrode_sequence(self, source):
-        """Return the electrodes a trajectory stimulates, in order
+    def electrode_sequence(self, source, *, extent=None):
+        """Return the electrodes a target stimulates, in order
 
         Parameters
         ----------
-        source : (N, 2) array_like or Quantity
-            Ordered ``(x, y)`` samples in dva. Bare numbers are dva.
+        source, extent :
+            Target, as in :py:meth:`trajectory`.
 
         Returns
         -------
@@ -1549,16 +1777,16 @@ class TraceEncoder(Encoder):
             duplicates collapsed.
 
         """
-        names, steps = self._sequence(source)
+        names, steps = self._sequence(source, extent)
         return [names[i] for i in steps]
 
-    def encode(self, source):
-        """Encode a visual-field trajectory as sequential pulse trains
+    def encode(self, source, *, extent=None):
+        """Encode a traced target as sequential pulse trains
 
         Parameters
         ----------
-        source : (N, 2) array_like or Quantity
-            Ordered ``(x, y)`` samples in dva. Bare numbers are dva.
+        source, extent :
+            Target, as in :py:meth:`trajectory`.
 
         Returns
         -------
@@ -1568,7 +1796,7 @@ class TraceEncoder(Encoder):
             the visited electrodes in electrode-array order.
 
         """
-        names, steps = self._sequence(source)
+        names, steps = self._sequence(source, extent)
         rows, which = np.unique(steps, return_inverse=True)
         frames = np.zeros((rows.size, steps.size), dtype=np.float32)
         frames[np.ravel(which), np.arange(steps.size)] = 1
@@ -1781,7 +2009,7 @@ class _OpticalStimulus(Stimulus):
                 'metadata': self.metadata}
 
 
-class PhotovoltaicEncoder(Encoder):
+class PhotovoltaicEncoder(ImplantEncoder):
     """Encode image/video gray levels as pulsed optical stimulation
 
     Photovoltaic subretinal arrays are driven by pulsed near-infrared light.

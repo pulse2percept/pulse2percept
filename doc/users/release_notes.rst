@@ -59,11 +59,17 @@ Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
 * The encoder API was cleaned up: :py:class:`~pulse2percept.stimuli.Encoder` is
-  now the general base class,
+  now the general base class, and only an
+  :py:class:`~pulse2percept.stimuli.ImplantEncoder` can be installed on
+  ``Implant.encoder``.
   ``AmplitudeEncoder(amp_range=(0, 50)).encode(image, implant=implant)``
   becomes ``AmplitudeEncoder(implant, amp_range=(0, 50)).encode(image)``,
   and ``StimulusEncoder`` was renamed to
-  :py:class:`~pulse2percept.stimuli.PulseEncoder` (:pull:`925`).
+  :py:class:`~pulse2percept.stimuli.PulseEncoder` (:pull:`925`, :pull:`XXX`).
+
+* Added :py:class:`~pulse2percept.stimuli.TraceEncoder`, a model-aware encoder
+  that stimulates one electrode at a time along a letter or trajectory drawn
+  in the visual field (:pull:`XXX`).
 
 * The stimuli API was simplified: bundled media moved to ``stimuli.samples``,
   visual psychophysics stimuli to ``stimuli.psychophysics``, and several legacy

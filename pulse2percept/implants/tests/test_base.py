@@ -21,7 +21,7 @@ from pulse2percept.stimuli import (Stimulus, ImageStimulus, VideoStimulus,
                                    samples)
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, FrequencyEncoder,
-                                   MonophasicPulse)
+                                   MonophasicPulse, TraceEncoder)
 from pulse2percept.implants import DiskElectrode
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models.retina import ScoreboardModel, ScoreboardSpatial
@@ -582,6 +582,12 @@ def test_Implant_encoder():
         Implant(ArgusII().electrode_array, encoder=unbound)
     npt.assert_equal(other.encoder, None)
     npt.assert_equal(bound.implant is implant, True)
+    # A model-aware encoder is not an ImplantEncoder, and a rejected one
+    # leaves the installed encoder in place:
+    trace = TraceEncoder(ScoreboardSpatial(implant))
+    with pytest.raises(TypeError, match='ImplantEncoder'):
+        implant.encoder = trace
+    npt.assert_equal(implant.encoder is bound, True)
     # A deep copy of the implant carries an encoder bound to the copy:
     clone = deepcopy(implant)
     npt.assert_equal(clone.encoder.implant is clone, True)

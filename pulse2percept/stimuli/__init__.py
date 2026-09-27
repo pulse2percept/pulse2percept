@@ -37,6 +37,7 @@ Convert visual stimuli to electrical stimulation.
     :toctree: _api
 
     Encoder
+    ImplantEncoder
     PulseEncoder
     AmplitudeEncoder
     FrequencyEncoder
@@ -99,8 +100,8 @@ from .base import ImageStimulus, Stimulus, VideoStimulus
 from .pulses import AsymmetricBiphasicPulse, BiphasicPulse, MonophasicPulse
 from .pulse_trains import (PulseTrain, BiphasicPulseTrain,
                            BiphasicTripletTrain, AsymmetricBiphasicPulseTrain)
-from .encoders import (Encoder, PulseEncoder, AmplitudeEncoder,
-                       FrequencyEncoder, PhotovoltaicEncoder,
+from .encoders import (Encoder, ImplantEncoder, PulseEncoder,
+                       AmplitudeEncoder, FrequencyEncoder, PhotovoltaicEncoder,
                        PRIMAEncoder, TraceEncoder)
 from .psychophysics import BarStimulus, GratingStimulus
 from .samples import LogoBVL, LogoUCSB
@@ -118,6 +119,7 @@ __all__ = [
     'FrequencyEncoder',
     'GratingStimulus',
     'ImageStimulus',
+    'ImplantEncoder',
     'LogoBVL',
     'LogoUCSB',
     'MonophasicPulse',
