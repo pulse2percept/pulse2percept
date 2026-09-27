@@ -25,6 +25,13 @@ def test_DynaphosModel():
 
     npt.assert_equal(model.regions, ['v1'])
     npt.assert_equal(model.visual_field_map.regions, ['v1'])
+    # V1 only; a rejected value leaves the regions unchanged:
+    for regions in (['v1', 'v2'], ['v2'], 'v3'):
+        with pytest.raises(ValueError, match='V1 only'):
+            DynaphosModel(NeuroPortArray(), regions=regions)
+        with pytest.raises(ValueError, match='V1 only'):
+            model.regions = regions
+    npt.assert_equal(model.regions, ['v1'])
 
     # can't set frequency/pulse dur that don't match up. A failed build
     # leaves the parameters the caller asked for in place, so put them back:

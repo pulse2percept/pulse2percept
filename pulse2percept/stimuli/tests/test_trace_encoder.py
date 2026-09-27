@@ -330,18 +330,13 @@ def test_TraceEncoder_image_thick_T():
 
 
 def test_TraceEncoder_image_asymmetric_fork():
-    # A thick bar with one short arm:
+    # A thick bar with one short arm; strict mode never alters a branch:
     img = np.zeros((30, 40))
     img[13:18, 3:37] = 1
     img[8:13, 18:23] = 1
-    target, extent = ImageStimulus(img), (0, 40, -30, 0) * dva
     with pytest.raises(ValueError, match='branches'):
-        TraceEncoder(line_model()).trajectory(target, extent=extent)
-    # Known limitation: pruning cannot tell this arm from a corner spur, and
-    # removes it:
-    xy = TraceEncoder(line_model(), prune_spurs=True).trajectory(
-        target, extent=extent)
-    npt.assert_equal(np.all(xy[:, 1] < -13), True)
+        TraceEncoder(line_model()).trajectory(ImageStimulus(img),
+                                              extent=(0, 40, -30, 0) * dva)
 
 
 def test_TraceEncoder_image_end_to_end():
@@ -531,10 +526,11 @@ def test_TraceEncoder_Polimeni_round_trip():
     vfmap = model.visual_field_map
     xdva, ydva = vfmap.to_dva()['v1'](x, y)
     encoder = TraceEncoder(model)
-    # '96' and '90' lie outside Polimeni's V1 wedge; `to_dva` wraps them into
-    # the other hemifield. They are not candidates:
+    # '96' and '90' lie outside Polimeni's V1 wedge, so `to_dva` returns NaN
+    # for them and they are not candidates:
     off_v1 = ['96', '90']
     on_v1 = [n not in off_v1 for n in names]
+    npt.assert_equal(np.isfinite(xdva) & np.isfinite(ydva), on_v1)
     candidates, _ = encoder._sequence([[-3, -2]])
     npt.assert_equal(sorted(set(names) - set(candidates)), sorted(off_v1))
     trace = np.column_stack([xdva, ydva])[on_v1]

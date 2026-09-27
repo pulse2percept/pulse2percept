@@ -66,8 +66,8 @@ class DynaphosModel(BaseModel):
     dt : float, optional
         Sampling time step of the simulation (ms)
     regions : list of str, optional
-        The visual regions to simulate. Options are 'v1', 'v2', or 'v3'.
-        Default : ['v1']
+        The visual regions to simulate. Only ``['v1']`` is supported: the
+        model's magnification, location noise, and phosphene size use V1.
     rheobase : float, optional
         Rheobase current constant (uA)
     tau_trace : float, optional
@@ -145,9 +145,11 @@ class DynaphosModel(BaseModel):
 
     @regions.setter
     def regions(self, regions):
-        
         if not isinstance(regions, list):
             regions = [regions]
+        if regions != ['v1']:
+            raise ValueError(f"DynaphosModel simulates V1 only, so 'regions' "
+                             f"must be ['v1'], not {regions}.")
         self._regions = regions
 
     def __init__(self, implant, *, dt=20, regions=None, rheobase=23.9,
