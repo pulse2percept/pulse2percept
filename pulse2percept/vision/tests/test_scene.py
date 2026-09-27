@@ -585,7 +585,7 @@ def test_grid_takes_a_color():
 def test_grid_stays_on_the_fovea_at_the_center_of_the_fov():
     scene = ramp_scene()
     ax = drawn_on_fresh_axes(scene, gaze=(3, -2) * dva, rings=True,
-                             meridians=True)
+                             meridians=True, view='eye')
     # Gaze moves the scene, not the eye-centered FOV the grid is drawn in:
     npt.assert_almost_equal(ring_radii(ax), [1.25, 2.5, 5, 10, 20],
                             decimal=6)
@@ -599,7 +599,7 @@ def test_grid_stays_on_the_fovea_at_the_center_of_the_fov():
 def test_meridians_follow_the_cartesian_polar_angle_convention():
     """0 deg is +x, 90 deg is +y, counterclockwise; each reaches the edge"""
     ax = drawn_on_fresh_axes(ramp_scene(), gaze=(3, -2) * dva,
-                             meridians=[0, 90, 180, 270])
+                             meridians=[0, 90, 180, 270], view='eye')
     ends = [end for _, end in meridian_ends(ax)]
     npt.assert_almost_equal(ends, [(20.5, 0), (0, 20.5), (-20.5, 0),
                                    (0, -20.5)])
@@ -687,8 +687,8 @@ def test_play_keeps_the_grid_still_on_a_gaze_that_moves():
                                 time=[0, 1000]), fov=(21, 21),
                   extent=(-20.5, 20.5, -20.5, 20.5))
     gaze = [(0, 0), (5, 5)]
-    plain = scene.play(gaze=gaze)._frame_data
-    ringed = scene.play(gaze=gaze, rings=[10])._frame_data
+    plain = scene.play(gaze=gaze, view='eye')._frame_data
+    ringed = scene.play(gaze=gaze, rings=[10], view='eye')._frame_data
     painted = (plain - ringed).max(axis=2) > 0.2
     npt.assert_equal(painted.any(), True)
     # The white source still covers the ring in both frames, so any drift of
@@ -767,7 +767,8 @@ def test_play_forwards_gaze_to_render():
     percept = aligned_percept()
     for gaze in ((3, -2), [(0, 0), (4, 1)]):
         npt.assert_allclose(
-            scene.play(percept=percept, vmax=3, gaze=gaze)._frame_data,
+            scene.play(percept=percept, vmax=3, gaze=gaze,
+                       view='eye')._frame_data,
             scene.render(percept=percept, vmax=3, gaze=gaze).data, atol=1e-6)
     plt.close('all')
 
@@ -1091,8 +1092,9 @@ def test_the_aperture_is_support_and_not_scene_data():
                            plain._device_input(x, y))
 
 
-def test_plotting_keeps_each_layer_at_its_own_resolution():
-    """A 60 x 80 source and a 301 x 301 percept stay two artists"""
+@pytest.mark.parametrize('view', ['eye', 'scene'])
+def test_plotting_keeps_each_layer_at_its_own_resolution(view):
+    """A 60 x 80 source and a 301 x 301 percept stay separate artists"""
     rng = np.random.default_rng(0)
     scene = Scene(ImageStimulus(rng.random((60, 80))), fov=(45, 33.75) * dva,
                   scotoma=Scotoma.circle(8), scotoma_fill=0.0,
@@ -1103,14 +1105,16 @@ def test_plotting_keeps_each_layer_at_its_own_resolution():
     data[::2, ::2, 0] = 8.0
     data[:150] *= 0.25
     percept = Percept(data, space=Grid2D((-3, 3), (-3, 3), step=6 / 300))
-    ax = scene.plot(percept=percept, vmax=8)
-    wide, patch = (image.get_array() for image in ax.images)
-    npt.assert_equal(wide.shape, (60, 80, 3))
+    ax = scene.plot(percept=percept, vmax=8, view=view)
+    wide, patch = (image.get_array() for image in ax.images[-2:])
+    # The source layers stay at the source's own resolution:
+    for image in ax.images[:-1]:
+        npt.assert_equal(image.get_array().shape, (60, 80, 3))
     npt.assert_equal(patch.shape, (301, 301, 3))
     # The patch covers the percept's own extent, not the whole field:
-    npt.assert_almost_equal(ax.images[1].get_extent(),
+    npt.assert_almost_equal(ax.images[-1].get_extent(),
                             (-3.01, 3.01, -3.01, 3.01), decimal=6)
-    npt.assert_almost_equal(ax.images[0].get_extent(),
+    npt.assert_almost_equal(ax.images[-2].get_extent(),
                             (-22.5, 22.5, -16.875, 16.875), decimal=6)
     # Pixel-for-pixel checkerboard, and the dim half is at the top:
     npt.assert_equal(patch[150, ::2, 0].min() > patch[150, 1::2, 0].max(),
@@ -1123,15 +1127,16 @@ def test_plotting_keeps_each_layer_at_its_own_resolution():
     plt.close('all')
 
 
-def test_a_dark_percept_patch_is_ordinary_residual_vision():
+@pytest.mark.parametrize('view', ['eye', 'scene'])
+def test_a_dark_percept_patch_is_ordinary_residual_vision(view):
     """No artificial border where the local patch ends"""
     scene = Scene(ImageStimulus(np.full((41, 41), 0.7)), fov=(41, 41),
                   scotoma=Scotoma.circle(14), scotoma_fill=0.25,
                   scotoma_blend=2)
     dark = Percept(np.zeros((21, 21, 1)),
                    space=Grid2D((-10, 10), (-10, 10), step=1))
-    ax = scene.plot(percept=dark, vmax=5)
-    wide, patch = (image.get_array() for image in ax.images)
+    ax = scene.plot(percept=dark, vmax=5, view=view)
+    wide, patch = (image.get_array() for image in ax.images[-2:])
     # The patch reduces to the residual view the wide layer shows, so the two
     # agree where they overlap:
     npt.assert_almost_equal(patch[0, :], wide[HALF - 10, HALF - 10:HALF + 11],
@@ -1143,7 +1148,7 @@ def test_a_dark_percept_patch_is_ordinary_residual_vision():
 def test_plot_draws_native_vision_where_the_eye_is_pointing():
     """The drawn image is the residual view, on visual-field axes"""
     scene = ramp_scene(scotoma=Scotoma.circle(3), scotoma_fill=0.0)
-    ax = scene.plot(gaze=(5, 0) * dva)
+    ax = scene.plot(gaze=(5, 0) * dva, view='eye')
     drawn = ax.images[-1].get_array()
     npt.assert_almost_equal(drawn, scene._native_rgb(gaze=(5, 0))[..., 0],
                             decimal=6)
@@ -1329,7 +1334,7 @@ def test_the_aperture_clips_a_composed_percept_only_when_it_is_drawn():
     npt.assert_almost_equal(seen_rect[0, -1, 0], ramp_at(HALF), decimal=6)
     # Plotting clips instead: the same elliptical support, applied to the
     # artist rather than written into its array.
-    ax = ellip.plot(percept=bright, vmax=1)
+    ax = ellip.plot(percept=bright, vmax=1, view='eye')
     npt.assert_array_equal(ax.images[0].get_array(),
                            rect._native_rgb()[..., 0])
     npt.assert_equal(ax.images[0].get_clip_path() is not None, True)
@@ -1343,7 +1348,7 @@ def test_a_percept_can_be_plotted_in_the_context_of_the_whole_field():
     data[4, 4] = 20.0
     phosphene = Percept(data, space=space)
     scene = ellipse_scene()
-    ax = scene.plot(percept=phosphene, vmax=20)
+    ax = scene.plot(percept=phosphene, vmax=20, view='eye')
     wide, patch = (image.get_array() for image in ax.images)
     # Each layer keeps its own resolution:
     npt.assert_equal(wide.shape, (SCENE_PX, SCENE_PX, 3))
@@ -1357,7 +1362,7 @@ def test_a_percept_can_be_plotted_in_the_context_of_the_whole_field():
     npt.assert_almost_equal(wide, 0.0)
     plt.close('all')
     # An omitted vmax is the percept's maximum:
-    auto = scene.plot(percept=phosphene).images[1].get_array()
+    auto = scene.plot(percept=phosphene, view='eye').images[1].get_array()
     npt.assert_almost_equal(auto, patch, decimal=6)
     plt.close('all')
     # A display range with nothing to map onto it is not silently
@@ -1372,7 +1377,7 @@ def test_plotting_a_percept_over_a_scotoma_is_the_composed_view():
     """On a shared raster the drawn layers are the dense composition"""
     scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
     bright = Percept(np.ones((SCENE_PX, SCENE_PX, 1)), space=scene._grid())
-    ax = scene.plot(percept=bright, vmax=1)
+    ax = scene.plot(percept=bright, vmax=1, view='eye')
     npt.assert_almost_equal(ax.images[1].get_array(),
                             rendered(scene, percept=bright, vmax=1)[..., 0],
                             decimal=6)
@@ -1384,7 +1389,7 @@ def test_plotting_a_percept_over_a_scotoma_is_the_composed_view():
 
 def test_rings_still_land_on_the_fovea_the_aperture_is_centered_on():
     scene = ellipse_scene()
-    ax = scene.plot(gaze=(7, -3) * dva, rings=[10])
+    ax = scene.plot(gaze=(7, -3) * dva, rings=[10], view='eye')
     # The ring is a circle of radius 10 about the fovea at the FOV center:
     ring = ax.lines[-1]
     xs, ys = ring.get_xdata(), ring.get_ydata()
@@ -1405,7 +1410,7 @@ def test_the_grid_is_clipped_to_an_elliptical_aperture():
     frames = np.stack([np.ones((SCENE_PX, SCENE_PX))] * 2, axis=-1)
     video = Scene(VideoStimulus(frames, time=[0, 1000]),
                   fov=(SCENE_PX, SCENE_PX), aperture='ellipse')
-    ruled = video.play(meridians=True)._frame_data
+    ruled = video.play(meridians=True, view='eye')._frame_data
     outside = video._aperture_mask(*video._view_axes())
     npt.assert_array_equal(ruled[outside], 0)
     plt.close('all')
@@ -1415,7 +1420,7 @@ def test_the_aperture_reaches_the_frames_the_player_shows():
     frames = np.stack([np.full((9, 9), v) for v in (0.4, 0.8)], axis=-1)
     scene = Scene(VideoStimulus(frames, time=[0, 10]), fov=(9, 9),
                   aperture='ellipse')
-    ani = scene.play()
+    ani = scene.play(view='eye')
     npt.assert_almost_equal(ani._frame_data[0, 0, :, 0], 0.0)
     npt.assert_almost_equal(ani._frame_data[4, 4, :, 1], 0.8, decimal=6)
     plt.close('all')
@@ -1570,49 +1575,56 @@ def frames_evaluated(monkeypatch):
     return counts
 
 
-def test_plotting_one_frame_evaluates_only_that_frame(monkeypatch):
+@pytest.mark.parametrize('view', ['eye', 'scene'])
+def test_plotting_one_frame_evaluates_only_that_frame(monkeypatch, view):
     """Drawing frame k must not compose, sample or align the other frames"""
     n = 6
     scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.0,
                              scotoma_blend=2)
     percept = ramped_percept(scene, n)
     counts = frames_evaluated(monkeypatch)
-    ax = scene.plot(percept=percept, vmax=1, frame=4, ax=plt.subplots()[1])
+    ax = scene.plot(percept=percept, vmax=1, frame=4, ax=plt.subplots()[1],
+                    view=view)
     # One source frame for the patch, one for the wide layer, one percept
     # frame, whatever the length of the video:
     npt.assert_equal(counts['source'], [1, 1])
     npt.assert_equal(counts['percept'], [1])
     # ... and it is frame 4, drawn exactly as the dense composition has it:
     dense = rendered(scene, percept=percept, vmax=1)
-    npt.assert_almost_equal(ax.images[1].get_array(), dense[..., 4],
+    npt.assert_almost_equal(ax.images[-1].get_array(), dense[..., 4],
                             decimal=6)
-    npt.assert_almost_equal(ax.images[0].get_array(),
+    npt.assert_almost_equal(ax.images[-2].get_array(),
                             scene._native_rgb()[..., 4], decimal=6)
     plt.close('all')
 
 
-def test_a_still_scene_narrows_to_the_requested_percept_frame(monkeypatch):
+@pytest.mark.parametrize('view', ['eye', 'scene'])
+def test_a_still_scene_narrows_to_the_requested_percept_frame(monkeypatch,
+                                                              view):
     """One source frame stands behind whichever percept frame is drawn"""
     n = 5
     scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
     percept = ramped_percept(scene, n)
     counts = frames_evaluated(monkeypatch)
-    ax = scene.plot(percept=percept, vmax=1, frame=3, ax=plt.subplots()[1])
+    ax = scene.plot(percept=percept, vmax=1, frame=3, ax=plt.subplots()[1],
+                    view=view)
     npt.assert_equal(counts['percept'], [1])
     npt.assert_equal(counts['source'], [1, 1])
-    npt.assert_almost_equal(ax.images[1].get_array(),
+    npt.assert_almost_equal(ax.images[-1].get_array(),
                             rendered(scene, percept=percept,
                                      vmax=1)[..., 3], decimal=6)
     plt.close('all')
 
 
-def test_plotting_a_video_frame_without_a_percept_reads_one_frame(monkeypatch):
+@pytest.mark.parametrize('view', ['eye', 'scene'])
+def test_plotting_a_video_frame_without_a_percept_reads_one_frame(monkeypatch,
+                                                                  view):
     n = 6
     scene = gray_video_scene(n, scotoma=Scotoma.circle(6), scotoma_fill=0.2)
     counts = frames_evaluated(monkeypatch)
-    ax = scene.plot(frame=2, ax=plt.subplots()[1])
+    ax = scene.plot(frame=2, ax=plt.subplots()[1], view=view)
     npt.assert_equal(counts['source'], [1])
-    npt.assert_almost_equal(ax.images[0].get_array(),
+    npt.assert_almost_equal(ax.images[-1].get_array(),
                             scene._native_rgb()[..., 2], decimal=6)
     plt.close('all')
 
@@ -1720,18 +1732,19 @@ def test_an_explicit_aperture_overrides_the_blank_default():
     npt.assert_equal(Scene.blank().aperture, 'ellipse')
 
 
-def test_a_blank_scene_does_not_resample_a_finer_percept():
+@pytest.mark.parametrize('view', ['eye', 'scene'])
+def test_a_blank_scene_does_not_resample_a_finer_percept(view):
     """The backing raster is a display default, not the model's grid"""
     scene = Scene.blank(fov=45 * dva)
     # Deliberately finer than the 45 / 512 dva backing raster:
     space = Grid2D((-2, 2), (-2, 2), step=0.02)
     data = np.zeros(space.x.shape + (1,))
     data[100, 100] = 5.0
-    ax = scene.plot(percept=Percept(data, space=space), vmax=5)
-    wide, patch = (image.get_array() for image in ax.images)
+    ax = scene.plot(percept=Percept(data, space=space), vmax=5, view=view)
+    wide, patch = (image.get_array() for image in ax.images[-2:])
     npt.assert_equal(wide.shape, (512, 512, 3))
     npt.assert_equal(patch.shape, (201, 201, 3))
-    npt.assert_almost_equal(ax.images[1].get_extent(),
+    npt.assert_almost_equal(ax.images[-1].get_extent(),
                             (-2.01, 2.01, -2.01, 2.01), decimal=6)
     npt.assert_almost_equal(patch[100, 100], [1.0, 1.0, 1.0], decimal=6)
     plt.close('all')
@@ -1836,8 +1849,29 @@ def test_an_explicit_extent_is_kept_exactly():
     npt.assert_almost_equal(shifted._angular_pixel, (2.0, 1.0))
 
 
+@pytest.mark.parametrize('shape, extent', [
+    # The shorter dimension spans the scalar, the other keeps the aspect ratio
+    ((173, 320), (-22.5 * 320 / 173, 22.5 * 320 / 173, -22.5, 22.5)),
+    ((320, 173), (-22.5, 22.5, -22.5 * 320 / 173, 22.5 * 320 / 173)),
+    ((64, 64), (-22.5, 22.5, -22.5, 22.5)),
+])
+def test_a_scalar_extent_spans_the_shorter_source_dimension(shape, extent):
+    scene = Scene(np.zeros(shape), fov=40, extent=45 * dva)
+    npt.assert_almost_equal(scene.extent, extent)
+    dx, dy = scene._angular_pixel
+    npt.assert_almost_equal(dx, dy)
+    npt.assert_equal(scene.fov, (40.0, 40.0))
+    # Unitless is read as dva, and a world smaller than the FOV is allowed:
+    npt.assert_almost_equal(Scene(np.zeros(shape), fov=40, extent=45).extent,
+                            extent)
+    small = Scene(np.zeros(shape), fov=40, extent=10)
+    npt.assert_almost_equal(min(small.extent[1] - small.extent[0],
+                                small.extent[3] - small.extent[2]), 10)
+
+
 @pytest.mark.parametrize('extent', [(0, 1, 2), (1, 0, 0, 1), (0, 1, 1, 1),
-                                    (0, np.inf, 0, 1), (0, 1, np.nan, 1)])
+                                    (0, np.inf, 0, 1), (0, 1, np.nan, 1),
+                                    0, -45, np.nan, np.inf])
 def test_a_bad_extent_is_refused(extent):
     with pytest.raises(ValueError):
         Scene(np.zeros((8, 8)), fov=8, extent=extent)
@@ -1896,7 +1930,7 @@ def test_image_and_video_sources_see_the_same_world():
                                image.render(gaze=g).data[..., 0])
 
 
-def test_render_plot_and_play_show_the_same_window():
+def test_render_and_the_eye_view_show_the_same_window():
     frames = np.stack([coordinate_image()] * 2, axis=-1)
     scene = world_scene(VideoStimulus(frames, time=[0, 100]),
                         scotoma=Scotoma.circle(3), scotoma_fill=0.2)
@@ -1905,13 +1939,14 @@ def test_render_plot_and_play_show_the_same_window():
     # The full 21-degree FOV, edge pixels included:
     fov = (-10.5, 10.5)
     for grid in ({}, {'rings': [5]}):
-        ani = scene.play(gaze=gaze, **grid)
+        ani = scene.play(gaze=gaze, view='eye', **grid)
         if not grid:
             npt.assert_array_equal(ani._frame_data, rendered_frames)
         npt.assert_almost_equal(ani._image.axes.get_xlim(), fov)
         npt.assert_almost_equal(ani._image.axes.get_ylim(), fov)
     for f in range(2):
-        ax = scene.plot(gaze=gaze, frame=f, ax=plt.subplots()[1])
+        ax = scene.plot(gaze=gaze, frame=f, ax=plt.subplots()[1],
+                        view='eye')
         npt.assert_almost_equal(ax.images[0].get_array(),
                                 rendered_frames[..., f], decimal=6)
         npt.assert_almost_equal(ax.get_xlim(), fov)
@@ -1986,3 +2021,312 @@ def test_a_fov_past_the_edge_of_the_world_is_black():
     npt.assert_array_equal(seen[x + 30 > 40.5], 0.0)
     # The device is given the same black:
     npt.assert_almost_equal(seen_at(scene, 45.0), 0.0)
+
+
+# Scene view: fixed world axes, the FOV moving with gaze
+#
+# World pixel (row, col) is at scene (col - 40, 40 - row).
+WORLD_X, WORLD_Y = np.meshgrid(np.arange(-40.0, 41.0),
+                               np.arange(40.0, -41.0, -1.0))
+
+
+def in_fov(gaze, aperture='rectangle', half=10.5):
+    """World pixels inside a 21-degree FOV fixating ``gaze``"""
+    x, y = WORLD_X - gaze[0], WORLD_Y - gaze[1]
+    if aperture == 'ellipse':
+        return x ** 2 + y ** 2 <= half ** 2
+    return (np.abs(x) <= half) & (np.abs(y) <= half)
+
+
+def clip_bounds(ax, artist):
+    """Data-space ``(left, bottom, right, top)`` an artist is clipped to"""
+    path = artist.get_clip_path()
+    # Matplotlib turns a rectangular clip path into a clip box:
+    bbox = (artist.get_clip_box() if path is None
+            else path.get_fully_transformed_path().get_extents())
+    return tuple(ax.transData.inverted().transform(bbox.get_points()).ravel())
+
+
+def world_video(n_frames=2, source=None, **kwargs):
+    """`world_scene` as a video, one second per frame"""
+    frame = coordinate_image() if source is None else source
+    frames = np.stack([frame] * n_frames, axis=-1)
+    return world_scene(VideoStimulus(frames, time=np.arange(n_frames) * 1000),
+                       **kwargs)
+
+
+def test_the_scene_view_is_the_default_and_spans_the_extent():
+    scene = world_scene()
+    source = coordinate_image()
+    for gaze in ((0, 0), (10, -5), (35, 0)):
+        ax = drawn_on_fresh_axes(scene, gaze=gaze * dva)
+        # Not the eye-centered [-10.5, 10.5], whatever the gaze:
+        npt.assert_almost_equal(ax.get_xlim(), WORLD[:2])
+        npt.assert_almost_equal(ax.get_ylim(), WORLD[2:])
+        # The source is where `extent` puts it, at its own raster:
+        for image in ax.images[:2]:
+            npt.assert_almost_equal(image.get_extent(), WORLD)
+        npt.assert_almost_equal(ax.images[0].get_array(), 0.25 * source,
+                                decimal=6)
+        npt.assert_almost_equal(ax.images[1].get_array(), source, decimal=6)
+    plt.close('all')
+    with pytest.raises(ValueError):
+        scene.plot(view='world')
+    with pytest.raises(ValueError):
+        world_video().play(view='head')
+
+
+@pytest.mark.parametrize('aperture', ['rectangle', 'ellipse'])
+def test_the_fov_moves_through_the_fixed_scene(aperture):
+    gaze = [(0, 0), (10, -5), (35, 0)]
+    scene = world_video(len(gaze), aperture=aperture)
+    source = coordinate_image()
+    frames = scene.play(gaze=gaze)._frame_data
+    # Nothing is invented past `extent`, even where the FOV reaches beyond it:
+    npt.assert_equal(frames.shape, (WORLD_PX, WORLD_PX, 3, len(gaze)))
+    for f, g in enumerate(gaze):
+        inside = in_fov(g, aperture)
+        # Every pixel keeps its world value; only its intensity changes:
+        npt.assert_almost_equal(frames[inside, :, f], source[inside],
+                                decimal=6)
+        npt.assert_almost_equal(frames[~inside, :, f], 0.25 * source[~inside],
+                                decimal=6)
+    # `plot` clips the full-intensity layer to the same moving support:
+    ax = drawn_on_fresh_axes(scene, gaze=gaze, frame=1)
+    npt.assert_almost_equal(clip_bounds(ax, ax.images[1]),
+                            (-0.5, -15.5, 20.5, 5.5), decimal=6)
+    # The dimmed context is not clipped:
+    npt.assert_equal(ax.images[0].get_clip_path(), None)
+    npt.assert_equal(ax.images[0].get_clip_box().bounds, ax.bbox.bounds)
+    plt.close('all')
+
+
+@pytest.mark.parametrize('alpha', [0, 0.25, 1])
+def test_context_alpha_dims_only_the_scene_outside_the_fov(alpha):
+    scene = world_video()
+    source = coordinate_image()
+    inside = in_fov((10, -5))
+    frames = scene.play(gaze=(10, -5), context_alpha=alpha)._frame_data
+    npt.assert_almost_equal(frames[~inside, :, 0], alpha * source[~inside],
+                            decimal=6)
+    npt.assert_almost_equal(frames[inside, :, 0], source[inside], decimal=6)
+    ax = drawn_on_fresh_axes(scene, gaze=(10, -5), context_alpha=alpha)
+    npt.assert_almost_equal(ax.images[0].get_array(), alpha * source,
+                            decimal=6)
+    plt.close('all')
+    # Display only, so the eye view and the render ignore it:
+    npt.assert_array_equal(
+        scene.play(gaze=(10, -5), context_alpha=alpha,
+                   view='eye')._frame_data,
+        scene.render(gaze=(10, -5)).data)
+    plt.close('all')
+
+
+@pytest.mark.parametrize('alpha', [-0.1, 1.5, np.nan, np.inf])
+def test_a_bad_context_alpha_is_refused(alpha):
+    with pytest.raises(ValueError):
+        world_scene().plot(context_alpha=alpha)
+    with pytest.raises(ValueError):
+        world_video().play(context_alpha=alpha)
+    plt.close('all')
+    # ... but only where it is used:
+    world_scene().plot(context_alpha=alpha, view='eye')
+    world_video().play(context_alpha=alpha, view='eye')
+    plt.close('all')
+
+
+@pytest.mark.parametrize('scotoma_fill', [0.0, 'inpaint'])
+def test_plot_kwargs_reach_the_fov_in_the_scene_view(scotoma_fill):
+    scene = world_scene(scotoma=Scotoma.circle(4), scotoma_fill=scotoma_fill)
+    ax = drawn_on_fresh_axes(scene, gaze=(10, -5), alpha=0.5,
+                             interpolation='nearest')
+    context, fov = ax.images
+    npt.assert_equal(fov.get_alpha(), 0.5)
+    npt.assert_equal(fov.get_interpolation(), 'nearest')
+    # The context is styled by `context_alpha` alone:
+    npt.assert_equal(context.get_alpha(), None)
+    npt.assert_equal(context.get_interpolation() == 'nearest', False)
+    npt.assert_almost_equal(ax.get_xlim(), WORLD[:2])
+    plt.close('all')
+
+
+def test_the_scotoma_moves_with_gaze_at_its_angular_size():
+    white = np.ones((WORLD_PX, WORLD_PX))
+    scene = world_scene(white, scotoma=Scotoma.circle(5), scotoma_fill=0.0)
+    for gx, gy in ((0, 0), (10, -5)):
+        ax = drawn_on_fresh_axes(scene, gaze=(gx, gy))
+        lost = ax.images[1].get_array()[..., 0] < 0.5
+        npt.assert_array_equal(lost, np.hypot(WORLD_X - gx, WORLD_Y - gy) <= 5)
+    plt.close('all')
+    video = world_video(source=white, scotoma=Scotoma.circle(5),
+                        scotoma_fill=0.0)
+    frames = video.play(gaze=[(0, 0), (10, -5)], context_alpha=1)._frame_data
+    for f, (gx, gy) in enumerate(((0, 0), (10, -5))):
+        npt.assert_array_equal(frames[..., 0, f] < 0.5,
+                               (WORLD_X - gx) ** 2 + (WORLD_Y - gy) ** 2 <= 25)
+    plt.close('all')
+
+
+def point_percept():
+    """One bright pixel at eye-centered (3, 2)"""
+    space = Grid2D((-6, 6), (-6, 6), step=1)
+    data = np.zeros(space.x.shape + (1,))
+    data[(space.y == 2) & (space.x == 3)] = 1.0
+    return Percept(data, space=space)
+
+
+@pytest.mark.parametrize('scotoma', [None, Scotoma.circle(8)])
+def test_a_percept_is_drawn_where_its_fovea_points(scotoma):
+    scene = world_scene(scotoma=scotoma, scotoma_fill=0.0)
+    percept = point_percept()
+    ax = drawn_on_fresh_axes(scene, percept=percept, gaze=(10, -5), vmax=1)
+    patch = ax.images[-1]
+    # The eye-view patch, shifted by gaze:
+    left, right, bottom, top = patch.get_extent()
+    npt.assert_almost_equal((left, right, bottom, top),
+                            (3.5, 16.5, -11.5, 1.5))
+    row, col = np.unravel_index(np.argmax(patch.get_array()[..., 0]),
+                                patch.get_array().shape[:2])
+    # Eye (3, 2) at gaze (10, -5) is scene (13, -3):
+    npt.assert_almost_equal((left + col + 0.5, top - row - 0.5), (13, -3))
+    npt.assert_almost_equal(clip_bounds(ax, patch), (-0.5, -15.5, 20.5, 5.5),
+                            decimal=6)
+    plt.close('all')
+    video = world_video(scotoma=scotoma, scotoma_fill=0.0)
+    frames = video.play(percept=percept, gaze=(10, -5), vmax=1)._frame_data
+    # Scene (13, -3) is row 43, column 53:
+    npt.assert_almost_equal(frames[43, 53, :, 0], 1.0, decimal=6)
+    plt.close('all')
+
+
+def test_a_percept_without_a_scotoma_is_still_shown_on_black():
+    """Not superimposed on intact native vision"""
+    scene = world_video()
+    source = coordinate_image()
+    inside = in_fov((10, -5))
+    ax = drawn_on_fresh_axes(scene, percept=point_percept(), gaze=(10, -5),
+                             vmax=1)
+    npt.assert_almost_equal(ax.images[1].get_array(), 0.0)
+    npt.assert_almost_equal(ax.images[0].get_array(), 0.25 * source,
+                            decimal=6)
+    plt.close('all')
+    frames = scene.play(percept=point_percept(), gaze=(10, -5),
+                        vmax=1)._frame_data[..., 0]
+    lit = frames.max(axis=-1) > 0
+    npt.assert_equal(np.count_nonzero(lit[inside]), 1)
+    npt.assert_almost_equal(frames[~inside], 0.25 * source[~inside],
+                            decimal=6)
+    plt.close('all')
+
+
+def test_the_scene_view_grid_follows_gaze():
+    scene = world_scene()
+    ax = drawn_on_fresh_axes(scene, gaze=(10, -5), rings=[5, 8],
+                             meridians=[0, 90])
+    # Same eccentricities, about the moving fovea:
+    npt.assert_almost_equal(ring_radii(ax, center=(10, -5)), [5, 8],
+                            decimal=6)
+    ends = meridian_ends(ax)
+    for start, _ in ends:
+        npt.assert_almost_equal(start, (10, -5))
+    # ... still reaching the edge of the translated FOV:
+    npt.assert_almost_equal([end for _, end in ends], [(20.5, -5), (10, 5.5)])
+    npt.assert_almost_equal(clip_bounds(ax, ax.get_lines()[0]),
+                            (-0.5, -15.5, 20.5, 5.5), decimal=6)
+    plt.close('all')
+    # The eye view keeps it on the origin:
+    ax = drawn_on_fresh_axes(scene, gaze=(10, -5), rings=[5], view='eye')
+    npt.assert_almost_equal(ring_radii(ax), [5], decimal=6)
+    plt.close('all')
+    # The player paints it about each frame's fovea, clipped to that FOV:
+    video = world_video(source=np.ones((WORLD_PX, WORLD_PX)))
+    gaze = [(0, 0), (6, -4)]
+    plain = video.play(gaze=gaze)._frame_data
+    ringed = video.play(gaze=gaze, rings=[5])._frame_data
+    painted = np.abs(plain - ringed).max(axis=2) > 0.05
+    npt.assert_equal(painted[..., 0].any(), True)
+    npt.assert_array_equal(np.roll(painted[..., 0], (4, 6), axis=(0, 1)),
+                           painted[..., 1])
+    npt.assert_equal(painted[~in_fov((0, 0)), 0].any(), False)
+    plt.close('all')
+
+
+def test_play_in_the_scene_view_keeps_the_display_clock(played):
+    """A temporal percept may label frame ends; those labels survive"""
+    scene = video_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.2)
+    scene.play(percept=aligned_percept(), vmax=3, gaze=[(0, 0), (4, 1)])
+    npt.assert_almost_equal(played['percept'].time, [1000, 2000])
+    npt.assert_equal(played['percept'].time_unit, ms)
+    npt.assert_almost_equal(outer_extent(played['percept']), scene.extent)
+    plt.close('all')
+
+
+def test_inpainting_cannot_see_past_the_fov_in_either_view():
+    """A scotoma covering the whole FOV leaves nothing to inpaint from, even
+    though the world around the FOV is intact"""
+    kwargs = dict(scotoma=Scotoma.circle(20), scotoma_fill='inpaint')
+    scene, video = world_scene(**kwargs), world_video(**kwargs)
+    draws = (scene.render, lambda: scene.plot(view='eye'), scene.plot,
+             lambda: video.play(view='eye'), video.play)
+    for draw in draws:
+        with pytest.raises(ValueError):
+            draw()
+        plt.close('all')
+
+
+def inpainted_views(scene, gaze):
+    """The eye view's render, and the scene view's plotted and played FOV"""
+    seen = scene.render(gaze=gaze).data[..., 0]
+    ax = drawn_on_fresh_axes(scene, gaze=gaze)
+    wide = ax.images[1]
+    frames = scene.play(gaze=gaze)._frame_data[..., 0]
+    plt.close('all')
+    return seen, wide, frames
+
+
+@pytest.mark.parametrize('gaze', [(10, -5), (35, 0)])
+def test_the_scene_view_inpaints_what_the_eye_view_does(gaze):
+    """Same eye-centered raster, including black past the edge of `extent`"""
+    scene = world_video(scotoma=Scotoma.circle(4), scotoma_fill='inpaint')
+    seen, wide, frames = inpainted_views(scene, gaze)
+    # `plot` draws the eye view's raster itself, moved to the fovea:
+    npt.assert_almost_equal(wide.get_array(), seen, decimal=6)
+    gx, gy = gaze
+    npt.assert_almost_equal(wide.get_extent(),
+                            (gx - 10.5, gx + 10.5, gy - 10.5, gy + 10.5))
+    # Here the lattices align, so `play` shows those very pixels. Eye raster
+    # (row, col) is world (30 - gy + row, 30 + gx + col):
+    rows, cols = np.arange(21) + 30 - gy, np.arange(21) + 30 + gx
+    keep = cols < WORLD_PX
+    npt.assert_almost_equal(frames[np.ix_(rows, cols[keep])], seen[:, keep],
+                            decimal=6)
+
+
+def test_inpainting_uses_the_eye_raster_when_the_lattices_differ():
+    """The pedestrian geometry: 45 / 173 dva source pixels, 40 / 154 dva
+    render pixels, so no source pixel center is a render node"""
+    y, x = np.mgrid[0:1:173j, 0:1:320j]
+    frame = np.stack([x, y, 0.5 + 0.4 * np.sin(6 * x) * np.cos(4 * y)],
+                     axis=-1)
+    video = VideoStimulus(np.stack([frame] * 2, axis=-1), time=[0, 100])
+    scene = Scene(video, extent=45 * dva, fov=40 * dva,
+                  scotoma=Scotoma.circle(5), scotoma_fill='inpaint')
+    npt.assert_equal(scene.render().shape[:2], (154, 154))
+    gaze = (3.3, -1.7)
+    seen, wide, frames = inpainted_views(scene, gaze)
+    npt.assert_almost_equal(wide.get_array(), seen, decimal=6)
+    # `play` shows that same inpainted image, linearly interpolated onto the
+    # source pixels inside the FOV:
+    xs, ys = scene._axes
+    eye_x, eye_y = np.meshgrid(xs - gaze[0], ys - gaze[1])
+    inside = (np.abs(eye_x) < 19.5) & (np.abs(eye_y) < 19.5)
+    view_x, view_y = scene._view_axes()
+    col = np.interp(eye_x[inside], view_x, np.arange(view_x.size))
+    row = np.interp(-eye_y[inside], -view_y, np.arange(view_y.size))
+    c0, r0 = np.floor(col).astype(int), np.floor(row).astype(int)
+    fc, fr = (col - c0)[:, None], (row - r0)[:, None]
+    c1, r1 = np.minimum(c0 + 1, 153), np.minimum(r0 + 1, 153)
+    top = (1 - fc) * seen[r0, c0] + fc * seen[r0, c1]
+    bottom = (1 - fc) * seen[r1, c0] + fc * seen[r1, c1]
+    expected = (1 - fr) * top + fr * bottom
+    npt.assert_allclose(frames[inside], expected, atol=1e-5)

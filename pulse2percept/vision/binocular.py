@@ -2,20 +2,26 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .scene import Scene, _check_prosthetic
+from .scene import (Scene, _check_prosthetic, _label_limits, _resolve_view,
+                    _CONTEXT_ALPHA, _EYE_VIEW, _SCENE_VIEW)
 from ..stimuli import ImageStimulus, VideoStimulus
 from ..utils import PrettyPrint
 
 
-def _share_visual_field(axes, scenes):
-    """Draw both eyes over the same angular extent."""
-    half = [max(scene.fov[i] for scene in scenes) / 2 for i in (0, 1)]
-    for axis, extent in zip(('x', 'y'), half):
-        for ax in axes:
-            getattr(ax, f'set_{axis}lim')(-extent, extent)
-            # `Percept._label_axes` fixes five ticks across its own range:
-            getattr(ax, f'set_{axis}ticks')(np.linspace(-extent, extent,
-                                                        num=5))
+def _share_visual_field(axes, scenes, view):
+    """Draw both eyes over the same angular extent: the largest FOV in the
+    eye view, the union of both extents in the scene view"""
+    if view == _EYE_VIEW:
+        half_w, half_h = (max(scene.fov[i] for scene in scenes) / 2
+                          for i in (0, 1))
+        extent = (-half_w, half_w, -half_h, half_h)
+    else:
+        extent = (min(scene.extent[0] for scene in scenes),
+                  max(scene.extent[1] for scene in scenes),
+                  min(scene.extent[2] for scene in scenes),
+                  max(scene.extent[3] for scene in scenes))
+    for ax in axes:
+        _label_limits(ax, extent)
 
 
 class BinocularScene(PrettyPrint):
@@ -168,7 +174,7 @@ class BinocularScene(PrettyPrint):
 
     def plot(self, left_percept=None, right_percept=None, gaze=None, frame=0,
              rings=False, meridians=False, vmax=None, vmin=None, axes=None,
-             **kwargs):
+             view=_SCENE_VIEW, context_alpha=_CONTEXT_ALPHA, **kwargs):
         """Plot the two eyes side by side
 
         Each panel is its own :py:meth:`~pulse2percept.vision.Scene.plot`: an
@@ -197,6 +203,13 @@ class BinocularScene(PrettyPrint):
         axes : sequence of two matplotlib.axes.Axes, optional
             Axes to draw the left and right eye on, in that order. If None,
             makes a new side-by-side pair.
+        view : {'scene', 'eye'}, optional
+            As in :py:meth:`~pulse2percept.vision.Scene.plot`. Both panels
+            share limits: the union of both ``extent`` values in the scene
+            view (default), the largest FOV in the eye view.
+        context_alpha : float, optional
+            Opacity of the source outside each FOV in the scene view, as in
+            :py:meth:`~pulse2percept.vision.Scene.plot`.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.vision.Scene.plot`.
 
@@ -206,6 +219,7 @@ class BinocularScene(PrettyPrint):
             The two axes, always in left-eye, right-eye order.
 
         """
+        view = _resolve_view(view)
         fig = None
         if axes is None:
             fig, axes = plt.subplots(1, 2, figsize=kwargs.pop('figsize',
@@ -232,10 +246,11 @@ class BinocularScene(PrettyPrint):
             scale = {'vmax': vmax, 'vmin': vmin} if percept is not None else {}
             drawn.append(scene.plot(gaze=gaze, frame=frame, ax=ax,
                                     rings=rings, meridians=meridians,
-                                    percept=percept, **scale,
+                                    percept=percept, view=view,
+                                    context_alpha=context_alpha, **scale,
                                     **kwargs))
             drawn[-1].set_title(f'{label} eye')
-        _share_visual_field(drawn, (self.left, self.right))
+        _share_visual_field(drawn, (self.left, self.right), view)
         if fig is not None:
             fig.tight_layout()
         return tuple(drawn)
