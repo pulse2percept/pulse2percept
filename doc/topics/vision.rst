@@ -50,7 +50,8 @@ the picture falls outside the device.
 Scenes
 ------
 
-A scene wraps a source with its angular extent:
+A scene places a source in the world and views it through an eye-centered
+field of view:
 
 .. code-block:: python
 
@@ -62,10 +63,24 @@ A scene wraps a source with its angular extent:
     model = p2p.models.retina.ScoreboardModel(implant=implant, rho=200)
     percept = model.predict_percept(scene, gaze=(0, 0) * dva)
 
-Geometry follows one convention: ``fov`` is the *outer* angular extent of the
-frame, centered on it; pixel coordinates address pixel centers; row 0 is the
-top of the frame and therefore the largest ``y``. A scalar ``fov`` is the
-horizontal extent, with the vertical one following from the aspect ratio.
+Two coordinate frames are used, related by gaze:
+
+=================  ===========================================================
+Scene coordinates  Fixed world coordinates. ``extent`` places the source here.
+Eye coordinates    Centered on the fovea. ``fov``, the aperture, the scotoma,
+                   the prosthetic percept and the visual-field grid live here.
+=================  ===========================================================
+
+``scene_xy = eye_xy + gaze_xy``
+
+``extent`` is the *outer* ``(left, right, bottom, top)`` of the source in
+scene dva. A scalar ``extent`` is the span of the shorter source dimension,
+centered, with square pixels: ``extent=45 * dva`` on a 173 x 320 source gives
+83.2 x 45 dva. If omitted, the source is centered with square pixels at the
+smallest extent that contains ``fov``. ``extent`` need not contain ``fov``.
+``fov`` is a scalar (square) or ``(width, height)`` in dva. Pixel coordinates
+address pixel centers; row 0 is the top of the frame and therefore the
+largest ``y``.
 
 Scene prediction separates four responsibilities:
 
@@ -84,7 +99,7 @@ retinal model given a non-retinotopic ``visual_field_map``, or an implant
 without an ``encoder``, raises ``ValueError``.
 
 A scene is per-prediction input and is not stored on the model or implant. Its
-source and FOV geometry are fixed after construction.
+source, ``extent`` and ``fov`` are fixed after construction.
 
 :py:meth:`~pulse2percept.vision.Scene.blank` provides a black visual-field
 canvas when no image is needed:
@@ -122,6 +137,28 @@ pulse2percept holds each fixation until the next timestamp:
 
     scene.play(gaze=gaze)
     percept = model.predict_percept(scene, gaze=gaze)
+
+``plot`` and ``play`` show the scene in one of two views. Neither changes
+sampling or prediction:
+
+.. code-block:: python
+
+    video = p2p.stimuli.samples.ucsb_pedestrians(resize=(173, 320))
+    scene = p2p.vision.Scene(video, extent=45 * dva, fov=40 * dva,
+                             scotoma=p2p.vision.Scotoma.circle(5 * dva),
+                             aperture='ellipse')
+    gaze = p2p.vision.Gaze([(0, 0), (-15.5, -6), (12, -6)] * dva,
+                           time=[0, 635, 1370] * ms)
+
+    scene.play(gaze=gaze)              # fixed world, moving visual field
+    scene.play(gaze=gaze, view='eye')  # fixed eye, moving world
+
+``view='scene'`` (default) spans ``extent``. The source stays fixed; the FOV,
+scotoma, percept and rings move with gaze. The source outside the FOV is
+drawn as ``context_alpha * source`` (default 0.25; 0 is black, 1 undimmed).
+``view='eye'`` spans ``[-fov / 2, fov / 2]`` in eye coordinates, and gaze
+moves the source through that window. :py:meth:`~pulse2percept.vision.Scene.render`
+is always eye-centered.
 
 Timestamps are milliseconds unless given as a unitful time, and a fixation
 starting exactly on a frame time already applies to that frame.
@@ -177,8 +214,8 @@ For scene input, ``preprocess`` must return an
 :py:class:`~pulse2percept.stimuli.ImageStimulus` or
 :py:class:`~pulse2percept.stimuli.VideoStimulus`; conversion to electrical
 stimulation belongs to the encoder. Pixel values and channels may change, but
-spatial shape and frame timing must remain unchanged because ``fov`` and the
-frame clock refer to the original scene.
+spatial shape and frame timing must remain unchanged because ``extent`` and
+the frame clock refer to the original scene.
 
 Residual vision
 ---------------

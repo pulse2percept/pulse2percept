@@ -199,7 +199,8 @@ def test_two_fovs_are_drawn_on_one_angular_scale():
     """
     left = Scene(ImageStimulus(np.full((21, 31), 0.4)), fov=(31, 21))
     right = Scene(ImageStimulus(np.full((51, 41), 0.4)), fov=(41, 51))
-    ax_left, ax_right = BinocularScene(left=left, right=right).plot()
+    ax_left, ax_right = BinocularScene(left=left, right=right).plot(
+        view='eye')
     npt.assert_almost_equal(ax_left.get_xlim(), ax_right.get_xlim())
     npt.assert_almost_equal(ax_left.get_ylim(), ax_right.get_ylim())
     # Both axes span the wider field's stated outer extent, per dimension,
@@ -212,6 +213,37 @@ def test_two_fovs_are_drawn_on_one_angular_scale():
     npt.assert_almost_equal(ax_right.images[-1].get_extent(),
                             (-20.5, 20.5, -25.5, 25.5))
     plt.close('all')
+
+
+def test_the_scene_view_shares_the_union_of_both_extents():
+    """Both panels use one world frame, so scene coordinates line up"""
+    source = np.full((21, 21), 0.4)
+    left = Scene(ImageStimulus(source), fov=11, extent=(-30, 10, -5, 15))
+    right = Scene(ImageStimulus(source), fov=11, extent=(-10, 20, -25, 5))
+    binocular = BinocularScene(left=left, right=right)
+    for ax in binocular.plot(gaze=(3, -2) * dva):
+        npt.assert_almost_equal(ax.get_xlim(), (-30, 20))
+        npt.assert_almost_equal(ax.get_ylim(), (-25, 15))
+    plt.close('all')
+    # The eye view keeps the shared FOV:
+    for ax in binocular.plot(gaze=(3, -2) * dva, view='eye'):
+        npt.assert_almost_equal(ax.get_xlim(), (-5.5, 5.5))
+        npt.assert_almost_equal(ax.get_ylim(), (-5.5, 5.5))
+    plt.close('all')
+    with pytest.raises(ValueError):
+        binocular.plot(view='fused')
+
+
+def test_context_alpha_reaches_both_eyes():
+    source = np.full((21, 21), 0.8)
+    binocular = BinocularScene(
+        left=Scene(ImageStimulus(source), fov=11, extent=21),
+        right=Scene(ImageStimulus(source), fov=11, extent=21))
+    for alpha in (0, 0.5):
+        for ax in binocular.plot(context_alpha=alpha):
+            npt.assert_almost_equal(ax.images[0].get_array(), alpha * 0.8,
+                                    decimal=6)
+        plt.close('all')
 
 
 def test_plot_lays_out_only_the_figure_it_made(monkeypatch):
@@ -233,7 +265,8 @@ def test_a_shared_gaze_moves_both_eyes_together():
     scotoma = Scotoma.circle(4)
     left = flat_scene(0.7, scotoma=scotoma, scotoma_fill=0.0)
     right = flat_scene(0.7, scotoma=scotoma, scotoma_fill=0.0)
-    axes = BinocularScene(left=left, right=right).plot(gaze=(6, 0) * dva)
+    axes = BinocularScene(left=left, right=right).plot(gaze=(6, 0) * dva,
+                                                       view='eye')
     for ax, scene in zip(axes, (left, right)):
         npt.assert_almost_equal(ax.images[-1].get_array(),
                                 scene._native_rgb(gaze=(6, 0))[..., 0],
@@ -244,7 +277,7 @@ def test_a_shared_gaze_moves_both_eyes_together():
 def test_the_grid_reaches_both_eyes_about_each_fovea():
     binocular = BinocularScene(left=flat_scene(), right=flat_scene())
     axes = binocular.plot(gaze=(2, 1) * dva, rings=[4], meridians=[0, 90],
-                          grid_color='red')
+                          grid_color='red', view='eye')
     for ax in axes:
         lines = ax.get_lines()
         npt.assert_equal([line.get_linestyle() for line in lines],

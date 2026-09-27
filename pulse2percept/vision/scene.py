@@ -35,6 +35,14 @@ _INPAINT = 'inpaint'
 _RECTANGLE = 'rectangle'
 _ELLIPSE = 'ellipse'
 
+# The two `view`s of `Scene.plot` and `Scene.play`: world-fixed axes spanning
+# `extent`, or eye-centered axes spanning `fov`.
+_SCENE_VIEW = 'scene'
+_EYE_VIEW = 'eye'
+
+# Default opacity of the source outside the FOV in the scene view
+_CONTEXT_ALPHA = 0.25
+
 # Backing raster of a blank scene. Fixed: it is a display raster only, and
 # making it configurable would let it set the aspect ratio the inferred
 # `extent` follows. `Scene.render` chooses a render raster of its own.
@@ -60,7 +68,8 @@ def _resolve_extent(extent, fov, n_rows, n_cols):
     """Scene extent ``(left, right, bottom, top)`` in dva
 
     If omitted: centered, square pixels, and the smallest such extent that
-    contains ``fov``.
+    contains ``fov``. A scalar is the span of the shorter source dimension,
+    centered, with square pixels.
     """
     if extent is None:
         width, height = fov
@@ -71,9 +80,21 @@ def _resolve_extent(extent, fov, n_rows, n_cols):
             width = height * n_cols / n_rows
         return (-width / 2, width / 2, -height / 2, height / 2)
     values = np.asarray(as_value(extent, dva, 'extent'), dtype=float)
+    if values.ndim == 0:
+        short = float(values)
+        if not np.isfinite(short) or short <= 0:
+            raise ValueError(f"A scalar 'extent' is the span of the shorter "
+                             f"source dimension and must be a finite "
+                             f"positive number of degrees, not {short}.")
+        if n_cols >= n_rows:
+            width, height = short * n_cols / n_rows, short
+        else:
+            width, height = short, short * n_rows / n_cols
+        return (-width / 2, width / 2, -height / 2, height / 2)
     if values.shape != (4,) or not np.all(np.isfinite(values)):
-        raise ValueError(f"'extent' must be four finite numbers (left, right, "
-                         f"bottom, top) in dva, not {np.ravel(values)}.")
+        raise ValueError(f"'extent' must be a scalar or four finite numbers "
+                         f"(left, right, bottom, top) in dva, not "
+                         f"{np.ravel(values)}.")
     left, right, bottom, top = (float(v) for v in values)
     if right <= left or top <= bottom:
         raise ValueError(f"'extent' requires left < right and bottom < top, "
@@ -124,6 +145,35 @@ def _raster_extent(xs, ys):
     dx, dy = _raster_step(xs, ys)
     return (float(xs[0]) - dx / 2, float(xs[-1]) + dx / 2,
             float(ys[-1]) - dy / 2, float(ys[0]) + dy / 2)
+
+
+def _to_pixel(xs, ys):
+    """Map dva onto continuous pixel coordinates of a raster, (0, 0) at the
+    top-left pixel center"""
+    dx, dy = _raster_step(xs, ys)
+
+    def to_pixel(x, y):
+        return ((np.asarray(x) - xs[0]) / dx, (ys[0] - np.asarray(y)) / dy)
+    return to_pixel
+
+
+def _imshow_within(ax, image, extent, zorder):
+    """`imshow` an RGB layer at ``extent`` without changing the axis limits"""
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    artist = ax.imshow(image, origin='upper', extent=extent, zorder=zorder)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    return artist
+
+
+def _label_limits(ax, extent):
+    """Set limits and five ticks per axis to ``extent``'s outer edges"""
+    left, right, bottom, top = extent
+    ax.set_xlim(left, right)
+    ax.set_xticks(np.linspace(left, right, num=5))
+    ax.set_ylim(bottom, top)
+    ax.set_yticks(np.linspace(bottom, top, num=5))
+    return ax
 
 
 def _raster_grid(xs, ys):
@@ -256,6 +306,25 @@ def _resolve_background(background):
     return bg
 
 
+def _resolve_view(view):
+    """Normalize ``view`` to ``_SCENE_VIEW`` or ``_EYE_VIEW``"""
+    for name in (_SCENE_VIEW, _EYE_VIEW):
+        if view == name:
+            return name
+    raise ValueError(f"'view' is either {_SCENE_VIEW!r} or {_EYE_VIEW!r}, "
+                     f"not {view!r}.")
+
+
+def _resolve_context_alpha(context_alpha):
+    """Normalize ``context_alpha`` to a float in [0, 1]"""
+    alpha = float(as_value(context_alpha, dimensionless, 'context_alpha'))
+    if not np.isfinite(alpha) or not 0 <= alpha <= 1:
+        raise ValueError(f"'context_alpha' is the opacity of the scene "
+                         f"outside the FOV and must lie in [0, 1], not "
+                         f"{context_alpha}.")
+    return alpha
+
+
 def _resolve_aperture(aperture):
     """Normalize ``aperture`` to ``_RECTANGLE`` or ``_ELLIPSE``"""
     for shape in (_RECTANGLE, _ELLIPSE):
@@ -338,17 +407,27 @@ class Scene(PrettyPrint):
     *  Pixel coordinates address pixel *centers*.
     *  Row 0 is the top of the frame and therefore the largest ``y``.
 
-    The FOV, the aperture, the scotoma and an implant are *eye-centered*:
-    fixed relative to the fovea. Gaze moves the viewing window through the
-    scene; the source does not move or rescale::
+    Two coordinate frames are used:
+
+    *  **Scene coordinates** are fixed world coordinates. ``extent`` places
+       the source in them.
+    *  **Eye coordinates** are centered on the fovea. The FOV, aperture,
+       scotoma, prosthetic percept, visual-field grid and an implant live
+       here.
+
+    Gaze moves the viewing window through the scene; the source does not
+    move or rescale::
 
         (x_scene, y_scene) = (x_eye, y_eye) + (x_gaze, y_gaze)
 
-    :py:meth:`~pulse2percept.vision.Scene.render`,
     :py:meth:`~pulse2percept.vision.Scene.plot` and
-    :py:meth:`~pulse2percept.vision.Scene.play` show the FOV in eye-centered
-    coordinates, spanning ``[-fov / 2, fov / 2]``. Parts of the FOV beyond
-    ``extent`` are black. Gaze also sets what the device is given to encode,
+    :py:meth:`~pulse2percept.vision.Scene.play` default to
+    ``view='scene'``: fixed axes spanning ``extent``, with the FOV moving
+    with gaze and the source outside it dimmed. ``view='eye'`` shows the FOV
+    in eye coordinates instead, spanning ``[-fov / 2, fov / 2]``, as
+    :py:meth:`~pulse2percept.vision.Scene.render` always does. There, parts
+    of the FOV beyond ``extent`` are black. Gaze also sets what the device
+    is given to encode,
     unless the implant's
     :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is
     ``'head'`` (a head-fixed camera the eye cannot move). Device input is
@@ -372,11 +451,13 @@ class Scene(PrettyPrint):
     fov : float or (width, height)
         Size of the viewing window, in degrees of visual angle, centered on
         the fovea (e.g. ``40 * dva``). A scalar is a square window.
-    extent : (left, right, bottom, top), optional
-        Where the source sits in scene coordinates, in dva. If None, the
-        source is centered with square pixels and scaled to the smallest
+    extent : float or (left, right, bottom, top), optional
+        Where the source sits in scene coordinates, in dva. A scalar is the
+        span of the shorter source dimension, centered with square pixels
+        (e.g., ``45 * dva`` on a 173 x 320 source is 83.2 x 45 dva). If None,
+        the source is centered with square pixels and scaled to the smallest
         extent that contains ``fov``: with a scalar ``fov``, the shorter
-        source dimension spans ``fov``.
+        source dimension spans ``fov``. ``extent`` need not contain ``fov``.
     scotoma : :py:class:`~pulse2percept.vision.Scotoma`, optional
         The region where native vision is lost. If None, native vision is
         intact everywhere and the scene is simply what is out there.
@@ -861,12 +942,22 @@ class Scene(PrettyPrint):
         out[self._aperture_mask(xs, ys)] = 0
         return out
 
-    def _support_patch(self, transform):
-        """The FOV's support as an eye-centered patch, for clipping artists"""
-        width, height = self._fov
+    def _outside_support(self, xs, ys):
+        """Nodes of an eye-centered raster outside the FOV's support, for
+        either aperture"""
         if self._aperture == _ELLIPSE:
-            return Ellipse((0, 0), width, height, transform=transform)
-        return Rectangle((-width / 2, -height / 2), width, height,
+            return self._aperture_mask(xs, ys)
+        a, b = self._fov[0] / 2, self._fov[1] / 2
+        return (np.abs(xs) > a) | (np.abs(ys) > b)[:, np.newaxis]
+
+    def _support_patch(self, transform, center=(0.0, 0.0)):
+        """The FOV's support as a patch centered on ``center`` (the fovea),
+        for clipping artists"""
+        width, height = self._fov
+        cx, cy = center
+        if self._aperture == _ELLIPSE:
+            return Ellipse((cx, cy), width, height, transform=transform)
+        return Rectangle((cx - width / 2, cy - height / 2), width, height,
                          transform=transform)
 
     def _clip_to_support(self, artists, transform):
@@ -1212,13 +1303,22 @@ class Scene(PrettyPrint):
 
     def plot(self, gaze=None, frame=0, ax=None, rings=False, meridians=False,
              grid_color=vf.GRID_COLOR, percept=None, vmax=None, vmin=None,
-             **kwargs):
+             view=_SCENE_VIEW, context_alpha=_CONTEXT_ALPHA, **kwargs):
         """Plot what is left of native vision
 
-        The FOV in eye-centered coordinates, as
-        :py:meth:`~pulse2percept.vision.Scene.render` shows it: the scene
-        where vision is intact and ``scotoma_fill`` where it is lost. ``gaze``
-        selects which part of the scene fills the FOV.
+        The scene where vision is intact and ``scotoma_fill`` where it is
+        lost, inside the FOV at the given ``gaze``.
+
+        With ``view='scene'`` (default), the axes span ``extent`` in scene
+        coordinates. The source stays fixed; the FOV, aperture, scotoma,
+        percept and visual-field grid are centered on ``gaze``. The source
+        outside the FOV is drawn dimmed, as ``context_alpha * source``.
+
+        With ``view='eye'``, the axes span ``[-fov / 2, fov / 2]`` in
+        eye-centered coordinates, as
+        :py:meth:`~pulse2percept.vision.Scene.render` shows them, and gaze
+        moves the source through the fixed window. Parts of the FOV beyond
+        ``extent`` are black.
 
         Passing a ``percept`` draws it in this field as well, so its size and
         place can be read against the FOV. Each layer keeps its own
@@ -1231,8 +1331,8 @@ class Scene(PrettyPrint):
         ``(1 - loss) * native + loss * max(scotoma_fill, phosphene)``, so
         where the percept is dark the patch is ordinary residual vision and
         its boundary does not show. With no scotoma the percept is drawn alone
-        on black, because superimposing it on intact native vision would
-        assert an unmodeled interaction.
+        on black inside the FOV, because superimposing it on intact native
+        vision would assert an unmodeled interaction.
 
         Parameters
         ----------
@@ -1265,6 +1365,13 @@ class Scene(PrettyPrint):
             maximum brightness across the whole ``percept``.
         vmin : float, optional
             The percept brightness that displays as black. Defaults to 0.
+        view : {'scene', 'eye'}, optional
+            Scene-centered axes spanning ``extent`` (default), or eye-centered
+            axes spanning the FOV.
+        context_alpha : float, optional
+            Opacity in [0, 1] of the source outside the FOV, over black, in
+            the scene view: 0 is black, 1 is the undimmed source. Display
+            only; ignored for ``view='eye'``.
         **kwargs :
             Passed on to :py:meth:`~pulse2percept.percepts.Percept.plot`.
 
@@ -1273,6 +1380,8 @@ class Scene(PrettyPrint):
         ax : matplotlib.axes.Axes
 
         """
+        view = _resolve_view(view)
+        context_alpha = _resolve_context_alpha(context_alpha)
         if percept is not None:
             _check_prosthetic(percept)
         n_out = self._n_display_frames(percept)
@@ -1283,42 +1392,90 @@ class Scene(PrettyPrint):
         # One frame is drawn, so one gaze and one frame of each layer is all
         # the work there is; the others are never evaluated.
         gaze_xy = points[0] if len(points) == 1 else points[frame]
-        radii, angles, extent = self._grid_geometry(rings, meridians)
-        xs, ys = self._view_axes()
-        src_frame = self._source_frame(frame)
-        patch = None
+        if view == _EYE_VIEW:
+            return self._plot_eye(gaze_xy, frame, ax, rings, meridians,
+                                  grid_color, percept, vmax, vmin, **kwargs)
+        return self._plot_scene(gaze_xy, frame, ax, rings, meridians,
+                                grid_color, percept, vmax, vmin,
+                                context_alpha, **kwargs)
+
+    def _fov_layer(self, xs, ys, gaze_xy, frame, percept, vmax, vmin):
+        """The wide layer `plot` draws on an eye-centered raster: native
+        vision, residual vision behind a percept, or black"""
         if percept is None:
             # `_display_on` rejects a display range with nothing to map:
-            wide = self._display_on(xs, ys, vmax=vmax, vmin=vmin,
+            return self._display_on(xs, ys, vmax=vmax, vmin=vmin,
                                     gaze=gaze_xy, frame=frame)[0][..., 0]
-        else:
-            pxs, pys = _percept_axes(percept)
-            # `pys` descends so that row 0 of the patch is its top, as drawn:
-            pys = pys[::-1]
-            patch = self._display_on(pxs, pys, percept=percept, vmax=vmax,
-                                     vmin=vmin, gaze=gaze_xy,
-                                     frame=frame)[0][..., 0]
-            if self.scotoma is None:
-                # Nothing is lost, so there is no residual vision to draw the
-                # percept into; only the field's extent is left to show.
-                wide = np.zeros((ys.size, xs.size, 3), dtype=np.float32)
-            else:
-                wide = self._native_on(xs, ys, gaze=gaze_xy,
-                                       frame=src_frame)[..., 0]
+        if self.scotoma is None:
+            # Nothing is lost, so there is no residual vision to draw the
+            # percept into; only the field's extent is left to show.
+            return np.zeros((ys.size, xs.size, 3), dtype=np.float32)
+        return self._native_on(xs, ys, gaze=gaze_xy,
+                               frame=self._source_frame(frame))[..., 0]
+
+    def _percept_patch(self, percept, vmax, vmin, gaze_xy, frame,
+                       offset=(0.0, 0.0)):
+        """The percept composed on its own grid, and its `imshow` extent
+        shifted by ``offset`` (dva)"""
+        pxs, pys = _percept_axes(percept)
+        # `pys` descends so that row 0 of the patch is its top, as drawn:
+        pys = pys[::-1]
+        patch = self._display_on(pxs, pys, percept=percept, vmax=vmax,
+                                 vmin=vmin, gaze=gaze_xy,
+                                 frame=frame)[0][..., 0]
+        left, right, bottom, top = _raster_extent(pxs, pys)
+        dx, dy = offset
+        return patch, (left + dx, right + dx, bottom + dy, top + dy)
+
+    def _plot_eye(self, gaze_xy, frame, ax, rings, meridians, grid_color,
+                  percept, vmax, vmin, **kwargs):
+        """`plot` on eye-centered axes spanning the FOV"""
+        radii, angles, extent = self._grid_geometry(rings, meridians)
+        xs, ys = self._view_axes()
+        patch = None
+        if percept is not None:
+            patch = self._percept_patch(percept, vmax, vmin, gaze_xy, frame)
+        wide = self._fov_layer(xs, ys, gaze_xy, frame, percept, vmax, vmin)
         still = Percept(wide[..., np.newaxis], space=self._grid())
         ax = self._label_fov(still.plot(ax=ax, **kwargs))
         artists = [ax.images[-1]]
         if patch is not None:
-            # `imshow` must not renegotiate the limits the wide layer set:
-            xlim, ylim = ax.get_xlim(), ax.get_ylim()
-            artists.append(ax.imshow(patch, origin='upper',
-                                     extent=_raster_extent(pxs, pys),
-                                     zorder=artists[0].get_zorder() + 1))
-            ax.set_xlim(xlim)
-            ax.set_ylim(ylim)
+            artists.append(_imshow_within(ax, *patch,
+                                          artists[0].get_zorder() + 1))
         artists += vf.draw(ax, radii, angles, (0, 0), extent,
                            color=grid_color)
         self._clip_to_support(artists, ax.transData)
+        return ax
+
+    def _plot_scene(self, gaze_xy, frame, ax, rings, meridians, grid_color,
+                    percept, vmax, vmin, context_alpha, **kwargs):
+        """`plot` on scene-centered axes spanning ``extent``"""
+        radii, angles, extent = self._grid_geometry(rings, meridians,
+                                                    center=gaze_xy)
+        xs, ys = self._axes
+        gx, gy = gaze_xy
+        # Eye coordinates of the source's own pixel centers, so `_source_on`
+        # reads the source back without resampling it:
+        eye_xs, eye_ys = xs - gx, ys - gy
+        patch = None
+        if percept is not None:
+            patch = self._percept_patch(percept, vmax, vmin, gaze_xy, frame,
+                                        offset=gaze_xy)
+        wide = self._fov_layer(eye_xs, eye_ys, gaze_xy, frame, percept, vmax,
+                               vmin)
+        source = _as_rgb(self._frames()[..., self._source_frame(frame)])
+        context = Percept((context_alpha * source)[..., np.newaxis],
+                          space=_raster_grid(xs, ys))
+        ax = self._label_scene(context.plot(ax=ax, **kwargs))
+        zorder = ax.images[-1].get_zorder()
+        artists = [_imshow_within(ax, wide, self._extent, zorder + 1)]
+        if patch is not None:
+            artists.append(_imshow_within(ax, *patch, zorder + 2))
+        artists += vf.draw(ax, radii, angles, gaze_xy, extent,
+                           color=grid_color)
+        clip = self._support_patch(ax.transData, center=gaze_xy)
+        for artist in artists:
+            artist.set_clip_path(clip)
         return ax
 
     def _label_fov(self, ax):
@@ -1327,30 +1484,39 @@ class Scene(PrettyPrint):
         `Percept` limits its axes to the outermost pixel centers, which would
         clip half of each edge pixel.
         """
-        left, right, bottom, top = self._view_extent
-        ax.set_xlim(left, right)
-        ax.set_xticks(np.linspace(left, right, num=5))
-        ax.set_ylim(bottom, top)
-        ax.set_yticks(np.linspace(bottom, top, num=5))
-        return ax
+        return _label_limits(ax, self._view_extent)
 
-    def _grid_geometry(self, rings, meridians):
-        """Ring radii (dva), meridian angles (deg), and the FOV extent"""
-        extent = self._view_extent
+    def _label_scene(self, ax):
+        """Set limits and ticks to the outer edges of ``extent``"""
+        return _label_limits(ax, self._extent)
+
+    def _grid_geometry(self, rings, meridians, center=(0.0, 0.0)):
+        """Ring radii (dva), meridian angles (deg), and the FOV extent
+        centered on ``center``"""
+        cx, cy = center
+        left, right, bottom, top = self._view_extent
+        extent = (left + cx, right + cx, bottom + cy, top + cy)
         # The nearest FOV edge also bounds an elliptical aperture:
-        r_min, r_max = vf.visible_band((0, 0), extent)
+        r_min, r_max = vf.visible_band((0, 0), self._view_extent)
         return (vf.ring_radii(rings, r_max, r_min=r_min),
                 vf.meridian_angles(meridians), extent)
 
     def play(self, gaze=None, rings=False, meridians=False,
              grid_color=vf.GRID_COLOR, ax=None, *, percept=None, vmax=None,
              vmin=None, fps=None, repeat=True, annotate_time=True,
-             fmt='png', title=None):
+             fmt='png', title=None, view=_SCENE_VIEW,
+             context_alpha=_CONTEXT_ALPHA):
         """Animate a video scene, optionally with a prosthetic percept
 
-        Shows the frames :py:meth:`~pulse2percept.vision.Scene.render`
-        returns for the same ``percept``, ``gaze``, ``vmax`` and ``vmin``,
+        Shows the content :py:meth:`~pulse2percept.vision.Scene.render`
+        composes for the same ``percept``, ``gaze``, ``vmax`` and ``vmin``,
         on that result's clock.
+
+        With ``view='scene'`` (default), the axes span ``extent``: the source
+        stays fixed, the FOV moves with gaze, and the source outside the FOV
+        is dimmed to ``context_alpha * source``. With ``view='eye'``, the
+        frames are exactly those ``render`` returns: a fixed eye-centered FOV
+        with the source moving through it.
 
         Parameters
         ----------
@@ -1376,35 +1542,47 @@ class Scene(PrettyPrint):
         fps, repeat, annotate_time, fmt, title : optional
             Player options, as in
             :py:meth:`~pulse2percept.percepts.Percept.play`.
+        view : {'scene', 'eye'}, optional
+            Scene-centered frames spanning ``extent`` (default), or
+            eye-centered frames spanning the FOV.
+        context_alpha : float, optional
+            Opacity in [0, 1] of the source outside the FOV, as in
+            :py:meth:`~pulse2percept.vision.Scene.plot`.
 
         Returns
         -------
         ani : :py:class:`~pulse2percept.utils.HTMLAnimation`
 
         """
+        view = _resolve_view(view)
+        context_alpha = _resolve_context_alpha(context_alpha)
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
         gaze = self._resolve_gaze(gaze, percept)
+        # Brightness scaling is done here; the player gets RGB:
+        player = dict(fps=fps, repeat=repeat, annotate_time=annotate_time,
+                      ax=ax, fmt=fmt, title=title)
+        if view == _EYE_VIEW:
+            return self._play_eye(gaze, rings, meridians, grid_color, percept,
+                                  vmax, vmin, player)
+        return self._play_scene(gaze, rings, meridians, grid_color, percept,
+                                vmax, vmin, context_alpha, player)
+
+    def _play_eye(self, gaze, rings, meridians, grid_color, percept, vmax,
+                  vmin, player):
+        """`play` on eye-centered frames spanning the FOV"""
         radii, angles, extent = self._grid_geometry(rings, meridians)
         # The player rasterizes its own frames, so this is display output:
         display = self.render(percept=percept, gaze=gaze, vmax=vmax,
                               vmin=vmin)
-        # Brightness scaling is done by `render`; the player gets RGB:
-        player = dict(fps=fps, repeat=repeat, annotate_time=annotate_time,
-                      ax=ax, fmt=fmt, title=title)
         if not radii.size and not angles.size:
             return self._fov_player(display.play(**player))
         # Painted into the displayed frames rather than left as an artist
         # behind the player's canvas, which would hide them. Eye-centered, so
         # one overlay holds for any gaze:
         xs, ys = self._view_axes()
-        dx, dy = _raster_step(xs, ys)
-
-        def to_pixel(x, y):
-            return ((np.asarray(x) - xs[0]) / dx, (ys[0] - np.asarray(y)) / dy)
-
         overlay = vf.rasterize((ys.size, xs.size), radii, angles, (0, 0),
-                               extent, to_pixel, color=grid_color)
+                               extent, _to_pixel(xs, ys), color=grid_color)
         if self._aperture == _ELLIPSE:
             overlay[self._aperture_mask(xs, ys), 3] = 0
         # The rendered clock: a temporal percept may label frame ends.
@@ -1412,6 +1590,49 @@ class Scene(PrettyPrint):
                             space=_raster_grid(xs, ys),
                             time=display.time, time_unit=display.time_unit)
         return self._fov_player(decorated.play(**player))
+
+    def _play_scene(self, gaze, rings, meridians, grid_color, percept, vmax,
+                    vmin, context_alpha, player):
+        """`play` on scene-centered frames spanning ``extent``"""
+        xs, ys = self._axes
+        source = self._frames()
+        n_out = self._n_display_frames(percept)
+        points = _gaze_points(gaze, n_out)
+        data = np.empty((ys.size, xs.size, 3, n_out), dtype=np.float32)
+        times, unit, overlays = [], None, {}
+        for f in range(n_out):
+            gx, gy = points[0] if len(points) == 1 else points[f]
+            # Eye coordinates of the source's own pixel centers:
+            eye_xs, eye_ys = xs - gx, ys - gy
+            shown, time, unit = self._display_on(eye_xs, eye_ys,
+                                                 percept=percept, vmax=vmax,
+                                                 vmin=vmin, gaze=(gx, gy),
+                                                 frame=f)
+            outside = self._outside_support(eye_xs, eye_ys)
+            context = context_alpha * _as_rgb(
+                source[..., self._source_frame(f)])
+            rgb = np.where(outside[..., np.newaxis], context, shown[..., 0])
+            radii, angles, extent = self._grid_geometry(rings, meridians,
+                                                        center=(gx, gy))
+            if radii.size or angles.size:
+                # Rasterizing is a figure draw, and gaze is often held:
+                key = (float(gx), float(gy))
+                if key not in overlays:
+                    overlay = vf.rasterize((ys.size, xs.size), radii, angles,
+                                           key, extent, _to_pixel(xs, ys),
+                                           color=grid_color)
+                    overlay[outside, 3] = 0
+                    overlays[key] = overlay
+                rgb = _over(rgb[..., np.newaxis], overlays[key])[..., 0]
+            data[..., f] = rgb
+            times.append(time)
+        # The display clock, per frame: a temporal percept may label frame
+        # ends rather than source onsets.
+        display = Percept(data, space=_raster_grid(xs, ys),
+                          time=np.concatenate(times), time_unit=unit)
+        ani = display.play(**player)
+        self._label_scene(ani._image.axes)
+        return ani
 
     def _fov_player(self, ani):
         """Show the full FOV in a player; its crop is read from the axes when

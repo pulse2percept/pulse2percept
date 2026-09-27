@@ -239,7 +239,8 @@ def test_play_resolves_gaze_as_render_does():
                    time=FRAME_TIMES + 100.0,
                    metadata={'source_frame_time': FRAME_TIMES})
     npt.assert_allclose(
-        scene.play(percept=late, gaze=trajectory(), vmax=1)._frame_data,
+        scene.play(percept=late, gaze=trajectory(), vmax=1,
+                   view='eye')._frame_data,
         scene.render(percept=late, gaze=EXPANDED * dva, vmax=1).data,
         atol=1e-6)
     plt.close('all')
