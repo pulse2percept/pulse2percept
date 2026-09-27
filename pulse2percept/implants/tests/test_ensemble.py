@@ -232,6 +232,32 @@ def test_prepare_stim_merges_per_implant_input():
     npt.assert_equal(stim.data, 3)
 
 
+def _driven(stim):
+    """Map each driven electrode to its peak amplitude"""
+    data = np.atleast_2d(np.asarray(stim.data))
+    return {str(e): float(np.abs(row).max())
+            for e, row in zip(stim.electrodes, data) if np.any(row)}
+
+
+def test_prepare_stim_sparse_per_implant_input():
+    """Sparse child input drives the named electrodes, not the first rows"""
+    ensemble = _orion_pair()
+    stim = ensemble.prepare_stim(
+        {0: {'70': BiphasicPulseTrain(20, 100, 0.45, stim_dur=100)}})
+    npt.assert_equal(list(_driven(stim)), ['0-70'])
+    npt.assert_almost_equal(_driven(stim)['0-70'], 100)
+    # ...and keeps the train behind it, so models can read its clock:
+    (name, train), = stim._structured_sources()
+    npt.assert_equal((name, train.freq), ('0-70', 20))
+    # Scalars, in an order unlike the implant's, across both children:
+    stim = ensemble.prepare_stim({0: {'50': 7, '70': 5}, 1: {'41': 3}})
+    npt.assert_equal(_driven(stim), {'0-70': 5, '0-50': 7, '1-41': 3})
+    # Sparse, time-varying input with its own time axis:
+    stim = ensemble.prepare_stim(
+        {1: {'41': MonophasicPulse(-10, 1), '96': MonophasicPulse(-20, 1)}})
+    npt.assert_equal(_driven(stim), {'1-41': 10, '1-96': 20})
+
+
 def test_prepare_stim_merged_goes_through_the_ensemble_pipeline():
     """Merging is how per-implant input becomes one stimulus, not a way around
 

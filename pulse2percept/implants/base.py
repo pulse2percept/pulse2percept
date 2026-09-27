@@ -8,8 +8,8 @@ from skimage.color import rgb2gray
 from .electrodes import Electrode, PointSource
 from .electrode_arrays import ElectrodeArray, ElectrodeGrid
 from .rasters import Raster
-from ..stimuli import (BiphasicPulseTrain, Encoder, Stimulus, ImageStimulus,
-                       VideoStimulus)
+from ..stimuli import (BiphasicPulseTrain, ImplantEncoder, Stimulus,
+                       ImageStimulus, VideoStimulus)
 from ..stimuli.base import _describe_unit
 from ..stimuli.encoders import _EncodedStimulus
 from ..stimuli.pulse_trains import _as_threshold_amp
@@ -88,7 +88,7 @@ class Implant(PrettyPrint):
         If safe mode is enabled, only charge-balanced stimuli are allowed.
         Charge balance is an electrical property and requires current units.
         Non-current-driven devices may override this check.
-    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.ImplantEncoder`, optional
         Maps image or video gray levels to device stimulation. If None,
         dimensionless visual input is rejected. An unbound encoder is bound
         to this implant (see
@@ -97,8 +97,9 @@ class Implant(PrettyPrint):
         .. versionadded:: 0.10.0
 
         .. versionchanged:: 0.11.0
-            Accepts any :py:class:`~pulse2percept.stimuli.Encoder`, not only
-            an electrical :py:class:`~pulse2percept.stimuli.PulseEncoder`.
+            Accepts any :py:class:`~pulse2percept.stimuli.ImplantEncoder`,
+            not only an electrical
+            :py:class:`~pulse2percept.stimuli.PulseEncoder`.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes that it cannot drive
         at the same time. If None, every electrode may fire at once. Assigning
@@ -227,7 +228,10 @@ class Implant(PrettyPrint):
     def encoder(self):
         """Stimulus encoder used for image or video input.
 
-        If None, dimensionless image/video stimuli are not encoded
+        Must be an :py:class:`~pulse2percept.stimuli.ImplantEncoder`.
+        Model-aware encoders such as
+        :py:class:`~pulse2percept.stimuli.TraceEncoder` are called directly
+        instead. If None, dimensionless image/video stimuli are not encoded
         automatically.
 
         Assigning an unbound encoder (``encoder.implant is None``) binds it
@@ -240,9 +244,11 @@ class Implant(PrettyPrint):
     def encoder(self, encoder):
         """Encoder setter (called upon ``self.encoder = encoder``)"""
         if encoder is not None:
-            if not isinstance(encoder, Encoder):
-                raise TypeError(f"'encoder' must be an Encoder object, not "
-                                f"{type(encoder)}.")
+            if not isinstance(encoder, ImplantEncoder):
+                raise TypeError(
+                    f"'encoder' must be an ImplantEncoder object, not "
+                    f"{type(encoder)}. Call a model-aware encoder's 'encode' "
+                    f"directly instead.")
             # Before the slot is written to, so that a rejected encoder leaves
             # the implant as it was:
             encoder._bind(self)
@@ -369,7 +375,7 @@ class Implant(PrettyPrint):
             f"{type(self).__name__} is driven by "
             f"{_describe_unit(self.stimulus_unit)}, but this stimulus is "
             f"measured in {_describe_unit(stim.unit)}. Give the implant an "
-            f"'encoder' (a pulse2percept.stimuli.Encoder that produces "
+            f"'encoder' (a pulse2percept.stimuli.ImplantEncoder that produces "
             f"{_describe_unit(self.stimulus_unit)}) so that image or video "
             f"input is encoded during 'prepare_stim', encode it yourself "
             f"first, or give the implant a 'preprocess' function that does.")
@@ -852,7 +858,7 @@ class GridImplant(Implant):
         Whether to preprocess a stimulus whenever one is prepared.
     safe_mode : bool, optional
         Whether to enforce charge balance.
-    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.ImplantEncoder`, optional
         How the device turns a picture into stimulation.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
         How the stimulator takes turns between electrodes.

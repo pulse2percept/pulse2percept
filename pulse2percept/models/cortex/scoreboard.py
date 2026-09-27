@@ -188,11 +188,10 @@ class ScoreboardSpatial(CortexSpatial):
             separate = 1
             boundary = self.visual_field_map.left_offset/2
         cutoff_r2 = self._cutoff_r2(self.rho)
-        # `location_noise` displaces an electrode in the visual field, so its
-        # cortical coordinates are region-specific:
-        coords = {region: self._electrode_coords(electrode_array, stim,
-                                                 region=region)
-                  for region in self.regions}
+        # One tissue location per electrode (displaced through its own region
+        # by `location_noise`), spread over every simulated region's grid:
+        xyz = self._electrode_coords(electrode_array, stim)
+        coords = {region: xyz for region in self.regions}
         if self.visual_field_map.ndim == 3:
             return np.sum([
                 fast_scoreboard_3d(amp, *coords[region],

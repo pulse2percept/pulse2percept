@@ -66,8 +66,8 @@ class DynaphosModel(BaseModel):
     dt : float, optional
         Sampling time step of the simulation (ms)
     regions : list of str, optional
-        The visual regions to simulate. Options are 'v1', 'v2', or 'v3'.
-        Default : ['v1']
+        The visual regions to simulate. Only ``['v1']`` is supported: the
+        model's magnification, location noise, and phosphene size use V1.
     rheobase : float, optional
         Rheobase current constant (uA)
     tau_trace : float, optional
@@ -145,9 +145,11 @@ class DynaphosModel(BaseModel):
 
     @regions.setter
     def regions(self, regions):
-        
         if not isinstance(regions, list):
             regions = [regions]
+        if regions != ['v1']:
+            raise ValueError(f"DynaphosModel simulates V1 only, so 'regions' "
+                             f"must be ['v1'], not {regions}.")
         self._regions = regions
 
     def __init__(self, implant, *, dt=20, regions=None, rheobase=23.9,
@@ -339,8 +341,20 @@ class DynaphosModel(BaseModel):
             boundary = self.visual_field_map.left_offset/2
 
         phosphene_locations = {}
+        driven = np.any(self._stim_values(stim) != 0, axis=1)
         for region in self.regions:
             phosphene_locations[region] = self.visual_field_map.to_dva()[region](x_el, y_el)
+            # Undriven electrodes never produce a phosphene:
+            placed = np.all(np.isfinite(phosphene_locations[region]), axis=0)
+            placed |= ~driven
+            if not np.all(placed):
+                lost = [e.item() if isinstance(e, np.generic) else e
+                        for e, ok in zip(stim.electrodes, placed) if not ok]
+                raise ValueError(
+                    f"Electrode(s) {', '.join(repr(e) for e in lost[:5])} "
+                    f"lie outside region {region!r} of "
+                    f"{type(self.visual_field_map).__name__} at the current "
+                    f"implant placement.")
 
         theta, r = cart2pol(*phosphene_locations['v1'])
 

@@ -59,11 +59,17 @@ Stimuli and encoding
 ~~~~~~~~~~~~~~~~~~~~
 
 * The encoder API was cleaned up: :py:class:`~pulse2percept.stimuli.Encoder` is
-  now the general base class,
+  now the general base class, and only an
+  :py:class:`~pulse2percept.stimuli.ImplantEncoder` can be installed on
+  ``Implant.encoder``.
   ``AmplitudeEncoder(amp_range=(0, 50)).encode(image, implant=implant)``
   becomes ``AmplitudeEncoder(implant, amp_range=(0, 50)).encode(image)``,
   and ``StimulusEncoder`` was renamed to
-  :py:class:`~pulse2percept.stimuli.PulseEncoder` (:pull:`925`).
+  :py:class:`~pulse2percept.stimuli.PulseEncoder` (:pull:`925`, :pull:`926`).
+
+* Added :py:class:`~pulse2percept.stimuli.TraceEncoder`, a model-aware encoder
+  that stimulates one electrode at a time along a letter or trajectory drawn
+  in the visual field (:pull:`926`).
 
 * The stimuli API was simplified: bundled media moved to ``stimuli.samples``,
   visual psychophysics stimuli to ``stimuli.psychophysics``, and several legacy
@@ -189,6 +195,14 @@ Bug fixes
   wide: the Gaussian standard deviation is a quarter of the phosphene diameter,
   matching the reference implementation's ``radius_to_sigma = 0.5``
   (:pull:`894`).
+
+* Cortical maps and models no longer place electrodes outside their mapped
+  region. :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`
+  ``to_dva`` returns NaN outside each region instead of wrapping into the
+  other hemifield; :py:class:`~pulse2percept.models.cortex.DynaphosModel`
+  simulates V1 only and raises for driven electrodes outside it; and
+  multi-region ``location_noise`` displaces each electrode through its home
+  region only. Predictions for such electrodes change (:pull:`926`).
 
 
 v0.10.0 Encoders (2026-08-23)

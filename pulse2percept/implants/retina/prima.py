@@ -385,7 +385,7 @@ class PRIMAPivotal(_PhotovoltaicRetinalImplant):
 
         .. versionchanged:: 0.11.0
             Checks the optical envelope instead of electrical charge balance.
-    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.ImplantEncoder`, optional
         Image/video encoder. Defaults to
         :py:class:`~pulse2percept.stimuli.PRIMAEncoder`, which describes the
         pivotal-trial projector. Pass ``None`` to disable automatic encoding.
@@ -562,7 +562,7 @@ class Lorach2015Array(_PhotovoltaicRetinalImplant):
 
         .. versionchanged:: 0.11.0
             No longer applies the PRIMA projector envelope to this array.
-    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.ImplantEncoder`, optional
         Image/video encoder. Defaults to a
         :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` configured
         for the illumination reported in [Lorach2015]_ (915 nm, 4 mW/mm^2,
@@ -694,7 +694,7 @@ class Ho2019FlatArray(_PhotovoltaicRetinalImplant):
         Not supported: no optical operating envelope has been published for
         this array, and the PRIMA projector limits are specific to
         :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`.
-    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.ImplantEncoder`, optional
         Image/video encoder. Pass ``None`` to disable automatic encoding.
     
     Notes
@@ -823,7 +823,7 @@ class Huang2021Array(_PhotovoltaicRetinalImplant):
 
         .. versionchanged:: 0.11.0
             No longer applies the PRIMA projector envelope to this array.
-    encoder : :py:class:`~pulse2percept.stimuli.Encoder`, optional
+    encoder : :py:class:`~pulse2percept.stimuli.ImplantEncoder`, optional
         Image/video encoder. Defaults to a
         :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` configured
         for the illumination reported in [Huang2021]_ (880 nm, 4.7 mW/mm^2,

@@ -28,7 +28,8 @@ from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
                                          Horsager2009Model, Nanduri2012Model,
                                          ScoreboardModel, ScoreboardSpatial,
                                          Thompson2003Model)
-from pulse2percept.models.base import _blend_meridian
+from pulse2percept.models.base import (_blend_meridian, _displaced_coords,
+                                      _electrode_offsets)
 from pulse2percept.models.cortex import (DynaphosModel,
                                          ScoreboardModel as
                                          CortexScoreboardModel,
@@ -2267,17 +2268,91 @@ def test_cortical_location_noise_moves_the_phosphene():
     npt.assert_equal(np.trace(cov_now) < 1.0, True)
 
 
+def _electrode_in(model, region):
+    """First electrode whose placed location lies in ``region``"""
+    names = model.implant.electrode_names
+    x, y, _ = BaseModel._electrode_coords(
+        model, model.implant.electrode_array, None, electrodes=names)
+    xdva, _ = model.visual_field_map.to_dva()[region](x, y)
+    return names[int(np.flatnonzero(np.isfinite(xdva))[0])]
+
+
 def test_cortical_location_noise_ignores_region_order():
+    # At the default placement NeuroPort straddles the V1/V2 border:
     implant = NeuroPortArray()
-    source = {implant.electrode_names[10]: 100}
     percepts = []
     for regions in (['v1', 'v2'], ['v2', 'v1']):
         np.random.seed(11)
         model = CortexScoreboardSpatial(implant, regions=regions,
                                         xrange=(-6, 6), yrange=(-6, 6),
                                         step=0.25, location_noise=1.0).build()
+        source = {_electrode_in(model, 'v1'): 100,
+                  _electrode_in(model, 'v2'): 100}
         percepts.append(model.predict_percept(source).data)
+    npt.assert_equal(np.any(percepts[0]), True)
     npt.assert_array_equal(*percepts)
+
+
+def test_cortical_location_noise_uses_home_region():
+    implant = NeuroPortArray()
+    coords = []
+    for regions in (['v1', 'v2'], ['v2', 'v1']):
+        np.random.seed(5)
+        model = CortexScoreboardSpatial(implant, regions=regions,
+                                        location_noise=1.0).build()
+        names = [_electrode_in(model, 'v1'), _electrode_in(model, 'v2')]
+        xyz = model._electrode_coords(implant.electrode_array, None,
+                                      electrodes=names)
+        placed = BaseModel._electrode_coords(
+            model, implant.electrode_array, None, electrodes=names)
+        offsets = _electrode_offsets(model, names)
+        # Each electrode moves through its own region, and only once:
+        for i, region in enumerate(('v1', 'v2')):
+            one = _displaced_coords(model, region, [names[i]],
+                                    tuple(c[[i]] for c in placed),
+                                    offsets[[i]])
+            npt.assert_allclose([c[i] for c in xyz], [c[0] for c in one])
+        npt.assert_equal(np.all(np.hypot(xyz[0] - placed[0],
+                                         xyz[1] - placed[1]) > 0), True)
+        coords.append(np.array(xyz))
+    npt.assert_array_equal(*coords)
+    # An electrode in no region has no visual field location to displace:
+    lost = [n for n in implant.electrode_names
+            if n not in {_electrode_in(model, r) for r in ('v1', 'v2')}]
+    x, y, _ = BaseModel._electrode_coords(model, implant.electrode_array,
+                                          None, electrodes=lost)
+    vf = model.visual_field_map
+    nowhere = [n for n, a, b in zip(lost, vf.to_dva()['v1'](x, y)[0],
+                                    vf.to_dva()['v2'](x, y)[0])
+               if np.isnan(a) and np.isnan(b)]
+    with pytest.raises(ValueError, match='lie in none of the regions'):
+        model._electrode_coords(implant.electrode_array, None,
+                                electrodes=nowhere[:1])
+
+
+class _NoV2Inverse(Polimeni2006Map):
+    """V2 is mapped forward only"""
+
+    def v2_to_dva(self, x, y):
+        raise NotImplementedError
+
+
+class _MissingV2Inverse(Polimeni2006Map):
+    """``to_dva`` omits V2"""
+
+    def to_dva(self):
+        return {'v1': self.v1_to_dva}
+
+
+@pytest.mark.parametrize('map_cls', [_NoV2Inverse, _MissingV2Inverse])
+def test_cortical_location_noise_requires_every_inverse(map_cls):
+    implant = NeuroPortArray()
+    model = CortexScoreboardSpatial(
+        implant, regions=['v1', 'v2'], location_noise=1.0,
+        visual_field_map=map_cls(regions=['v1', 'v2'])).build()
+    with pytest.raises(NotImplementedError, match='invertible'):
+        model._electrode_coords(implant.electrode_array, None,
+                                electrodes=[_electrode_in(model, 'v1')])
 
 
 class _Slab3DMap(VisualFieldMap):

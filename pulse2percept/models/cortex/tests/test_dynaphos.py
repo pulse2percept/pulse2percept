@@ -25,6 +25,13 @@ def test_DynaphosModel():
 
     npt.assert_equal(model.regions, ['v1'])
     npt.assert_equal(model.visual_field_map.regions, ['v1'])
+    # V1 only; a rejected value leaves the regions unchanged:
+    for regions in (['v1', 'v2'], ['v2'], 'v3'):
+        with pytest.raises(ValueError, match='V1 only'):
+            DynaphosModel(NeuroPortArray(), regions=regions)
+        with pytest.raises(ValueError, match='V1 only'):
+            model.regions = regions
+    npt.assert_equal(model.regions, ['v1'])
 
     # can't set frequency/pulse dur that don't match up. A failed build
     # leaves the parameters the caller asked for in place, so put them back:
@@ -46,6 +53,15 @@ def test_DynaphosModel():
     with pytest.raises(ValueError):
         model.predict_percept([300 for e in NeuroPortArray().electrode_names])
 
+def _in_v1(model):
+    """Names of the electrodes that lie in V1 at the model's placement"""
+    names = model.implant.electrode_names
+    x, y, _ = model._electrode_coords(model.implant.electrode_array, None,
+                                      electrodes=names)
+    xdva, _ = model.visual_field_map.to_dva()['v1'](x, y)
+    return [n for n, xd in zip(names, xdva) if np.isfinite(xd)]
+
+
 def test_predict_spatial():
     # test that no current can spread between hemispheres
     implant = Orion()
@@ -53,12 +69,25 @@ def test_predict_spatial():
                           xrange=(-3, 3), yrange=(-3, 3),
                           step=0.5).build()
     source = {e: BiphasicPulseTrain(freq=300, amp=2000, phase_dur=0.17)
-              for e in implant.electrode_names}
+              for e in _in_v1(model)}
     # Check brightest frame of percept
     percept = model.predict_percept(source).max(axis='frames')
     half = percept.shape[1] // 2
     npt.assert_equal(np.all(percept[:, half+1:] == 0), True)
     npt.assert_equal(np.all(percept[:, :half] != 0), True)
+
+def test_predict_rejects_electrodes_outside_v1():
+    # At (20, -5) mm, Orion electrode '96' lies outside Polimeni's V1 wedge:
+    implant = Orion()
+    model = DynaphosModel(implant=implant, implant_position=(20, -5) * mm,
+                          xrange=(-3, 3), yrange=(-3, 3), step=0.5)
+    npt.assert_equal('96' in _in_v1(model), False)
+    pulse = BiphasicPulseTrain(freq=300, amp=100, phase_dur=0.17)
+    with pytest.raises(ValueError, match="'96' lie outside region 'v1'"):
+        model.predict_percept({'96': pulse, '70': pulse})
+    npt.assert_equal(np.all(np.isfinite(
+        model.predict_percept({'70': pulse}).data)), True)
+
 
 def test_predict_spatial_unsplit_map():
     # A map without hemifields must not be masked (used to raise NameError)
@@ -70,7 +99,7 @@ def test_predict_spatial_unsplit_map():
                           xrange=(-3, 3), yrange=(-3, 3),
                           step=0.5, visual_field_map=UnsplitMap()).build()
     source = {e: BiphasicPulseTrain(freq=300, amp=2000, phase_dur=0.17)
-              for e in implant.electrode_names}
+              for e in _in_v1(model)}
     percept = model.predict_percept(source).max(axis='frames')
     npt.assert_equal(np.all(np.isfinite(percept)), True)
     npt.assert_equal(np.any(percept > 0), True)
@@ -335,6 +364,10 @@ def test_dynaphos_ensemble_prediction_uses_those_clocks():
     ensemble, source = _ensemble_of_two_clocks()
     model = DynaphosModel(implant=ensemble, xrange=(-3, 3), yrange=(-3, 3),
                           step=1).build()
+    # Members straddle the foveal confluence; drive only electrodes in V1:
+    in_v1 = set(_in_v1(model))
+    source = {m: {e: pt for e, pt in trains.items() if f'{m}-{e}' in in_v1}
+              for m, trains in source.items()}
     with_clocks = model.predict_percept(source).data
     npt.assert_equal(np.any(with_clocks), True)
     # The same waveform with the trains behind it taken away is back on the

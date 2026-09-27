@@ -12,9 +12,9 @@ from pulse2percept.implants.retina import ArgusII, PRIMAPivotal
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, Encoder,
                                    FrequencyEncoder, ImageStimulus,
-                                   MonophasicPulse, PhotovoltaicEncoder,
-                                   PRIMAEncoder, PulseEncoder, Stimulus,
-                                   VideoStimulus)
+                                   ImplantEncoder, MonophasicPulse,
+                                   PhotovoltaicEncoder, PRIMAEncoder,
+                                   PulseEncoder, Stimulus, VideoStimulus)
 from pulse2percept import stimuli as p2p_stimuli
 from pulse2percept.stimuli import encoders
 from pulse2percept.utils.constants import DT
@@ -65,17 +65,23 @@ def test_PulseEncoder_is_abstract():
         PulseEncoder()
     with pytest.raises(TypeError):
         Encoder()
+    with pytest.raises(TypeError):
+        ImplantEncoder()
 
 
 def test_Encoder_hierarchy():
     # Pulse modulation strategies share the electrical pulse machinery:
     for cls in (AmplitudeEncoder, FrequencyEncoder):
         npt.assert_equal(issubclass(cls, PulseEncoder), True)
-    npt.assert_equal(issubclass(PulseEncoder, Encoder), True)
+    npt.assert_equal(issubclass(PulseEncoder, ImplantEncoder), True)
+    npt.assert_equal(issubclass(ImplantEncoder, Encoder), True)
     # Photovoltaic encoding is optical, not an electrical pulse encoder:
     for cls in (PhotovoltaicEncoder, PRIMAEncoder):
-        npt.assert_equal(issubclass(cls, Encoder), True)
+        npt.assert_equal(issubclass(cls, ImplantEncoder), True)
         npt.assert_equal(issubclass(cls, PulseEncoder), False)
+    for encoder in (AmplitudeEncoder(), PRIMAEncoder()):
+        npt.assert_equal(isinstance(encoder, Encoder), True)
+        npt.assert_equal(isinstance(encoder, ImplantEncoder), True)
     npt.assert_equal(issubclass(PRIMAEncoder, PhotovoltaicEncoder), True)
     npt.assert_equal(hasattr(p2p_stimuli, 'StimulusEncoder'), False)
 
