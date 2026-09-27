@@ -254,6 +254,11 @@ def test_TraceEncoder_image_rejects_bad_input():
     rgb = ImageStimulus(np.ones((3, 3, 3)))
     with pytest.raises(ValueError, match='as_gray=True'):
         encoder.trajectory(rgb, extent=(-1, 1, -1, 1) * dva)
+    img = np.zeros((3, 3))
+    img[1] = 1
+    with pytest.raises(ValueError, match='compress=False'):
+        encoder.trajectory(ImageStimulus(img, compress=True),
+                           extent=(-1, 1, -1, 1) * dva)
     for threshold in (-0.1, 1.1, np.nan, [0.2, 0.5]):
         with pytest.raises(ValueError, match='threshold'):
             TraceEncoder(line_model(), threshold=threshold)
@@ -288,8 +293,13 @@ def test_TraceEncoder_image_thick_Z(width):
     n = 40
     img = thick_z(n, width)
     # extent puts pixel (row, col) at x = col + 0.5, y = -(row + 0.5):
-    xy = TraceEncoder(line_model()).trajectory(
-        ImageStimulus(img), extent=(0, n, -n, 0) * dva)
+    extent = (0, n, -n, 0) * dva
+    # Strict mode rejects the corner spurs of a thick stroke:
+    with pytest.raises(ValueError, match='branches'):
+        TraceEncoder(line_model()).trajectory(ImageStimulus(img),
+                                              extent=extent)
+    xy = TraceEncoder(line_model(), prune_spurs=True).trajectory(
+        ImageStimulus(img), extent=extent)
     rc = np.column_stack([-xy[:, 1] - 0.5, xy[:, 0] - 0.5])
     npt.assert_almost_equal(rc, np.round(rc))
     rc = np.round(rc).astype(int)
@@ -309,13 +319,29 @@ def test_TraceEncoder_image_thick_Z(width):
 
 
 def test_TraceEncoder_image_thick_T():
-    # Corner spurs are pruned, but a drawn fork is not:
+    # A fork with two short arms is rejected even with pruning:
     img = np.zeros((30, 30))
     img[3:8, 3:27] = 1
     img[3:27, 13:18] = 1
+    for prune_spurs in (False, True):
+        with pytest.raises(ValueError, match='branches'):
+            TraceEncoder(line_model(), prune_spurs=prune_spurs).trajectory(
+                ImageStimulus(img), extent=(0, 30, -30, 0) * dva)
+
+
+def test_TraceEncoder_image_asymmetric_fork():
+    # A thick bar with one short arm:
+    img = np.zeros((30, 40))
+    img[13:18, 3:37] = 1
+    img[8:13, 18:23] = 1
+    target, extent = ImageStimulus(img), (0, 40, -30, 0) * dva
     with pytest.raises(ValueError, match='branches'):
-        TraceEncoder(line_model()).trajectory(ImageStimulus(img),
-                                              extent=(0, 30, -30, 0) * dva)
+        TraceEncoder(line_model()).trajectory(target, extent=extent)
+    # Known limitation: pruning cannot tell this arm from a corner spur, and
+    # removes it:
+    xy = TraceEncoder(line_model(), prune_spurs=True).trajectory(
+        target, extent=extent)
+    npt.assert_equal(np.all(xy[:, 1] < -13), True)
 
 
 def test_TraceEncoder_image_end_to_end():

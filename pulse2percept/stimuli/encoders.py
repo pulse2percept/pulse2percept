@@ -1309,8 +1309,8 @@ def _prune_spurs(skeleton, mask):
     At a sharp corner of a thick stroke, the skeleton continues past the
     bend into the corner, reaching ``r / sin(angle / 2)`` from the junction,
     where ``r`` is the junction's distance to the background of ``mask``. An
-    end branch whose tip lies within ``3 r`` (corners of 39 deg or wider) is
-    removed if it is the only such branch at its junction.
+    end branch whose tip lies within ``3 r`` is removed if it is the only such
+    branch at its junction. A short real branch is removed too.
     """
     pixels = np.argwhere(skeleton)
     neighbors = _pixel_graph(pixels)
@@ -1416,9 +1416,10 @@ class TraceEncoder(Encoder):
     *  A grayscale :py:class:`~pulse2percept.stimuli.ImageStimulus` of a
        single bright stroke on a dark background (e.g., a letter), placed in
        the visual field by ``extent``. Pixels above ``threshold`` are
-       skeletonized to a one-pixel centerline, without the short spurs that
-       skeletonization adds at sharp corners (39 deg or wider). The
-       centerline must form one open, nonbranching path. The path starts at
+       skeletonized to a one-pixel centerline, which must form one open,
+       nonbranching path. With ``prune_spurs=True``, short endpoint spurs
+       produced by skeletonization near thick corners are removed before
+       topology validation. The path starts at
        its endpoint that comes first in row-major order (topmost, then
        leftmost). Skeletonization can bend the end of a thick stroke by a
        pixel, which can change that endpoint. Use :py:meth:`trajectory` to
@@ -1468,6 +1469,10 @@ class TraceEncoder(Encoder):
         Required if the map has more than one region.
     threshold : float, optional
         Gray level in [0, 1] above which an image pixel is part of the trace.
+    prune_spurs : bool, optional
+        If True, short endpoint spurs produced by skeletonization near thick
+        corners are removed before topology validation. This can also remove
+        a short real branch. If False, any branch is rejected.
 
     Notes
     -----
@@ -1522,11 +1527,12 @@ class TraceEncoder(Encoder):
     """
     __slots__ = ('model', 'amp', 'amp_unit', 'freq', 'phase_dur', 'step_dur',
                  'interphase_dur', 'cathodic_first', 'clock', 'region',
-                 'threshold')
+                 'threshold', 'prune_spurs')
 
     def __init__(self, model, *, amp=100 * uA, freq=300 * Hz,
                  phase_dur=0.17 * ms, step_dur=50 * ms, interphase_dur=0 * ms,
-                 cathodic_first=True, clock=None, region=None, threshold=0.5):
+                 cathodic_first=True, clock=None, region=None, threshold=0.5,
+                 prune_spurs=False):
         for attr in ('implant', 'visual_field_map', '_electrode_coords'):
             if getattr(model, attr, None) is None:
                 raise TypeError(
@@ -1556,6 +1562,7 @@ class TraceEncoder(Encoder):
             raise ValueError(f"'threshold' must be a scalar in [0, 1], not "
                              f"{threshold}.")
         self.threshold = float(threshold)
+        self.prune_spurs = bool(prune_spurs)
         self._check_model()
         # Validates the pulse parameters:
         self._pulse_encoder()
@@ -1570,7 +1577,8 @@ class TraceEncoder(Encoder):
                        'interphase_dur': self.interphase_dur,
                        'cathodic_first': self.cathodic_first,
                        'clock': self.clock, 'region': self.region,
-                       'threshold': self.threshold})
+                       'threshold': self.threshold,
+                       'prune_spurs': self.prune_spurs})
         return params
 
     def _pulse_encoder(self):
@@ -1659,9 +1667,15 @@ class TraceEncoder(Encoder):
             raise ValueError(f"TraceEncoder requires a grayscale image, not "
                              f"shape {image.img_shape}. Construct it with "
                              f"ImageStimulus(image, as_gray=True).")
+        if image.data.size != np.prod(image.img_shape):
+            raise ValueError("TraceEncoder requires a dense ImageStimulus. "
+                             "Construct it with compress=False.")
         n_rows, n_cols = image.img_shape
         mask = np.asarray(image.data).reshape(image.img_shape) > self.threshold
-        row, col = _ordered_path(_prune_spurs(skeletonize(mask), mask)).T
+        skeleton = skeletonize(mask)
+        if self.prune_spurs:
+            skeleton = _prune_spurs(skeleton, mask)
+        row, col = _ordered_path(skeleton).T
         # Pixel centers, as in Scene.pixel_to_dva; row 0 is the top:
         return np.column_stack([
             left + (col + 0.5) * (right - left) / n_cols,
