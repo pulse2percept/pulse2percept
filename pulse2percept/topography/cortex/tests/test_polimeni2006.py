@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import numpy.testing as npt
 
 from pulse2percept.topography.cortex import Polimeni2006Map
@@ -189,3 +190,36 @@ def test_polimeni_scalars():
                                 err_msg=region)
         # Points outside the mapped eccentricity are NaN, not an error:
         npt.assert_equal(np.isnan(to_tissue(100, 0)), True)
+
+
+@pytest.mark.parametrize('params', [{}, {'a': 0.75, 'k': 17.3, 'b': 120,
+                                         'alpha1': 0.95}])
+@pytest.mark.parametrize('region', ['v1', 'v2', 'v3'])
+def test_polimeni_inverse_domain(region, params):
+    """Tissue outside a region maps to NaN; tissue inside round-trips"""
+    map = Polimeni2006Map(regions=[region], **params)
+    gx, gy = np.meshgrid(np.linspace(-90000, 90000, 181),
+                         np.linspace(-90000, 90000, 181))
+    x, y = gx.ravel(), gy.ravel()
+    xdva, ydva = map.to_dva()[region](x, y)
+    inside = np.isfinite(xdva)
+    npt.assert_equal(np.isfinite(ydva), inside)
+    npt.assert_equal(0 < inside.sum() < inside.size, True)
+    # Both hemispheres' foveas invert to (0, 0) dva, which maps back to one:
+    inside &= np.hypot(np.nan_to_num(xdva), np.nan_to_num(ydva)) > 1e-3
+    xb, yb = map.from_dva()[region](xdva[inside], ydva[inside])
+    npt.assert_allclose(np.hypot(xb - x[inside], yb - y[inside]), 0,
+                        atol=0.1)
+
+
+def test_polimeni_inverse_outside_v1():
+    # Past the vertical meridian, beyond 90 dva, and in the gap between
+    # hemispheres:
+    map = Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
+    x, y = map.to_dva()['v1']([8450, 80000, -5000], [-14641, 0, 0])
+    npt.assert_equal(np.isnan(x), True)
+    npt.assert_equal(np.isnan(y), True)
+    # The fovea and valid points keep their values:
+    npt.assert_almost_equal(map.to_dva()['v1'](0, 0), (0, 0))
+    npt.assert_almost_equal(map.to_dva()['v1'](*map.from_dva()['v1'](-3, 2)),
+                            (-3, 2), decimal=4)

@@ -339,8 +339,20 @@ class DynaphosModel(BaseModel):
             boundary = self.visual_field_map.left_offset/2
 
         phosphene_locations = {}
+        driven = np.any(self._stim_values(stim) != 0, axis=1)
         for region in self.regions:
             phosphene_locations[region] = self.visual_field_map.to_dva()[region](x_el, y_el)
+            # Undriven electrodes never produce a phosphene:
+            placed = np.all(np.isfinite(phosphene_locations[region]), axis=0)
+            placed |= ~driven
+            if not np.all(placed):
+                lost = [e.item() if isinstance(e, np.generic) else e
+                        for e, ok in zip(stim.electrodes, placed) if not ok]
+                raise ValueError(
+                    f"Electrode(s) {', '.join(repr(e) for e in lost[:5])} "
+                    f"lie outside region {region!r} of "
+                    f"{type(self.visual_field_map).__name__} at the current "
+                    f"implant placement.")
 
         theta, r = cart2pol(*phosphene_locations['v1'])
 

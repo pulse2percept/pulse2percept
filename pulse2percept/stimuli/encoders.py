@@ -14,7 +14,7 @@ from scipy.spatial import cKDTree
 from .base import ImageStimulus, Stimulus, VideoStimulus, _adoptable
 from .pulses import BiphasicPulse
 from ..units import (DimensionMismatchError, Hz, Quantity, as_value,
-                     dimensionless, dva, mW, mm, ms, nm, uA, um, xTh)
+                     dimensionless, dva, mW, mm, ms, nm, uA, xTh)
 from ..utils import PrettyPrint, frame_interval
 # Point encoder warnings at the caller.
 from ..utils.deprecation import _warn_external
@@ -1273,10 +1273,9 @@ class TraceEncoder(Encoder):
                    -> nearest candidate electrode at model-side placement
                    -> one step_dur pulse train per selected electrode
 
-    Candidates are activated electrodes whose placed location lies in the
-    mapped region, i.e. maps back onto itself through ``to_dva`` and
-    ``from_dva``. Each sample is mapped on its own, so its electrode does not
-    depend on the other samples.
+    Candidates are activated electrodes whose placed location has a finite
+    ``to_dva`` location, i.e. lies in the mapped region. Each sample is mapped
+    on its own, so its electrode does not depend on the other samples.
 
     Consecutive samples that select the same electrode are collapsed into one
     step, so dense sampling does not lengthen a dwell. A later revisit of the
@@ -1356,11 +1355,6 @@ class TraceEncoder(Encoder):
     """
     __slots__ = ('model', 'amp', 'amp_unit', 'freq', 'phase_dur', 'step_dur',
                  'interphase_dur', 'cathodic_first', 'clock', 'region')
-
-    #: Largest tissue -> dva -> tissue error (um) of a selectable electrode.
-    #: Valid Polimeni V1 locations round-trip within ~0.01 um (float32);
-    #: off-map electrodes miss by millimeters.
-    _ROUND_TRIP_TOL = 1.0
 
     def __init__(self, model, *, amp=100 * uA, freq=300 * Hz,
                  phase_dur=0.17 * ms, step_dur=50 * ms, interphase_dur=0 * ms,
@@ -1499,11 +1493,11 @@ class TraceEncoder(Encoder):
                 f"tissue.")
         return tissue
 
-    def _candidates(self, region, forward, inverse):
+    def _candidates(self, region, inverse):
         """Return names and tissue coordinates of selectable electrodes
 
-        Selectable: activated, and mapped back onto its own placed location
-        by tissue -> dva -> tissue (within ``_ROUND_TRIP_TOL``).
+        Selectable: activated, with a finite ``to_dva`` location. Maps return
+        NaN for tissue outside the region.
         """
         vfmap = self.model.visual_field_map
         array = self.implant.electrode_array
@@ -1516,16 +1510,12 @@ class TraceEncoder(Encoder):
         xyz = Quantity(xyz.astype(np.float64), self.model.space_unit
                        ).to_value(vfmap.tissue_unit)
         try:
-            back = self._pointwise(
-                forward, self._pointwise(inverse, xyz, 2), vfmap.ndim)
+            ok = np.all(np.isfinite(self._pointwise(inverse, xyz, 2)), axis=1)
         except NotImplementedError:
             raise NotImplementedError(
                 f"TraceEncoder requires an invertible map, but "
                 f"{type(vfmap).__name__} does not map region {region!r} "
-                f"both ways.") from None
-        tol = Quantity(self._ROUND_TRIP_TOL, um).to_value(vfmap.tissue_unit)
-        with np.errstate(invalid='ignore'):
-            ok = np.linalg.norm(back - xyz, axis=1) <= tol
+                f"back to dva.") from None
         if not np.any(ok):
             raise ValueError(
                 f"None of the {len(names)} activated electrodes of "
@@ -1537,7 +1527,7 @@ class TraceEncoder(Encoder):
         """Return candidate electrode names and the index of each trace step"""
         self._check_model()
         region, forward, inverse = self._transforms()
-        names, xyz = self._candidates(region, forward, inverse)
+        names, xyz = self._candidates(region, inverse)
         target = self._target_tissue(source, region, forward)
         _, nearest = cKDTree(xyz).query(target)
         # Collapse consecutive duplicates only; later revisits are kept:

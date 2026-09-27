@@ -95,6 +95,28 @@ class Polimeni2006Map(CorticalMap):
         x[idx_nan], y[idx_nan] = np.nan, np.nan
         return x, y
 
+    def _mask_inverse(self, x, y, theta, radius, w_imag, folded=False):
+        """Set dva outputs to NaN where tissue lies outside the region
+
+        ``theta`` and ``radius`` are canonical (before hemisphere flips), as
+        in :py:meth:`add_nans`. ``w_imag`` is the imaginary part of the
+        tissue coordinate (mm): the forward map's principal log cannot
+        produce ``|w_imag| >= k * pi``. For V2/V3 (``folded``), the inverse
+        picks its angular branch from ``sign(w_imag)``, which is only the
+        forward map's branch if ``theta`` has the same sign; ``theta = 0`` is
+        excluded, as in ``dva_to_v2``/``dva_to_v3``. The fovea (``radius``
+        0) has no polar angle and is kept.
+        """
+        angle = (theta <= -np.pi / 2) | (theta >= np.pi / 2)
+        if folded:
+            angle |= np.isclose(theta, 0, atol=1e-6)
+            angle |= np.sign(theta) != np.sign(w_imag)
+        idx = ((angle & (radius > 0)) | (radius > 90) |
+               (np.abs(w_imag) >= self.k * np.pi))
+        x, y = np.array(x), np.array(y)
+        x[idx], y[idx] = np.nan, np.nan
+        return x, y
+
     @_scalar_safe('float32')
     def dva_to_v1(self, x, y):
         if self.jitter_boundary:
@@ -168,7 +190,8 @@ class Polimeni2006Map(CorticalMap):
         r = np.sqrt(t1**2 + t2**2)
         thetav1 = np.arctan2(t2, t1)
         theta = thetav1 / self.alpha1
-        return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
+        xdva, ydva = pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
+        return self._mask_inverse(xdva, ydva, theta, r, y)
 
     @_scalar_safe(None)
     def v2_to_dva(self, x, y):
@@ -186,7 +209,8 @@ class Polimeni2006Map(CorticalMap):
         phi1 = np.pi / 2 * (1 - self.alpha1)
         phi2 = np.pi / 2 * (1 - self.alpha2)
         theta = (thetav2 - (np.sign(y) * (phi1 + phi2))) / self.alpha2
-        return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
+        xdva, ydva = pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
+        return self._mask_inverse(xdva, ydva, theta, r, y, folded=True)
 
     @_scalar_safe(None)
     def v3_to_dva(self, x, y):
@@ -203,7 +227,8 @@ class Polimeni2006Map(CorticalMap):
         phi2 = np.pi / 2 * (1 - self.alpha2)
         thetav3 -= np.sign(y) * (np.pi - phi1 - phi2)
         theta = thetav3 / self.alpha3
-        return pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
+        xdva, ydva = pol2cart(*self._invert_left_pol(theta, r, ~inverted)[:2])
+        return self._mask_inverse(xdva, ydva, theta, r, y, folded=True)
     
     def plot(self, ax=None):
         if ax is None:
