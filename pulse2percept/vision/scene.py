@@ -1398,7 +1398,6 @@ class Scene(PrettyPrint):
 
         """
         view = _resolve_view(view)
-        context_alpha = _resolve_context_alpha(context_alpha)
         if percept is not None:
             _check_prosthetic(percept)
         n_out = self._n_display_frames(percept)
@@ -1414,7 +1413,8 @@ class Scene(PrettyPrint):
                                   grid_color, percept, vmax, vmin, **kwargs)
         return self._plot_scene(gaze_xy, frame, ax, rings, meridians,
                                 grid_color, percept, vmax, vmin,
-                                context_alpha, **kwargs)
+                                _resolve_context_alpha(context_alpha),
+                                **kwargs)
 
     def _fov_layer(self, xs, ys, gaze_xy, frame, percept, vmax, vmin):
         """The wide layer `plot` draws on an eye-centered raster: native
@@ -1482,24 +1482,27 @@ class Scene(PrettyPrint):
                                         offset=gaze_xy)
         if self._inpaints():
             # The eye view's FOV raster, moved to the fovea:
-            wide = self._fov_layer(*self._view_axes(), gaze_xy, frame,
-                                   percept, vmax, vmin)
-            left, right, bottom, top = self._view_extent
-            wide_extent = (left + gx, right + gx, bottom + gy, top + gy)
+            view_xs, view_ys = self._view_axes()
+            wide = self._fov_layer(view_xs, view_ys, gaze_xy, frame, percept,
+                                   vmax, vmin)
+            wide_xs, wide_ys = view_xs + gx, view_ys + gy
         else:
             # The source's own pixel centers, so `_source_on` does not
             # resample:
             wide = self._fov_layer(xs - gx, ys - gy, gaze_xy, frame, percept,
                                    vmax, vmin)
-            wide_extent = self._extent
+            wide_xs, wide_ys = xs, ys
         source = _as_rgb(self._frames()[..., self._source_frame(frame)])
         context = Percept((context_alpha * source)[..., np.newaxis],
                           space=_raster_grid(xs, ys))
-        ax = self._label_scene(context.plot(ax=ax, **kwargs))
-        zorder = ax.images[-1].get_zorder()
-        artists = [_imshow_within(ax, wide, wide_extent, zorder + 1)]
+        ax = context.plot(ax=ax, **kwargs)
+        fov = Percept(wide[..., np.newaxis],
+                      space=_raster_grid(wide_xs, wide_ys))
+        ax = self._label_scene(fov.plot(ax=ax, **kwargs))
+        artists = [ax.images[-1]]
         if patch is not None:
-            artists.append(_imshow_within(ax, *patch, zorder + 2))
+            artists.append(_imshow_within(ax, *patch,
+                                          artists[0].get_zorder() + 1))
         artists += vf.draw(ax, radii, angles, gaze_xy, extent,
                            color=grid_color)
         clip = self._support_patch(ax.transData, center=gaze_xy)
@@ -1584,7 +1587,6 @@ class Scene(PrettyPrint):
 
         """
         view = _resolve_view(view)
-        context_alpha = _resolve_context_alpha(context_alpha)
         if self.time is None:
             raise ValueError("A still scene has nothing to play. Use plot().")
         gaze = self._resolve_gaze(gaze, percept)
@@ -1595,7 +1597,8 @@ class Scene(PrettyPrint):
             return self._play_eye(gaze, rings, meridians, grid_color, percept,
                                   vmax, vmin, player)
         return self._play_scene(gaze, rings, meridians, grid_color, percept,
-                                vmax, vmin, context_alpha, player)
+                                vmax, vmin,
+                                _resolve_context_alpha(context_alpha), player)
 
     def _play_eye(self, gaze, rings, meridians, grid_color, percept, vmax,
                   vmin, player):

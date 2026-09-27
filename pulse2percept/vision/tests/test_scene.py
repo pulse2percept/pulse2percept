@@ -2129,6 +2129,22 @@ def test_a_bad_context_alpha_is_refused(alpha):
     with pytest.raises(ValueError):
         world_video().play(context_alpha=alpha)
     plt.close('all')
+    # ... but only where it is used:
+    world_scene().plot(context_alpha=alpha, view='eye')
+    world_video().play(context_alpha=alpha, view='eye')
+    plt.close('all')
+
+
+@pytest.mark.parametrize('scotoma_fill', [0.0, 'inpaint'])
+def test_plot_kwargs_reach_the_fov_in_the_scene_view(scotoma_fill):
+    scene = world_scene(scotoma=Scotoma.circle(4), scotoma_fill=scotoma_fill)
+    ax = drawn_on_fresh_axes(scene, gaze=(10, -5), alpha=0.5,
+                             interpolation='nearest')
+    for image in ax.images:
+        npt.assert_equal(image.get_alpha(), 0.5)
+        npt.assert_equal(image.get_interpolation(), 'nearest')
+    npt.assert_almost_equal(ax.get_xlim(), WORLD[:2])
+    plt.close('all')
 
 
 def test_the_scotoma_moves_with_gaze_at_its_angular_size():
