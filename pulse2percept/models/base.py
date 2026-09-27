@@ -608,18 +608,20 @@ def _home_regions(model, electrodes, xyz):
     location to finite coordinates. Raises unless exactly one region does.
     """
     vfmap = model.visual_field_map
+    regions = list(vfmap.from_dva())
     try:
         inverses = vfmap.to_dva()
-    except NotImplementedError:
+        # Every mapped region needs an inverse, or its electrodes would be
+        # reported as lying in no region:
+        inside = np.array([np.all(np.isfinite(inverses[r](
+            *[np.array(c, dtype=np.float64) for c in xyz[:2]])), axis=0)
+            for r in regions]).reshape((len(regions), -1))
+    except (NotImplementedError, KeyError):
         raise NotImplementedError(
             f"location_noise places electrodes in the visual field, which "
             f"requires an invertible visual field map. "
-            f"{type(vfmap).__name__} cannot map tissue coordinates back to "
-            f"dva.") from None
-    regions = [r for r in vfmap.from_dva() if r in inverses]
-    inside = np.array([np.all(np.isfinite(inverses[r](
-        *[np.array(c, dtype=np.float64) for c in xyz[:2]])), axis=0)
-        for r in regions]).reshape((len(regions), -1))
+            f"{type(vfmap).__name__} cannot map tissue coordinates in every "
+            f"region of {regions} back to dva.") from None
     count = inside.sum(axis=0)
     for bad, what in ((count == 0, f"lie in none of the regions {regions}"),
                       (count > 1, f"lie in several of the regions {regions}")):

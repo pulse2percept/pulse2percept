@@ -2330,6 +2330,31 @@ def test_cortical_location_noise_uses_home_region():
                                 electrodes=nowhere[:1])
 
 
+class _NoV2Inverse(Polimeni2006Map):
+    """V2 is mapped forward only"""
+
+    def v2_to_dva(self, x, y):
+        raise NotImplementedError
+
+
+class _MissingV2Inverse(Polimeni2006Map):
+    """``to_dva`` omits V2"""
+
+    def to_dva(self):
+        return {'v1': self.v1_to_dva}
+
+
+@pytest.mark.parametrize('map_cls', [_NoV2Inverse, _MissingV2Inverse])
+def test_cortical_location_noise_requires_every_inverse(map_cls):
+    implant = NeuroPortArray()
+    model = CortexScoreboardSpatial(
+        implant, regions=['v1', 'v2'], location_noise=1.0,
+        visual_field_map=map_cls(regions=['v1', 'v2'])).build()
+    with pytest.raises(NotImplementedError, match='invertible'):
+        model._electrode_coords(implant.electrode_array, None,
+                                electrodes=[_electrode_in(model, 'v1')])
+
+
 class _Slab3DMap(VisualFieldMap):
     """A 3D map placing the visual field on the z=0 plane of a slab"""
 
