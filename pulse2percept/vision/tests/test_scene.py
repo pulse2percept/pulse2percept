@@ -2140,9 +2140,12 @@ def test_plot_kwargs_reach_the_fov_in_the_scene_view(scotoma_fill):
     scene = world_scene(scotoma=Scotoma.circle(4), scotoma_fill=scotoma_fill)
     ax = drawn_on_fresh_axes(scene, gaze=(10, -5), alpha=0.5,
                              interpolation='nearest')
-    for image in ax.images:
-        npt.assert_equal(image.get_alpha(), 0.5)
-        npt.assert_equal(image.get_interpolation(), 'nearest')
+    context, fov = ax.images
+    npt.assert_equal(fov.get_alpha(), 0.5)
+    npt.assert_equal(fov.get_interpolation(), 'nearest')
+    # The context is styled by `context_alpha` alone:
+    npt.assert_equal(context.get_alpha(), None)
+    npt.assert_equal(context.get_interpolation() == 'nearest', False)
     npt.assert_almost_equal(ax.get_xlim(), WORLD[:2])
     plt.close('all')
 

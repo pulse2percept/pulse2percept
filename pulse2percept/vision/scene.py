@@ -1495,7 +1495,9 @@ class Scene(PrettyPrint):
         source = _as_rgb(self._frames()[..., self._source_frame(frame)])
         context = Percept((context_alpha * source)[..., np.newaxis],
                           space=_raster_grid(xs, ys))
-        ax = context.plot(ax=ax, **kwargs)
+        # Styled by `context_alpha` only; `figsize` still sizes a new figure:
+        ax = context.plot(ax=ax, **{key: kwargs[key] for key in ('figsize',)
+                                    if key in kwargs})
         fov = Percept(wide[..., np.newaxis],
                       space=_raster_grid(wide_xs, wide_ys))
         ax = self._label_scene(fov.plot(ax=ax, **kwargs))
