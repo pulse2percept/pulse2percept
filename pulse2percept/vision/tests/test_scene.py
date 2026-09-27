@@ -2255,22 +2255,59 @@ def test_inpainting_cannot_see_past_the_fov_in_either_view():
         plt.close('all')
 
 
+def inpainted_views(scene, gaze):
+    """The eye view's render, and the scene view's plotted and played FOV"""
+    seen = scene.render(gaze=gaze).data[..., 0]
+    ax = drawn_on_fresh_axes(scene, gaze=gaze)
+    wide = ax.images[1]
+    frames = scene.play(gaze=gaze)._frame_data[..., 0]
+    plt.close('all')
+    return seen, wide, frames
+
+
 @pytest.mark.parametrize('gaze', [(10, -5), (35, 0)])
 def test_the_scene_view_inpaints_what_the_eye_view_does(gaze):
-    """Same eye-centered domain, including black past the edge of `extent`"""
+    """Same eye-centered raster, including black past the edge of `extent`"""
     scene = world_video(scotoma=Scotoma.circle(4), scotoma_fill='inpaint')
+    seen, wide, frames = inpainted_views(scene, gaze)
+    # `plot` draws the eye view's raster itself, moved to the fovea:
+    npt.assert_almost_equal(wide.get_array(), seen, decimal=6)
     gx, gy = gaze
-    seen = scene.render(gaze=gaze).data[..., 0]
-    # Eye raster (row, col) is world (30 - gy + row, 30 + gx + col):
+    npt.assert_almost_equal(wide.get_extent(),
+                            (gx - 10.5, gx + 10.5, gy - 10.5, gy + 10.5))
+    # Here the lattices align, so `play` shows those very pixels. Eye raster
+    # (row, col) is world (30 - gy + row, 30 + gx + col):
     rows, cols = np.arange(21) + 30 - gy, np.arange(21) + 30 + gx
     keep = cols < WORLD_PX
-    expected = seen[:, keep]
-    ax = drawn_on_fresh_axes(scene, gaze=gaze)
-    wide = ax.images[1].get_array()
-    npt.assert_almost_equal(wide[np.ix_(rows, cols[keep])], expected,
+    npt.assert_almost_equal(frames[np.ix_(rows, cols[keep])], seen[:, keep],
                             decimal=6)
-    plt.close('all')
-    frames = scene.play(gaze=gaze)._frame_data[..., 0]
-    npt.assert_almost_equal(frames[np.ix_(rows, cols[keep])], expected,
-                            decimal=6)
-    plt.close('all')
+
+
+def test_inpainting_uses_the_eye_raster_when_the_lattices_differ():
+    """The pedestrian geometry: 45 / 173 dva source pixels, 40 / 154 dva
+    render pixels, so no source pixel center is a render node"""
+    y, x = np.mgrid[0:1:173j, 0:1:320j]
+    frame = np.stack([x, y, 0.5 + 0.4 * np.sin(6 * x) * np.cos(4 * y)],
+                     axis=-1)
+    video = VideoStimulus(np.stack([frame] * 2, axis=-1), time=[0, 100])
+    scene = Scene(video, extent=45 * dva, fov=40 * dva,
+                  scotoma=Scotoma.circle(5), scotoma_fill='inpaint')
+    npt.assert_equal(scene.render().shape[:2], (154, 154))
+    gaze = (3.3, -1.7)
+    seen, wide, frames = inpainted_views(scene, gaze)
+    npt.assert_almost_equal(wide.get_array(), seen, decimal=6)
+    # `play` shows that same inpainted image, linearly interpolated onto the
+    # source pixels inside the FOV:
+    xs, ys = scene._axes
+    eye_x, eye_y = np.meshgrid(xs - gaze[0], ys - gaze[1])
+    inside = (np.abs(eye_x) < 19.5) & (np.abs(eye_y) < 19.5)
+    view_x, view_y = scene._view_axes()
+    col = np.interp(eye_x[inside], view_x, np.arange(view_x.size))
+    row = np.interp(-eye_y[inside], -view_y, np.arange(view_y.size))
+    c0, r0 = np.floor(col).astype(int), np.floor(row).astype(int)
+    fc, fr = (col - c0)[:, None], (row - r0)[:, None]
+    c1, r1 = np.minimum(c0 + 1, 153), np.minimum(r0 + 1, 153)
+    top = (1 - fc) * seen[r0, c0] + fc * seen[r0, c1]
+    bottom = (1 - fc) * seen[r1, c0] + fc * seen[r1, c1]
+    expected = (1 - fr) * top + fr * bottom
+    npt.assert_allclose(frames[inside], expected, atol=1e-5)
