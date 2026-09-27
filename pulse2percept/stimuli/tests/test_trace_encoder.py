@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+from scipy.spatial import cKDTree
 
 from pulse2percept.implants import DiskElectrode, ElectrodeArray, Implant
 from pulse2percept.implants.cortex import Orion
@@ -19,8 +20,15 @@ class LinearMap(VisualFieldMap):
         return (1000 * np.asarray(x, dtype=float),
                 1000 * np.asarray(y, dtype=float))
 
+    def lin_to_dva(self, x, y):
+        return (np.asarray(x, dtype=float) / 1000,
+                np.asarray(y, dtype=float) / 1000)
+
     def from_dva(self):
         return {'lin': self.dva_to_lin}
+
+    def to_dva(self):
+        return {'lin': self.lin_to_dva}
 
 
 class TwoRegionMap(LinearMap):
@@ -32,10 +40,35 @@ class TwoRegionMap(LinearMap):
     def from_dva(self):
         return {'lin': self.dva_to_lin, 'other': self.dva_to_other}
 
+    def to_dva(self):
+        return {'lin': self.lin_to_dva, 'other': self.dva_to_other}
+
 
 class NoForwardMap(LinearMap):
     def from_dva(self):
         raise NotImplementedError
+
+
+class NoInverseMap(LinearMap):
+    def to_dva(self):
+        raise NotImplementedError
+
+
+class EdgeMap(LinearMap):
+    """The mapped region ends at x = 1500 um"""
+
+    def lin_to_dva(self, x, y):
+        x, y = super().lin_to_dva(x, y)
+        return np.where(x > 1.5, np.nan, x), y
+
+
+class BatchMap(LinearMap):
+    """Shifts x = 0 toward the batch mean, like Polimeni2006Map"""
+
+    def dva_to_lin(self, x, y):
+        x = np.array(x, dtype=float)
+        x[x == 0] += np.copysign(1.2, np.mean(x))
+        return super().dva_to_lin(x, y)
 
 
 def line_implant():
@@ -52,8 +85,7 @@ def line_model(implant=None, **params):
 
 
 def sequence(encoder, trace):
-    names, steps = encoder._sequence(trace)
-    return [names[i] for i in steps]
+    return encoder.electrode_sequence(trace)
 
 
 def test_TraceEncoder_is_an_Encoder():
@@ -120,6 +152,32 @@ def test_TraceEncoder_regions():
     none = ScoreboardSpatial(line_implant(), visual_field_map=NoForwardMap())
     with pytest.raises(NotImplementedError, match='does not map dva'):
         TraceEncoder(none).encode([[0, 0]])
+    oneway = ScoreboardSpatial(line_implant(),
+                               visual_field_map=NoInverseMap())
+    with pytest.raises(NotImplementedError, match='invertible'):
+        TraceEncoder(oneway).encode([[0, 0]])
+
+
+def test_TraceEncoder_skips_electrodes_outside_mapped_region():
+    # C (2000 um) is outside the region; the nearest candidate to 2 dva is B:
+    model = ScoreboardSpatial(line_implant(), visual_field_map=EdgeMap())
+    encoder = TraceEncoder(model)
+    npt.assert_equal(sequence(encoder, [[0, 0], [2, 0]]), ['A', 'B'])
+    # No candidate left:
+    model.implant_position = (5000, 0)
+    with pytest.raises(ValueError, match='None of the 3'):
+        encoder.encode([[0, 0]])
+
+
+def test_TraceEncoder_maps_pointwise():
+    # A, B, C at 0.5, 1.5, 2.5 dva. Alone, x = 0 shifts to +1.2 dva (nearest
+    # B); in a batch with a negative mean it would shift to -1.2 dva (A).
+    model = ScoreboardSpatial(line_implant(), visual_field_map=BatchMap(),
+                              implant_position=(500, 0))
+    encoder = TraceEncoder(model)
+    npt.assert_equal(sequence(encoder, [[0, 0]]), ['B'])
+    npt.assert_equal(sequence(encoder, [[0, 0], [-3, 0]]), ['B', 'A'])
+    npt.assert_equal(sequence(encoder, [[0, 0], [3, 0]]), ['B', 'C'])
 
 
 def test_TraceEncoder_rejects_unmappable_trace():
@@ -245,16 +303,23 @@ def test_TraceEncoder_Polimeni_round_trip():
                                       electrodes=names)
     vfmap = model.visual_field_map
     xdva, ydva = vfmap.to_dva()['v1'](x, y)
-    # A few electrodes lie outside Polimeni's V1 wedge; `to_dva` wraps them
-    # into the other hemifield, where no dva target maps back onto them:
-    xb, yb = vfmap.from_dva()['v1'](xdva, ydva)
-    on_v1 = np.hypot(xb - x, yb - y) < 1
-    npt.assert_equal(on_v1.sum() >= 55, True)
-    names = [n for n, ok in zip(names, on_v1) if ok]
-    xdva, ydva = xdva[on_v1], ydva[on_v1]
     encoder = TraceEncoder(model)
-    npt.assert_equal(sequence(encoder, np.column_stack([xdva, ydva])),
-                     names)
+    # '96' and '90' lie outside Polimeni's V1 wedge; `to_dva` wraps them into
+    # the other hemifield. They are not candidates:
+    off_v1 = ['96', '90']
+    on_v1 = [n not in off_v1 for n in names]
+    candidates, _ = encoder._sequence([[-3, -2]])
+    npt.assert_equal(sorted(set(names) - set(candidates)), sorted(off_v1))
+    trace = np.column_stack([xdva, ydva])[on_v1]
+    npt.assert_equal(sequence(encoder, trace),
+                     [n for n, ok in zip(names, on_v1) if ok])
+    # Valid targets along the upper vertical meridian lie closest in tissue
+    # to the off-V1 electrodes, but select on-V1 ones:
+    edge = np.column_stack([np.full(50, -0.01), np.linspace(1.3, 1.8, 50)])
+    tissue = np.column_stack(vfmap.from_dva()['v1'](edge[:, 0], edge[:, 1]))
+    _, nearest = cKDTree(np.column_stack([x, y])).query(tissue)
+    npt.assert_equal(set(off_v1) <= {names[i] for i in nearest}, True)
+    npt.assert_equal(set(sequence(encoder, edge)) & set(off_v1), set())
     # Deactivated electrodes are replaced by an active neighbor:
     implant.deactivate(names[10])
     got = sequence(encoder, [[xdva[10], ydva[10]]])

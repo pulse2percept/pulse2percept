@@ -14,7 +14,7 @@ from scipy.spatial import cKDTree
 from .base import ImageStimulus, Stimulus, VideoStimulus, _adoptable
 from .pulses import BiphasicPulse
 from ..units import (DimensionMismatchError, Hz, Quantity, as_value,
-                     dimensionless, dva, mW, mm, ms, nm, uA, xTh)
+                     dimensionless, dva, mW, mm, ms, nm, uA, um, xTh)
 from ..utils import PrettyPrint, frame_interval
 # Point encoder warnings at the caller.
 from ..utils.deprecation import _warn_external
@@ -1270,12 +1270,18 @@ class TraceEncoder(Encoder):
     .. code-block:: text
 
         (x, y) dva -> model.visual_field_map.from_dva()[region] -> tissue
-                   -> nearest activated electrode at model-side placement
+                   -> nearest candidate electrode at model-side placement
                    -> one step_dur pulse train per selected electrode
+
+    Candidates are activated electrodes whose placed location lies in the
+    mapped region, i.e. maps back onto itself through ``to_dva`` and
+    ``from_dva``. Each sample is mapped on its own, so its electrode does not
+    depend on the other samples.
 
     Consecutive samples that select the same electrode are collapsed into one
     step, so dense sampling does not lengthen a dwell. A later revisit of the
-    same electrode is a new step.
+    same electrode is a new step. :py:meth:`electrode_sequence` returns the
+    selected electrodes.
 
     Inspired by dynamic stimulation of visual cortex [Beauchamp2020]_. This
     implementation uses physical electrodes only: it does not implement
@@ -1287,10 +1293,11 @@ class TraceEncoder(Encoder):
     Parameters
     ----------
     model : model
-        Model that places the implant in tissue. Requires ``implant``, a
-        ``visual_field_map`` with a ``from_dva`` mapping, and placed electrode
-        coordinates (``implant_position``, ``implant_rotation``,
-        ``implant_depth``). The encoder binds to ``model.implant``.
+        Model that places the implant in tissue. Requires ``implant``, an
+        invertible ``visual_field_map`` (``from_dva`` and ``to_dva``), and
+        placed electrode coordinates (``implant_position``,
+        ``implant_rotation``, ``implant_depth``). The encoder binds to
+        ``model.implant``.
     amp : float or Quantity, optional
         Pulse amplitude (uA, or ``xTh`` for threshold multiples) on the
         active electrode.
@@ -1341,11 +1348,19 @@ class TraceEncoder(Encoder):
     ...                                    phase_dur=model.p_dur,
     ...                                    step_dur=50 * ms)
     >>> x = np.linspace(-6, -2, 41)
-    >>> stim = encoder.encode(np.column_stack([x, np.full_like(x, -2)]))
+    >>> trace = np.column_stack([x, np.full_like(x, -2)])
+    >>> encoder.electrode_sequence(trace)
+    ['41', '37', '38']
+    >>> stim = encoder.encode(trace)
 
     """
     __slots__ = ('model', 'amp', 'amp_unit', 'freq', 'phase_dur', 'step_dur',
                  'interphase_dur', 'cathodic_first', 'clock', 'region')
+
+    #: Largest tissue -> dva -> tissue error (um) of a selectable electrode.
+    #: Valid Polimeni V1 locations round-trip within ~0.01 um (float32);
+    #: off-map electrodes miss by millimeters.
+    _ROUND_TRIP_TOL = 1.0
 
     def __init__(self, model, *, amp=100 * uA, freq=300 * Hz,
                  phase_dur=0.17 * ms, step_dur=50 * ms, interphase_dur=0 * ms,
@@ -1419,29 +1434,48 @@ class TraceEncoder(Encoder):
             raise ValueError(f"{type(model).__name__} has no "
                              f"'visual_field_map'.")
 
-    def _mapping(self):
-        """Return the dva -> tissue transform for ``region``"""
+    def _transforms(self):
+        """Return the region name and its (dva -> tissue, tissue -> dva)"""
         vfmap = self.model.visual_field_map
+        name = type(vfmap).__name__
         try:
-            mappings = vfmap.from_dva()
+            forward = vfmap.from_dva()
         except NotImplementedError:
             raise NotImplementedError(
-                f"{type(vfmap).__name__} does not map dva onto tissue.") \
-                from None
-        if self.region is None:
-            if len(mappings) != 1:
-                raise ValueError(
-                    f"{type(vfmap).__name__} maps onto regions "
-                    f"{list(mappings)}. Pass 'region' to select one.")
-            return next(iter(mappings.values()))
-        if self.region not in mappings:
-            raise ValueError(
-                f"Region {self.region!r} is not available in "
-                f"{type(vfmap).__name__}, which maps onto {list(mappings)}.")
-        return mappings[self.region]
+                f"{name} does not map dva onto tissue.") from None
+        region = self.region
+        if region is None:
+            if len(forward) != 1:
+                raise ValueError(f"{name} maps onto regions {list(forward)}. "
+                                 f"Pass 'region' to select one.")
+            region = next(iter(forward))
+        elif region not in forward:
+            raise ValueError(f"Region {region!r} is not available in {name}, "
+                             f"which maps onto {list(forward)}.")
+        try:
+            inverse = vfmap.to_dva()[region]
+        except (NotImplementedError, KeyError):
+            raise NotImplementedError(
+                f"TraceEncoder requires an invertible map, but {name} does "
+                f"not map region {region!r} back to dva.") from None
+        return region, forward[region], inverse
 
-    def _target_tissue(self, source):
-        """Return trace samples as (N, ndim) tissue coordinates (space_unit)"""
+    @staticmethod
+    def _pointwise(transform, coords, n_out):
+        """Apply a map transform one point at a time; returns (N, n_out)
+
+        Some maps are batch-dependent (Polimeni2006Map shifts x=0 samples
+        toward the batch mean), so each point is mapped on its own.
+        """
+        out = np.empty((len(coords), n_out))
+        for i, point in enumerate(coords):
+            mapped = transform(*[np.array([c]) for c in point])
+            out[i] = [np.asarray(c, dtype=np.float64).ravel()[0]
+                      for c in mapped[:n_out]]
+        return out
+
+    def _target_tissue(self, source, region, forward):
+        """Return trace samples as (N, ndim) tissue coordinates"""
         if isinstance(source, Stimulus):
             raise TypeError("TraceEncoder encodes an (N, 2) trajectory in "
                             "dva, not a Stimulus.")
@@ -1452,37 +1486,81 @@ class TraceEncoder(Encoder):
         _finite('source', xy)
         vfmap = self.model.visual_field_map
         try:
-            tissue = self._mapping()(xy[:, 0], xy[:, 1])
+            tissue = self._pointwise(forward, xy, vfmap.ndim)
         except NotImplementedError:
             raise NotImplementedError(
                 f"{type(vfmap).__name__} does not map dva onto region "
-                f"{self.region!r}.") from None
-        tissue = np.column_stack([np.asarray(c, dtype=np.float64).ravel()
-                                  for c in tissue[:vfmap.ndim]])
+                f"{region!r}.") from None
         lost = np.flatnonzero(~np.all(np.isfinite(tissue), axis=1))
         if lost.size:
             raise ValueError(
                 f"{type(vfmap).__name__} does not map trajectory sample(s) "
                 f"{lost[:5].tolist()} (e.g., {xy[lost[0]].tolist()} dva) onto "
                 f"tissue.")
-        return Quantity(tissue, vfmap.tissue_unit).to_value(
-            self.model.space_unit)
+        return tissue
 
-    def _sequence(self, source):
-        """Return activated electrode names and the index of each trace step"""
+    def _candidates(self, region, forward, inverse):
+        """Return names and tissue coordinates of selectable electrodes
+
+        Selectable: activated, and mapped back onto its own placed location
+        by tissue -> dva -> tissue (within ``_ROUND_TRIP_TOL``).
+        """
+        vfmap = self.model.visual_field_map
         array = self.implant.electrode_array
         names = [n for n, e in array.electrodes.items() if e.activated]
         if not names:
             raise ValueError(f"{type(self.implant).__name__} has no activated "
                              f"electrodes.")
-        target = self._target_tissue(source)
-        # Placed coordinates, in the map's tissue dimensions:
         xyz = np.column_stack(self.model._electrode_coords(
-            array, None, electrodes=names)).astype(np.float64)
-        _, nearest = cKDTree(xyz[:, :target.shape[1]]).query(target)
+            array, None, electrodes=names))[:, :vfmap.ndim]
+        xyz = Quantity(xyz.astype(np.float64), self.model.space_unit
+                       ).to_value(vfmap.tissue_unit)
+        try:
+            back = self._pointwise(
+                forward, self._pointwise(inverse, xyz, 2), vfmap.ndim)
+        except NotImplementedError:
+            raise NotImplementedError(
+                f"TraceEncoder requires an invertible map, but "
+                f"{type(vfmap).__name__} does not map region {region!r} "
+                f"both ways.") from None
+        tol = Quantity(self._ROUND_TRIP_TOL, um).to_value(vfmap.tissue_unit)
+        with np.errstate(invalid='ignore'):
+            ok = np.linalg.norm(back - xyz, axis=1) <= tol
+        if not np.any(ok):
+            raise ValueError(
+                f"None of the {len(names)} activated electrodes of "
+                f"{type(self.implant).__name__} lies in region {region!r} of "
+                f"{type(vfmap).__name__} at this implant placement.")
+        return [n for n, keep in zip(names, ok) if keep], xyz[ok]
+
+    def _sequence(self, source):
+        """Return candidate electrode names and the index of each trace step"""
+        self._check_model()
+        region, forward, inverse = self._transforms()
+        names, xyz = self._candidates(region, forward, inverse)
+        target = self._target_tissue(source, region, forward)
+        _, nearest = cKDTree(xyz).query(target)
         # Collapse consecutive duplicates only; later revisits are kept:
         keep = np.r_[True, nearest[1:] != nearest[:-1]]
         return names, nearest[keep]
+
+    def electrode_sequence(self, source):
+        """Return the electrodes a trajectory stimulates, in order
+
+        Parameters
+        ----------
+        source : (N, 2) array_like or Quantity
+            Ordered ``(x, y)`` samples in dva. Bare numbers are dva.
+
+        Returns
+        -------
+        names : list
+            One electrode name per ``step_dur`` step, with consecutive
+            duplicates collapsed.
+
+        """
+        names, steps = self._sequence(source)
+        return [names[i] for i in steps]
 
     def encode(self, source):
         """Encode a visual-field trajectory as sequential pulse trains
@@ -1500,7 +1578,6 @@ class TraceEncoder(Encoder):
             the visited electrodes in electrode-array order.
 
         """
-        self._check_model()
         names, steps = self._sequence(source)
         rows, which = np.unique(steps, return_inverse=True)
         frames = np.zeros((rows.size, steps.size), dtype=np.float32)
