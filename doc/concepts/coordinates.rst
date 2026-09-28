@@ -242,7 +242,7 @@ plot them with :py:meth:`~pulse2percept.topography.Grid2D.plot3d`.
     nmap = p2p.topography.cortex.NeuropythyMap(subject='fsaverage',
                                                regions=['v1'])
     model = p2p.models.cortex.ScoreboardModel(
-        implant=p2p.implants.cortex.Cortivis(),
+        implant=p2p.implants.cortex.NeuroPortArray(),
         visual_field_map=nmap, regions=['v1'])
 
 Subject-specific phosphene locations

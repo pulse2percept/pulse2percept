@@ -1689,7 +1689,7 @@ class TraceEncoder(Encoder):
         source : (N, 2) array_like, Quantity, or ImageStimulus
             Ordered ``(x, y)`` samples in dva (bare numbers are dva), or a
             grayscale image of a single stroke.
-        extent : (left, right, bottom, top) Quantity, optional
+        extent : ``(left, right, bottom, top)`` Quantity, optional
             Outer edges of the image in dva, as in
             :py:attr:`Scene.extent <pulse2percept.vision.Scene.extent>`.
             Required for an image; not accepted for an ``(N, 2)`` trajectory.

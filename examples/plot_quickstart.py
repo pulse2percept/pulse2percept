@@ -24,39 +24,42 @@ threshold, ``xTh``), frequency (``Hz``), and pulse duration (``ms``):
 # sphinx_gallery_thumbnail_number = 1
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 import pulse2percept as p2p
 from pulse2percept.units import Hz, um, mm, ms, uA, xTh, dva
 
-retinal_implant = p2p.implants.retina.ArgusII()
-retinal_model = p2p.models.retina.BiphasicAxonMapModel(
-    retinal_implant,
-    rho=300 * um,  # microns
-    lam=500 * um,  # microns
+argus = p2p.implants.retina.ArgusII()
+axon_map = p2p.models.retina.BiphasicAxonMapModel(
+    argus,
+    rho=200 * um,  # microns
+    lam=800 * um,  # microns
 )
-
 stim = {
-    'A5': p2p.stimuli.BiphasicPulseTrain(
+    'A3': p2p.stimuli.BiphasicPulseTrain(
         freq=20 * Hz,         # Hertz (pulses/s)
         amp=2 * xTh,          # multiples of threshold
         phase_dur=0.45 * ms,  # milliseconds
     )
 }
 
-percept = retinal_model.predict_percept(stim)
-percept.plot()
-plt.title('Argus II: one stimulated electrode')
-plt.show()
+fig, axes = plt.subplots(ncols=2, figsize=(12, 5))
+percept = axon_map.predict_percept(stim)
+percept.plot(ax=axes[1], rings=True)
+axon_map.plot(show_implant=True, ax=axes[0])
+fig.tight_layout()
 
 ###############################################################################
 # The biphasic axon map model [Granley2021]_ is based on human behavioral data
 # collected across multiple retinal prosthesis studies. Its two spatial
 # parameters, `rho` and `lam`, control phosphene spread perpendicular and
 # parallel to the retinal nerve fiber bundles, respectively.
-# These parameters vary across patients, so the values above are illustrative
+# These parameters vary across patients, so the values below are illustrative
 # rather than universal.
-#
-#
+
+
+
+###############################################################################
 # An image through a photovoltaic implant
 # ---------------------------------------
 #
@@ -69,16 +72,17 @@ plt.show()
 # :py:class:`~pulse2percept.models.retina.Ho2018Model`, which models the
 # transient retinal network response reported by [Ho2018]_.
 
-prima = p2p.implants.retina.PRIMAPivotal()
+prima = p2p.implants.retina.Huang2021Array(30)
 prima_model = p2p.models.retina.Ho2018Model(
     prima,
     xrange=(-6 * dva, 6 * dva),  # degrees of visual angle
     yrange=(-6 * dva, 6 * dva),
-    step=0.1 * dva,
+    step=0.05 * dva,
 )
 
 image = p2p.stimuli.samples.ucsb_surf(resize=(180, 320))
 percept = prima_model.predict_percept(image, t_percept=50 * ms)
+percept.plot()
 
 ###############################################################################
 # The model is based on degenerated rat retina and should not be interpreted
@@ -106,10 +110,11 @@ scene = p2p.vision.Scene(
     aperture='round',
 )
 
-gaze = p2p.vision.Gaze(
-    [(0, 0), (-15.5, -6), (12, -6)] * dva, 
-    time=[0, 635, 1370] * ms
-)
+gaze = p2p.vision.Gaze([
+    (0, 0, 0),
+    (-29 * dva, -7 * dva, 605 * ms),
+    (22 * dva, -10 * dva, 1270 * ms)
+])
 percept = prima_model.predict_percept(scene, gaze=gaze)
 scene.play(
     percept=percept,
@@ -130,36 +135,39 @@ scene.play(
 # Here we borrow that stimulation strategy, but visualize the resulting
 # spatiotemporal percept with the independently developed
 # :py:class:`~pulse2percept.models.cortex.DynaphosModel`
-# [vanderGrinten2023]_. An Orion array is mapped from cortex into the visual
-# field, and a sequence of electrodes traces a letter over time:
-# NeuroPort array on V1 and stimulate every electrode with the same pulse train.
-#
-# TODO: composed view, orion lighting up on the left, using ``TraceEncoder``
-# to draw a Z on the right.
-
-polimeni_map = p2p.topography.cortex.Polimeni2006Map(regions=['v1'])
+# [vanderGrinten2023]_. An Orion array on right V1 covers part of the left
+# visual field. :py:class:`~pulse2percept.stimuli.TraceEncoder` maps a
+# trajectory in dva onto the nearest electrodes and stimulates them one at a
+# time, ``step_dur`` each:
 
 orion = p2p.implants.cortex.Orion()
 dynaphos = p2p.models.cortex.DynaphosModel(
     orion,
-    visual_field_map = polimeni_map,
+    visual_field_map=p2p.topography.cortex.Polimeni2006Map(regions=['v1']),
     implant_position=(20, -5) * mm,
-    xrange=(-3 * dva, -1 * dva),
-    yrange=(0, 2 * dva),
-    step=0.01 * dva,
+    xrange=(-6 * dva, 0 * dva),
+    yrange=(-1 * dva, 4.5 * dva),
+    step=0.05 * dva,
 )
 
-train = p2p.stimuli.BiphasicPulseTrain(
-    freq=20 * Hz,
-    amp=100 * uA,
-    phase_dur=0.45 * ms,
-)
-stim = {electrode: train for electrode in cortical_implant.electrode_names}
+# The letter Z: top bar, diagonal, bottom bar, 30 samples per stroke (dva)
+corners = [(-4.5, 3.4), (-1.3, 3.4), (-3.8, 0), (-1.2, 0)]
+z = np.vstack([np.linspace(start, end, 30)
+               for start, end in zip(corners[:-1], corners[1:])]) * dva
 
-percept = cortical_model.predict_percept(stim)
-percept.plot()
-plt.title('NeuroPort Array: all 96 electrodes')
-plt.show()
+encoder = p2p.stimuli.TraceEncoder(
+    dynaphos,
+    amp=1000 * uA,             # phosphene diameter grows with sqrt(amp)
+    freq=dynaphos.freq,        # Dynaphos simulates its own pulse timing
+    phase_dur=dynaphos.p_dur,
+    step_dur=100 * ms,         # per electrode
+)
+stim = encoder.encode(z)
+percept = dynaphos.predict_percept(stim)
+
+fig, axes = plt.subplots(ncols=2, figsize=(12, 4))
+dynaphos.plot(show_implant=True, ax=axes[0])
+percept.play(rings=True, ax=axes[1])
 
 ###############################################################################
 # This is therefore an illustrative simulation, not a reproduction of the

@@ -97,12 +97,12 @@ their column names in the left eye (see each class's API documentation).
      - 1600
      - Alpha AMS microphotodiode array
      - ``ScoreboardModel``
-   * - :py:class:`~pulse2percept.implants.retina.BVT24`
+   * - :py:class:`~pulse2percept.implants.retina.Suprachoroidal24`
      - suprachoroidal
      - 35
      - First-generation suprachoroidal array
      - ``ScoreboardModel``
-   * - :py:class:`~pulse2percept.implants.retina.BVT44`
+   * - :py:class:`~pulse2percept.implants.retina.Suprachoroidal44`
      - suprachoroidal
      - 46
      - Second-generation suprachoroidal array
@@ -114,7 +114,7 @@ their column names in the left eye (see each class's API documentation).
      - ``Ho2018Model``, ``ScoreboardModel``
 
 These classes are built from published device descriptions; they are not
-manufacturer-validated simulators. ``BVT24`` and ``BVT44`` are pulse2percept
+manufacturer-validated simulators. ``Suprachoroidal24`` and ``Suprachoroidal44`` are pulse2percept
 identifiers, not product names.
 
 The arrays differ widely in physical scale (device-local microns):
@@ -127,7 +127,7 @@ The arrays differ widely in physical scale (device-local microns):
     devices = [
         ('ArgusII()', p2p.implants.retina.ArgusII()),
         ('AlphaAMS()', p2p.implants.retina.AlphaAMS()),
-        ('BVT44()', p2p.implants.retina.BVT44()),
+        ('Suprachoroidal44()', p2p.implants.retina.Suprachoroidal44()),
         ('IMIE()', p2p.implants.retina.IMIE()),
         ('PRIMAPivotal()', p2p.implants.retina.PRIMAPivotal()),
     ]
@@ -307,7 +307,7 @@ models, :py:class:`~pulse2percept.models.cortex.ScoreboardModel` and
 
     devices = [
         ('Orion()', p2p.implants.cortex.Orion()),
-        ('Cortivis()', p2p.implants.cortex.Cortivis()),
+        ('NeuroPortArray()', p2p.implants.cortex.NeuroPortArray()),
         ('ICVP()', p2p.implants.cortex.ICVP()),
     ]
 

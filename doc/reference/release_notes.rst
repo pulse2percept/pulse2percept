@@ -325,7 +325,7 @@ v0.9.0 Cortex (2025-02-17)
 
 Highlights:
 
-*  Cortical implants: :py:class:`~pulse2percept.implants.cortex.Cortivis`
+*  Cortical implants: :py:class:`~pulse2percept.implants.cortex.NeuroPortArray`
    [Fernandez2017]_ (:pull:`525`),
    :py:class:`~pulse2percept.implants.cortex.ICVP` [Troyk2003]_ (:pull:`542`),
    :py:class:`~pulse2percept.implants.cortex.Neuralink` [Musk2019]_
@@ -350,7 +350,7 @@ v0.8.0 Retina (2022-05-05)
 
 Highlights:
 
-*  New implants: :py:class:`~pulse2percept.implants.retina.BVT44` [Petoe2021]_
+*  New implants: :py:class:`~pulse2percept.implants.retina.Suprachoroidal44` [Petoe2021]_
    (:pull:`465`)
 *  New models: :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
    [Granley2021]_ (:pull:`398`) and
@@ -408,7 +408,7 @@ Highlights:
 
 *   New API (:pull:`96`, :pull:`174`, :pull:`178`)
 *   New implants: ``BVA24``, since renamed
-    :py:class:`~pulse2percept.implants.retina.BVT24` (:pull:`161`)
+    :py:class:`~pulse2percept.implants.retina.Suprachoroidal24` (:pull:`161`)
 *   New models: :py:class:`~pulse2percept.models.retina.ScoreboardModel` (:pull:`96`),
     :py:class:`~pulse2percept.models.retina.AxonMapModel` (:pull:`96`),
     :py:class:`~pulse2percept.models.retina.Nanduri2012Model` (:pull:`168`),
