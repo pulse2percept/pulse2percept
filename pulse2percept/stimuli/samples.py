@@ -14,6 +14,9 @@ Loaders return ordinary :py:class:`~pulse2percept.stimuli.ImageStimulus` or
 """
 from os.path import dirname, join
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 from .base import ImageStimulus, VideoStimulus
 from ..utils.deprecation import deprecated
 
@@ -34,6 +37,21 @@ __all__ = [
 def _sample_path(filename):
     """Return the absolute path of a bundled sample asset"""
     return join(dirname(__file__), 'data', 'samples', filename)
+
+
+def _plot_frames(video, n_frames=5):
+    """Plot evenly spaced frames of a video side by side (used by the docs)"""
+    height, width = video.vid_shape[:2]
+    fig, axes = plt.subplots(1, n_frames,
+                             figsize=(2.4 * n_frames, 2.4 * height / width))
+    idx = np.linspace(0, video.data.shape[1] - 1, n_frames).round().astype(int)
+    cmap = 'gray' if len(video.vid_shape) == 3 else None
+    for ax, t in zip(axes, idx):
+        ax.imshow(video.data[:, t].reshape(video.vid_shape[:-1]), cmap=cmap,
+                  vmin=0)
+        ax.set_title(f'{video.time[t]:.0f} ms')
+        ax.axis('off')
+    fig.tight_layout()
 
 
 #: The clip is CC BY 3.0, not BSD like the rest of pulse2percept, so its
@@ -57,6 +75,11 @@ def big_buck_bunny(resize=None, electrodes=None, metadata=None,
     .. note::
         At full resolution the stimulus contains 689,280 electrodes. Use
         ``resize`` and/or ``as_gray`` before passing it to most models.
+
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples._plot_frames(samples.big_buck_bunny(resize=(180, 320)))
 
     .. versionadded:: 0.11.0
 
@@ -120,6 +143,11 @@ def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     The photograph is distributed under the BSD 3-Clause license; attribution
     is included in ``metadata``.
+
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples.bvl_cake().plot().axis('off')
 
     .. versionadded:: 0.11.0
 
@@ -185,6 +213,11 @@ def cajal_retina(resize=None, electrodes=None, metadata=None, as_gray=False):
     Wikimedia Commons designates the drawing public domain. Attribution is
     included in ``metadata``; see ``data/samples/README.rst`` for provenance.
 
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples.cajal_retina().plot().axis('off')
+
     .. versionadded:: 0.11.0
 
     Parameters
@@ -236,6 +269,11 @@ def logo_bvl(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Load the 576x720x4 Bionic Vision Lab (BVL) logo.
 
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples.logo_bvl().plot().axis('off')
+
     .. versionadded:: 0.11.0
 
     Parameters
@@ -276,6 +314,11 @@ def logo_ucsb(resize=None, electrodes=None, metadata=None):
 
     Load a 324x727 white-on-black logo of the University of California, Santa
     Barbara.
+
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples.logo_ucsb().plot().axis('off')
 
     .. versionadded:: 0.11.0
 
@@ -326,6 +369,11 @@ def ucsb_bike(resize=None, electrodes=None, metadata=None, as_gray=False):
     The photograph is made available by its copyright holder under the same
     BSD 3-Clause license as pulse2percept; ``metadata`` carries a short form
     of that.
+
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples.ucsb_bike().plot().axis('off')
 
     .. versionadded:: 0.11.0
 
@@ -405,6 +453,11 @@ def ucsb_flyover(resize=None, electrodes=None, metadata=None, as_gray=False):
        The source is variable-frame-rate, so the reader resamples it to a
        constant rate: about 10 of the 53 frames repeat the frame before them.
 
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples._plot_frames(samples.ucsb_flyover(resize=(173, 320)))
+
     .. versionadded:: 0.11.0
 
     Parameters
@@ -475,6 +528,11 @@ def ucsb_pedestrians(resize=None, electrodes=None, metadata=None,
        The source is variable-frame-rate, so the reader resamples it to a
        constant rate: about 9 of the 45 frames repeat the frame before them.
 
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples._plot_frames(samples.ucsb_pedestrians(resize=(173, 320)))
+
     .. versionadded:: 0.11.0
 
     Parameters
@@ -535,6 +593,11 @@ def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
     government work it is in the public domain in the United States, and is
     therefore not covered by pulse2percept's BSD license; ``metadata`` carries
     the requested attribution.
+
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples.ucsb_surf().plot().axis('off')
 
     .. versionadded:: 0.11.0
 
@@ -602,6 +665,11 @@ def zebrafish_retina(resize=None, electrodes=None, metadata=None,
     The micrograph is by Dr Kara Cerveny and Dr Steve Wilson, held by the
     Wellcome Collection, and licensed CC BY 4.0 rather than under
     pulse2percept's BSD license; ``metadata`` carries the attribution.
+
+    .. plot::
+
+        from pulse2percept.stimuli import samples
+        samples.zebrafish_retina().plot().axis('off')
 
     .. versionadded:: 0.11.0
 

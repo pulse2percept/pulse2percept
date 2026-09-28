@@ -80,9 +80,9 @@ prima_model = p2p.models.retina.Ho2018Model(
     step=0.05 * dva,
 )
 
-image = p2p.stimuli.samples.ucsb_surf(resize=(180, 320))
+image = p2p.stimuli.samples.cajal_retina()
 percept = prima_model.predict_percept(image, t_percept=50 * ms)
-percept.plot()
+percept.plot();
 
 ###############################################################################
 # The model is based on degenerated rat retina and should not be interpreted
@@ -165,9 +165,9 @@ encoder = p2p.stimuli.TraceEncoder(
 stim = encoder.encode(z)
 percept = dynaphos.predict_percept(stim)
 
-fig, axes = plt.subplots(ncols=2, figsize=(12, 4))
+fig, axes = plt.subplots(ncols=2, figsize=(12, 5))
 dynaphos.plot(show_implant=True, ax=axes[0])
-percept.play(rings=True, ax=axes[1])
+percept.play(rings=True, ax=axes[1]);
 
 ###############################################################################
 # This is therefore an illustrative simulation, not a reproduction of the
