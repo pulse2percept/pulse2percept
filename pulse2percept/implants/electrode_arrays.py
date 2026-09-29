@@ -232,6 +232,8 @@ class ElectrodeArray(PrettyPrint):
             ax = plt.gca()
         ax.set_aspect('equal')
         patches = []
+        # Index of each activated electrode's stimulus-colored patch:
+        stim_patches = {}
         cm = None
         norm = None
         if color_stim is not None:
@@ -260,6 +262,8 @@ class ElectrodeArray(PrettyPrint):
                 # Regular use case: single object
                 patches.append(electrode.plot_patch((electrode.x, electrode.y),
                                                     **kwargs))
+            if electrode.activated:
+                stim_patches[name] = len(patches) - 1
             if annotate:
                 ax.text(electrode.x, electrode.y, name, ha='center',
                         va='center',  color='black', size='large',
@@ -268,6 +272,8 @@ class ElectrodeArray(PrettyPrint):
                         zorder=ZORDER['annotate'])
         patch_collection = PatchCollection(patches, match_original=True,
                                           zorder=ZORDER['foreground'], cmap=cm, norm=norm)
+        # Lets plotting helpers recolor electrodes after placement:
+        patch_collection._stim_patches = stim_patches
         ax.add_collection(patch_collection)
         ax._sci(patch_collection) # enables plt.colormap()
         if autoscale:

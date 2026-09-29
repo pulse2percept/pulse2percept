@@ -1,5 +1,7 @@
 """:py:func:`~pulse2percept.plotting.plot_stimulus_percept`,
-   :py:func:`~pulse2percept.plotting.play_stimulus_percept`
+   :py:func:`~pulse2percept.plotting.play_stimulus_percept`,
+   :py:func:`~pulse2percept.plotting.plot_implant_percept`,
+   :py:func:`~pulse2percept.plotting.play_implant_percept`
 
 Views that span more than one object: what went into the model next to what
 came out of it.
@@ -7,18 +9,37 @@ came out of it.
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.backends.backend_agg import RendererAgg
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
+from matplotlib.transforms import Bbox
 
-from ..percepts.base import _reject_rgb, _resolve_clim
-from ..stimuli import ImageStimulus, VideoStimulus
+from ..percepts.base import Percept, _pixel_extent, _reject_rgb, _resolve_clim
+from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
+from ..stimuli.base import _has_time_axis
 from ..units import ms
 from ..utils import HTMLAnimation
+from ..utils import _visual_field as vf
 from ..utils.animation import _frame_timeline
+from ..utils.constants import ZORDER
 
-__all__ = ['play_stimulus_percept', 'plot_stimulus_percept']
+__all__ = ['play_implant_percept', 'play_stimulus_percept',
+           'plot_implant_percept', 'plot_stimulus_percept']
 
 # Size of a two-panel figure (in inches), wide enough for two square panels
 # side by side:
 FIGSIZE = (10, 4)
+
+# Electrode fill, as in ``Implant.plot(stim_cmap=True)``:
+STIM_CMAP = 'YlOrRd'
+STIM_ALPHA = 0.8
+# Electrode labels sit above the electrode (offset in points), so that they
+# do not cover its fill:
+LABEL_OFFSET = (0, 6)
+LABEL_KWARGS = {'ha': 'center', 'va': 'bottom', 'color': 'black',
+                'zorder': ZORDER['annotate'],
+                'bbox': {'boxstyle': 'square,pad=0.1', 'ec': 'none',
+                         'fc': (1, 1, 1, 0.7)}}
 
 
 def _panel_axes(axes, figsize, layout=None):
@@ -256,3 +277,422 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
                          frame_data=[src, percept.data],
                          frame_index=[src_idx, idx], labels=labels,
                          title=clock, fmt=fmt)
+
+
+def _electrode_stim(percept):
+    """The electrode-level stimulus recorded in ``percept.metadata['stim']``
+
+    A composite model stores its intermediate percept there, which in turn
+    stores the stimulus.
+    """
+    stim = percept
+    while isinstance(stim, Percept):
+        stim = (stim.metadata or {}).get('stim')
+    if not isinstance(stim, Stimulus):
+        raise ValueError("The percept does not record the stimulus that "
+                         "produced it in metadata['stim']. Pass a percept "
+                         "returned by the model's predict_percept().")
+    return stim
+
+
+def _electrode_drive(stim, times=None):
+    """Peak absolute drive, (n_electrodes, n_times), at display ``times`` (ms)
+
+    A frame-level view (``stim._spatial_view()``) is held between its frames
+    and is off once the stimulus ends. A plain waveform (linear between its
+    samples) is reduced to its peak over ``[times[k], times[k + 1])``, the
+    last interval running to the end of the stimulus. ``times=None`` reduces
+    the whole stimulus to one column.
+    """
+    view = stim._spatial_view()
+    data = np.asarray(view.data, dtype=np.float64).reshape(
+        len(view.electrodes), -1)
+    if times is None:
+        return np.abs(data).max(axis=1, keepdims=True)
+    times = np.asarray(times, dtype=np.float64).ravel()
+    if view is stim and view.time is not None:
+        # Value at the start of each interval, then every sample inside it:
+        drive = np.abs([np.interp(times, view.time, row, left=0, right=0)
+                        for row in data]).T
+        k = np.searchsorted(times, view.time, side='right') - 1
+        inside = k >= 0
+        np.maximum.at(drive, k[inside], np.abs(data[:, inside]).T)
+        return drive.T
+    if view.time is None:
+        drive = np.repeat(np.abs(data[:, :1]), times.size, axis=1)
+    else:
+        idx = np.searchsorted(view.time, times, side='right') - 1
+        drive = np.abs(data[:, np.clip(idx, 0, view.time.size - 1)])
+    if _has_time_axis(stim):
+        drive[:, times >= stim.duration] = 0
+    return drive
+
+
+def _drive_norm(drive):
+    """One color scale for every frame, from 0 to the peak drive"""
+    vmax = float(np.max(drive)) if np.size(drive) else 0.0
+    return Normalize(vmin=0, vmax=vmax if vmax > 0 else 1.0)
+
+
+def _drive_label(stim):
+    """Colorbar label for the electrode drive"""
+    unit = stim._spatial_view().unit
+    if unit is None or unit.dimension.is_dimensionless:
+        return 'Electrode drive (a.u.)'
+    return f'Amplitude ({unit})'
+
+
+def _implant_panel(model, ax):
+    """Plot ``model`` with its placed implant on ``ax``
+
+    Returns ``(collection, facecolors, edgecolors)`` for every electrode
+    collection the implant drew, colors as drawn.
+    """
+    before = set(map(id, ax.collections))
+    model.plot(ax=ax, show_implant=True)
+    panel = []
+    for coll in ax.collections:
+        if id(coll) in before or not hasattr(coll, '_stim_patches'):
+            continue
+        n = len(coll.get_paths())
+        panel.append((coll,
+                      np.broadcast_to(coll.get_facecolor(), (n, 4)).copy(),
+                      np.broadcast_to(coll.get_edgecolor(), (n, 4)).copy()))
+    return panel
+
+
+def _paint(panel, electrodes, drive, cmap, norm, only_active=False):
+    """Fill each electrode's stimulus patch by its ``drive``
+
+    ``only_active`` makes every other patch transparent.
+    """
+    for coll, base_fc, base_ec in panel:
+        fc, ec = base_fc.copy(), base_ec.copy()
+        if only_active:
+            fc[:], ec[:] = 0, 0
+        for name, amp in zip(electrodes, drive):
+            k = coll._stim_patches.get(name)
+            if k is not None and amp > 0:
+                fc[k] = cmap(norm(amp), alpha=STIM_ALPHA)
+                ec[k] = base_ec[k]
+        coll.set_facecolor(fc)
+        coll.set_edgecolor(ec)
+
+
+def _labels(model, panel, electrodes):
+    """One hidden label per electrode, placed with its collection"""
+    labels = {}
+    for coll, _, _ in panel:
+        for name in electrodes:
+            if name in coll._stim_patches and name not in labels:
+                e = model.implant.electrode_array[name]
+                labels[name] = coll.axes.annotate(
+                    str(name), (e.x, e.y), xycoords=coll.get_transform(),
+                    xytext=LABEL_OFFSET, textcoords='offset points',
+                    visible=False, **LABEL_KWARGS)
+    return labels
+
+
+def _overlay(ax, panel, labels, electrodes, states, cmap, norm):
+    """RGBA renders of the stimulated electrodes, one per row of ``states``
+
+    Only the electrode collections and labels are drawn, so the rest of the
+    panel stays vector graphics underneath. Returns ``(frames, extent)``:
+    (Y, X, 4, n_states) in [0, 1], cropped to the implant, and its data
+    extent.
+    """
+    fig = ax.figure
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    colls = [coll for coll, _, _ in panel]
+    for text in labels.values():
+        text.set_visible(True)
+    box = Bbox.intersection(
+        Bbox.union([a.get_window_extent(renderer)
+                    for a in colls + list(labels.values())]), ax.bbox)
+    if box is None:
+        box = ax.bbox
+    width, height = int(round(fig.bbox.width)), int(round(fig.bbox.height))
+    left = max(int(np.floor(box.x0)), 0)
+    right = min(int(np.ceil(box.x1)), width)
+    top = max(int(np.floor(height - box.y1)), 0)
+    bottom = min(int(np.ceil(height - box.y0)), height)
+    where = {name: i for i, name in enumerate(electrodes)}
+    frames = np.empty((bottom - top, right - left, 4, len(states)),
+                      dtype=np.float32)
+    for s, state in enumerate(states):
+        _paint(panel, electrodes, state, cmap, norm, only_active=True)
+        canvas = RendererAgg(width, height, fig.dpi)
+        for coll in colls:
+            coll.draw(canvas)
+        for name, text in labels.items():
+            text.set_visible(state[where[name]] > 0)
+            text.draw(canvas)
+        rgba = np.asarray(canvas.buffer_rgba())
+        frames[..., s] = rgba[top:bottom, left:right] / 255.0
+    # The static background shows the implant as drawn, without labels:
+    for coll, fc, ec in panel:
+        coll.set_facecolor(fc)
+        coll.set_edgecolor(ec)
+    for text in labels.values():
+        text.remove()
+    (x0, y0), (x1, y1) = ax.transData.inverted().transform(
+        [(left, height - bottom), (right, height - top)])
+    return frames, (x0, x1, y0, y1)
+
+
+def _grid_kwargs(rings=False, meridians=False, grid_color=vf.GRID_COLOR):
+    """The visual-field grid options of ``Percept.play``"""
+    return rings, meridians, grid_color
+
+
+def _percept_panel(percept, ax, vmin, vmax, colorbar):
+    """The image an animated percept is drawn into, as in ``Percept.play``"""
+    spatial = percept.xdva is not None and percept.ydva is not None
+    extent = _pixel_extent(percept.xdva, percept.ydva) if spatial else None
+    blank = np.zeros_like(percept.data[..., 0])
+    if percept.is_rgb:
+        if vmin is not None or vmax is not None:
+            raise _reject_rgb('vmin/vmax', ' Its RGB values are shown as '
+                                           'they are.')
+        im = ax.imshow(blank, origin='upper', extent=extent)
+    else:
+        vmin, vmax = _resolve_clim(percept.data, vmin, vmax, auto_vmin=0)
+        im = ax.imshow(blank, cmap='gray', vmin=vmin, vmax=vmax,
+                       origin='upper', extent=extent)
+        if colorbar:
+            cbar = ax.figure.colorbar(im, ax=ax)
+            cbar.ax.set_ylabel('Phosphene brightness (a.u.)', rotation=-90,
+                               va='center')
+    if spatial:
+        percept._label_axes(ax)
+    return im
+
+
+def plot_implant_percept(model, percept, axes=None, figsize=None,
+                         titles=('Implant', 'Percept'), annotate=False,
+                         colorbar=True, percept_kwargs=None):
+    """Plot the stimulated implant next to the percept it produced
+
+    The left panel shows ``model`` with its implant at the model-side
+    placement, each electrode filled by its peak absolute drive. The drive
+    comes from ``percept.metadata['stim']``, the prepared stimulus that entered
+    the model. Encoded stimuli (e.g., from
+    :py:class:`~pulse2percept.stimuli.TraceEncoder`) are shown at their
+    frame-level modulation, not at individual pulse phases.
+
+    A percept with more than one frame has no single time point to show the
+    implant at; use :py:func:`~pulse2percept.plotting.play_implant_percept`.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    model : :py:class:`~pulse2percept.models.BaseModel`
+        The model that predicted ``percept``. Its ``plot(show_implant=True)``
+        draws the left panel.
+    percept : :py:class:`~pulse2percept.percepts.Percept`
+        The percept the model predicted, timeless or a single frame. A
+        timeless percept shows the peak drive over the whole stimulus; a
+        single frame at time t shows the drive at t.
+    axes : list of two matplotlib.axes.Axes, optional
+        Axes to draw into, implant first. If None, a new figure is created.
+    figsize : ``(width, height)``, optional
+        Size of that new figure (in inches). Ignored if ``axes`` is given.
+    titles : (str, str), optional
+        Titles for the two panels.
+    annotate : bool, optional
+        Whether to label the stimulated electrodes.
+    colorbar : bool, optional
+        Whether to show a drive colorbar next to the implant.
+    percept_kwargs : dict, optional
+        Passed on to :py:meth:`~pulse2percept.percepts.Percept.plot`.
+
+    Returns
+    -------
+    axes : np.ndarray of matplotlib.axes.Axes
+        The two Axes that were drawn into.
+
+    Examples
+    --------
+    >>> import matplotlib
+    >>> matplotlib.use('Agg')
+    >>> import pulse2percept as p2p
+    >>> model = p2p.models.retina.ScoreboardModel(
+    ...     p2p.implants.retina.ArgusII(), xrange=(-4, 4), yrange=(-4, 4),
+    ...     step=0.5)
+    >>> percept = model.predict_percept({'A3': 20})
+    >>> axes = p2p.plotting.plot_implant_percept(model, percept)
+    >>> [ax.get_title() for ax in axes]
+    ['Implant', 'Percept']
+
+    """
+    if percept.time is not None and np.size(percept.time) > 1:
+        raise ValueError("A percept with more than one frame has no single "
+                         "time point to show the implant at. Use "
+                         "play_implant_percept() instead.")
+    stim = _electrode_stim(percept)
+    times = None if percept.time is None else percept.times(ms)
+    drive = _electrode_drive(stim, times)[:, 0]
+    electrodes = list(stim.electrodes)
+    cmap, norm = plt.get_cmap(STIM_CMAP), _drive_norm(drive)
+    axes = _panel_axes(axes, figsize, layout='constrained')
+    panel = _implant_panel(model, axes[0])
+    _paint(panel, electrodes, drive, cmap, norm)
+    if annotate:
+        active = [name for name, amp in zip(electrodes, drive) if amp > 0]
+        for text in _labels(model, panel, active).values():
+            text.set_visible(True)
+    if colorbar:
+        cbar = axes[0].figure.colorbar(ScalarMappable(norm, cmap),
+                                       ax=axes[0])
+        cbar.set_label(_drive_label(stim))
+    percept.plot(ax=axes[1], **(percept_kwargs or {}))
+    for ax, title in zip(axes, titles):
+        ax.set_title(title)
+    return axes
+
+
+def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
+                         titles=('Implant', 'Percept'), annotate=False,
+                         repeat=True, annotate_time=True, colorbar=True,
+                         vmin=None, vmax=None, percept_kwargs=None):
+    """Animate the stimulated implant next to the percept it produced
+
+    Both panels run off a single clock, and the percept's time axis is
+    authoritative. Electrode drive comes from ``percept.metadata['stim']`` and
+    is mapped onto each displayed percept time by physical time:
+
+    *  A frame-level modulation (e.g., from
+       :py:class:`~pulse2percept.stimuli.TraceEncoder` or an image encoder)
+       is held between its frames (zero-order hold) and is off once the
+       stimulus ends.
+    *  A plain waveform shows its peak absolute amplitude over each displayed
+       interval, so any pulse inside the interval lights the electrode.
+       Individual pulse phases are not resolved.
+
+    All frames share one color scale, from 0 to the peak drive.
+
+    .. versionadded:: 0.11.0
+
+    Parameters
+    ----------
+    model : :py:class:`~pulse2percept.models.BaseModel`
+        The model that predicted ``percept``. Its ``plot(show_implant=True)``
+        draws the left panel.
+    percept : :py:class:`~pulse2percept.percepts.Percept`
+        The percept the model predicted. Must have a time axis.
+    fps : float, optional
+        Display frame rate in Hz. If None, use the percept's recorded timing.
+        May also be given as a unitful frequency (e.g., ``30 * Hz``).
+    axes : list of two matplotlib.axes.Axes, optional
+        Axes to animate in, implant first. If None, a new figure is created.
+    figsize : ``(width, height)``, optional
+        Size of that new figure (in inches). Ignored if ``axes`` is given.
+    titles : (str, str), optional
+        Titles for the two panels.
+    annotate : bool, optional
+        Whether to label electrodes while they are stimulated.
+    repeat : bool, optional
+        Whether to repeat the animation.
+    annotate_time : bool, optional
+        Whether to show the current time above the two panels.
+    colorbar : bool, optional
+        Whether to show a drive colorbar next to the implant and a brightness
+        colorbar next to the percept. An RGB percept never gets one.
+    vmin, vmax : float, optional
+        Brightness limits for the percept. By default, ``vmin=0`` and ``vmax``
+        is the maximum brightness across the percept.
+    percept_kwargs : dict, optional
+        ``rings``, ``meridians``, and ``grid_color``, as in
+        :py:meth:`~pulse2percept.percepts.Percept.play`.
+
+    Returns
+    -------
+    ani : :py:class:`~pulse2percept.utils.HTMLAnimation`
+        The animation.
+
+    Notes
+    -----
+    The implant layer is rendered once per distinct electrode state, at the
+    figure's resolution.
+
+    """
+    if percept.time is None:
+        raise ValueError("Cannot animate a percept with time=None. Use "
+                         "plot_implant_percept() instead.")
+    rings, meridians, grid_color = _grid_kwargs(**(percept_kwargs or {}))
+    grid = percept._grid_geometry(rings, meridians)
+    stim = _electrode_stim(percept)
+    timeline = _frame_timeline(percept.times(ms), fps=fps)
+    idx = timeline.indices
+    electrodes = list(stim.electrodes)
+    drive = _electrode_drive(stim, timeline.times)
+    states, state_idx = np.unique(drive.T, axis=0, return_inverse=True)
+    # NumPy 2.x returns a 2D inverse for axis-wise unique:
+    state_idx = np.ravel(state_idx)
+    cmap, norm = plt.get_cmap(STIM_CMAP), _drive_norm(drive)
+    axes = _panel_axes(axes, figsize, layout='constrained')
+    fig = axes[0].figure
+    panel = _implant_panel(model, axes[0])
+    if colorbar:
+        cbar = fig.colorbar(ScalarMappable(norm, cmap), ax=axes[0])
+        cbar.set_label(_drive_label(stim))
+    im_percept = _percept_panel(percept, axes[1], vmin, vmax, colorbar)
+    for ax, title in zip(axes, titles):
+        ax.set_title(title)
+    clock = labels = None
+    if annotate_time:
+        labels = [f't = {t:.2f} {percept.time_unit}'
+                  for t in percept.time[idx]]
+        clock = fig.suptitle(labels[0])
+    # Lay out once, then freeze: the player measures the figure with the time
+    # annotation blanked out, and a re-flow would move the panels under it.
+    fig.canvas.draw()
+    fig.set_layout_engine('none')
+    if clock is not None:
+        clock.set_text('')
+    im_grid = None
+    if grid is not None:
+        # A still image layer, as in ``Percept.play``:
+        im_grid = percept._grid_layer(axes[1], grid, grid_color,
+                                      im_percept.get_zorder() + 1)
+    active = []
+    if annotate:
+        active = [name for name, on in zip(electrodes, np.any(drive > 0, 1))
+                  if on]
+    frames, extent = _overlay(axes[0], panel, _labels(model, panel, active),
+                              electrodes, states, cmap, norm)
+    # Keep the limits the model plot chose:
+    xlim, ylim = axes[0].get_xlim(), axes[0].get_ylim()
+    im_implant = axes[0].imshow(frames[..., state_idx[0]], origin='upper',
+                                extent=extent, zorder=ZORDER['annotate'] + 1)
+    axes[0].set_xlim(xlim)
+    axes[0].set_ylim(ylim)
+    axes[0].set_autoscale_on(False)
+
+    def update(i):
+        if clock is not None:
+            clock.set_text(labels[i])
+        im_implant.set_data(frames[..., state_idx[i]])
+        im_percept.set_data(percept.data[..., idx[i]])
+        return im_implant, im_percept
+
+    def data_gen():
+        yield from range(idx.size)
+
+    images = [im_implant, im_percept]
+    frame_data = [frames, percept.data]
+    frame_index = [state_idx, idx]
+    if im_grid is not None:
+        images.append(im_grid)
+        frame_data.append(np.asarray(im_grid.get_array())[..., np.newaxis])
+        frame_index.append(np.zeros_like(idx))
+    plt.rcParams["animation.html"] = 'jshtml'
+    plt.close(fig)
+    # PNG keeps the implant layer transparent around the electrodes:
+    return HTMLAnimation(fig, update, data_gen, repeat=repeat,
+                         intervals=timeline.intervals, save_count=idx.size,
+                         image=images, frame_data=frame_data,
+                         frame_index=frame_index, labels=labels,
+                         title=clock, fmt='png')
