@@ -40,6 +40,11 @@ class Suprachoroidal24(RetinalImplant):
         Column order for electrode numbering is reversed in a left-eye
         implant.
 
+    .. plot::
+
+        from pulse2percept.implants.retina import Suprachoroidal24
+        Suprachoroidal24().plot(annotate=True)
+
     .. versionadded :: 0.6
 
     Parameters
@@ -145,6 +150,11 @@ class Suprachoroidal44(RetinalImplant):
 
         Column order for electrode numbering is reversed in a left-eye
         implant.
+
+    .. plot::
+
+        from pulse2percept.implants.retina import Suprachoroidal44
+        Suprachoroidal44().plot(annotate=True)
 
     .. versionadded :: 0.8
 

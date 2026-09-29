@@ -8,17 +8,17 @@ Core
 ----
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
     Stimulus
     ImageStimulus
     VideoStimulus
 
-Electrical stimuli
+Electrical Stimuli
 ------------------
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
     MonophasicPulse
     BiphasicPulse
@@ -34,7 +34,7 @@ Encoders
 Convert visual stimuli to electrical stimulation.
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
     Encoder
     ImplantEncoder
@@ -51,7 +51,7 @@ Psychophysics
 Generated visual stimuli in degrees of visual angle and physical time.
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
     psychophysics.bar
     psychophysics.grating
@@ -64,7 +64,7 @@ Samples
 Bundled images and videos for examples, documentation, and tests.
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
     samples.big_buck_bunny
     samples.bvl_cake
@@ -83,7 +83,7 @@ Deprecated in v0.11
 These compatibility classes will be removed in v0.12.
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
     BarStimulus
     GratingStimulus
@@ -92,7 +92,7 @@ These compatibility classes will be removed in v0.12.
 
 .. seealso::
 
-    *  :ref:`Basic Concepts > Electrical Stimuli <topics-stimuli>`
+    *  :ref:`Core Concepts > Stimulation <topics-stimulation>`
 
 """
 

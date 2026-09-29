@@ -6,7 +6,7 @@ Frequently Asked Questions
 
 New to pulse2percept? This page gives a quick overview of the main concepts,
 objects, and modeling choices. For complete examples, see the
-:doc:`Example Gallery <../examples/index>`.
+:doc:`model reproductions <../examples/models/index>`.
 
 .. contents:: On this page
    :local:
@@ -185,7 +185,7 @@ For learning the API or reproducing an example, yes.
 For scientific conclusions, model parameters should be treated as scientific
 assumptions, not generic software settings.
 
-For example, the Axon Map model has two particularly important parameters:
+For example, the axon map model [Beyeler2019]_ has two particularly important parameters:
 
 ``rho``
     Controls how quickly sensitivity falls off with distance away from an
@@ -199,14 +199,16 @@ The current software defaults for
 :py:class:`~pulse2percept.models.retina.AxonMapModel` are ``rho=200`` microns and
 ``lam=500`` microns. These values make the model usable out of the box; they
 should not be interpreted as universal values for every implant user.
-In fact, every real prosthesis user has their onw ``rho`` and ``lam`` values
+In fact, every real prosthesis user has their own ``rho`` and ``lam`` values
 that best represent how "streaky" or "blobby" their vision appears
-[Beyeler2019]_.
+[Beyeler2019]_, and appearance changes systematically with 
+stimulus amplitude, frequency, and pulse duration [Granley2021]_
+(see :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`).
 
 Likewise, the :py:class:`~pulse2percept.models.retina.ScoreboardModel` has a ``rho``
-parameter controlling the spatial extent of its electrode-centered blobs. Its
-meaning is related to ``rho`` in the Axon Map model, but the two models make
-different assumptions about how activation spreads through the retina.
+parameter controlling the spatial extent of its electrode-centered blobs,
+which may also change with stimulus parameters
+(see :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`).
 
 If your conclusions depend on phosphene size, elongation, or another
 model-dependent property, fit the relevant parameters to data when possible,
@@ -328,10 +330,6 @@ Most pulse2percept simulations involve four objects, plus an optional encoder:
 :py:class:`~pulse2percept.percepts.Percept`
     The predicted visual percept, represented across visual space and,
     optionally, time.
-
-:py:class:`~pulse2percept.stimuli.PulseEncoder`
-    An optional step that converts higher-level input such as an image or video
-    into the electrical stimulus delivered by an implant.
 
 
 What is the difference between a stimulus and a percept?
@@ -457,8 +455,8 @@ electrode layout does not correspond to an existing implant, you can construct
 your own :py:class:`~pulse2percept.implants.ElectrodeArray` and
 :py:class:`~pulse2percept.implants.Implant`.
 
-The implant matters because electrode size, spacing, location, and orientation
-can all affect the predicted response.
+Electrode size, spacing, location, and orientation can all affect the predicted
+response.
 
 See :ref:`Visual Prostheses <topics-implants>` for details.
 
@@ -676,8 +674,8 @@ A useful progression is:
 #. Use an encoder when you are ready to turn images or videos into pulse
    trains.
 
-The :doc:`Example Gallery <../examples/index>` contains complete examples for
-implants, stimuli, models, and encoding strategies.
+The :doc:`model reproductions <../examples/models/index>` recreate figures
+from published models.
 
 
 The code I installed does not match the documentation. What gives?

@@ -6,36 +6,36 @@
    :maxdepth: 1
 
    Overview <self>
-   install
-   Quickstart <examples/plot_getting_started>
+   getting_started/install
+   Quickstart Guide <examples/plot_quickstart>
 
 .. toctree::
-   :caption: Core concepts
+   :caption: Core Concepts
    :hidden:
 
-   topics/implants
-   topics/stimulation
-   topics/models
-   topics/vision
-   topics/coordinates
-   topics/units
-   topics/datasets
+   concepts/implants
+   concepts/stimulation
+   concepts/models
+   concepts/vision
+   concepts/coordinates
+   concepts/units
+   concepts/datasets
 
 .. toctree::
    :caption: Scientific examples
    :hidden:
 
-   examples/index
+   examples/models/index
 
 .. toctree::
    :caption: Reference
    :hidden:
 
-   users/api
-   users/faq
-   users/release_notes
-   users/references
-   users/news
+   reference/api
+   reference/faq
+   reference/release_notes
+   reference/references
+   reference/research
 
 .. toctree::
    :caption: Developer Guide
@@ -66,18 +66,31 @@ Compatibility
    :start-after: .. compat-begin
    :end-before: .. compat-end
 
-Where to go from here
-=====================
+.. warning::
 
-*  Start with the :doc:`Quickstart <examples/plot_getting_started>` guide.
-*  Learn the core concepts: :doc:`visual prostheses <topics/implants>`,
-   :doc:`stimulation <topics/stimulation>`,
-   :doc:`models and percepts <topics/models>`,
-   :doc:`visual input <topics/vision>`, and
-   :doc:`coordinates <topics/coordinates>`.
-*  Explore the :doc:`Example Gallery <examples/index>` for complete simulations
-   and use cases.
-*  Check the :doc:`FAQ <users/faq>` for common questions.
-*  Request features or report bugs on the `Issue Tracker`_.
+   v0.11 is an API-breaking release.
+   See the :doc:`release notes <reference/release_notes>` for details.
+
+Getting Started
+===============
+
+New to pulse2percept? Start with the
+:doc:`Quickstart Guide <examples/plot_quickstart>` for some short
+end-to-end examples.
+
+From there, the core concepts are easiest to read in this order:
+:doc:`implants <concepts/implants>`,
+:doc:`stimulation <concepts/stimulation>`,
+:doc:`models and percepts <concepts/models>`,
+:doc:`visual input <concepts/vision>`,
+:doc:`coordinates <concepts/coordinates>`, :doc:`units <concepts/units>`, and
+:doc:`datasets <concepts/datasets>`.
+
+The :doc:`model reproductions <examples/models/index>` show how published
+models and experiments are implemented in pulse2percept.
+
+For common questions, see the :doc:`FAQs <reference/faq>`.
+If something is broken or missing, please open an issue on the 
+`Issue Tracker`_.
 
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

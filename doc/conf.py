@@ -38,15 +38,22 @@ extensions = [
     "sphinx_gallery.gen_gallery",
     "versionwarning.extension",
     "IPython.sphinxext.ipython_directive",
+    # Provides :rc:, used by docstrings HTMLAnimation inherits from matplotlib
+    "matplotlib.sphinxext.roles",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx.ext.extlinks",
     "sphinx.ext.mathjax",
     "sphinx.ext.doctest",
     "matplotlib.sphinxext.plot_directive",
     "sphinx_copybutton",
+    "api_layout",
 ]
 
 autosummary_generate = True
+# One page per public object; api_layout fills in autosummary_context
+autosummary_context = {}
+# The page title already shows the full dotted path
+add_module_names = False
 autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
@@ -57,13 +64,22 @@ todo_include_todos = True
 source_suffix = ".rst"
 master_doc = "index"
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "**/.ipynb_checkpoints"]
+# "**/" requires a parent directory, so the top-level folder needs its own entry
+exclude_patterns = ["_build", ".ipynb_checkpoints", "**/.ipynb_checkpoints"]
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
+html_logo = "_static/logo.png"
+html_favicon = "_static/favicon.png"
+html_theme_options = {
+    "style_nav_header_background": "#2c3e50",
+}
 
-intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "matplotlib": ("https://matplotlib.org/stable", None),
+}
 
 # Sphinx-Gallery: keep execution on (your examples produce images),
 # but never fail the build if an example hiccups.
@@ -72,12 +88,13 @@ sphinx_gallery_conf = {
     "examples_dirs": ["../examples"],
     "gallery_dirs": ["examples"],
     "reference_url": {"pulse2percept": None},
+    # "Examples using ..." thumbnails on API pages (autosummary templates)
+    "doc_module": ("pulse2percept",),
+    "backreferences_dir": "examples/backreferences",
     "thumbnail_size": (320, 224),
     "remove_config_comments": True,
     "subsection_order": ExplicitOrder([
         "../examples/models",
-        "../examples/vision",
-        "../examples/datasets",
     ]),
     "only_warn_on_example_error": True,
 }

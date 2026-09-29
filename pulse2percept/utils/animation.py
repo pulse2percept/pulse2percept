@@ -278,7 +278,7 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt, bg_color=(255, 255, 255)):
         The normalization of the animated image (ignored for RGB(A) data)
     cmap : matplotlib.colors.Colormap
         The colormap of the animated image (ignored for RGB(A) data)
-    max_shape : (height, width)
+    max_shape : ``(height, width)``
         Frames are downsampled to at most this size
     fmt : {'jpg', 'png'}
         Whether to encode the sheet as (lossy) JPEG or (lossless) PNG

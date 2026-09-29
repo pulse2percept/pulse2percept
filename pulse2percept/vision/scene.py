@@ -32,8 +32,8 @@ _INPAINT = 'inpaint'
 
 # The two `aperture` shapes; see `Scene._aperture_mask`. Both take their
 # dimensions from `fov`, so the shape is all that is named here.
-_RECTANGLE = 'rectangle'
-_ELLIPSE = 'ellipse'
+_RECTANGULAR = 'rectangular'
+_ROUND = 'round'
 
 # The two `view`s of `Scene.plot` and `Scene.play`: world-fixed axes spanning
 # `extent`, or eye-centered axes spanning `fov`.
@@ -341,11 +341,11 @@ def _resolve_context_alpha(context_alpha):
 
 
 def _resolve_aperture(aperture):
-    """Normalize ``aperture`` to ``_RECTANGLE`` or ``_ELLIPSE``"""
-    for shape in (_RECTANGLE, _ELLIPSE):
+    """Normalize ``aperture`` to ``_RECTANGULAR`` or ``_ROUND``"""
+    for shape in (_RECTANGULAR, _ROUND):
         if aperture == shape:
             return shape
-    raise ValueError(f"'aperture' is either {_RECTANGLE!r} or {_ELLIPSE!r}, "
+    raise ValueError(f"'aperture' is either {_RECTANGULAR!r} or {_ROUND!r}, "
                      f"not {aperture!r}.")
 
 
@@ -463,10 +463,10 @@ class Scene(PrettyPrint):
         :py:class:`~pulse2percept.stimuli.ImageStimulus` or a
         :py:class:`~pulse2percept.stimuli.VideoStimulus`, such as a file name
         or a NumPy array, is handed to ``ImageStimulus``.
-    fov : float or (width, height)
+    fov : float or ``(width, height)``
         Size of the viewing window, in degrees of visual angle, centered on
         the fovea (e.g. ``40 * dva``). A scalar is a square window.
-    extent : float or (left, right, bottom, top), optional
+    extent : float or ``(left, right, bottom, top)``, optional
         Where the source sits in scene coordinates, in dva. A scalar is the
         span of the shorter source dimension, centered with square pixels
         (e.g., ``45 * dva`` on a 173 x 320 source is 83.2 x 45 dva). If None,
@@ -495,11 +495,12 @@ class Scene(PrettyPrint):
 
         .. versionchanged:: 0.11.0
             Measured in degrees of visual angle rather than in scene pixels.
-    aperture : {'rectangle', 'ellipse'}, optional
+    aperture : {'rectangular', 'round'}, optional
         Shape of the FOV. ``fov`` sets its size and this sets its shape: the
-        default ``'rectangle'`` shows the whole window, while ``'ellipse'``
+        default ``'rectangular'`` shows the whole window, while ``'round'``
         inscribes an eye-centered ellipse of semi-axes ``fov / 2`` in it, so a
-        square ``fov`` renders as a disc. The aperture is a display boundary:
+        square ``fov`` renders as a disc and a non-square one as an ellipse.
+        The aperture is a display boundary:
         :py:meth:`~pulse2percept.vision.Scene.plot` clips the full-intensity
         FOV, percept and grid to it (scene-view context stays visible
         outside), :py:meth:`~pulse2percept.vision.Scene.render` writes black
@@ -524,7 +525,7 @@ class Scene(PrettyPrint):
     source's angular pixel pitch:
 
     >>> world = Scene(samples.logo_bvl(), extent=(-50, 50, -40, 40) * dva,
-    ...               fov=40 * dva, aperture='ellipse')
+    ...               fov=40 * dva, aperture='round')
     >>> world.render().shape
     (288, 288, 3, 1)
 
@@ -537,7 +538,7 @@ class Scene(PrettyPrint):
     """
 
     def __init__(self, source, fov, extent=None, scotoma=None, scotoma_fill=0,
-                 scotoma_blend=0.5, background=0, aperture=_RECTANGLE):
+                 scotoma_blend=0.5, background=0, aperture=_RECTANGULAR):
         if not isinstance(source, (ImageStimulus, VideoStimulus)):
             # A picture is the common case:
             source = ImageStimulus(source)
@@ -580,12 +581,12 @@ class Scene(PrettyPrint):
 
         Parameters
         ----------
-        fov : float or (width, height), optional
+        fov : float or ``(width, height)``, optional
             Viewing window, in dva. The default 45 dva is a 45 x 45 dva disc.
         **kwargs :
             Any other :py:class:`~pulse2percept.vision.Scene` argument.
-            ``aperture`` defaults to ``'ellipse'`` rather than
-            ``'rectangle'``.
+            ``aperture`` defaults to ``'round'`` rather than
+            ``'rectangular'``.
 
         Examples
         --------
@@ -596,7 +597,7 @@ class Scene(PrettyPrint):
         (60.0, 60.0)
 
         """
-        kwargs.setdefault('aperture', _ELLIPSE)
+        kwargs.setdefault('aperture', _ROUND)
         return cls(np.zeros(_BLANK_SHAPE, dtype=np.float32), fov=fov,
                    **kwargs)
 
@@ -609,7 +610,7 @@ class Scene(PrettyPrint):
                   'scotoma_fill': self.scotoma_fill,
                   'scotoma_blend': self.scotoma_blend}
         # Omitted when rectangular, which is the default:
-        if self.aperture != _RECTANGLE:
+        if self.aperture != _RECTANGULAR:
             params['aperture'] = self.aperture
         return params
 
@@ -644,7 +645,7 @@ class Scene(PrettyPrint):
 
     @property
     def aperture(self):
-        """Shape of the field's support: ``'rectangle'`` or ``'ellipse'``"""
+        """Shape of the field's support: ``'rectangular'`` or ``'round'``"""
         return self._aperture
 
     @property
@@ -953,7 +954,7 @@ class Scene(PrettyPrint):
         A display decision taken at the boundary of a finished raster: outside
         the aperture is undefined visual-field support, not black content.
         """
-        if self._aperture == _RECTANGLE:
+        if self._aperture == _RECTANGULAR:
             return frames
         out = np.array(frames, dtype=np.float32)
         out[self._aperture_mask(xs, ys)] = 0
@@ -962,7 +963,7 @@ class Scene(PrettyPrint):
     def _outside_support(self, xs, ys):
         """Nodes of an eye-centered raster outside the FOV's support, for
         either aperture"""
-        if self._aperture == _ELLIPSE:
+        if self._aperture == _ROUND:
             return self._aperture_mask(xs, ys)
         a, b = self._fov[0] / 2, self._fov[1] / 2
         return (np.abs(xs) > a) | (np.abs(ys) > b)[:, np.newaxis]
@@ -972,7 +973,7 @@ class Scene(PrettyPrint):
         for clipping artists"""
         width, height = self._fov
         cx, cy = center
-        if self._aperture == _ELLIPSE:
+        if self._aperture == _ROUND:
             return Ellipse((cx, cy), width, height, transform=transform)
         return Rectangle((cx - width / 2, cy - height / 2), width, height,
                          transform=transform)
@@ -985,7 +986,7 @@ class Scene(PrettyPrint):
         FOV layer already covers exactly the rectangle, so only a local
         patch, which may reach past the FOV, needs clipping to that.
         """
-        if self._aperture == _RECTANGLE:
+        if self._aperture == _RECTANGULAR:
             artists = artists[1:]
         if not artists:
             return
@@ -1617,7 +1618,7 @@ class Scene(PrettyPrint):
         xs, ys = self._view_axes()
         overlay = vf.rasterize((ys.size, xs.size), radii, angles, (0, 0),
                                extent, _to_pixel(xs, ys), color=grid_color)
-        if self._aperture == _ELLIPSE:
+        if self._aperture == _ROUND:
             overlay[self._aperture_mask(xs, ys), 3] = 0
         # The rendered clock: a temporal percept may label frame ends.
         decorated = Percept(_over(display.data, overlay),

@@ -50,6 +50,11 @@ class ArgusI(RetinalImplant):
 
         Column order is reversed in a left-eye implant.
 
+    .. plot::
+
+        from pulse2percept.implants.retina import ArgusI
+        ArgusI().plot(annotate=True)
+
     Parameters
     ----------
     z : float, list, or Quantity, optional
@@ -171,6 +176,11 @@ class ArgusII(RetinalImplant):
     .. note::
 
         Column order is reversed in a left-eye implant.
+
+    .. plot::
+
+        from pulse2percept.implants.retina import ArgusII
+        ArgusII().plot(annotate=True)
 
     Parameters
     ----------

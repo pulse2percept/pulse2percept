@@ -143,20 +143,21 @@ def test_CheckerboardRaster():
 
 
 def test_CheckerboardRaster_grids():
-    # A hex grid is handled the same way, and its 7-group pattern is the one
-    # that puts every group on a hex lattice of its own, sqrt(7) pitches wide:
+    # On a hex grid, 7 groups form interleaved hexagonal lattices with
+    # sqrt(7) times the electrode spacing.
     hexgrid = Implant(ElectrodeGrid((14, 14), 200, grid_type='hex'))
     raster = CheckerboardRaster(7).bind(hexgrid)
     npt.assert_almost_equal(raster.min_spacing, 200 * np.sqrt(7), decimal=3)
     npt.assert_almost_equal(_min_spacing(hexgrid, raster), raster.min_spacing,
                             decimal=3)
-    # A hex grid cannot be two-colored the way a square one can, so two groups
-    # buy nothing there and the caller has to notice through `min_spacing`:
-    npt.assert_almost_equal(CheckerboardRaster(2).bind(hexgrid).min_spacing,
-                            200)
 
-    # Rotating the implant rotates the pattern with it, since the pattern is
-    # read off the electrode positions:
+    # A hex grid is not bipartite, so splitting it into two groups does not
+    # increase the minimum within-group spacing.
+    npt.assert_almost_equal(
+        CheckerboardRaster(2).bind(hexgrid).min_spacing, 200)
+
+    # Rotation should preserve the grouping while the inferred grid axes remain
+    # in the same order.
     upright = Implant(ElectrodeGrid((10, 10), 400))
     expected = CheckerboardRaster(5).bind(upright).groups(
         upright.electrode_names)
@@ -165,34 +166,33 @@ def test_CheckerboardRaster_grids():
         npt.assert_equal(
             CheckerboardRaster(5).bind(turned).groups(turned.electrode_names),
             expected)
-    # Past a quarter turn the two grid directions trade places, so the pattern
-    # comes out transposed. It is the same pattern in every way that matters --
-    # which is what is checked here -- just not the same labelling:
+
+    # Larger rotations may transpose the inferred grid axes. The resulting
+    # pattern should still have the same spacing and group sizes.
     for angle in [117, 300]:
         turned = Implant(ElectrodeGrid((10, 10), 400, rot=angle))
         raster = CheckerboardRaster(5).bind(turned)
         npt.assert_almost_equal(raster.min_spacing, 400 * np.sqrt(5),
                                 decimal=3)
-        npt.assert_equal(np.bincount(raster.groups(turned.electrode_names)),
-                         np.full(5, 20))
+        npt.assert_equal(
+            np.bincount(raster.groups(turned.electrode_names)),
+            np.full(5, 20))
 
-    # Grids with electrodes trimmed off still work. PRIMA's 378 electrodes do
-    # not divide by four, so the groups come out as even as 378 allows:
+    # Trimmed grids should still produce approximately balanced groups.
     prima = PRIMAPivotal()
     raster = CheckerboardRaster(4).bind(prima)
     count = np.bincount(raster.groups(prima.electrode_names))
     npt.assert_equal(count.sum(), 378)
     npt.assert_equal(count.max() <= np.ceil(378 / 4) * 1.05, True)
     npt.assert_almost_equal(raster.min_spacing, 200)
-    # Demanding an exactly even split is allowed, and costs spacing:
+
+    # Requiring an exactly balanced split may reduce the achievable spacing.
     npt.assert_equal(
         CheckerboardRaster(5, balance=0).bind(prima).min_spacing <=
         CheckerboardRaster(5, balance=0.5).bind(prima).min_spacing, True)
 
-    # Rows and columns need not be spaced the same. A grid can be stretched
-    # far enough that an electrode's twenty nearest neighbors are all in its
-    # own row, and the step to the next row still has to be found -- looking
-    # only at the near neighborhood used to miss it and reject the grid:
+    # Grid detection must also handle strongly anisotropic spacing, where the
+    # second grid direction may lie well outside the nearest neighborhood.
     for spacing, n in [((100, 1050), 5), ((100, 1050), 4), ((25, 3000), 5)]:
         stretched = ElectrodeGrid((3, 20), spacing=spacing)
         raster = CheckerboardRaster(n).bind(stretched)
@@ -200,22 +200,24 @@ def test_CheckerboardRaster_grids():
         npt.assert_equal(count, np.full(n, 60 // n))
         npt.assert_almost_equal(_min_spacing(stretched, raster),
                                 raster.min_spacing, decimal=3)
-    # Electrodes really in a line have no second direction to find, and are
-    # still split into groups spread along it:
-    row = ElectrodeGrid((1, 12), 200)
-    npt.assert_equal(np.bincount(CheckerboardRaster(4).bind(row).groups(
-        row.electrode_names)), np.full(4, 3))
 
-    # An implant whose electrodes are not on a grid cannot be checkered:
+    # A one-dimensional grid should be split into groups along the row.
+    row = ElectrodeGrid((1, 12), 200)
+    npt.assert_equal(
+        np.bincount(
+            CheckerboardRaster(4).bind(row).groups(row.electrode_names)),
+        np.full(4, 3))
+
+    # Non-grid electrode layouts are unsupported.
     with pytest.raises(NotImplementedError):
         CheckerboardRaster(2).bind(Suprachoroidal24())
-    # Neither can a count that leaves no pattern even enough to be worth
-    # having. PRIMA's trimmed edges are what put 20 groups out of reach, and
-    # allowing bigger groups is what buys it back:
+
+    # Reject group counts that cannot satisfy the default balance constraint.
+    # Relaxing the constraint makes the same grouping possible.
     with pytest.raises(ValueError):
         CheckerboardRaster(20).bind(prima)
-    npt.assert_equal(CheckerboardRaster(20, balance=0.2).bind(prima).n_groups,
-                     20)
+    npt.assert_equal(
+        CheckerboardRaster(20, balance=0.2).bind(prima).n_groups, 20)
 
 
 def test_CheckerboardRaster_min_spacing():

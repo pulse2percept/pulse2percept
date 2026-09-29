@@ -354,6 +354,11 @@ class PRIMAPivotal(_PhotovoltaicRetinalImplant):
     [Holz2026]_. The same configuration was used in the earlier first-in-human
     study [Palanker2020]_.
     
+    .. plot::
+
+        from pulse2percept.implants.retina import PRIMAPivotal
+        PRIMAPivotal().plot()
+
     .. versionadded:: 0.7
     
     .. versionchanged:: 0.11.0
@@ -536,6 +541,11 @@ class Lorach2015Array(_PhotovoltaicRetinalImplant):
     The array has 142 pixels, each 70 um wide on a 75 um hexagonal grid, with a
     20 um active electrode, on a nominal 1 mm substrate.
     
+    .. plot::
+
+        from pulse2percept.implants.retina import Lorach2015Array
+        Lorach2015Array().plot()
+
     .. versionadded:: 0.7
     
     .. versionchanged:: 0.11.0
@@ -673,6 +683,11 @@ class Ho2019FlatArray(_PhotovoltaicRetinalImplant):
     40 (F40)             502     34.6 um      10 um diameter
     ===================  ======  ===========  ================
     
+    .. plot::
+
+        from pulse2percept.implants.retina import Ho2019FlatArray
+        Ho2019FlatArray(pixel_size=55).plot()
+
     .. versionadded:: 0.11.0
     
     Parameters
@@ -798,6 +813,11 @@ class Huang2021Array(_PhotovoltaicRetinalImplant):
     20                   2806              3508               8 um diameter
     ===================  ================  =================  ================
     
+    .. plot::
+
+        from pulse2percept.implants.retina import Huang2021Array
+        Huang2021Array(pixel_size=55).plot()
+
     .. versionadded:: 0.11.0
     
     Parameters

@@ -59,7 +59,7 @@ def fetch_han2021(videos=None, resize=None, as_gray=None, data_path=None,
     videos: str | list of strings | None, optional
         Video names you want to download. By default, all videos will be
         downloaded. Available names: 'sample1' - 'sample4', 'stim1' - 'stim16'
-    resize : (height, width) or None, optional, default: None
+    resize : ``(height, width)`` or None, optional, default: None
         A tuple specifying the desired height and width of each video frame.
         The original size is 320x180 pixels.
     as_gray : bool, optional

@@ -486,12 +486,12 @@ class AxonMapSpatial(RetinalSpatial):
     n_axons : int, optional
         Number of nerve fiber bundles generated.
     axons_range : (float, float) or Quantity, optional
-        Range of initial bundle angles ``phi0`` in the Jansonius model.
+        Range of initial bundle angles ``phi0`` in the [Jansonius2009]_ model.
     n_ax_segments : int, optional
         Number of radial samples used to generate each bundle.
     ax_segments_range : (float, float), optional
-        Radial-coordinate range used to generate each bundle in the Jansonius
-        model.
+        Radial-coordinate range used to generate each bundle in the
+        [Jansonius2009]_ model.
     min_ax_sensitivity : float, optional
         Minimum relative axon sensitivity retained during precomputation.
     meridian_blend : float or Quantity, optional
@@ -677,7 +677,7 @@ class AxonMapSpatial(RetinalSpatial):
         return np.vstack((xmodel, ymodel)).astype(np.float32).T
 
     def grow_axon_bundles(self, n_bundles=None, prune=True):
-        """Generate nerve fiber bundles from the Jansonius model.
+        """Generate nerve fiber bundles from the [Jansonius2009]_ model.
 
         Parameters
         ----------
@@ -1203,14 +1203,15 @@ class AxonMapModel(Model):
     and :math:`d_{\mathrm{soma}}` is the path length along the axon from that
     segment to the ganglion cell body. Thus :math:`\rho` controls spread
     away from the axon, whereas :math:`\lambda` controls spread along it.
+    Nerve fiber bundle geometry is derived from [Jansonius2009]_.
 
     .. note::
 
         Dimensionless image or video values are read as relative electrode
-        drive, so an implant ``encoder`` is optional when only the spatial
-        pattern matters. An encoder is required when physical amplitude, pulse
-        timing, safety constraints, or a temporal or pulse-dependent model
-        matters.
+        drive, so an implant ``encoder`` is optional when you only care about
+        the spatial phosphene pattern. An encoder is required when physical
+        amplitude, pulse timing, safety constraints, or a temporal or
+        pulse-dependent model are important.
 
     .. important::
 
@@ -1295,12 +1296,12 @@ class AxonMapModel(Model):
     n_axons : int, optional
         Number of nerve fiber bundles generated.
     axons_range : (float, float) or Quantity, optional
-        Range of initial bundle angles ``phi0`` in the Jansonius model.
+        Range of initial bundle angles ``phi0`` in the [Jansonius2009]_ model.
     n_ax_segments : int, optional
         Number of radial samples used to generate each bundle.
     ax_segments_range : (float, float), optional
-        Radial-coordinate range used to generate each bundle in the Jansonius
-        model.
+        Radial-coordinate range used to generate each bundle in the
+        [Jansonius2009]_ model.
     min_ax_sensitivity : float, optional
         Minimum relative axon sensitivity retained during precomputation.
     meridian_blend : float or Quantity, optional

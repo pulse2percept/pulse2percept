@@ -1,28 +1,43 @@
-"""Computational models of prosthetic vision
+"""Computational models of prosthetic vision.
 
-The root namespace holds only anatomy-neutral model machinery: the abstract
-base classes a model is assembled from, and temporal models that are not tied
-to a particular stimulation site. Models of a specific target live in the
-subpackage for the tissue they stimulate ---
-:py:mod:`~pulse2percept.models.retina` and
-:py:mod:`~pulse2percept.models.cortex`.
+Anatomy-neutral base classes and temporal models are available at the
+top level. Models of a specific target tissue are in ``retina`` and
+``cortex``.
 
-.. versionchanged:: 0.11.0
-
-    Retinal models are no longer exported here; import them from
-    ``models.retina``.
+Base Classes
+------------
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
-    base
-    temporal
+    BaseModel
+    Model
+    SpatialModel
+    TemporalModel
+
+Temporal Models
+---------------
+
+Combine with any retinal or cortical spatial model.
+
+.. autosummary::
+    :toctree:
+
+    AlphaTemporal
+    FadingTemporal
+
+Target-Specific Models
+----------------------
+
+.. autosummary::
+    :toctree:
+
     retina
     cortex
 
 .. seealso::
 
-    *  :ref:`Basic Concepts > Computational Models <topics-models>`
+    *  :ref:`Core Concepts > Models and Percepts <topics-models>`
 
 """
 from .base import BaseModel, Model, SpatialModel, TemporalModel

@@ -229,9 +229,9 @@ class Implant(PrettyPrint):
         """Stimulus encoder used for image or video input.
 
         Must be an :py:class:`~pulse2percept.stimuli.ImplantEncoder`.
-        Model-aware encoders such as
-        :py:class:`~pulse2percept.stimuli.TraceEncoder` are called directly
-        instead. If None, dimensionless image/video stimuli are not encoded
+        Encoders such as :py:class:`~pulse2percept.stimuli.TraceEncoder` are
+        called directly through ``encode`` rather than attached to an implant.
+        If ``None``, dimensionless image/video stimuli are not encoded
         automatically.
 
         Assigning an unbound encoder (``encoder.implant is None``) binds it
@@ -247,7 +247,7 @@ class Implant(PrettyPrint):
             if not isinstance(encoder, ImplantEncoder):
                 raise TypeError(
                     f"'encoder' must be an ImplantEncoder object, not "
-                    f"{type(encoder)}. Call a model-aware encoder's 'encode' "
+                    f"{type(encoder)}. Call the encoder's 'encode' "
                     f"directly instead.")
             # Before the slot is written to, so that a rejected encoder leaves
             # the implant as it was:

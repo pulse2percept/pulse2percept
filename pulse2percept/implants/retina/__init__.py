@@ -1,18 +1,59 @@
-"""Retinal implants: Argus, Alpha, suprachoroidal, IMIE, and PRIMA arrays
+"""Retinal implants.
+
+Base class
+----------
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
-    base
-    argus
-    alpha
-    suprachoroidal
-    imie
-    prima
+    RetinalImplant
+
+Human implant systems
+---------------------
+
+.. autosummary::
+    :toctree:
+
+    ArgusI
+    ArgusII
+    IMIE
+    AlphaIMS
+    AlphaAMS
+    PRIMAPivotal
+    Suprachoroidal24
+    Suprachoroidal44
+
+Research array geometries
+-------------------------
+
+.. autosummary::
+    :toctree:
+
+    Lorach2015Array
+    Ho2019FlatArray
+    Huang2021Array
+    PhotovoltaicPixel
+
+Deprecated in v0.11
+-------------------
+
+These compatibility classes will be removed in v0.12.
+
+.. autosummary::
+    :toctree:
+
+    PRIMA
+    PRIMA75
+    PRIMA55
+    PRIMA40
 
 .. seealso::
 
-    *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
+    *  :ref:`Core Concepts > Implants > Human Implant Systems
+       <topics-implants-human>`
+    *  :ref:`Core Concepts > Implants > Research Array Geometries
+       <topics-implants-research>`
+
 """
 from .base import RetinalImplant
 from .argus import ArgusI, ArgusII

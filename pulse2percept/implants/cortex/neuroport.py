@@ -6,12 +6,10 @@ from ..electrodes import DiskElectrode
 from ..electrode_arrays import ElectrodeGrid
 
 class NeuroPortArray(CorticalImplant):
-    """96-channel Utah (NeuroPort) intracortical array
+    """96-channel NeuroPort intracortical array
 
-    The 96-channel Utah array used in the CORTIVIS studies [Fernandez2017]_.
-    This class uses Blackrock's NeuroPort Array name for the human-use
-    version of the Utah Array. CORTIVIS is the project/consortium, not the
-    implant.
+    The 96-channel Blackrock NeuroPort array used in the CORTIVIS studies
+    [Fernandez2017]_.
 
     96 electrodes on a 10x10 grid (corners unused) with 400 um spacing and
     80 um diameter at the base; shank tips sit 1.5 mm deep (``z=-1500``).
@@ -23,6 +21,11 @@ class NeuroPortArray(CorticalImplant):
         Implant the array with the model's ``implant_position``, e.g.
         ``implant_position=(20, -5) * mm`` for the right hemisphere.
     
+    .. plot::
+
+        from pulse2percept.implants.cortex import NeuroPortArray
+        NeuroPortArray().plot()
+
     Parameters
     ----------
     preprocess : bool or callable, optional

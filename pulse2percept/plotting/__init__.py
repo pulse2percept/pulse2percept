@@ -1,13 +1,24 @@
 """Figures and animations that combine multiple pulse2percept objects.
 
-Individual objects retain their own ``plot()`` and ``play()`` methods; this
-package only holds views that no single object owns.
+Single objects have their own ``plot()`` and ``play()`` methods.
+
+Stimulus and Percept
+--------------------
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
-    comparison
-    argus
+    plot_stimulus_percept
+    play_stimulus_percept
+
+Argus Phosphene Drawings
+------------------------
+
+.. autosummary::
+    :toctree:
+
+    plot_argus_phosphenes
+    plot_argus_simulated_phosphenes
 
 """
 

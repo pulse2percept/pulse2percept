@@ -1,19 +1,89 @@
-"""Various utility and helper functions.
+"""Utility classes and functions used across pulse2percept.
+
+Base Classes
+------------
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
-    base
-    constants
-    geometry
-    array
-    animation
-    images
-    convolution
-    optimize
-    stats
-    deprecation
-    three_dim
+    PrettyPrint
+    Frozen
+    FreezeError
+    Parametrized
+    Data
+    cached
+    base.freeze_class
+    base.has_own_attr
+
+Arrays
+------
+
+.. autosummary::
+    :toctree:
+
+    center_vector
+    is_strictly_increasing
+    radial_mask
+    sample
+    unique
+    bijective26_name
+
+Images
+------
+
+.. autosummary::
+    :toctree:
+
+    center_image
+    scale_image
+    shift_image
+    trim_image
+
+Geometry
+--------
+
+.. autosummary::
+    :toctree:
+
+    cart2pol
+    pol2cart
+    delta_angle
+    parse_3d_orient
+
+Numerics
+--------
+
+.. autosummary::
+    :toctree:
+
+    bisect
+    conv
+    gamma
+    r2_score
+    circ_r2_score
+
+Animation
+---------
+
+.. autosummary::
+    :toctree:
+
+    HTMLAnimation
+    frame_interval
+
+Deprecation
+-----------
+
+.. autosummary::
+    :toctree:
+
+    deprecated
+    deprecate_parameter
+    deprecated_alias
+    rename_parameter
+    warn_deprecated_params
+    rename_deprecated_params
+    deprecation.is_deprecated
 
 """
 from .base import (PrettyPrint, FreezeError, Frozen, Parametrized, Data,

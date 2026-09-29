@@ -30,6 +30,11 @@ class AlphaIMS(RetinalImplant):
 
         Column order is reversed in a left-eye implant.
 
+    .. plot::
+
+        from pulse2percept.implants.retina import AlphaIMS
+        AlphaIMS().plot()
+
     Parameters
     ----------
     z : float, list, or Quantity, optional
@@ -159,6 +164,11 @@ class AlphaAMS(RetinalImplant):
     .. note::
 
         Column order is reversed in a left-eye implant.
+
+    .. plot::
+
+        from pulse2percept.implants.retina import AlphaAMS
+        AlphaAMS().plot()
 
     Parameters
     ----------

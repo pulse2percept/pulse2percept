@@ -21,7 +21,7 @@ Create a release branch from an up-to-date ``master``:
 
 On the release branch:
 
-* Update ``doc/users/release_notes.rst``.
+* Update ``doc/reference/release_notes.rst``.
 * Set the final version in ``pyproject.toml`` (for example, ``0.10.0`` rather
   than ``0.10.0.dev0``).
 * Run the test suite and build the documentation.
@@ -122,7 +122,7 @@ Return to ``master`` and prepare the next development version:
 
 * Set the version in ``pyproject.toml`` to the next ``.dev0`` version.
 * Add an empty section for the next release to
-  ``doc/users/release_notes.rst``.
+  ``doc/reference/release_notes.rst``.
 * Commit these changes to ``master``.
 
 For example, after releasing ``0.10.0``, development continues as

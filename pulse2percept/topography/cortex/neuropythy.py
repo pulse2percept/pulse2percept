@@ -18,7 +18,7 @@ class NeuropythyMap(CorticalMap):
 
         Parameters
         ----------
-        subject : str, path, or :py.class:`neuropythy.mri.core.Subject`
+        subject : str, path, or :py:class:`neuropythy.mri.core.Subject`
             The subject specific mapping to use. If it is not a loaded
             neuropythy subject object, it will be passed to 
             ny.freesurfer_subject(subject). Neuropythy accepts either a path

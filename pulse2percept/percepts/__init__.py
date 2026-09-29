@@ -1,15 +1,30 @@
-"""Visual percepts and phosphenes.
+"""Percepts predicted by a model, and phosphene measurements.
 
-The ``metrics`` module is documented but deliberately not imported here:
-:py:meth:`~pulse2percept.percepts.Percept.measure` loads it on demand, so
-predicting a percept never pays for the measurement machinery. Import its
-classes from ``pulse2percept.percepts.metrics`` if you need them directly.
+Core
+----
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
-    base
-    metrics
+    Percept
+
+Metrics
+-------
+
+Returned by :py:meth:`Percept.measure`. ``metrics`` is not
+imported with ``percepts``; import it from
+``pulse2percept.percepts.metrics``.
+
+.. autosummary::
+    :toctree:
+
+    metrics.measure_percept
+    metrics.PerceptMetrics
+    metrics.FrameMetrics
+
+.. seealso::
+
+    *  :ref:`Core Concepts > Models and Percepts <topics-models>`
 
 """
 from .base import Percept

@@ -1,22 +1,68 @@
-"""Computational models of retinal stimulation
+"""Models of retinal stimulation.
 
-Phosphene and neural-response models for epiretinal, subretinal and
-suprachoroidal devices, plus the retinal spatial base class they share.
+Base class
+----------
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
-    base
-    thompson2003
-    horsager2009
-    nanduri2012
-    beyeler2019
-    granley2021
-    ho2018
+    RetinalSpatial
+
+Scoreboard and Axon Map Models
+------------------------------
+
+.. autosummary::
+    :toctree:
+
+    ScoreboardModel
+    ScoreboardSpatial
+    AxonMapModel
+    AxonMapSpatial
+    Thompson2003Model
+    Thompson2003Spatial
+
+Pulse-Dependent Models
+----------------------
+
+.. autosummary::
+    :toctree:
+
+    BiphasicScoreboardModel
+    BiphasicScoreboardSpatial
+    BiphasicAxonMapModel
+    BiphasicAxonMapSpatial
+    Nanduri2012Model
+    Nanduri2012Spatial
+    Nanduri2012Temporal
+    Horsager2009Model
+    Horsager2009Temporal
+
+Biphasic Effect Models
+----------------------
+
+Brightness, size, and streak scaling used by the biphasic
+models.
+
+.. autosummary::
+    :toctree:
+
+    granley2021.DefaultBrightModel
+    granley2021.DefaultSizeModel
+    granley2021.DefaultStreakModel
+
+Photovoltaic Models
+-------------------
+
+.. autosummary::
+    :toctree:
+
+    Ho2018Model
+    Ho2018Spatial
+    Ho2018Temporal
 
 .. seealso::
 
-    *  :ref:`Basic Concepts > Computational Models <topics-models>`
+    *  :ref:`Core Concepts > Models and Percepts <topics-models>`
 
 """
 from .base import RetinalSpatial

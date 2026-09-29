@@ -373,7 +373,7 @@ def test_tumbling_e_polarity():
 
 def test_tumbling_e_units():
     # Plain numbers follow the dva/degree conventions, so they have to agree
-    # with the unit-aware call:
+    # with a call that explicitly specifies the units:
     plain = psychophysics.tumbling_e(stroke=0.5, position=(2, -1),
                                      orientation=90, fov=(12, 12),
                                      shape=(128, 128))

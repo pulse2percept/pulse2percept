@@ -4,42 +4,45 @@
 Release Notes
 =============
 
-v0.11.0 Foundations (unreleased)
+v0.11.0 Foundations (2026-09-30)
 ================================
+
+.. warning::
+
+    v0.11 is a **backwards-incompatible API overhaul**.
+    Retinal and cortical implants, models, and topography now live under
+    explicit `retina` and `cortex` namespaces.
+    Models are constructed with an implant, build automatically, and take the
+    stimulus directly in `predict_percept`. Implant placement moved from
+    device constructors to model parameters, so named implant geometry now
+    remains device-local (:pull:`862`, :pull:`879`, :pull:`880`, :pull:`884`,
+    :pull:`887`).
+
+    A typical workflow changes from:
+
+    .. code-block:: python
+
+        # v0.10
+        implant = p2p.implants.ArgusII(x=1000, y=-500, rot=15)
+        model = p2p.models.AxonMapModel()
+        model.build()
+        percept = model.predict_percept(implant, stim)
+
+    to:
+
+    .. code-block:: python
+
+        # v0.11
+        implant = p2p.implants.retina.ArgusII()
+        model = p2p.models.retina.AxonMapModel(
+            implant,
+            implant_position=(1000 * um, -500 * um),
+            implant_rotation=15 * deg,
+        )
+        percept = model.predict_percept(stim)
 
 Highlights
 ----------
-
-* **Backwards-incompatible API overhaul.** Retinal and cortical implants,
-  models, and topography now live under explicit `retina` and `cortex`
-  namespaces. Models are constructed with an implant, build automatically, and
-  take the stimulus directly in `predict_percept`. Implant placement moved
-  from device constructors to model parameters, so named implant geometry now
-  remains device-local (:pull:`862`, :pull:`879`, :pull:`880`, :pull:`884`,
-  :pull:`887`).
-
-  A typical workflow changes from:
-
-  .. code-block:: python
-
-      # v0.10
-      implant = p2p.implants.ArgusII(x=1000, y=-500, rot=15)
-      model = p2p.models.AxonMapModel()
-      model.build()
-      percept = model.predict_percept(implant, stim)
-
-  to:
-
-  .. code-block:: python
-
-      # v0.11
-      implant = p2p.implants.retina.ArgusII()
-      model = p2p.models.retina.AxonMapModel(
-          implant,
-          implant_position=(1000, -500),
-          implant_rotation=15,
-      )
-      percept = model.predict_percept(stim)
 
 * Added :py:mod:`pulse2percept.vision` for composing scenes, scotomas,
   residual vision, and prosthetic percepts in visual-field coordinates,
@@ -67,9 +70,9 @@ Stimuli and encoding
   and ``StimulusEncoder`` was renamed to
   :py:class:`~pulse2percept.stimuli.PulseEncoder` (:pull:`925`, :pull:`926`).
 
-* Added :py:class:`~pulse2percept.stimuli.TraceEncoder`, a model-aware encoder
-  that stimulates one electrode at a time along a letter or trajectory drawn
-  in the visual field (:pull:`926`).
+* Added :py:class:`~pulse2percept.stimuli.TraceEncoder`, which traces a letter
+  or trajectory in the visual field by stimulating one electrode at a time
+  (:pull:`926`).
 
 * The stimuli API was simplified: bundled media moved to ``stimuli.samples``,
   visual psychophysics stimuli to ``stimuli.psychophysics``, and several legacy
@@ -325,7 +328,7 @@ v0.9.0 Cortex (2025-02-17)
 
 Highlights:
 
-*  Cortical implants: :py:class:`~pulse2percept.implants.cortex.Cortivis`
+*  Cortical implants: :py:class:`~pulse2percept.implants.cortex.NeuroPortArray`
    [Fernandez2017]_ (:pull:`525`),
    :py:class:`~pulse2percept.implants.cortex.ICVP` [Troyk2003]_ (:pull:`542`),
    :py:class:`~pulse2percept.implants.cortex.Neuralink` [Musk2019]_
@@ -350,7 +353,7 @@ v0.8.0 Retina (2022-05-05)
 
 Highlights:
 
-*  New implants: :py:class:`~pulse2percept.implants.retina.BVT44` [Petoe2021]_
+*  New implants: :py:class:`~pulse2percept.implants.retina.Suprachoroidal44` [Petoe2021]_
    (:pull:`465`)
 *  New models: :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
    [Granley2021]_ (:pull:`398`) and
@@ -408,7 +411,7 @@ Highlights:
 
 *   New API (:pull:`96`, :pull:`174`, :pull:`178`)
 *   New implants: ``BVA24``, since renamed
-    :py:class:`~pulse2percept.implants.retina.BVT24` (:pull:`161`)
+    :py:class:`~pulse2percept.implants.retina.Suprachoroidal24` (:pull:`161`)
 *   New models: :py:class:`~pulse2percept.models.retina.ScoreboardModel` (:pull:`96`),
     :py:class:`~pulse2percept.models.retina.AxonMapModel` (:pull:`96`),
     :py:class:`~pulse2percept.models.retina.Nanduri2012Model` (:pull:`168`),

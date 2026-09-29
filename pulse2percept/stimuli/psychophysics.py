@@ -44,7 +44,7 @@ class GratingStimulus(VideoStimulus):
 
     Parameters
     ----------
-    shape : (height, width)
+    shape : ``(height, width)``
         A tuple specifying the desired height (pixels) and the width (pixels)
         of the grating stimulus.
 
@@ -148,7 +148,7 @@ class BarStimulus(VideoStimulus):
 
     Parameters
     ----------
-    shape : (height, width)
+    shape : ``(height, width)``
         A tuple specifying the desired height (pixels) and the width (pixels)
         of the grating stimulus.
 
@@ -475,7 +475,7 @@ def _check_spatial_nyquist(spatial_freq, direction, fov, shape):
     A grating of frequency ``fs`` at angle ``theta`` has components
     ``fs |cos(theta)|`` and ``fs |sin(theta)|`` along x and y, each of which
     has to stay strictly below the Nyquist frequency of its own angular pixel
-    pitch. Direction matters: a grating that varies only vertically is
+    pitch. Direction is important: a grating that varies only vertically is
     resolved by a frame of wide, short pixels. Equality is not enough either:
     at exactly two samples per cycle the phase is unrecoverable, and a
     quadrature-phase grating rasterizes as a uniform field.
@@ -560,7 +560,7 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
     contrast : float, optional
         Michelson contrast in [0, 1] around mean gray 0.5: the pattern spans
         ``0.5 +/- contrast / 2``.
-    fov : float or (width, height), optional
+    fov : float or ``(width, height)``, optional
         How much of the visual field the scene covers, in dva. A scalar is the
         horizontal extent, and the vertical one follows from ``shape``.
     shape : (rows, cols), optional
@@ -689,7 +689,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     contrast : float, optional
         Michelson contrast in [0, 1] around mean gray 0.5: bar and background
         sit at ``0.5 +/- contrast / 2``.
-    fov : float or (width, height), optional
+    fov : float or ``(width, height)``, optional
         How much of the visual field the scene covers, in dva. A scalar is the
         horizontal extent, and the vertical one follows from ``shape``.
     shape : (rows, cols), optional
@@ -830,7 +830,7 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
         Direction the opening points, in degrees counterclockwise from the
         positive x axis (e.g. ``90 * deg``): 0 right, 90 up, 180 left, 270
         down. Any finite angle is accepted.
-    fov : float or (width, height), optional
+    fov : float or ``(width, height)``, optional
         How much of the visual field the scene covers, in dva. A scalar is the
         horizontal extent, and the vertical one follows from ``shape``.
     polarity : {'dark', 'light'}, optional
@@ -960,7 +960,7 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
         Direction the bars point, in degrees counterclockwise from the
         positive x axis (e.g. ``90 * deg``): 0 right, 90 up, 180 left, 270
         down. Any finite angle is accepted.
-    fov : float or (width, height), optional
+    fov : float or ``(width, height)``, optional
         How much of the visual field the scene covers, in dva. A scalar is the
         horizontal extent, and the vertical one follows from ``shape``.
     polarity : {'dark', 'light'}, optional

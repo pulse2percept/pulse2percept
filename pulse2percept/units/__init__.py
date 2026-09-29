@@ -1,12 +1,49 @@
-"""Physical units used by pulse2percept.
+"""Physical units.
 
-Bare numbers retain their documented units. Unitful values are checked
-for dimensional compatibility and converted at API boundaries.
+Bare numbers use their documented units. Unitful values are checked for
+dimensional compatibility and converted at API boundaries.
+
+Core
+----
 
 .. autosummary::
-    :toctree: _api
+    :toctree:
 
-    base
+    Unit
+    Quantity
+    Dimension
+
+Helpers
+-------
+
+.. autosummary::
+    :toctree:
+
+    as_value
+    base.has_units
+    DimensionMismatchError
+
+Units
+-----
+
+===============  ======================================
+time             ``s``, ``ms``, ``us``, ``ns``
+frequency        ``Hz``, ``kHz``
+distance         ``m``, ``cm``, ``mm``, ``um``, ``nm``
+current          ``A``, ``mA``, ``uA``, ``nA``
+voltage          ``V``, ``mV``, ``uV``
+power            ``W``, ``mW``, ``uW``
+charge           ``C``, ``mC``, ``uC``, ``nC``
+angle            ``rad``, ``deg``
+visual angle     ``dva``
+threshold ratio  ``xTh``
+none             ``dimensionless``
+===============  ======================================
+
+.. seealso::
+
+    *  :ref:`Core Concepts > Physical Units <topics-units>`
+
 """
 from .base import (Dimension, Unit, Quantity, DimensionMismatchError, as_value,
                    dimensionless,

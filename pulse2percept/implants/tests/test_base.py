@@ -582,8 +582,7 @@ def test_Implant_encoder():
         Implant(ArgusII().electrode_array, encoder=unbound)
     npt.assert_equal(other.encoder, None)
     npt.assert_equal(bound.implant is implant, True)
-    # A model-aware encoder is not an ImplantEncoder, and a rejected one
-    # leaves the installed encoder in place:
+    # TraceEncoder is different because it needs a model:
     trace = TraceEncoder(ScoreboardSpatial(implant))
     with pytest.raises(TypeError, match='ImplantEncoder'):
         implant.encoder = trace

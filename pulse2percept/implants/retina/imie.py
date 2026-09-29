@@ -23,6 +23,11 @@ class IMIE(RetinalImplant):
     array with center (0,0) has the top three rows lie in the lower
     retina (upper visual field):
 
+    .. plot::
+
+        from pulse2percept.implants.retina import IMIE
+        IMIE().plot()
+
     Parameters
     ----------
     z : float, list, or Quantity, optional

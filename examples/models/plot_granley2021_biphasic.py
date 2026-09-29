@@ -1,24 +1,45 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-Granley et al. (2021): Pulse parameters shape phosphene appearance
+Granley et al. (2021): Pulse-parameter effects
 ===============================================================================
 
-The axon map model of [Beyeler2019]_ predicts one phosphene shape per
-electrode, no matter how that electrode is driven. [Granley2021]_ adds three
-stimulus-dependent scaling factors on top of it, fit to psychophysical and
-electrophysiological data: amplitude, frequency, and phase duration modulate
-brightness (:math:`F_\\mathrm{bright}`), spatial extent
-(:math:`F_\\mathrm{size}`, scaling :math:`\\rho`), and streak length
-(:math:`F_\\mathrm{streak}`, scaling :math:`\\lambda`).
+The axon map model predicts a fixed phosphene shape for each electrode,
+independent of the pulse train (Beyeler et al., 2019). Granley et al. (2021)
+extend the model with three scaling factors, fit to psychophysical and
+electrophysiological data, that relate amplitude, frequency, and phase duration
+to phosphene brightness, size, and streak length.
 
-This example is a qualitative recreation of Fig. 3 in [Granley2021]_ with the
-current pulse2percept parameterization. Each row sweeps one pulse parameter on
-a single Argus II electrode:
+The scaling factors are:
 
-* **amplitude** makes the phosphene brighter *and* larger,
-* **frequency** makes it brighter but not larger,
-* **phase duration** shortens the axonal streak.
+.. math::
+
+    F_\\mathrm{bright} &= a_2 \\tilde{a} + a_3 f + a_4, \\\\
+    F_\\mathrm{size} &= a_5 \\tilde{a} + a_6, \\\\
+    F_\\mathrm{streak} &= a_9 - a_7 t^{a_8},
+
+where :math:`\\tilde{a}` is amplitude in multiples of threshold, :math:`f` is
+frequency (Hz), and :math:`t` is phase duration (ms). :math:`F_\\mathrm{bright}`
+scales peak brightness. The spatial factors modify the decay constants of the
+axon map model [Beyeler2019]_:
+
+.. math::
+
+    \\rho_\\mathrm{eff} &= \\rho \\sqrt{F_\\mathrm{size}}, \\\\
+    \\lambda_\\mathrm{eff} &= \\lambda \\sqrt{F_\\mathrm{streak}}.
+
+The model also applies lower bounds ``min_rho`` and ``min_lambda``. The fitted
+coefficients are documented in
+:py:class:`~pulse2percept.models.retina.granley2021.DefaultBrightModel`,
+:py:class:`~pulse2percept.models.retina.granley2021.DefaultSizeModel`, and
+:py:class:`~pulse2percept.models.retina.granley2021.DefaultStreakModel`.
+For phosphene size, pulse2percept uses an Argus II refit of the threshold
+correction rather than Eq. 5 of [Granley2021]_.
+
+The example qualitatively reproduces Fig. 3 of [Granley2021]_ by varying one
+pulse parameter at a time on a single Argus II electrode. Increasing amplitude
+increases brightness and size, increasing frequency increases brightness, and
+increasing phase duration shortens the axonal streak.
 """
 import matplotlib.pyplot as plt
 
@@ -27,46 +48,51 @@ from pulse2percept.models.retina import BiphasicAxonMapModel
 from pulse2percept.stimuli import BiphasicPulseTrain
 from pulse2percept.units import xTh
 
+
 ###############################################################################
-# One electrode, one model
-# ------------------------
+# Model setup
+# -----------
 #
-# ``rho`` and ``lam`` are the baseline spatial decay away from the axon and
-# along it. ``lam = 800`` um gives a baseline phosphene elongated enough
-# (about 2.5:1) for the streak effect in the bottom row to be visible; the
-# published figure used a shorter ``lam``. The grid is cropped to the corner of
-# the visual field that electrode A4 of a right-eye Argus II projects to.
+# ``rho`` and ``lam`` (um) set the baseline spread across and along axons.
+# ``lam = 800`` um, longer than in the paper, produces a more elongated
+# baseline phosphene so that the phase-duration effect is easier to see.
+# The grid covers the region stimulated by electrode A4 in a right-eye
+# Argus II.
 
 ELECTRODE = 'A4'
-BASE_FREQ = 5     # Hz
-BASE_AMP = 1      # xTh
-BASE_PDUR = 0.45  # ms
+BASE_FREQ = 5      # Hz
+BASE_AMP = 1       # xTh
+BASE_PDUR = 0.45   # ms
 
-model = BiphasicAxonMapModel(implant=ArgusII(), rho=200, lam=800,
-                             xrange=(-10.5, 1.5), yrange=(-2, 10), step=0.1)
+model = BiphasicAxonMapModel(
+    implant=ArgusII(),
+    rho=200,
+    lam=800,
+    xrange=(-10.5, 1.5),
+    yrange=(-2, 10),
+    step=0.1,
+)
 model.build()
 
 
 def predict(freq, amp, pdur):
-    """Brightest frame of the percept for one biphasic pulse train"""
+    """Return the brightest frame for one biphasic pulse train."""
     train = BiphasicPulseTrain(freq, amp * xTh, pdur)
     return model.predict_percept({ELECTRODE: train}).data[..., 0]
 
 
 ###############################################################################
-# The three sweeps
+# Parameter sweeps
 # ----------------
 #
-# Amplitude is in multiples of perceptual threshold (``xTh``), where threshold
-# is defined at 0.45 ms phase duration.
+# Amplitude is expressed in multiples of perceptual threshold (``xTh``),
+# defined at a phase duration of 0.45 ms.
 #
-# The phase-duration row needs a correction. In this model, threshold falls as
-# phase duration grows (``a0 * pdur + a1``, Eq. 3), so a fixed ``1 xTh`` at
-# 100 ms would deliver ~200x the threshold-scaled amplitude of the 0.45 ms
-# reference and the row would show one enormous saturated blob rather than a
-# streak. Dividing the nominal amplitude by that same factor holds
-# threshold-scaled amplitude constant, leaving phase duration to act only
-# through :math:`F_\mathrm{streak}`.
+# Threshold varies with phase duration (``a0 * pdur + a1``, Eq. 3). Without
+# compensation, a fixed ``1 xTh`` at long phase durations would therefore
+# correspond to a much larger threshold-scaled amplitude. For the
+# phase-duration sweep, amplitude is adjusted by the same threshold relation
+# so that the row isolates the effect on streak length.
 
 AMPS = [1, 2, 3, 4, 5, 6]              # xTh, at 5 Hz / 0.45 ms
 FREQS = [5, 10, 20, 40, 80, 120]       # Hz, at 1 xTh / 0.45 ms
@@ -76,24 +102,21 @@ scale = model.spatial.bright_model.scale_threshold
 pdur_amps = [BASE_AMP * scale(BASE_PDUR) / scale(pdur) for pdur in PDURS]
 
 rows = [
-    ('Increasing amplitude',
+    ('Amplitude',
      [f'{a:g}' + r'$\times$Th' for a in AMPS],
      [predict(BASE_FREQ, a, BASE_PDUR) for a in AMPS]),
-    ('Increasing frequency',
+    ('Frequency',
      [f'{f:g} Hz' for f in FREQS],
      [predict(f, BASE_AMP, BASE_PDUR) for f in FREQS]),
-    ('Increasing phase duration',
+    ('Phase duration',
      [f'{t:g} ms' for t in PDURS],
      [predict(BASE_FREQ, a, t) for a, t in zip(pdur_amps, PDURS)]),
 ]
 
+
 ###############################################################################
-# All 18 panels share one grayscale range, ``[0, vmax]``, with ``vmax`` the
-# brightest pixel anywhere in the figure (the 120 Hz panel, ~9x the 5 Hz
-# reference, which is why the other two rows sit at the dim end). This
-# matters: ``Percept.plot()`` and Matplotlib both autoscale each image to its
-# own min and max by default, which would make every panel below equally
-# bright and erase the result.
+# Use one gray scale for all 18 panels. Autoscaling each panel separately
+# would obscure the modeled brightness differences.
 
 vmax = max(frame.max() for _, _, frames in rows for frame in frames)
 
@@ -107,28 +130,22 @@ for row_axes, (label, titles, frames) in zip(axes, rows):
     row_axes[0].set_ylabel(label, color='w', fontsize=11)
 fig.tight_layout()
 
+
 ###############################################################################
-# Amplitude (top) recruits a wider patch of retina and drives it harder, so the
-# phosphene grows in both size and brightness. Frequency (middle) leaves
-# :math:`F_\mathrm{size}` untouched: the outline is pixel-for-pixel identical
-# across the row, only brighter. Phase duration (bottom) is the opposite case,
-# with brightness and width held fixed by the amplitude compensation: the
-# streak along the axon shortens by about half between 0.1 and 100 ms.
+# Amplitude increases phosphene size and brightness. Frequency changes
+# brightness without changing the outline. With threshold compensation,
+# increasing phase duration shortens the axonal streak.
 #
-# What this does not establish
-# ----------------------------
+# Limitations
+# -----------
 #
-# * The three factors are phenomenological fits to a handful of Argus I/II
-#   subjects, not a biophysical account of how pulse parameters drive ganglion
-#   cells. They are linear (or single-power-law) in their arguments and
-#   extrapolate poorly outside the ranges swept here.
+# * The scaling factors are phenomenological fits to data from a small number
+#   of Argus I/II subjects, not a biophysical model. Extrapolation outside the
+#   fitted stimulus ranges should therefore be treated cautiously.
 # * v0.11 uses an Argus II refit of the [Horsager2009]_ phase-duration
-#   threshold relation rather than the equation in the original publication, so
-#   the bottom row is not a bit-for-bit reproduction of the published panel.
-#   The compensating amplitudes here are derived from the current model's own
-#   ``scale_threshold``, not copied from the paper.
-# * Brightness is in arbitrary units. Only relative comparisons within this
-#   figure are meaningful.
-# * A single electrode is a best case. With many electrodes active, the
-#   summation across electrodes in the model is linear, which real
-#   multi-electrode percepts are not.
+#   threshold relation, so the bottom row does not exactly reproduce the
+#   published panel. The compensating amplitudes use the model's own
+#   ``scale_threshold``.
+# * Brightness is in arbitrary units and is only comparable within this figure.
+# * Multi-electrode stimulation is modeled by linear summation, which does not
+#   capture the nonlinear percepts reported with simultaneous stimulation.
