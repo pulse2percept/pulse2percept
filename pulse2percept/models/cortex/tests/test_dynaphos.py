@@ -204,11 +204,12 @@ def test_dynaphos_plot():
     plt.close()
 
 
-def _assert_mm_labels(axis):
-    """Tick labels read the current tick positions (um) in mm"""
-    labels = [float(t.get_text())
+def _assert_tick_labels(axis, scale):
+    """Tick labels read the current tick positions divided by ``scale``"""
+    # Matplotlib's default formatter writes negatives with U+2212:
+    labels = [float(t.get_text().replace('\N{MINUS SIGN}', '-'))
               for t in axis.get_ticklabels()]
-    npt.assert_allclose(labels, axis.get_majorticklocs() / 1000, atol=1e-9)
+    npt.assert_allclose(labels, axis.get_majorticklocs() / scale, atol=1e-9)
 
 
 def test_dynaphos_plot_mm_ticks():
@@ -221,14 +222,17 @@ def test_dynaphos_plot_mm_ticks():
     npt.assert_equal(orion.plot(ax=ax) is ax, True)
     npt.assert_equal(ax.get_xlim() != xlim, True)
     ax.figure.canvas.draw()
-    _assert_mm_labels(ax.xaxis)
-    _assert_mm_labels(ax.yaxis)
+    _assert_tick_labels(ax.xaxis, 1000)
+    _assert_tick_labels(ax.yaxis, 1000)
     plt.close(ax.figure)
-    # dva axes keep Matplotlib's default formatter:
+    # dva axes are labeled in dva, without the um -> mm conversion:
     ax = model.plot(use_dva=True)
+    ax.set_xlim(-10, 10)
+    ax.set_ylim(-5, 5)
+    ax.figure.canvas.draw()
     npt.assert_equal(ax.get_xlabel(), 'x (dva)')
-    npt.assert_equal(type(ax.xaxis.get_major_formatter()).__name__,
-                     'ScalarFormatter')
+    _assert_tick_labels(ax.xaxis, 1)
+    _assert_tick_labels(ax.yaxis, 1)
     plt.close(ax.figure)
 
 

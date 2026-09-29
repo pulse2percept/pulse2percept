@@ -15,8 +15,7 @@ def set_mm_ticks(ax):
     Data and limits stay in microns. Labels are computed from the current tick
     positions at draw time, so they stay correct after later limit changes.
     """
-    formatter = FuncFormatter(_um_to_mm_label)
-    ax.xaxis.set_major_formatter(formatter)
-    ax.yaxis.set_major_formatter(formatter)
-    if hasattr(ax, 'zaxis'):
-        ax.zaxis.set_major_formatter(formatter)
+    axes = [ax.xaxis, ax.yaxis] + ([ax.zaxis] if hasattr(ax, 'zaxis') else [])
+    # One formatter per axis: formatters bind to the axis they are set on
+    for axis in axes:
+        axis.set_major_formatter(FuncFormatter(_um_to_mm_label))
