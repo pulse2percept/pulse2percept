@@ -37,7 +37,7 @@ and stimulation pattern:
              implant,
              xrange=(-10, 10),
              yrange=(-10, 10),
-             step=0.1,
+             step=0.025,
              verbose=False)),
         ('ScoreboardModel',
          p2p.models.retina.ScoreboardModel(
@@ -45,7 +45,7 @@ and stimulation pattern:
              rho=200,
              xrange=(-10, 10),
              yrange=(-10, 10),
-             step=0.1,
+             step=0.025,
              verbose=False)),
         ('AxonMapModel',
          p2p.models.retina.AxonMapModel(
@@ -53,7 +53,7 @@ and stimulation pattern:
              rho=200,
              xrange=(-10, 10),
              yrange=(-10, 10),
-             step=0.1,
+             step=0.025,
              verbose=False)),
     ]
 

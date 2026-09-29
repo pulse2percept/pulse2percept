@@ -66,6 +66,11 @@ Compatibility
    :start-after: .. compat-begin
    :end-before: .. compat-end
 
+.. warning::
+
+   v0.11 is an API-breaking release.
+   See the :doc:`release notes <reference/release_notes>` for details.
+
 Getting Started
 ===============
 

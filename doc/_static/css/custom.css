@@ -138,3 +138,9 @@ dl.py > dd > dl.field-list {
 	padding-top: 10px;
 	border-top: 1px solid #e1e4e5;
 }
+
+/* Tables: RTD sets nowrap on cells, which ignores :widths: and forces scrolling */
+.wy-table-responsive table td,
+.wy-table-responsive table th {
+	white-space: normal;
+}

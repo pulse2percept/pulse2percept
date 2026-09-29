@@ -73,7 +73,7 @@ fig.tight_layout()
 # transient retinal network response reported by [Ho2018]_.
 
 from pulse2percept.units import dva, deg, ms
-huang = p2p.implants.retina.Huang2021Array(30)
+huang = p2p.implants.retina.Huang2021Array(40)
 huang_model = p2p.models.retina.Ho2018Model(
     huang,
     xrange=(-3 * dva, 3 * dva),  # degrees of visual angle
@@ -88,8 +88,13 @@ e = p2p.stimuli.psychophysics.tumbling_e(
     fov=6 * dva,
     polarity='light',      # white E on black: only the E is stimulated
 )
+
+fig, axes = plt.subplots(ncols=2, figsize=(12, 5))
 percept = huang_model.predict_percept(e, t_percept=50 * ms)
-percept.plot();
+percept.plot(ax=axes[1], rings=True, meridians=True)
+huang_model.plot(show_implant=True, ax=axes[0])
+fig.tight_layout()
+
 
 ###############################################################################
 # Adding residual vision and gaze
