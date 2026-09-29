@@ -582,7 +582,8 @@ class Implant(PrettyPrint):
             .. versionadded:: 0.11.0
         stim_cmap : bool, str, or matplotlib colormap, optional
             If not false, the fill color of the plotted electrodes will vary based
-            on maximum stimulus amplitude on each electrode. The chosen colormap
+            on peak absolute stimulus amplitude on each electrode, so cathodic
+            stimulation is colored too. The chosen colormap
             will be used if provided
 
         Returns

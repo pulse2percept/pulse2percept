@@ -14,6 +14,7 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from matplotlib.transforms import Bbox
 
+from ..implants.electrode_arrays import _peak_drive, _stim_fill
 from ..models.base import Model, SpatialModel
 from ..percepts.base import Percept, _pixel_extent, _reject_rgb, _resolve_clim
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
@@ -33,7 +34,6 @@ FIGSIZE = (10, 4)
 
 # Electrode fill, as in ``Implant.plot(stim_cmap=True)``:
 STIM_CMAP = 'YlOrRd'
-STIM_ALPHA = 0.8
 # Electrode labels sit above the electrode (offset in points), so that they
 # do not cover its fill:
 LABEL_OFFSET = (0, 6)
@@ -321,7 +321,7 @@ def _electrode_drive(stim, times=None, intervals=None, hold=False):
     data = np.asarray(view.data, dtype=np.float64).reshape(
         len(view.electrodes), -1)
     if times is None:
-        return np.abs(data).max(axis=1, keepdims=True)
+        return _peak_drive(data, axis=1)[:, np.newaxis]
     times = np.asarray(times, dtype=np.float64).ravel()
     if view.time is None:
         return np.repeat(np.abs(data[:, :1]), times.size, axis=1)
@@ -388,7 +388,7 @@ def _paint(panel, electrodes, drive, cmap, norm, only_active=False):
         for name, amp in zip(electrodes, drive):
             k = coll._stim_patches.get(name)
             if k is not None and amp > 0:
-                fc[k] = cmap(norm(amp), alpha=STIM_ALPHA)
+                fc[k] = _stim_fill(cmap, norm, amp)
                 ec[k] = base_ec[k]
         coll.set_facecolor(fc)
         coll.set_edgecolor(ec)

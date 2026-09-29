@@ -15,6 +15,19 @@ from ..units import Quantity, as_value, deg, um
 from ..utils import PrettyPrint, bijective26_name
 from ..utils.constants import ZORDER
 
+# Alpha of a stimulus-colored electrode fill:
+STIM_ALPHA = 0.8
+
+
+def _peak_drive(values, axis=None):
+    """Peak absolute amplitude: the magnitude stimulus coloring shows"""
+    return np.max(np.abs(values), axis=axis)
+
+
+def _stim_fill(cm, norm, amp):
+    """Fill color of an electrode driven at magnitude ``amp``"""
+    return cm(norm(amp), alpha=STIM_ALPHA)
+
 
 def _is_electrode_collection(selector):
     """Whether an electrode selector names several electrodes or just one
@@ -216,8 +229,8 @@ class ElectrodeArray(PrettyPrint):
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
         color_stim : ``pulse2percept.stimuli.Stimulus``, or None
-            If provided, colors the electrode_array based on the stimulus
-            amplitudes. A multi-patch electrode (e.g.,
+            If provided, colors the electrode_array based on the peak absolute
+            stimulus amplitude. A multi-patch electrode (e.g.,
             :py:class:`~pulse2percept.implants.retina.PhotovoltaicPixel`)
             colors only its last patch; earlier patches are structural.
         cmap : str
@@ -238,20 +251,20 @@ class ElectrodeArray(PrettyPrint):
         norm = None
         if color_stim is not None:
             cm = plt.get_cmap(cmap)
-            norm = Normalize(vmin=0, vmax=np.max(color_stim.data))
+            norm = Normalize(vmin=0, vmax=_peak_drive(color_stim.data))
         for name, electrode in self.electrodes.items():
             # Rather than calling electrode.plot(), generate all the patch
             # objects and add them to a collection:
             if electrode.activated:
                 kwargs = deepcopy(electrode.plot_kwargs)
                 if color_stim is not None and name in color_stim.electrodes:
-                    amp = np.max(color_stim[name])
+                    amp = _peak_drive(color_stim[name])
                     if amp != 0:
                         # Only the last patch is colored (see docstring):
                         fc_kwargs = (kwargs[-1]
                                      if isinstance(kwargs, list)
                                      else kwargs)
-                        fc_kwargs['fc'] = cm(norm(amp), alpha=0.8)
+                        fc_kwargs['fc'] = _stim_fill(cm, norm, amp)
             else:
                 kwargs = electrode.plot_deactivated_kwargs
             if isinstance(electrode.plot_patch, list):
