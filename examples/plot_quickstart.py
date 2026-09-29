@@ -4,7 +4,7 @@
 Quickstart Guide
 ===============================================================================
 
-A pulse2percept simulation has three parts:
+A pulse2percept [Beyeler2017]_ simulation has three parts:
 
 1. an **implant**: the device and its electrodes,
 2. a **stimulus**: what is delivered to the electrodes, and
@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import pulse2percept as p2p
-from pulse2percept.units import Hz, um, mm, ms, uA, xTh, dva
+from pulse2percept.units import Hz, um, ms, xTh
 
 argus = p2p.implants.retina.ArgusII()
 axon_map = p2p.models.retina.BiphasicAxonMapModel(
@@ -45,7 +45,7 @@ stim = {
 
 fig, axes = plt.subplots(ncols=2, figsize=(12, 5))
 percept = axon_map.predict_percept(stim)
-percept.plot(ax=axes[1], rings=True)
+percept.plot(ax=axes[1], rings=True, meridians=True)
 axon_map.plot(show_implant=True, ax=axes[0])
 fig.tight_layout()
 
@@ -54,12 +54,12 @@ fig.tight_layout()
 # collected across multiple retinal prosthesis studies. Its two spatial
 # parameters, `rho` and `lam`, control phosphene spread perpendicular and
 # parallel to the retinal nerve fiber bundles, respectively.
-# These parameters vary across patients, so the values below are illustrative
-# rather than universal.
-
-
-
-###############################################################################
+# These parameters vary across patients, so the values above are illustrative
+# rather than universal (see the
+# :ref:`Granley 2021 reproduction 
+# <sphx_glr_examples_models_plot_granley2021_biphasic.py>`).
+#
+#
 # An image through a photovoltaic implant
 # ---------------------------------------
 #
@@ -72,22 +72,26 @@ fig.tight_layout()
 # :py:class:`~pulse2percept.models.retina.Ho2018Model`, which models the
 # transient retinal network response reported by [Ho2018]_.
 
-prima = p2p.implants.retina.PRIMAPivotal()
-prima_model = p2p.models.retina.Ho2018Model(
-    prima,
-    xrange=(-6 * dva, 6 * dva),  # degrees of visual angle
-    yrange=(-6 * dva, 6 * dva),
-    step=0.05 * dva,
+from pulse2percept.units import dva, deg, ms
+huang = p2p.implants.retina.Huang2021Array(30)
+huang_model = p2p.models.retina.Ho2018Model(
+    huang,
+    xrange=(-3 * dva, 3 * dva),  # degrees of visual angle
+    yrange=(-3 * dva, 3 * dva),
+    step=0.025 * dva,
 )
 
-image = p2p.stimuli.samples.bvl_cake()
-percept = prima_model.predict_percept(image, t_percept=50 * ms)
+# 0.3 dva stroke ≈ 87 um ≈ 3 pixels of 30 um; the whole E is 1.5 dva across
+e = p2p.stimuli.psychophysics.tumbling_e(
+    stroke=0.3 * dva,
+    orientation=90 * deg,  # bars point up
+    fov=6 * dva,
+    polarity='light',      # white E on black: only the E is stimulated
+)
+percept = huang_model.predict_percept(e, t_percept=50 * ms)
 percept.plot();
 
 ###############################################################################
-# The model is based on degenerated rat retina and should not be interpreted
-# as a validated human model of PRIMA perception.
-#
 # Adding residual vision and gaze
 # -------------------------------
 #
@@ -110,6 +114,14 @@ scene = p2p.vision.Scene(
     aperture='round',
 )
 
+prima = p2p.implants.retina.PRIMAPivotal()
+prima_model = p2p.models.retina.Ho2018Model(
+    prima,
+    xrange=(-6 * dva, 6 * dva),  # degrees of visual angle
+    yrange=(-6 * dva, 6 * dva),
+    step=0.05 * dva,
+)
+
 gaze = p2p.vision.Gaze([
     (0, 0, 0),
     (-29 * dva, -7 * dva, 605 * ms),
@@ -123,6 +135,10 @@ scene.play(
 )
 
 ###############################################################################
+# The [Ho2018]_ model is based on degenerated rat retina and should not be
+# interpreted as a validated human model of PRIMA perception.
+#
+# 
 # A form traced through visual cortex
 # -----------------------------------
 #
@@ -139,6 +155,8 @@ scene.play(
 # visual field. :py:class:`~pulse2percept.stimuli.TraceEncoder` maps a
 # trajectory in dva onto the nearest electrodes and stimulates them one at a
 # time, ``step_dur`` each:
+
+from pulse2percept.units import mm, ms, uA, dva
 
 orion = p2p.implants.cortex.Orion()
 dynaphos = p2p.models.cortex.DynaphosModel(
@@ -167,7 +185,7 @@ percept = dynaphos.predict_percept(stim)
 
 fig, axes = plt.subplots(ncols=2, figsize=(12, 5))
 dynaphos.plot(show_implant=True, ax=axes[0])
-percept.play(rings=True, ax=axes[1]);
+percept.play(ax=axes[1], rings=[1.25, 2.5, 5], meridians=True);
 
 ###############################################################################
 # This is therefore an illustrative simulation, not a reproduction of the

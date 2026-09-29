@@ -475,7 +475,7 @@ def _check_spatial_nyquist(spatial_freq, direction, fov, shape):
     A grating of frequency ``fs`` at angle ``theta`` has components
     ``fs |cos(theta)|`` and ``fs |sin(theta)|`` along x and y, each of which
     has to stay strictly below the Nyquist frequency of its own angular pixel
-    pitch. Direction matters: a grating that varies only vertically is
+    pitch. Direction is important: a grating that varies only vertically is
     resolved by a frame of wide, short pixels. Equality is not enough either:
     at exactly two samples per cycle the phase is unrecoverable, and a
     quadrature-phase grating rasterizes as a uniform field.

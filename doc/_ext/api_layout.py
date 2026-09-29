@@ -5,8 +5,9 @@ An object's page lives at the shallowest package that lists it in ``__all__``
 Objects no ``__all__`` lists stay on their defining module's page. A plain
 module gets a page only if some object lives there; subpackages always do.
 
-``CURATED`` modules list their objects in hand-written autosummary tables in
-their docstring; those names are taken as given and get no generated tables.
+``CURATED`` modules list their objects and subpackages in hand-written
+autosummary tables in their docstring; those names are taken as given and get
+no generated tables.
 """
 import importlib
 import inspect
@@ -15,7 +16,11 @@ import re
 import warnings
 
 ROOT = 'pulse2percept'
-CURATED = ('pulse2percept.stimuli',)
+CURATED = tuple(f'{ROOT}.{m}' for m in (
+    'datasets', 'implants', 'implants.cortex', 'implants.retina', 'models',
+    'models.cortex', 'models.retina', 'percepts', 'plotting', 'stimuli',
+    'topography', 'topography.cortex', 'topography.retina', 'units', 'utils',
+    'vision'))
 SKIP = re.compile(r'\.(tests|conftest)(\.|$)|\._|\.utils\.testing$')
 KINDS = (('class', 'Classes'), ('function', 'Functions'),
          ('exception', 'Exceptions'))
@@ -83,6 +88,8 @@ def build_layout():
             obj = mods[modname]
             for part in name.split('.'):
                 obj = getattr(obj, part)
+            if inspect.ismodule(obj):
+                continue
             claim(obj, *f'{modname}.{name}'.rsplit('.', 1), curated=True)
             curated.add(id(obj))
 
@@ -104,7 +111,8 @@ def build_layout():
                 layout[m]['tables'] or layout[m]['data']}
     for modname in sorted(has_page - {ROOT}):
         parent = modname.rsplit('.', 1)[0]
-        if parent != ROOT:
+        # The root and curated docstrings list their own subpackages
+        if parent != ROOT and parent not in CURATED:
             layout[parent]['modules'].append(modname.rsplit('.', 1)[1])
     return {m: v for m, v in layout.items() if m in has_page}
 

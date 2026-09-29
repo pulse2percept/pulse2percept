@@ -87,8 +87,8 @@ def test_deepcopy_ScoreboardSpatial():
     # Assert building one object does not affect the copied
     original.build()
     npt.assert_equal(copied.is_built, False)
-    # Array-aware: a plain dict comparison raises once the model is
-    # built, because `array == array` cannot be coerced to a bool.
+    # The copied model should no longer have the same state as the original.
+    # Use NumPy's equality check because the dictionaries contain arrays.
     npt.assert_raises(AssertionError, npt.assert_equal,
                       original.__dict__, copied.__dict__)
 
@@ -153,8 +153,8 @@ def test_deepcopy_ScoreboardModel():
     # Assert building one object does not affect the copied
     original.build()
     npt.assert_equal(copied.is_built, False)
-    # Array-aware: a plain dict comparison raises once the model is
-    # built, because `array == array` cannot be coerced to a bool.
+    # The copied model should no longer have the same state as the original.
+    # Use NumPy's equality check because the dictionaries contain arrays.
     npt.assert_raises(AssertionError, npt.assert_equal,
                       original.__dict__, copied.__dict__)
 
@@ -283,8 +283,8 @@ def test_deepcopy_AxonMapSpatial():
     # Assert building one object does not affect the copied
     original.build()
     npt.assert_equal(copied.is_built, False)
-    # Array-aware: a plain dict comparison raises once the model is
-    # built, because `array == array` cannot be coerced to a bool.
+    # The copied model should no longer have the same state as the original.
+    # Use NumPy's equality check because the dictionaries contain arrays.    
     npt.assert_raises(AssertionError, npt.assert_equal,
                       original.__dict__, copied.__dict__)
 

@@ -455,8 +455,8 @@ electrode layout does not correspond to an existing implant, you can construct
 your own :py:class:`~pulse2percept.implants.ElectrodeArray` and
 :py:class:`~pulse2percept.implants.Implant`.
 
-The implant matters because electrode size, spacing, location, and orientation
-can all affect the predicted response.
+Electrode size, spacing, location, and orientation can all affect the predicted
+response.
 
 See :ref:`Visual Prostheses <topics-implants>` for details.
 

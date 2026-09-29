@@ -1,4 +1,25 @@
-"""Cortical visual field maps
+"""Cortical visual field maps.
+
+Base Class
+----------
+
+.. autosummary::
+    :toctree:
+
+    CorticalMap
+
+Maps
+----
+
+.. autosummary::
+    :toctree:
+
+    Polimeni2006Map
+    NeuropythyMap
+
+.. seealso::
+
+    *  :ref:`Core Concepts > Retinotopy and Coordinates <topics-coordinates>`
 
 """
 from .base import CorticalMap

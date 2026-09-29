@@ -1,13 +1,13 @@
 .. _dev-style-guide:
 
-==========
-Code Style
-==========
+===========
+Style Guide
+===========
 
 pulse2percept follows `PEP 8`_ with a small number of project-specific
 conventions. The repository's lint configuration is authoritative.
 
-General conventions
+General Conventions
 -------------------
 
 * Use four spaces for indentation.
@@ -35,7 +35,7 @@ Use the conventional package aliases used throughout the codebase:
 
     import pulse2percept as p2p
 
-Line breaks around operators
+Line Breaks Around Operators
 ----------------------------
 
 pulse2percept breaks long expressions **after** binary operators:

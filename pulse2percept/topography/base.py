@@ -734,17 +734,13 @@ class VisualFieldMap(Parametrized):
     tissue_unit = um
 
     def __init_subclass__(cls, **kwargs):
-        """Make every coordinate transform a unit-aware boundary
+        """Add unit handling to coordinate transforms defined by subclasses.
 
-        A transform's name says which side it takes: ``dva_to_v1`` takes
-        visual field coordinates, ``v1_to_dva`` takes tissue coordinates. That
-        is enough to normalize them in one place instead of at the top of
-        twenty methods, and it covers a map written outside p2p without its
-        author having to know about any of this.
+        Methods named ``dva_to_*`` accept visual-field coordinates, while
+        ``*_to_dva`` methods accept tissue coordinates. Wrap them here so
+        subclasses do not need to handle unit conversion themselves.
 
-        Only arguments named for a coordinate are touched (see
-        ``_COORD_ARG``), so ``coords='cart'``, ``region='v1'``, ``hemi`` and
-        ``surface`` travel through untouched.
+        Only coordinate arguments recognized by ``_COORD_ARG`` are converted.
         """
         super().__init_subclass__(**kwargs)
         for name, attr in list(vars(cls).items()):

@@ -1,4 +1,34 @@
-"""Retinal visual field maps
+"""Retinal visual field maps.
+
+Base Class
+----------
+
+.. autosummary::
+    :toctree:
+
+    RetinalMap
+
+Maps
+----
+
+.. autosummary::
+    :toctree:
+
+    Curcio1990Map
+    Watson2014Map
+
+Maps with RGC Displacement
+--------------------------
+
+.. autosummary::
+    :toctree:
+
+    Watson2014DisplaceMap
+    Montesano2020Map
+
+.. seealso::
+
+    *  :ref:`Core Concepts > Retinotopy and Coordinates <topics-coordinates>`
 
 """
 from .base import RetinalMap

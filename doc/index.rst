@@ -7,10 +7,10 @@
 
    Overview <self>
    getting_started/install
-   Quickstart <examples/plot_quickstart>
+   Quickstart Guide <examples/plot_quickstart>
 
 .. toctree::
-   :caption: Core concepts
+   :caption: Core Concepts
    :hidden:
 
    concepts/implants
@@ -66,22 +66,26 @@ Compatibility
    :start-after: .. compat-begin
    :end-before: .. compat-end
 
-Where to go from here
-=====================
+Getting Started
+===============
 
-*  Run the :doc:`Quickstart <examples/plot_quickstart>`.
-*  Read the core concepts in order: :doc:`implants <concepts/implants>`,
-   :doc:`stimulation <concepts/stimulation>`,
-   :doc:`models and percepts <concepts/models>`,
-   :doc:`visual input <concepts/vision>`,
-   :doc:`coordinates <concepts/coordinates>`, :doc:`units <concepts/units>`, and
-   :doc:`datasets <concepts/datasets>`.
-*  Browse the :doc:`model reproductions <examples/models/index>`.
-*  Check the :doc:`FAQ <reference/faq>` for common questions.
-*  Request features or report bugs on the `Issue Tracker`_.
+New to pulse2percept? Start with the
+:doc:`Quickstart Guide <examples/plot_quickstart>` for some short
+end-to-end examples.
 
-.. minigallery:: ../examples/models/plot_*.py
-   :add-heading: Model reproductions
-   :heading-level: =
+From there, the core concepts are easiest to read in this order:
+:doc:`implants <concepts/implants>`,
+:doc:`stimulation <concepts/stimulation>`,
+:doc:`models and percepts <concepts/models>`,
+:doc:`visual input <concepts/vision>`,
+:doc:`coordinates <concepts/coordinates>`, :doc:`units <concepts/units>`, and
+:doc:`datasets <concepts/datasets>`.
+
+The :doc:`model reproductions <examples/models/index>` show how published
+models and experiments are implemented in pulse2percept.
+
+For common questions, see the :doc:`FAQs <reference/faq>`.
+If something is broken or missing, please open an issue on the 
+`Issue Tracker`_.
 
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

@@ -619,12 +619,12 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
     n_axons : int, optional
         Number of nerve fiber bundles generated.
     axons_range : (float, float) or Quantity, optional
-        Range of initial bundle angles ``phi0`` in the Jansonius model.
+        Range of initial bundle angles ``phi0`` in the [Jansonius2009]_ model.
     n_ax_segments : int, optional
         Number of radial samples used to generate each bundle.
     ax_segments_range : (float, float), optional
-        Radial-coordinate range used to generate each bundle in the Jansonius
-        model.
+        Radial-coordinate range used to generate each bundle in the
+        [Jansonius2009]_ model.
     min_ax_sensitivity : float, optional
         Minimum relative axon sensitivity retained during precomputation.
     meridian_blend : float or Quantity, optional
@@ -875,12 +875,12 @@ class BiphasicAxonMapModel(Model):
     n_axons : int, optional
         Number of nerve fiber bundles generated.
     axons_range : (float, float) or Quantity, optional
-        Range of initial bundle angles ``phi0`` in the Jansonius model.
+        Range of initial bundle angles ``phi0`` in the [Jansonius2009]_ model.
     n_ax_segments : int, optional
         Number of radial samples used to generate each bundle.
     ax_segments_range : (float, float), optional
-        Radial-coordinate range used to generate each bundle in the Jansonius
-        model.
+        Radial-coordinate range used to generate each bundle in the
+        [Jansonius2009]_ model.
     min_ax_sensitivity : float, optional
         Minimum relative axon sensitivity retained during precomputation.
     meridian_blend : float or Quantity, optional

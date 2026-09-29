@@ -1,8 +1,39 @@
-"""Cortical implants such as Orion, ICVP, and Neuralink
+"""Cortical implants.
+
+Base class
+----------
+
+.. autosummary::
+    :toctree:
+
+    CorticalImplant
+
+Devices
+-------
+
+.. autosummary::
+    :toctree:
+
+    Orion
+    ICVP
+    NeuroPortArray
+    Neuralink
+
+Neuralink components
+--------------------
+
+.. autosummary::
+    :toctree:
+
+    NeuralinkThread
+    LinearEdgeThread
+    EllipsoidElectrode
 
 .. seealso::
 
-    *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
+    *  :ref:`Core Concepts > Implants > Cortical Implants
+       <topics-implants-cortex>`
+
 """
 
 from .base import CorticalImplant

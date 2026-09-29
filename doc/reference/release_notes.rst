@@ -7,9 +7,6 @@ Release Notes
 v0.11.0 Foundations (2026-09-30)
 ================================
 
-Highlights
-----------
-
 .. warning::
 
     v0.11 is a **backwards-incompatible API overhaul**.
@@ -39,10 +36,13 @@ Highlights
         implant = p2p.implants.retina.ArgusII()
         model = p2p.models.retina.AxonMapModel(
             implant,
-            implant_position=(1000, -500),
-            implant_rotation=15,
+            implant_position=(1000 * um, -500 * um),
+            implant_rotation=15 * deg,
         )
         percept = model.predict_percept(stim)
+
+Highlights
+----------
 
 * Added :py:mod:`pulse2percept.vision` for composing scenes, scotomas,
   residual vision, and prosthetic percepts in visual-field coordinates,
@@ -70,9 +70,9 @@ Stimuli and encoding
   and ``StimulusEncoder`` was renamed to
   :py:class:`~pulse2percept.stimuli.PulseEncoder` (:pull:`925`, :pull:`926`).
 
-* Added :py:class:`~pulse2percept.stimuli.TraceEncoder`, a model-aware encoder
-  that stimulates one electrode at a time along a letter or trajectory drawn
-  in the visual field (:pull:`926`).
+* Added :py:class:`~pulse2percept.stimuli.TraceEncoder`, which traces a letter
+  or trajectory in the visual field by stimulating one electrode at a time
+  (:pull:`926`).
 
 * The stimuli API was simplified: bundled media moved to ``stimuli.samples``,
   visual psychophysics stimuli to ``stimuli.psychophysics``, and several legacy

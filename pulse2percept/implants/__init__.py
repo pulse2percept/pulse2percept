@@ -1,11 +1,73 @@
-"""Visual prostheses, e.g. Argus II, Alpha-IMS, PRIMA, NeuroPortArray
+"""Visual prostheses, electrode arrays, and electrodes.
 
-Generic device machinery lives at the root; devices live under the anatomical
-target they stimulate.
+Anatomy-neutral classes are available at the top level. Devices are
+grouped by target tissue in ``retina`` and ``cortex``.
+
+Implants
+--------
+
+.. autosummary::
+    :toctree:
+
+    Implant
+    GridImplant
+    EnsembleImplant
+
+Electrode Arrays
+----------------
+
+.. autosummary::
+    :toctree:
+
+    ElectrodeArray
+    ElectrodeGrid
+
+Electrodes
+----------
+
+.. autosummary::
+    :toctree:
+
+    Electrode
+    PointSource
+    DiskElectrode
+    SquareElectrode
+    HexElectrode
+
+Rasters
+-------
+
+Split electrodes into groups that are stimulated at different
+times.
+
+.. autosummary::
+    :toctree:
+
+    Raster
+    SequentialRaster
+    CheckerboardRaster
+    CustomRaster
+
+Devices
+-------
+
+.. autosummary::
+    :toctree:
+
+    retina
+    cortex
+
+Deprecated in v0.11
+-------------------
+
+``ProsthesisSystem`` is an alias of :py:class:`Implant` and will be
+removed in v0.12.
 
 .. seealso::
 
-    *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`
+    *  :ref:`Core Concepts > Implants <topics-implants>`
+    *  :ref:`Core Concepts > Stimulation > Raster Scheduling <topics-rasters>`
+
 """
 from .base import GridImplant, Implant
 from .electrodes import (Electrode, PointSource, DiskElectrode,

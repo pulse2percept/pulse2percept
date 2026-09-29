@@ -1,8 +1,27 @@
-"""Phosphene models for cortical implants
+"""Models of cortical stimulation.
+
+Base Class
+----------
+
+.. autosummary::
+    :toctree:
+
+    CortexSpatial
+
+Models
+------
+
+.. autosummary::
+    :toctree:
+
+    ScoreboardModel
+    ScoreboardSpatial
+    DynaphosModel
 
 .. seealso::
 
-    *  :ref:`Basic Concepts > Computational Models <topics-models>`
+    *  :ref:`Core Concepts > Models and Percepts <topics-models>`
+
 """
 from .base import CortexSpatial
 from .scoreboard import ScoreboardModel, ScoreboardSpatial

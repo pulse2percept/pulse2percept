@@ -20,6 +20,8 @@ calls are equivalent:
     BiphasicPulse(50, 0.45)
     BiphasicPulse(0.05 * mA, 450 * us)
 
+When in doubt, use units.
+
 
 Canonical Units
 ===============
@@ -239,13 +241,3 @@ compatible units:
 Parameter units defined by models and other parametrized objects are available
 through
 :py:meth:`~pulse2percept.utils.Parametrized.get_param_units`.
-
-
-Scope of the Unit System
-========================
-
-The unit system is intentionally small.
-
-It provides dimensional checking and explicit conversion, but does not include
-a global unit registry, string parsing, or automatic NumPy unit propagation.
-Performance-sensitive Cython and Torch code receives plain numeric values.

@@ -13,12 +13,6 @@ Studies describing pulse2percept:
 
 Studies referenced throughout the Documentation:
 
-.. [Ahuja2008] AK Ahuja, MR Behrend, M Kuroda, MS Humayun, JD Weiland (2008).
-               An in vitro model of a retinal prosthesis.
-               *IEEE Trans Biomed Eng* 55, 1744-1753.
-.. [Al-Atabany2010] WT Al-Atabany, T Tong, PA Degenaar (2010). Improved 
-                    content aware scene retargeting for retinitis pigmentosa
-                    patients. *BioMedical Engineering OnLine*, 9(1), 52.
 .. [Beauchamp2020] MS Beauchamp, D Oswalt, P Sun, BL Foster, JF Magnotti,
                    S Niketeghad, N Pouratian, WH Bosking, D Yoshor (2020).
                    Dynamic stimulation of visual cortex produces form vision
@@ -43,10 +37,6 @@ Studies referenced throughout the Documentation:
                 *Journal of Comparative Neurophysiology* 292:497-523,
                 doi:`10.1002/cne.902920402
                 <https://doi.org/10.1002/cne.902920402>`_.
-.. [EricksonDavis2021] C Erickson-Davis, H Korzybska (2021). What do blind people 
-                       "see" with retinal prostheses? Observations and qualitative
-                       reports of epiretinal implant users. *PLOS ONE* 16(2), 
-                       doi:`10.1371/journal.pone.0229189 <https://doi.org/10.1371/journal.pone.0229189>`_.
 .. [Fernandez2017] E Fernandez & R Normann (2017). CORTIVIS Approach for an 
                    Intracortical Visual Prostheses. *Springer International Publishing*,
                    doi: `10.1007/978-3-319-41876-6_15 <https://doi.org/10.1007/978-3-319-41876-6_15>`_.
@@ -69,9 +59,6 @@ Studies referenced throughout the Documentation:
 .. [Han2021] N Han, S Srivastava, A Xu, D Klein, M Beyeler (2021). Deep learning-based 
                  scene simplification for bionic vision. *ACM Augmented Humans* 2021,
                  doi:`10.1145/3458709.3458982 <https://doi.org/10.1145/3458709.3458982>`_.
-.. [Hayes2003] JS Hayes et al. (2003). Visually guided performance of
-               simple tasks using simulated prosthetic vision.
-               *Artificial Organs* 27, 1016-1028.
 .. [Ho2018] E Ho, R Smith, G Goetz, X Lei, L Galambos, TI Kamins, J Harris,
             K Mathieson, D Palanker, A Sher (2018). Spatiotemporal
             characteristics of retinal response to network-mediated
@@ -121,10 +108,6 @@ Studies referenced throughout the Documentation:
                 K Mathieson, P Huie, J Harris, A Sher, D Palanker (2015).
                 Photovoltaic restoration of sight with high visual acuity.
                 *Nature Medicine* 21(5):476-482
-.. [Luo2016] YH Luo, JJ Zhong, M Clemo, L da Cruz (2016). Long-term Repeatability and 
-             Reproducibility of Phosphene Characteristics in Chronically Implanted
-             Argus(R) II Retinal Prosthesis Subjects. *Am J Ophthalmol*, 
-             doi:`10.1016/j.ajo.2016.07.021 <https://doi.org/10.1016/j.ajo.2016.07.021>`_.
 .. [Montesano2020] G Montesano, G Ometto, RE Hogg, LM Rossetti, DF Garway-Heath,
                    DP Crabb (2020). Revisiting the Drasdo model: implications
                    for structure-function analysis of the macular region.

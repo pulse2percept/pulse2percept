@@ -156,7 +156,7 @@ class Stimulus(PrettyPrint):
 
     .. seealso ::
 
-        *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+        *  :ref:`Core Concepts > Stimulation <topics-stimulation>`
 
     .. versionadded:: 0.6
 
@@ -1507,7 +1507,7 @@ class ImageStimulus(Stimulus):
 
     .. seealso ::
 
-        *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+        *  :ref:`Core Concepts > Stimulation <topics-stimulation>`
         *  :py:class:`~pulse2percept.stimuli.VideoStimulus`
 
     .. versionadded:: 0.7
@@ -2275,7 +2275,7 @@ class VideoStimulus(Stimulus):
 
     .. seealso ::
 
-        *  `Basic Concepts > Electrical Stimuli <topics-stimuli>`
+        *  :ref:`Core Concepts > Stimulation <topics-stimulation>`
         *  :py:class:`~pulse2percept.stimuli.ImageStimulus`
 
     .. versionadded:: 0.7

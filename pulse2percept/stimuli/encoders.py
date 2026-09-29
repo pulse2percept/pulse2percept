@@ -1386,77 +1386,74 @@ def _ordered_path(skeleton):
 
 
 class TraceEncoder(Encoder):
-    """Encode a traced shape as sequential single-electrode pulses
+    """Encode a visual trajectory as sequential single-electrode stimulation.
 
-    A model-aware encoder: it uses the model's
-    :py:class:`~pulse2percept.topography.VisualFieldMap` and implant placement
-    to stimulate one electrode at a time, in trajectory order, for
-    ``step_dur`` each:
+    ``TraceEncoder`` maps an ordered trajectory in the visual field to physical
+    electrodes using the model's visual-field map and implant placement. The
+    selected electrodes are stimulated one at a time for ``step_dur`` each.
 
-    .. code-block:: text
+    Unlike an :py:class:`~pulse2percept.stimuli.ImplantEncoder`,
+    ``TraceEncoder`` is not attached to
+    :py:attr:`~pulse2percept.implants.Implant.encoder`. Call
+    :py:meth:`encode` directly.
 
-        image or ordered trajectory in visual field
-                          |
-                ordered (x, y) trajectory in dva      <- trajectory()
-                          |
-          model.visual_field_map.from_dva()[region]
-                          |
-        nearest placed physical electrode per sample  <- electrode_sequence()
-                          |
-          one step_dur pulse train per electrode      <- encode()
+    Input
+    -----
+    The target may be either:
 
-    Unlike an :py:class:`~pulse2percept.stimuli.ImplantEncoder`, it cannot be
-    installed on :py:attr:`Implant.encoder
-    <pulse2percept.implants.Implant.encoder>`; call :py:meth:`encode`
-    directly.
+    * An ``(N, 2)`` array of ordered ``(x, y)`` positions in dva.
+    * A grayscale :py:class:`~pulse2percept.stimuli.ImageStimulus` containing
+      one bright stroke on a dark background. ``extent`` places the image in
+      the visual field.
 
-    Accepted targets:
+    Image traces are thresholded and skeletonized to a one-pixel centerline.
+    The centerline must form one open, nonbranching path. Its direction starts
+    at the endpoint that appears first in row-major order (topmost, then
+    leftmost).
 
-    *  An ``(N, 2)`` array of ordered ``(x, y)`` positions in dva.
-    *  A grayscale :py:class:`~pulse2percept.stimuli.ImageStimulus` of a
-       single bright stroke on a dark background (e.g., a letter), placed in
-       the visual field by ``extent``. Pixels above ``threshold`` are
-       skeletonized to a one-pixel centerline, which must form one open,
-       nonbranching path. With ``prune_spurs=True``, short endpoint spurs
-       produced by skeletonization near thick corners are removed before
-       topology validation. The path starts at
-       its endpoint that comes first in row-major order (topmost, then
-       leftmost). Skeletonization can bend the end of a thick stroke by a
-       pixel, which can change that endpoint. Use :py:meth:`trajectory` to
-       check the direction, or pass an ``(N, 2)`` trajectory to set it.
+    Thick corners can produce short spurs during skeletonization. Setting
+    ``prune_spurs=True`` removes short endpoint spurs before topology is
+    checked, but may also remove a short real branch. Use
+    :py:meth:`trajectory` to inspect the resulting path, or pass an explicit
+    ``(N, 2)`` trajectory when direction must be controlled.
 
-    Candidates are activated electrodes whose placed location has a finite
-    ``to_dva`` location, i.e. lies in the mapped region. Each sample is mapped
-    on its own, so its electrode does not depend on the other samples.
+    Mapping
+    -------
+    Each trajectory sample is mapped independently to the nearest active
+    electrode with a finite inverse visual-field location. ``region`` selects
+    the target region when the visual-field map contains more than one.
 
-    Consecutive samples that select the same electrode are collapsed into one
-    step, so dense sampling does not lengthen a dwell. A later revisit of the
-    same electrode is a new step.
+    Consecutive samples that map to the same electrode are collapsed into a
+    single stimulation step. Revisiting that electrode later in the trajectory
+    produces a new step.
 
-    Inspired by the dynamic letter-tracing paradigm of [Beauchamp2020]_. This
-    implementation uses physical electrodes only: it does not implement
-    current steering or virtual electrodes, and does not reproduce that
-    study's protocol.
+    The resulting electrode sequence depends on retinotopy and implant
+    placement, so its path across the physical array need not resemble the
+    trajectory in visual space.
+
+    This encoder is inspired by the dynamic letter-tracing paradigm of
+    [Beauchamp2020]_. It uses physical electrodes only and does not implement
+    current steering, virtual electrodes, or the stimulation protocol from
+    that study.
 
     .. versionadded:: 0.11.0
 
     Parameters
     ----------
     model : model
-        Model that places the implant in tissue. Requires ``implant``, an
-        invertible ``visual_field_map`` (``from_dva`` and ``to_dva``), and
-        placed electrode coordinates (``implant_position``,
-        ``implant_rotation``, ``implant_depth``). The encoder binds to
-        ``model.implant``.
+        Model used to map visual-field positions to physical electrodes.
+        Requires an ``implant``, an invertible ``visual_field_map``
+        (``from_dva`` and ``to_dva``), and implant placement parameters.
+        The encoder uses ``model.implant``.
     amp : float or Quantity, optional
-        Pulse amplitude (uA, or ``xTh`` for threshold multiples) on the
-        active electrode.
+        Pulse amplitude in uA, or in ``xTh`` for threshold-relative
+        stimulation.
     freq : float or Quantity, optional
-        Pulse train frequency (Hz).
+        Pulse-train frequency (Hz).
     phase_dur : float or Quantity, optional
         Duration of each pulse phase (ms).
     step_dur : float or Quantity, optional
-        Stimulation time (ms) per trajectory step.
+        Stimulation duration for each trajectory step (ms).
     interphase_dur : float or Quantity, optional
         Gap between cathodic and anodic phases (ms).
     cathodic_first : bool, optional
@@ -1465,34 +1462,32 @@ class TraceEncoder(Encoder):
         Stimulator clock period (ms). See
         :py:class:`~pulse2percept.stimuli.PulseEncoder`.
     region : str, optional
-        Region of ``visual_field_map.from_dva()`` to map onto, e.g. 'v1'.
-        Required if the map has more than one region.
+        Region returned by ``visual_field_map.from_dva()`` to use, e.g.
+        ``'v1'``. Required when the map contains more than one region.
     threshold : float, optional
-        Gray level in [0, 1] above which an image pixel is part of the trace.
+        Gray level in ``[0, 1]`` above which image pixels belong to the trace.
     prune_spurs : bool, optional
-        If True, short endpoint spurs produced by skeletonization near thick
-        corners are removed before topology validation. This can also remove
-        a short real branch. If False, any branch is rejected.
+        If True, remove short endpoint spurs introduced by skeletonization
+        before topology validation. This may also remove a short real branch.
+        If False, any branch is rejected.
 
     Notes
     -----
-    *  Pulse trains are built by
-       :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` with
-       ``frame_dur=step_dur``, so the implant's raster applies.
-    *  Sparse vertices are not interpolated. To trace a line, pass samples
-       along it. An image trace has one sample per skeleton pixel, so the
-       image resolution sets the sampling density.
-    *  The electrode sequence is determined by retinotopy and placement, so the
-       path across the physical array can look unlike the visual trajectory.
-    *  :py:class:`~pulse2percept.models.cortex.DynaphosModel` simulates an
-       encoded stimulus at its own ``freq`` and ``p_dur``. Set ``freq`` and
-       ``phase_dur`` to match them.
-    *  Models with ``location_noise`` are not supported.
+    * Pulse trains are generated with
+      :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` using
+      ``frame_dur=step_dur``, so the implant's raster is respected.
+    * Sparse trajectory vertices are not interpolated. Sample intermediate
+      points explicitly when tracing a line. Image traces contain one sample
+      per skeleton pixel, so image resolution determines sampling density.
+    * :py:class:`~pulse2percept.models.cortex.DynaphosModel` simulates encoded
+      stimulation using its own ``freq`` and ``p_dur``. Set ``freq`` and
+      ``phase_dur`` to match these values.
+    * Models with ``location_noise`` are not supported.
 
     Examples
     --------
-    Trace a horizontal line at 2 dva below fixation with Orion in the right
-    hemisphere (left visual field):
+    Trace a horizontal line at 2 dva below fixation using Orion in the right
+    hemisphere:
 
     >>> import numpy as np
     >>> import pulse2percept as p2p
@@ -1500,17 +1495,19 @@ class TraceEncoder(Encoder):
     >>> implant = p2p.implants.cortex.Orion()
     >>> model = p2p.models.cortex.DynaphosModel(
     ...     implant, implant_position=(20, -5) * mm)
-    >>> encoder = p2p.stimuli.TraceEncoder(model, amp=100 * uA,
-    ...                                    freq=model.freq,
-    ...                                    phase_dur=model.p_dur,
-    ...                                    step_dur=50 * ms)
+    >>> encoder = p2p.stimuli.TraceEncoder(
+    ...     model,
+    ...     amp=100 * uA,
+    ...     freq=model.freq,
+    ...     phase_dur=model.p_dur,
+    ...     step_dur=50 * ms)
     >>> x = np.linspace(-6, -2, 41)
     >>> trace = np.column_stack([x, np.full_like(x, -2)])
     >>> encoder.electrode_sequence(trace)
     ['41', '37', '38']
     >>> stim = encoder.encode(trace)
 
-    The same line drawn as an image, one pixel per 0.1 dva:
+    The same line can be supplied as an image with one pixel per 0.1 dva:
 
     >>> from pulse2percept.units import dva
     >>> line = np.zeros((9, 41))
@@ -1523,7 +1520,6 @@ class TraceEncoder(Encoder):
     >>> encoder.electrode_sequence(target, extent=extent)
     ['41', '37', '38']
     >>> stim = encoder.encode(target, extent=extent)
-
     """
     __slots__ = ('model', 'amp', 'amp_unit', 'freq', 'phase_dur', 'step_dur',
                  'interphase_dur', 'cathodic_first', 'clock', 'region',

@@ -4,104 +4,68 @@
 Implants
 ========
 
-An implant defines the hardware that delivers stimulation: the electrodes,
-their geometry, and, when applicable, the encoding and rastering rules used to
-turn images or video into electrode stimuli.
-
-The stimulus itself is separate from the implant; see
-:ref:`topics-stimulation`. Placement of the device in tissue is handled by the
-model; see :ref:`topics-coordinates`.
-
-Retinal devices are available under :mod:`pulse2percept.implants.retina`;
-cortical devices under :mod:`pulse2percept.implants.cortex`. Generic
-electrodes, arrays, grids, and
-:py:class:`~pulse2percept.implants.EnsembleImplant` live directly in
-:mod:`pulse2percept.implants`.
-
-
-Quick Start
-===========
-
-.. code-block:: python
-
-    import pulse2percept as p2p
-
-    implant = p2p.implants.retina.ArgusII()
-
-    implant['A8']                        # electrode by name
-    implant[0]                           # electrode by index
-    implant.electrode_names
-    implant.electrode_array.coordinates()
-    implant.plot()
-
-
-Implant Interface
-=================
-
-All implants derive from :py:class:`~pulse2percept.implants.Implant`.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 22 48 30
-
-   * - Attribute
-     - Meaning
-     - Typical values
-   * - ``electrode_array``
-     - Electrode geometry and device-local coordinates
-     - :py:class:`~pulse2percept.implants.ElectrodeArray`
-   * - ``placement``
-     - Tissue interface represented by the device
-     - ``'epiretinal'``, ``'subretinal'``, ``'suprachoroidal'``,
-       ``'epicortical'``, ``'intracortical'``
-   * - ``encoder``
-     - Converts image or video input into electrode values
-     - Device-specific encoder or ``None``
-   * - ``raster``
-     - Controls when electrodes are stimulated
-     - Sequential raster, simultaneous stimulation, or ``None``
-   * - ``preprocess``
-     - Optional preprocessing applied before encoding
-     - Callable or ``None``
-   * - ``thresholds``
-     - Perceptual threshold current used to convert ``xTh`` amplitudes
-       to current
-     - Scalar or per-electrode dictionary
-   * - ``safe_mode``
-     - Enables device-specific stimulation checks
-     - ``True`` or ``False``
-   * - ``max_current``
-     - Maximum instantaneous current summed across electrodes
-     - Current in uA
-   * - ``scene_input_frame``
-     - Reference frame of image or video input
-     - ``'eye'`` or ``'head'``
-
-``encoder``, ``raster``, and ``preprocess`` are described in
-:ref:`topics-stimulation`. ``scene_input_frame`` determines whether gaze moves
-the input and is described in :ref:`topics-vision`.
-
+.. _topics-implants-retina:
 
 Retinal Implants
 ================
 
+Retinal implants span epiretinal, subretinal, and suprachoroidal devices with
+very different electrode counts, geometries, and physical scales.
+
 Retinal implant classes derive from
 :py:class:`~pulse2percept.implants.retina.RetinalImplant`.
 
-The ``eye`` argument records which eye is implanted (``'left'`` or
-``'right'``; default ``'right'``). Axon map models use it to locate the optic
-disc. Some devices also reverse electrode column names for the left eye; see
-the individual API documentation for details.
+Their ``eye`` argument records the implanted eye (``'left'`` or ``'right'``;
+default ``'right'``). Axon map models use it to locate the optic disc. Some
+devices also reverse electrode column names in the left eye; see the
+individual API documentation.
+
+Several representative arrays are shown below at the same physical scale:
+
+.. plot::
+
+    import matplotlib.pyplot as plt
+    import pulse2percept as p2p
+
+    devices = [
+        ('Argus II', p2p.implants.retina.ArgusII()),
+        ('Alpha AMS', p2p.implants.retina.AlphaAMS()),
+        ('Suprachoroidal 44', p2p.implants.retina.Suprachoroidal44()),
+        ('IMIE', p2p.implants.retina.IMIE()),
+        ('PRIMA', p2p.implants.retina.PRIMAPivotal()),
+    ]
+
+    fig, axes = plt.subplots(2, 3, figsize=(11, 6.5))
+
+    for ax, (title, implant) in zip(axes.flat, devices):
+        implant.plot(ax=ax)
+        ax.set_title(title, fontsize=10)
+        ax.set_aspect('equal')
+        ax.set_xlabel('x (um)', fontsize=8)
+        ax.set_ylabel('y (um)', fontsize=8)
+        ax.tick_params(labelsize=7)
+
+    axes.flat[-1].axis('off')
+    fig.tight_layout()
+
+
+.. _topics-implants-human:
+
+Human Implant Systems
+---------------------
+
+pulse2percept includes geometries for several retinal prosthesis systems that
+have been implanted in people:
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 14 10 26 28
+   :widths: 25 16 12 25 22
 
-   * - Object
+   * - Implant
      - Placement
      - Electrodes
      - Device
-     - Typical model
+     - Typical Model
    * - :py:class:`~pulse2percept.implants.retina.ArgusI`
      - epiretinal
      - 16
@@ -143,71 +107,28 @@ the individual API documentation for details.
      - PRIMA photovoltaic array [Holz2026]_
      - ``Ho2018Model``, ``ScoreboardModel``
 
-These classes are reconstructed from published device descriptions rather than
-manufacturer-validated simulators. ``Suprachoroidal24`` and
-``Suprachoroidal44`` are pulse2percept identifiers, not product names.
-
-
-Physical Scale
---------------
-
-Retinal arrays differ substantially in size. The plots below use the same
-device-local units (um):
-
-.. plot::
-
-    import matplotlib.pyplot as plt
-    import pulse2percept as p2p
-
-    devices = [
-        ('ArgusII()', p2p.implants.retina.ArgusII()),
-        ('AlphaAMS()', p2p.implants.retina.AlphaAMS()),
-        ('Suprachoroidal44()', p2p.implants.retina.Suprachoroidal44()),
-        ('IMIE()', p2p.implants.retina.IMIE()),
-        ('PRIMAPivotal()', p2p.implants.retina.PRIMAPivotal()),
-    ]
-
-    fig, axes = plt.subplots(2, 3, figsize=(11, 6.5))
-    for ax, (title, implant) in zip(axes.flat, devices):
-        implant.plot(ax=ax)
-        ax.set_title(title, fontsize=9)
-        ax.set_aspect('equal')
-        ax.set_xlabel('x (um)', fontsize=8)
-        ax.set_ylabel('y (um)', fontsize=8)
-        ax.tick_params(labelsize=7)
-
-    axes.flat[-1].axis('off')
-    fig.tight_layout()
-
-
-Argus II
---------
-
-``ArgusII()`` includes the device's default video pipeline: an
-:py:class:`~pulse2percept.stimuli.AmplitudeEncoder` operating at 6 Hz and a
-:py:class:`~pulse2percept.implants.SequentialRaster` that stimulates one of
-six rows every 2 ms. Images and videos can therefore be passed to the implant
-directly.
-
-Both stages can be disabled:
-
-.. code-block:: python
-
-    implant = p2p.implants.retina.ArgusII(
-        encoder=None,
-        raster=None,
-    )
-
-
-Photovoltaic Arrays
--------------------
-
 :py:class:`~pulse2percept.implants.retina.PRIMAPivotal` represents the
 378-pixel, 100 um subretinal array used in the pivotal PRIMAvera trial
 [Holz2026]_, matching the first-in-human device [Palanker2020]_.
 
-Additional research arrays reproduce geometries reported by [Lorach2015]_,
-[Ho2019]_, and [Huang2021]_:
+.. note::
+
+   These classes reproduce published implant geometries and device properties;
+   they are not manufacturer-validated device simulators.
+
+   ``Suprachoroidal24`` and ``Suprachoroidal44`` are pulse2percept names for
+   the first- and second-generation suprachoroidal systems, not product names.
+
+
+.. _topics-implants-research:
+
+Research Array Geometries
+-------------------------
+
+pulse2percept also includes photovoltaic array geometries reconstructed from
+preclinical studies by [Lorach2015]_, [Ho2019]_, and [Huang2021]_. These
+classes represent the experimental arrays used in those studies rather than
+complete clinical implant systems.
 
 .. plot::
 
@@ -215,14 +136,13 @@ Additional research arrays reproduce geometries reported by [Lorach2015]_,
     import pulse2percept as p2p
 
     implants = [
-        ('PRIMAPivotal()', p2p.implants.retina.PRIMAPivotal()),
-        ('Lorach2015Array()', p2p.implants.retina.Lorach2015Array()),
-        ('Ho2019FlatArray(55)', p2p.implants.retina.Ho2019FlatArray(55)),
-        ('Ho2019FlatArray(40)', p2p.implants.retina.Ho2019FlatArray(40)),
-        ('Huang2021Array(55)', p2p.implants.retina.Huang2021Array(55)),
-        ('Huang2021Array(40)', p2p.implants.retina.Huang2021Array(40)),
-        ('Huang2021Array(30)', p2p.implants.retina.Huang2021Array(30)),
-        ('Huang2021Array(20)', p2p.implants.retina.Huang2021Array(20)),
+        ('Lorach 2015', p2p.implants.retina.Lorach2015Array()),
+        ('Ho 2019: 55 um', p2p.implants.retina.Ho2019FlatArray(55)),
+        ('Ho 2019: 40 um', p2p.implants.retina.Ho2019FlatArray(40)),
+        ('Huang 2021: 55 um', p2p.implants.retina.Huang2021Array(55)),
+        ('Huang 2021: 40 um', p2p.implants.retina.Huang2021Array(40)),
+        ('Huang 2021: 30 um', p2p.implants.retina.Huang2021Array(30)),
+        ('Huang 2021: 20 um', p2p.implants.retina.Huang2021Array(20)),
     ]
 
     fig, axes = plt.subplots(
@@ -238,23 +158,18 @@ Additional research arrays reproduce geometries reported by [Lorach2015]_,
         ax.set_xlabel('')
         ax.set_ylabel('')
 
+    axes.flat[-1].axis('off')
     fig.tight_layout()
-
 
 .. list-table::
    :header-rows: 1
    :widths: 24 9 33 10 24
 
-   * - Object
+   * - Array
      - Pixels
-     - Pixel geometry
+     - Pixel Geometry
      - Substrate
-     - Default optical protocol
-   * - ``PRIMAPivotal()``
-     - 378
-     - 100 um wide, 100 um spacing, 28 um active
-     - 2 x 2 mm
-     - ``PRIMAEncoder``: 880 nm, 3.5 mW/mm^2, 30 Hz, 0.7-9.8 ms ON
+     - Default Optical Protocol
    * - ``Lorach2015Array()``
      - 142
      - 70 um wide, 75 um spacing, 20 um active
@@ -295,52 +210,55 @@ Hexagonal rows are separated by ``spacing * sqrt(3) / 2``.
 
 .. note::
 
-   **Geometry.** ``Ho2019FlatArray(55)`` is reconstructed from Fig. 2(a) of
-   [Ho2019]_. The F40 outline was not published, so
-   ``Ho2019FlatArray(40)`` uses the 502 lattice sites nearest the substrate
-   center.
+   ``Ho2019FlatArray(55)`` is reconstructed from Fig. 2(a) of [Ho2019]_.
+   Because the F40 outline was not published, ``Ho2019FlatArray(40)`` uses
+   the 502 lattice sites nearest the substrate center.
 
-   ``Huang2021Array`` includes only exposed stimulating pixels. The fabricated
-   arrays contained 526 (F55), 1027 (F40), 1735 (F30), and 3508 (F20) cells;
-   peripheral cells forming the common return are not modeled.
+   ``Huang2021Array`` includes only exposed stimulating pixels. Peripheral
+   cells forming the common return are not modeled.
 
-   **Optical stimulation.** These arrays are driven by pulsed near-infrared
-   light, so ``prepare_stim`` returns irradiance in mW/mm^2; see
-   :ref:`topics-encoders`. Conversion from optical power to tissue current is
-   not modeled.
+These arrays use pulsed near-infrared stimulation; their optical protocols are
+described in :ref:`topics-stimulation`.
 
-   The 4.7 mW/mm^2 value used by ``Huang2021Array`` is the highest condition in
-   the published VEP threshold sweep (0.002-4.7 mW/mm^2), not a device or
-   safety maximum.
+``PRIMA``, ``PRIMA75``, ``PRIMA55``, and ``PRIMA40`` are deprecated aliases;
+see the v0.11 release notes.
 
-   **Safety checks.** Negative or non-finite irradiance is rejected.
-   ``safe_mode=True`` checks the documented PRIMA projector envelope for
-   ``PRIMAPivotal``. No corresponding published envelope is available for the
-   research arrays, so they raise ``NotImplementedError`` when ``safe_mode`` is
-   requested.
 
-.. note::
-
-   ``PRIMA``, ``PRIMA75``, ``PRIMA55``, and ``PRIMA40`` are deprecated aliases.
-   See the v0.11 release notes for their replacements.
-
+.. _topics-implants-cortex:
 
 Cortical Implants
 =================
 
-Cortical implant classes derive from
-:py:class:`~pulse2percept.implants.cortex.CorticalImplant`.
+pulse2percept includes both surface and penetrating cortical arrays.
 
-Both cortical models,
-:py:class:`~pulse2percept.models.cortex.ScoreboardModel` and
-:py:class:`~pulse2percept.models.cortex.DynaphosModel`, accept any cortical
-implant.
+.. plot::
+
+    import matplotlib.pyplot as plt
+    import pulse2percept as p2p
+
+    devices = [
+        ('Orion', p2p.implants.cortex.Orion()),
+        ('CORTIVIS NeuroPort', p2p.implants.cortex.NeuroPortArray()),
+        ('ICVP', p2p.implants.cortex.ICVP()),
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.6))
+
+    for ax, (title, implant) in zip(axes, devices):
+        implant.plot(ax=ax)
+        ax.set_title(title, fontsize=10)
+        ax.set_aspect('equal')
+        ax.set_xlabel('x (um)', fontsize=8)
+        ax.set_ylabel('y (um)', fontsize=8)
+        ax.tick_params(labelsize=7)
+
+    fig.tight_layout()
 
 .. list-table::
    :header-rows: 1
-   :widths: 26 18 14 42
+   :widths: 28 18 14 40
 
-   * - Object
+   * - Implant
      - Placement
      - Electrodes
      - Description
@@ -361,89 +279,16 @@ implant.
      - per thread
      - Ensemble of Neuralink-style threads
 
-.. plot::
+Cortical implant classes derive from
+:py:class:`~pulse2percept.implants.cortex.CorticalImplant`.
 
-    import matplotlib.pyplot as plt
-    import pulse2percept as p2p
+Both cortical models,
+:py:class:`~pulse2percept.models.cortex.ScoreboardModel` and
+:py:class:`~pulse2percept.models.cortex.DynaphosModel`, accept cortical
+implants.
 
-    devices = [
-        ('Orion()', p2p.implants.cortex.Orion()),
-        ('NeuroPortArray()', p2p.implants.cortex.NeuroPortArray()),
-        ('ICVP()', p2p.implants.cortex.ICVP()),
-    ]
-
-    fig, axes = plt.subplots(1, 3, figsize=(11, 3.6))
-    for ax, (title, implant) in zip(axes, devices):
-        implant.plot(ax=ax)
-        ax.set_title(title, fontsize=9)
-        ax.set_aspect('equal')
-        ax.set_xlabel('x (um)', fontsize=8)
-        ax.set_ylabel('y (um)', fontsize=8)
-        ax.tick_params(labelsize=7)
-
-    fig.tight_layout()
-
-The ``hemisphere`` argument (``'left'``, ``'right'``, or ``None``) is metadata.
-The model's ``implant_position`` determines where the array is placed. Setting
-``hemisphere`` does not move or mirror it.
+The ``hemisphere`` argument (``'left'``, ``'right'``, or ``None``) records
+laterality but does not place or mirror the array. The model's
+``implant_position`` determines its location in cortex.
 
 Cortical implants do not define a default encoder.
-
-
-Custom Arrays
-=============
-
-Regular layouts can be created directly with
-:py:class:`~pulse2percept.implants.GridImplant`:
-
-.. code-block:: python
-
-    implant = p2p.implants.GridImplant(
-        shape=(10, 10),
-        spacing=500,
-    )
-
-    implant = p2p.implants.GridImplant(
-        shape=(20, 20),
-        spacing=400,
-        grid_type='hex',
-        electrode_type=p2p.implants.DiskElectrode,
-        radius=75,
-    )
-
-Electrodes are point sources unless ``electrode_type`` gives them a finite
-extent.
-
-For irregular layouts, construct an
-:py:class:`~pulse2percept.implants.ElectrodeArray` from individual electrodes
-and wrap it in :py:class:`~pulse2percept.implants.Implant`.
-
-
-Laterality
-----------
-
-``GridImplant`` and ``Implant`` do not carry ``eye`` or ``hemisphere``
-metadata. Wrap the array in the corresponding tissue-specific class when
-laterality is needed:
-
-.. code-block:: python
-
-    from pulse2percept.implants import ElectrodeGrid
-    from pulse2percept.implants.retina import RetinalImplant
-    from pulse2percept.implants.cortex import CorticalImplant
-
-    array = ElectrodeGrid(shape=(10, 10), spacing=500)
-
-    retinal = RetinalImplant(array, eye='right')
-    cortical = CorticalImplant(array, hemisphere='right')
-
-
-Multiple Implants
------------------
-
-:py:class:`~pulse2percept.implants.EnsembleImplant` combines several implants
-into one system.
-
-:py:meth:`~pulse2percept.implants.EnsembleImplant.from_visual_field_map`
-places one copy per visual-field location using a two-dimensional
-:py:class:`~pulse2percept.topography.VisualFieldMap`.
