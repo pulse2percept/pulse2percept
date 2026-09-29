@@ -33,3 +33,108 @@ h3 {
 p {
 	margin-bottom: 4px;
 }
+
+/* Sidebar: cool dark gray to match the slate header (RTD default is #343131) */
+.wy-nav-side {
+	background: #262b33;
+}
+
+.wy-side-nav-search > a img.logo {
+	max-width: 80%;
+}
+
+/* Gallery thumbnails: 3 per row (2, then 1 on narrow screens), larger images */
+.rst-content .sphx-glr-thumbnails {
+	grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 900px) {
+	.rst-content .sphx-glr-thumbnails {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+@media (max-width: 560px) {
+	.rst-content .sphx-glr-thumbnails {
+		grid-template-columns: 1fr;
+	}
+}
+.rst-content .sphx-glr-thumbcontainer .figure,
+.rst-content .sphx-glr-thumbcontainer figure {
+	width: auto;
+	margin: 0;
+}
+.rst-content .sphx-glr-thumbcontainer img {
+	max-width: 100%;
+	max-height: none;
+}
+.rst-content .sphx-glr-thumbcontainer .sphx-glr-thumbnail-title {
+	font-size: 90%;
+	line-height: 1.3;
+	text-align: center;
+}
+
+/* Gallery tooltip: smaller text that uses the whole card, not just the image */
+.rst-content .sphx-glr-thumbcontainer[tooltip]:hover::after {
+	font-size: 80%;
+	line-height: 1.4;
+	height: 100%;
+	padding: 12px;
+	-webkit-line-clamp: 14;
+}
+
+/* Gallery: the download buttons at the end of each example suffice */
+div.sphx-glr-download-link-note {
+	display: none;
+}
+
+/* References: label above each entry instead of RTD's ragged label grid;
+   selectors match the theme's specificity */
+html.writer-html5 .rst-content div.citation {
+	display: block;
+	margin: 0 0 14px;
+	padding: 2px 0 2px 12px;
+	border-left: 3px solid transparent;
+}
+html.writer-html5 .rst-content div.citation:target {
+	border-left-color: #2980b9;
+	background: rgba(41, 128, 185, 0.06);
+}
+html.writer-html5 .rst-content div.citation > span.label {
+	font-size: 80%;
+	font-weight: 600;
+	color: #6a737d;
+}
+html.writer-html5 .rst-content div.citation > span.label > span.fn-bracket {
+	display: none;
+}
+html.writer-html5 .rst-content div.citation > p {
+	margin: 2px 0 0;
+	line-height: 1.5;
+}
+
+/* API docs: full import path under the short page title */
+p.api-path {
+	margin-top: -8px;
+	margin-bottom: 16px;
+}
+p.api-path code.literal {
+	background: none;
+	border: none;
+	padding: 0;
+	color: #6a737d;
+	font-size: 90%;
+}
+
+/* API docs: docstring summary line as a lead */
+dl.py:is(.function, .class, .method, .exception) > dd > p:first-child {
+	font-size: 1.15em;
+	font-weight: 600;
+	margin-top: 8px;
+	margin-bottom: 10px;
+}
+
+/* API docs: separate the prose from Parameters/Returns */
+dl.py > dd > dl.field-list {
+	margin-top: 16px;
+	padding-top: 10px;
+	border-top: 1px solid #e1e4e5;
+}

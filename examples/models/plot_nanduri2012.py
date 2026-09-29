@@ -1,20 +1,52 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-Nanduri et al. (2012): Amplitude and frequency are not interchangeable
+Nanduri et al. (2012): Amplitude and frequency effects on brightness and size
 ===============================================================================
 
-[Nanduri2012]_ had Argus I users rate brightness and size while the
-amplitude or the frequency of a 0.45 ms cathodic-first pulse train was varied
-from a reference of 1.25x threshold at 20 Hz. **Brightness saturated with
-amplitude but kept growing with frequency; size grew mainly with amplitude.**
+Nanduri et al. (2012) measured phosphene brightness and size in Argus I users
+while varying either the amplitude or frequency of a 0.45 ms cathodic-first
+pulse train. Relative to a reference stimulus of 1.25x threshold at 20 Hz,
+brightness saturated with amplitude but continued to increase with frequency;
+phosphene size increased primarily with amplitude.
 
-This example reproduces the frequency result with
-:py:class:`~pulse2percept.models.retina.Nanduri2012Model` and recreates
-Figs. 7 and 8. The amplitude result cannot be compared quantitatively: the
-model's amplitude nonlinearity spans about a factor of 3.5 in current, the
-experiment a factor of 6, so the predicted amplitude curve depends on the
-assumed threshold rather than on the ratings.
+The model combines spatial current spread with a temporal cascade. Current
+:math:`A_e(t)` from each disk electrode :math:`e` falls off with distance
+:math:`d_e` from the electrode edge:
+
+.. math::
+
+    I(x, y, t) = \\sum_e A_e(t)
+    \\frac{\\mathrm{atten\\_a}}
+    {\\mathrm{atten\\_a} + d_e(x, y)^{\\mathrm{atten\\_n}}}.
+
+At each retinal location, :math:`I` passes through a temporal model related to
+[Horsager2009]_: a fast response :math:`R_1`, minus a slowly filtered charge
+term :math:`R_2`, followed by half-wave rectification and three slow leaky
+integrators. Before the final smoothing stage, a logistic nonlinearity rescales
+the peak response:
+
+.. math::
+
+    \\mathrm{asymptote} \\cdot
+    \\sigma\\left(
+    \\frac{R_{3,\\max} - \\mathrm{shift}}{\\mathrm{slope}}
+    \\right),
+    \\qquad
+    \\sigma(u) = \\frac{1}{1 + e^{-u}}.
+
+Because the logistic operates on the peak fast response, brightness saturates
+with pulse amplitude. Increasing frequency adds more responses within the
+temporal integration window, allowing brightness to continue increasing.
+Parameters are documented in
+:py:class:`~pulse2percept.models.retina.Nanduri2012Spatial` and
+:py:class:`~pulse2percept.models.retina.Nanduri2012Temporal`.
+
+This example recreates Figs. 7 and 8 of [Nanduri2012]_ and compares the
+predicted amplitude- and frequency-dependent brightness with the rating data.
+The frequency comparison is quantitative. For amplitude, the dataset does not
+provide thresholds for the rated electrodes, so the prediction depends on an
+assumed threshold current.
 """
 # sphinx_gallery_thumbnail_number = 3
 
@@ -26,17 +58,18 @@ from pulse2percept.implants import DiskElectrode, ElectrodeArray, Implant
 from pulse2percept.models.retina import Nanduri2012Model
 from pulse2percept.stimuli import BiphasicPulseTrain
 
+
 ###############################################################################
-# The stimulated electrode
-# ------------------------
+# Stimulation setup
+# -----------------
 #
-# The experiment stimulated one Argus I electrode at a time, so the
-# simulation uses a single :py:class:`~pulse2percept.implants.DiskElectrode`.
-# Five of the eight rated electrodes are 500 um across, so the radius is
-# 250 um. The radius sets phosphene size, not brightness under the electrode.
+# The experiment stimulated one Argus I electrode at a time. Five of the eight
+# rated electrodes were 500 um in diameter, so the simulation uses a single
+# disk electrode with radius 250 um.
 #
-# ``AMP_TH`` is an assumed threshold, not a published value. At ``z = 0`` the
-# current-spread term is 1, so the model receives the full electrode current.
+# ``AMP_TH`` is an assumed threshold because thresholds for the eight pooled
+# electrodes are not reported in the dataset. At ``z = 0``, the current-spread
+# term is 1 directly beneath the electrode.
 
 AMP_TH = 30       # assumed threshold current (uA)
 PHASE_DUR = 0.45  # cathodic/anodic phase duration (ms)
@@ -44,28 +77,38 @@ STIM_DUR = 500    # stimulus duration (ms), as in the experiment
 
 implant = Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 250)))
 
+
 ###############################################################################
-# Brightness over time
-# --------------------
+# Temporal response
+# -----------------
 #
-# The model is a cascade of linear filters and a static nonlinearity. At a
-# single point, brightness rises within about 100 ms, then fades. Below,
-# "brightness" means the maximum of this time course.
+# First evaluate the model at a single retinal location. Here, brightness
+# refers to the maximum of the predicted temporal response.
 
 model = Nanduri2012Model(implant=implant, xrange=(0, 0), yrange=(0, 0))
 
-stim = BiphasicPulseTrain(20, AMP_TH, PHASE_DUR, interphase_dur=PHASE_DUR,
-                          stim_dur=STIM_DUR)
+stim = BiphasicPulseTrain(
+    20, AMP_TH, PHASE_DUR,
+    interphase_dur=PHASE_DUR,
+    stim_dur=STIM_DUR,
+)
 percept = model.predict_percept(stim, t_percept=np.arange(STIM_DUR))
 delivered = implant.prepare_stim(stim)
 
 fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(delivered.time,
-        -0.02 + 0.01 * delivered.data[0, :] / delivered.data.max(),
-        linewidth=2, label='pulse train')
+ax.plot(
+    delivered.time,
+    -0.02 + 0.01 * delivered.data[0, :] / delivered.data.max(),
+    linewidth=2,
+    label='pulse train',
+)
 ax.plot(percept.time, percept.data[0, 0, :], linewidth=2, label='percept')
-ax.axhline(percept.data.max(), color='k', linestyle='--',
-           label='max brightness')
+ax.axhline(
+    percept.data.max(),
+    color='k',
+    linestyle='--',
+    label='max brightness',
+)
 ax.axhline(0, color='k')
 ax.set_xlabel('time (ms)')
 ax.set_ylabel('predicted brightness (a.u.)')
@@ -73,12 +116,13 @@ ax.set_xlim(0, STIM_DUR)
 ax.legend(loc='center right')
 fig.tight_layout()
 
+
 ###############################################################################
-# The brightness asymmetry
-# ------------------------
+# Brightness ratings
+# ------------------
 #
-# The dataset holds the ratings for both modulations, relative to the
-# 1.25xTh / 20 Hz reference. The model is run on the same conditions:
+# The rating data contain separate amplitude- and frequency-modulation
+# conditions, both relative to the 1.25xTh / 20 Hz reference.
 
 data = load_nanduri2012(task='rate')
 amp_rows = data[data.varied_param == 'amp']
@@ -89,9 +133,14 @@ freqs = sorted(freq_rows.freq.unique())
 
 
 def brightness(amp_factor, freq):
-    """Peak predicted brightness for one pulse-train condition"""
-    train = BiphasicPulseTrain(freq, amp_factor * AMP_TH, PHASE_DUR,
-                               interphase_dur=PHASE_DUR, stim_dur=STIM_DUR)
+    """Peak predicted brightness for one pulse-train condition."""
+    train = BiphasicPulseTrain(
+        freq,
+        amp_factor * AMP_TH,
+        PHASE_DUR,
+        interphase_dur=PHASE_DUR,
+        stim_dur=STIM_DUR,
+    )
     return model.predict_percept(train).data.max()
 
 
@@ -99,27 +148,48 @@ reference = brightness(1.25, 20)
 model_amp = np.array([brightness(f, 20) for f in amp_factors]) / reference
 model_freq = np.array([brightness(1.25, f) for f in freqs]) / reference
 
+
 ###############################################################################
-# Ratings and model output have unrelated scales, so both are normalized to
-# the reference and plotted in separate rows. Compare curve shapes, not gains:
+# Ratings and model output use different scales, so both are normalized to
+# their reference condition. The comparison is therefore between curve shapes,
+# not absolute brightness.
 
 fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharey='row')
 
 for electrode, group in amp_rows.groupby('electrode'):
     group = group.sort_values('amp_factor')
     ref = group[group.amp_factor == 1.25].brightness.values[0]
-    axes[0, 0].plot(group.amp_factor, group.brightness / ref, 'o-',
-                    color='0.6', markersize=4, linewidth=1)
+    axes[0, 0].plot(
+        group.amp_factor,
+        group.brightness / ref,
+        'o-',
+        color='0.6',
+        markersize=4,
+        linewidth=1,
+    )
+
 for electrode, group in freq_rows.groupby('electrode'):
     group = group.sort_values('freq')
     ref = group[group.freq == 20].brightness.values[0]
-    axes[0, 1].plot(group.freq, group.brightness / ref, 'o-',
-                    color='0.6', markersize=4, linewidth=1)
+    axes[0, 1].plot(
+        group.freq,
+        group.brightness / ref,
+        'o-',
+        color='0.6',
+        markersize=4,
+        linewidth=1,
+    )
 
 axes[1, 0].plot(amp_factors, model_amp, 'ko-', linewidth=2)
 axes[1, 0].axvspan(2, 6, color='0.9', zorder=0)
-axes[1, 0].text(2.2, 0.92, 'nonlinearity saturated', fontsize=8, color='0.4',
-                transform=axes[1, 0].get_xaxis_transform())
+axes[1, 0].text(
+    2.2,
+    0.92,
+    'nonlinearity saturated',
+    fontsize=8,
+    color='0.4',
+    transform=axes[1, 0].get_xaxis_transform(),
+)
 axes[1, 1].plot(freqs, model_freq, 'ko-', linewidth=2)
 
 axes[0, 0].set_title('amplitude modulation (20 Hz)')
@@ -130,48 +200,88 @@ axes[1, 0].set_xlabel('amplitude (xTh)')
 axes[1, 1].set_xlabel('frequency (Hz)')
 fig.tight_layout()
 
-###############################################################################
-# **Frequency** is reproduced. The model predicts
-# 0.79 / 1.00 / 1.20 / 1.84 / 3.47 / 5.00 at 15-120 Hz; the measured means are
-# 0.76 / 1.00 / 1.12 / 1.72 / 2.39 / 3.03 (SD 0.15-1.38 across eight
-# electrodes). The model is steeper but within the spread of the data. This
-# curve is independent of ``AMP_TH``, because the model's gain is normalized
-# by the peak of its own fast response.
-#
-# **Amplitude** is not reproduced; the flat curve does not confirm
-# saturation. The nonlinearity is a logistic in the peak fast response (about
-# 0.66x the current for a 0.45 ms phase; midpoint 16, slope 3), which spans
-# roughly 12-45 uA from threshold to saturation. At ``AMP_TH = 30`` uA the
-# sweep starts 86% saturated and is fully clipped by 2xTh. The predicted
-# 6xTh / 1.25xTh ratio depends only on the assumed threshold (38.6 at 5 uA,
-# 6.5 at 15 uA, 2.7 at 20 uA, 1.5 at 25 uA, 1.15 at 30 uA, 1.0 at 40 uA);
-# the measured ratio is 1.83 +/- 0.67. No threshold reproduces the measured
-# shape.
-#
-# Phosphene size (Fig. 7)
-# -----------------------
-#
-# Size requires a spatial grid, so the model is rebuilt over an 8 x 8 dva
-# patch. The conditions are those of Fig. 7:
 
-model = Nanduri2012Model(implant=implant, step=0.5, xrange=(-4, 4),
-                         yrange=(-4, 4))
+###############################################################################
+# Frequency modulation
+# --------------------
+#
+# The model predicts relative brightness values of
+# 0.79 / 1.00 / 1.20 / 1.84 / 3.47 / 5.00 at 15-120 Hz, compared with measured
+# means of 0.76 / 1.00 / 1.12 / 1.72 / 2.39 / 3.03 (SD 0.15-1.38 across eight
+# electrodes). The model response is steeper but follows the measured trend.
+#
+# This curve does not depend on ``AMP_TH`` because the model gain is normalized
+# by the peak of its own fast response.
+
+
+###############################################################################
+# Amplitude modulation
+# --------------------
+#
+# The amplitude curve is sensitive to ``AMP_TH`` and should not be treated as
+# a quantitative reproduction of the ratings. The logistic nonlinearity acts
+# on the peak fast response, approximately 0.66x the current for a 0.45 ms
+# phase, with midpoint 16 and slope 3. It therefore spans only about 12-45 uA
+# from threshold to saturation.
+#
+# With ``AMP_TH = 30`` uA, the sweep begins about 86% saturated and is fully
+# saturated by 2xTh. The predicted 6xTh / 1.25xTh brightness ratio varies from
+# 38.6 at a 5 uA threshold to 1.0 at 40 uA; the measured ratio is
+# 1.83 +/- 0.67. No threshold reproduces the measured curve shape.
+
+
+###############################################################################
+# Phosphene size
+# --------------
+#
+# Rebuild the model over an 8 x 8 dva spatial grid and evaluate the amplitude
+# and frequency conditions from Fig. 7.
+
+model = Nanduri2012Model(
+    implant=implant,
+    step=0.5,
+    xrange=(-4, 4),
+    yrange=(-4, 4),
+)
 
 t_percept = np.arange(0, STIM_DUR, 1)
 fig7_amps = [1, 1.25, 1.5, 2, 4, 6]
 fig7_freqs = [40.0 / 3, 20, 2.0 * 40 / 3, 40, 80, 120]
 
-frames_amp = [model.predict_percept(
-    BiphasicPulseTrain(20, a * AMP_TH, PHASE_DUR, interphase_dur=PHASE_DUR,
-                       stim_dur=STIM_DUR),
-    t_percept=t_percept).max(axis='frames') for a in fig7_amps]
+frames_amp = [
+    model.predict_percept(
+        BiphasicPulseTrain(
+            20,
+            a * AMP_TH,
+            PHASE_DUR,
+            interphase_dur=PHASE_DUR,
+            stim_dur=STIM_DUR,
+        ),
+        t_percept=t_percept,
+    ).max(axis='frames')
+    for a in fig7_amps
+]
 
-frames_freq = [model.predict_percept(
-    BiphasicPulseTrain(f, 1.25 * AMP_TH, PHASE_DUR, interphase_dur=PHASE_DUR,
-                       stim_dur=STIM_DUR),
-    t_percept=t_percept).max(axis='frames') for f in fig7_freqs]
+frames_freq = [
+    model.predict_percept(
+        BiphasicPulseTrain(
+            f,
+            1.25 * AMP_TH,
+            PHASE_DUR,
+            interphase_dur=PHASE_DUR,
+            stim_dur=STIM_DUR,
+        ),
+        t_percept=t_percept,
+    ).max(axis='frames')
+    for f in fig7_freqs
+]
 
-fig, axes = plt.subplots(nrows=2, ncols=len(fig7_amps), figsize=(14, 5))
+fig, axes = plt.subplots(
+    nrows=2,
+    ncols=len(fig7_amps),
+    figsize=(14, 5),
+)
+
 for ax, amp, frame in zip(axes[0], fig7_amps, frames_amp):
     ax.imshow(frame, vmin=0, vmax=0.3, cmap='gray')
     ax.set_title(f'{amp:.2g}xTh / 20 Hz', fontsize=11)
@@ -185,41 +295,54 @@ for ax, freq, frame in zip(axes[1], fig7_freqs, frames_freq):
     ax.set_xticks([])
     ax.set_yticks([])
 axes[1][0].set_ylabel('frequency\nmodulation')
+
 fig.tight_layout()
 
+
 ###############################################################################
-# Size vs brightness (Fig. 8)
-# ---------------------------
+# Brightness and phosphene area
+# -----------------------------
 #
-# Suprathreshold area against brightness separates the two modulations:
-# amplitude increases area, frequency mostly does not.
+# Figure 8 compares suprathreshold area with peak brightness. Increasing
+# amplitude increases both quantities, whereas frequency has little effect on
+# area.
 
 bright_th = brightness(1, 20)
 
 plt.figure()
-plt.plot([np.max(frame) for frame in frames_amp],
-         [np.sum(frame >= bright_th) for frame in frames_amp],
-         'o-', label='amplitude modulation')
-plt.plot([np.max(frame) for frame in frames_freq],
-         [np.sum(frame >= bright_th) for frame in frames_freq],
-         'o-', label='frequency modulation')
+plt.plot(
+    [np.max(frame) for frame in frames_amp],
+    [np.sum(frame >= bright_th) for frame in frames_amp],
+    'o-',
+    label='amplitude modulation',
+)
+plt.plot(
+    [np.max(frame) for frame in frames_freq],
+    [np.sum(frame >= bright_th) for frame in frames_freq],
+    'o-',
+    label='frequency modulation',
+)
 plt.xlabel('brightness (a.u.)')
 plt.ylabel('area (# suprathreshold pixels)')
-plt.legend()
+plt.legend();
+
 
 ###############################################################################
-# What this does not establish
-# ----------------------------
+# Limitations
+# -----------
 #
-# * Model brightness is in arbitrary units, not a rating scale. Compare only
-#   within one figure.
-# * ``AMP_TH = 30`` uA is an assumption; the amplitude figure reflects it,
-#   not the data. Raising the electrode above the retina rescales the current
-#   reaching the nonlinearity but cannot widen it, so no geometry recovers the
-#   measured amplitude curve.
-# * Argus I thresholds vary by more than 10x across electrodes and subjects;
-#   the dataset does not report thresholds for the eight pooled electrodes.
-# * The rating task had 1 subject and 8 electrodes. The asymmetry is a
-#   group-level trend, not a per-electrode prediction.
-# * Area is counted in model pixels above the reference brightness, not the
-#   drawn phosphene size.
+# * Model brightness is in arbitrary units and is not a perceptual rating
+#   scale. Values should only be compared within a figure.
+# * ``AMP_TH = 30`` uA is assumed rather than measured for these electrodes.
+#   The amplitude prediction therefore depends on this choice.
+# * Changing electrode-retina distance rescales the current reaching the
+#   nonlinearity but does not widen the nonlinearity itself, so electrode
+#   geometry cannot recover the measured amplitude curve.
+# * Argus I thresholds vary by more than an order of magnitude across subjects
+#   and electrodes, and thresholds for the eight pooled electrodes are not
+#   reported in the dataset.
+# * The rating experiment included one subject and eight electrodes. The
+#   amplitude-frequency difference is therefore a pooled trend rather than a
+#   per-electrode prediction.
+# * Phosphene area is defined here as the number of model pixels above the
+#   reference brightness, not the reported or drawn phosphene size.

@@ -1,63 +1,42 @@
-{{ fullname | escape | underline}}
+{{ fullname.split('.')[-1] | escape | underline}}
+
+.. rst-class:: api-path
+
+``{{ fullname }}``
+
+.. Objects get their own pages (see doc/_ext/api_layout.py); this page only
+   lists them.
 
 .. automodule:: {{ fullname }}
-{%- if fullname in no_index_modules %}
-   :no-index:
-{%- endif %}
+   :no-members:
+   :no-inherited-members:
 
-   {% block attributes %}
-   {%- if attributes %}
-   .. rubric:: {{ _('Module Attributes') }}
+{%- set page = api_layout.get(fullname, {}) %}
+{%- if page.modules %}
 
-   .. autosummary::
-   {% for item in attributes %}
-      {{ item }}
-   {%- endfor %}
-   {% endif %}
-   {%- endblock %}
-
-   {%- block functions %}
-   {%- if functions %}
-   .. rubric:: {{ _('Functions') }}
-
-   .. autosummary::
-   {% for item in functions %}
-      {{ item }}
-   {%- endfor %}
-   {% endif %}
-   {%- endblock %}
-
-   {%- block classes %}
-   {%- if classes %}
-   .. rubric:: {{ _('Classes') }}
-
-   .. autosummary::
-   {% for item in classes %}
-      {{ item }}
-   {%- endfor %}
-   {% endif %}
-   {%- endblock %}
-
-   {%- block exceptions %}
-   {%- if exceptions %}
-   .. rubric:: {{ _('Exceptions') }}
-
-   .. autosummary::
-   {% for item in exceptions %}
-      {{ item }}
-   {%- endfor %}
-   {% endif %}
-   {%- endblock %}
-
-{%- block modules %}
-{%- if modules %}
 .. rubric:: Modules
 
 .. autosummary::
    :toctree:
-   :recursive:
-{% for item in modules %}
+{% for item in page.modules %}
    {{ item }}
 {%- endfor %}
-{% endif %}
-{%- endblock %}
+{%- endif %}
+{%- for title, names in page.tables %}
+
+.. rubric:: {{ title }}
+
+.. autosummary::
+   :toctree:
+{% for item in names %}
+   {{ item }}
+{%- endfor %}
+{%- endfor %}
+{%- if page.data %}
+
+.. rubric:: Module Attributes
+{% for item in page.data %}
+
+.. autodata:: {{ item }}
+{%- endfor %}
+{%- endif %}

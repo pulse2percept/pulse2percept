@@ -6,9 +6,11 @@ Physical Units
 
 .. versionadded:: 0.10.0
 
-The :py:mod:`~pulse2percept.units` module adds dimensional checking and
-conversion to physical parameters. Bare numbers remain valid and use the
-canonical unit below.
+:mod:`pulse2percept.units` adds dimensional checking and unit conversion to
+physical parameters.
+
+Bare numbers remain valid. Each quantity has a canonical unit, so these two
+calls are equivalent:
 
 .. code-block:: python
 
@@ -16,38 +18,50 @@ canonical unit below.
     from pulse2percept.units import mA, us
 
     BiphasicPulse(50, 0.45)
-    BiphasicPulse(0.05 * mA, 450 * us)  # equivalent
+    BiphasicPulse(0.05 * mA, 450 * us)
 
-Canonical units
----------------
+
+Canonical Units
+===============
 
 .. list-table::
    :header-rows: 1
+   :widths: 44 28 28
 
    * - Quantity
      - Bare number means
-   * - stimulus current
-     - microamps (``uA``)
-   * - stimulus and percept time
-     - milliseconds (``ms``)
-   * - electrode and tissue geometry
-     - microns (``um``)
-   * - visual-field coordinates
-     - degrees of visual angle (``dva``)
-   * - geometric angle
-     - degrees (``deg``)
-   * - frequency
-     - hertz (``Hz``)
-   * - image and video intensity
+     - Unit
+   * - Stimulus current
+     - microamps
+     - ``uA``
+   * - Stimulus and percept time
+     - milliseconds
+     - ``ms``
+   * - Electrode and tissue geometry
+     - microns
+     - ``um``
+   * - Visual-field coordinates
+     - degrees of visual angle
+     - ``dva``
+   * - Geometric angle
+     - degrees
+     - ``deg``
+   * - Frequency
+     - hertz
+     - ``Hz``
+   * - Image and video intensity
      - dimensionless
+     - none
 
-Objects that store a different unit (e.g. a Percept with another time base)
-record it in an attribute such as ``time_unit``.
+Objects that store values in another compatible unit record that unit
+explicitly, for example through ``time_unit`` on a
+:py:class:`~pulse2percept.percepts.Percept`.
 
-Quantities and conversion
--------------------------
 
-Multiply a number or array by a unit to create a
+Quantities and Conversion
+=========================
+
+Multiply a scalar or array by a unit to create a
 :py:class:`~pulse2percept.units.Quantity`:
 
 .. doctest::
@@ -59,78 +73,155 @@ Multiply a number or array by a unit to create a
     >>> q.to_value(mA)
     0.5
 
-``to`` returns another Quantity; ``to_value`` returns a plain number or array.
-Compatible quantities can be added, multiplied, divided, and raised to powers.
+The two conversion methods differ only in their return type:
 
-Dimensional boundaries
-----------------------
+.. list-table::
+   :header-rows: 1
+   :widths: 28 72
 
-Some quantities never convert into each other, and mixing them raises a
-``DimensionMismatchError``:
+   * - Method
+     - Returns
+   * - ``q.to(unit)``
+     - Another :py:class:`~pulse2percept.units.Quantity`
+   * - ``q.to_value(unit)``
+     - A plain scalar or NumPy array
 
-*  ``dva`` and ``um``: convert through a
-   :py:class:`~pulse2percept.topography.VisualFieldMap`
-   (see :ref:`topics-coordinates`).
-*  Gray levels and current: images and videos are dimensionless; an encoder
-   converts them (see :ref:`topics-encoders`).
-*  ``dva`` and ``deg``: see below.
+Compatible quantities can be added, multiplied, divided, and raised to
+powers.
 
-Geometric angle
----------------
 
-``deg`` and ``rad`` measure geometric angle: implant and image rotation,
-grating direction and phase, axon polar angle. They convert into each other;
-bare numbers mean degrees:
+Dimensions
+==========
+
+Units convert only within the same physical dimension.
+
+For example:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 24 52
+
+   * - Quantity 1
+     - Quantity 2
+     - Relationship
+   * - ``uA``
+     - ``mA``
+     - Same dimension; conversion is direct
+   * - ``ms``
+     - ``s``
+     - Same dimension; conversion is direct
+   * - ``deg``
+     - ``rad``
+     - Same geometric-angle dimension
+   * - ``dva``
+     - ``um``
+     - Different dimensions; conversion requires a
+       :py:class:`~pulse2percept.topography.VisualFieldMap`
+   * - Gray level
+     - current
+     - Different dimensions; conversion is performed by an encoder
+   * - ``dva``
+     - ``deg``
+     - Different dimensions; visual position is not geometric rotation
+
+Combining incompatible dimensions raises
+:py:class:`~pulse2percept.units.DimensionMismatchError`.
+
+See :ref:`topics-coordinates` for retinal/cortical geometry and
+:ref:`topics-encoders` for conversion from visual intensity to stimulation.
+
+
+Geometric Angle
+===============
+
+``deg`` and ``rad`` represent geometric rotation: implant orientation, image
+rotation, grating direction and phase, and axon polar angle.
+
+Bare angular values are interpreted as degrees:
 
 .. code-block:: python
 
     import numpy as np
+
     from pulse2percept.implants import ElectrodeGrid
     from pulse2percept.units import deg, rad
 
-    ElectrodeGrid((6, 10), 575, rot=45)               # degrees
-    ElectrodeGrid((6, 10), 575, rot=45 * deg)         # equivalent
-    ElectrodeGrid((6, 10), 575, rot=np.pi / 4 * rad)  # equivalent
+    ElectrodeGrid((6, 10), 575, rot=45)
+    ElectrodeGrid((6, 10), 575, rot=45 * deg)
+    ElectrodeGrid((6, 10), 575, rot=np.pi / 4 * rad)
 
-``dva`` is a separate dimension: a position or extent in the visual field,
-not a rotation.
+All three specify the same rotation.
 
-Threshold-relative amplitude
-----------------------------
+``dva`` is intentionally separate. It describes position or extent in the
+visual field, not rotation.
 
-``xTh`` is a multiple of perceptual threshold. Some models (e.g.
-:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`) take amplitude
-in ``xTh``. With ``implant.thresholds`` set, ``xTh`` amplitudes are converted
-to uA when stimulation is prepared:
+
+Threshold-Relative Amplitude
+============================
+
+``xTh`` represents multiples of perceptual threshold.
+
+Some models, including
+:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`, use
+threshold-relative amplitude rather than absolute current.
 
 .. code-block:: python
 
     from pulse2percept.stimuli import BiphasicPulseTrain
     from pulse2percept.units import uA, xTh
 
-    train = BiphasicPulseTrain(20, 2 * xTh, 0.45)
+    train = BiphasicPulseTrain(
+        20,
+        2 * xTh,
+        0.45,
+    )
 
-    implant.thresholds = {'A4': 80 * uA}
-    implant.prepare_stim({'A4': train})  # calibrated to 160 uA
+    implant.thresholds = {
+        'A4': 80 * uA,
+    }
 
-Without a threshold, the amplitude stays in ``xTh``. Current-based models
-and safety checks require a threshold.
+    implant.prepare_stim({
+        'A4': train,
+    })  # calibrated to 160 uA
 
-Documented shorthands
----------------------
+When ``implant.thresholds`` is available, threshold-relative amplitudes are
+converted to current during ``prepare_stim``.
 
-A few parameters accept a second dimension where the meaning is
-unambiguous. These are not general conversions:
+Without a threshold value, the amplitude remains in ``xTh``. Models and safety
+checks that require absolute current therefore also require threshold
+calibration.
 
-*  Retinal-model ``xrange`` and ``yrange`` accept retinal lengths (converted
-   to dva through the model's map).
-*  Frame-rate arguments such as ``fps`` accept frequencies (``30 * Hz``).
 
-Inspecting units
-----------------
+Accepted Shorthand Units
+========================
 
-Objects expose the units of their stored numbers and return them in any
-compatible unit:
+A few parameters accept an additional dimension when the intended conversion
+is defined by the surrounding object. These are API conveniences, not general
+unit conversions.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 36 26 38
+
+   * - Parameter
+     - Also accepts
+     - Conversion
+   * - Retinal-model ``xrange`` and ``yrange``
+     - retinal length
+     - Converted to dva through the model's visual-field map
+   * - Frame-rate arguments such as ``fps``
+     - frequency
+     - Converted to the corresponding frame rate
+
+In particular, the unit system does not define a general ``um <-> dva``
+conversion independently of a visual-field map.
+
+
+Inspecting Units
+================
+
+Objects expose both their stored units and convenience methods for requesting
+compatible units:
 
 .. code-block:: python
 
@@ -145,8 +236,16 @@ compatible unit:
     percept.time_unit
     percept.times(s)
 
-Model parameter units are available through
+Parameter units defined by models and other parametrized objects are available
+through
 :py:meth:`~pulse2percept.utils.Parametrized.get_param_units`.
 
-The unit system is small: no unit registry, no string parsing, no automatic
-NumPy propagation. Cython and Torch kernels receive plain numbers.
+
+Scope of the Unit System
+========================
+
+The unit system is intentionally small.
+
+It provides dimensional checking and explicit conversion, but does not include
+a global unit registry, string parsing, or automatic NumPy unit propagation.
+Performance-sensitive Cython and Torch code receives plain numeric values.

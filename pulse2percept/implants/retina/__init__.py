@@ -1,15 +1,5 @@
 """Retinal implants: Argus, Alpha, suprachoroidal, IMIE, and PRIMA arrays
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    argus
-    alpha
-    suprachoroidal
-    imie
-    prima
-
 .. seealso::
 
     *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`

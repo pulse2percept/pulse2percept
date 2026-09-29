@@ -1,14 +1,5 @@
 """Cortical implants such as Orion, ICVP, and Neuralink
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    orion
-    neuroport
-    icvp
-    neuralink
-
 .. seealso::
 
     *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`

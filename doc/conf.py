@@ -46,18 +46,14 @@ extensions = [
     "sphinx.ext.doctest",
     "matplotlib.sphinxext.plot_directive",
     "sphinx_copybutton",
+    "api_layout",
 ]
 
 autosummary_generate = True
-# Their public API is re-exported by the parent package, whose page is indexed.
-# Indexing both makes short type names (e.g. ``Quantity``) ambiguous.
-autosummary_context = {
-    "no_index_modules": [
-        "pulse2percept.percepts.base",
-        "pulse2percept.topography.base",
-        "pulse2percept.units.base",
-    ],
-}
+# One page per public object; api_layout fills in autosummary_context
+autosummary_context = {}
+# The page title already shows the full dotted path
+add_module_names = False
 autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
@@ -74,6 +70,11 @@ exclude_patterns = ["_build", ".ipynb_checkpoints", "**/.ipynb_checkpoints"]
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
+html_logo = "_static/logo.png"
+html_favicon = "_static/favicon.png"
+html_theme_options = {
+    "style_nav_header_background": "#2c3e50",
+}
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -87,10 +88,12 @@ sphinx_gallery_conf = {
     "examples_dirs": ["../examples"],
     "gallery_dirs": ["examples"],
     "reference_url": {"pulse2percept": None},
+    # "Examples using ..." thumbnails on API pages (autosummary templates)
+    "doc_module": ("pulse2percept",),
+    "backreferences_dir": "examples/backreferences",
     "thumbnail_size": (320, 224),
     "remove_config_comments": True,
     "subsection_order": ExplicitOrder([
-        "../examples/workflows",
         "../examples/models",
     ]),
     "only_warn_on_example_error": True,

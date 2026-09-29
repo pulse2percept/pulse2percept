@@ -2,11 +2,6 @@
 
 Bare numbers retain their documented units. Unitful values are checked
 for dimensional compatibility and converted at API boundaries.
-
-.. autosummary::
-    :toctree: _api
-
-    base
 """
 from .base import (Dimension, Unit, Quantity, DimensionMismatchError, as_value,
                    dimensionless,

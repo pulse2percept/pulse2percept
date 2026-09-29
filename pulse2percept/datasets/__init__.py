@@ -5,17 +5,6 @@
 *  **Dataset fetchers** can be used to download larger datasets from a given
    URL and directly import them into pulse2percept.
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    han2021
-    beyeler2019
-    nanduri2012
-    perezfornos2012
-    greenwald2009
-    horsager2009
-
 .. seealso::
 
     *  :ref:`Basic Concepts > Datasets <topics-datasets>`

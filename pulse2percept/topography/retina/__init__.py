@@ -1,13 +1,5 @@
 """Retinal visual field maps
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    curcio1990
-    montesano2020
-    watson2014
-
 """
 from .base import RetinalMap
 from .curcio1990 import Curcio1990Map

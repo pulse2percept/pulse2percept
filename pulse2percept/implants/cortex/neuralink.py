@@ -37,6 +37,7 @@ class EllipsoidElectrode(Electrode):
             orient defaults to positive z direction
 
             ``orient`` can be:
+
             - A length 3 vector specifying the direction that the 
               thread should extend in (if orient_mode == 'direction')
             - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation 
@@ -141,6 +142,7 @@ class LinearEdgeThread(NeuralinkThread):
             Orientation of the thread in 3D space. 
 
             ``orient`` can be:
+
             - A length 3 vector specifying the direction that the 
               thread should extend in (if orient_mode == 'direction')
             - A list of 3 angles, (r_x, r_y, r_z), specifying the rotation 
@@ -479,7 +481,7 @@ class Neuralink(EnsembleImplant):
                  hemisphere=None):
         """
         Neuralink implant, consisting of one or more 
-        :py:class:`~pulse2percept.implants.cortex.NeuralinkThread`s.
+        :py:class:`~pulse2percept.implants.cortex.NeuralinkThread` objects.
 
         This is just a wrapper class for EnsembleImplant, with extra
         functionality for plotting in 3D and a factory method to easily create 

@@ -3,12 +3,6 @@
 Individual objects retain their own ``plot()`` and ``play()`` methods; this
 package only holds views that no single object owns.
 
-.. autosummary::
-    :toctree: _api
-
-    comparison
-    argus
-
 """
 
 from .argus import plot_argus_phosphenes, plot_argus_simulated_phosphenes

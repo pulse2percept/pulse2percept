@@ -4,42 +4,45 @@
 Release Notes
 =============
 
-v0.11.0 Foundations (unreleased)
+v0.11.0 Foundations (2026-09-30)
 ================================
 
 Highlights
 ----------
 
-* **Backwards-incompatible API overhaul.** Retinal and cortical implants,
-  models, and topography now live under explicit `retina` and `cortex`
-  namespaces. Models are constructed with an implant, build automatically, and
-  take the stimulus directly in `predict_percept`. Implant placement moved
-  from device constructors to model parameters, so named implant geometry now
-  remains device-local (:pull:`862`, :pull:`879`, :pull:`880`, :pull:`884`,
-  :pull:`887`).
+.. warning::
 
-  A typical workflow changes from:
+    v0.11 is a **backwards-incompatible API overhaul**.
+    Retinal and cortical implants, models, and topography now live under
+    explicit `retina` and `cortex` namespaces.
+    Models are constructed with an implant, build automatically, and take the
+    stimulus directly in `predict_percept`. Implant placement moved from
+    device constructors to model parameters, so named implant geometry now
+    remains device-local (:pull:`862`, :pull:`879`, :pull:`880`, :pull:`884`,
+    :pull:`887`).
 
-  .. code-block:: python
+    A typical workflow changes from:
 
-      # v0.10
-      implant = p2p.implants.ArgusII(x=1000, y=-500, rot=15)
-      model = p2p.models.AxonMapModel()
-      model.build()
-      percept = model.predict_percept(implant, stim)
+    .. code-block:: python
 
-  to:
+        # v0.10
+        implant = p2p.implants.ArgusII(x=1000, y=-500, rot=15)
+        model = p2p.models.AxonMapModel()
+        model.build()
+        percept = model.predict_percept(implant, stim)
 
-  .. code-block:: python
+    to:
 
-      # v0.11
-      implant = p2p.implants.retina.ArgusII()
-      model = p2p.models.retina.AxonMapModel(
-          implant,
-          implant_position=(1000, -500),
-          implant_rotation=15,
-      )
-      percept = model.predict_percept(stim)
+    .. code-block:: python
+
+        # v0.11
+        implant = p2p.implants.retina.ArgusII()
+        model = p2p.models.retina.AxonMapModel(
+            implant,
+            implant_position=(1000, -500),
+            implant_rotation=15,
+        )
+        percept = model.predict_percept(stim)
 
 * Added :py:mod:`pulse2percept.vision` for composing scenes, scotomas,
   residual vision, and prosthetic percepts in visual-field coordinates,

@@ -11,13 +11,6 @@ the tissue they describe --- :py:mod:`~pulse2percept.topography.retina` and
     Anatomy-specific maps are no longer exported here; import them from
     ``topography.retina`` or ``topography.cortex``.
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    retina
-    cortex
-
 """
 from . import cortex
 from . import retina

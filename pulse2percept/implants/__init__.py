@@ -3,21 +3,6 @@
 Generic device machinery lives at the root; devices live under the anatomical
 target they stimulate.
 
-.. autosummary::
-    :toctree: _api
-
-    retina
-    cortex
-
-.. autosummary::
-    :toctree: _api
-
-    base
-    electrodes
-    electrode_arrays
-    rasters
-    ensemble
-
 .. seealso::
 
     *  :ref:`Basic Concepts > Visual Prostheses <topics-implants>`

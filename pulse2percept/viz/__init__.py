@@ -8,12 +8,6 @@ go away with this module.
 
     Will be removed in version 0.12.0.
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    argus
-
 """
 
 from ..plotting import (play_stimulus_percept, plot_argus_phosphenes,

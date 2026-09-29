@@ -43,8 +43,8 @@ bundled data; ``fetch_*`` functions download larger datasets on first use.
      - any model, as a
        :py:class:`~pulse2percept.stimuli.VideoStimulus`
 
-The :ref:`example gallery <examples>` reproduces [Horsager2009]_,
-[Nanduri2012]_ and [Beyeler2019]_ from these loaders.
+The :ref:`model reproductions <examples-models>` reproduce [Horsager2009]_
+and [Nanduri2012]_ from these loaders.
 
 Tabular loaders return a pandas DataFrame and accept filters, so a subject or
 electrode can be selected without post-processing:

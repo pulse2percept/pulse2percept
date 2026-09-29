@@ -25,7 +25,7 @@
    :caption: Scientific examples
    :hidden:
 
-   examples/index
+   examples/models/index
 
 .. toctree::
    :caption: Reference
@@ -35,7 +35,7 @@
    reference/faq
    reference/release_notes
    reference/references
-   reference/news
+   reference/research
 
 .. toctree::
    :caption: Developer Guide
@@ -76,9 +76,12 @@ Where to go from here
    :doc:`visual input <concepts/vision>`,
    :doc:`coordinates <concepts/coordinates>`, :doc:`units <concepts/units>`, and
    :doc:`datasets <concepts/datasets>`.
-*  Work through the :doc:`Example Gallery <examples/index>`, starting with the
-   key examples.
+*  Browse the :doc:`model reproductions <examples/models/index>`.
 *  Check the :doc:`FAQ <reference/faq>` for common questions.
 *  Request features or report bugs on the `Issue Tracker`_.
+
+.. minigallery:: ../examples/models/plot_*.py
+   :add-heading: Model reproductions
+   :heading-level: =
 
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

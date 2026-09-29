@@ -21,6 +21,11 @@ class NeuroPortArray(CorticalImplant):
         Implant the array with the model's ``implant_position``, e.g.
         ``implant_position=(20, -5) * mm`` for the right hemisphere.
     
+    .. plot::
+
+        from pulse2percept.implants.cortex import NeuroPortArray
+        NeuroPortArray().plot()
+
     Parameters
     ----------
     preprocess : bool or callable, optional

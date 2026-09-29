@@ -12,14 +12,6 @@ subpackage for the tissue they stimulate ---
     Retinal models are no longer exported here; import them from
     ``models.retina``.
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    temporal
-    retina
-    cortex
-
 .. seealso::
 
     *  :ref:`Basic Concepts > Computational Models <topics-models>`

@@ -1,12 +1,5 @@
 """Phosphene models for cortical implants
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    scoreboard
-    dynaphos
-
 .. seealso::
 
     *  :ref:`Basic Concepts > Computational Models <topics-models>`

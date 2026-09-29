@@ -1,20 +1,5 @@
 """Various utility and helper functions.
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    constants
-    geometry
-    array
-    animation
-    images
-    convolution
-    optimize
-    stats
-    deprecation
-    three_dim
-
 """
 from .base import (PrettyPrint, FreezeError, Frozen, Parametrized, Data,
                    bijective26_name, cached, gamma)

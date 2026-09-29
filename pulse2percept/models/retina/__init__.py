@@ -3,17 +3,6 @@
 Phosphene and neural-response models for epiretinal, subretinal and
 suprachoroidal devices, plus the retinal spatial base class they share.
 
-.. autosummary::
-    :toctree: _api
-
-    base
-    thompson2003
-    horsager2009
-    nanduri2012
-    beyeler2019
-    granley2021
-    ho2018
-
 .. seealso::
 
     *  :ref:`Basic Concepts > Computational Models <topics-models>`

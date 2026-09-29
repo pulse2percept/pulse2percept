@@ -14,7 +14,7 @@ Studies describing pulse2percept:
 Studies referenced throughout the Documentation:
 
 .. [Ahuja2008] AK Ahuja, MR Behrend, M Kuroda, MS Humayun, JD Weiland (2008).
-               An in in vitro model of a retinal prosthesis.
+               An in vitro model of a retinal prosthesis.
                *IEEE Trans Biomed Eng* 55, 1744-1753.
 .. [Al-Atabany2010] WT Al-Atabany, T Tong, PA Degenaar (2010). Improved 
                     content aware scene retargeting for retinitis pigmentosa
@@ -25,7 +25,7 @@ Studies referenced throughout the Documentation:
                    in sighted and blind humans. *Cell* 181(4), 774-783,
                    doi:`10.1016/j.cell.2020.04.033
                    <https://doi.org/10.1016/j.cell.2020.04.033>`_.
-.. [Benson2018] Benson NC, Winawer J (2018) Bayesian Analysis of Retinotopic Maps. 
+.. [Benson2018] NC Benson, J Winawer (2018) Bayesian Analysis of Retinotopic Maps. 
                 eLife 2018, doi:`10.1101/325597
                 <https://www.biorxiv.org/content/10.1101/325597v4>`_.
 .. [Beyeler2019] M Beyeler, D Nanduri, JD Weiland, A Rokem, GM Boynton, I Fine
@@ -50,12 +50,12 @@ Studies referenced throughout the Documentation:
 .. [Fernandez2017] E Fernandez & R Normann (2017). CORTIVIS Approach for an 
                    Intracortical Visual Prostheses. *Springer International Publishing*,
                    doi: `10.1007/978-3-319-41876-6_15 <https://doi.org/10.1007/978-3-319-41876-6_15>`_.
-.. [Granley2021] Granley, J., & Beyeler, M. (2021). A Computational Model of 
+.. [Granley2021] J Granley, M Beyeler (2021). A Computational Model of 
                  Phosphene Appearance for Epiretinal Prostheses. *International
                  Conference of the IEEE Engineering in Medicine and Biology
                  Society*, doi:`10.1109/EMBC46164.2021.9629663 <https://doi.org/10.1109/EMBC46164.2021.9629663>`_.
-.. [Greenwald2009] Greenwald, S., Horsager A., Humayun M, Greenberg R.,
-                   McMahon M., Fine I. (2009).
+.. [Greenwald2009] S Greenwald, A Horsager, M Humayun, R Greenberg,
+                   M McMahon, I Fine (2009).
                    Brightness as a Function of Current Amplitude in Human
                    Retinal Electrical Simulation. *Investigative Ophthalmology & Visual
                    Science November 2009* Vol.50, 5017-5025, doi:`10.1167/iovs.08-2897
@@ -154,7 +154,7 @@ Studies referenced throughout the Documentation:
                Retinal Prosthesis: Interim Clinical Trial Results.
                *Translational Vision Science & Technology*, doi: `10.1167/tvst.10.10.12 
                <https://doi.org/10.1167/tvst.10.10.12>`_.
-.. [Polimeni2006] Polimeni, J. R., Balasubramanian, M., & Schwartz, E. L. (2006). Multi-area 
+.. [Polimeni2006] JR Polimeni, M Balasubramanian, EL Schwartz (2006). Multi-area 
                   visuotopic map complexes in macaque striate and extra-striate cortex. 
                   Vision research, 46(20), 3336-3359. doi: `10.1016/j.visres.2006.03.006
                   <https://doi.org/10.1016/j.visres.2006.03.006>`_.
@@ -181,12 +181,12 @@ Studies referenced throughout the Documentation:
                D McCreery, E Schmidt, V Towle (2003). A model for Intracortical
                visual prosthesis research. *Artificial Organs*,
                doi: `10.1046/j.1525-1594.2003.07308.x <https://doi.org/10.1046/j.1525-1594.2003.07308.x>`_.
-.. [Watson2014] A.B. Watson (2014). A formula for human retinal ganglion cell
+.. [Watson2014] AB Watson (2014). A formula for human retinal ganglion cell
                 receptive field density as a function of visual field
                 location. *Journal of Vision* 14(7):1-17,
                 doi:`10.1167/14.7.15 <https://doi.org/10.1167/14.7.15>`_.
-.. [Weitz2015]  Weitz, A. C., Nanduri, D., Behrend, M. R., Gonzalez-Calle, A.,
-                Greenberg, R. J., Humayun, M. S., ... & Weiland, J. D. (2015).
+.. [Weitz2015]  AC Weitz, D Nanduri, MR Behrend, A Gonzalez-Calle,
+                RJ Greenberg, MS Humayun, ... JD Weiland (2015).
                 Improving the spatial resolution of epiretinal implants by 
                 increasing stimulus pulse duration. Science translational medicine,
                 7(318), 318ra203-318ra203.
@@ -199,6 +199,6 @@ Studies referenced throughout the Documentation:
             With the 256 Channel Intelligent Micro Implant Eye (IMIE 256). 
             *Translational Vision Science & Technology*, 10(10), 14–14. 
 .. [Yue2020] L Yue, V Wuyyuru, A Gonzalez-Calle, JD Dorn, MS Humayun (2020).
-             Retina–electrode interface properties and vision restoration by
+             Retina-electrode interface properties and vision restoration by
              two generations of retinal prostheses in one patient—one in each
              eye. *Journal of Neural Engineering* 026020.

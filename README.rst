@@ -130,17 +130,17 @@ To uninstall:
 Where to go from here
 =====================
 
-*  Run the `Quickstart`_.
+*  Run the `Quickstart Guide`_.
 *  Read the core concepts in order: `implants`_, `stimulation`_, and
    `models and percepts`_.
-*  Work through the `Example Gallery`_, starting with the key examples.
+*  Browse the `model reproductions`_.
 *  Check the `FAQ`_ for common questions.
 *  Request features or report bugs on the `Issue Tracker`_.
 
-.. _Quickstart: https://pulse2percept.readthedocs.io/en/latest/examples/plot_quickstart.html
+.. _Quickstart Guide: https://pulse2percept.readthedocs.io/en/latest/examples/plot_quickstart.html
 .. _implants: https://pulse2percept.readthedocs.io/en/latest/concepts/implants.html
 .. _stimulation: https://pulse2percept.readthedocs.io/en/latest/concepts/stimulation.html
 .. _models and percepts: https://pulse2percept.readthedocs.io/en/latest/concepts/models.html
-.. _Example Gallery: https://pulse2percept.readthedocs.io/en/latest/examples/index.html
+.. _model reproductions: https://pulse2percept.readthedocs.io/en/latest/examples/models/index.html
 .. _FAQ: https://pulse2percept.readthedocs.io/en/latest/reference/faq.html
 .. _Issue Tracker: https://github.com/pulse2percept/pulse2percept/issues

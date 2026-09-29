@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-Quickstart
+Quickstart Guide
 ===============================================================================
 
 A pulse2percept simulation has three parts:
@@ -72,7 +72,7 @@ fig.tight_layout()
 # :py:class:`~pulse2percept.models.retina.Ho2018Model`, which models the
 # transient retinal network response reported by [Ho2018]_.
 
-prima = p2p.implants.retina.Huang2021Array(30)
+prima = p2p.implants.retina.PRIMAPivotal()
 prima_model = p2p.models.retina.Ho2018Model(
     prima,
     xrange=(-6 * dva, 6 * dva),  # degrees of visual angle
@@ -80,7 +80,7 @@ prima_model = p2p.models.retina.Ho2018Model(
     step=0.05 * dva,
 )
 
-image = p2p.stimuli.samples.cajal_retina()
+image = p2p.stimuli.samples.bvl_cake()
 percept = prima_model.predict_percept(image, t_percept=50 * ms)
 percept.plot();
 
@@ -190,5 +190,5 @@ percept.play(rings=True, ax=axes[1]);
 # ----------
 #
 # The Core Concepts pages cover each part in order, starting with
-# :ref:`topics-implants`. The :ref:`key examples <examples-workflows>` show
-# complete workflows with images, video, and encoders.
+# :ref:`topics-implants`. The :ref:`model reproductions <examples-models>`
+# recreate figures from published models.

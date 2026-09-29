@@ -1,7 +1,7 @@
 .. _examples-models:
 
-Model reproductions
+Model Reproductions
 ===================
 
 Figures from published models, recreated against the psychophysical data they
-were fit to.
+were fit to:
