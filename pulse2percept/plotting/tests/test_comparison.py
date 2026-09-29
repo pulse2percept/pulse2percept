@@ -349,18 +349,39 @@ def test_electrode_drive_zero_order_hold():
 def test_electrode_drive_raw_waveform():
     # Pulses start every 50 ms; display frames are 20 ms apart:
     stim = Stimulus({'A': BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)})
-    drive = _electrode_drive(stim, np.arange(0, 200, 20))
+    times = np.arange(0, 200, 20)
+    drive = _electrode_drive(stim, times, np.full(times.size, 20))
     npt.assert_almost_equal(drive[0], [10, 0, 10, 0, 0, 10, 0, 10, 0, 0])
     # A cathodic pulse between display frames is still drive:
     stim = Stimulus({'A': MonophasicPulse(-20, 1, delay_dur=30,
                                           stim_dur=100)})
-    npt.assert_almost_equal(_electrode_drive(stim, [0, 20, 40, 60])[0],
-                            [0, 20, 0, 0])
-    # A sample between display times counts toward the earlier one:
+    npt.assert_almost_equal(
+        _electrode_drive(stim, [0, 20, 40, 60], [20] * 4)[0], [0, 20, 0, 0])
+    # The last frame covers its own interval, not the rest of the stimulus:
+    npt.assert_almost_equal(_electrode_drive(stim, [0, 10], [10, 10])[0],
+                            [0, 0])
+    # Without intervals, the value at each time:
+    npt.assert_almost_equal(_electrode_drive(stim, [20, 30.5])[0], [0, 20])
     stim = Stimulus([[0, 5, 0, 0]], time=[0, 10, 11, 40])
-    npt.assert_almost_equal(_electrode_drive(stim, [0, 20])[0], [5, 0])
-    # Values at the display time are interpolated:
-    npt.assert_almost_equal(_electrode_drive(stim, [5, 15])[0], [5, 0])
+    npt.assert_almost_equal(_electrode_drive(stim, [5, 15])[0], [2.5, 0])
+    npt.assert_almost_equal(_electrode_drive(stim, [5, 15], [10, 10])[0],
+                            [5, 0])
+    # Held frames are not interpolated:
+    npt.assert_almost_equal(
+        _electrode_drive(stim, [5, 10.5], [10, 10], hold=True)[0], [0, 5])
+
+
+def test_plot_implant_percept_single_frame_waveform():
+    implant = line_model().implant
+    model = Model(spatial=ScoreboardSpatial(implant, xrange=(-1, 3),
+                                            yrange=(-1, 1), step=0.5),
+                  temporal=FadingTemporal()).build()
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)
+    # At 20 ms, no pulse is on; later pulses do not count:
+    percept = model.predict_percept({'A': pt}, t_percept=20)
+    axes = plot_implant_percept(model, percept)
+    base = implant.electrode_array['A'].plot_kwargs['fc']
+    npt.assert_almost_equal(fill(axes[0], 'A'), base)
 
 
 def test_play_implant_percept_trace():
@@ -380,6 +401,20 @@ def test_play_implant_percept_trace():
     # Labels are baked into the implant layer:
     npt.assert_equal(len(ani._layers[0].image.axes.texts), 0)
     npt.assert_equal('<canvas' in ani.to_jshtml(), True)
+
+
+def test_play_implant_percept_spatial_fps():
+    model = line_model()
+    # The percept records the frame states the spatial model used:
+    percept = model.predict_percept(trace_stim(model))
+    ani = play_implant_percept(model, percept, fps=20 * Hz)
+    # Halfway between A and B (50 ms), only A is on, at full amplitude:
+    npt.assert_equal(ani._layers[0].data.shape[-1], 3)
+    npt.assert_equal(electrode_pixel(ani, model, 'B', 1)[3], 0)
+    cmap = plt.get_cmap(STIM_CMAP)
+    npt.assert_allclose(electrode_pixel(ani, model, 'A', 1)[:3],
+                        cmap(1.0)[:3], atol=0.02)
+    npt.assert_equal(electrode_pixel(ani, model, 'B', 2)[3] > 0, True)
 
 
 def test_play_implant_percept_clocks():

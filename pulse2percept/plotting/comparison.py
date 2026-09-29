@@ -14,6 +14,7 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from matplotlib.transforms import Bbox
 
+from ..models.base import Model, SpatialModel
 from ..percepts.base import Percept, _pixel_extent, _reject_rgb, _resolve_clim
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _has_time_axis
@@ -295,14 +296,26 @@ def _electrode_stim(percept):
     return stim
 
 
-def _electrode_drive(stim, times=None):
-    """Peak absolute drive, (n_electrodes, n_times), at display ``times`` (ms)
+def _holds_frames(model):
+    """Whether ``model`` is spatial-only
 
-    A frame-level view (``stim._spatial_view()``) is held between its frames
-    and is off once the stimulus ends. A plain waveform (linear between its
-    samples) is reduced to its peak over ``[times[k], times[k + 1])``, the
-    last interval running to the end of the stimulus. ``times=None`` reduces
-    the whole stimulus to one column.
+    A spatial-only model stores the frame states it used, not a waveform.
+    """
+    if isinstance(model, Model):
+        return model.has_space and not model.has_time
+    return isinstance(model, SpatialModel)
+
+
+def _electrode_drive(stim, times=None, intervals=None, hold=False):
+    """Absolute drive, (n_electrodes, n_times), at display ``times`` (ms)
+
+    * ``times=None``: peak over the whole stimulus, as one column.
+    * A frame-level view (``stim._spatial_view()``), or any stimulus with
+      ``hold=True``: each frame is held until the next (zero-order hold). A
+      frame-level view is off once the stimulus ends.
+    * A plain waveform (linear between samples): its value at ``times``, or
+      with ``intervals`` (ms), its peak over ``[times[k], times[k] +
+      intervals[k])``.
     """
     view = stim._spatial_view()
     data = np.asarray(view.data, dtype=np.float64).reshape(
@@ -310,20 +323,22 @@ def _electrode_drive(stim, times=None):
     if times is None:
         return np.abs(data).max(axis=1, keepdims=True)
     times = np.asarray(times, dtype=np.float64).ravel()
-    if view is stim and view.time is not None:
-        # Value at the start of each interval, then every sample inside it:
+    if view.time is None:
+        return np.repeat(np.abs(data[:, :1]), times.size, axis=1)
+    if view is stim and not hold:
         drive = np.abs([np.interp(times, view.time, row, left=0, right=0)
                         for row in data]).T
-        k = np.searchsorted(times, view.time, side='right') - 1
-        inside = k >= 0
-        np.maximum.at(drive, k[inside], np.abs(data[:, inside]).T)
+        if intervals is not None:
+            # Add every sample inside a display interval:
+            ends = times + np.asarray(intervals, dtype=np.float64).ravel()
+            k = np.searchsorted(times, view.time, side='right') - 1
+            inside = k >= 0
+            inside[inside] = view.time[inside] < ends[k[inside]]
+            np.maximum.at(drive, k[inside], np.abs(data[:, inside]).T)
         return drive.T
-    if view.time is None:
-        drive = np.repeat(np.abs(data[:, :1]), times.size, axis=1)
-    else:
-        idx = np.searchsorted(view.time, times, side='right') - 1
-        drive = np.abs(data[:, np.clip(idx, 0, view.time.size - 1)])
-    if _has_time_axis(stim):
+    idx = np.searchsorted(view.time, times, side='right') - 1
+    drive = np.abs(data[:, np.clip(idx, 0, view.time.size - 1)])
+    if view is not stim and _has_time_axis(stim):
         drive[:, times >= stim.duration] = 0
     return drive
 
@@ -475,7 +490,7 @@ def plot_implant_percept(model, percept, axes=None, figsize=None,
     """Plot the stimulated implant next to the percept it produced
 
     The left panel shows ``model`` with its implant at the model-side
-    placement, each electrode filled by its peak absolute drive. The drive
+    placement, each electrode filled by its absolute drive. The drive
     comes from ``percept.metadata['stim']``, the prepared stimulus that entered
     the model. Encoded stimuli (e.g., from
     :py:class:`~pulse2percept.stimuli.TraceEncoder`) are shown at their
@@ -488,8 +503,10 @@ def plot_implant_percept(model, percept, axes=None, figsize=None,
 
     Parameters
     ----------
-    model : :py:class:`~pulse2percept.models.BaseModel`
-        The model that predicted ``percept``. Its ``plot(show_implant=True)``
+    model : Model or BaseModel
+        The :py:class:`~pulse2percept.models.Model` or
+        :py:class:`~pulse2percept.models.BaseModel` that predicted
+        ``percept``. Its ``plot(show_implant=True)``
         draws the left panel.
     percept : :py:class:`~pulse2percept.percepts.Percept`
         The percept the model predicted, timeless or a single frame. A
@@ -533,7 +550,7 @@ def plot_implant_percept(model, percept, axes=None, figsize=None,
                          "play_implant_percept() instead.")
     stim = _electrode_stim(percept)
     times = None if percept.time is None else percept.times(ms)
-    drive = _electrode_drive(stim, times)[:, 0]
+    drive = _electrode_drive(stim, times, hold=_holds_frames(model))[:, 0]
     electrodes = list(stim.electrodes)
     cmap, norm = plt.get_cmap(STIM_CMAP), _drive_norm(drive)
     axes = _panel_axes(axes, figsize, layout='constrained')
@@ -567,6 +584,8 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
        :py:class:`~pulse2percept.stimuli.TraceEncoder` or an image encoder)
        is held between its frames (zero-order hold) and is off once the
        stimulus ends.
+    *  A spatial-only model stores the frame states it used; these are held
+       the same way.
     *  A plain waveform shows its peak absolute amplitude over each displayed
        interval, so any pulse inside the interval lights the electrode.
        Individual pulse phases are not resolved.
@@ -577,8 +596,10 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
 
     Parameters
     ----------
-    model : :py:class:`~pulse2percept.models.BaseModel`
-        The model that predicted ``percept``. Its ``plot(show_implant=True)``
+    model : Model or BaseModel
+        The :py:class:`~pulse2percept.models.Model` or
+        :py:class:`~pulse2percept.models.BaseModel` that predicted
+        ``percept``. Its ``plot(show_implant=True)``
         draws the left panel.
     percept : :py:class:`~pulse2percept.percepts.Percept`
         The percept the model predicted. Must have a time axis.
@@ -627,7 +648,8 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
     timeline = _frame_timeline(percept.times(ms), fps=fps)
     idx = timeline.indices
     electrodes = list(stim.electrodes)
-    drive = _electrode_drive(stim, timeline.times)
+    drive = _electrode_drive(stim, timeline.times, timeline.intervals,
+                             hold=_holds_frames(model))
     states, state_idx = np.unique(drive.T, axis=0, return_inverse=True)
     # NumPy 2.x returns a 2D inverse for axis-wise unique:
     state_idx = np.ravel(state_idx)
