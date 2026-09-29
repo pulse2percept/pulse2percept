@@ -3,8 +3,8 @@
 from ..base import SpatialModel, _check_implant, _draw_placed_implant
 from ...implants.base import _implant_target
 from ...topography.cortex import Polimeni2006Map
-from ...utils.constants import UM_PER_MM, ZORDER
-import numpy as np
+from ...utils._plotting import set_mm_ticks
+from ...utils.constants import ZORDER
 
 
 def _check_cortical_implant(implant):
@@ -217,8 +217,7 @@ class CortexSpatial(SpatialModel):
             ax.set_ylabel('y (dva)')
         else:
             # Cortical coordinates are stored in microns, plotted in mm:
-            ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
-            ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
+            set_mm_ticks(ax)
             ax.set_xlabel('x (mm)')
             ax.set_ylabel('y (mm)')
         return ax
@@ -228,9 +227,7 @@ class CortexSpatial(SpatialModel):
             self.build()
         ax = self.grid.plot3d(style=style, ax=ax, **kwargs)
         # this is only ever for cortex right now so this is safe
-        ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
-        ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
-        ax.set_zticklabels(np.array(ax.get_zticks()) / UM_PER_MM)
+        set_mm_ticks(ax)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.set_zlabel('z (mm)')
