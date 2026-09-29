@@ -94,6 +94,19 @@ def _source_frames(stim, times):
     return frames, np.clip(idx, 0, frames.shape[-1] - 1)
 
 
+def _source_times(percept, timeline):
+    """Source time (ms) that each display frame shows
+
+    A temporal model records the onset of the source-video frame that each
+    output frame summarizes (``metadata['source_frame_time']``); the output
+    time itself is that frame's end.
+    """
+    onsets = (percept.metadata or {}).get('source_frame_time')
+    if onsets is None:
+        return timeline.times
+    return np.asarray(onsets, dtype=np.float64)[timeline.indices]
+
+
 def _image_artist(ax, frames, vmin=None, vmax=None):
     """An empty image artist for the animation to write ``frames`` into"""
     blank = np.zeros_like(frames[..., 0])
@@ -177,7 +190,10 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
     authoritative: every displayed percept frame is paired with the source
     frame that is up at the same physical time (zero-order hold), so a source
     and a percept sampled at different rates stay in register, and a still
-    image stays put. ``fps`` resamples the whole presentation, exactly as in
+    image stays put. A temporal percept frame that summarizes a source frame
+    ends when that frame does, and is paired with it
+    (``metadata['source_frame_time']``). ``fps`` resamples the whole
+    presentation, exactly as in
     :py:meth:`~pulse2percept.percepts.Percept.play`.
 
     .. versionadded:: 0.11.0
@@ -231,7 +247,7 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
                          "plot_stimulus_percept() instead.")
     timeline = _frame_timeline(percept.times(ms), fps=fps)
     idx = timeline.indices
-    src, src_idx = _source_frames(stim, timeline.times)
+    src, src_idx = _source_frames(stim, _source_times(percept, timeline))
     # No constrained layout: the player measures the figure with the time
     # annotation blanked out, and a re-flow would move the panels under it.
     axes = _panel_axes(axes, figsize)
@@ -296,50 +312,79 @@ def _electrode_stim(percept):
     return stim
 
 
-def _holds_frames(model):
-    """Whether ``model`` is spatial-only
+def _is_causal(model):
+    """Whether ``model`` integrates stimulation over time
 
-    A spatial-only model stores the frame states it used, not a waveform.
+    A spatial-only model stores the frame states it used. Any other model's
+    percept at t reflects the stimulation delivered up to t.
     """
     if isinstance(model, Model):
-        return model.has_space and not model.has_time
-    return isinstance(model, SpatialModel)
+        return model.has_time
+    return not isinstance(model, SpatialModel)
 
 
-def _electrode_drive(stim, times=None, intervals=None, hold=False):
-    """Absolute drive, (n_electrodes, n_times), at display ``times`` (ms)
+def _frame_intervals(times):
+    """``(lo, hi)``: the interval ``(lo, hi]`` that each percept frame ends
+
+    The first interval is as long as the second; a single frame is an
+    instant.
+    """
+    if times.size < 2:
+        return times.copy(), times
+    return np.concatenate(([2 * times[0] - times[1]], times[:-1])), times
+
+
+def _electrode_drive(stim, times=None, causal=False):
+    """Absolute drive, (n_electrodes, n_times), paired with percept ``times``
+
+    All times are in ms.
 
     * ``times=None``: peak over the whole stimulus, as one column.
-    * A frame-level view (``stim._spatial_view()``), or any stimulus with
-      ``hold=True``: each frame is held until the next (zero-order hold). A
-      frame-level view is off once the stimulus ends.
-    * A plain waveform (linear between samples): its value at ``times``, or
-      with ``intervals`` (ms), its peak over ``[times[k], times[k] +
-      intervals[k])``.
+    * ``causal=False`` (spatial-only model): the drive at each time. Columns
+      are held until the next one (zero-order hold); a frame-level view
+      (``stim._spatial_view()``) is off once the stimulus ends.
+    * ``causal=True``: the peak over ``(times[k - 1], times[k]]``, the
+      stimulation a model with time integrated into frame k. A plain
+      waveform is linear between its samples.
     """
     view = stim._spatial_view()
-    data = np.asarray(view.data, dtype=np.float64).reshape(
+    data = np.abs(np.asarray(view.data, dtype=np.float64)).reshape(
         len(view.electrodes), -1)
     if times is None:
         return _peak_drive(data, axis=1)[:, np.newaxis]
     times = np.asarray(times, dtype=np.float64).ravel()
     if view.time is None:
-        return np.repeat(np.abs(data[:, :1]), times.size, axis=1)
-    if view is stim and not hold:
-        drive = np.abs([np.interp(times, view.time, row, left=0, right=0)
-                        for row in data]).T
-        if intervals is not None:
-            # Add every sample inside a display interval:
-            ends = times + np.asarray(intervals, dtype=np.float64).ravel()
-            k = np.searchsorted(times, view.time, side='right') - 1
-            inside = k >= 0
-            inside[inside] = view.time[inside] < ends[k[inside]]
-            np.maximum.at(drive, k[inside], np.abs(data[:, inside]).T)
+        return np.repeat(data[:, :1], times.size, axis=1)
+    t = view.times(ms)
+    if view is stim and causal:
+        signed = np.asarray(view.data, dtype=np.float64).reshape(data.shape)
+        lo, hi = _frame_intervals(times)
+        # A linear waveform peaks at an interval end or at a sample inside:
+        drive = np.array([np.maximum(np.abs(np.interp(lo, t, row, 0, 0)),
+                                     np.abs(np.interp(hi, t, row, 0, 0)))
+                          for row in signed]).T
+        k = np.clip(np.searchsorted(hi, t, side='left'), 0, hi.size - 1)
+        inside = (lo[k] < t) & (t < hi[k])
+        np.maximum.at(drive, k[inside], data[:, inside].T)
         return drive.T
-    idx = np.searchsorted(view.time, times, side='right') - 1
-    drive = np.abs(data[:, np.clip(idx, 0, view.time.size - 1)])
-    if view is not stim and _has_time_axis(stim):
-        drive[:, times >= stim.duration] = 0
+    # Each column lasts until the next; a frame-level view ends with the
+    # stimulus:
+    end = (stim.times(ms)[-1] if view is not stim and _has_time_axis(stim)
+           else np.inf)
+    ends = np.append(t[1:], end)
+    if not causal:
+        idx = np.searchsorted(t, times, side='right') - 1
+        on = idx >= 0
+        on[on] = times[on] < ends[idx[on]]
+        return data[:, np.clip(idx, 0, t.size - 1)] * on
+    lo, hi = _frame_intervals(times)
+    # An instant takes the frame that was up just before it:
+    lo = np.where(lo < hi, lo, np.nextafter(hi, -np.inf))
+    drive = np.zeros((data.shape[0], times.size))
+    for k in range(times.size):
+        cols = (t < hi[k]) & (ends > lo[k])
+        if np.any(cols):
+            drive[:, k] = data[:, cols].max(axis=1)
     return drive
 
 
@@ -413,8 +458,8 @@ def _overlay(ax, panel, labels, electrodes, states, cmap, norm):
 
     Only the electrode collections and labels are drawn, so the rest of the
     panel stays vector graphics underneath. Returns ``(frames, extent)``:
-    (Y, X, 4, n_states) in [0, 1], cropped to the implant, and its data
-    extent.
+    (Y, X, 4, n_states) uint8 at the figure's resolution, cropped to the
+    implant, and its data extent.
     """
     fig = ax.figure
     fig.canvas.draw()
@@ -433,8 +478,10 @@ def _overlay(ax, panel, labels, electrodes, states, cmap, norm):
     top = max(int(np.floor(height - box.y1)), 0)
     bottom = min(int(np.ceil(height - box.y0)), height)
     where = {name: i for i, name in enumerate(electrodes)}
-    frames = np.empty((bottom - top, right - left, 4, len(states)),
-                      dtype=np.float32)
+    # State-major, so that the (Y, X, 4, n_states) view below is exactly what
+    # the player packs, without a copy:
+    frames = np.empty((len(states), bottom - top, right - left, 4),
+                      dtype=np.uint8)
     for s, state in enumerate(states):
         _paint(panel, electrodes, state, cmap, norm, only_active=True)
         canvas = RendererAgg(width, height, fig.dpi)
@@ -443,8 +490,7 @@ def _overlay(ax, panel, labels, electrodes, states, cmap, norm):
         for name, text in labels.items():
             text.set_visible(state[where[name]] > 0)
             text.draw(canvas)
-        rgba = np.asarray(canvas.buffer_rgba())
-        frames[..., s] = rgba[top:bottom, left:right] / 255.0
+        frames[s] = np.asarray(canvas.buffer_rgba())[top:bottom, left:right]
     # The static background shows the implant as drawn, without labels:
     for coll, fc, ec in panel:
         coll.set_facecolor(fc)
@@ -453,7 +499,7 @@ def _overlay(ax, panel, labels, electrodes, states, cmap, norm):
         text.remove()
     (x0, y0), (x1, y1) = ax.transData.inverted().transform(
         [(left, height - bottom), (right, height - top)])
-    return frames, (x0, x1, y0, y1)
+    return np.moveaxis(frames, 0, -1), (x0, x1, y0, y1)
 
 
 def _grid_kwargs(rings=False, meridians=False, grid_color=vf.GRID_COLOR):
@@ -511,7 +557,8 @@ def plot_implant_percept(model, percept, axes=None, figsize=None,
     percept : :py:class:`~pulse2percept.percepts.Percept`
         The percept the model predicted, timeless or a single frame. A
         timeless percept shows the peak drive over the whole stimulus; a
-        single frame at time t shows the drive at t.
+        single frame at time t shows the drive at t (for a model with time,
+        the frame that was up just before t).
     axes : list of two matplotlib.axes.Axes, optional
         Axes to draw into, implant first. If None, a new figure is created.
     figsize : ``(width, height)``, optional
@@ -550,7 +597,7 @@ def plot_implant_percept(model, percept, axes=None, figsize=None,
                          "play_implant_percept() instead.")
     stim = _electrode_stim(percept)
     times = None if percept.time is None else percept.times(ms)
-    drive = _electrode_drive(stim, times, hold=_holds_frames(model))[:, 0]
+    drive = _electrode_drive(stim, times, causal=_is_causal(model))[:, 0]
     electrodes = list(stim.electrodes)
     cmap, norm = plt.get_cmap(STIM_CMAP), _drive_norm(drive)
     axes = _panel_axes(axes, figsize, layout='constrained')
@@ -577,20 +624,21 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
     """Animate the stimulated implant next to the percept it produced
 
     Both panels run off a single clock, and the percept's time axis is
-    authoritative. Electrode drive comes from ``percept.metadata['stim']`` and
-    is mapped onto each displayed percept time by physical time:
+    authoritative: each percept frame at time t is shown with the stimulation
+    that produced it, taken from ``percept.metadata['stim']``:
 
-    *  A frame-level modulation (e.g., from
-       :py:class:`~pulse2percept.stimuli.TraceEncoder` or an image encoder)
-       is held between its frames (zero-order hold) and is off once the
-       stimulus ends.
-    *  A spatial-only model stores the frame states it used; these are held
-       the same way.
-    *  A plain waveform shows its peak absolute amplitude over each displayed
-       interval, so any pulse inside the interval lights the electrode.
-       Individual pulse phases are not resolved.
+    *  A spatial-only model: the drive at t. Frame-level modulation (e.g.,
+       from :py:class:`~pulse2percept.stimuli.TraceEncoder` or an image
+       encoder) is held between its frames (zero-order hold).
+    *  A model with time: the peak absolute drive since the previous percept
+       frame, i.e., over ``(t_prev, t]``. A frame-level modulation counts
+       every frame up in that interval; a plain waveform counts every pulse,
+       without resolving pulse phases. For automatic output times, this is
+       the interval the percept frame summarizes.
 
-    All frames share one color scale, from 0 to the peak drive.
+    ``fps`` resamples the percept frames, and the implant follows the percept
+    frame on screen. All frames share one color scale, from 0 to the peak
+    drive.
 
     .. versionadded:: 0.11.0
 
@@ -635,8 +683,9 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
 
     Notes
     -----
-    The implant layer is rendered once per distinct electrode state, at the
-    figure's resolution.
+    The implant layer is rendered once per distinct electrode state, as 8-bit
+    RGBA at the figure's resolution (about 0.36 MB per state for a 300 x 300
+    pixel implant), so memory grows with the number of distinct states.
 
     """
     if percept.time is None:
@@ -648,8 +697,9 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
     timeline = _frame_timeline(percept.times(ms), fps=fps)
     idx = timeline.indices
     electrodes = list(stim.electrodes)
-    drive = _electrode_drive(stim, timeline.times, timeline.intervals,
-                             hold=_holds_frames(model))
+    # One drive per percept frame, shown whenever that frame is:
+    drive = _electrode_drive(stim, percept.times(ms),
+                             causal=_is_causal(model))[:, idx]
     states, state_idx = np.unique(drive.T, axis=0, return_inverse=True)
     # NumPy 2.x returns a 2D inverse for axis-wise unique:
     state_idx = np.ravel(state_idx)

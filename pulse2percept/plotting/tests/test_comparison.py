@@ -120,6 +120,15 @@ def test_play_stimulus_percept_zero_order_hold():
     npt.assert_equal(source_index(ani), [0, 0, 1])
 
 
+def test_play_stimulus_percept_source_frame_time():
+    """A temporal percept frame ends the source frame it summarizes"""
+    # Source frames at 0, 33, 66 ms; percept frames at their ends:
+    p = percept(n_frames=3, time=[33.0, 66.0, 99.0],
+                metadata={'source_frame_time': [0.0, 33.0, 66.0]})
+    ani = play_stimulus_percept(video(n_frames=3), p)
+    npt.assert_equal(source_index(ani), [0, 1, 2])
+
+
 def test_play_stimulus_percept_time_units():
     """Source and percept are lined up in physical time, not in raw numbers"""
     ani = play_stimulus_percept(video(n_frames=5),
@@ -247,7 +256,7 @@ def overlay_pixel(ani, model, xy, frame, placed=True):
     h, w = layer.data.shape[:2]
     col = int((x - bbox.x0) / bbox.width * w)
     row = int((bbox.y1 - y) / bbox.height * h)
-    return layer.data[row, col, :, layer.index[frame]]
+    return layer.data[row, col, :, layer.index[frame]] / 255.0
 
 
 def electrode_pixel(ani, model, name, frame):
@@ -346,29 +355,56 @@ def test_electrode_drive_zero_order_hold():
     npt.assert_almost_equal(_electrode_drive(stim).ravel(), 100)
 
 
+def test_electrode_drive_causal_frames():
+    stim = trace_stim(line_model())
+    # A frame at t shows what was up over (t_prev, t]:
+    on = _electrode_drive(stim, [100, 200, 300], causal=True) > 0
+    npt.assert_equal(on, np.eye(3, dtype=bool))
+    # An instant takes the frame up just before it:
+    on = _electrode_drive(stim, [100], causal=True) > 0
+    npt.assert_equal(on.ravel(), [1, 0, 0])
+    npt.assert_equal(_electrode_drive(stim, [0], causal=True).ravel(), 0)
+    # Frames overlapping a longer interval are all counted:
+    on = _electrode_drive(stim, [50, 250], causal=True) > 0
+    npt.assert_equal(on[:, 1], [1, 1, 1])
+
+
 def test_electrode_drive_raw_waveform():
-    # Pulses start every 50 ms; display frames are 20 ms apart:
+    # Pulses start every 50 ms; percept frames are 20 ms apart:
     stim = Stimulus({'A': BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)})
-    times = np.arange(0, 200, 20)
-    drive = _electrode_drive(stim, times, np.full(times.size, 20))
+    drive = _electrode_drive(stim, np.arange(20, 220, 20), causal=True)
     npt.assert_almost_equal(drive[0], [10, 0, 10, 0, 0, 10, 0, 10, 0, 0])
-    # A cathodic pulse between display frames is still drive:
+    # A cathodic pulse between percept frames is still drive:
     stim = Stimulus({'A': MonophasicPulse(-20, 1, delay_dur=30,
                                           stim_dur=100)})
     npt.assert_almost_equal(
-        _electrode_drive(stim, [0, 20, 40, 60], [20] * 4)[0], [0, 20, 0, 0])
-    # The last frame covers its own interval, not the rest of the stimulus:
-    npt.assert_almost_equal(_electrode_drive(stim, [0, 10], [10, 10])[0],
-                            [0, 0])
-    # Without intervals, the value at each time:
-    npt.assert_almost_equal(_electrode_drive(stim, [20, 30.5])[0], [0, 20])
-    stim = Stimulus([[0, 5, 0, 0]], time=[0, 10, 11, 40])
-    npt.assert_almost_equal(_electrode_drive(stim, [5, 15])[0], [2.5, 0])
-    npt.assert_almost_equal(_electrode_drive(stim, [5, 15], [10, 10])[0],
-                            [5, 0])
-    # Held frames are not interpolated:
+        _electrode_drive(stim, [20, 40, 60], causal=True)[0], [0, 20, 0])
+    # A ramp peaks where the interval ends, between samples:
+    stim = Stimulus([[0, 5, 10]], time=[0, 15, 30])
     npt.assert_almost_equal(
-        _electrode_drive(stim, [5, 10.5], [10, 10], hold=True)[0], [0, 5])
+        _electrode_drive(stim, [0, 20], causal=True)[0], [0, 20 / 3])
+    # A pulse starting at a frame boundary belongs to the next frame:
+    stim = Stimulus([[0, 0, 5, 0]], time=[0, 20, 21, 40])
+    npt.assert_almost_equal(
+        _electrode_drive(stim, [20, 40], causal=True)[0], [0, 5])
+    # A spatial-only model's columns are held, not interpolated:
+    stim = Stimulus([[0, 5, 0, 0]], time=[0, 10, 11, 40])
+    npt.assert_almost_equal(_electrode_drive(stim, [5, 10.5])[0], [0, 5])
+
+
+class SecondStimulus(Stimulus):
+    """A stimulus that stores its time axis in seconds"""
+    _default_time_unit = s
+
+
+def test_electrode_drive_time_unit():
+    ms_stim = Stimulus([[0, 5, 0, 0]], time=[0, 10, 11, 40])
+    s_stim = SecondStimulus([[0, 5, 0, 0]], time=[0, 0.010, 0.011, 0.040])
+    npt.assert_almost_equal(s_stim.times(ms), ms_stim.time)
+    for kwargs in ({}, {'causal': True}):
+        npt.assert_almost_equal(
+            _electrode_drive(s_stim, [5, 10.5, 20], **kwargs),
+            _electrode_drive(ms_stim, [5, 10.5, 20], **kwargs))
 
 
 def test_plot_implant_percept_single_frame_waveform():
@@ -428,11 +464,27 @@ def test_play_implant_percept_clocks():
                for name in 'ABC'] for frame in range(5)]
     npt.assert_equal(active, [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
                               [0, 0, 0]])
-    # So does the display clock:
+    # Resampled at 10 Hz, the implant follows the percept frame on screen:
+    # 100 ms still shows the 50 ms frame (A), 200 ms the 150 ms frame (B).
     ani = play_implant_percept(model, percept, fps=10 * Hz)
     active = [electrode_pixel(ani, model, 'B', frame)[3] > 0
               for frame in range(3)]
-    npt.assert_equal(active, [False, True, False])
+    npt.assert_equal(active, [False, False, True])
+
+
+def test_play_implant_percept_temporal_frames():
+    spatial = line_model()
+    model = Model(spatial=spatial, temporal=FadingTemporal()).build()
+    # A for 0-100 ms, then B for 100-200 ms:
+    stim = TraceEncoder(spatial, step_dur=100 * ms).encode(
+        np.array([(0, 0), (1, 0)]) * dva)
+    percept = model.predict_percept(stim)
+    # Each frame ends the interval it summarizes:
+    npt.assert_almost_equal(percept.time, [100, 200])
+    ani = play_implant_percept(model, percept)
+    active = [[electrode_pixel(ani, model, name, frame)[3] > 0
+               for name in 'AB'] for frame in range(2)]
+    npt.assert_equal(active, [[True, False], [False, True]])
 
 
 def test_play_implant_percept_shared_scale():

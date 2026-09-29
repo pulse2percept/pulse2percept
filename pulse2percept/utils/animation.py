@@ -273,7 +273,7 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt, bg_color=(255, 255, 255)):
     ----------
     data : ndarray
         Either (Y, X, T) scalar data, (Y, X, 3, T) RGB data, or (Y, X, 4, T)
-        RGBA data in [0, 1]
+        RGBA data in [0, 1] (floats) or [0, 255] (uint8)
     norm : matplotlib.colors.Normalize
         The normalization of the animated image (ignored for RGB(A) data)
     cmap : matplotlib.colors.Colormap
@@ -296,7 +296,11 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt, bg_color=(255, 255, 255)):
     rgb = np.ndim(data) == 4
     rgba = rgb and np.shape(data)[-2] == 4
     n_frames = np.shape(data)[-1]
-    if rgb:
+    if rgb and np.asarray(data).dtype == np.uint8:
+        # Already 8-bit, as Matplotlib reads uint8 RGB(A): (Y, X, C, T) ->
+        # (T, Y, X, C), without a float copy:
+        frames = np.ascontiguousarray(np.moveaxis(data, -1, 0))
+    elif rgb:
         # (Y, X, C, T) -> (T, Y, X, C), clipped the same way Matplotlib clips
         # out-of-range RGB values:
         scaled = np.clip(np.asarray(data, dtype=np.float32), 0, 1) * 255
@@ -742,7 +746,8 @@ class HTMLAnimation(FuncAnimation):
         normalization determine how the frames are drawn
     frame_data : ndarray or list thereof
         One array per image: either (Y, X, T) scalar data, (Y, X, 3, T) RGB
-        data, or (Y, X, 4, T) RGBA data, matching what ``func`` displays
+        data, or (Y, X, 4, T) RGBA data, matching what ``func`` displays.
+        RGB(A) data is either floats in [0, 1] or uint8.
     frame_index : list of (array_like or None), optional
         One entry per image, giving the frame of ``frame_data`` that each
         display frame shows. None (the default, or per image) advances that
