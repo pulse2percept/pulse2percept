@@ -204,6 +204,34 @@ def test_dynaphos_plot():
     plt.close()
 
 
+def _assert_mm_labels(axis):
+    """Tick labels read the current tick positions (um) in mm"""
+    labels = [float(t.get_text())
+              for t in axis.get_ticklabels()]
+    npt.assert_allclose(labels, axis.get_majorticklocs() / 1000, atol=1e-9)
+
+
+def test_dynaphos_plot_mm_ticks():
+    orion = Orion()
+    model = DynaphosModel(orion, implant_position=(20, -5) * mm,
+                          xrange=(-6, 0), yrange=(-1, 4.5), step=0.5).build()
+    ax = model.plot()
+    xlim = ax.get_xlim()
+    # Orion autoscales the shared axes after the model set its labels:
+    npt.assert_equal(orion.plot(ax=ax) is ax, True)
+    npt.assert_equal(ax.get_xlim() != xlim, True)
+    ax.figure.canvas.draw()
+    _assert_mm_labels(ax.xaxis)
+    _assert_mm_labels(ax.yaxis)
+    plt.close(ax.figure)
+    # dva axes keep Matplotlib's default formatter:
+    ax = model.plot(use_dva=True)
+    npt.assert_equal(ax.get_xlabel(), 'x (dva)')
+    npt.assert_equal(type(ax.xaxis.get_major_formatter()).__name__,
+                     'ScalarFormatter')
+    plt.close(ax.figure)
+
+
 def test_DynaphosModel_units():
     """A unitful parameter lands on the same percept as the bare one
 

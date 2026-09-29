@@ -12,7 +12,8 @@ from ...percepts import Percept
 from ...stimuli import BiphasicPulseTrain
 from ...units import (A, Quantity, as_value, deg, dva, Hz, mm, ms, uA, um)
 from ...utils import cart2pol
-from ...utils.constants import MS_PER_S, UM_PER_MM, ZORDER
+from ...utils._plotting import set_mm_ticks
+from ...utils.constants import MS_PER_S, ZORDER
 from ...topography.cortex import Polimeni2006Map
 
 
@@ -630,8 +631,7 @@ class DynaphosModel(BaseModel):
             ax.set_ylabel('y (dva)')
         else:
             # Cortical coordinates are stored in microns, plotted in mm:
-            ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
-            ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
+            set_mm_ticks(ax)
             ax.set_xlabel('x (mm)')
             ax.set_ylabel('y (mm)')
         return ax

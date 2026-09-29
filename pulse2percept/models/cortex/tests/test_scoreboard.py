@@ -186,6 +186,33 @@ def test_plot(ModelClass):
     plt.close()
 
 
+def _assert_mm_labels(axis):
+    """Tick labels read the current tick positions (um) in mm"""
+    fmt = axis.get_major_formatter()
+    labels = [float(fmt(t))
+              for t in axis.get_majorticklocs()]
+    npt.assert_allclose(labels, axis.get_majorticklocs() / 1000, atol=1e-9)
+
+
+def test_plot_mm_ticks(monkeypatch):
+    m = ScoreboardSpatial(implant=NeuroPortArray()).build()
+    ax = m.plot()
+    ax.set_xlim(-50000, 50000)
+    ax.figure.canvas.draw()
+    _assert_mm_labels(ax.xaxis)
+    _assert_mm_labels(ax.yaxis)
+    plt.close(ax.figure)
+    # plot3d requires a 3D map, so stand in for the grid's 3D plot:
+    ax3d = plt.figure().add_subplot(projection='3d')
+    monkeypatch.setattr(m.grid, 'plot3d', lambda **kwargs: ax3d)
+    npt.assert_equal(m.plot3d() is ax3d, True)
+    ax3d.set_zlim(-2500, 2500)
+    ax3d.figure.canvas.draw()
+    for axis in (ax3d.xaxis, ax3d.yaxis, ax3d.zaxis):
+        _assert_mm_labels(axis)
+    plt.close(ax3d.figure)
+
+
 def test_poli_nlink():
     # make sure that the polimeni map and neuralink work togther with scoreboard
     # since this is an odd combo of 2d map and 3d implant

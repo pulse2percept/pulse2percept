@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import numpy.testing as npt
+import matplotlib.pyplot as plt
 
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.utils import pol2cart, cart2pol
@@ -223,3 +224,16 @@ def test_polimeni_inverse_outside_v1():
     npt.assert_almost_equal(map.to_dva()['v1'](0, 0), (0, 0))
     npt.assert_almost_equal(map.to_dva()['v1'](*map.from_dva()['v1'](-3, 2)),
                             (-3, 2), decimal=4)
+
+
+def test_polimeni_plot_mm_ticks():
+    fig, ax = plt.subplots()
+    Polimeni2006Map().plot(ax=ax)
+    # Limits changed after plotting relabel the new ticks:
+    ax.set_xlim(0, 36000)
+    ax.set_ylim(-5000, 5000)
+    fig.canvas.draw()
+    for axis in (ax.xaxis, ax.yaxis):
+        labels = [float(t.get_text()) for t in axis.get_ticklabels()]
+        npt.assert_allclose(labels, axis.get_majorticklocs() / 1000)
+    plt.close(fig)

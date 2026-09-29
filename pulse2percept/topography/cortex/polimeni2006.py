@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from .base import CorticalMap
 from ...units import dva, mm
 from ...utils import pol2cart, cart2pol
-from ...utils.constants import UM_PER_MM
+from ...utils._plotting import set_mm_ticks
 
 
 def _scalar_safe(dtype):
@@ -273,8 +273,7 @@ class Polimeni2006Map(CorticalMap):
 
         # Coordinates are stored in microns, but a cortical map is worth
         # reading in millimeters:
-        ax.set_xticklabels(np.array(ax.get_xticks()) / UM_PER_MM)
-        ax.set_yticklabels(np.array(ax.get_yticks()) / UM_PER_MM)
+        set_mm_ticks(ax)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')
         ax.legend()
