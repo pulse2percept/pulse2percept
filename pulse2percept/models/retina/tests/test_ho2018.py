@@ -146,6 +146,25 @@ def test_temporal_stage_takes_the_spatial_percept():
     npt.assert_equal(np.any(percept.data > 0), True)
 
 
+@pytest.mark.parametrize('metadata', [
+    None,
+    {'encoder': {'frame_time': np.zeros(1), 'frame_dur': 500.0}},
+])
+def test_temporal_stage_ignores_percept_metadata(metadata):
+    implant = tiny_implant()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        spatial = Ho2018Spatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                step=0.25, verbose=False)
+    drive = spatial.predict_percept(spot())
+    temporal = Ho2018Temporal(verbose=False)
+    ref = temporal.predict_percept(drive)
+    drive._internal['metadata'] = metadata
+    got = temporal.predict_percept(drive)
+    npt.assert_array_equal(got.time, ref.time)
+    npt.assert_array_equal(got.data, ref.data)
+
+
 # -- Structured stimulus routing --------------------------------------------
 
 def test_spatial_stage_receives_the_schedule(monkeypatch):

@@ -1550,6 +1550,33 @@ def test_Model_ignores_response_metadata(monkeypatch):
                            ref.metadata['source_frame_time'])
 
 
+@pytest.mark.parametrize('metadata', [
+    None,
+    {},
+    # Metadata that would imply another clock:
+    {'encoder': {'frame_time': np.zeros(1), 'frame_dur': 500.0},
+     'stim': None, 'source_frame_time': np.zeros(1)},
+])
+def test_TemporalModel_ignores_percept_metadata(metadata):
+    implant = ArgusI()
+    vid = VideoStimulus(np.random.default_rng(0).random((4, 4, 6)),
+                        metadata={'fps': 29.97})
+    stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20).encode(vid)
+    spatial = ScoreboardSpatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                step=1)
+    temporal = FadingTemporal(tau=100)
+    percept = spatial.predict_percept(stim)
+    ref = temporal.predict_percept(percept)
+    # One frame per video frame, not the 20 ms default:
+    npt.assert_equal(ref.data.shape[-1], 6)
+    percept._internal['metadata'] = metadata
+    got = temporal.predict_percept(percept)
+    npt.assert_array_equal(got.data, ref.data)
+    npt.assert_array_equal(got.time, ref.time)
+    npt.assert_array_equal(got.metadata['source_frame_time'],
+                           ref.metadata['source_frame_time'])
+
+
 def test_Model_n_gray_precedes_temporal_stage():
     grid = {'xrange': (-3, 3), 'yrange': (-2, 2), 'step': 0.5}
     plain = Model(ScoreboardSpatial(ArgusI(), **grid),

@@ -272,6 +272,10 @@ class Percept(Data):
 
     """
 
+    #: Encoder frame clock of a model-generated percept, read by temporal
+    #: models instead of metadata. None for other percepts.
+    _frame_clock = None
+
     def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
                  time_unit=ms):
         # import at runtime to avoid circular import

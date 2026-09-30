@@ -13,13 +13,9 @@ Highlights
 API changes and improvements
 ----------------------------
 
-* Composite models no longer pass an intermediate
-  :py:class:`~pulse2percept.percepts.Percept` from the spatial to the temporal
-  stage. ``percept.metadata['stim']`` now stores the prepared
-  :py:class:`~pulse2percept.stimuli.Stimulus` directly; plotting functions
-  still read the nested form of v0.11 percepts. Temporal models take the
-  encoder frame clock from the encoded stimulus, not from
-  ``metadata['encoder']`` (:pull:`XXX`).
+* ``percept.metadata['stim']`` of composite models now stores the prepared
+  stimulus directly, and metadata no longer affects model timing
+  (:pull:`936`).
 
 Bug fixes
 ---------

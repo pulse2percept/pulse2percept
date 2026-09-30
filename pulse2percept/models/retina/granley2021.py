@@ -9,7 +9,7 @@ from copy import deepcopy
 from ...implants import ElectrodeArray
 from ...stimuli import BiphasicPulseTrain, Stimulus
 from ...units import as_value, um, xTh
-from ..base import (BaseModel, Model, _ModelResponse,
+from ..base import (BaseModel, Model, _ModelResponse, _encoder_clock,
                     _require_stim_dimension)
 from .base import _warn_ignores_z
 from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
@@ -413,7 +413,8 @@ class _BiphasicSpatialMixin:
                 self.implant.electrode_array, stim).reshape(-1)
         # Apply the same spatial postprocessing as the generic path.
         resp = self._postprocess_spatial(resp)
-        return self._spatial_response(resp, t_percept, {'stim': stim})
+        return self._spatial_response(resp, t_percept, {'stim': stim},
+                                      frame_clock=_encoder_clock(stim))
 
     def _combine_temporal(self, resp, temporal, stim, t_percept):
         """Apply a normalized temporal response to the spatial response."""
@@ -429,7 +430,8 @@ class _BiphasicSpatialMixin:
         fade = env.data.reshape(-1) / peak
         return _ModelResponse(resp.data[:, :1] * fade, env.time,
                               probe.time_unit, self.grid.x.shape,
-                              space=self.grid, metadata={'stim': stim})
+                              space=self.grid, frame_clock=resp.frame_clock,
+                              metadata={'stim': stim})
 
     @staticmethod
     def _envelope_peak(temporal, envelope):

@@ -85,28 +85,6 @@ def _encoder_clock(stim):
                        stim._source_dur)
 
 
-def _metadata_clock(obj):
-    """Return the frame clock recorded in metadata, or None.
-
-    Compatibility for public Percept input only, which stores the encoder
-    clock only in metadata (``'encoder'``, or nested under ``'stim'``).
-    """
-    clock = _encoder_clock(obj)
-    meta = getattr(obj, 'metadata', None)
-    if clock is not None or not isinstance(meta, dict):
-        return clock
-    enc = meta.get('encoder')
-    if not isinstance(enc, dict):
-        # `Stimulus` stores unrecognized metadata under 'user':
-        user = meta.get('user')
-        enc = user.get('encoder') if isinstance(user, dict) else None
-    if not isinstance(enc, dict):
-        return _metadata_clock(meta['stim']) if 'stim' in meta else None
-    return _FrameClock(enc.get('frame_time'), enc.get('frame_dur'),
-                       enc.get('source_frame_time'),
-                       enc.get('source_frame_dur'))
-
-
 @dataclass
 class _ModelResponse:
     """Numerical output passed between model stages.
@@ -135,13 +113,15 @@ def _to_percept(resp, inherit_space_from=None):
     """Return the ``(*shape, T)`` Percept for a model response, or None.
 
     Without a grid, reuses the coordinates of ``inherit_space_from`` if it is
-    a Percept of matching shape.
+    a Percept of matching shape. The frame clock is kept as private state for
+    downstream temporal models.
     """
     if resp is None:
         return None
     percept = Percept(resp.data.reshape(tuple(resp.shape) + (-1,)),
                       space=resp.space, time=resp.time,
                       time_unit=resp.time_unit, metadata=resp.metadata)
+    percept._frame_clock = resp.frame_clock
     if resp.space is None:
         percept._inherit_space(inherit_space_from)
     return percept
@@ -1352,6 +1332,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if stim is None:
             # Nothing to see here:
             return None
+        clock = _encoder_clock(stim)
         source = _spatial_input(stim)
         _require_stim_dimension(
             self, source,
@@ -1416,7 +1397,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 resp = self._predict_spatial(self.implant.electrode_array,
                                              stim)
         resp = self._postprocess_spatial(resp)
-        return self._spatial_response(resp, t_percept, {'stim': stim})
+        return self._spatial_response(resp, t_percept, {'stim': stim},
+                                      frame_clock=clock)
 
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
              figsize=None, show_implant=False):
@@ -1639,7 +1621,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                 clock = _encoder_clock(stim)
             else:
                 _space = [len(stim.ydva), len(stim.xdva)]
-                clock = _metadata_clock(stim)
+                clock = stim._frame_clock
         n_space = int(np.prod(_space))
         # `_frame_clock`, `dt` and `t_percept` all use `time_unit`:
         _time = self._stim_times(stim)
@@ -1699,7 +1681,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # source_frame_time[k] (ms); percept.time marks its end.
             metadata['source_frame_time'] = source
         return _ModelResponse(resp, t_percept, self.time_unit, tuple(_space),
-                              space=space, metadata=metadata)
+                              space=space, frame_clock=clock,
+                              metadata=metadata)
 
     def _warn_if_blank(self, stim, resp):
         """Warn when stimulus polarity explains an all-zero response.
