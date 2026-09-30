@@ -985,9 +985,9 @@ def test_Model_predict_percept_frame_peak():
     npt.assert_array_equal(last.predict_percept(stim).data, at_end.data)
 
 
-def test_Model_predict_percept_correctly_parallelizes():
-    # Wall-clock speedup is too noisy to test; thread count must not change
-    # the result of the Cython spatial and temporal loops:
+def test_Model_predict_percept_thread_count_invariant():
+    # Thread count must not change the result of the Cython spatial and
+    # temporal loops:
     stim = BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)
     percepts = []
     for n_threads in (1, 2):

@@ -220,7 +220,7 @@ def test_poli_nlink():
     npt.assert_equal(_spatial(model).grid.v1.z is None, True)
     npt.assert_equal(_spatial(model).grid.v1.x is None, False)
     percept = model.predict_percept({e: 1 for e in implant.electrode_names})
-    npt.assert_almost_equal(np.sum(percept.data), 32.494125, decimal=3)
+    npt.assert_almost_equal(np.sum(percept.data), 32.503597, decimal=3)
     npt.assert_equal(np.sum(percept.data > .05), 4)
 
 

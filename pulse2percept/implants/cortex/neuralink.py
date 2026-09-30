@@ -56,11 +56,13 @@ class EllipsoidElectrode(Electrode):
         self.ry = ry
         self.rz = rz
         self.plot_patch = Ellipse
-        self.plot_kwargs = {'width': rx, 'height': ry, 'angle': 0,
+        # Ellipse takes diameters:
+        self.plot_kwargs = {'width': 2 * rx, 'height': 2 * ry, 'angle': 0,
                             'linewidth': 2,
                             'ec': (0.3, 0.3, 0.3, 1),
                             'fc': (1, 1, 1, 0.9)}
-        self.plot_deactivated_kwargs = {'width': rx, 'height': ry, 'angle': 0,
+        self.plot_deactivated_kwargs = {'width': 2 * rx, 'height': 2 * ry,
+                                        'angle': 0,
                                         'linewidth': 2,
                                         'ec': (0.6, 0.6, 0.6, 1),
                                         'fc': (1, 1, 1, 0.6)}
@@ -163,7 +165,8 @@ class LinearEdgeThread(NeuralinkThread):
         electrode : Electrode
             Electrode class to use for the individual electrodes.
             Must accept x, y, z, and orient parameters, and contain a plot_patch
-            and plot_kwargs if dim=2 or a plot_3d method if dim=3.
+            and plot_kwargs if dim=2 or a plot_3d method if dim=3. Electrode
+            centers sit ``radius + rx`` (um) from the thread axis.
 
         Notes
         -----
@@ -195,10 +198,12 @@ class LinearEdgeThread(NeuralinkThread):
         # calculate the coordinates of the electrodes
         electrodes = {}
         start = self.loc + self.insertion_depth * self.direction 
-        # Place electrodes on the thread edge, facing an arbitrary direction
-        # (rotated x axis). Exact geometry is not specified in [Musk2019]:
-        offset = (parse_3d_orient([1, 0, 0], 'direction')[0] @
-                  self.direction * (self.radius + 7 / 2))
+        # Electrodes touch the outside of the thread along their local x axis,
+        # which is perpendicular to the thread. Exact geometry is not specified
+        # in [Musk2019]. Electrodes without `rx` are centered on the surface:
+        probe = self.electrode(0, 0, 0, orient=self.rot, orient_mode='rot')
+        offset = (self.rot @ np.array([1.0, 0, 0]) *
+                  (self.radius + getattr(probe, 'rx', 0)))
         electrode_locs = [start + i*self.spacing*self.direction + offset for i in range(self.n_elecs)]
         for i, loc in enumerate(electrode_locs):
             electrodes[str(i)] = self.electrode(loc[0], loc[1], loc[2], orient=self.rot, orient_mode='rot')
