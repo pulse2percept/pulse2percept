@@ -506,7 +506,7 @@ def gamma(n, tau, tsample, tol=0.01):
     tau = float(tau)
     tsample = float(tsample)
     if n <= 0 or tau <= 0 or tsample <= 0:
-        raise ValueError("`n`, `tau`, and `tsample` must be nonnegative.")
+        raise ValueError("`n`, `tau`, and `tsample` must be positive.")
     if tau <= tsample:
         raise ValueError("`tau` cannot be smaller than `tsample`.")
 

@@ -29,7 +29,7 @@ frequencies. Model parameters and the unit conversion of :math:`\\epsilon`
 are documented in
 :py:class:`~pulse2percept.models.retina.Horsager2009Temporal`.
 
-This example reproduces Figs. 3B and 4B of [Horsager2009]_ for subject S05,
+This example reproduces Fig. 3B of [Horsager2009]_ for subject S05,
 electrode C3.
 """
 # sphinx_gallery_thumbnail_number = 2

@@ -34,6 +34,8 @@ def test_PhotovoltaicPixel():
     for kwargs in ({'r': 3, 'apothem': 4}, {'radius': 3, 'a': 4}):
         with pytest.raises(TypeError):
             PhotovoltaicPixel(0, 1, 2, **kwargs)
+    with pytest.raises(ValueError, match="not -3"):
+        PhotovoltaicPixel(0, 1, 2, radius=-3, apothem=4)
     # Slots:
     npt.assert_equal(hasattr(electrode, '__slots__'), True)
     npt.assert_equal(hasattr(electrode, '__dict__'), False)

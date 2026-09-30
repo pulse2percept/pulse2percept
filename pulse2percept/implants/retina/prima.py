@@ -266,7 +266,7 @@ class PhotovoltaicPixel(HexElectrode):
             raise TypeError("Radius of the active electrode must be a scalar.")
         if radius <= 0:
             raise ValueError("Radius of the active electrode must be > 0, not "
-                             "{radius}.")
+                             f"{radius}.")
         self.radius = radius
         # Plot the pixel body and active electrode:
         hex_kwargs = self._hex_patch_kwargs()

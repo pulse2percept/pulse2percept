@@ -52,6 +52,9 @@ def test_PointSource():
     npt.assert_equal(len(ax.texts), 0)
     npt.assert_equal(len(ax.patches), 1)
     npt.assert_equal(isinstance(ax.patches[0], Circle), True)
+    ax = electrode.plot(autoscale=True)
+    npt.assert_almost_equal(ax.get_xlim(), (-100, 100))
+    npt.assert_almost_equal(ax.get_ylim(), (-99, 101))
 
 
 def test_DiskElectrode():

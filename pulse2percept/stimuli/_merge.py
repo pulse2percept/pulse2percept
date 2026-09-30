@@ -79,9 +79,8 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     time : list of np.ndarray
         The time axes to merge.
     merge_tolerance : float, optional
-        Two time points closer together than this (or than float32 can
-        resolve at their own magnitude, whichever is coarser) are the same
-        point.
+        Two time points closer together than this (or than the accumulated
+        drift at their magnitude, whichever is coarser) are the same point.
 
     Returns
     -------
@@ -103,7 +102,7 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
             continue
         if t0_tol is None:
             t0_tol = _same_time_point(t0, merge_tolerance)
-        # Same axis up to float32 noise? (`np.allclose` is too loose: its
+        # Same axis up to rounding drift? (`np.allclose` is too loose: its
         # rtol is 0.01 ms at t = 1000 ms, i.e. ten time steps.)
         if not np.all(np.abs(np.subtract(t, t0, dtype=np.float64)) <= t0_tol):
             identical = False

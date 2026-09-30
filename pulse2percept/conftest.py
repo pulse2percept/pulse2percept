@@ -11,8 +11,8 @@ import pytest
 
 from pulse2percept.stimuli import VideoStimulus
 
-#: Frame count and rate of a short camera clip. 29.97 fps (33.365 ms per
-#: frame) is incommensurate with the 6 Hz Argus II pulse rate.
+#: Frame count and rate of a short camera clip. 29.97 fps is incommensurate
+#: with the 6 Hz Argus II pulse rate.
 CAMERA_N_FRAMES, CAMERA_FPS = 94, 29.97
 
 

@@ -263,7 +263,7 @@ def test_endtoend_raster_is_what_separates_the_groups():
 def test_endtoend_slow_train_stays_lit_for_the_whole_video(camera_video):
     """A pulse rate well below the frame rate keeps the percept lit
 
-    ``camera_video`` runs at 29.97 fps (33.365 ms per frame) and a 6 Hz train
+    ``camera_video`` runs at 29.97 fps (1000 / 29.97 ms per frame) and a 6 Hz train
     pulses every 166.67 ms (4.995 frames). Sampling one instant per frame
     drifts through the pulse cycle and can miss the 0.92 ms pulse window
     entirely. A rectified drive keeps brightness between pulses, and reporting

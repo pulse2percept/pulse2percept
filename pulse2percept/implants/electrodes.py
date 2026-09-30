@@ -134,7 +134,7 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         Parameters
         ----------
         autoscale : bool, optional
-            Whether to adjust the x,y limits of the plot
+            Whether to set the x,y limits to 100 um around the electrode
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None given, a new one will be created.
 
@@ -163,6 +163,7 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
             # This is needed in MPL 3.0.X to set the axis limit correctly:
             ax.autoscale_view()
         if autoscale:
+            pad = 100  # um
             ax.set_xlim(self.x - pad, self.x + pad)
             ax.set_ylim(self.y - pad, self.y + pad)
         return ax

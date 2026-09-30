@@ -160,10 +160,10 @@ def test_EllipsoidElectrode_invalid_orient():
 def test_EllipsoidElectrode_plot_kwargs():
     electrode = EllipsoidElectrode(rx=3, ry=4, rz=5)
     npt.assert_equal(electrode.plot_patch, Ellipse)
-    # The 2D patch is the ellipse's cross-section:
+    # The 2D patch is the ellipse's cross-section; rx, ry are semiaxes:
     for kwargs in (electrode.plot_kwargs, electrode.plot_deactivated_kwargs):
-        npt.assert_almost_equal(kwargs['width'], 3)
-        npt.assert_almost_equal(kwargs['height'], 4)
+        npt.assert_almost_equal(kwargs['width'], 6)
+        npt.assert_almost_equal(kwargs['height'], 8)
     # Deactivated electrodes are drawn lighter and more transparent:
     npt.assert_equal(electrode.plot_deactivated_kwargs['ec'][0] >
                      electrode.plot_kwargs['ec'][0], True)
@@ -198,7 +198,7 @@ def test_LinearEdgeThread():
     # Electrodes are on the thread edge, a few um off from this spot:
     zs = []
     for e in thread.electrode_objects:
-        npt.assert_almost_equal(e.x, thread.radius + 7 // 2)
+        npt.assert_almost_equal(e.x, thread.radius + 7)
         npt.assert_almost_equal(e.y, 0)
         npt.assert_almost_equal(e.rot, thread.rot)
         zs.append(e.z)
@@ -208,17 +208,19 @@ def test_LinearEdgeThread():
     thread = LinearEdgeThread(orient=[1, 0, 0])
     xs = []
     for e in thread.electrode_objects:
-        npt.assert_almost_equal(e.z, -thread.radius - 7 // 2)
+        npt.assert_almost_equal(e.z, -thread.radius - 7)
         npt.assert_almost_equal(e.y, 0)
         xs.append(e.x)
     npt.assert_equal(np.allclose(np.diff(xs), thread.spacing), True)
 
     thread = LinearEdgeThread(orient=[1, 1, 1], spacing=3*np.sqrt(3))
     locs = []
+    # rot @ x = (1, 1, -2) / sqrt(6), perpendicular to the thread:
+    offset = (thread.radius + 7) / np.sqrt(6)
     for i, e in enumerate(thread.electrode_objects):
-        npt.assert_almost_equal(e.x, 3*i + 4.618802, decimal=5)
-        npt.assert_almost_equal(e.y, 3*i + 4.618802, decimal=5)
-        npt.assert_almost_equal(e.z, 3*i - 4.618802, decimal=5)
+        npt.assert_almost_equal(e.x, 3*i + offset, decimal=5)
+        npt.assert_almost_equal(e.y, 3*i + offset, decimal=5)
+        npt.assert_almost_equal(e.z, 3*i - 2 * offset, decimal=5)
         locs.append([e.x, e.y, e.z])
     npt.assert_equal(np.allclose(np.diff(locs, axis=0), 3), True)
 
@@ -252,11 +254,22 @@ def test_LinearEdgeThread_geometry():
     npt.assert_equal(thread.n_electrodes, 4)
     # Default orientation is +z, so electrodes start `insertion_depth` below
     # the insertion point, offset onto the thread edge:
-    edge_offset = 8 + 7 // 2
+    edge_offset = 8 + 7
     for i, e in enumerate(thread.electrode_objects):
         npt.assert_almost_equal(e.x, 10 + edge_offset)
         npt.assert_almost_equal(e.y, 20)
         npt.assert_almost_equal(e.z, 30 + 100 + i * 25)
+
+
+@pytest.mark.parametrize('orient', ([0, 1, 0], [0, -1, 1], [1, 2, 3]))
+def test_LinearEdgeThread_edge_offset(orient):
+    # Electrode centers are `radius + rx` from the thread axis, for any
+    # orientation:
+    thread = LinearEdgeThread(n_elecs=3, orient=orient)
+    for e in thread.electrode_objects:
+        radial = np.array([e.x, e.y, e.z]) - thread.loc
+        radial -= (radial @ thread.direction) * thread.direction
+        npt.assert_almost_equal(np.linalg.norm(radial), thread.radius + e.rx)
 
 
 def test_LinearEdgeThread_custom_electrode():
@@ -271,6 +284,8 @@ def test_LinearEdgeThread_custom_electrode():
         npt.assert_almost_equal((e.rx, e.ry, e.rz), (20, 21, 22))
         # Electrodes use the thread's orientation:
         npt.assert_almost_equal(e.rot, thread.rot)
+        # Larger electrodes sit farther out, still touching the thread:
+        npt.assert_almost_equal(e.x, thread.radius + 20)
 
 
 def test_LinearEdgeThread_stim():

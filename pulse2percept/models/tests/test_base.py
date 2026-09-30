@@ -8,7 +8,6 @@ import pytest
 import numpy.testing as npt
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
-import time
 
 from pulse2percept.implants import (DiskElectrode, ElectrodeArray,
                                     EnsembleImplant, Implant,
@@ -986,40 +985,20 @@ def test_Model_predict_percept_frame_peak():
     npt.assert_array_equal(last.predict_percept(stim).data, at_end.data)
 
 
-def test_Model_predict_percept_correctly_parallelizes():
-    # setup and time spatial model with 1 thread
-    one_thread_spatial = Model(
-        spatial=ValidSpatialModel(ArgusI(), n_threads=1)).build()
-    start_time_one_thread_spatial = time.perf_counter()
-    one_thread_spatial.predict_percept(np.ones(16))
-    one_thread_spatial_predict_time = time.perf_counter() - start_time_one_thread_spatial
-
-    # setup and time spatial model with 2 threads
-    two_thread_spatial = Model(
-        spatial=ValidSpatialModel(ArgusI(), n_threads=2)).build()
-    start_time_two_thread_spatial = time.perf_counter()
-    two_thread_spatial.predict_percept(np.ones(16))
-    two_threaded_spatial_predict_time = time.perf_counter() - start_time_two_thread_spatial
-
-    # we expect roughly a linear decrease in time as thread count increases
-    npt.assert_almost_equal(actual=two_threaded_spatial_predict_time, desired=one_thread_spatial_predict_time / 2, decimal=1e-5)
-
-    # setup and time temporal model with 1 thread
-    one_thread_temporal = Model(temporal=ValidTemporalModel(n_threads=1)).build()
-    start_time_one_thread_temporal = time.perf_counter()
-    one_thread_temporal.predict_percept(Stimulus(np.ones((16, 2)),
-                                                  time=[0, 100]))
-    one_thread_temporal_predict_time = time.perf_counter() - start_time_one_thread_temporal
-
-    # setup and time temporal model with 2 threads
-    two_thread_temporal = Model(temporal=ValidTemporalModel(n_threads=2)).build()
-    start_time_two_thread_temporal = time.perf_counter()
-    two_thread_temporal.predict_percept(Stimulus(np.ones((16, 2)),
-                                                  time=[0, 100]))
-    two_thread_temporal_predict_time = time.perf_counter() - start_time_two_thread_temporal
-
-    # we expect roughly a linear decrease in time as thread count increases
-    npt.assert_almost_equal(actual=two_thread_temporal_predict_time, desired=one_thread_temporal_predict_time / 2, decimal=1e-5)
+def test_Model_predict_percept_thread_count_invariant():
+    # Thread count must not change the result of the Cython spatial and
+    # temporal loops:
+    stim = BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)
+    percepts = []
+    for n_threads in (1, 2):
+        model = Model(
+            spatial=ScoreboardSpatial(ArgusI(), n_threads=n_threads),
+            temporal=FadingTemporal(n_threads=n_threads)).build()
+        npt.assert_equal(model.spatial.n_threads, n_threads)
+        npt.assert_equal(model.temporal.n_threads, n_threads)
+        percepts.append(model.predict_percept({'A1': stim, 'D4': stim}))
+    npt.assert_equal(percepts[0].data.max() > 0, True)
+    npt.assert_array_equal(percepts[0].data, percepts[1].data)
 
 
 def test_Model_deepcopy_memo():

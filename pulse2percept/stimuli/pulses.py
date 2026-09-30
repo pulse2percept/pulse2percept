@@ -438,10 +438,10 @@ class AsymmetricBiphasicPulse(Stimulus):
         interphase_dur = as_value(interphase_dur, ms, 'interphase_dur')
         delay_dur = as_value(delay_dur, ms, 'delay_dur')
         stim_dur = as_value(stim_dur, ms, 'stim_dur')
-        if phase_dur1 <= 0:
-            raise ValueError("'phase_dur1' must be greater than 0.")
-        if phase_dur2 <= 0:
-            raise ValueError("'phase_dur1' must be greater than 0.")
+        if phase_dur1 <= DT:
+            raise ValueError(f"'phase_dur1' must be greater than DT={DT}ms.")
+        if phase_dur2 <= DT:
+            raise ValueError(f"'phase_dur2' must be greater than DT={DT}ms.")
         if interphase_dur < 0:
             raise ValueError("'interphase_dur' cannot be negative.")
         if delay_dur < 0:
