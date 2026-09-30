@@ -4,6 +4,19 @@
 Release Notes
 =============
 
+v0.12.0 Torch (unreleased)
+==========================
+
+Highlights
+----------
+
+API changes and improvements
+----------------------------
+
+Bug fixes
+---------
+
+
 v0.11.0 Foundations (2026-09-30)
 ================================
 
