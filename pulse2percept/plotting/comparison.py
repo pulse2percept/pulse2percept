@@ -323,15 +323,13 @@ def _is_causal(model):
     return not isinstance(model, SpatialModel)
 
 
-def _frame_intervals(times):
+def _frame_intervals(times, start):
     """``(lo, hi)``: the interval ``(lo, hi]`` that each percept frame ends
 
-    The first interval is as long as the second; a single frame is an
-    instant.
+    The first frame has no previous one, so its interval starts at stimulus
+    onset ``start``. A frame at or before onset is an instant.
     """
-    if times.size < 2:
-        return times.copy(), times
-    return np.concatenate(([2 * times[0] - times[1]], times[:-1])), times
+    return np.concatenate(([min(start, times[0])], times[:-1])), times
 
 
 def _electrode_drive(stim, times=None, causal=False):
@@ -344,8 +342,9 @@ def _electrode_drive(stim, times=None, causal=False):
       are held until the next one (zero-order hold); a frame-level view
       (``stim._spatial_view()``) is off once the stimulus ends.
     * ``causal=True``: the peak over ``(times[k - 1], times[k]]``, the
-      stimulation a model with time integrated into frame k. A plain
-      waveform is linear between its samples.
+      stimulation a model with time integrated into frame k; the first
+      interval starts at stimulus onset. A plain waveform is linear between
+      its samples.
     """
     view = stim._spatial_view()
     data = np.abs(np.asarray(view.data, dtype=np.float64)).reshape(
@@ -358,7 +357,7 @@ def _electrode_drive(stim, times=None, causal=False):
     t = view.times(ms)
     if view is stim and causal:
         signed = np.asarray(view.data, dtype=np.float64).reshape(data.shape)
-        lo, hi = _frame_intervals(times)
+        lo, hi = _frame_intervals(times, t[0])
         # A linear waveform peaks at an interval end or at a sample inside:
         drive = np.array([np.maximum(np.abs(np.interp(lo, t, row, 0, 0)),
                                      np.abs(np.interp(hi, t, row, 0, 0)))
@@ -377,7 +376,7 @@ def _electrode_drive(stim, times=None, causal=False):
         on = idx >= 0
         on[on] = times[on] < ends[idx[on]]
         return data[:, np.clip(idx, 0, t.size - 1)] * on
-    lo, hi = _frame_intervals(times)
+    lo, hi = _frame_intervals(times, t[0])
     # An instant takes the frame that was up just before it:
     lo = np.where(lo < hi, lo, np.nextafter(hi, -np.inf))
     drive = np.zeros((data.shape[0], times.size))
@@ -558,7 +557,7 @@ def plot_implant_percept(model, percept, axes=None, figsize=None,
         The percept the model predicted, timeless or a single frame. A
         timeless percept shows the peak drive over the whole stimulus; a
         single frame at time t shows the drive at t (for a model with time,
-        the frame that was up just before t).
+        the peak from stimulus onset to t).
     axes : list of two matplotlib.axes.Axes, optional
         Axes to draw into, implant first. If None, a new figure is created.
     figsize : ``(width, height)``, optional
@@ -631,7 +630,8 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
        from :py:class:`~pulse2percept.stimuli.TraceEncoder` or an image
        encoder) is held between its frames (zero-order hold).
     *  A model with time: the peak absolute drive since the previous percept
-       frame, i.e., over ``(t_prev, t]``. A frame-level modulation counts
+       frame, i.e., over ``(t_prev, t]``; for the first frame, since stimulus
+       onset. A frame-level modulation counts
        every frame up in that interval; a plain waveform counts every pulse,
        without resolving pulse phases. For automatic output times, this is
        the interval the percept frame summarizes.
@@ -699,11 +699,13 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
     electrodes = list(stim.electrodes)
     # One drive per percept frame, shown whenever that frame is:
     drive = _electrode_drive(stim, percept.times(ms),
-                             causal=_is_causal(model))[:, idx]
+                             causal=_is_causal(model))
+    # The color scale spans every percept frame, whatever ``fps`` shows:
+    cmap, norm = plt.get_cmap(STIM_CMAP), _drive_norm(drive)
+    drive = drive[:, idx]
     states, state_idx = np.unique(drive.T, axis=0, return_inverse=True)
     # NumPy 2.x returns a 2D inverse for axis-wise unique:
     state_idx = np.ravel(state_idx)
-    cmap, norm = plt.get_cmap(STIM_CMAP), _drive_norm(drive)
     axes = _panel_axes(axes, figsize, layout='constrained')
     fig = axes[0].figure
     panel = _implant_panel(model, axes[0])

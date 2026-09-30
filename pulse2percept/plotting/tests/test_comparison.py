@@ -407,17 +407,56 @@ def test_electrode_drive_time_unit():
             _electrode_drive(ms_stim, [5, 10.5, 20], **kwargs))
 
 
+def temporal_line_model():
+    spatial = line_model()
+    return spatial, Model(spatial=spatial, temporal=FadingTemporal()).build()
+
+
 def test_plot_implant_percept_single_frame_waveform():
-    implant = line_model().implant
-    model = Model(spatial=ScoreboardSpatial(implant, xrange=(-1, 3),
-                                            yrange=(-1, 1), step=0.5),
-                  temporal=FadingTemporal()).build()
-    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)
-    # At 20 ms, no pulse is on; later pulses do not count:
-    percept = model.predict_percept({'A': pt}, t_percept=20)
+    _, model = temporal_line_model()
+    # A pulses at 0 ms, B at 30 ms:
+    stim = {'A': MonophasicPulse(-20, 1, stim_dur=200),
+            'B': MonophasicPulse(-20, 1, delay_dur=30, stim_dur=200)}
+    percept = model.predict_percept(stim, t_percept=20)
     axes = plot_implant_percept(model, percept)
-    base = implant.electrode_array['A'].plot_kwargs['fc']
-    npt.assert_almost_equal(fill(axes[0], 'A'), base)
+    # A frame at 20 ms reflects stimulation since onset, not after 20 ms:
+    npt.assert_almost_equal(fill(axes[0], 'A'),
+                            plt.get_cmap(STIM_CMAP)(1.0, alpha=0.8))
+    base = model.implant.electrode_array['B'].plot_kwargs['fc']
+    npt.assert_almost_equal(fill(axes[0], 'B'), base)
+
+
+def test_electrode_drive_first_interval_from_onset():
+    # Stimulation ends long before the first requested percept frame:
+    stim = Stimulus({'A': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)})
+    npt.assert_almost_equal(
+        _electrode_drive(stim, [200, 250], causal=True)[0], [10, 0])
+    frames = trace_stim(line_model())
+    on = _electrode_drive(frames, [400, 450], causal=True) > 0
+    npt.assert_equal(on[:, 0], [1, 1, 1])
+    npt.assert_equal(on[:, 1], [0, 0, 0])
+
+
+def test_play_implant_percept_first_frame_from_onset():
+    _, model = temporal_line_model()
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    percept = model.predict_percept({'A': pt}, t_percept=[200, 250])
+    ani = play_implant_percept(model, percept)
+    # The frame at 200 ms is still caused by A; nothing is delivered after:
+    npt.assert_equal(electrode_pixel(ani, model, 'A', 0)[3] > 0, True)
+    npt.assert_equal(electrode_pixel(ani, model, 'A', 1)[3], 0)
+
+
+def test_play_implant_percept_fps_keeps_color_scale():
+    model = line_model()
+    # A peaks at 20 in a frame that 5 Hz playback skips:
+    stim = Stimulus({'A': [10, 20, 10]}, time=[0, 50, 200])
+    percept = Percept(np.zeros((3, 3, 3)), time=[0, 50, 200],
+                      metadata={'stim': stim})
+    ani = play_implant_percept(model, percept, fps=5 * Hz)
+    npt.assert_equal(ani._layers[1].index, [0, 2])
+    npt.assert_allclose(electrode_pixel(ani, model, 'A', 0)[:3],
+                        plt.get_cmap(STIM_CMAP)(0.5)[:3], atol=0.02)
 
 
 def test_play_implant_percept_trace():
