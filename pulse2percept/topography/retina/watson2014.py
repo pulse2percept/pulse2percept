@@ -34,9 +34,7 @@ class Watson2014Map(RetinalMap):
         """
         phi_um, r_um = cart2pol(x_um, y_um)
         sign = np.sign(r_um)
-        # Eq. A6 is fitted in millimeters; `tissue_unit` is microns. One
-        # conversion per call, on the whole array at once, and the polynomial
-        # below stays plain floats:
+        # Eq. A6 is fitted in mm; `tissue_unit` is um:
         r_mm = Quantity(np.abs(r_um), um).to_value(mm)
         r_deg = 3.556 * r_mm + 0.05993 * r_mm ** 2 - 0.007358 * r_mm ** 3
         r_deg += 3.027e-4 * r_mm ** 4
@@ -114,8 +112,8 @@ class Watson2014DisplaceMap(Watson2014Map):
     [Watson2014]_ fits Eq. 5 separately for the nasal and temporal meridian.
     Specify ``eye`` as either ``'left'`` or ``'right'`` for the proper
     assignment (one is the horizontal mirror of the other).
-    Points on the vertical meridian (``x == 0``) use the nasal fit, which is a
-    backward-compatible tie-break rather than an anatomical claim.
+    Points on the vertical meridian (``x == 0``) use the nasal fit (a
+    tie-break kept for backward compatibility, not an anatomical claim).
 
     Each fit applies throughout its retinal hemifield, so a point 45 deg above
     the horizon is displaced like one on the horizon at the same
@@ -162,9 +160,8 @@ class Watson2014DisplaceMap(Watson2014Map):
         r : double|array-like
             Eccentricity in degrees of visual angle (dva)
         meridian : 'temporal' or 'nasal'
-            Meridian whose fit to apply, elementwise if array-like. Which
-            meridian a visual-field location falls on depends on the eye, but
-            this function does not: it only evaluates the requested fit.
+            Meridian fit to apply, elementwise if array-like. Independent of
+            ``eye``.
 
         Returns
         -------
@@ -204,9 +201,8 @@ class Watson2014DisplaceMap(Watson2014Map):
         """
         # Convert x, y (dva) into polar coordinates:
         theta, rho_dva = cart2pol(xdva, ydva)
-        # Add RGC displacement. The nasal retina lies on the right of a right
-        # eye and on the left of a left eye; x == 0 takes the nasal fit either
-        # way:
+        # Add RGC displacement. Nasal retina is +x in a right eye, -x in a
+        # left eye; x == 0 uses the nasal fit:
         if self.eye == 'left':
             is_temporal = np.greater(xdva, 0)
         else:

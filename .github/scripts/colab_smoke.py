@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Install p2p inside the real Colab runtime and check what it broke.
+"""Install p2p in the Colab runtime and report changed preinstalled packages.
 
-This runs inside Google's published Colab image (see colab.yml). It is
-Python rather than shell so it can be run and debugged locally against the
-very same image a user gets in a notebook:
+Runs inside Google's published Colab image (see colab.yml). To run locally
+against the same image:
 
     docker run --rm -v "$PWD:/repo:ro" -w /tmp \
         us-docker.pkg.dev/colab-images/public/cpu-runtime:latest \
         python3 /repo/.github/scripts/colab_smoke.py pulse2percept \
             --source-root /repo
 
-The working directory must not be the checkout: from there a source tree
-shadows the installed package on sys.path and the whole run tests the wrong
-thing (quietly).
-
+The working directory must not be the checkout, where the source tree shadows
+the installed package on sys.path.
 """
 
 from __future__ import annotations
@@ -46,7 +43,7 @@ def canonicalize(name: str) -> str:
 
 def run(cmd: list[str], *, check: bool = True,
         tee: bool = False) -> subprocess.CompletedProcess:
-    """Run a command, echoing it so CI logs show exactly what happened"""
+    """Run a command and echo it to the CI log."""
     print(f"\n$ {' '.join(cmd)}", flush=True)
     if not tee:
         return subprocess.run(cmd, check=check, text=True)
@@ -58,11 +55,11 @@ def run(cmd: list[str], *, check: bool = True,
 
 
 def parse_requirements(output: str) -> dict[str, list[tuple[str, str]]]:
-    """Map each package pip resolved to the requirement(s) it was satisfying
+    """Map each package pip resolved to the requirement(s) it satisfied.
 
-    Returns ``{canonical name: [(requirement, requirer chain), ...]}``, where
-    the chain is pip's own ``a->b`` rendering, nearest requirer first, and is
-    empty for a package asked for on the command line.
+    Returns ``{canonical name: [(requirement, requirer chain), ...]}``. The
+    chain is pip's ``a->b`` string, nearest requirer first, and empty for a
+    package given on the command line.
     """
     found: dict[str, list[tuple[str, str]]] = {}
     for line in output.splitlines():
@@ -82,20 +79,20 @@ def parse_requirements(output: str) -> dict[str, list[tuple[str, str]]]:
 
 def explain(names: list[str],
             requirements: dict[str, list[tuple[str, str]]]) -> list[str]:
-    """Say which requirement pip was resolving for each of ``names``."""
+    """Return report lines naming the requirement behind each of ``names``."""
     rows: list[str] = []
     for name in names:
         reqs = requirements.get(name)
         if not reqs:
-            # pip only prints `Collecting` for packages it (re)installs by
-            # name; a version can also move as a side effect of backtracking.
+            # pip prints `Collecting` only for packages it (re)installs by
+            # name; backtracking can also change a version:
             rows.append(f"{name}: no requirement line from pip - most likely "
                         f"resolver backtracking to satisfy another pin")
             continue
         for req, chain in reqs:
             who = chain.replace("->", " -> ") if chain else "the install target"
             rows.append(f"{name}: required by {who} as `{req}`")
-            # Whoever asked for it first is the one holding the constraint.
+            # The nearest requirer holds the constraint:
             immediate = REQ_NAME.match(chain.split("->")[0].strip()) if chain else None
             specifier = req[len(REQ_NAME.match(req).group(0)):]
             if (immediate and canonicalize(immediate.group(0)) == DIST_NAME and
@@ -116,12 +113,11 @@ def pip(*args: str, capture: bool = False) -> str:
 
 
 def freeze() -> dict[str, str]:
-    """Snapshot the environment as {canonical name: version}."""
+    """Return the environment as {canonical name: version}."""
     installed: dict[str, str] = {}
     for line in pip("freeze", "--all", capture=True).splitlines():
         line = line.strip()
-        # Skip blanks, comments, editable installs and bare VCS/URL entries
-        # that carry no comparable version.
+        # Skip blanks, comments, editable installs and VCS/URL entries:
         if not line or line.startswith(("#", "-e ", "-")):
             continue
         if "==" in line:
@@ -135,17 +131,16 @@ def freeze() -> dict[str, str]:
 
 
 def pip_check() -> set[str]:
-    """Whatever `pip check` complains about, as a set of lines
+    """Return the lines reported by `pip check` as a set.
 
-    Colab's image routinely ships with dependency conflicts of its own, so 
-    only conflicts that appear because of our install are important.
+    Colab's image ships with its own conflicts, so callers compare before and
+    after the install.
     """
     out = subprocess.run(
         [sys.executable, "-m", "pip", "check"], text=True, capture_output=True
     )
     if out.returncode == 0:
-        # Exit 0 means no conflicts; the stdout is a success message, not a
-        # finding, and must not end up in the diff as a phantom conflict.
+        # Exit 0 = no conflicts; stdout is only a success message:
         return set()
     return {line.strip() for line in out.stdout.splitlines() if line.strip()}
 
@@ -211,8 +206,7 @@ def main() -> int:
             return 1
         print("A prebuilt wheel is available for Colab's interpreter.")
 
-    # Install exactly the way a notebook user would: plain pip, build
-    # isolation left on
+    # Install as a notebook user would (plain pip, build isolation on):
     install = run(
         [sys.executable, "-m", "pip", "install", "--root-user-action=ignore", args.spec],
         check=False,
@@ -241,7 +235,7 @@ def main() -> int:
     report("Changed versions (must be empty)", changed)
     report("Removed (must be empty)", removed)
 
-    # Only conflicts we introduced count; Colab's own are not our problem.
+    # Ignore conflicts that Colab already had:
     new_conflicts = sorted(pip_check() - conflicts_before)
     report("New dependency conflicts (must be empty)", new_conflicts)
 

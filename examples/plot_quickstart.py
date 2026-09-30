@@ -55,9 +55,8 @@ _ = p2p.plotting.plot_implant_percept(
 # collected across multiple retinal prosthesis studies. Its two spatial
 # parameters, `rho` and `lam`, control phosphene spread perpendicular and
 # parallel to the retinal nerve fiber bundles, respectively.
-# These parameters vary across patients, so the values above are illustrative
-# rather than universal (see the
-# :ref:`Granley 2021 reproduction 
+# These parameters vary across patients; the values above are illustrative
+# (see the :ref:`Granley 2021 reproduction
 # <sphx_glr_examples_models_plot_granley2021_biphasic.py>`).
 #
 #
@@ -68,10 +67,9 @@ _ = p2p.plotting.plot_implant_percept(
 # light. :py:class:`~pulse2percept.implants.retina.PRIMAPivotal` includes a
 # :py:class:`~pulse2percept.stimuli.PRIMAEncoder` that converts image intensity
 # into the pulse durations delivered by the projector.
-# 
-# Below we pair the implant with 
-# :py:class:`~pulse2percept.models.retina.Ho2018Model`, which models the
-# transient retinal network response reported by [Ho2018]_.
+#
+# :py:class:`~pulse2percept.models.retina.Ho2018Model` models the transient
+# retinal network response reported by [Ho2018]_.
 
 from pulse2percept.units import dva, deg, ms
 huang = p2p.implants.retina.Huang2021Array(40)
@@ -145,7 +143,7 @@ scene.play(
 # The [Ho2018]_ model is based on degenerated rat retina and should not be
 # interpreted as a validated human model of PRIMA perception.
 #
-# 
+#
 # A form traced through visual cortex
 # -----------------------------------
 #
@@ -155,9 +153,8 @@ scene.play(
 # a recognizable shape. Beauchamp et al. [Beauchamp2020]_ instead stimulated
 # electrodes sequentially, tracing letter-like forms through the retinotopic map.
 #
-# Here we borrow that stimulation strategy, but visualize the resulting
-# spatiotemporal percept with the independently developed
-# :py:class:`~pulse2percept.models.cortex.DynaphosModel`
+# The example below uses that stimulation strategy with the independently
+# developed :py:class:`~pulse2percept.models.cortex.DynaphosModel`
 # [vanderGrinten2023]_. An Orion array on right V1 covers part of the left
 # visual field. :py:class:`~pulse2percept.stimuli.TraceEncoder` maps a
 # trajectory in dva onto the nearest electrodes and stimulates them one at a
@@ -197,9 +194,9 @@ p2p.plotting.play_implant_percept(
 )
 
 ###############################################################################
-# This is therefore an illustrative simulation, not a reproduction of the
-# Beauchamp participant: electrode locations, thresholds, and phosphene dynamics
-# vary across people.
+# This simulation is illustrative and does not reproduce the Beauchamp
+# participant: electrode locations, thresholds, and phosphene dynamics vary
+# across people.
 #
 #
 # Changing the simulation

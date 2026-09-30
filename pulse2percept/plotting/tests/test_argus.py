@@ -12,8 +12,8 @@ import pytest
 import matplotlib
 matplotlib.use('Agg')
 
-# Building an axon map writes a cache to a relative path; keep it in a
-# temporary directory instead of wherever pytest was started from:
+# Building an axon map writes a cache to a relative path; use a temporary
+# directory:
 pytestmark = pytest.mark.usefixtures('axon_cache_in_tmp')
 
 
@@ -54,12 +54,12 @@ def test_plot_argus_phosphenes():
     # If no implant given, the dataframe must name the device:
     with pytest.raises(ValueError):
         plot_argus_phosphenes(df, ax=ax)
-    # ...and it must name a device that exists:
+    # and it must name an existing device:
     df['implant_type_str'] = 'Arguz'
     with pytest.raises(ValueError):
         plot_argus_phosphenes(df, ax=ax)
     df['implant_type_str'] = 'ArgusII'
-    # That column alone is enough; the placement ones are optional:
+    # That column is sufficient; the placement columns are optional:
     plot_argus_phosphenes(df, ax=ax)
     df['implant_x'] = 0
     df['implant_y'] = 0
@@ -82,7 +82,7 @@ def test_argus_placement_never_moves_the_implant():
     plot_argus_phosphenes(df, argus, ax=ax)
     npt.assert_array_equal(argus.electrode_array.coordinates(), local)
 
-    # The dataset columns are what got used:
+    # Pose comes from the dataset columns:
     xy, rot = _argus_pose(df, None, None)
     npt.assert_almost_equal(xy, (-1331, -850))
     npt.assert_almost_equal(rot, -28.4)
@@ -92,11 +92,11 @@ def test_argus_placement_never_moves_the_implant():
     npt.assert_almost_equal(np.array(list(placed.values())),
                             (R @ local[:, :2].T).T + xy)
 
-    # Explicit arguments win over them, in model units:
+    # Explicit arguments override the columns and accept units:
     xy, rot = _argus_pose(df, (100, 200) * um, 10 * deg)
     npt.assert_almost_equal(xy, (100, 200))
     npt.assert_almost_equal(rot, 10)
-    # ...and without either, the array is drawn about the fovea:
+    # Without either, the array is centered on the fovea:
     npt.assert_equal(_argus_pose(df.drop(columns=['implant_x', 'implant_y',
                                                   'implant_rot']),
                                  None, None), ((0.0, 0.0), 0.0))
@@ -127,9 +127,8 @@ def test_argus_plot_does_not_flip_the_electrode_constants():
         npt.assert_array_equal(argus_mod.PX_ARGUS2, px2)
 
 
-# Parametrize over the class, not over instances: arguments to `parametrize`
-# are built at import time and shared across invocations, so a test that
-# mutated one would leak state into the others.
+# Parametrize over the class, not instances: `parametrize` arguments are
+# built at import time and shared across tests.
 @pytest.mark.parametrize('ImplantType', (ArgusI, ArgusII))
 def test_plot_argus_simulated_phosphenes(ImplantType):
     implant = ImplantType()
@@ -146,11 +145,10 @@ def test_plot_argus_simulated_phosphenes(ImplantType):
 
 
 def test_the_plotted_implant_owns_the_axon_laterality(monkeypatch):
-    """One implant in the picture, so one eye -- the caller's `argus`
+    """Axon bundles use the eye of the plotted `argus`, not the model's implant
 
-    Asserted on where the bundles are grown from rather than on the drawn
-    lines: this plot windows bundles to the array's own extent, and nothing
-    survives that in a synthetic dataset.
+    Checks where the bundles are grown rather than the drawn lines, since the
+    plot clips bundles to the array extent and none remain with synthetic data.
     """
     df = pd.DataFrame([
         {'subject': 'S1', 'electrode': 'A1', 'image': np.random.rand(10, 10),
@@ -164,12 +162,12 @@ def test_the_plotted_implant_owns_the_axon_laterality(monkeypatch):
         return unwrapped(self, **kwargs)
 
     monkeypatch.setattr(AxonMapSpatial, 'grow_axon_bundles', spy)
-    # A model bound to the other eye, which used to be what decided:
+    # A model bound to the other eye:
     axon_map = AxonMapModel(implant=ArgusII(eye='right'), loc_od=(15.5, 1.5))
     _, ax = plt.subplots()
     plot_argus_phosphenes(df, ArgusII(eye='left'), ax=ax, axon_map=axon_map)
     # The optic disc is nasal, so a left eye puts it at negative x:
     npt.assert_equal(grown, [('left', (-15.5, 1.5))])
-    # ... and the caller's model is left pointed where it was:
+    # The caller's model is unchanged:
     npt.assert_equal(axon_map.implant.eye, 'right')
     npt.assert_equal(tuple(axon_map.spatial.loc_od), (15.5, 1.5))

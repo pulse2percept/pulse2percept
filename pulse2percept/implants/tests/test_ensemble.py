@@ -58,11 +58,8 @@ def test_EnsembleImplant():
     model = ScoreboardModel(implant=ensemble).build()
     model.predict_percept([1, 1])
 
-# we essentially just need to make sure that electrode names are
-# set properly, the rest of the EnsembleImplant functionality 
-# (electrode placement, etc) is determined by the implants passed in
-# and thus already tested
-# but we'll test it again just to make sure
+# The ensemble sets electrode names; electrode placement comes from the
+# constituent implants (tested elsewhere), but is checked here too:
 def test_ensemble_neuroport():
     neuroport = NeuroPortArray()
 
@@ -70,7 +67,7 @@ def test_ensemble_neuroport():
                                            locs=np.array([(0, 0),
                                                           (10000, 0)]))
 
-    # Each device keeps its own geometry, offset into the ensemble's frame:
+    # Each device keeps its own geometry, offset into the ensemble frame:
     npt.assert_equal(ensemble['0-1'].x, neuroport['1'].x)
     npt.assert_equal(ensemble['0-1'].y, neuroport['1'].y)
     npt.assert_equal(ensemble['1-1'].x, neuroport['1'].x + 10000)
@@ -89,7 +86,7 @@ def test_from_coords():
     device = NeuroPortArray()
     ensemble = EnsembleImplant.from_coords(NeuroPortArray, locs=locs)
 
-    # Every device is the same hardware, shifted to its own location:
+    # Each device has the same geometry, shifted to its location:
     for i, (dx, dy) in enumerate(locs):
         npt.assert_equal(ensemble[f'{i}-1'].x, device['1'].x + dx)
         npt.assert_equal(ensemble[f'{i}-1'].y, device['1'].y + dy)
@@ -97,14 +94,14 @@ def test_from_coords():
 
 
 class _Grid2x2(GridImplant):
-    """A constituent whose constructor happens to expose `x`/`y`"""
+    """A constituent whose constructor has `x`/`y` arguments"""
 
     def __init__(self, x=0, y=0):
         super().__init__((2, 2), 400, x=x, y=y)
 
 
 def test_from_coords_translates_every_kind_of_constituent():
-    """Placement in an ensemble does not depend on a constructor's spelling"""
+    """from_coords translates constituents with or without `x`/`y` arguments"""
     locs = np.array([(0, 0), (10000, -4000)])
     for implant_type in (NeuroPortArray, _Grid2x2):
         device = implant_type()
@@ -115,7 +112,7 @@ def test_from_coords_translates_every_kind_of_constituent():
                                     device[name].x + dx)
             npt.assert_almost_equal(ensemble[f'{i}-{name}'].y,
                                     device[name].y + dy)
-        # And the prototype device is untouched:
+        # The prototype device is unchanged:
         npt.assert_almost_equal(device[name].x, implant_type()[name].x)
 
 
@@ -136,7 +133,7 @@ def test_from_visual_field_map():
     ensemble = EnsembleImplant.from_visual_field_map(
         NeuroPortArray, visual_field_map, dva_locs)
 
-    # The dva locations round-trip back to the physical ones they came from:
+    # The dva locations map back to the original physical locations:
     for i, (dx, dy) in enumerate(locs):
         npt.assert_approx_equal(ensemble[f'{i}-1'].x, device['1'].x + dx, 5)
         npt.assert_approx_equal(ensemble[f'{i}-1'].y, device['1'].y + dy, 5)
@@ -144,12 +141,9 @@ def test_from_visual_field_map():
 
 
 def test_from_visual_field_map_works_for_a_retinal_map():
-    """The generic factory is not cortex-only
+    """from_visual_field_map also works with a retinal map
 
-    ``from_cortical_map`` took a CorticalMap; the operation it performs --
-    transform dva through one region of a map, then place a constituent at the
-    resulting tissue coordinates -- needs nothing cortical. A retinal map has
-    a single region, so ``region`` can be left out.
+    A retinal map has a single region, so ``region`` can be omitted.
     """
     visual_field_map = Curcio1990Map()
     locs = np.array([[-2., 0.], [0., 0.], [3., 1.]])
@@ -163,7 +157,7 @@ def test_from_visual_field_map_works_for_a_retinal_map():
         npt.assert_almost_equal(ensemble[f'{i}-A1'].x, device['A1'].x + dx)
         npt.assert_almost_equal(ensemble[f'{i}-A1'].y, device['A1'].y + dy)
         npt.assert_almost_equal(ensemble[f'{i}-A1'].z, device['A1'].z)
-    # Retinal microns, not the degrees the factory was handed:
+    # Ranges are in dva; the result is in retinal um:
     ranged = EnsembleImplant.from_visual_field_map(
         ArgusI, visual_field_map, xrange=(-2, 2), yrange=(0, 0), step=2)
     npt.assert_equal(len(ranged.implants), 3)
@@ -180,7 +174,7 @@ def test_prepare_stim_merges_per_implant_input():
     ensemble = _orion_pair()
     npt.assert_equal(ensemble.prepare_stim(None), None)
     npt.assert_equal(ensemble.prepare_stim({}), None)
-    # A key left out contributes zeros, but the rest still merge:
+    # A missing key contributes zeros:
     stim = ensemble.prepare_stim({0: np.ones(60)})
     npt.assert_equal(stim.data.shape, (120, 1))
     npt.assert_equal(stim.electrodes, ensemble.electrode_names)
@@ -197,7 +191,7 @@ def test_prepare_stim_merges_per_implant_input():
     npt.assert_equal(stim.data[:60], 1)
     npt.assert_equal(stim.data[60:, :2], 2)
     npt.assert_equal(stim.data[60:, 2:], 0)
-    # A merge of sampled waveforms has no structure to keep:
+    # A merge of sampled waveforms has no structured sources:
     npt.assert_equal(stim._structured_sources(), None)
 
     # biphasic pulse trains
@@ -205,9 +199,9 @@ def test_prepare_stim_merges_per_implant_input():
     stim = ensemble.prepare_stim(
         {0: {e: BiphasicPulseTrain(50, 1, .45) for e in names},
          1: {e: BiphasicPulseTrain(20, 2, .85) for e in names}})
-    # Asked before `.data`: reading the waveform must not be what builds it.
-    # Each child electrode keeps the train that drives it, under the name the
-    # ensemble gives it, so a model still sees two clocks and not one array:
+    # Checked before `.data`, which would render the waveform. Each child
+    # electrode keeps its own pulse train under its ensemble name, so a model
+    # sees two clocks:
     sources = stim._structured_sources()
     npt.assert_equal([e for e, _ in sources], ensemble.electrode_names)
     sources = dict(sources)
@@ -216,8 +210,8 @@ def test_prepare_stim_merges_per_implant_input():
     npt.assert_equal((sources['1-96'].freq, sources['1-96'].phase_dur),
                      (20, .85))
     npt.assert_equal(stim.data.shape, (120, 471))
-    # Two implants that pulse at the same instant get there by accumulating
-    # their own way, so merging their time axes needs a tolerance:
+    # Time points of the two implants accumulate differently, so merging their
+    # time axes uses a tolerance:
     npt.assert_equal(np.all(np.diff(stim.time) > 0.95 * DT), True)
 
     # with NeuroPortArray and Orion
@@ -226,14 +220,14 @@ def test_prepare_stim_merges_per_implant_input():
         mixed.prepare_stim({0: np.ones(60), 1: np.ones(96) * 2}).data.shape,
         (156, 1))
 
-    # A source that is not keyed by implant is laid out on the whole array:
+    # A source not keyed by implant is applied to the whole array:
     stim = ensemble.prepare_stim(np.ones(120) * 3)
     npt.assert_equal(stim.data.shape, (120, 1))
     npt.assert_equal(stim.data, 3)
 
 
 def _driven(stim):
-    """Map each driven electrode to its peak amplitude"""
+    """Returns a dict of each driven electrode's peak amplitude"""
     data = np.atleast_2d(np.asarray(stim.data))
     return {str(e): float(np.abs(row).max())
             for e, row in zip(stim.electrodes, data) if np.any(row)}
@@ -246,10 +240,10 @@ def test_prepare_stim_sparse_per_implant_input():
         {0: {'70': BiphasicPulseTrain(20, 100, 0.45, stim_dur=100)}})
     npt.assert_equal(list(_driven(stim)), ['0-70'])
     npt.assert_almost_equal(_driven(stim)['0-70'], 100)
-    # ...and keeps the train behind it, so models can read its clock:
+    # The pulse train is kept, so models can read its clock:
     (name, train), = stim._structured_sources()
     npt.assert_equal((name, train.freq), ('0-70', 20))
-    # Scalars, in an order unlike the implant's, across both children:
+    # Scalars, in a different order than the implant's, across both children:
     stim = ensemble.prepare_stim({0: {'50': 7, '70': 5}, 1: {'41': 3}})
     npt.assert_equal(_driven(stim), {'0-70': 5, '0-50': 7, '1-41': 3})
     # Sparse, time-varying input with its own time axis:
@@ -259,32 +253,29 @@ def test_prepare_stim_sparse_per_implant_input():
 
 
 def test_prepare_stim_merged_goes_through_the_ensemble_pipeline():
-    """Merging is how per-implant input becomes one stimulus, not a way around
-
-    The children prepare their own halves, but what the ensemble delivers is
-    still the ensemble's to preprocess and to check.
-    """
+    """Merged per-implant input goes through ensemble preprocessing and
+    safety checks"""
     ensemble = _orion_pair(preprocess=lambda s: s * -2)
     stim = ensemble.prepare_stim({0: np.ones(60), 1: np.ones(60) * 2})
     npt.assert_almost_equal(stim.data[:60], -2)
     npt.assert_almost_equal(stim.data[60:], -4)
 
-    # ... and an ensemble-level safety check still refuses what it should,
-    # even though neither child enforces charge balance of its own:
+    # The ensemble safety check applies, even though neither child uses
+    # safe_mode:
     unsafe = _orion_pair(safe_mode=True)
     with pytest.raises(ValueError, match='charge-balanced'):
         unsafe.prepare_stim({0: {'96': MonophasicPulse(20, 0.45)}})
 
 
 def test_EnsembleImplant_from_coords_units():
-    """`from_coords` takes physical coordinates, so they may be unitful"""
+    """`from_coords` accepts length units"""
     locs = np.array([[0., 0.], [10000., -5000.]])
     bare = EnsembleImplant.from_coords(NeuroPortArray, locs=locs)
     unitful = EnsembleImplant.from_coords(NeuroPortArray,
                                           locs=locs / 1000 * mm)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
-    # ... and so may the range form:
+    # Also for the range form:
     ranged = EnsembleImplant.from_coords(NeuroPortArray,
                                          xrange=(-10 * mm, 10 * mm),
                                          yrange=(0, 0), step=10000 * um)
@@ -302,15 +293,14 @@ def test_EnsembleImplant_from_coords_units():
 
 
 def test_EnsembleImplant_from_coords_needs_a_specification():
-    """Locations or a complete grid, but never a guessed physical default
+    """`from_coords` requires locations or a complete grid
 
-    There is no universal physical equivalent of the ``(-3, 3)`` dva that
-    `from_visual_field_map` defaults to: how far a degree reaches depends on
-    the visual field map.
+    There is no physical default equivalent to the ``(-3, 3)`` dva default of
+    `from_visual_field_map`, since it depends on the visual field map.
     """
     with pytest.raises(ValueError):
         EnsembleImplant.from_coords(NeuroPortArray)
-    # A partial grid is not a grid:
+    # A partial grid is rejected:
     with pytest.raises(ValueError) as excinfo:
         EnsembleImplant.from_coords(NeuroPortArray, xrange=(-1 * mm, 1 * mm),
                                     step=500 * um)
@@ -323,7 +313,7 @@ def test_EnsembleImplant_from_coords_needs_a_specification():
 
 
 def test_EnsembleImplant_from_visual_field_map_units():
-    """`from_visual_field_map` places implants by visual field location"""
+    """`from_visual_field_map` accepts dva units"""
     bare = EnsembleImplant.from_visual_field_map(
         NeuroPortArray, Polimeni2006Map(), xrange=(-2, 2), yrange=(0, 0),
         step=2)
@@ -332,7 +322,7 @@ def test_EnsembleImplant_from_visual_field_map_units():
         yrange=(0 * dva, 0 * dva), step=2 * dva)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
-    # Locations, too:
+    # Also for locations:
     locs = np.array([[-2.0, 0.0], [2.0, 0.0]])
     unitful = EnsembleImplant.from_visual_field_map(
         NeuroPortArray, Polimeni2006Map(), locs=locs * dva)
@@ -340,8 +330,7 @@ def test_EnsembleImplant_from_visual_field_map_units():
         NeuroPortArray, Polimeni2006Map(), locs=locs)
     npt.assert_allclose(unitful.electrode_array.coordinates(),
                         bare.electrode_array.coordinates(), rtol=1e-12)
-    # These are degrees, not microns: the whole point of the map is that the
-    # two are not interchangeable.
+    # Length units are rejected (these are dva):
     for kwargs in ({'xrange': (-2 * mm, 2 * mm)}, {'step': 2 * um},
                    {'locs': locs * um}):
         with pytest.raises(DimensionMismatchError):
@@ -351,13 +340,11 @@ def test_EnsembleImplant_from_visual_field_map_units():
 
 
 def test_EnsembleImplant_from_coords_is_physical():
-    """`from_coords` lays out its own micron mesh, not a visual field one
+    """`from_coords` builds its mesh in um, not dva
 
-    The two factories take the same argument names and mean different things
-    by them, which is why `from_coords` no longer borrows a `Grid2D`: a
-    `Grid2D` reads its ranges as degrees.
+    `Grid2D` reads its ranges as dva, so `from_coords` does not use it.
     """
-    # A range and the equivalent explicit locations must agree:
+    # A range and the equivalent explicit locations agree:
     ranged = EnsembleImplant.from_coords(NeuroPortArray,
                                          xrange=(-10000, 10000),
                                          yrange=(0, 0), step=10000)
@@ -366,8 +353,8 @@ def test_EnsembleImplant_from_coords_is_physical():
     npt.assert_equal(len(ranged.implants), 3)
     npt.assert_allclose(ranged.electrode_array.coordinates(),
                         listed.electrode_array.coordinates(), rtol=1e-12)
-    # A micron range is fine here and a dva one is not -- the mirror image of
-    # `from_visual_field_map`:
+    # Length units are accepted and dva rejected (the reverse of
+    # `from_visual_field_map`):
     npt.assert_allclose(
         EnsembleImplant.from_coords(
             NeuroPortArray, xrange=(-10 * mm, 10 * mm), yrange=(0, 0),
@@ -379,7 +366,7 @@ def test_EnsembleImplant_from_coords_is_physical():
 
 
 def _generic(dx=0):
-    """An anatomy-neutral implant, i.e. one with no anatomical target."""
+    """Returns an implant with no anatomical target"""
     return GridImplant((2, 2), 500, x=dx, electrode_type=PointSource)
 
 

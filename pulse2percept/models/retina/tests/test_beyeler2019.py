@@ -25,8 +25,7 @@ from pulse2percept.units import (DimensionMismatchError, deg,
                                  dimensionless, dva, mW, mm, rad, um)
 from pulse2percept.utils.testing import assert_warns_msg
 
-# Building an axon map writes a cache to a relative path; keep it in a
-# temporary directory instead of wherever pytest was started from:
+# Axon map caches use a relative path; write them to a temp directory:
 pytestmark = pytest.mark.usefixtures('axon_cache_in_tmp')
 
 
@@ -87,8 +86,7 @@ def test_deepcopy_ScoreboardSpatial():
     # Assert building one object does not affect the copied
     original.build()
     npt.assert_equal(copied.is_built, False)
-    # The copied model should no longer have the same state as the original.
-    # Use NumPy's equality check because the dictionaries contain arrays.
+    # States now differ (NumPy check because the dicts contain arrays):
     npt.assert_raises(AssertionError, npt.assert_equal,
                       original.__dict__, copied.__dict__)
 
@@ -153,8 +151,7 @@ def test_deepcopy_ScoreboardModel():
     # Assert building one object does not affect the copied
     original.build()
     npt.assert_equal(copied.is_built, False)
-    # The copied model should no longer have the same state as the original.
-    # Use NumPy's equality check because the dictionaries contain arrays.
+    # States now differ (NumPy check because the dicts contain arrays):
     npt.assert_raises(AssertionError, npt.assert_equal,
                       original.__dict__, copied.__dict__)
 
@@ -196,15 +193,14 @@ def test_ScoreboardModel_predict_percept():
     # Warning for nonzero electrode-retina distances
     raised = ScoreboardModel(implant=ArgusII(z=10), step=0.55, rho=100)
     raised.build()
-    # Framed as a limitation of the model, not as a claim that distance is
-    # irrelevant, and named so the reader knows which model is silent about it:
+    # Warning names the model:
     assert_warns_msg(UserWarning, raised.predict_percept,
                      "ScoreboardSpatial does not model electrode-retina distance",
                      np.ones(60))
     assert_warns_msg(UserWarning, raised.predict_percept,
                      "not parameterized by this model", np.ones(60))
 
-    # Model-side depth is depth too, even with a locally flat array:
+    # `implant_depth` also counts as electrode-retina distance:
     placed = ScoreboardModel(implant=ArgusII(), implant_depth=500 * um,
                              step=0.55, rho=100)
     placed.build()
@@ -212,7 +208,7 @@ def test_ScoreboardModel_predict_percept():
                      "ScoreboardSpatial does not model "
                      "electrode-retina distance",
                      np.ones(60))
-    # ... and a flat implant placed at the tissue surface still says nothing:
+    # No warning for a flat implant at the retinal surface:
     flat = ScoreboardModel(implant=ArgusII(), step=0.55, rho=100)
     flat.build()
     with warnings.catch_warnings():
@@ -283,8 +279,7 @@ def test_deepcopy_AxonMapSpatial():
     # Assert building one object does not affect the copied
     original.build()
     npt.assert_equal(copied.is_built, False)
-    # The copied model should no longer have the same state as the original.
-    # Use NumPy's equality check because the dictionaries contain arrays.    
+    # States now differ (NumPy check because the dicts contain arrays):
     npt.assert_raises(AssertionError, npt.assert_equal,
                       original.__dict__, copied.__dict__)
 
@@ -355,7 +350,7 @@ def test_AxonMapModel():
     # Zeros in, zeros out:
     npt.assert_almost_equal(model.predict_percept(np.zeros(60)).data, 0)
 
-    # The eye is the implanted one, and is not settable on its own:
+    # `eye` comes from the implant and cannot be passed to the model:
     npt.assert_equal(
         AxonMapModel(implant=ArgusII(eye='left'), step=5).spatial.eye, 'left')
     with pytest.raises(TypeError):
@@ -368,8 +363,7 @@ def test_AxonMapModel():
 
 @pytest.mark.parametrize('cls', [AxonMapSpatial, AxonMapModel])
 def test_AxonMap_removed_axlambda(cls):
-    # `lam` was called `axlambda` until 0.10.0; the old name was removed
-    # in 0.11.0, so it is now an unknown parameter:
+    # `axlambda` (renamed to `lam` in 0.10.0) was removed in 0.11.0:
     with pytest.raises(TypeError):
         cls(ArgusII(), axlambda=400)
     with pytest.raises(AttributeError):
@@ -502,13 +496,7 @@ def test_AxonMapModel_find_closest_axon():
 @pytest.mark.parametrize('n_threads', (1, 3))
 def test_AxonMapModel_find_closest_axon_respects_n_threads(monkeypatch,
                                                            n_threads):
-    """The KD-tree query stays inside the model's thread budget.
-
-    ``n_threads``/``n_jobs`` is the one knob this package gives for capping
-    CPU use, and the tree query is part of ``build``. Passing ``workers=-1``
-    here would let ``AxonMapModel(implant=ArgusII(), n_threads=1).build()`` fan out over every
-    core anyway.
-    """
+    """The KD-tree query uses ``n_threads`` workers"""
     from pulse2percept.models.retina import beyeler2019
 
     seen = []
@@ -540,12 +528,9 @@ def test_AxonMapModel_calc_axon_sensitivity():
     axons = model.spatial.find_closest_axon(bundles)
     axon_contrib = model.spatial.calc_axon_sensitivity(axons)
 
-    # Check lambda math. `calc_axon_sensitivity` walks the axon in float64
-    # and rounds once at the end, so the reference has to be built the same
-    # way: `model_ax` is float32, and accumulating the arc length at that
-    # precision costs about as much accuracy as the whole comparison has to
-    # spare. Building it here in float32 left roughly a 1.2x margin against
-    # the tolerance, which held on some platforms and not on others.
+    # Check lambda math. `calc_axon_sensitivity` accumulates arc length in
+    # float64 and rounds once, so build the reference in float64 too
+    # (float32 accumulation uses up most of the tolerance):
     max_d2 = -2.0 * model.spatial.lam ** 2 * np.log(
         model.spatial.min_ax_sensitivity)
     for model_ax, xy in zip(axon_contrib, xyret):
@@ -555,15 +540,14 @@ def test_AxonMapModel_calc_axon_sensitivity():
                                np.diff(axon[:, 1], axis=0) ** 2))**2
         idx_d2 = d2 < max_d2
         sensitivity = np.exp(-d2[idx_d2] / (2.0 * model.spatial.lam ** 2))
-        # A relative bound, unlike `assert_almost_equal`'s absolute one: the
-        # sensitivities span [min_ax_sensitivity, 1], and float32 resolves
-        # them to ~1.2e-7 relative wherever they sit in that range.
+        # Relative tolerance: sensitivities span [min_ax_sensitivity, 1] and
+        # float32 resolves them to ~1.2e-7 relative:
         npt.assert_allclose(model_ax[:, 2], sensitivity, rtol=1e-6)
 
 
 def test_AxonMapModel_calc_axon_sensitivity_removed_pad():
-    # 'pad' used to pad all axons to the length of the longest one for the
-    # (now removed) jax backend. Deprecated in 0.9.1, removed in 0.10.0:
+    # 'pad' (for the removed jax backend) was deprecated in 0.9.1, removed in
+    # 0.10.0:
     model = AxonMapModel(implant=ArgusII(), step=2, n_axons=10, xrange=(-20, 20),
                          yrange=(-15, 15), axons_range=(-30, 30))
     model.build()
@@ -603,9 +587,7 @@ def test_AxonMapModel_calc_bundle_tangent_fast():
 
 
 def test_AxonMapModel_predict_percept():
-    # `meridian_blend=0` throughout: the expectations below pin the axon-map
-    # computation, which the default postprocessing does not change. The blend
-    # itself is covered by `test_AxonMapSpatial_meridian_blend`.
+    # `meridian_blend=0` throughout; see `test_AxonMapSpatial_meridian_blend`:
     model = AxonMapModel(implant=ArgusII(), step=0.55, lam=100, rho=100,
                          thresh_percept=0, meridian_blend=0,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -634,8 +616,7 @@ def test_AxonMapModel_predict_percept():
                          xrange=(-20, 20), yrange=(-15, 15), n_axons=500)
     model.build()
     percept = model.predict_percept(np.ones(60))
-    # Most spots are pretty bright, but there are 2 dimmer ones (due to their
-    # location on the retina):
+    # Most spots are bright; 2 are dimmer due to their retinal location:
     npt.assert_equal(np.sum(percept.data > 0.5), 28)
     npt.assert_equal(np.sum(percept.data > 0.275), 56)
 
@@ -651,8 +632,7 @@ def test_AxonMapModel_predict_percept():
     raised = AxonMapModel(implant=ArgusII(z=10), step=1, rho=100, lam=40,
                           meridian_blend=0, n_axons=250, n_ax_segments=200,
                           ignore_pickle=True).build()
-    # Framed as a limitation of the model, not as a claim that distance is
-    # irrelevant, and named so the reader knows which model is silent about it:
+    # Warning names the model:
     assert_warns_msg(UserWarning, raised.predict_percept,
                      "AxonMapSpatial does not model electrode-retina distance",
                      np.ones(60))
@@ -662,13 +642,11 @@ def test_AxonMapModel_predict_percept():
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
 def test_min_current_spread(ModelClass):
-    """The default current-spread cutoff barely moves a sparse percept.
+    """The default current-spread cutoff barely changes a sparse percept
 
     ``min_current_spread`` drops an electrode's contribution once its
-    Gaussian has decayed past the given fraction of its peak. This pins the
-    everyday case -- a handful of electrodes at unit amplitude, where the
-    default cutoff is not worth thinking about. See
-    ``test_min_current_spread_error_bound`` for the case where it is.
+    Gaussian falls below that fraction of its peak. Here: a few electrodes at
+    unit amplitude. See ``test_min_current_spread_error_bound``.
     """
     stim = np.zeros(60)
     stim[[10, 33, 47]] = [1.0, -0.5, 0.75]
@@ -681,8 +659,7 @@ def test_min_current_spread(ModelClass):
     npt.assert_allclose(default, exact, rtol=1e-5,
                         atol=1e-6 * np.abs(exact).max())
 
-    # A coarse cutoff *does* change the result, which is how we know the
-    # parameter reaches the kernel at all:
+    # A coarse cutoff changes the result:
     coarse = ModelClass(min_current_spread=0.5,
                         **kwargs).build().predict_percept(stim).data
     assert np.abs(coarse - exact).max() > 1e-3
@@ -696,14 +673,12 @@ def test_min_current_spread(ModelClass):
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
 @pytest.mark.parametrize('amp', (1.0, 1000.0))
 def test_min_current_spread_error_bound(ModelClass, amp):
-    """The cutoff is an approximation, and stays inside its documented bound.
+    """The cutoff error stays within its documented bound
 
-    The kernels compare the Gaussian against the cutoff *before* scaling it
-    by the stimulus and summing over electrodes, so the quantity dropped at a
-    point is ``sum_i gauss_i * amp_i``, not ``gauss`` alone. Every electrode
-    of the array is driven here so that all 60 individually sub-cutoff terms
-    accumulate -- the adversarial case for a per-electrode cutoff -- and the
-    amplitude is swept because the bound scales with it.
+    The cutoff is applied to the Gaussian *before* scaling by amplitude and
+    summing, so the error at a point is ``sum_i gauss_i * amp_i``. All 60
+    electrodes are driven (worst case for a per-electrode cutoff), and the
+    amplitude is varied because the bound scales with it.
     """
     min_spread = 1e-8
     stim = np.full(60, amp)
@@ -714,14 +689,13 @@ def test_min_current_spread_error_bound(ModelClass, amp):
                        **kwargs).build().predict_percept(stim).data
     default = ModelClass(min_current_spread=min_spread,
                          **kwargs).build().predict_percept(stim).data
-    # What the docs promise: `min_current_spread` times the summed amplitude,
-    # plus whatever the float32 accumulation itself costs:
+    # Documented bound: `min_current_spread` times the summed amplitude, plus
+    # float32 accumulation error:
     dropped = min_spread * np.abs(stim).sum()
     assert np.abs(default - exact).max() <= dropped + 1e-6 * np.abs(exact).max()
 
-    # It is not, however, a no-op. Points that every electrode is far from
-    # come back as exactly zero rather than merely small -- a relative error
-    # of 100% at those points, however small they are in absolute terms:
+    # Points far from all electrodes become exactly zero (100% relative
+    # error, but within the absolute bound):
     zeroed = (np.abs(exact) > 0) & (default == 0)
     assert zeroed.any()
     assert np.abs(exact[zeroed]).max() <= dropped
@@ -729,11 +703,10 @@ def test_min_current_spread_error_bound(ModelClass, amp):
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
 def test_predict_percept_frames_are_independent(ModelClass):
-    """Each frame of a multi-frame stimulus is predicted on its own.
+    """Each frame of a multi-frame stimulus is predicted independently
 
-    The spatial kernels evaluate the electrode-to-point Gaussian once and
-    reuse it across every time point, so this guards against one frame
-    leaking into another.
+    The kernels compute the electrode-to-point Gaussian once and reuse it
+    across time points.
     """
     rng = np.random.default_rng(42)
     data = rng.normal(size=(60, 4)).astype(np.float32)
@@ -752,10 +725,10 @@ def test_predict_percept_frames_are_independent(ModelClass):
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
 def test_predict_percept_all_zero_stim(ModelClass):
-    """An all-zero stimulus produces an all-zero percept.
+    """An all-zero stimulus produces an all-zero percept
 
-    The kernels skip electrodes that are zero for the whole stimulus, so the
-    case where *every* electrode is skipped is worth pinning down.
+    The kernels skip electrodes that are zero for the whole stimulus; here
+    every electrode is skipped.
     """
     model = ModelClass(implant=ArgusII(), step=1, xrange=(-10, 10),
                        yrange=(-8, 8)).build()
@@ -764,12 +737,11 @@ def test_predict_percept_all_zero_stim(ModelClass):
 
 
 def test_fast_axon_map_cutoff_band_boundaries():
-    """An electrode exactly on either edge of the cutoff still contributes.
+    """An electrode exactly on either edge of the cutoff still contributes
 
-    ``fast_axon_map`` binary-searches the x band ``[ax_x - r, ax_x + r]`` and
-    walks it until x leaves, so both ends are places an off-by-one can hide.
-    ``cutoff_r2`` is an exact float32 square here, so that what is being
-    pinned is the band's boundary rather than the rounding of its ``sqrt``.
+    ``fast_axon_map`` binary-searches the x band ``[ax_x - r, ax_x + r]``.
+    ``cutoff_r2`` is an exact float32 square, so ``sqrt`` rounding does not
+    affect the band edges.
     """
     rho = np.float32(200.0)
     cutoff_r2 = np.float32(360000.0)  # r = 600 um, exactly
@@ -790,10 +762,10 @@ def test_fast_axon_map_cutoff_band_boundaries():
     for x in (-600.5, 600.5):
         npt.assert_equal(bright([x]), 0.0)
 
-    # ... and the walk in between drops exactly the electrodes outside it:
+    # Electrodes outside the band are dropped:
     x_el = np.array([-900., -600.5, -600., -300., 0., 300., 600., 600.5,
                      900.], dtype=np.float32)
-    # Summed in increasing x, which is the order the kernel visits them in:
+    # Sum in increasing x (the kernel's order):
     want = np.float32(0.0)
     two_rho2 = 2.0 * rho * rho
     for x in x_el[np.abs(x_el) <= 600.0]:
@@ -803,12 +775,10 @@ def test_fast_axon_map_cutoff_band_boundaries():
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
 def test_predict_percept_thread_count_invariant(ModelClass):
-    """The percept must not depend on how many threads computed it.
+    """The percept does not depend on the number of threads
 
-    ``fast_axon_map`` hands each thread its own row of a scratch buffer, so
-    this covers both the indexing of that buffer and the case where the
-    stimulus has a single frame (the padding that keeps two threads off the
-    same cache line).
+    ``fast_axon_map`` gives each thread its own row of a padded scratch
+    buffer; a single-frame stimulus tests that padding.
     """
     stim = np.zeros(60)
     stim[[5, 22, 51]] = [1.0, 0.6, -0.3]
@@ -824,7 +794,7 @@ def test_predict_percept_thread_count_invariant(ModelClass):
 
 
 def test_AxonMapModel_find_closest_axon_return_segment():
-    """``return_segment`` reports where in the axon the closest point is."""
+    """``return_segment`` returns the index of the closest axon segment"""
     model = AxonMapModel(implant=ArgusII(), step=2, n_axons=20, xrange=(-12, 12),
                          yrange=(-12, 12), axons_range=(-45, 45))
     model.build()
@@ -835,20 +805,20 @@ def test_AxonMapModel_find_closest_axon_return_segment():
 
     axons, idx_seg = spatial.find_closest_axon(bundles, return_segment=True)
     npt.assert_equal(len(idx_seg), len(xyret))
-    # The reported segment is the one `argmin` would have picked:
+    # Same as `argmin` of the squared distance:
     for axon, seg, xy in zip(axons, idx_seg, xyret):
         expected = np.argmin((axon[:, 0] - xy[0]) ** 2 +
                              (axon[:, 1] - xy[1]) ** 2)
         npt.assert_equal(seg, expected)
 
-    # Both flags together, in the documented order:
+    # Both flags, in the documented order:
     axons2, idx_ax, idx_seg2 = spatial.find_closest_axon(
         bundles, return_index=True, return_segment=True)
     npt.assert_array_equal(idx_seg2, idx_seg)
     for axon, idx in zip(axons2, idx_ax):
         npt.assert_array_equal(axon, bundles[idx])
 
-    # A single query point still returns scalars, not arrays:
+    # A single query point returns scalars:
     single, idx_ax1, idx_seg1 = spatial.find_closest_axon(
         bundles, xret=xyret[0, 0], yret=xyret[0, 1], return_index=True,
         return_segment=True)
@@ -858,7 +828,7 @@ def test_AxonMapModel_find_closest_axon_return_segment():
 
 
 def test_AxonMapModel_calc_axon_sensitivity_empty_bundle():
-    """A bundle with no segments is rejected rather than silently skipped."""
+    """A bundle with no segments raises ValueError"""
     model = AxonMapModel(implant=ArgusII(), step=4, n_axons=5, xrange=(-8, 8), yrange=(-8, 8))
     model.build()
     n_points = model.spatial.grid.ret.x.size
@@ -868,7 +838,7 @@ def test_AxonMapModel_calc_axon_sensitivity_empty_bundle():
 
 
 def test_AxonMapModel_build_cache_roundtrip(tmp_path):
-    """A warm build off the cache reproduces the cold build exactly."""
+    """A build from the cache matches the uncached build exactly"""
     pickle_file = str(tmp_path / 'axons.pickle')
 
     def build(ignore_pickle):
@@ -883,25 +853,24 @@ def test_AxonMapModel_build_cache_roundtrip(tmp_path):
     npt.assert_array_equal(warm.axon_idx_start, cold.axon_idx_start)
     npt.assert_array_equal(warm.axon_idx_end, cold.axon_idx_end)
 
-    # A cache written by an older version is regrown, not misread:
+    # A cache from an older version is regrown:
     with open(pickle_file, 'rb') as f:
         params, _ = pickle.load(f)
     with open(pickle_file, 'wb') as f:
         pickle.dump((params, [np.zeros((3, 2), dtype=np.float32)]), f)
     stale = build(False)
     npt.assert_array_equal(stale.axon_contrib, cold.axon_contrib)
-    # ...and the file is left in the current format:
+    # File is rewritten in the current format:
     with open(pickle_file, 'rb') as f:
         _, payload = pickle.load(f)
     npt.assert_equal(payload[0], _AXON_CACHE_VERSION)
 
 
 def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
-    """A cache naming the grid step `xystep` is regrown, and stays quiet
+    """A pre-0.10.0 cache with `xystep` is regrown without a warning
 
-    The parameter dict is versioned along with the payload, so a cache written
-    before the 0.10.0 rename is discarded outright rather than validated
-    against a model that no longer has a `xystep` parameter.
+    The parameter dict is versioned with the payload, so the old cache is
+    discarded.
     """
     pickle_file = str(tmp_path / 'axons.pickle')
 
@@ -913,7 +882,7 @@ def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
     cold = build(ignore_pickle=True)
     with open(pickle_file, 'rb') as f:
         params, payload = pickle.load(f)
-    # Rewrite it the way v0.9.1 would have:
+    # Rewrite it in the v0.9.1 format:
     params['xystep'] = params.pop('step')
     with open(pickle_file, 'wb') as f:
         pickle.dump((params, (2, *payload[1:])), f)
@@ -922,7 +891,7 @@ def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
         warnings.simplefilter("error", DeprecationWarning)
         warm = build()
     npt.assert_array_equal(warm.axon_contrib, cold.axon_contrib)
-    # The stale file was replaced, so the next build is a cache hit:
+    # Stale file was replaced:
     with open(pickle_file, 'rb') as f:
         params, payload = pickle.load(f)
     npt.assert_equal('xystep' in params, False)
@@ -930,12 +899,12 @@ def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):
 
 
 def _spatial(model):
-    """The spatial model itself, or the one a composite wraps."""
+    """Return the spatial model, or the one wrapped by a composite model"""
     return getattr(model, 'spatial', model)
 
 
 def _straddling_pair(coord):
-    """Indices nearest zero from below and above."""
+    """Return the indices nearest zero from below and above"""
     below = np.flatnonzero(coord < 0)
     above = np.flatnonzero(coord > 0)
     return below[np.argmax(coord[below])], above[np.argmin(coord[above])]
@@ -944,7 +913,7 @@ def _straddling_pair(coord):
 @pytest.mark.parametrize('ModelClass', [AxonMapSpatial, AxonMapModel])
 def test_AxonMapSpatial_meridian_blend(ModelClass):
     def make(**params):
-        # Offset by half a step so the nearest rows straddle the raphe.
+        # Half-step offset so the nearest rows straddle the raphe:
         return ModelClass(implant=ArgusII(), xrange=(-6, 6),
                           yrange=(-6.125, 5.875), step=0.25, rho=200, lam=400,
                           n_axons=250, n_ax_segments=200, ignore_pickle=True,
@@ -962,7 +931,7 @@ def test_AxonMapSpatial_meridian_blend(ModelClass):
     npt.assert_equal(blended.dtype, unblended.dtype)
 
     y, x = _spatial(plain).grid.y[:, 0], _spatial(plain).grid.x[0, :]
-    # The raphe is where the two halves of the axon map meet:
+    # The raphe separates the two halves of the axon map:
     seam = _straddling_pair(y)
 
     def jump(data):
@@ -977,28 +946,27 @@ def test_AxonMapSpatial_meridian_blend(ModelClass):
     rows = delta.max(axis=(1, 2)) > moved
     cols = delta.max(axis=(0, 2)) > moved
     npt.assert_equal(np.any(rows), True)
-    # Every row that moved is within a few widths of the raphe, so the far
-    # field is untouched...
+    # Changed rows stay within 4 blend widths of the raphe:
     npt.assert_array_less(np.abs(y[rows]).max(), 4 * width)
-    # ...while columns moved right across the grid:
+    # Changed columns span the grid:
     npt.assert_array_less(4 * width, np.abs(x[cols]).max())
 
 
 def test_AxonMapSpatial_meridian_blend_reapplies_threshold():
-    # Blending pulls brightness across the raphe, which could otherwise lift a
-    # point that `thresh_percept` had zeroed back off zero.
+    # Blending can lift sub-threshold points above zero, so `thresh_percept`
+    # is applied again afterward:
     model = AxonMapSpatial(implant=ArgusII(), xrange=(-6, 6), yrange=(-6, 6),
                            step=0.25, rho=200, lam=400, n_axons=250,
                            n_ax_segments=200, ignore_pickle=True,
                            meridian_blend=1, thresh_percept=0.1).build()
     data = model.predict_percept({'C4': 1}).data
     npt.assert_equal(np.any(data > 0), True)
-    # Nothing survives strictly between zero and the threshold:
+    # No values strictly between zero and the threshold:
     npt.assert_equal(np.any((np.abs(data) > 0) & (np.abs(data) < 0.1)), False)
 
 
 def test_AxonMapSpatial_meridian_blend_over_time():
-    # Every frame is blended, and each one on its own.
+    # Each frame is blended independently:
     model = AxonMapSpatial(implant=ArgusII(), xrange=(-6, 6), yrange=(-6, 6),
                            step=0.5, rho=200, lam=400, n_axons=250,
                            n_ax_segments=200, ignore_pickle=True,
@@ -1014,7 +982,7 @@ def test_AxonMapSpatial_meridian_blend_over_time():
 
 
 def test_AxonMapSpatial_axons_range_units():
-    """`axons_range` is a range of ordinary polar angles, stored in degrees"""
+    """`axons_range` accepts angle units and is stored in degrees"""
     npt.assert_equal(AxonMapSpatial(implant=ArgusII()).get_param_units()['axons_range'], deg)
     bare = AxonMapSpatial(implant=ArgusII(), axons_range=(-30, 30))
     npt.assert_equal(AxonMapSpatial(implant=ArgusII(), axons_range=(-30 * deg, 30 * deg)).
@@ -1027,10 +995,9 @@ def test_AxonMapSpatial_axons_range_units():
 
 
 def _user_warnings(build):
-    """The UserWarning messages a build emits, and nothing else
+    """Return the UserWarning messages emitted by `build`
 
-    Building an axon map also emits ResourceWarnings from the pickle cache,
-    which have nothing to do with what these tests are about.
+    Ignores ResourceWarnings from the pickle cache.
     """
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
@@ -1040,16 +1007,15 @@ def _user_warnings(build):
 
 
 def test_axon_map_eye_follows_the_implant():
-    """The eye is the implanted one, and cannot drift out of step with it"""
+    """`eye` follows the implant's eye"""
     implant = ArgusII(eye='right')
     model = AxonMapModel(implant=implant, step=2, n_axons=50,
                          n_ax_segments=30).build()
     npt.assert_equal(model.spatial.eye, 'right')
-    # The optic disc is on the nasal side, which is a different side per eye:
+    # The optic disc is on the nasal side, which differs per eye:
     npt.assert_equal(model.spatial.loc_od[0] > 0, True)
 
-    # Turning the *bound implant* around is the one build-invalidating change
-    # the parameter machinery cannot see, so the model checks it itself:
+    # Changing the bound implant's eye resets `is_built`:
     implant.eye = 'left'
     npt.assert_equal(model.spatial.eye, 'left')
     npt.assert_equal(model.is_built, False)
@@ -1059,11 +1025,10 @@ def test_axon_map_eye_follows_the_implant():
 
 
 def test_axon_map_needs_an_implant_with_an_eye():
-    """A generic implant does not say which eye, and the optic disc needs one
+    """A generic implant without an eye raises TypeError
 
-    ``eye`` left :py:class:`~pulse2percept.implants.Implant` in 0.11, so a
-    generic array reaches the model without laterality. Say so, rather than
-    failing on a missing attribute somewhere inside the build.
+    ``eye`` was removed from :py:class:`~pulse2percept.implants.Implant` in
+    0.11; the optic disc location requires it.
     """
     from pulse2percept.implants import ElectrodeGrid, GridImplant
     from pulse2percept.implants.retina import RetinalImplant
@@ -1073,10 +1038,10 @@ def test_axon_map_needs_an_implant_with_an_eye():
     with pytest.raises(TypeError) as excinfo:
         model.build()
     npt.assert_equal('RetinalImplant' in str(excinfo.value), True)
-    # Reading the property says the same thing:
+    # Same for the property:
     with pytest.raises(TypeError):
         model.spatial.eye
-    # Wrapping the same array in a RetinalImplant is all it takes:
+    # Wrapping the array in a RetinalImplant works:
     fixed = AxonMapModel(
         implant=RetinalImplant(ElectrodeGrid((3, 3), 2000), eye='left'),
         **grid).build()
@@ -1093,8 +1058,8 @@ def test_axon_map_warns_when_the_implant_is_not_epiretinal():
     said = _user_warnings(AxonMapModel(implant=Lorach2015Array(), **grid).build)
     npt.assert_equal(any('subretinal' in w for w in said), True)
     npt.assert_equal(any('scoreboard model' in w for w in said), True)
-    # An implant whose placement nobody wrote down says nothing either way.
-    # Its pitch is wide enough not to trip the other warning:
+    # No warning for an implant without a placement. Its pitch is wide enough
+    # to avoid the rho warning:
     quiet = RetinalImplant(ElectrodeGrid((3, 3), 2000))
     npt.assert_equal(_user_warnings(AxonMapModel(implant=quiet, **grid).build),
                      [])
@@ -1109,10 +1074,10 @@ def test_rho_wider_than_the_electrode_pitch_warns(ModelClass):
     dense = ModelClass(implant=RetinalImplant(ElectrodeGrid((3, 3), 100)),
                        rho=400, **grid)
     said = _user_warnings(dense.build)
-    # The numbers a reader needs to judge it, not a verdict:
+    # Warning reports pitch and ratio:
     npt.assert_equal(any('pitch (100 um)' in w for w in said), True)
     npt.assert_equal(any('ratio of 4.00' in w for w in said), True)
-    # rho at the pitch is the boundary, and is not warned about:
+    # No warning for rho equal to the pitch:
     matched = ModelClass(implant=RetinalImplant(ElectrodeGrid((3, 3), 400)),
                          rho=400, **grid)
     npt.assert_equal(_user_warnings(matched.build), [])
@@ -1120,12 +1085,11 @@ def test_rho_wider_than_the_electrode_pitch_warns(ModelClass):
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, AxonMapModel])
 def test_electrode_pitch_ignores_a_dimension_the_model_drops(ModelClass):
-    """A retinal model reads x and y, so z cannot pull neighbours apart"""
+    """Retinal pitch uses x and y only, ignoring z"""
     from pulse2percept.implants import DiskElectrode, ElectrodeArray
     from pulse2percept.implants.retina import RetinalImplant
     extra = {'n_axons': 50, 'n_ax_segments': 30} if ModelClass is AxonMapModel         else {}
-    # Three electrodes 100 um apart in x, but 1000 um apart in z. Reading all
-    # three coordinates would call that a ~1005 um pitch and stay quiet:
+    # 100 um apart in x, 1000 um in z (a 3D pitch would be ~1005 um):
     stacked = RetinalImplant(ElectrodeArray(
         [DiskElectrode(100 * i, 0, 1000 * i, 50) for i in range(3)]))
     model = ModelClass(implant=stacked, rho=400, step=1, xrange=(-2, 2),
@@ -1135,7 +1099,7 @@ def test_electrode_pitch_ignores_a_dimension_the_model_drops(ModelClass):
 
 
 def test_scoreboard_visualizes_a_photovoltaic_implant():
-    """Scoreboard accepts normalized optical drive from PRIMA."""
+    """Scoreboard accepts normalized optical drive from PRIMA"""
     implant = PRIMAPivotal()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
@@ -1158,7 +1122,8 @@ def test_scoreboard_visualizes_a_photovoltaic_implant():
 
 
 def test_scoreboard_visualizes_a_photovoltaic_video():
-    """Normalized-drive semantics survive video resampling."""
+    """Scoreboard accepts normalized drive after video resampling"""
+
     implant = PRIMAPivotal()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)

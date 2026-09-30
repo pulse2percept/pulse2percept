@@ -55,17 +55,16 @@ def _as_scalar_column(source):
         flat = np.asarray(source)
     except (TypeError, ValueError):
         return None
-    # Strings, None and complex values all infer to a non-numeric dtype and so
-    # fall through:
+    # Strings, None and complex values infer to a non-numeric dtype:
     if flat.ndim != 1 or flat.dtype.kind not in 'biuf':
         return None
     return flat.astype(np.float32).reshape((-1, 1))
 
 
 class _AdoptableArray(np.ndarray):
-    """Internal marker for an array that may be installed without copying
+    """Marker for an array that may be installed without copying
 
-    Views keep the subclass, so the mark survives the reshaping on the way in.
+    Views keep the subclass, so the mark survives reshaping.
     """
     __slots__ = ()
 
@@ -76,14 +75,14 @@ def _adoptable(arr):
 
 
 def _describe_unit(unit):
-    """Name a unit the way an error message wants to read"""
+    """Return a unit description for error messages"""
     if unit.dimension.is_dimensionless:
         return 'dimensionless units'
     return f'{unit.dimension.name} ({unit})'
 
 
 def _stimulus_sources(source):
-    """The Stimulus objects a source is built from, if any"""
+    """Return the Stimulus objects contained in a source"""
     if isinstance(source, Stimulus):
         return [source]
     if isinstance(source, dict):
@@ -94,19 +93,19 @@ def _stimulus_sources(source):
 
 
 def _has_waveform(stim):
-    """Whether a stimulus has already generated the samples it describes"""
+    """Return True if a stimulus has already generated its waveform"""
     return stim._Stimulus__stim['data'] is not None
 
 
 def _snapshot(source):
-    """One entry of a collection, as it was when the collection was built"""
+    """Return a copy of a collection entry (scalars as-is)"""
     if np.isscalar(source):
         return source
     return deepcopy(source)
 
 
 def _component_shape(source):
-    """What one entry of a collection contributes, without sampling it"""
+    """Return (electrodes, n_rows, has_time) of an entry without sampling"""
     if isinstance(source, Stimulus):
         has_time = not _has_waveform(source) or source.time is not None
         return source.electrodes, len(source.electrodes), has_time
@@ -127,7 +126,7 @@ def _strip_units(source, unit):
 
 
 def _scale_factor(op, scalar, reverse=False):
-    """The factor by which an arithmetic operator scales the stimulus data"""
+    """Return the factor by which an operator scales the data, or None"""
     if op is ops.mul:
         factor = scalar
     elif op is ops.truediv:
@@ -281,8 +280,7 @@ class Stimulus(PrettyPrint):
         self.metadata = self._wrap_metadata(metadata)
         # Flag will be flipped in the compress method:
         self._is_compressed = False
-        # Set by `_factory` when this is a collection whose entries have not
-        # been merged into a waveform yet (see `_render`):
+        # Unmerged collection entries, set by `_factory` (see `_render`):
         self._components = None
         self._unit, self._time_unit = self._resolve_units(source)
         source = _strip_units(source, self._unit)
@@ -292,11 +290,11 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _wrap_metadata(metadata):
-        """File the caller's metadata under ``user``"""
+        """Store the caller's metadata under ``user``"""
         return {'user': metadata}
 
     def _inherit_metadata(self, other):
-        """Take on another stimulus' metadata dict, as it stands"""
+        """Use another stimulus' metadata dict (not a copy)"""
         self.metadata = other.metadata
         return self
 
@@ -310,26 +308,24 @@ class Stimulus(PrettyPrint):
                            else time_unit)
         if not isinstance(electrodes, _GridNames):
             electrodes = np.array([electrodes]).ravel()
-        # `data=None` is what says the waveform has not been generated yet
+        # `data=None` means the waveform has not been generated yet:
         self.__stim = {'data': None, 'time': None,
                        'electrodes': self._own_names(electrodes)}
 
     def _forget_waveform(self, electrodes):
-        """Drop a cached waveform the components no longer describe"""
+        """Drop a cached waveform that no longer matches the components"""
         self.__stim = {'data': None, 'time': None,
                        'electrodes': self._own_names(electrodes)}
 
     def _render(self):
         """Generate the waveform this stimulus describes
 
-        A subclass that called :py:meth:`_defer` overrides this and returns
-        the state to install::
+        Subclasses that call :py:meth:`_defer` override this and return::
 
             {'data': ..., 'electrodes': ..., 'time': ...}
 
-        It runs at most once, and what it returns goes through the ``_stim``
-        setter like any other state, so the waveform it built is owned,
-        immutable and validated on the same terms as one that was passed in.
+        Runs at most once. The result goes through the ``_stim`` setter, so it
+        is copied, made read-only, and validated like any other input.
         """
         if self._components is None:
             raise NotImplementedError(
@@ -345,7 +341,7 @@ class Stimulus(PrettyPrint):
         return {'data': _data, 'electrodes': self.electrodes, 'time': _time}
 
     def _resolve_units(self, source):
-        """Determine the units this stimulus stores its data and time in"""
+        """Return the data and time units of this stimulus"""
         unit, time_unit = self._default_unit, self._default_time_unit
         sources = _stimulus_sources(source)
         if not sources:
@@ -379,10 +375,9 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _defers_waveform(source, electrodes, time, compress):
-        """Whether to keep this source's entries instead of merging them now
+        """Return True if the source's entries should be merged lazily
 
-        Worth doing when an entry is a stimulus that is defined by its
-        stimulation parameters, or that has not generated a waveform yet
+        True if an entry is parametric or has not generated its waveform.
         """
         if time is not None or compress:
             return False
@@ -391,7 +386,7 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _require_one_time_convention(no_time):
-        """Every entry of a collection has a time axis, or none of them does"""
+        """Require that all or none of the entries have a time axis"""
         if len(np.unique(no_time)) > 1:
             raise ValueError("If one stimulus has time=None, all others "
                              "must have time=None as well.")
@@ -412,21 +407,12 @@ class Stimulus(PrettyPrint):
     def _parse_source(self, source, nested=False):
         """Extract data, time and electrode names from a single source
 
-        This private method converts input data from allowable source types
-        into a 2-D NumPy array, where the first dimension denotes electrodes
-        and the second dimension denotes points in time.
+        Returns a 2-D array (electrodes x time points).
 
-        The same source is read in one of two ways, depending on where it
-        appears:
-
-        * At the top level, a flat sequence of N values means N electrodes
-          stimulated once each, with no time component.
-        * As an element of a collection (a list entry or a dict value), that
-          same sequence means a *single* electrode sampled at N points in
-          time.
-
-        ``nested`` selects between the two readings. Only a collection can
-        contain a nested source, so only a collection passes ``nested=True``.
+        * Top level (``nested=False``): a flat sequence of N values means N
+          electrodes, no time component.
+        * Collection entry (``nested=True``): the same sequence means one
+          electrode sampled at N time points.
         """
         if isinstance(source, Stimulus):
             # e.g. a Stimulus being renamed, or a dict of Stimulus objects
@@ -504,14 +490,13 @@ class Stimulus(PrettyPrint):
                 _data, _time = self._merge_sources(_data, _time)
                 _n_rows = _data.shape[0]
             else:
-                # Asked here as well as in `_merge_sources`:
+                # Also checked in `_merge_sources`:
                 self._require_one_time_convention(_no_time)
                 _n_rows = sum(n for _, n in self._components)
         else:
             # A single source: a scalar, a NumPy array, or a Stimulus
             if self._defers_waveform(source, electrodes, time, compress):
-                # Renaming or re-wrapping a stimulus that has not generated
-                # its waveform must not be what generates it:
+                # Renaming a lazy stimulus must not render its waveform:
                 snapshot = _snapshot(source)
                 _electrodes, _n_rows, _ = _component_shape(snapshot)
                 self._components = [(snapshot, _n_rows)]
@@ -520,14 +505,12 @@ class Stimulus(PrettyPrint):
                 _data, _time, _electrodes = self._parse_source(source)
                 _n_rows = _data.shape[0]
             if isinstance(source, Stimulus):
-                # Re-wrapping or renaming a stimulus keeps the metadata it
-                # came with:
+                # Re-wrapping or renaming a stimulus keeps its metadata:
                 self._inherit_metadata(source)
 
         if _electrodes is None:
-            # The source did not name its electrodes, so they are 0..N-1 --
-            # unique by construction. Only build that array if something will
-            # read it
+            # Unnamed electrodes are numbered 0..N-1 (unique). Only build the
+            # array if the user did not provide names:
             _auto_electrodes = True
             if electrodes is None:
                 _electrodes = np.arange(_n_rows)
@@ -543,7 +526,7 @@ class Stimulus(PrettyPrint):
                 _auto_electrodes = False
         else:
             if isinstance(_electrodes, _GridNames):
-                # The source brought its own generated names along:
+                # Grid names from the source:
                 _electrodes = _electrodes.ravel()
                 _auto_electrodes = _electrodes.check_unique()
             elif not isinstance(_electrodes, np.ndarray):
@@ -556,8 +539,7 @@ class Stimulus(PrettyPrint):
             raise ValueError(f"Number of electrodes provided ({len(_electrodes)}) does "
                              f"not match the number of electrodes in the data "
                              f"({_n_rows}).")
-        # Electrodes we numbered ourselves are 0..N-1 and therefore unique by
-        # construction, so the sort that np.unique performs can be skipped:
+        # Auto-numbered electrodes are unique, so skip np.unique:
         if not _auto_electrodes:
             if isinstance(_electrodes, _GridNames):
                 _electrodes = np.asarray(_electrodes)
@@ -569,9 +551,8 @@ class Stimulus(PrettyPrint):
                        f"{_electrodes[idx]}, and replaced with integer values")
                 warnings.warn(msg)
                 if _electrodes.dtype.kind in 'US':
-                    # A fixed-width string array may be too narrow to hold the
-                    # integer replacements, which would truncate them silently
-                    # (and could even reintroduce duplicates), so widen first:
+                    # Widen fixed-width strings so the integer replacements
+                    # are not truncated:
                     n_digits = len(str(len(_electrodes) - 1))
                     _electrodes = _electrodes.astype(
                         np.result_type(_electrodes.dtype, f'U{n_digits}'))
@@ -608,29 +589,30 @@ class Stimulus(PrettyPrint):
         return stim
 
     def _waveform_copy(self):
-        """This stimulus' waveform, as an ordinary ``Stimulus``"""
+        """Return this stimulus' waveform as a plain ``Stimulus``"""
         stim = Stimulus(self.data, electrodes=self.electrodes, time=self.time)
         stim.metadata = deepcopy(self.metadata)
         return stim._inherit_units(self)
 
     def _spatial_view(self):
-        """This stimulus as a reader with no clock of its own can read it"""
+        """Return the spatial-only view of this stimulus (for models without
+        a temporal component)"""
         return self
 
     def _without_electrodes(self, electrodes):
-        """A copy of this stimulus that no longer drives ``electrodes``"""
+        """Return a copy of this stimulus without ``electrodes``"""
         stim = self._derived()
         stim.remove(electrodes)
         return stim
 
     def _derived(self):
-        """The object a waveform-rewriting operation builds its result on"""
+        """Return the copy that a waveform-changing operation modifies"""
         if self._is_parametric:
             return self._waveform_copy()
         return self._shallow_copy()
 
     def __deepcopy__(self, memo):
-        """A copy that shares the data container with the original"""
+        """Return a copy that shares the (read-only) data container"""
         stim = copy(self)
         memo[id(self)] = stim
         stim.metadata = deepcopy(self.metadata, memo)
@@ -681,8 +663,6 @@ class Stimulus(PrettyPrint):
         if not isinstance(other, Stimulus):
             raise TypeError(f"Other object must be a Stimulus, not "
                             f"{type(other)}.")
-        # The result is a copy of `self` with `other`'s data concatenated onto
-        # its own:
         if self.unit != other.unit:
             raise DimensionMismatchError(
                 f"Cannot append a stimulus measured in "
@@ -712,14 +692,14 @@ class Stimulus(PrettyPrint):
         return self._append_waveform(other)
 
     def _end_column(self):
-        """The last column of the waveform"""
+        """Return the last column of the waveform"""
         return self.data[:, -1]
 
     def _append_waveform(self, other):
-        """Lay ``other``'s samples after this stimulus' own"""
+        """Return this stimulus with ``other``'s samples appended in time"""
         stim = self._derived()
         if isclose(other.time[0], 0, abs_tol=DT):
-            # The shared endpoint is written once:
+            # Store the shared endpoint once:
             time = np.hstack((self.time, other.time[1:] + self.time[-1]))
             data = np.hstack((self.data, other.data[:, 1:]))
         else:
@@ -774,7 +754,8 @@ class Stimulus(PrettyPrint):
         }
 
     def _keep_mask(self, electrodes):
-        """Which rows survive removing ``electrodes``"""
+        """Return a boolean mask of the rows kept after removing
+        ``electrodes``"""
         # Start with a list of True and set the removed electrodes to False:
         keep_el = np.ones(len(self.electrodes), dtype=bool)
         if np.isscalar(electrodes) and electrodes == 'all':
@@ -795,7 +776,10 @@ class Stimulus(PrettyPrint):
         return keep_el
 
     def _drop_components(self, keep_el):
-        """Forget whole entries of an unmerged collection"""
+        """Drop whole entries of an unmerged collection
+
+        Returns False if a removal splits an entry.
+        """
         if self._components is None or not keep_el.any():
             return False
         kept, start = [], 0
@@ -904,7 +888,7 @@ class Stimulus(PrettyPrint):
             data = np.hstack((data, zeros))
             time = np.hstack((time, [duration]))
         if not pad_left and not pad_right:
-            # hstack allocates; the no-op path must copy explicitly
+            # hstack allocates; the no-op path must copy explicitly:
             data = data.copy()
             time = time.copy()
         stim = self._derived()
@@ -919,9 +903,8 @@ class Stimulus(PrettyPrint):
         .. versionadded:: 0.7
 
         .. versionchanged:: 0.10.0
-            Added ``kind``: a whole multi-electrode stimulus is now drawn as
-            an electrode-by-time heatmap rather than as one subplot per
-            electrode.
+            Added ``kind``. Multi-electrode stimuli are drawn as an
+            electrode-by-time heatmap by default.
 
         Parameters
         ----------
@@ -943,13 +926,11 @@ class Stimulus(PrettyPrint):
         kind : {'traces', 'heatmap'}, optional, default: None
             What to draw:
 
-            *  'traces': the waveform of each electrode, one Axes per
-               electrode. Good for a handful of electrodes.
-            *  'heatmap': an electrode-by-time image in a single Axes. Good
-               for a whole implant's worth of electrodes.
+            *  'traces': one Axes per electrode (for a few electrodes).
+            *  'heatmap': an electrode-by-time image in a single Axes.
 
-            If None, a whole stimulus of more than one electrode is drawn as a
-            heatmap and everything else as traces.
+            If None, a heatmap is drawn if ``electrodes`` is None and the
+            stimulus has more than one electrode; otherwise traces.
 
         Returns
         -------
@@ -958,7 +939,7 @@ class Stimulus(PrettyPrint):
             ``kind='heatmap'``.
 
         """
-        # Imported here so that a stimulus does not depend on Matplotlib:
+        # Lazy import, so a stimulus does not depend on Matplotlib:
         from ._plot import plot_stimulus
         return plot_stimulus(self, electrodes, time, fmt, ax, kind)
 
@@ -1014,7 +995,7 @@ class Stimulus(PrettyPrint):
         except IndexError:
             raise IndexError("Invalid electrode index", electrodes)
 
-        # STEP 2: NUMPY HANDLES MOST INDEXING AND SLICING:
+        # STEP 3: NUMPY HANDLES MOST INDEXING AND SLICING:
         # Rebuild original index from ``electrodes`` and ``time``:
         if time is None:
             item = electrodes
@@ -1026,7 +1007,7 @@ class Stimulus(PrettyPrint):
             if not isinstance(item, tuple):
                 raise IndexError(e)
 
-        # STEP 3: INTERPOLATE TIME
+        # STEP 4: INTERPOLATE TIME
         # From here on out, we know that ``item`` is a tuple, otherwise we
         # would have raised an IndexError above.
         if self.time is None:
@@ -1072,8 +1053,7 @@ class Stimulus(PrettyPrint):
         """
         if not isinstance(other, Stimulus):
             return False
-        # Two stimuli that hold the same numbers in different units are not
-        # the same stimulus: 500 uA of current is not 500 gray levels.
+        # Same numbers in different units are not equal (e.g., uA vs. gray):
         if self.unit != other.unit or self.time_unit != other.time_unit:
             return False
         if self.time is None:
@@ -1130,9 +1110,7 @@ class Stimulus(PrettyPrint):
         if not a_supported and not b_supported:
             raise TypeError(f"Unsupported operand for types {(type(a))} and "
                             f"{type(b)}")
-        # Return a copy of the current object with the new data. The operator
-        # produces a new array for `field`; the other fields must be copied
-        # explicitly:
+        # `op` returns a new array for `field`; copy the other fields:
         stim = self._derived()
         time = stim.time
         if field == 'time':
@@ -1145,11 +1123,14 @@ class Stimulus(PrettyPrint):
         return stim
 
     def _scaled(self, factor):
-        """This stimulus with every amplitude scaled by ``factor``"""
+        """Return this stimulus with every amplitude scaled by ``factor``
+
+        Returns None if the stimulus cannot be scaled without its waveform.
+        """
         return self._scale_components(factor)
 
     def _scale_components(self, factor):
-        """An unmerged collection scales its entries instead"""
+        """Return an unmerged collection with each entry scaled, or None"""
         if self._components is None:
             return None
         if not all(isinstance(src, Stimulus) for src, _ in self._components):
@@ -1172,19 +1153,19 @@ class Stimulus(PrettyPrint):
         return self._apply_operator(a, op, b)
 
     def _as_amplitude(self, scalar):
-        """Normalize an operand that is added to or subtracted from the data"""
+        """Convert an additive operand to the data unit"""
         return as_value(scalar, self.unit)
 
     def _as_factor(self, scalar):
-        """Normalize an operand that scales the data"""
+        """Convert a multiplicative operand to a dimensionless value"""
         return as_value(scalar, dimensionless)
 
     def _as_time(self, scalar):
-        """Normalize an operand that shifts the stimulus in time"""
+        """Convert a time operand to the time unit"""
         return as_value(scalar, self.time_unit)
 
     def _slice_times(self, time):
-        """The time points a slice of the time axis asks for"""
+        """Return the time points requested by a slice of the time axis"""
         return _slice_times(time, self.time, self.time_unit)
 
     def __add__(self, scalar):
@@ -1250,7 +1231,7 @@ class Stimulus(PrettyPrint):
                                  f"number of columns in the data array "
                                  f"({data_shape[1]}).")
             if not is_strictly_increasing(stim['time'], tol=0.95*DT):
-                # Report the offending points rather than the whole axis:
+                # Report only the offending points:
                 t = np.asarray(stim['time'])
                 bad = np.flatnonzero(np.diff(t) < 0.95 * DT)
                 shown = ', '.join(f"t[{i}]={t[i]:g} -> t[{i + 1}]={t[i + 1]:g}"
@@ -1266,7 +1247,7 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _own(arr, dtype):
-        """An immutable, C-contiguous array of dtype"""
+        """Return a read-only, C-contiguous copy of ``arr`` as ``dtype``"""
         if arr is None:
             return None
         if isinstance(arr, _AdoptableArray) and arr.dtype == dtype:
@@ -1278,7 +1259,7 @@ class Stimulus(PrettyPrint):
 
     @staticmethod
     def _own_names(electrodes):
-        """The electrode names, in a container nobody can write into"""
+        """Return the electrode names in a read-only container"""
         if isinstance(electrodes, _GridNames):
             return electrodes
         owned = np.array(electrodes)
@@ -1289,13 +1270,13 @@ class Stimulus(PrettyPrint):
     def _stim(self):
         """A dictionary containing all the stimulus data
 
-        Reading this is what materializes the waveform of a stimulus that
-        deferred building one (see :py:meth:`_defer` and :py:meth:`_render`).
+        Reading this renders a deferred waveform (see :py:meth:`_defer` and
+        :py:meth:`_render`).
         """
         if self.__stim['data'] is None:
             promised = self.__stim['electrodes']
-            # The setter installs the rendered state, so `_render` runs once.
-            # It also clears the components:
+            # The setter stores the rendered state (so `_render` runs once) and
+            # clears the components:
             components = self._components
             self._stim = self._render()
             self._components = components
@@ -1487,7 +1468,7 @@ class Stimulus(PrettyPrint):
 
 
 def _has_time_axis(stim):
-    """Whether a stimulus has a time component, without sampling it"""
+    """Return True if a stimulus has a time component, without sampling"""
     return _component_shape(stim)[2]
 
 
@@ -1537,10 +1518,9 @@ class ImageStimulus(Stimulus):
         alpha channel will be blended with the color black.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -1564,7 +1544,7 @@ class ImageStimulus(Stimulus):
             metadata = {}
         elif not isinstance(metadata, dict):
             metadata = {'user': metadata}
-        # The buffer the caller still holds, if any:
+        # Caller's buffer, if any (copied below if shared):
         borrowed = None
         fname = _as_filename(source)
         if fname is not None:
@@ -1607,10 +1587,9 @@ class ImageStimulus(Stimulus):
         # Store the original image shape for resizing and color conversion:
         self.img_shape = img.shape
         if electrodes is None:
-            # Name every pixel after its place in the image: 'A1' is the
-            # top-left pixel, 'C12' sits in the third row and twelfth column,
-            # and a color image suffixes the channel ('A1_R'). The names are
-            # generated on demand rather than stored:
+            # Grid names generated on demand: 'A1' is the top-left pixel,
+            # 'C12' is row 3, column 12, and color images add a channel
+            # suffix ('A1_R'):
             electrodes = _GridNames(self.img_shape)
         data = img_as_float32(img)
         if borrowed is not None and np.may_share_memory(data, borrowed):
@@ -1627,7 +1606,7 @@ class ImageStimulus(Stimulus):
         return params
 
     def _names_for(self, img, electrodes):
-        """Electrode names for an image derived from this one"""
+        """Return electrode names for an image derived from this one"""
         if electrodes is not None:
             return electrodes
         return self.electrodes if np.shape(img) == self.img_shape else None
@@ -1650,10 +1629,9 @@ class ImageStimulus(Stimulus):
             Additional positional arguments passed to the function
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, the original names are carried over whenever ``func`` leaves
-            the shape of the image alone, and the result is named after its
-            place in the new image otherwise (e.g. for
-            ``skimage.transform.resize``).
+            given, the original names are kept if ``func`` preserves the image
+            shape; otherwise, grid names are generated for the new image (e.g.
+            for ``skimage.transform.resize``).
 
             .. note::
                The number of electrode names provided must match the number of
@@ -1666,8 +1644,8 @@ class ImageStimulus(Stimulus):
         stim : `ImageStimulus`
             A copy of the stimulus object with the new image
         """
-        # `func` gets a frame of its own: several of the scikit-image
-        # transforms this exists to reach cannot take a read-only one.
+        # Pass a writable copy; some scikit-image functions reject read-only
+        # arrays:
         img = func(_as_writable(self.data.reshape(self.img_shape)),
                    *args, **kwargs)
         return ImageStimulus(img, electrodes=self._names_for(img, electrodes),
@@ -1844,8 +1822,7 @@ class ImageStimulus(Stimulus):
         else:
             cropped_img = img[y0:y1, x0:x1]
         if electrodes is None:
-            # Carry the cropped pixels' original names over, so that a pixel
-            # keeps the same name before and after cropping:
+            # Keep the original pixel names:
             electrodes = self.electrodes.reshape(self.img_shape)
             if len(self.img_shape) == 3:
                 electrodes = electrodes[y0:y1, x0:x1, :3].ravel()
@@ -1977,9 +1954,8 @@ class ImageStimulus(Stimulus):
             `skimage.transform.rotate`_.
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, each pixel keeps the name it had before the rotation, unless
-            ``resize=True`` grew the canvas, in which case the enlarged image is
-            named after its own pixel grid.
+            given, pixel names are kept, unless ``resize=True`` changed the
+            image shape (then grid names are generated for the new image).
         **kwargs :
             Additional keyword arguments passed to `skimage.transform.rotate`_,
             such as ``order``, ``cval``, or ``resize=True`` to grow the image so
@@ -1991,8 +1967,7 @@ class ImageStimulus(Stimulus):
             A copy of the stimulus object containing the rotated image
 
         """
-        # Rotating in place is the common case, and keeps the pixel names
-        # meaningful; ``resize=True`` is available through kwargs:
+        # Keep the image shape (and pixel names) unless `resize=True`:
         kwargs.setdefault('resize', False)
         angle = as_value(angle, deg, 'angle')
         img = img_rotate(_as_writable(self.data.reshape(self.img_shape)),
@@ -2116,10 +2091,10 @@ class ImageStimulus(Stimulus):
 
         .. versionchanged:: 0.10.0
 
-            Gray levels now map onto ``amp_range`` absolutely rather than being
-            stretched to fill it (pass ``stretch=True`` for the old behavior),
-            the image receives a pulse *train* rather than a single pulse, and
-            ``implant`` encodes at electrode rather than pixel resolution.
+            Gray levels map onto ``amp_range`` without stretching (pass
+            ``stretch=True`` for the old behavior), the image is encoded as a
+            pulse train instead of a single pulse, and ``implant`` encodes at
+            electrode resolution.
 
         Parameters
         ----------
@@ -2130,9 +2105,8 @@ class ImageStimulus(Stimulus):
             Pulse train frequency (Hz). The image is treated as a single frame
             lasting 500 ms unless ``frame_dur`` says otherwise.
         implant : :py:class:`~pulse2percept.implants.Implant`, optional
-            If given, the image is first sampled at the implant's electrode
-            locations, so that the pulse trains are built at electrode rather
-            than pixel resolution.
+            If given, the image is sampled at the implant's electrode
+            locations (electrode resolution instead of pixel resolution).
         **kwargs :
             Additional arguments passed to
             :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
@@ -2143,7 +2117,7 @@ class ImageStimulus(Stimulus):
             Encoded stimulus
 
         """
-        # Imported here because `encoders` imports this module:
+        # Local import, because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
         return AmplitudeEncoder(implant, amp_range=amp_range, freq=freq,
                                 **kwargs).encode(self)
@@ -2210,7 +2184,7 @@ class ImageStimulus(Stimulus):
             imsave(fname, clipped_data.reshape(self.img_shape))
 
 
-#: Anything this close to a frame boundary is treated as being on it
+#: Tolerance (in frames) for a time to count as on a frame boundary
 _FRAME_TOL = 1e-6
 
 
@@ -2309,10 +2283,9 @@ class VideoStimulus(Stimulus):
         alpha channel will be blended with the color black.
 
     electrodes : int, string or list thereof; optional, default: None
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -2353,7 +2326,7 @@ class VideoStimulus(Stimulus):
             metadata = {}
         elif not isinstance(metadata, dict):
             metadata = {'user': metadata}
-        # The buffer the caller still holds, if any (see below):
+        # Caller's buffer, if any (copied below if shared):
         borrowed = None
         fname = _as_filename(source)
         if fname is not None:
@@ -2413,9 +2386,8 @@ class VideoStimulus(Stimulus):
         # Store the original image shape for resizing and color conversion:
         self.vid_shape = vid.shape
         if electrodes is None:
-            # One electrode per pixel, named after its place in the frame
-            # ('A1', 'C12', 'A1_R' for a color video). The last axis holds the
-            # frames, which are the time component and not electrodes:
+            # One electrode per pixel ('A1', 'C12', 'A1_R'); the last axis is
+            # time:
             electrodes = _GridNames(self.vid_shape[:-1])
         if borrowed is not None and np.may_share_memory(vid, borrowed):
             vid = vid.copy()
@@ -2428,29 +2400,24 @@ class VideoStimulus(Stimulus):
     def compress(self):
         """Compress the source data
 
-        Also brings ``vid_shape`` back in line with the compressed data:
-        compression drops the time points at which the video does not change,
-        so the frame count of the source is no longer the frame count of the
-        stimulus. Every ``data.reshape(vid_shape)`` in this module relies on
-        that invariant. (Compression can also drop all-zero pixels, in which
-        case no shape describes the data any more; see ``_frames``.)
+        Also updates the frame count in ``vid_shape`` to match the retained
+        time points. (Dropping all-zero pixels leaves data that no longer
+        matches ``vid_shape``; see ``_frames``.)
 
         Returns
         -------
         compressed : :py:class:`~pulse2percept.stimuli.VideoStimulus`
         """
         super().compress()
-        # ``Stimulus.__init__`` calls this method for ``compress=True``, which
-        # is why ``vid_shape`` is set before the constructor runs: one
-        # implementation then covers both that and an explicit ``compress()``.
+        # Also called by ``Stimulus.__init__`` (``compress=True``), which is
+        # why ``vid_shape`` is set before the constructor runs:
         self.vid_shape = (*self.vid_shape[:-1], self.data.shape[-1])
 
     def _frames(self):
-        """The stimulus as a dense <rows x columns [x channels] x frames> array
+        """Return the data as a <rows x columns [x channels] x frames> array
 
-        Raises a ``ValueError`` if the video has been compressed in space,
-        which removes all-zero pixels and therefore leaves nothing that can be
-        reshaped back into a frame.
+        Raises ValueError if the video was compressed in space (all-zero
+        pixels removed).
         """
         n_px = int(np.prod(self.vid_shape[:-1]))
         if self.data.shape[0] != n_px:
@@ -2467,15 +2434,10 @@ class VideoStimulus(Stimulus):
         return params
 
     def _names_for(self, vid, electrodes):
-        """Electrode names for a video derived from this one
+        """Return electrode names for a video derived from this one
 
-        A pixel keeps its name across an operation that leaves the pixel grid
-        alone, which is what makes 'A1' refer to the same thing before and
-        after. An operation that resamples the grid (a resize, a rotation that
-        grows the canvas) has no such correspondence to preserve, so the result
-        is named afresh rather than inheriting names that no longer describe
-        it. Only the frame layout is compared; the number of frames is the time
-        axis, not an electrode count.
+        Names are kept if the frame shape is unchanged (the number of frames
+        is ignored); otherwise None (new grid names).
         """
         if electrodes is not None:
             return electrodes
@@ -2501,10 +2463,9 @@ class VideoStimulus(Stimulus):
             Additional positional arguments passed to the function
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, the original names are carried over whenever ``func`` leaves
-            the shape of a frame alone, and the result is named after its place
-            in the new frame otherwise (e.g. for
-            ``skimage.transform.resize``).
+            given, the original names are kept if ``func`` preserves the frame
+            shape; otherwise, grid names are generated for the new frame (e.g.
+            for ``skimage.transform.resize``).
 
             .. note::
                The number of electrode names provided must match the number of
@@ -2517,8 +2478,8 @@ class VideoStimulus(Stimulus):
         stim : `VideoStimulus`
             A copy of the stimulus object with the new video
         """
-        # `func` gets a frame of its own: several of the scikit-image
-        # transforms this exists to reach cannot take a read-only one.
+        # Pass a writable copy; some scikit-image functions reject read-only
+        # arrays:
         frames = self._frames()
         vid = np.array([func(_as_writable(frames[..., idx]), *args, **kwargs)
                         for idx in range(frames.shape[-1])])
@@ -2711,8 +2672,7 @@ class VideoStimulus(Stimulus):
         cropped_vid = vid[y0:y1, x0:x1, ..., t0:t1]  # could be RGB or gray
         time = self.time[t0:t1]
         if electrodes is None:
-            # Carry the cropped pixels' original names over, so that a pixel
-            # keeps the same name before and after cropping:
+            # Keep the original pixel names:
             electrodes = self.electrodes.reshape(self.vid_shape[:-1])
             electrodes = electrodes[y0:y1, x0:x1, ...].ravel()
         return VideoStimulus(cropped_vid, electrodes=electrodes, time=time,
@@ -2771,7 +2731,7 @@ class VideoStimulus(Stimulus):
             rows.append(r)
             cols.append(c)
         rows, cols = np.array(rows), np.array(cols)
-        # Then we
+        # Then crop to the union of the per-frame bounding boxes:
         col_start, col_end = cols[:, 0].min(), cols[:, 1].max()
         row_start, row_end = rows[:, 0].min(), rows[:, 1].max()
         vid = vid[row_start:row_end, col_start:col_end, ...]
@@ -2797,9 +2757,8 @@ class VideoStimulus(Stimulus):
             `skimage.transform.rotate`_.
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
-            given, each pixel keeps the name it had before the rotation, unless
-            ``resize=True`` grew the frame, in which case the enlarged video is
-            named after its own pixel grid.
+            given, pixel names are kept, unless ``resize=True`` changed the
+            frame shape (then grid names are generated for the new frame).
         **kwargs :
             Additional keyword arguments passed to `skimage.transform.rotate`_,
             such as ``order``, ``cval``, or ``resize=True`` to grow each frame
@@ -2811,14 +2770,12 @@ class VideoStimulus(Stimulus):
             A copy of the stimulus object containing the rotated video
 
         """
-        # Rotating in place is the common case, and keeps the pixel names
-        # meaningful; ``resize=True`` is available through kwargs:
+        # Keep the image shape (and pixel names) unless `resize=True`:
         kwargs.setdefault('resize', False)
         angle = as_value(angle, deg, 'angle')
         data = self.data.reshape(self.vid_shape)
         if len(self.vid_shape) == 3:
-            # A grayscale video can be fed to `rotate` in one go, with its
-            # frames standing in for the color channels it expects:
+            # Rotate a grayscale video in one call (frames act as channels):
             data = vid_rotate(_as_writable(data), angle, mode=mode,
                               **kwargs)
             return VideoStimulus(data,
@@ -2942,10 +2899,10 @@ class VideoStimulus(Stimulus):
 
         .. versionchanged:: 0.10.0
 
-            Gray levels now map onto ``amp_range`` absolutely rather than being
-            stretched to fill it (pass ``stretch=True`` for the old behavior),
-            each frame receives a pulse *train* rather than a single pulse, and
-            ``implant`` encodes at electrode rather than pixel resolution.
+            Gray levels map onto ``amp_range`` without stretching (pass
+            ``stretch=True`` for the old behavior), each frame is encoded as a
+            pulse train instead of a single pulse, and ``implant`` encodes at
+            electrode resolution.
 
         Parameters
         ----------
@@ -2955,10 +2912,10 @@ class VideoStimulus(Stimulus):
         freq : float, optional
             Pulse train frequency (Hz).
         implant : :py:class:`~pulse2percept.implants.Implant`, optional
-            If given, the video is first sampled at the implant's electrode
-            locations, so that the pulse trains are built at electrode rather
-            than pixel resolution. Strongly recommended: a video has orders of
-            magnitude more pixels than an implant has electrodes.
+            If given, the video is sampled at the implant's electrode
+            locations (electrode resolution instead of pixel resolution).
+            Strongly recommended: a video has orders of magnitude more pixels
+            than an implant has electrodes.
         **kwargs :
             Additional arguments passed to
             :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`.
@@ -2969,7 +2926,7 @@ class VideoStimulus(Stimulus):
             Encoded stimulus
 
         """
-        # Imported here because `encoders` imports this module:
+        # Local import, because `encoders` imports this module:
         from .encoders import AmplitudeEncoder
         return AmplitudeEncoder(implant, amp_range=amp_range, freq=freq,
                                 **kwargs).encode(self)
@@ -2979,9 +2936,9 @@ class VideoStimulus(Stimulus):
 
         .. versionchanged:: 0.11.0
 
-            Each frame is handed out as a standalone
-            :py:class:`~pulse2percept.stimuli.ImageStimulus` that carries the
-            electrode names and metadata of the video, but no time axis
+            Each frame is an
+            :py:class:`~pulse2percept.stimuli.ImageStimulus` with the video's
+            electrode names and metadata, but no time axis.
 
         Yields
         ------
@@ -3022,9 +2979,8 @@ class VideoStimulus(Stimulus):
         ax : matplotlib.axes.AxesSubplot, optional
             A Matplotlib axes object. If None, will create a new Axes object
         fmt : {'jpg', 'png'}, optional
-            The image format used to embed the frames. 'jpg' keeps notebooks
-            and doc pages an order of magnitude smaller; use 'png' if you need
-            the frames to be pixel-exact.
+            The image format used to embed the frames. 'jpg' is about 10x
+            smaller; 'png' is pixel-exact.
 
             .. versionadded:: 0.10.0
 
@@ -3038,20 +2994,18 @@ class VideoStimulus(Stimulus):
         -----
         .. versionchanged:: 0.10.0
 
-            The HTML player is now generated by
-            :py:class:`~pulse2percept.utils.HTMLAnimation`, which renders the
-            figure once and ships all frames as a single sprite sheet. This is
-            roughly two orders of magnitude faster than Matplotlib's
-            ``to_jshtml`` and produces much smaller notebooks and doc pages.
+            The HTML player is generated by
+            :py:class:`~pulse2percept.utils.HTMLAnimation`, which embeds all
+            frames as a single sprite sheet (about 100x faster than
+            Matplotlib's ``to_jshtml``, with smaller output).
         """
         if self.time is None:
             raise ValueError("Cannot animate a percept with time=None.")
         frames = self._frames()
 
-        # Only the inherited Matplotlib machinery (``save``,
-        # ``to_html5_video``) runs these; the HTML player draws ``frames``
-        # itself. Frames are handed out by index so that the title can be
-        # looked up without tracking iterator state:
+        # Used only by Matplotlib's ``save`` and ``to_html5_video``; the HTML
+        # player draws ``frames`` itself. Frames are passed by index to look
+        # up the title:
         def update(idx):
             if annotate_time:
                 mat.axes.set_title(f't = {self.time[idx]:.2f} ms')
@@ -3074,8 +3028,7 @@ class VideoStimulus(Stimulus):
         mat = ax.imshow(np.zeros(self.vid_shape[:-1]), cmap='gray',
                         vmin=0, vmax=self.data.max())
         plt.close(fig)
-        # Create the animation. The frame data is handed to HTMLAnimation so
-        # that it can render the HTML player without going through Matplotlib:
+        # Pass the frame data so HTMLAnimation can render without Matplotlib:
         labels = None
         if annotate_time:
             labels = [f't = {t:.2f} ms' for t in self.time]

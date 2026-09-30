@@ -38,10 +38,9 @@ class AlphaIMS(RetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 1500 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 1500 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -86,15 +85,11 @@ class AlphaIMS(RetinalImplant):
         elec_width = 50.0  # um
         e_spacing = 72.0  # um
 
-        # Normalized here rather than in ElectrodeGrid, because a per-electrode
-        # list of heights never reaches the grid at all -- it is written onto
-        # the electrodes further down:
+        # Convert here, since a per-electrode z list bypasses ElectrodeGrid:
         z = as_value(z, um, 'z')
 
-        # The user might provide a list of z values for each of the
-        # 378 resulting electrodes, not for the 22x19 initial ones.
-        # In this case, don't pass it to ElectrodeGrid, but overwrite
-        # the z values later:
+        # A z list covers the 1500 remaining electrodes, not the 39x39 grid,
+        # so assign it after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
         zarr = 0.0 if overwrite_z else z
         self.electrode_array = ElectrodeGrid(
@@ -173,10 +168,9 @@ class AlphaAMS(RetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 1600 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 1600 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional

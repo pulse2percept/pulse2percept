@@ -15,7 +15,7 @@ def implant(eye='right', generic=False):
 
 
 def model(implant, **params):
-    # Tiny grid: these tests are about laterality, not about the percept.
+    # Tiny grid, since these tests only check laterality:
     return ScoreboardSpatial(implant, xrange=(-1, 1), yrange=(-1, 1), step=1,
                              verbose=False, **params)
 
@@ -54,8 +54,7 @@ def test_RetinalSpatial_eye_agnostic_map(eye, vfmap):
 
 
 def test_RetinalSpatial_eye_mutation_after_build():
-    # Mutating `implant.eye` or the bound map's `eye` bypasses parameter
-    # assignment, so `is_built` has to catch it.
+    # Setting `implant.eye` or the map's `eye` directly resets `is_built`:
     for mutate in ['implant', 'map', 'both']:
         spatial = model(implant(eye='right'),
                         visual_field_map=Montesano2020Map(eye='right'))
@@ -66,6 +65,6 @@ def test_RetinalSpatial_eye_mutation_after_build():
         if mutate in ('map', 'both'):
             spatial.visual_field_map.eye = 'left'
         npt.assert_equal(spatial.is_built, False)
-    # Rebuilding the now-matching left/left configuration works:
+    # Rebuilding with matching left/left eyes works:
     spatial.build()
     npt.assert_equal(spatial.is_built, True)

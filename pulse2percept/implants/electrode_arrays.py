@@ -20,7 +20,7 @@ STIM_ALPHA = 0.8
 
 
 def _peak_drive(values, axis=None):
-    """Peak absolute amplitude: the magnitude stimulus coloring shows"""
+    """Return peak absolute amplitude (used for stimulus coloring)"""
     return np.max(np.abs(values), axis=axis)
 
 
@@ -30,18 +30,10 @@ def _stim_fill(cm, norm, amp):
 
 
 def _is_electrode_collection(selector):
-    """Whether an electrode selector names several electrodes or just one
+    """Return True if ``selector`` refers to several electrodes
 
-    Three things are one electrode however sequence-like they look: a name, a
-    ``(row, col)`` pair on an
-    :py:class:`~pulse2percept.implants.ElectrodeGrid`, and an index. Anything
-    else that can be iterated is a collection -- a list, an array, or the
-    name container a stimulus reports as ``electrodes``.
-
-    The tuple carve-out is what makes ``grid[0, 0]`` and
-    ``grid.coordinates(electrodes=(0, 0))`` mean the same thing, and the
-    string carve-out keeps ``'A1'`` from being read as the electrodes 'A' and
-    '1'.
+    A name, an index, and a ``(row, col)`` tuple each select one electrode.
+    Any other iterable (list, array, ``stim.electrodes``) is a collection.
     """
     if isinstance(selector, (str, bytes, tuple)):
         return False
@@ -93,8 +85,7 @@ class ElectrodeArray(PrettyPrint):
     # Frozen class: User cannot add more class attributes
     __slots__ = ('_electrodes',)
 
-    #: The unit electrode coordinates are stored in, i.e. what the plain
-    #: numbers returned by :py:meth:`coordinates` mean by default.
+    #: Unit of stored coordinates (default of :py:meth:`coordinates`).
     coordinate_unit = um
 
     def __init__(self, electrodes):
@@ -119,10 +110,7 @@ class ElectrodeArray(PrettyPrint):
     def coordinates(self, unit=None, electrodes=None):
         """Positions of the electrodes in the array
 
-        The one place to ask an implant where its electrodes are. Code that
-        needs the coordinates in a particular unit says so here, instead of
-        reading ``electrode.x`` and knowing that electrodes happen to store
-        microns.
+        Use instead of ``electrode.x`` to get coordinates in a given unit.
 
         .. versionadded:: 0.10.0
 
@@ -323,9 +311,8 @@ class ElectrodeArray(PrettyPrint):
 
         Notes
         -----
-        *  A name is looked up before an integer is read as a position, so an
-           array whose electrodes are *named* 0, 1, 2 answers with the
-           electrode of that name rather than the one in that position.
+        *  Names take precedence over positions: if electrodes are named 0, 1,
+           2, ``array[0]`` returns the electrode named 0.
 
         .. versionchanged:: 0.11.0
             A lookup that fails raises instead of returning ``None``.
@@ -339,7 +326,7 @@ class ElectrodeArray(PrettyPrint):
         return self._by_position(item)
 
     def _by_position(self, item):
-        """Return the ``item``-th electrode, for an ``item`` that is no name"""
+        """Return the electrode(s) at position ``item``"""
         if isinstance(item, slice):
             return self.electrode_objects[item]
         if isinstance(item, (int, np.integer)):
@@ -405,15 +392,12 @@ def _get_numeric_names(n_electrodes):
 
 
 def _is_naming_scheme(names):
-    """Whether a two-entry ``names`` gives the (rows, cols) naming scheme
+    """Return True if ``names`` is a (rows, cols) naming scheme
 
-    This is only ever in doubt on a grid with exactly two electrodes, where
-    the same two entries could just as well be the two electrode names. A
-    scheme entry is a token like 'A' or '1' (optionally reversed: '-A', '-1'),
-    so ``('A', '1')`` is the scheme, while ``('C1', '4')`` cannot be one and
-    must therefore be the names themselves. A list or array is always taken to
-    be the names, which is how two electrodes can still be named 'A' and '1'
-    if that is really what is wanted.
+    Needed to disambiguate grids with exactly two electrodes. A scheme is a
+    tuple of two alphabetic or numeric tokens, optionally prefixed with '-'
+    (e.g., ``('A', '1')``, not ``('C1', '4')``). Lists and arrays are always
+    electrode names.
     """
     if not isinstance(names, tuple) or len(names) != 2:
         return False
@@ -455,8 +439,7 @@ class ElectrodeGrid(ElectrodeArray):
         to. ``z`` is height above the array plane.
     rot : double, optional
         Rotation of the grid in degrees (positive angle: counter-clockwise).
-        A plain angle, not a unitful one: ``dva`` means visual angle, which is
-        a different thing.
+        ``dva`` (visual angle) is not accepted.
     names: (name_rows, name_cols), each of which either 'A' or '1'
         Naming convention for rows and columns, respectively.
         If 'A', rows or columns will be labeled alphabetically: A-Z, AA-AZ,
@@ -466,17 +449,15 @@ class ElectrodeGrid(ElectrodeArray):
         For example ('1', 'A') will number rows numerically and columns
         alphabetically; first row: 'A1', 'B1', 'C1', NOT '1A', '1B', '1C'.
 
-        The default, ``('A', '1')``, is the same convention that names the
-        pixels of an :py:class:`~pulse2percept.stimuli.ImageStimulus`, and is
-        generated by the same implementation. The other combinations exist to reproduce the naming
-        of specific published implants and are not otherwise recommended.
+        The default, ``('A', '1')``, matches the pixel names of an
+        :py:class:`~pulse2percept.stimuli.ImageStimulus`. Other combinations
+        reproduce the naming of specific published implants.
 
-        Alternatively, pass a list or NumPy array with one name per electrode
-        to name them all explicitly. On a grid with exactly two electrodes the
-        two readings collide, and only something that could be a scheme is
-        read as one: ``names=('A', '1')`` gives 'A1', 'A2', whereas
-        ``names=('C1', '4')`` names the two electrodes 'C1' and '4'. Pass a
-        list (``names=['A', '1']``) to name two electrodes 'A' and '1'.
+        Alternatively, pass a list or NumPy array with one name per
+        electrode. On a two-electrode grid, a tuple of scheme tokens is read
+        as a scheme: ``names=('A', '1')`` gives 'A1', 'A2', whereas
+        ``names=('C1', '4')`` gives 'C1', '4'. Use a list
+        (``names=['A', '1']``) to name two electrodes 'A' and '1'.
 
         .. versionchanged:: 0.10.0
             On a grid with exactly two electrodes, ``('A', '1')`` now yields
@@ -490,20 +471,18 @@ class ElectrodeGrid(ElectrodeArray):
     **electrode_params :
         Keyword arguments passed to the ``electrode_type`` constructor, such
         as ``radius`` for
-        :py:class:`~pulse2percept.implants.DiskElectrode`. They are forwarded
-        unchanged, except that ``radius`` may be given per electrode (see
-        below).
+        :py:class:`~pulse2percept.implants.DiskElectrode`. ``radius`` may be
+        given per electrode (see Notes).
 
     Notes
     -----
     *  ``z`` and ``radius`` may be given per electrode, as a list or array
-       with one entry per grid position. Every other electrode parameter is
-       one value shared by all electrodes.
-    *  ``spacing``, ``x``, ``y``, ``z`` and ``radius`` may be given as plain
-       numbers of microns or as unitful quantities, and may be mixed freely:
-       ``spacing=(0.5 * mm, 600 * um)`` and ``z=[0 * um, 0.1 * mm, ...]`` both
-       work. Any other electrode keyword is normalized by the electrode class
-       it is passed to. See :py:mod:`pulse2percept.units`.
+       with one entry per grid position. All other electrode parameters are
+       shared by all electrodes.
+    *  ``spacing``, ``x``, ``y``, ``z``, and ``radius`` accept numbers (um)
+       or quantities, mixed freely (e.g., ``spacing=(0.5 * mm, 600 * um)``).
+       Other electrode keywords are normalized by the electrode class. See
+       :py:mod:`pulse2percept.units`.
 
     Examples
     --------
@@ -604,12 +583,8 @@ class ElectrodeGrid(ElectrodeArray):
                 raise ValueError(f"'names' must either have two entries for "
                                  f"rows/columns or {np.prod(shape)} entries, not "
                                  f"{len(names)}")
-        # Normalized before anything is built with them: `_make_grid` lays out
-        # the pitch from `spacing`, translates by (x, y), broadcasts `z` and
-        # `radius` over the electrodes, and stores `spacing` on the grid
-        # itself. Every other electrode parameter travels through
-        # **electrode_params untouched and is normalized by the electrode
-        # class it belongs to.
+        # Convert grid-level lengths to um; other electrode params are
+        # normalized by the electrode class:
         spacing = as_value(spacing, um, 'spacing')
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
@@ -617,15 +592,13 @@ class ElectrodeGrid(ElectrodeArray):
         if 'radius' in electrode_params:
             electrode_params['radius'] = as_value(electrode_params['radius'],
                                                   um, 'radius')
-        # `deg` is an ordinary geometric angle; `dva` is visual angle, and is
-        # rejected here:
+        # Geometric angle; `dva` is rejected:
         rot = as_value(rot, deg, 'rot')
         self.shape = shape
         self.grid_type = grid_type
         self.spacing = spacing
         self.rot = rot
-        # Instantiate empty collection of electrodes. This dictionary will be
-        # populated in a private method ``_set_egrid``:
+        # Populated by ``_make_grid``:
         self._electrodes = OrderedDict()
         self._make_grid(x, y, z, rot, names, orientation, electrode_type,
                         **electrode_params)
@@ -697,11 +670,8 @@ class ElectrodeGrid(ElectrodeArray):
         n_elecs = np.prod(self.shape)
         rows, cols = self.shape
 
-        # A two-entry `names` is the (rows, cols) naming scheme -- except on a
-        # grid that happens to have exactly two electrodes, where it could
-        # just as well be both electrode names spelled out. There, only
-        # something that could actually be a scheme is read as one, so that
-        # ('A', '1') means the same thing at every grid size:
+        # Two entries are a (rows, cols) scheme, unless the grid has two
+        # electrodes and they are not scheme tokens:
         if len(names) == 2 and (n_elecs != 2 or _is_naming_scheme(names)):
             name_rows, name_cols = names
             if not isinstance(name_rows, str):
@@ -742,13 +712,8 @@ class ElectrodeGrid(ElectrodeArray):
                          for j in range(len(clms))]
             elif (name_rows.isalpha() and name_cols.isdigit() and
                     not reverse_rows and not reverse_cols):
-                # The canonical convention: a letter for the row, a number for
-                # the column. This is the same scheme that names the pixels of
-                # an ImageStimulus, so both come from the one implementation -
-                # a generic grid and an image stimulus cannot drift apart.
-                # The remaining schemes above and below exist to reproduce the
-                # naming of specific published implants (ArgusI, Orion), and
-                # are deliberately left as overrides:
+                # Default scheme, shared with ImageStimulus pixel names. The
+                # other branches reproduce specific implants (ArgusI, Orion):
                 names = np.asarray(_GridNames((rows, cols))).tolist()
             else:
                 names = [rws[i] + clms[j] for i in range(len(rws))
@@ -770,8 +735,7 @@ class ElectrodeGrid(ElectrodeArray):
         else:
             x_spc = y_spc = self.spacing
             if self.grid_type.lower() == 'hex':
-                # In a hex grid, we need to adjust the spacing so that
-                # neighboring electrodes are separated by self.spacing:
+                # Hex grid: neighbors are separated by self.spacing:
                 if orientation.lower() == 'horizontal':
                     y_spc = x_spc * np.sqrt(3) / 2
                 else:
@@ -788,11 +752,8 @@ class ElectrodeGrid(ElectrodeArray):
             else:
                 # Shift every other column:
                 y_arr[:, ::2] += 0.5 * y_spc
-        # Center the lattice on (0, 0) once it is built, rather than assuming
-        # what the stagger did to its extent. (x, y) is the middle of that
-        # extent, not the centroid of the electrode centers: a hex grid with
-        # an odd number of rows has one stagger more often than the other, and
-        # its centroid sits a fraction of a pitch off center.
+        # Center the bounding box (not the centroid) on (0, 0). The two differ
+        # for hex grids with an odd number of rows:
         x_arr -= 0.5 * (x_arr.min() + x_arr.max())
         y_arr -= 0.5 * (y_arr.min() + y_arr.max())
 
@@ -804,10 +765,7 @@ class ElectrodeGrid(ElectrodeArray):
             # Match the hexagonal body to the grid:
             electrode_params.setdefault('orientation', orientation)
             electrode_params.setdefault('rot', rot)
-        # `radius` is the one electrode parameter the grid itself interprets,
-        # because implants with two electrode sizes exist (e.g. ArgusI): a
-        # list gives one radius per grid position. Everything else in
-        # `electrode_params` is one value shared by all electrodes.
+        # `radius` may be per electrode (e.g., ArgusI has two sizes):
         radius = electrode_params.pop('radius', None)
         if radius is None:
             elecs = [electrode_type(ex, ey, ez, name=nm, **electrode_params)
@@ -819,16 +777,13 @@ class ElectrodeGrid(ElectrodeArray):
                                      f"{n_elecs} entries, not {len(radius)}.")
                 r_arr = radius
             else:
-                # Floated like `z`, so that an integer radius gives the same
-                # electrodes a float one does:
+                # Cast to float like `z`:
                 r_arr = np.ones(n_elecs, dtype=float) * radius
             elecs = [electrode_type(ex, ey, ez, radius=er, name=nm,
                                     **electrode_params)
                      for ex, ey, ez, er, nm in zip(x_arr, y_arr, z_arr, r_arr,
                                                    names)]
-        # Populated in one shot rather than through ``add_electrode``: on a
-        # grid every name is known up front, so a duplicate shows up as a
-        # short dict instead of costing a lookup per electrode.
+        # Build in one shot; duplicate names show up as a short dict:
         self._electrodes = OrderedDict(zip(names, elecs))
         if len(self._electrodes) != n_elecs:
             dupe = next(nm for nm, n in Counter(names).items() if n > 1)

@@ -85,8 +85,8 @@ def test_rejects_current():
 
 
 def test_rejects_gray_levels():
-    # Checked on the prepared stimulus: as a *source*, the encoder would
-    # read the drive as a picture and re-encode it.
+    # Pass the prepared drive directly (as a source, it would be re-encoded
+    # as an image):
     implant = tiny_implant()
     drive = implant.prepare_stim(spot())._spatial_view()
     npt.assert_equal(drive._is_normalized_drive, True)
@@ -116,8 +116,7 @@ def test_temporal_stage_rejects_current():
 
 
 def test_temporal_stage_rejects_gray_levels():
-    # Dimensionless, so the unit alone does not disqualify it. Time-varying
-    # on purpose: a still image would be refused for lacking a time axis.
+    # Dimensionless and time-varying, so only the gray-level check applies:
     temporal = Ho2018Temporal(verbose=False)
     video = VideoStimulus(np.zeros((2, 2, 4)), time=np.arange(4) * 50.0)
     npt.assert_equal(video.unit.dimension.is_dimensionless, True)
@@ -216,8 +215,8 @@ def test_reference_condition_gives_unit_drive():
 # -- Spatial response -------------------------------------------------------
 
 def test_default_rho_is_half_the_electrode_pitch():
-    # A pulse2percept convention, resolved against the bound implant when the
-    # model is built -- not the receptive-field size [Ho2018]_ reports.
+    # A pulse2percept convention set at build time, not the receptive-field
+    # size reported by [Ho2018]_:
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
         spatial = Ho2018Spatial(PRIMAPivotal(), xrange=(-1, 1),
@@ -261,15 +260,15 @@ def test_rho_needs_a_pitch_or_a_value():
         Ho2018Spatial(single, xrange=(-1, 1), yrange=(-1, 1), step=0.5,
                       verbose=False).build()
     npt.assert_equal('pitch' in str(excinfo.value), True)
-    # An explicit rho is all it takes:
+    # An explicit rho works:
     spatial = Ho2018Spatial(single, rho=97.5, xrange=(-1, 1), yrange=(-1, 1),
                             step=0.5, verbose=False).build()
     npt.assert_almost_equal(spatial.rho, 97.5)
 
 
 def test_spatial_profile_is_a_gaussian_of_rho():
-    # Read the width off the kernel: `Percept.measure` reports an FWHM-like
-    # extent, which is not how [Ho2018]_ defines a receptive field.
+    # Compare against the kernel: `Percept.measure` reports an FWHM-like
+    # extent, unlike the [Ho2018]_ receptive-field definition:
     implant = TinyArray(shape=(1, 1),
                         encoder=PhotovoltaicEncoder(**REF))
     rho = 97.5
@@ -286,8 +285,8 @@ def test_spatial_profile_is_a_gaussian_of_rho():
 
 
 def test_spatial_drive_is_zero_outside_the_schedule():
-    # Zero-order hold holds *within* the schedule; before the first pulse and
-    # after the stimulus ends nothing is delivered.
+    # Zero-order hold applies within the schedule only; no drive before the
+    # first pulse or after the stimulus ends:
     implant = tiny_implant()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
@@ -306,8 +305,7 @@ def test_spatial_drive_is_zero_outside_the_schedule():
 
 
 def test_spatial_drive_is_zero_before_a_delayed_first_pulse():
-    # A source whose time axis starts late puts the first pulse after t=0, so
-    # "before the schedule" is not the same as "negative time".
+    # A source time axis that starts late puts the first pulse after t=0:
     implant = tiny_implant()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
@@ -367,15 +365,14 @@ def test_response_adapts_to_a_sustained_pulse_train():
     percept = model.predict_percept(spot())
     peaks = percept.data.max(axis=(0, 1))
     npt.assert_equal(peaks.size > 4, True)
-    # Every pulse period delivers the same drive, yet the response decays.
+    # Same drive every pulse period, but the response decays:
     npt.assert_array_less(peaks[-1], 0.2 * peaks.max())
     npt.assert_array_less(0, peaks.max())
 
 
 def test_automatic_output_times_are_exact():
-    # `reduce='peak'` would subsample each interval eight times; at 20 Hz that
-    # underestimates the true peak by tens of percent, so the default reports
-    # the instant it actually computes.
+    # Default is `reduce='last'`: `reduce='peak'` subsamples each interval 8x,
+    # which at 20 Hz underestimates the peak by tens of percent:
     model = tiny_model()
     npt.assert_equal(model.temporal.reduce, 'last')
     npt.assert_equal(Ho2018Temporal().reduce, 'last')
@@ -400,7 +397,7 @@ def test_static_image_produces_a_pulse_train_response():
     npt.assert_allclose(np.diff(percept.time), period, rtol=1e-3)
     frames = np.round(percept.data.max(axis=(0, 1)), 6)
     npt.assert_equal(np.unique(frames).size > 1, True)
-    # A still has no source-video frames to report against.
+    # No source frame times for a still image:
     npt.assert_equal('source_frame_time' in percept.metadata, False)
 
 
@@ -426,7 +423,7 @@ def prima_model():
 
 @pytest.mark.parametrize('fps', [15, 24.52, 29.97, 30, 60])
 def test_video_reports_on_the_source_clock(fps):
-    # The projector clock sets stimulation; the source clock sets reporting.
+    # Pulses follow the projector frame times; output follows the video's:
     n = 12
     frames = np.zeros((8, 8, n))
     frames[..., ::2] = 1
@@ -446,7 +443,7 @@ def test_video_reports_on_the_source_clock(fps):
     asked = model.predict_percept(video, t_percept=percept.time)
     npt.assert_allclose(asked.data, percept.data, rtol=1e-6, atol=1e-7)
     npt.assert_equal('source_frame_time' in asked.metadata, False)
-    # Explicit `t_percept` always wins:
+    # Explicit `t_percept` overrides the video frame times:
     npt.assert_almost_equal(
         model.predict_percept(video, t_percept=[0, 10, 20]).time, [0, 10, 20])
 
@@ -463,12 +460,12 @@ def test_pedestrian_scene_reports_on_the_video_clock():
     npt.assert_allclose(rendered.time, percept.time)
     npt.assert_equal(percept.time.size, video.time.size)
     npt.assert_allclose(percept.metadata['source_frame_time'], video.time)
-    # Last output closes the last source frame, not the last pulse period:
+    # Last output time is the end of the last source frame:
     npt.assert_allclose(percept.time[-1],
                         video.time[-1] + np.diff(video.time).mean(), atol=0.5)
 
 
-# -- What the wrapper forwards ----------------------------------------------
+# -- Parameters passed to the components ------------------------------------
 
 def test_model_does_not_quantize_the_retinal_drive():
     # `n_gray` would quantize drive before temporal filtering.
@@ -480,7 +477,9 @@ def test_model_does_not_quantize_the_retinal_drive():
 
 
 def test_threshold_applies_to_brightness_only():
-    # Thresholding drive first would delete what repeated pulses sum to.
+    # Threshold applies after temporal filtering, so sub-threshold drive can
+    # still sum across pulses:
+
     model = tiny_model(thresh_percept=0.5)
     npt.assert_almost_equal(model.spatial.thresh_percept, 0)
     npt.assert_almost_equal(model.temporal.thresh_percept, 0.5)

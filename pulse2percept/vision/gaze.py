@@ -6,17 +6,16 @@ from ..utils import PrettyPrint
 
 
 class Gaze(PrettyPrint):
-    """A sparse sequence of fixations, each starting at a given time
+    """A sequence of fixations, each starting at a given time
 
-    Gaze is piecewise constant: position ``i`` becomes active at ``time[i]``
-    and is held until ``time[i + 1]``; the last fixation is held indefinitely.
-    Nothing is interpolated, so a saccade takes no time. Resolution is
-    right-continuous, so an event landing exactly on a frame time applies to
-    that frame; times before the first event raise.
+    Gaze is piecewise constant: position ``i`` is active from ``time[i]``
+    until ``time[i + 1]``; the last fixation is held indefinitely. Saccades
+    are instantaneous (no interpolation). An event exactly on a frame time
+    applies to that frame; times before the first event are a ValueError.
 
     Accepted wherever :py:class:`~pulse2percept.vision.Scene` and
     :py:meth:`~pulse2percept.models.Model.predict_percept` take a ``gaze``,
-    given a clock to resolve against: a video scene's frame times, or a timed
+    if there are frame times to resolve against: a video scene's, or a timed
     percept's for a still scene.
 
     .. versionadded:: 0.11.0
@@ -24,14 +23,14 @@ class Gaze(PrettyPrint):
     Parameters
     ----------
     positions : (n, 2) or (n, 3) array_like
-        Scene locations that fall on the fovea, in degrees of visual angle.
-        Unitful values are accepted. Without ``time``, each row is
-        ``(x, y, time)``: x and y in dva, time in ms, unless unitful. Each
-        entry converts on its own, so a bare 0 needs no unit.
+        Scene locations on the fovea, in dva. Unitful values are accepted.
+        Without ``time``, each row is ``(x, y, time)``: x and y in dva, time
+        in ms, unless unitful. Each entry is converted separately, so a bare
+        0 needs no unit.
     time : (n,) array_like, optional
-        When each fixation begins, in milliseconds unless given as a unitful
-        time. Must be finite and strictly increasing. Required for ``(n, 2)``
-        positions; not allowed for ``(x, y, time)`` rows.
+        Start time of each fixation, in ms unless unitful. Must be finite and
+        strictly increasing. Required for ``(n, 2)`` positions; not allowed
+        for ``(x, y, time)`` rows.
 
     Examples
     --------
@@ -54,8 +53,7 @@ class Gaze(PrettyPrint):
         elif _row_width(positions) == 3:
             raise ValueError("'positions' has (x, y, time) rows and 'time' "
                              "is given too. Pass one or the other.")
-        # Copied, then frozen below: an array the caller can still mutate
-        # would silently change gaze that has already been resolved.
+        # Copy, then make read-only below, so caller mutations have no effect:
         positions = np.array(as_value(positions, dva, 'positions'),
                              dtype=float)
         if positions.ndim != 2 or positions.shape[1] != 2:
@@ -69,7 +67,7 @@ class Gaze(PrettyPrint):
         if not np.all(np.isfinite(positions)):
             raise ValueError(f"'positions' must be finite, not "
                              f"{positions.tolist()}.")
-        # A quantity keeps the unit it was written in; a bare number is ms:
+        # Keep a Quantity's unit; bare numbers are ms:
         unit = time.unit if isinstance(time, Quantity) else ms
         if unit.dimension != ms.dimension:
             raise DimensionMismatchError(
@@ -82,8 +80,7 @@ class Gaze(PrettyPrint):
         if not np.all(np.isfinite(time)):
             raise ValueError(f"'time' must be finite, not {time.tolist()}.")
         if time.size > 1 and np.any(np.diff(time) <= 0):
-            # Equal timestamps leave `searchsorted` to pick between two
-            # fixations:
+            # Equal timestamps would make `searchsorted` ambiguous:
             raise ValueError(f"'time' must be strictly increasing, not "
                              f"{time.tolist()}.")
         positions.flags.writeable = False
@@ -99,30 +96,29 @@ class Gaze(PrettyPrint):
 
     @property
     def positions(self):
-        """The ``(n, 2)`` fixations, in dva; read-only"""
+        """``(n, 2)`` fixations in dva; read-only"""
         return self._positions
 
     @property
     def time(self):
-        """When each fixation begins, counted in ``time_unit``; read-only"""
+        """Fixation start times in ``time_unit``; read-only"""
         return self._time
 
     @property
     def time_unit(self):
-        """The unit ``time`` is counted in"""
+        """Unit of ``time``"""
         return self._time_unit
 
     def _at(self, time, time_unit=None):
-        """Fixations active at each instant of ``time``, as ``(n, 2)``
+        """Returns the fixation active at each ``time``, as ``(n, 2)``
 
-        ``time_unit`` is the unit ``time`` is counted in; None means this
-        object's own.
+        ``time_unit`` is the unit of ``time``; None uses ``self.time_unit``.
         """
         unit = self.time_unit if time_unit is None else time_unit
         events = np.asarray(as_value(Quantity(self.time, self.time_unit),
                                      unit, 'time'), dtype=float)
         time = np.asarray(time, dtype=float).ravel()
-        # 'right' so an event landing exactly on a frame already applies to it:
+        # 'right', so an event exactly on a frame time applies to that frame:
         idx = np.searchsorted(events, time, side='right') - 1
         if idx.size and idx.min() < 0:
             first = time.min()
@@ -134,7 +130,7 @@ class Gaze(PrettyPrint):
 
 
 def _row_width(rows):
-    """Common length of the rows of ``rows``, or None if there is none"""
+    """Returns the common row length of ``rows``, or None"""
     if isinstance(rows, Quantity):
         rows = as_value(rows, rows.unit)
     try:
@@ -145,7 +141,7 @@ def _row_width(rows):
 
 
 def _split_rows(rows):
-    """Split ``(x, y, time)`` rows into dva positions and ms timestamps"""
+    """Splits ``(x, y, time)`` rows into dva positions and ms timestamps"""
     width = _row_width(rows)
     if width == 2:
         raise ValueError("(x, y) positions require 'time'. Pass time=..., "
@@ -154,7 +150,7 @@ def _split_rows(rows):
         raise ValueError("Without 'time', 'positions' must be (x, y, time) "
                          "rows, at least one of them.")
     if isinstance(rows, Quantity):
-        # One unit cannot be both visual angle and time:
+        # A single unit cannot be both dva and time:
         raise DimensionMismatchError(
             f"(x, y, time) rows carry one unit ({rows.unit}) for all three "
             f"columns. Give each entry its own unit, e.g. "
@@ -167,10 +163,10 @@ def _split_rows(rows):
 
 
 def _gaze_points(gaze, n_frames, time=None, time_unit=None):
-    """Gaze as one (x, y) in dva, or one per frame
+    """Returns gaze as one (x, y) in dva, or one per frame
 
-    A :py:class:`~pulse2percept.vision.Gaze` is resolved onto ``time``,
-    counted in ``time_unit``.
+    A :py:class:`~pulse2percept.vision.Gaze` is resolved at ``time`` (in
+    ``time_unit``).
     """
     if gaze is None:
         return np.zeros((1, 2))
@@ -187,7 +183,6 @@ def _gaze_points(gaze, n_frames, time=None, time_unit=None):
                          f"frame ({n_frames} of them), not an array of shape "
                          f"{gaze.shape}.")
     if not np.all(np.isfinite(gaze)):
-        # Left to reach the interpolator, this would come back as a blank
-        # percept rather than as a question about where the eye was pointing:
+        # Otherwise the interpolator would return a blank percept:
         raise ValueError(f"'gaze' must be finite, not {gaze.tolist()}.")
     return gaze

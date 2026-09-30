@@ -1,19 +1,15 @@
 """End-to-end tests you can check by hand
 
-The encoder tests in ``pulse2percept/stimuli/tests`` drive Argus II with a
-camera clip, which exercises the plumbing but tells you nothing you could
-have predicted with a pencil. These tests run the whole pipeline -- image ->
-encoder -> implant -> model -> percept -- on a deliberately tiny setup where
-every number has a closed form:
+These tests run the full pipeline (image -> encoder -> implant -> model ->
+percept) on a tiny setup where every number has a closed form:
 
 *  Four electrodes on the corners of a 1200 um square, far enough apart that
    each one produces its own phosphene.
 *  A 2x2 image, so that ``reshape_stim`` samples exactly one pixel per
    electrode (it maps the image grid linearly onto the electrode bounding box,
    and the electrodes sit on its corners).
-*  Gray levels chosen to be distinct and evenly separated.
-*  One electrode per raster group, so the stimulator drives exactly one
-   electrode at a time.
+*  Distinct, evenly spaced gray levels.
+*  One electrode per raster group, so only one electrode is on at a time.
 """
 import numpy as np
 import numpy.testing as npt
@@ -29,8 +25,8 @@ from pulse2percept.stimuli import (AmplitudeEncoder, FrequencyEncoder,
                                    ImageStimulus, Stimulus)
 from pulse2percept.utils.constants import DT
 
-# Electrode names in the order `ElectrodeArray` keeps them, and their positions
-# (um). The 2x2 image below is sampled at exactly these four points:
+# Electrode names in `ElectrodeArray` order, and their positions (um). The
+# 2x2 image is sampled at exactly these four points:
 #     A = top-left pixel, B = top-right, C = bottom-left, D = bottom-right
 NAMES = ['A', 'B', 'C', 'D']
 POS = [(-600.0, -600.0), (600.0, -600.0), (-600.0, 600.0), (600.0, 600.0)]
@@ -44,21 +40,21 @@ def make_implant(raster=None):
 
 
 def one_per_group():
-    """A raster that drives exactly one electrode at a time"""
+    """A raster that drives one electrode at a time"""
     return CustomRaster({n: i for i, n in enumerate(NAMES)})
 
 
 def onsets(stim, electrode):
-    """The time (ms) at which each of one electrode's pulses begins"""
+    """Return the onset time (ms) of each pulse on one electrode"""
     neg = stim.data[electrode] < 0
     started = neg & ~np.concatenate(([False], neg[:-1]))
-    # A pulse ramps up over DT, so the first sample at full amplitude sits one
-    # tick past the onset:
+    # A pulse ramps up over DT, so the first full-amplitude sample is one DT
+    # after onset:
     return stim.time[started] - DT
 
 
 def at_electrodes(model, implant):
-    """The grid index nearest each electrode, and one in the middle"""
+    """Return the grid index nearest each electrode, and the center index"""
     gx = np.asarray(model.grid.ret.x)
     gy = np.asarray(model.grid.ret.y)
     here = {}
@@ -80,49 +76,45 @@ def test_endtoend_amplitude_modulation():
     npt.assert_equal(list(stim.electrodes), NAMES)
 
     # --- what the encoder produced --------------------------------------
-    # Gray level maps onto amplitude absolutely: 50 uA * gray.
+    # Amplitude is 50 uA * gray level:
     npt.assert_almost_equal(np.abs(stim.data).max(axis=1),
                             [12.5, 25.0, 37.5, 50.0], decimal=4)
-    # Every electrode pulses at the requested 20 Hz -- rastering costs no
-    # frequency, it only decides where in each 50 ms period an electrode goes.
-    # Four groups split that period into four 12.5 ms slots:
+    # Every electrode pulses at 20 Hz; the raster only sets the onset within
+    # each 50 ms period (four 12.5 ms slots):
     for e in range(4):
         npt.assert_almost_equal(onsets(stim, e)[0], e * 12.5, decimal=3)
         npt.assert_almost_equal(np.diff(onsets(stim, e)), 50.0, decimal=3)
     npt.assert_almost_equal(stim.metadata['encoder']['cycle'], 50.0)
-    # The point of the raster: the stimulator sources one electrode's worth of
-    # current at a time. All four at once would be 12.5+25+37.5+50 = 125 uA.
+    # Only one electrode is on at a time (all four at once would total
+    # 12.5+25+37.5+50 = 125 uA):
     npt.assert_almost_equal(np.abs(stim.data).sum(axis=0).max(), 50.0)
     net = trapezoid(stim.data.astype(np.float64),
                     x=stim.time.astype(np.float64))
     npt.assert_almost_equal(net, 0, decimal=4)
 
     # --- what the model made of it --------------------------------------
-    # A spatial model reads what the encoder *asked* each electrode for, since
-    # a raster slot is a fact about time it has no way to express (see
-    # `models.base._spatial_input`). Wrapping the schedule in an ordinary
-    # `Stimulus` is what asks for the delivered pulses instead, which is what
-    # makes the raster visible below:
+    # A spatial model uses the requested amplitude per electrode, without
+    # raster timing (see `models.base._spatial_input`). Wrapping the schedule
+    # in a plain `Stimulus` passes the delivered pulses instead, so the raster
+    # shows up below:
     npt.assert_equal(stim._spatial_view().shape, (4, 1))
     model = ScoreboardSpatial(implant=implant, xrange=(-4, 4), yrange=(-4, 4),
                               step=0.2, rho=200).build()
     percept = model.predict_percept(Stimulus(stim))
     here, middle = at_electrodes(model, implant)
-    # Brightest over time, since no two electrodes are ever on together:
+    # Max over time, since no two electrodes are on together:
     env = percept.data.max(axis=-1)
     bright = np.array([env[here[n]] for n in NAMES])
 
-    # Four separate phosphenes, one per electrode, brightness following the
-    # gray level that produced it:
+    # One phosphene per electrode, brightness proportional to gray level:
     npt.assert_equal(np.all(np.diff(bright) > 0), True)
     npt.assert_allclose(bright / bright[-1], [0.25, 0.5, 0.75, 1.0], rtol=1e-3)
-    # ... and nothing in between them, so they really are separate blobs:
+    # Phosphenes are separate (dark in between):
     npt.assert_equal(env[middle] < 0.01 * bright[0], True)
     npt.assert_equal(np.unravel_index(int(np.argmax(env)), env.shape),
                      here['D'])
 
-    # Size is set by `rho`, not by amplitude: a brighter phosphene is brighter,
-    # not bigger, so all four cover the same area relative to their own peak.
+    # Size depends on `rho` only, so all four have the same half-max area:
     gx, gy = np.asarray(model.grid.ret.x), np.asarray(model.grid.ret.y)
     areas = []
     for n in NAMES:
@@ -134,21 +126,19 @@ def test_endtoend_amplitude_modulation():
     npt.assert_equal(areas, [areas[0]] * 4)
     npt.assert_equal(areas[0] > 4, True)
 
-    # The raster is visible in the percept itself: at any one instant at most
-    # one electrode is lit. The threshold sits well above the 0.006 of
-    # cross-talk an unlit electrode picks up and well below the 12.5 of the
-    # dimmest lit one:
+    # At most one electrode is lit at any time. The threshold of 1.0 is well
+    # above the ~0.006 cross-talk at an unlit electrode and well below the
+    # 12.5 of the dimmest lit one:
     lit = np.array([[percept.data[here[n]][t] > 1.0 for n in NAMES]
                     for t in range(percept.data.shape[-1])])
     npt.assert_equal(lit.sum(axis=1).max(), 1)
-    # ... and over the whole stimulus each of them gets a turn:
+    # Each electrode is lit at some point:
     npt.assert_equal(lit.any(axis=0), [True] * 4)
 
 
 def test_endtoend_frequency_modulation():
-    # Gray levels chosen so that the requested rates are 50, 66.7, 100 and
-    # 200 Hz -- whole multiples of the 5 ms raster cycle that the fastest
-    # electrode sets, so nothing has to be quantized away:
+    # Gray levels give 50, 66.7, 100, and 200 Hz, whose periods are whole
+    # multiples of the 5 ms raster cycle (no quantization):
     implant = make_implant(one_per_group())
     img = ImageStimulus(np.array([[0.25, 1 / 3], [0.5, 1.0]]))
     stim = implant.prepare_stim(
@@ -156,57 +146,48 @@ def test_endtoend_frequency_modulation():
                          frame_dur=200).encode(img))
 
     # --- what the encoder produced --------------------------------------
-    # One amplitude for everyone; the gray level sets the rate instead:
+    # Same amplitude on every electrode; gray level sets the rate:
     npt.assert_almost_equal(np.abs(stim.data).max(axis=1), 50.0, decimal=4)
     npt.assert_almost_equal(stim.metadata['encoder']['cycle'], 5.0)
-    # 200 Hz / 4 groups gives each electrode a 1.25 ms slot, and each pulses at
-    # exactly the rate it asked for:
+    # 5 ms cycle / 4 groups = 1.25 ms slot per electrode, each at its
+    # requested rate:
     period = [20.0, 15.0, 10.0, 5.0]
     for e in range(4):
         npt.assert_almost_equal(onsets(stim, e)[0], e * 1.25, decimal=3)
         npt.assert_almost_equal(np.diff(onsets(stim, e)), period[e],
                                 decimal=3)
-    # Over a 200 ms frame that is floor((200 - pulse) / period) + 1 pulses:
+    # floor((200 - pulse_dur) / period) + 1 pulses per 200 ms frame:
     npt.assert_equal([onsets(stim, e).size for e in range(4)],
                      [10, 14, 20, 40])
-    # Still one electrode at a time, even though they are on different rates.
-    # This is what the raster cycle buys: without it the four trains would
-    # drift onto each other and the stimulator would have to source 200 uA:
+    # Still one electrode at a time despite different rates (without the
+    # raster cycle, the trains would overlap and total 200 uA):
     npt.assert_almost_equal(np.abs(stim.data).sum(axis=0).max(), 50.0)
     net = trapezoid(stim.data.astype(np.float64),
                     x=stim.time.astype(np.float64))
     npt.assert_almost_equal(net, 0, decimal=4)
 
     # --- what the model made of it --------------------------------------
-    # A temporal model integrates the pulses, so more pulses is brighter even
-    # though every pulse carries the same current:
+    # The temporal model integrates pulses, so more pulses is brighter at the
+    # same current:
     percept = FadingTemporal().build().predict_percept(stim)
-    # One percept frame per video frame -- the image is a single 200 ms frame:
+    # One percept frame for the single 200 ms image frame:
     npt.assert_equal(percept.data.shape, (4, 1, 1))
     bright = percept.data[:, 0, 0]
     npt.assert_equal(np.all(np.diff(bright) > 0), True)
-    # Brightness tracks the pulse *count* rather than the amplitude, which is
-    # what distinguishes frequency modulation from amplitude modulation. It
-    # grows a little slower than the count does, though: each pulse adds less
-    # the brighter the percept already is, so doubling the rate does not double
-    # the brightness. Normalized against the fastest train, that saturation
-    # puts the slower ones slightly *above* the line the counts would draw:
+    # Brightness tracks pulse count, but saturates: each pulse adds less as the
+    # percept gets brighter. Normalized to the fastest train, slower trains
+    # therefore sit slightly *above* the pulse-count ratio:
     counts = np.array([onsets(stim, e).size for e in range(4)],
                       dtype=np.float64)
     npt.assert_allclose(bright / bright[-1], counts / counts[-1], rtol=0.15)
     npt.assert_array_less(counts / counts[-1] - 1e-6, bright / bright[-1])
-    # In closed form, since every pulse here is identical and the percept is
-    # the peak the frame reached: the cathodic phase lifts brightness by
-    # `amp (1 - exp(-phase_dur/tau))` toward `amp`, and what is left of that
-    # lift when the next pulse lands is `exp(-period/tau)` of it, so the peaks
-    # are a geometric series that the n-th pulse has summed n terms of. That
-    # only holds because the drive is rectified -- with the anodic phase
-    # pulling brightness back down, no pulse would leave anything to sum:
-    # The closed form is continuous-time while the model samples the stimulus
-    # and holds it over each `dt` step, so the phase the integrator actually
-    # sees is a fraction of a step shorter than `phase_dur`. That is worth a few
-    # tenths of a percent here, which is far tighter than the structure being
-    # checked -- brightness as a geometric series in the pulse count:
+    # Closed form (identical pulses, percept = frame peak): each cathodic phase
+    # adds `amp (1 - exp(-phase_dur/tau))`, which decays by `exp(-period/tau)`
+    # before the next pulse, so the peak after n pulses is a geometric series.
+    # This requires a rectified drive (otherwise the anodic phase cancels each
+    # pulse). The model samples the stimulus at `dt`, so the effective phase is
+    # slightly shorter than `phase_dur` (a few tenths of a percent, within
+    # rtol=1e-2):
     tau, phase_dur, amp = 100.0, 0.46, 50.0
     period = np.array(period, dtype=np.float64)
     npt.assert_allclose(
@@ -218,9 +199,7 @@ def test_endtoend_frequency_modulation():
 
 @pytest.mark.parametrize('order', [[0, 1, 2, 3], [3, 2, 1, 0], [1, 3, 0, 2]])
 def test_endtoend_raster_order(order):
-    # The raster decides *when in the period* each electrode gets its turn, and
-    # nothing else. Reordering the groups should permute the onsets to match
-    # and leave every other thing about the stimulus alone.
+    # Reordering raster groups permutes the onsets and nothing else:
     img = ImageStimulus(np.array([[0.25, 0.50], [0.75, 1.00]]))
     implant = make_implant(CustomRaster({n: g
                                          for n, g in zip(NAMES, order)}))
@@ -228,22 +207,19 @@ def test_endtoend_raster_order(order):
         AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
                          frame_dur=200).encode(img))
 
-    # Each electrode starts in the slot its group was given -- 50 ms period
-    # split four ways is 12.5 ms per slot:
+    # Each electrode starts in its group's slot (50 ms / 4 = 12.5 ms):
     npt.assert_almost_equal([onsets(stim, e)[0] for e in range(4)],
                             np.asarray(order) * 12.5, decimal=3)
-    # Everything else is untouched: same amplitudes, same rate, same current
-    # limit, whichever order the groups take their turns in.
+    # Same amplitudes, rate, and total current regardless of order:
     npt.assert_almost_equal(np.abs(stim.data).max(axis=1),
                             [12.5, 25.0, 37.5, 50.0], decimal=4)
     for e in range(4):
         npt.assert_almost_equal(np.diff(onsets(stim, e)), 50.0, decimal=3)
     npt.assert_almost_equal(np.abs(stim.data).sum(axis=0).max(), 50.0)
 
-    # And the percept says the same: the electrodes light up one at a time, in
-    # the order the raster puts them in, and each is as bright as its own gray
-    # level regardless of when its turn comes. Asked of the delivered pulses,
-    # because that is where a raster lives (see `_spatial_input`):
+    # In the percept, electrodes light up one at a time in raster order, with
+    # brightness set by gray level. Uses the delivered pulses (see
+    # `_spatial_input`):
     model = ScoreboardSpatial(implant=implant, xrange=(-4, 4), yrange=(-4, 4),
                               step=0.2, rho=200).build()
     percept = model.predict_percept(Stimulus(stim))
@@ -255,32 +231,28 @@ def test_endtoend_raster_order(order):
     lit = np.array([[percept.data[here[n]][t] > 1.0 for n in NAMES]
                     for t in range(percept.data.shape[-1])])
     npt.assert_equal(lit.sum(axis=1).max(), 1)
-    # Read off the order in which they first light up, and check it is the
-    # order the raster asked for:
+    # Order of first lighting up matches the raster order:
     first = [int(np.argmax(lit[:, i])) for i in range(4)]
     npt.assert_equal(np.argsort(first).tolist(),
                      np.argsort(order).tolist())
 
 
 def test_endtoend_raster_is_what_separates_the_groups():
-    # The same four electrodes without a raster: every one of them fires at
-    # the start of every period, so the stimulator has to source all of it at
-    # once. This is the failure the raster exists to prevent, and it is why
-    # `max_current` rejects the unrastered version of the very same image.
+    # Without a raster, all electrodes fire at the start of every period, so
+    # `max_current` rejects the stimulus:
     img = ImageStimulus(np.array([[0.25, 0.50], [0.75, 1.00]]))
     implant = make_implant()
     plain = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
                              frame_dur=200).encode(img)
-    # Every electrode fires at the same times, so the stimulator has to
-    # source all of them at once:
+    # All electrodes fire at the same times (total 125 uA):
     npt.assert_equal(len(np.unique(np.abs(plain.data) > 0, axis=0)), 1)
     npt.assert_almost_equal(np.abs(plain.data).sum(axis=0).max(), 125.0)
 
     implant.max_current = 60
     with pytest.raises(ValueError, match='raster'):
         implant.prepare_stim(plain)
-    # Giving the implant the raster is enough -- the encoder picks it up, and
-    # the same image now fits inside the current limit:
+    # With a raster (used by the encoder), the same image fits the current
+    # limit:
     implant.raster = one_per_group()
     rastered = implant.prepare_stim(
         AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
@@ -289,34 +261,22 @@ def test_endtoend_raster_is_what_separates_the_groups():
 
 
 def test_endtoend_slow_train_stays_lit_for_the_whole_video(camera_video):
-    """A pulse rate well below the frame rate must not extinguish the percept.
+    """A pulse rate well below the frame rate keeps the percept lit
 
-    This is the case that crossed every layer at once and that none of the
-    per-layer tests caught. ``camera_video`` runs at 29.97 fps (33.365 ms per
-    frame) and a 6 Hz train pulses every 166.67 ms, so the pulse cycle and the
-    percept's own frame grid are incommensurate by 4.995 frames. Reporting a
-    frame by sampling instants out of it therefore walks slowly through the
-    pulse cycle, and once the walk carries every sample off the 0.92 ms window
-    where a pulse actually delivers current it never walks back: the percept
-    used to light up for the first 25 frames and then stay black for the
-    remaining 2.3 seconds.
-
-    Both halves of the fix matter here. A rectified drive is what lets
-    brightness persist between pulses at all, and summarizing each frame by the
-    peak it reached is what stops the report from depending on sampling phase.
+    ``camera_video`` runs at 29.97 fps (33.365 ms per frame) and a 6 Hz train
+    pulses every 166.67 ms (4.995 frames). Sampling one instant per frame
+    drifts through the pulse cycle and can miss the 0.92 ms pulse window
+    entirely. A rectified drive keeps brightness between pulses, and reporting
+    each frame's peak removes the dependence on sampling phase.
     """
-    # Argus II's own defaults: an amplitude encoder at 6 Hz, and a six-group
-    # raster. So the whole setup is `ArgusII().prepare_stim(video)`.
+    # Argus II defaults: amplitude encoder at 6 Hz, six-group raster:
     implant = ArgusII()
     with pytest.warns(UserWarning, match='deliver no pulse'):
-        # 6 Hz against 29.97 fps: most frames carry no pulse of their own, and
-        # the encoder says so. That is a property of the stimulus, not a reason
-        # for the percept to go dark:
+        # At 6 Hz vs. 29.97 fps, most frames contain no pulse:
         delivered = implant.prepare_stim(camera_video)
-    # The encoder schedules pulses across the whole video, not just its start.
-    # The last of the six raster groups takes its turn 5 x 2 = 10 ms behind the
-    # first, which is what puts the final pulse past the 3000.5 ms that an
-    # unrastered Argus II would end on:
+    # Pulses span the whole video. The last of six raster groups starts
+    # 5 x 2 = 10 ms after the first, so the last onset is 3010.5 ms (vs.
+    # 3000.5 ms without a raster):
     onset = delivered.time[np.any(delivered.data < 0, axis=0)]
     npt.assert_almost_equal(onset.max(), 3010.5, decimal=1)
 
@@ -330,9 +290,10 @@ def test_endtoend_slow_train_stays_lit_for_the_whole_video(camera_video):
     npt.assert_array_less(3000, percept.time[-1])
 
     frame = percept.data.reshape(-1, percept.data.shape[-1]).max(axis=0)
-    # Nothing goes dark, least of all the second half of the video:
+    # No frame goes dark, including the second half of the video:
     npt.assert_array_less(0.1 * frame.max(), frame[percept.time > 1000])
     npt.assert_array_less(0.1 * frame.max(), frame.min())
-    # ... and the swing from frame to frame stays modest, rather than the two
-    # orders of magnitude that sampling an instant out of a pulse train gives:
+    # Frame-to-frame variation stays small (instantaneous sampling would vary
+    # by two orders of magnitude):
+
     npt.assert_array_less(frame.max() / np.median(frame), 4.0)

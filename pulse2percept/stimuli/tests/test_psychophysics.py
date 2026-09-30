@@ -80,7 +80,7 @@ def test_BarStimulus():
 
 @pytest.mark.filterwarnings('ignore::DeprecationWarning')
 def test_psychophysics_time_units():
-    # `time` is a duration, so it may be given as one:
+    # `time` may be given as a duration:
     for cls, kwargs in [(GratingStimulus, {}), (BarStimulus, {})]:
         bare = cls((4, 4), time=100, **kwargs)
         unitful = cls((4, 4), time=0.1 * sec, **kwargs)
@@ -89,8 +89,7 @@ def test_psychophysics_time_units():
         # An explicit list of time points works too:
         listed = cls((4, 4), time=[0, 20, 40] * ms, **kwargs)
         npt.assert_almost_equal(listed.time, [0, 20, 40])
-        # These are visual stimuli: their pixels are gray levels, but their
-        # time is still physical.
+        # Pixels are gray levels; time has physical units.
         npt.assert_equal(unitful.unit, dimensionless)
         npt.assert_equal(unitful.time_unit, ms)
         with pytest.raises(DimensionMismatchError):
@@ -99,7 +98,7 @@ def test_psychophysics_time_units():
 
 @pytest.mark.filterwarnings('ignore::DeprecationWarning')
 def test_GratingStimulus_angle_units():
-    """`direction` and `phase` are ordinary angles, not visual angle"""
+    """`direction` and `phase` are plain angles, not visual angles"""
     bare = GratingStimulus((4, 4), direction=45, phase=90, time=100)
     unitful = GratingStimulus((4, 4), direction=45 * deg, phase=90 * deg,
                               time=100)
@@ -114,8 +113,8 @@ def test_GratingStimulus_angle_units():
 
 
 def test_psychophysics_namespace():
-    # The module is reachable, but the optotype generators are not promoted to
-    # the top-level namespace:
+    # The module is importable, but the optotype generators are not in the
+    # top-level namespace:
     npt.assert_equal(p2p.stimuli.psychophysics is psychophysics, True)
     for name in ('bar', 'grating', 'landolt_c', 'tumbling_e'):
         npt.assert_equal(hasattr(psychophysics, name), True)
@@ -135,7 +134,7 @@ def _assert_area_averaged(scene):
 
 
 def _ink(scene):
-    """Visual-field coordinates of the inked pixels, as ``(x, y)`` arrays"""
+    """Return visual-field coordinates ``(x, y)`` of the inked pixels"""
     img = scene.source.data.reshape(scene.source.img_shape)
     rows, cols = np.where(img < 0.5)
     return scene.pixel_to_dva(cols, rows)
@@ -154,7 +153,7 @@ def test_landolt_c():
     npt.assert_equal(meta['position'], (0.0, 0.0))
     npt.assert_almost_equal(meta['orientation'], 0.0)
     npt.assert_equal(meta['polarity'], 'dark')
-    # A scalar fov is the horizontal one; the vertical follows from `shape`:
+    # A scalar fov is horizontal; the vertical fov follows from `shape`:
     npt.assert_equal(psychophysics.landolt_c(fov=10, shape=(256, 512)).fov,
                      (10.0, 5.0))
 
@@ -175,9 +174,9 @@ def test_landolt_c_geometry():
     # through the center of the C crosses ink from -2.5 to -1.5 gaps:
     left = x[(abs(y) < tol) & (x < 0)]
     npt.assert_almost_equal(left.max() - left.min(), gap, decimal=1)
-    # ... and the opening is one gap wide, measured across the gap direction:
+    # ... and the opening is one gap wide, across the gap direction:
     npt.assert_equal(np.any((x > 0) & (abs(y) < gap / 2)), False)
-    # Ink resumes right at the slot edge, so the opening is exactly a gap wide:
+    # Ink resumes at the slot edge, so the opening is exactly one gap wide:
     edge = abs(y[(x > 1.5 * gap) & (x < 2.5 * gap)]).min()
     npt.assert_almost_equal(edge, gap / 2, decimal=1)
 
@@ -194,8 +193,8 @@ def test_landolt_c_orientation(orientation, direction):
     img = scene.source.data.reshape(scene.source.img_shape)
     rows, cols = np.where(img > 0.5)
     x, y = scene.pixel_to_dva(cols, rows)
-    # The background pixels that fall inside the annulus are the opening, and
-    # they sit on the side the orientation points to:
+    # Background pixels inside the annulus form the opening, on the side the
+    # orientation points to:
     radius = np.hypot(x, y)
     inside = (radius > 1.5 * gap) & (radius < 2.5 * gap)
     npt.assert_almost_equal([x[inside].mean() / radius[inside].mean(),
@@ -234,7 +233,7 @@ def test_landolt_c_polarity():
     (dict(shape=(10, 10, 10)), "'shape'"),
     (dict(shape=(10.5, 10)), "'shape'"),
     (dict(fov=0), "'fov'"),
-    # The whole outer circle has to fit: 5 * gap = 5 dva across, centered 8 dva
+    # The whole outer circle must fit: 5 * gap = 5 dva across, centered 8 dva
     # out in a 10 dva field:
     (dict(gap=1, position=(8, 0), fov=10), 'half-FOV'),
     (dict(gap=1, position=(0, -8), fov=10), 'half-FOV'),
@@ -248,7 +247,7 @@ def test_landolt_c_invalid(kwargs, msg):
 
 
 def _is_ink(scene, x, y):
-    """Whether the pixel nearest visual-field point ``(x, y)`` is ink"""
+    """Return True if the pixel nearest visual-field point ``(x, y)`` is ink"""
     col, row = scene.dva_to_pixel(x, y)
     img = scene.source.data.reshape(scene.source.img_shape)
     return bool(img[int(round(float(row))), int(round(float(col)))] < 0.5)
@@ -268,7 +267,7 @@ def test_tumbling_e():
     npt.assert_almost_equal(meta['orientation'], 0.0)
     npt.assert_equal(meta['polarity'], 'dark')
     npt.assert_equal(meta['fov'], (15.0, 15.0))
-    # A scalar fov is the horizontal one; the vertical follows from `shape`:
+    # A scalar fov is horizontal; the vertical fov follows from `shape`:
     npt.assert_equal(psychophysics.tumbling_e(fov=10, shape=(256, 512)).fov,
                      (10.0, 5.0))
 
@@ -280,8 +279,8 @@ def test_tumbling_e_geometry():
     tol = 2 * fov / shape[0]
     scene = psychophysics.tumbling_e(stroke=stroke, fov=fov, shape=shape)
     x, y = _ink(scene)
-    # The 5 x 5 construction: the glyph is 5 strokes across, both ways, and
-    # centered on the requested position:
+    # The 5 x 5 construction: the glyph is 5 strokes across in both
+    # directions, centered on the requested position:
     npt.assert_almost_equal(x.max() - x.min(), 5 * stroke, decimal=1)
     npt.assert_almost_equal(y.max() - y.min(), 5 * stroke, decimal=1)
     npt.assert_array_less(abs(x.max() + x.min()), tol)
@@ -309,16 +308,16 @@ def test_tumbling_e_orientation(orientation):
     scene = psychophysics.tumbling_e(stroke=stroke, fov=20,
                                      orientation=orientation * deg,
                                      shape=(512, 512))
-    # Probe points in the canonical right-facing frame, rotated by the
-    # requested angle. Each sits a half stroke clear of a mask boundary.
+    # Probe points in the right-facing frame, rotated by the requested angle.
+    # Each is half a stroke away from a mask boundary.
     theta = np.deg2rad(orientation)
 
     def probe(u, v):
         return (u * np.cos(theta) - v * np.sin(theta),
                 u * np.sin(theta) + v * np.cos(theta))
 
-    # The bars reach the free end, the gaps beside the middle one do not, and
-    # the spine runs the full height behind them:
+    # The bars reach the free end, the gaps next to the middle bar do not, and
+    # the spine runs the full height:
     npt.assert_equal(_is_ink(scene, *probe(2 * stroke, 0)), True)
     npt.assert_equal(_is_ink(scene, *probe(2 * stroke, 2 * stroke)), True)
     npt.assert_equal(_is_ink(scene, *probe(2 * stroke, stroke)), False)
@@ -333,8 +332,8 @@ def test_tumbling_e_orientation(orientation):
     (0, (1, 0)), (90, (0, 1)), (180, (-1, 0)), (270, (0, -1)),
 ])
 def test_tumbling_e_gap_side(orientation, direction):
-    # The two gaps are the only background inside the glyph's bounding box,
-    # and they sit on the side the bars point to:
+    # The two gaps are the only background inside the bounding box, on the
+    # side the bars point to:
     stroke = 1.0
     scene = psychophysics.tumbling_e(stroke=stroke, fov=20,
                                      orientation=orientation * deg,
@@ -346,7 +345,7 @@ def test_tumbling_e_gap_side(orientation, direction):
     centroid = np.array([x[inside].mean(), y[inside].mean()])
     along = np.asarray(direction, dtype=float)
     across = np.asarray([-direction[1], direction[0]], dtype=float)
-    # The gaps span 4 strokes of the 5, offset a half stroke toward the bars:
+    # The gaps span 4 of the 5 strokes, offset half a stroke toward the bars:
     npt.assert_almost_equal(centroid @ along, 0.5 * stroke, decimal=1)
     npt.assert_almost_equal(centroid @ across, 0, decimal=1)
 
@@ -372,8 +371,7 @@ def test_tumbling_e_polarity():
 
 
 def test_tumbling_e_units():
-    # Plain numbers follow the dva/degree conventions, so they have to agree
-    # with a call that explicitly specifies the units:
+    # Plain numbers use dva/degrees, so they must match explicit units:
     plain = psychophysics.tumbling_e(stroke=0.5, position=(2, -1),
                                      orientation=90, fov=(12, 12),
                                      shape=(128, 128))
@@ -387,7 +385,7 @@ def test_tumbling_e_units():
 
 
 def _profile(scene, center, theta, u0, v0, along, half, n=2001):
-    """Ink fraction along a line through the optotype's own frame
+    """Return ink fraction along a line in the optotype's local frame
 
     Returns ``(t, f)``: signed distance in dva from local point ``(u0, v0)``
     along local axis ``along`` ('u' or 'v'), and the ink fraction there.
@@ -403,7 +401,7 @@ def _profile(scene, center, theta, u0, v0, along, half, n=2001):
 
 
 def _feature_width(t, f, ink):
-    """Width in dva of the feature straddling t = 0, at 50% ink coverage"""
+    """Return width (dva) of the feature at t = 0, at 50% ink coverage"""
     g = (f - 0.5) if ink else (0.5 - f)
     i0 = int(np.argmin(np.abs(t)))
     npt.assert_equal(g[i0] > 0, True)  # the profile has to start inside it
@@ -417,12 +415,12 @@ def _feature_width(t, f, ink):
 @pytest.mark.parametrize('orientation', [0, 22.5, 45, 67.5])
 @pytest.mark.parametrize('subpixel', [0.0, 0.25, 0.5])
 def test_optotype_raster_floor(orientation, subpixel):
-    """At the floor, realized features stay within 10% of the requested size
+    """At the size floor, features stay within 10% of the requested size
 
-    `_MIN_OPTOTYPE_PX` and `_SUPERSAMPLE` were picked together against this
-    criterion, over a far denser sweep of sub-pixel positions and orientations
-    than the boundary cases pinned here. Binary rasterization misses it by a
-    wide margin at any feature size, since its edges snap to whole pixels.
+    `_MIN_OPTOTYPE_PX` and `_SUPERSAMPLE` were tuned together for this
+    criterion over a denser sweep of sub-pixel positions and orientations than
+    tested here. Binary rasterization fails it at any feature size, since its
+    edges snap to whole pixels.
     """
     fov, shape = 20.0, (128, 128)
     px = fov / shape[1]
@@ -439,8 +437,8 @@ def test_optotype_raster_floor(orientation, subpixel):
         # ... and its stroke, through the arm opposite the opening:
         _feature_width(*_profile(c, center, orientation, -2 * feature, 0, 'u',
                                  1.5 * feature), ink=True),
-        # The E's middle bar, and the gap between it and the top bar, both
-        # sampled down the spine-free center column:
+        # The E's middle bar and the gap above it, sampled down the center
+        # column (no spine):
         _feature_width(*_profile(e, center, orientation, 0, 0, 'v',
                                  1.5 * feature), ink=True),
         _feature_width(*_profile(e, center, orientation, 0, feature, 'v',
@@ -453,7 +451,7 @@ def test_optotype_raster_floor(orientation, subpixel):
     (psychophysics.tumbling_e, 'stroke', 'bars'),
 ])
 def test_optotype_raster_minimum(generator, param, feature):
-    """The floor counts output pixels; supersampling does not lower it"""
+    """The size floor counts output pixels; supersampling does not lower it"""
     fov, shape = 20.0, (128, 128)
     at_floor = psychophysics._MIN_OPTOTYPE_PX * fov / shape[1]
     generator(fov=fov, shape=shape, **{param: at_floor})
@@ -474,13 +472,12 @@ def test_optotype_raster_minimum(generator, param, feature):
     (dict(shape=(10, 10, 10)), "'shape'"),
     (dict(shape=(10.5, 10)), "'shape'"),
     (dict(fov=0), "'fov'"),
-    # The whole 5 x 5 dva square has to fit, and this one is centered 8 dva
-    # out in a 10 dva field:
+    # The whole 5 x 5 dva square must fit, centered 8 dva out in a 10 dva
+    # field:
     (dict(stroke=1, position=(8, 0), fov=10), 'half-FOV'),
     (dict(stroke=1, position=(0, -8), fov=10), 'half-FOV'),
     # Rotated 45 deg, the square's axis-aligned extent grows to
-    # 2.5 * sqrt(2) = 3.54 dva, past the 3.5 dva half-FOV the same E clears
-    # upright:
+    # 2.5 * sqrt(2) = 3.54 dva, past the 3.5 dva half-FOV that fits upright:
     (dict(stroke=1, orientation=45, fov=7), 'half-FOV'),
     # 0.1 dva across a 10-degree, 128-pixel frame is 1.3 pixels:
     (dict(stroke=0.1, fov=10, shape=(128, 128)), 'resolve the bars'),
@@ -493,7 +490,7 @@ def test_tumbling_e_invalid(kwargs, msg):
 
 def test_tumbling_e_fits_snugly():
     # Upright, the bound is exactly 5 * stroke; the rotated-extent check must
-    # not tighten that, nor loosen the 45-degree one:
+    # neither tighten it nor loosen the 45-degree bound:
     npt.assert_equal(psychophysics.tumbling_e(stroke=1, fov=5.2).fov,
                      (5.2, 5.2))
     npt.assert_equal(psychophysics.tumbling_e(stroke=1, orientation=45,
@@ -501,7 +498,7 @@ def test_tumbling_e_fits_snugly():
 
 
 def _raster(scene):
-    """The scene's source as a ``(rows, cols, frames)`` array"""
+    """Return the scene's source as a ``(rows, cols, frames)`` array"""
     source = scene.source
     if isinstance(source, ImageStimulus):
         return source.data.reshape(source.img_shape)[..., np.newaxis]
@@ -509,20 +506,20 @@ def _raster(scene):
 
 
 def _at(scene, x, y, frame=0):
-    """Gray level of the pixel nearest the visual-field coordinate (x, y)"""
+    """Return the gray level of the pixel nearest (x, y) in the visual field"""
     col, row = scene.dva_to_pixel(x, y)
     return float(_raster(scene)[int(round(float(row))), int(round(float(col))),
                                 frame])
 
 
 def _lit(scene, frame=0):
-    """Visual-field coordinates of the above-mean-gray pixels of a frame"""
+    """Return visual-field coordinates of above-mean-gray pixels of a frame"""
     rows, cols = np.where(_raster(scene)[..., frame] > 0.5)
     return scene.pixel_to_dva(cols, rows)
 
 
 def _peak_x(scene, frame=0):
-    """x of the brightest pixel of the center row, in dva"""
+    """Return x (dva) of the brightest pixel in the center row"""
     img = _raster(scene)[..., frame]
     row = img.shape[0] // 2
     col = int(np.argmax(img[row]))
@@ -544,7 +541,7 @@ def test_grating_static():
     npt.assert_almost_equal(meta['spatial_freq'], 1.0)
     npt.assert_almost_equal(meta['temporal_freq'], 0.0)
     npt.assert_equal(meta['fov'], (10.0, 10.0))
-    # A scalar fov is the horizontal one; the vertical follows from `shape`:
+    # A scalar fov is horizontal; the vertical fov follows from `shape`:
     npt.assert_equal(psychophysics.grating(fov=10, shape=(256, 512)).fov,
                      (10.0, 5.0))
 
@@ -572,7 +569,7 @@ def test_grating_spatial_period(shape):
                                   shape=shape)
     row = _raster(scene)[shape[0] // 2, :, 0]
     # Interior local maxima, ties broken to the right so a two-pixel plateau
-    # straddling a peak counts once:
+    # at a peak counts once:
     cols = np.where((row[1:-1] >= row[:-2]) & (row[1:-1] > row[2:]))[0] + 1
     x, _ = scene.pixel_to_dva(cols, np.zeros_like(cols))
     # 20 dva at 0.5 cycles/dva holds 10 cycles, with a peak at fixation, so
@@ -583,7 +580,7 @@ def test_grating_spatial_period(shape):
 
 
 def test_grating_temporal_phase():
-    """Temporal phase follows the physical clock, not the frame index"""
+    """Temporal phase follows physical time, not the frame index"""
     # 5 Hz: half a period is 100 ms (frame 4 here), a full one 200 ms.
     scene = psychophysics.grating(spatial_freq=0.5, temporal_freq=5 * Hz,
                                   fov=20, shape=(64, 64),
@@ -592,8 +589,8 @@ def test_grating_temporal_phase():
     npt.assert_allclose(vid[..., 8], vid[..., 0], atol=1e-5)
     # Half a period inverts a full-contrast grating around mean gray:
     npt.assert_allclose(vid[..., 4], 1.0 - vid[..., 0], atol=1e-5)
-    # Sampling the same physical instants twice as densely does not change
-    # what happens at 100 ms, which a frame-index phase would:
+    # Sampling the same instants twice as densely does not change the frame at
+    # 100 ms (a frame-index phase would):
     dense = psychophysics.grating(spatial_freq=0.5, temporal_freq=5 * Hz,
                                   fov=20, shape=(64, 64),
                                   time=np.arange(0, 201, 12.5))
@@ -613,7 +610,7 @@ def test_grating_sampling_invariance():
         npt.assert_array_equal(
             _raster(coarse)[..., int(np.argmin(abs(t_coarse - t)))],
             _raster(fine)[..., int(np.argmin(abs(t_fine - t)))])
-    # The grids do disagree frame by frame, so the check above is not vacuous:
+    # The grids differ frame by frame, so the check above is meaningful:
     npt.assert_equal(np.array_equal(_raster(coarse)[..., 1],
                                     _raster(fine)[..., 1]), False)
 
@@ -633,7 +630,7 @@ def test_grating_direction(direction, along_x):
 
 
 def test_grating_drift_speed():
-    """The pattern moves along `direction` at temporal_freq/spatial_freq"""
+    """The pattern drifts along `direction` at temporal_freq/spatial_freq"""
     spatial_freq, temporal_freq = 0.05, 0.2
     # 4 dva/s for 250 ms, i.e. 1 dva. A period of 20 dva puts a single peak
     # in the 20-degree frame, so the brightest pixel is unambiguous.
@@ -672,12 +669,11 @@ def test_grating_contrast_and_mask():
     for mask in ('circle', None):
         img = _raster(psychophysics.grating(contrast=0.45, mask=mask,
                                             **kwargs))
-        # A circular aperture is 1 wherever it does not cut, so contrast
-        # still sets the extremes:
+        # A circular aperture is 1 inside, so contrast still sets the extremes:
         npt.assert_almost_equal(img.max(), 0.725, decimal=3)
         npt.assert_almost_equal(img.min(), 0.275, decimal=3)
     # A Gaussian aperture attenuates the pattern away from fixation, so
-    # contrast only bounds the excursion there:
+    # contrast only bounds the excursion:
     img = _raster(psychophysics.grating(contrast=0.45, mask='gauss',
                                         **kwargs))
     npt.assert_equal(img.max() <= 0.725 + 1e-6, True)
@@ -703,11 +699,11 @@ def test_grating_units():
                                     shape=(64, 64), time=[0, 20, 40] * ms)
     npt.assert_array_equal(_raster(bare), _raster(unitful))
     npt.assert_array_equal(bare.source.time, unitful.source.time)
-    # Milliseconds are the bare-number convention for time, seconds for speed:
+    # Bare numbers: ms for time, seconds for speed:
     in_s = psychophysics.grating(spatial_freq=0.5, temporal_freq=4, fov=20,
                                  shape=(64, 64), time=[0, 0.02, 0.04] * sec)
     npt.assert_almost_equal(in_s.source.time, [0, 20, 40])
-    # These are visual stimuli: pixels are gray levels, time is physical.
+    # Pixels are gray levels; time has physical units.
     npt.assert_equal(unitful.source.unit, dimensionless)
     npt.assert_equal(unitful.source.time_unit, ms)
 
@@ -746,7 +742,7 @@ def test_grating_dimensions(kwargs):
     (dict(time=[]), '1-D'),
     (dict(time=[[0, 10], [20, 30]]), '1-D'),
     (dict(time=[0, np.nan]), 'finite'),
-    # Drift without sample times would silently freeze at t = 0:
+    # Drift without sample times would freeze at t = 0:
     (dict(temporal_freq=4), "'temporal_freq' is 4 Hz"),
     # Well past the 0.8 cycles/dva Nyquist limit of a 0.625 dva pixel:
     (dict(spatial_freq=10), 'Nyquist'),
@@ -783,15 +779,15 @@ def test_bar_static():
     (psychophysics.bar, 'speed', 8 * dva / sec),
 ])
 def test_motion_requires_time(call, param, moving):
-    """A nonzero drift rate or speed may not silently vanish into an image"""
+    """A nonzero drift rate or speed without `time` raises ValueError"""
     kwargs = dict(shape=(32, 32), fov=10)
     with pytest.raises(ValueError) as excinfo:
         call(**kwargs, **{param: moving})
     npt.assert_equal("'time' is None" in str(excinfo.value), True)
-    # Zero motion is what a static stimulus means, so it stays legal:
+    # Zero motion (a static stimulus) is allowed:
     static = call(**kwargs, **{param: 0})
     npt.assert_equal(isinstance(static.source, ImageStimulus), True)
-    # ... and the same motion is fine once there are sample times:
+    # ... and so is motion with sample times:
     video = call(**kwargs, time=np.arange(0, 200, 20), **{param: moving})
     npt.assert_equal(isinstance(video.source, VideoStimulus), True)
 
@@ -817,7 +813,7 @@ def test_bar_width_in_dva(shape):
     px = fov / shape[1]
     row = _raster(scene)[shape[0] // 2, :, 0]
     npt.assert_allclose(np.count_nonzero(row > 0.5) * px, width, atol=px)
-    # ... and spans the whole frame the other way, since it is a stripe:
+    # ... and spans the whole frame in the other direction:
     col = _raster(scene)[:, shape[1] // 2, 0]
     npt.assert_equal(np.all(col > 0.5), True)
 
@@ -834,7 +830,7 @@ def test_bar_direction(direction, center):
 
 
 def test_bar_displacement():
-    """The bar's center is offset + speed * t, from its physical timestamps"""
+    """The bar's center is at offset + speed * t, using physical timestamps"""
     speed, offset = 8.0, -4.0
     time = np.array([0.0, 125.0, 250.0])
     scene = psychophysics.bar(width=2, speed=speed * dva / sec, offset=offset,
@@ -842,9 +838,8 @@ def test_bar_displacement():
     for frame, t in enumerate(time):
         x, _ = _lit(scene, frame)
         npt.assert_allclose(x.mean(), offset + speed * t / 1000, atol=0.1)
-    # Reversing `direction` mirrors the whole trajectory through fixation,
-    # since `offset` is measured along the motion axis; `speed` stays a
-    # magnitude either way:
+    # Reversing `direction` mirrors the trajectory through fixation, since
+    # `offset` is measured along the motion axis; `speed` is a magnitude:
     back = psychophysics.bar(width=2, direction=180 * deg,
                              speed=speed * dva / sec, offset=offset, fov=20,
                              shape=(256, 256), time=time)
@@ -878,11 +873,11 @@ def test_bar_edge_width():
                               shape=shape)
     px = fov / shape[1]
     row = _raster(scene)[shape[0] // 2, :, 0]
-    # The plateau is `width` across, and the ramps add `edge_width` a side:
+    # The plateau is `width` across; the ramps add `edge_width` per side:
     npt.assert_allclose(np.count_nonzero(row > 1 - 1e-6) * px, width, atol=px)
     npt.assert_allclose(np.count_nonzero(row > 1e-6) * px,
                         width + 2 * edge_width, atol=2 * px)
-    # Halfway down a raised-cosine ramp the profile sits at mean gray:
+    # Halfway down a raised-cosine ramp the profile is at mean gray:
     npt.assert_allclose(_at(scene, width / 2 + edge_width / 2, 0), 0.5,
                         atol=0.05)
     # ... and the ramp descends monotonically to the background:
@@ -957,7 +952,7 @@ def test_bar_dimensions(kwargs):
     (dict(time=500), 'scalar'),
     (dict(time=[]), '1-D'),
     (dict(time=[0, np.nan]), 'finite'),
-    # Motion without sample times would silently freeze at t = 0:
+    # Motion without sample times would freeze at t = 0:
     (dict(speed=8), "'speed' is 8 dva/s"),
     # 0.1 dva across a 10-degree, 16-pixel frame is 0.16 pixels:
     (dict(width=0.1), 'resolve the bar'),
@@ -977,7 +972,7 @@ def test_psychophysics_legacy_deprecated(cls, alt):
     with pytest.warns(DeprecationWarning) as record:
         cls((16, 16), time=[0, 20])
     # `BarStimulus` builds a `GratingStimulus` internally, which must not warn
-    # a second time:
+    # again:
     npt.assert_equal(len(record), 1)
     msg = str(record[0].message)
     for expected in (cls.__name__, alt, '0.11.0', '0.12.0'):
@@ -986,13 +981,13 @@ def test_psychophysics_legacy_deprecated(cls, alt):
 
 @pytest.mark.filterwarnings('ignore::DeprecationWarning')
 def test_psychophysics_legacy_semantics():
-    """The deprecated classes keep their raster/frame units through 0.11"""
+    """Deprecated classes keep their pixel/frame units until 0.11"""
     grating = GratingStimulus((4, 4), spatial_freq=0.25, temporal_freq=0.1)
     # `time=None` is still a 1-second video on an implicit 50 Hz grid:
     npt.assert_almost_equal(grating.time, np.arange(0, 1001, 20))
     npt.assert_equal(grating.vid_shape, (4, 4, 51))
     # Temporal frequency is still cycles/frame, so 0.1 repeats every 10
-    # frames no matter what the time axis says:
+    # frames regardless of the time axis:
     data = grating.data.reshape(grating.vid_shape)
     npt.assert_allclose(data[..., 10], data[..., 0], atol=1e-6)
     # Spatial frequency is still cycles/pixel, so 0.25 repeats every 4 pixels:
@@ -1005,14 +1000,13 @@ def test_psychophysics_legacy_semantics():
 
 
 def test_grating_spatial_nyquist():
-    """A grating at or past two samples per cycle is refused, not aliased"""
+    """A grating at or above the spatial Nyquist frequency raises ValueError"""
     # 20 dva across 64 pixels is a 0.3125 dva pixel, whose Nyquist frequency
     # is 1.6 cycles/dva:
     nyquist = 0.5 / (20.0 / 64)
     kwargs = dict(fov=20, shape=(64, 64), direction=0 * deg)
     psychophysics.grating(spatial_freq=0.99 * nyquist, **kwargs)
-    # Exactly at Nyquist the phase is unrecoverable, so equality is refused
-    # along with everything above it:
+    # At exactly Nyquist the phase is unrecoverable, so it is rejected too:
     for spatial_freq in (nyquist, 1.01 * nyquist, 10 * nyquist):
         with pytest.raises(ValueError) as excinfo:
             psychophysics.grating(spatial_freq=spatial_freq, **kwargs)
@@ -1020,7 +1014,7 @@ def test_grating_spatial_nyquist():
 
 
 def test_grating_nyquist_is_directional():
-    """Each axis is judged by its own angular pixel pitch"""
+    """Each axis uses its own angular pixel pitch"""
     # 40 dva over 64 columns is a 0.625 dva pixel (0.8 cycles/dva Nyquist);
     # 10 dva over 64 rows is a 0.15625 dva one (3.2 cycles/dva).
     kwargs = dict(fov=(40, 10), shape=(64, 64), spatial_freq=1.0)
@@ -1030,8 +1024,8 @@ def test_grating_nyquist_is_directional():
     with pytest.raises(ValueError) as excinfo:
         psychophysics.grating(direction=0 * deg, **kwargs)
     npt.assert_equal('horizontal component' in str(excinfo.value), True)
-    # An oblique grating sits between the two limits: at 45 deg, 1 cycle/dva
-    # has a 0.71 cycles/dva horizontal component, which 0.8 still resolves ...
+    # An oblique grating falls between the limits: at 45 deg, 1 cycle/dva has
+    # a 0.71 cycles/dva horizontal component, which 0.8 still resolves ...
     psychophysics.grating(direction=45 * deg, **kwargs)
     # ... but 1.2 cycles/dva does not:
     with pytest.raises(ValueError):
@@ -1050,18 +1044,18 @@ def test_grating_temporal_nyquist():
             psychophysics.grating(temporal_freq=temporal_freq * Hz, time=time,
                                   **kwargs)
         npt.assert_equal('Nyquist' in str(excinfo.value), True)
-    # The widest gap decides, not the average one:
+    # The widest gap counts, not the average:
     with pytest.raises(ValueError):
         psychophysics.grating(temporal_freq=24 * Hz, time=[0, 1, 2, 100],
                               **kwargs)
-    # A single frame has no gap across which the drift could alias:
+    # A single frame has no gap to alias across:
     psychophysics.grating(temporal_freq=1000 * Hz, time=[0.0], **kwargs)
 
 
 def test_aperture_is_circular_in_dva():
-    """Apertures are radial in visual angle, not stretched to the frame"""
-    # A 40 x 10 dva field: the aperture is the largest circle that fits, so 5
-    # dva in radius, rather than an ellipse filling the frame.
+    """Apertures are circular in visual angle, not stretched to the frame"""
+    # A 40 x 10 dva field: the aperture is the largest circle that fits (5 dva
+    # radius), not an ellipse filling the frame.
     scene = psychophysics.grating(spatial_freq=0.2, fov=(40, 10),
                                   shape=(64, 256), mask='circle')
     img = _raster(scene)[..., 0]

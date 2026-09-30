@@ -13,10 +13,8 @@ ctypedef Py_ssize_t index_t
 cpdef bool[::1] fast_compress_space(const float32[:, ::1] data):
     """Compress a stimulus in space"""
     # In space, we only keep electrodes with nonzero activation values.
-    # Note that `c_isclose(x, 0)` is an exact test, not a tolerant one: its
-    # abs_tol is 0, so the comparison reduces to |x| <= 1e-9 * |x|, which
-    # holds only for x == 0. Electrodes carrying a tiny but nonzero amplitude
-    # are therefore kept, which is what "all-zero" above promises.
+    # `c_isclose(x, 0)` has abs_tol 0, so it is true only for x == 0: tiny
+    # nonzero amplitudes are kept.
     cdef:
         index_t e, n_elec, t, n_time
         bool[::1] idx_space
@@ -45,13 +43,10 @@ cpdef bool[::1] fast_compress_time(const float32[:, ::1] data):
     # You always need the first and last element. You also need the
     # high and low value (along with the time stamps) for every signal
     # edge.
-    # Only the column indices matter here, so the time axis itself is not
-    # needed: the caller applies the returned mask to it.
-    # `c_isclose`'s rel_tol (1e-9) sits far below float32 eps (~1.2e-7), so
-    # for float32 input this is exact equality for any pair of finite values.
-    # It is not interchangeable with `!=` at the extremes, though:
-    # c_isclose(inf, inf) is False, so a constant infinite signal registers an
-    # edge at every column.
+    # The caller applies the returned mask to the time axis.
+    # `c_isclose`'s rel_tol (1e-9) is below float32 eps (~1.2e-7), so this is
+    # exact equality for finite float32 values. c_isclose(inf, inf) is False,
+    # so a constant infinite signal has an edge at every column.
     cdef:
         index_t e, n_elec, t, n_time
         bool[::1] idx_time

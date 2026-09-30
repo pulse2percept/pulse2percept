@@ -32,14 +32,12 @@ if not _ok:
     )
 
 
-# NumPy 2.x is the only supported build and runtime, so target its C API
-# unconditionally.
+# Only NumPy 2.x is supported for build and runtime:
 NUMPY_API_MACRO = ("NPY_NO_DEPRECATED_API", "NPY_2_0_API_VERSION")
 
 if int(_np.__version__.split(".")[0]) < 2:
-    # pyproject.toml pins numpy>=2.0 as a build requirement, so this is only
-    # reachable with --no-build-isolation. Say so here rather than let it
-    # surface as a compiler error about a missing macro.
+    # Only reachable with --no-build-isolation (pyproject.toml requires
+    # numpy>=2.0). Fail here instead of with a missing-macro compiler error:
     raise RuntimeError(
         f"Building pulse2percept requires NumPy 2.0 or newer, found "
         f"{_np.__version__}. Upgrade NumPy, or drop --no-build-isolation and "

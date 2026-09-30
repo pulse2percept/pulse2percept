@@ -106,32 +106,22 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                     uint32 n_threads):
     """Fast spatial response of the axon map model
 
-    The Gaussian falloff from an electrode to an axon segment depends only on
-    the two of them, not on time. The loop nest is therefore ordered
-    pixel -> segment -> electrode -> time, so that the ``exp`` is evaluated
-    once per (segment, electrode) pair and reused across every time point.
-    A time-innermost ordering would evaluate it ``n_time`` times over.
+    Loops run pixel -> segment -> electrode -> time, so the time-independent
+    Gaussian ``exp`` is evaluated once per (segment, electrode) pair.
 
-    Only electrodes within ``cutoff_r2`` of a segment can contribute to it.
-    The active electrodes are sorted by x once per call and each segment
-    binary-searches the band ``[ax_x - r, ax_x + r]``; with a finite cutoff
-    that leaves the electrode loop walking the band rather than the whole
-    array. Sorting also lets the inactive electrodes be dropped outright
-    rather than branched past. The band is one-dimensional, so the exact
-    ``r2 <= cutoff_r2`` test still decides which of its electrodes count; an
-    infinite cutoff puts every electrode in the band and rejects none.
+    Inactive electrodes are dropped and the rest sorted by x once per call.
+    Each segment binary-searches the band ``[ax_x - r, ax_x + r]`` and applies
+    the exact ``r2 <= cutoff_r2`` test within it. An infinite cutoff includes
+    every electrode.
 
-    The innermost loop over time accumulates into independent slots of a
-    scratch buffer, so it vectorizes without relaxed floating-point
-    semantics. Nothing of size ``n_segments x n_electrodes`` or
-    ``n_segments x n_time`` is ever materialized: each thread holds two
+    The innermost time loop accumulates into independent scratch slots, so it
+    vectorizes without relaxed floating-point semantics. Each thread uses two
     buffers of ``n_time`` floats.
 
     .. note::
 
-        Electrodes are summed in order of increasing x rather than in the
-        order they were passed, so results can differ in the last bits from
-        a version that summed them in array order.
+        Electrodes are summed in order of increasing x, so results can differ
+        in the last bits from summing in array order.
 
     Parameters
     ----------
@@ -148,14 +138,14 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
         ``idx_start`` and ``idx_end`` are used to slice the ``axon`` array.
         For example, the axon belonging to the i-th pixel has segments
         axon[idx_start[i]:idx_end[i]].
-        This arrangement is necessary in order to access ``axon`` in parallel.
+        This layout allows parallel access.
     idx_start, idx_end : 1D uint32 array
         Start and stop indices of the i-th axon.
     rho : float32
         The rho parameter of the axon map model: exponential decay constant
         (microns) away from the axon.
-        Note that lambda was already taken into account when calculating the
-        axon contribution (stored/passed in ``axon``).
+        Lambda is already included in the axon contribution (third column of
+        ``axon_segments``).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
     cutoff_r2 : float32
@@ -179,43 +169,34 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
 
     n_time = stim.shape[1]
     n_space = len(idx_start)
-    # `num_threads(0)` is not conforming OpenMP, and the scratch buffer below
-    # is sized on the assumption that no thread id can reach `n_threads`:
+    # `num_threads(0)` is not conforming OpenMP; scratch rows assume thread
+    # ids < `n_threads`:
     if n_threads < 1:
         n_threads = 1
 
     # A flattened array containing n_space x n_time entries:
     bright = np.empty((n_space, n_time), dtype=np.float32)  # Py overhead
 
-    # Keep the electrodes that carry current at some point, in order of
-    # increasing x. `stim` is permuted alongside so that the band the loop
-    # below walks is contiguous in all three arrays.  # Py overhead follows
+    # Keep electrodes with nonzero current, sorted by x. Permute `stim` too so
+    # the band is contiguous in all three arrays.  # Py overhead follows
     keep = np.asarray(_active_electrodes(stim)).view(np.bool_).nonzero()[0]
     keep = keep[np.argsort(np.asarray(xel)[keep], kind='stable')]
     xs = np.ascontiguousarray(np.asarray(xel)[keep])
     ys = np.ascontiguousarray(np.asarray(yel)[keep])
     stim_s = np.ascontiguousarray(np.asarray(stim)[keep])
     n_el = len(keep)
-    # Half-width of the x band to search. `inf` (no cutoff) carries through:
-    # every electrode then sorts into the band and none is ever rejected.
+    # Half-width of the x band; `inf` (no cutoff) includes every electrode:
     cutoff_r = c_sqrt(cutoff_r2)
 
-    # Per-thread scratch: row `tid` holds this thread's running per-time-point
-    # segment brightness (first `n_time` entries) and pixel brightness (next
-    # `n_time`). OpenMP may give the team fewer threads than requested but
-    # never more, so `n_threads` rows always suffice. Rows are padded to a
-    # 64-byte boundary so that two threads never share a cache line, which for
-    # a single-frame stimulus they otherwise would. This is the only extra
-    # memory the kernel needs, and allocating it through NumPy means a failure
-    # raises MemoryError here rather than inside a nogil block.
+    # Per-thread scratch: row `tid` holds segment brightness (first `n_time`
+    # entries) and pixel brightness (next `n_time`). OpenMP never uses more
+    # than `n_threads` threads. Rows are padded to 64 bytes to avoid false
+    # sharing. NumPy allocation raises MemoryError outside the nogil block.
     stride = ((2 * n_time + 15) // 16) * 16
     scratch = np.empty((n_threads, stride), dtype=np.float32)
 
-    # Parallel loop over all pixels to be rendered. `guided` rather than
-    # `static`: axons differ several-fold in how many segments they have, and
-    # how many electrodes fall inside `cutoff_r2` varies with where the pixel
-    # sits relative to the array, so equal-sized chunks are not equal-sized
-    # work.
+    # Parallel loop over pixels. `guided` schedule because segment counts and
+    # electrodes within the cutoff vary across pixels:
     for idx_space in prange(n_space, schedule='guided', nogil=True,
                             num_threads=n_threads):
         tid = threadid()
@@ -230,9 +211,7 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
         for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
             ax_x = axon_segments[idx_ax, 0]
             ax_y = axon_segments[idx_ax, 1]
-            # A segment with no location cannot be activated. That is a
-            # property of the segment, so it is checked once here rather than
-            # once per electrode:
+            # Skip segments without a location:
             if c_isnan(ax_x) or c_isnan(ax_y):
                 continue
             # Activation as a function of distance to the cell body (depends
@@ -242,10 +221,8 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
             # contribution of each electrode:
             for idx_time in range(n_time):
                 scratch[tid, idx_time] = <float32>0.0
-            # Only the electrodes whose x lies within `cutoff_r` of this
-            # segment can clear the cutoff, and `xs` is sorted, so they are
-            # one contiguous run. Seek its start, then walk until x leaves the
-            # band -- no electrode outside it is ever looked at:
+            # `xs` is sorted, so electrodes within `cutoff_r` in x form one
+            # contiguous run:
             lo_el = _lower_bound(xs, n_el, ax_x - cutoff_r)
             x_hi = ax_x + cutoff_r
             for idx_el in range(lo_el, n_el):
@@ -256,21 +233,16 @@ cpdef fast_axon_map(const float32[:, ::1] stim,
                 xdiff = ax_x - xs[idx_el]
                 ydiff = ax_y - ys[idx_el]
                 r2 = xdiff * xdiff + ydiff * ydiff
-                # In the band on x, but still too far in y. Note this drops
-                # `gauss * stim`, not just `gauss`:
+                # Inside the x band but beyond the cutoff radius:
                 if r2 > cutoff_r2:
                     continue
                 # Activation as a function of distance to the stimulating
-                # electrode (depends on `rho`). Neither this nor `sens`
-                # depends on time, which is why time is the innermost loop:
+                # electrode (depends on `rho`); time-independent:
                 gauss = sens * c_exp(-r2 / (<float32>2.0 * rho * rho))
                 for idx_time in range(n_time):
                     scratch[tid, idx_time] = (scratch[tid, idx_time] +
                                               gauss * stim_s[idx_el, idx_time])
-            # After summing up the currents from all the electrodes, we
-            # compare the brightness of the segment to the previously
-            # brightest segment. The brightest segment overall determines the
-            # brightness of the pixel:
+            # The brightest segment determines the pixel brightness:
             for idx_time in range(n_time):
                 sgm = scratch[tid, idx_time]
                 if c_abs(sgm) > c_abs(scratch[tid, n_time + idx_time]):

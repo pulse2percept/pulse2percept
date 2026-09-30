@@ -54,8 +54,8 @@ def _plot_frames(video, n_frames=5):
     fig.tight_layout()
 
 
-#: The clip is CC BY 3.0, not BSD like the rest of pulse2percept, so its
-#: attribution travels with the stimulus. See ``data/samples/README.rst``.
+#: CC BY 3.0 attribution, stored in the stimulus metadata. See
+#: ``data/samples/README.rst``.
 _BIG_BUCK_BUNNY_CREDIT = {
     'title': 'Big Buck Bunny',
     'creator': 'Blender Foundation',
@@ -90,10 +90,9 @@ def big_buck_bunny(resize=None, electrodes=None, metadata=None,
         frame.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the frame: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -158,10 +157,9 @@ def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -227,10 +225,9 @@ def cajal_retina(resize=None, electrodes=None, metadata=None, as_gray=False):
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -283,10 +280,9 @@ def logo_bvl(resize=None, electrodes=None, metadata=None, as_gray=False):
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -329,10 +325,9 @@ def logo_ucsb(resize=None, electrodes=None, metadata=None):
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -366,9 +361,8 @@ def ucsb_bike(resize=None, electrodes=None, metadata=None, as_gray=False):
     Load a 600x900x3 RGB photograph of a cyclist, a pedestrian, a crosswalk,
     and a stop sign on the UCSB campus.
 
-    The photograph is made available by its copyright holder under the same
-    BSD 3-Clause license as pulse2percept; ``metadata`` carries a short form
-    of that.
+    The photograph is distributed under the BSD 3-Clause license;
+    attribution is included in ``metadata``.
 
     .. plot::
 
@@ -384,10 +378,9 @@ def ucsb_bike(resize=None, electrodes=None, metadata=None, as_gray=False):
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -421,10 +414,9 @@ def ucsb_bike(resize=None, electrodes=None, metadata=None, as_gray=False):
                          metadata=meta, compress=False)
 
 
-#: Shared by every asset cut from the NLM video *Towards a Smart Bionic Eye*.
-#: ``ImageStimulus`` and ``VideoStimulus`` overwrite ``metadata['source']``
-#: with the local file name, so provenance goes under ``credit``. See
-#: ``data/samples/README.rst``.
+#: Credit for assets from the NLM video *Towards a Smart Bionic Eye*.
+#: Stored under ``credit``, because ``metadata['source']`` is overwritten
+#: with the local file name. See ``data/samples/README.rst``.
 _NLM_CREDIT = {
     'credit': 'Courtesy of the National Library of Medicine',
     'license': 'Public domain (U.S. government work)',
@@ -440,18 +432,16 @@ def ucsb_flyover(resize=None, electrodes=None, metadata=None, as_gray=False):
     shoreline, 53 frames at 24.32 fps (2.18 s of video).
 
     The clip is cut from *Towards a Smart Bionic Eye*, produced by the
-    National Library of Medicine / National Institutes of Health. As a U.S.
-    government work it is in the public domain in the United States, and is
-    therefore not covered by pulse2percept's BSD license; ``metadata`` carries
-    the requested attribution.
+    National Library of Medicine / National Institutes of Health. It is a
+    U.S. government work in the public domain (not BSD-licensed); attribution
+    is included in ``metadata``.
 
-    The clip has no intrinsic field of view; wrap it in a
-    :py:class:`~pulse2percept.vision.Scene` to say how much of the visual
-    field it covers.
+    The clip has no intrinsic field of view; use a
+    :py:class:`~pulse2percept.vision.Scene` to set its visual-field extent.
 
     .. note::
-       The source is variable-frame-rate, so the reader resamples it to a
-       constant rate: about 10 of the 53 frames repeat the frame before them.
+       The variable-frame-rate source is resampled to a constant rate:
+       about 10 of the 53 frames repeat the frame before them.
 
     .. plot::
 
@@ -467,10 +457,9 @@ def ucsb_flyover(resize=None, electrodes=None, metadata=None, as_gray=False):
         frame.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the frame: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -515,18 +504,16 @@ def ucsb_pedestrians(resize=None, electrodes=None, metadata=None,
     24.52 fps (1.84 s of video).
 
     The clip is cut from *Towards a Smart Bionic Eye*, produced by the
-    National Library of Medicine / National Institutes of Health. As a U.S.
-    government work it is in the public domain in the United States, and is
-    therefore not covered by pulse2percept's BSD license; ``metadata`` carries
-    the requested attribution.
+    National Library of Medicine / National Institutes of Health. It is a
+    U.S. government work in the public domain (not BSD-licensed); attribution
+    is included in ``metadata``.
 
-    The clip has no intrinsic field of view; wrap it in a
-    :py:class:`~pulse2percept.vision.Scene` to say how much of the visual
-    field it covers.
+    The clip has no intrinsic field of view; use a
+    :py:class:`~pulse2percept.vision.Scene` to set its visual-field extent.
 
     .. note::
-       The source is variable-frame-rate, so the reader resamples it to a
-       constant rate: about 9 of the 45 frames repeat the frame before them.
+       The variable-frame-rate source is resampled to a constant rate:
+       about 9 of the 45 frames repeat the frame before them.
 
     .. plot::
 
@@ -542,10 +529,9 @@ def ucsb_pedestrians(resize=None, electrodes=None, metadata=None,
         frame.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the frame: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -589,10 +575,9 @@ def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
     stimulus.
 
     The frame comes from *Towards a Smart Bionic Eye*, produced by the
-    National Library of Medicine / National Institutes of Health. As a U.S.
-    government work it is in the public domain in the United States, and is
-    therefore not covered by pulse2percept's BSD license; ``metadata`` carries
-    the requested attribution.
+    National Library of Medicine / National Institutes of Health. It is a
+    U.S. government work in the public domain (not BSD-licensed); attribution
+    is included in ``metadata``.
 
     .. plot::
 
@@ -608,10 +593,9 @@ def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -645,8 +629,8 @@ def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
                          metadata=meta, compress=False)
 
 
-#: The micrograph is CC BY 4.0, not BSD like the rest of pulse2percept, so its
-#: attribution travels with the stimulus. See ``data/samples/README.rst``.
+#: CC BY 4.0 attribution, stored in the stimulus metadata. See
+#: ``data/samples/README.rst``.
 _ZEBRAFISH_RETINA_CREDIT = {
     'title': 'Sunrise in the eye: zebrafish retina',
     'creator': 'Dr Kara Cerveny & Dr Steve Wilson',
@@ -662,9 +646,9 @@ def zebrafish_retina(resize=None, electrodes=None, metadata=None,
     Load a 544x760x3 RGB fluorescence micrograph of a zebrafish retina
     ("Sunrise in the eye"), as a false-color image stimulus.
 
-    The micrograph is by Dr Kara Cerveny and Dr Steve Wilson, held by the
-    Wellcome Collection, and licensed CC BY 4.0 rather than under
-    pulse2percept's BSD license; ``metadata`` carries the attribution.
+    The micrograph is by Dr Kara Cerveny and Dr Steve Wilson (Wellcome
+    Collection), licensed CC BY 4.0; attribution is included in
+    ``metadata``.
 
     .. plot::
 
@@ -680,10 +664,9 @@ def zebrafish_retina(resize=None, electrodes=None, metadata=None,
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -733,10 +716,9 @@ class LogoBVL(ImageStimulus):
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of
@@ -772,10 +754,9 @@ class LogoUCSB(ImageStimulus):
         stimulus.
 
     electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
         .. note::
            The number of electrode names provided must match the number of

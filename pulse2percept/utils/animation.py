@@ -5,11 +5,11 @@ Fast, dependency-free HTML/JavaScript animations.
 :py:class:`HTMLAnimation` renders the static parts of the figure exactly once
 and packs all frames into a single, color-mapped sprite sheet per animated
 image, which a small vanilla-JavaScript player blits into a ``<canvas>``. This
-is typically two orders of magnitude faster and produces much smaller notebooks
-and doc pages.
+is typically two orders of magnitude faster than Matplotlib's ``to_jshtml`` and
+produces much smaller notebooks and doc pages.
 
-The sheet is encoded as JPEG by default, which roughly halves it again; pass
-``fmt='png'`` if you need the frames to be pixel-exact.
+The sheet is encoded as JPEG by default (about half the size of PNG); pass
+``fmt='png'`` for pixel-exact frames.
 """
 import base64
 from collections import namedtuple
@@ -28,48 +28,41 @@ from ..units import Hz, as_value
 
 __all__ = ['HTMLAnimation', 'frame_interval']
 
-# Frames are packed into a single sprite sheet. Browsers put a cap on the size
-# of an image they are willing to decode; 8192px per side is safe everywhere,
-# including on mobile:
+# Browsers limit the size of a decoded image; 8192px per side is safe
+# everywhere, including mobile:
 MAX_SPRITE_PX = 8192
 
 # Matplotlib's 'antialiased' interpolation falls back to 'nearest' once an
 # image is magnified by more than this factor (see ``Image._make_image``). The
-# canvas player mirrors that behavior so that percepts keep their crisp,
-# pixelated look:
+# canvas player does the same:
 MAX_SMOOTH_UPSAMPLE = 3
 
 # Number of gray/color levels in the sprite sheet. Matplotlib quantizes to 256
-# levels before the colormap lookup as well, so nothing is lost here:
+# levels before the colormap lookup:
 N_LEVELS = 256
 
-# PNG compression level. Anything above this buys a few percent in size for
-# several times the encoding time:
+# PNG compression level. Higher levels save a few percent in size at several
+# times the encoding time:
 PNG_COMPRESS_LEVEL = 3
 
-# JPEG quality. High enough that the artifacts stay invisible next to the blur
-# of a phosphene (a mean error of about 1 gray level out of 255), while still
-# cutting the size of the sprite sheet roughly in half:
+# JPEG quality. Mean error is about 1 gray level out of 255, at roughly half
+# the size of PNG:
 JPEG_QUALITY = 90
 
-# Frames are padded so that no JPEG block ever straddles two frames of the
-# sprite sheet, which would bleed one frame into the next. Grayscale sheets are
-# coded in 8x8 DCT blocks; color sheets additionally use 4:2:0 chroma
-# subsampling, whose macroblocks are 16x16:
+# Frames are padded so that no JPEG block straddles two frames. Grayscale
+# sheets use 8x8 DCT blocks; color sheets use 4:2:0 chroma subsampling with
+# 16x16 macroblocks:
 JPEG_BLOCK = 8
 JPEG_MACROBLOCK = 16
 
-# Frame duration (in ms) to fall back on for single-frame animations, which
-# have no time step of their own:
+# Frame duration (in ms) for single-frame animations:
 SINGLE_FRAME_INTERVAL = 1000.0 / 30
 
-# The title is blank while the animation is built, and an empty ``Text`` has a
-# degenerate bounding box. Its geometry is therefore measured on a probe
-# string, which must carry both an ascender and a descender so that the band
-# the player clears covers a full line of text:
+# An empty ``Text`` has a degenerate bounding box, so the title is measured on
+# a probe string with an ascender and a descender (a full line of text):
 TITLE_PROBE = 'Ag'
 
-# Pixels of slack added to that band, to catch antialiasing:
+# Pixels added around the title band, for antialiasing:
 TITLE_MARGIN = 1
 
 
@@ -98,23 +91,17 @@ def frame_interval(time, fps=None, tol=1e-2):
         time step of its own and falls back on ``SINGLE_FRAME_INTERVAL``.
 
     """
-    # Every ``play`` in p2p ends up here for its frame timing, so this is the
-    # one place a frame rate has to be turned into a plain number of hertz. A
-    # rate is a frequency, so `30 * Hz` and `0.03 * kHz` are the same argument
-    # as `30`, and `30 * ms` is not an argument at all:
+    # `30`, `30 * Hz`, and `0.03 * kHz` are equivalent; `30 * ms` is rejected:
     fps = as_value(fps, Hz, 'fps')
     if fps is not None:
         return 1000.0 / fps
     interval = np.diff(np.asarray(time, dtype=np.float64))
     if interval.size == 0:
-        # A single frame has no time step, and there is nothing to advance to,
-        # so any interval will do:
+        # A single frame has no time step:
         return SINGLE_FRAME_INTERVAL
-    # Compare the steps against each other rather than quantizing each one onto
-    # a grid of `tol`: a step that lands exactly on a grid boundary (33.365 ms
-    # against tol=1e-2, which is what a 29.97 fps percept comes out at) rounds
-    # up or down depending on floating-point noise far below `tol`, and an
-    # evenly spaced axis then looks like two different steps.
+    # Compare steps against each other instead of rounding each to `tol`: a
+    # 29.97 fps step (33.365 ms) sits on a rounding boundary of tol=1e-2, where
+    # floating-point noise would split an even axis into two step sizes:
     spread = float(interval.max() - interval.min())
     if spread > tol:
         raise NotImplementedError(
@@ -124,9 +111,8 @@ def frame_interval(time, fps=None, tol=1e-2):
     return float(interval[0])
 
 
-#: The frames of an animation, laid out on a display clock: which frame of the
-#: source data to show (``indices``), when it comes up (``times``, in ms), and
-#: how long it stays up (``intervals``, in ms).
+#: Display frames: source frame to show (``indices``), onset (``times``, in
+#: ms), and duration (``intervals``, in ms).
 _FrameTimeline = namedtuple('_FrameTimeline', ['indices', 'times',
                                                'intervals'])
 
@@ -169,7 +155,7 @@ def _frame_timeline(time, fps=None):
     if fps <= 0:
         raise ValueError(f"'fps' must be greater than zero, not {fps}.")
     step = 1000.0 / fps
-    # Choose the nearest whole number of display frames.
+    # Round to the nearest whole number of display frames:
     n_frames = max(1, int(np.floor(intervals.sum() / step + 0.5)))
     times = time[0] + np.arange(n_frames) * step
     # Zero-order hold:
@@ -206,9 +192,8 @@ def _round_up(value, multiple):
 def _sprite_grid(n_frames, height, width):
     """Lay out ``n_frames`` frames in a roughly square sprite sheet
 
-    Returns the number of rows and columns of the sheet. A square-ish sheet
-    keeps both dimensions as small as possible, which is what browsers care
-    about.
+    Returns the number of rows and columns. A square sheet keeps the longer
+    side small, which is what browsers limit.
     """
     n_cols = max(1, int(np.ceil(np.sqrt(n_frames * height / width))))
     n_cols = min(n_frames, n_cols)
@@ -219,15 +204,14 @@ def _sprite_grid(n_frames, height, width):
 def _frame_shape(data_shape, n_frames, max_shape, pad_to=1):
     """Determine the size at which each frame is embedded
 
-    Frames are never upsampled (the browser does that for free) and are
-    downsampled if they are either larger than the area they are displayed in
-    or too large to fit in a sprite sheet. ``pad_to`` is the multiple that
-    each tile is padded to on the sheet.
+    Frames are never upsampled (the browser does that). They are downsampled
+    if larger than their display area or too large for a sprite sheet.
+    ``pad_to`` is the multiple each tile is padded to on the sheet.
     """
     height, width = data_shape
-    # No point in shipping more pixels than are actually displayed:
+    # Embed no more pixels than are displayed:
     scale = min(1.0, max_shape[0] / height, max_shape[1] / width)
-    # Shrink further if the sheet would exceed what browsers can decode:
+    # Shrink further if the sheet exceeds MAX_SPRITE_PX:
     for _ in range(20):
         out_h = max(1, int(round(height * scale)))
         out_w = max(1, int(round(width * scale)))
@@ -309,16 +293,15 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt, bg_color=(255, 255, 255)):
     else:
         frames = _quantize(data, norm)
     if rgba and fmt == 'jpg':
-        # JPEG has no alpha channel, so the frames have to be flattened onto
-        # what they are drawn on top of. This is what Matplotlib rasterizes as
-        # well; the PNG path keeps the alpha and lets the canvas composite it:
+        # JPEG has no alpha channel, so flatten onto the background (as
+        # Matplotlib does). PNG keeps alpha for the canvas to composite:
         alpha = frames[..., 3:].astype(np.float32) / 255.0
         flat = frames[..., :3] * alpha + np.asarray(bg_color, dtype=np.float32)\
             * (1.0 - alpha)
         frames = np.ascontiguousarray(np.round(flat).astype(np.uint8))
         rgba = False
-    # JPEG has no palette, so scalar data must carry its colors itself. Gray
-    # colormaps stay single-channel; anything else is expanded to RGB:
+    # JPEG has no palette: gray colormaps stay single-channel, all others are
+    # expanded to RGB:
     if fmt == 'jpg' and not rgb:
         lut = _color_lut(cmap)
         frames = lut[..., 0][frames] if _is_gray(lut) else lut[frames]
@@ -328,14 +311,14 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt, bg_color=(255, 255, 255)):
         pad_to = JPEG_MACROBLOCK if frames.ndim == 4 else JPEG_BLOCK
     out_h, out_w = _frame_shape(frames.shape[1:3], n_frames, max_shape, pad_to)
     if (out_h, out_w) != frames.shape[1:3]:
-        # Downsample in index space, which is what Matplotlib does as well (it
-        # resamples the normalized data before the colormap lookup):
+        # Downsample in index space, as Matplotlib resamples normalized data
+        # before the colormap lookup:
         frames = np.stack([
             np.asarray(Image.fromarray(frame).resize((out_w, out_h),
                                                      Image.BILINEAR))
             for frame in frames])
-    # Pad the tiles so that JPEG macroblocks cannot straddle two frames.
-    # Repeating the edge pixel keeps the padding from ringing into the frame:
+    # Pad tiles to whole JPEG blocks. Edge padding avoids ringing into the
+    # frame:
     stride_h, stride_w = _round_up(out_h, pad_to), _round_up(out_w, pad_to)
     if (stride_h, stride_w) != (out_h, out_w):
         pad = [(0, 0), (0, stride_h - out_h), (0, stride_w - out_w)]
@@ -358,8 +341,7 @@ def _sprite_sheet(data, norm, cmap, max_shape, fmt, bg_color=(255, 255, 255)):
         Image.fromarray(sheet, mode='RGBA' if rgba else 'RGB').save(
             buf, format='png', compress_level=PNG_COMPRESS_LEVEL)
     else:
-        # Ship the colormap as a PNG palette: this keeps the sheet at one byte
-        # per pixel no matter how colorful the colormap is:
+        # Colormap as PNG palette keeps the sheet at one byte per pixel:
         img = Image.fromarray(sheet, mode='P')
         img.putpalette(_color_lut(cmap).ravel())
         img.save(buf, format='png', compress_level=PNG_COMPRESS_LEVEL)
@@ -379,8 +361,8 @@ def _background(fig, images):
         im.set_visible(False)
     buf = BytesIO()
     try:
-        # ``bbox_inches`` and ``dpi`` must be pinned: the geometry below is in
-        # figure pixels, and 'tight' would crop the canvas:
+        # Geometry below is in figure pixels, and 'tight' would crop the
+        # canvas:
         fig.savefig(buf, format='png', dpi=fig.dpi, bbox_inches=None)
     finally:
         for im, was_visible in zip(images, visible):
@@ -390,10 +372,9 @@ def _background(fig, images):
 
 
 def _bg_color(ax):
-    """The 8-bit color that the animated image sits on top of
+    """The 8-bit background color behind the animated image
 
-    Only matters for RGBA frames on a JPEG sheet, which cannot carry an alpha
-    channel and therefore have to be flattened onto their background.
+    Used to flatten RGBA frames onto a JPEG sheet, which has no alpha channel.
     """
     axes_rgba = np.asarray(to_rgba(ax.get_facecolor()), dtype=np.float32)
     # A transparent axes patch lets the figure show through:
@@ -404,16 +385,11 @@ def _bg_color(ax):
 
 
 def _title_geometry(title, width, height, dpi):
-    """Locate the title so that the player can redraw it for every frame
+    """Locate the title for the player to redraw every frame
 
     Returns a dict of canvas coordinates/styles, or None if the title cannot be
-    measured (e.g., because the figure has not been drawn yet).
-
-    The title is blank at this point so that it does not end up in the static
-    background, and an empty ``Text`` has a degenerate bounding box: it sits on
-    the baseline and has no height at all. Both the anchor the text is aligned
-    to and the line box that has to be cleared before every frame are therefore
-    measured on ``TITLE_PROBE`` instead.
+    measured (e.g., the figure has not been drawn yet). The title is blank at
+    this point, so its anchor and line box are measured on ``TITLE_PROBE``.
     """
     text = title.get_text()
     try:
@@ -431,9 +407,8 @@ def _title_geometry(title, width, height, dpi):
     else:
         align, x = 'center', (bbox.x0 + bbox.x1) / 2
     return {
-        # Only the title's own line box is cleared, so a suptitle or anything
-        # else on the figure stays untouched. The band spans the entire figure
-        # because the text grows to both sides of its anchor:
+        # Clear only the title's line box (not a suptitle), across the full
+        # figure width since the text grows to both sides of its anchor:
         'rect': [0, round(height - bbox.y1 - TITLE_MARGIN), width,
                  max(1, round(bbox.y1 - bbox.y0 + 2 * TITLE_MARGIN))],
         'x': round(x),
@@ -497,10 +472,10 @@ _Layer = namedtuple('_Layer', ['image', 'data', 'index'])
 
 
 def _as_layers(image, frame_data, frame_index):
-    """Pair the animated images up with the frames they display
+    """Pair each animated image with its frames
 
-    Returns one ``_Layer`` per image artist, or None if the caller did not hand
-    over what the fast player needs.
+    Returns one ``_Layer`` per image artist, or None if ``image`` or
+    ``frame_data`` is None.
     """
     if image is None or frame_data is None:
         return None
@@ -521,12 +496,10 @@ def _as_layers(image, frame_data, frame_index):
 
 
 def _compact_frames(data, index):
-    """Drop the frames an animation never shows, and renumber ``index``
+    """Drop frames that are never shown, and renumber ``index``
 
-    Returns ``(frames, index)``, where ``frames`` is ``data`` itself if every
-    source frame is shown at least once, and a copy of just the used frames
-    otherwise. Either way each source frame that is displayed is packed at
-    most once.
+    Returns ``(frames, index)``. ``frames`` is ``data`` itself if every frame
+    is shown, otherwise a copy of the used frames.
     """
     index = np.asarray(index, dtype=np.intp)
     used, remap = np.unique(index, return_inverse=True)
@@ -536,7 +509,7 @@ def _compact_frames(data, index):
 
 
 def _n_display_frames(layers):
-    """The number of frames the animation shows, on which all layers agree"""
+    """Number of display frames, which must be the same for all layers"""
     counts = {int(np.size(layer.index)) if layer.index is not None
               else int(np.shape(layer.data)[-1]) for layer in layers}
     if len(counts) > 1:
@@ -728,11 +701,10 @@ _PLAYER = Template("""
 class HTMLAnimation(FuncAnimation):
     """A :py:class:`~matplotlib.animation.FuncAnimation` with a fast player
 
-    Behaves exactly like ``FuncAnimation`` (including ``save`` and
+    Behaves like ``FuncAnimation`` (including ``save`` and
     ``to_html5_video``), but renders to HTML through a self-contained
-    JavaScript player instead of Matplotlib's ``to_jshtml``. Instead of
-    re-rendering the whole figure once per frame, the static parts of the
-    figure are rendered once and all frames are shipped as a single
+    JavaScript player instead of Matplotlib's ``to_jshtml``. The static parts
+    of the figure are rendered once, and all frames are embedded as a single
     color-mapped sprite sheet.
 
     .. versionadded:: 0.10.0
@@ -751,8 +723,8 @@ class HTMLAnimation(FuncAnimation):
     frame_index : list of (array_like or None), optional
         One entry per image, giving the frame of ``frame_data`` that each
         display frame shows. None (the default, or per image) advances that
-        image one frame at a time. This is what lets a still image or a source
-        sampled at another rate share a clock with the rest of the figure.
+        image one frame at a time. Use this for a still image or a source
+        sampled at another rate.
 
         .. versionadded:: 0.11.0
     labels : list of str or None
@@ -768,15 +740,15 @@ class HTMLAnimation(FuncAnimation):
         order of magnitude smaller, PNG is lossless
     intervals : array_like or None, optional
         How long each frame stays up (in ms), one value per frame. If None,
-        every frame is shown for ``interval`` ms. Frames of unequal duration
-        are what lets an animation follow an irregular time axis.
+        every frame is shown for ``interval`` ms. Unequal durations follow an
+        irregular time axis.
 
         .. versionadded:: 0.10.0
 
     Notes
     -----
-    *  Frames are quantized to 256 levels and embedded at most at the size at
-       which they are displayed, exactly like Matplotlib would rasterize them.
+    *  Frames are quantized to 256 levels and embedded at most at their
+       display size, as Matplotlib rasterizes them.
     *  The per-frame title is drawn by the browser, so it uses DejaVu Sans if
        available and falls back to the default sans-serif font otherwise.
 
@@ -801,14 +773,13 @@ class HTMLAnimation(FuncAnimation):
                 raise ValueError(f"'intervals' must have one value per "
                                  f"frame ({n_frames}), not "
                                  f"{intervals.size}.")
-            # Matplotlib has a single frame delay, which is all the inherited
-            # machinery (``save``, ``to_html5_video``) can express. The mean
-            # keeps a movie the same length as the animation it came from:
+            # ``save`` and ``to_html5_video`` use a single frame delay. The
+            # mean keeps the movie duration:
             kwargs.setdefault('interval', float(intervals.mean()))
         self._intervals = intervals
         super().__init__(fig, func, frames, *args, **kwargs)
-        # Avoid Matplotlib's "deleted without rendering warning", which
-        # turns into an unraisable exception wherever warnings are errors:
+        # Suppress Matplotlib's "deleted without rendering" warning, which is
+        # an unraisable exception when warnings are errors:
         self._draw_was_started = True
 
     @property
@@ -828,8 +799,8 @@ class HTMLAnimation(FuncAnimation):
     def _display_intervals(self, fps, n_frames):
         """How long each frame stays up (in ms), one value per frame"""
         if fps is not None:
-            # An explicit frame rate overrides the animation's own timing,
-            # which is what Matplotlib's ``to_jshtml(fps=...)`` means:
+            # Explicit fps overrides the animation's timing, as in
+            # Matplotlib's ``to_jshtml(fps=...)``:
             return np.full(n_frames, 1000.0 / fps)
         if self._intervals is not None:
             return self._intervals
@@ -838,18 +809,16 @@ class HTMLAnimation(FuncAnimation):
     def _layer_config(self, layer, bbox, rect, height, overlaid):
         """Where one animated image sits, and how its frames are packed
 
-        ``bbox`` is the whole image in display pixels and ``rect`` the canvas
-        rect its axes leave visible. ``overlaid`` says whether it is drawn
-        over an earlier layer, in which case RGBA frames stay PNG: JPEG would
-        flatten them to opaque.
+        ``bbox`` is the whole image in display pixels and ``rect`` the visible
+        canvas rect. If ``overlaid`` (drawn over an earlier layer), RGBA frames
+        stay PNG, since JPEG would make them opaque.
         """
         # The sheet is sized and smoothed for the whole, unclipped image:
         full = _layer_rect(bbox, height)
         im = layer.image
         data, index = layer.data, layer.index
         if index is not None:
-            # Frames no display frame lands on stay out of the sheet. The
-            # compacted copy is dropped once the sheet is encoded:
+            # Omit frames that are never shown:
             data, index = _compact_frames(data, index)
         rgba = np.ndim(data) == 4 and np.shape(data)[-2] == 4
         fmt = 'png' if rgba and overlaid else self._fmt
@@ -866,8 +835,8 @@ class HTMLAnimation(FuncAnimation):
             'rect': rect,
             'crop': _source_crop(bbox, rect, height, sheet['fw'],
                                  sheet['fh']),
-            # Mirror Matplotlib's 'antialiased' interpolation, which switches
-            # to nearest-neighbor once the image is strongly magnified:
+            # Match Matplotlib's 'antialiased' interpolation, which switches
+            # to nearest-neighbor at strong magnification:
             'smooth': (full[2] <= MAX_SMOOTH_UPSAMPLE * sheet['fw'] and
                        full[3] <= MAX_SMOOTH_UPSAMPLE * sheet['fh']),
             'map': None if index is None else [int(i) for i in index],
@@ -879,8 +848,8 @@ class HTMLAnimation(FuncAnimation):
         images = [layer.image for layer in self._layers]
         for layer in self._layers:
             if layer.image.norm.vmin is None or layer.image.norm.vmax is None:
-                # The image is hidden while the background is rendered, so it
-                # will never get a chance to autoscale itself:
+                # The image is hidden while rendering the background, so
+                # autoscale it here:
                 layer.image.norm.autoscale_None(np.asarray(layer.data))
         title_artist = self._title
         if title_artist is None:
@@ -888,19 +857,18 @@ class HTMLAnimation(FuncAnimation):
         old_title = title_artist.get_text()
         try:
             if self._labels is not None:
-                # The player draws the title itself, on a canvas that sits on
-                # top of the static background:
+                # The player draws the title on the canvas above the
+                # background:
                 title_artist.set_text('')
             bg, width, height = _background(fig, images)
-            # ``get_window_extent`` is only meaningful once the figure has been
-            # drawn, which ``_background`` just did:
+            # ``get_window_extent`` requires a drawn figure (``_background``):
             boxes = [im.get_window_extent() for im in images]
             title = None
             if self._labels is not None:
                 title = _title_geometry(title_artist, width, height, fig.dpi)
         finally:
             title_artist.set_text(old_title)
-        # Matplotlib clips an image to its axes, and so does the player:
+        # Clip each image to its axes, as Matplotlib does:
         rects = [_visible_rect(im, bbox, height)
                  for im, bbox in zip(images, boxes)]
         overlaid = [any(_overlap(rect, below) for below in rects[:k])
@@ -910,8 +878,7 @@ class HTMLAnimation(FuncAnimation):
             'layers': [self._layer_config(layer, bbox, rect, height, over)
                        for layer, bbox, rect, over
                        in zip(self._layers, boxes, rects, overlaid)],
-            # The player advances frame by frame, so it needs every delay;
-            # the scalar is kept for whoever reads the config:
+            # 'intervals' drives playback; 'interval' is the mean:
             'interval': float(np.mean(intervals)),
             'intervals': [float(i) for i in intervals],
             'mode': default_mode,
@@ -936,20 +903,19 @@ class HTMLAnimation(FuncAnimation):
         embed_frames : bool
             Unused; frames are always embedded.
         default_mode : {'loop', 'once', 'reflect'} or None
-            What the animation should do once it has played through. If None,
-            uses 'loop' or 'once', depending on ``repeat``.
+            Playback mode at the end of the animation. If None, uses 'loop' or
+            'once', depending on ``repeat``.
         """
-        # Before the fallback below: Matplotlib takes a plain number of hertz,
-        # so a quantity has to be converted whichever player renders it.
+        # Matplotlib requires plain Hz, so convert before the fallback:
         fps = as_value(fps, Hz, 'fps')
         if self._layers is None:
-            # Nothing to accelerate, fall back on Matplotlib:
+            # No frame data, so fall back on Matplotlib:
             return super().to_jshtml(fps=fps, embed_frames=embed_frames,
                                      default_mode=default_mode)
         if default_mode is None:
             default_mode = 'loop' if self._repeat else 'once'
         intervals = self._display_intervals(fps, self._n_frames)
-        # Rendering the sprite sheet is the expensive part, so only do it once:
+        # Cache the HTML, since rendering the sprite sheet is slow:
         key = (tuple(intervals), default_mode)
         if self._html is None or self._html[0] != key:
             self._html = (key, self._build_html(intervals, default_mode))

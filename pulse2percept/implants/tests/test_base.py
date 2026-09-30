@@ -145,22 +145,22 @@ def test_Implant_prepare_stim():
 
 
 def test_Implant_prepare_stim_is_stateless():
-    """Preparing leaves neither the implant nor the caller's source changed"""
+    """prepare_stim changes neither the implant nor the source"""
     implant = ArgusII(preprocess=False)
     source = Stimulus({'A1': 10, 'B2': 20})
     first = implant.prepare_stim(source)
-    # The result is a copy, so the caller can keep using their own object:
+    # The result is a copy of the source:
     npt.assert_equal(first is source, False)
     npt.assert_almost_equal(first.data, source.data)
 
-    # Two calls with different input do not leak into one another:
+    # Consecutive calls are independent:
     second = implant.prepare_stim({'C3': 30})
     npt.assert_equal(sorted(str(e) for e in first.electrodes), ['A1', 'B2'])
     npt.assert_equal([str(e) for e in second.electrodes], ['C3'])
     npt.assert_equal(hasattr(implant, 'stim'), False)
     npt.assert_equal(hasattr(implant, '_stim'), False)
 
-    # And the same source prepares to the same thing every time:
+    # Same source, same result:
     again = implant.prepare_stim(source)
     npt.assert_almost_equal(again.data, first.data)
 
@@ -170,9 +170,8 @@ def test_Implant_prepare_stim_is_stateless():
 @pytest.mark.parametrize('n_frames', (1, 3, 4))
 def test_Implant_reshape_stim(rot, gtype, n_frames):
     implant = Implant(ElectrodeGrid((10, 10), 30, rot=rot, grid_type=gtype))
-    # Smoke test the reshaping. It runs inside `prepare_stim`, but
-    # a picture is not a stimulus an implant can deliver, so it is exercised
-    # directly here (which is also how an encoder reaches it):
+    # Smoke test the reshaping directly (encoders call it too, since a picture
+    # is not a deliverable stimulus):
     n_px = 21
     reshaped = implant.reshape_stim(
         ImageStimulus(np.ones((n_px, n_px, n_frames)).squeeze()))
@@ -186,10 +185,8 @@ def test_Implant_reshape_stim(rot, gtype, n_frames):
     npt.assert_equal(reshaped.time, 2 * np.arange(3 * n_frames))
 
     # Verify that a horizontal stimulus will always appear horizontally, even if
-    # the device is rotated. What is under test is where `reshape_stim` puts
-    # the pixels, so the sampled gray levels are handed to the model as an
-    # ordinary electrical stimulus rather than encoded -- a model reads
-    # current, and the one-uA-per-gray-level reading has to be written down:
+    # the device is rotated. Sampled gray levels are passed to the model as a
+    # plain Stimulus (1 uA per gray level) to test `reshape_stim` only:
     data = np.zeros((50, 50))
     data[20:-20, 10:-10] = 1
     sampled = implant.reshape_stim(ImageStimulus(data))
@@ -212,17 +209,17 @@ def test_Implant_deactivate():
     npt.assert_equal(electrode in implant.prepare_stim(source).electrodes, True)
     implant.deactivate(electrode)
     npt.assert_equal(implant[electrode].activated, False)
-    # Deactivating affects the next preparation, not one already handed out:
+    # Deactivation applies to the next prepare_stim call:
     npt.assert_equal(electrode in implant.prepare_stim(source).electrodes,
                      False)
 
 def test_ProsthesisSystem_is_a_deprecated_alias():
-    """Renamed to Implant in 0.11.0; the old name is the same class"""
+    """ProsthesisSystem is a deprecated alias of Implant (renamed in 0.11.0)"""
     for module in (implants, implants.base):
         with pytest.deprecated_call(match='Use ``Implant``'):
             alias = module.ProsthesisSystem
         npt.assert_equal(alias is implants.Implant, True)
-    # An alias, not a subclass, so existing type checks still hold:
+    # Alias, not a subclass, so isinstance/issubclass still work:
     npt.assert_equal(isinstance(ArgusII(), alias), True)
     npt.assert_equal(issubclass(GridImplant, alias), True)
     npt.assert_equal(alias(PointSource(0, 0, 0)).n_electrodes, 1)
@@ -256,14 +253,13 @@ def test_GridImplant_hex():
     implant = GridImplant((3, 4), 100, grid_type='hex')
     npt.assert_equal(implant.electrode_array.grid_type, 'hex')
     npt.assert_equal(implant.n_electrodes, 12)
-    # `grid_type` really produces a triangular lattice, not just some other set
-    # coordinates: every nearest neighbor is exactly one spacing away, which
-    # on a rect grid is only true of the orthogonal ones.
+    # Hex grid is a triangular lattice: every nearest neighbor is exactly one
+    # spacing away (on a rect grid, only the orthogonal ones are):
     xy = implant.electrode_array.coordinates()[:, :2]
     dist = np.linalg.norm(xy[:, None, :] - xy[None, :, :], axis=-1)
     np.fill_diagonal(dist, np.inf)
     npt.assert_almost_equal(dist.min(axis=1), 100)
-    # The array is still centered on (x, y), odd row count and all:
+    # Still centered on (x, y), even with an odd row count:
     npt.assert_almost_equal((xy[:, 0].min() + xy[:, 0].max()) / 2, 0)
     npt.assert_almost_equal((xy[:, 1].min() + xy[:, 1].max()) / 2, 0)
 
@@ -304,11 +300,7 @@ def test_GridImplant_geometry_passthrough():
 
 
 def test_GridImplant_device_arguments_reach_Implant():
-    """Everything that is not geometry is handed to Implant as given
-
-    What those arguments then do is Implant's business and is tested
-    there; all a GridImplant owes them is not to drop or reinterpret one.
-    """
+    """GridImplant passes all non-geometry arguments to Implant unchanged"""
     encoder = AmplitudeEncoder(amp_range=(0, 20))
     raster = implants.SequentialRaster(2)
     implant = GridImplant((2, 3), 100,
@@ -325,11 +317,10 @@ def test_GridImplant_device_arguments_reach_Implant():
 
 
 def test_Implant_reshape_stim_frames_independent():
-    """Downsampling a video must treat each frame on its own.
+    """reshape_stim samples each video frame independently
 
-    ``reshape_stim`` builds one interpolator for the whole video rather than
-    one per frame, so this checks that a frame lands on the electrodes the
-    same way whether it arrives alone or inside a sequence.
+    ``reshape_stim`` uses one interpolator for the whole video, so a frame must
+    map to the electrodes the same way alone or inside a sequence.
     """
     rng = np.random.default_rng(3)
     n_frames = 5
@@ -345,8 +336,7 @@ def test_Implant_reshape_stim_frames_independent():
         npt.assert_allclose(single.data[:, 0], joint[:, f], rtol=1e-5,
                             atol=1e-7)
 
-    # Pixels outside the electrode footprint are filled with zero, not
-    # extrapolated, so an all-zero frame stays all zero:
+    # Pixels outside the electrode footprint are zero-filled, not extrapolated:
     vid[..., 2] = 0
     sampled = implant.reshape_stim(VideoStimulus(vid,
                                                  time=np.arange(n_frames)))
@@ -366,12 +356,11 @@ def test_Implant_rgb_video_stim():
 
 
 def test_implant_geometry_units():
-    """Every implant places itself the same way, however its x/y/z is spelled
+    """Unitful and plain x/y/z give the same coordinates for every implant
 
-    Some device constructors inspect or adjust the geometry themselves before
-    handing it to an ElectrodeGrid (Orion checks `z`, PRIMA writes a
-    per-electrode `z` list onto the electrodes afterwards), so it is not enough
-    to normalize inside the grid.
+    Some constructors adjust geometry before building the ElectrodeGrid
+    (Orion checks `z`, PRIMA writes per-electrode `z` afterwards), so
+    normalizing inside the grid is not enough.
     """
     cases = [
         (retina.ArgusI, {'z': 100 * um}, {'z': 100}),
@@ -394,16 +383,16 @@ def test_implant_geometry_units():
         coords = cls(**unitful).electrode_array.coordinates()
         npt.assert_allclose(coords, cls(**bare).electrode_array.coordinates(),
                             rtol=1e-12, err_msg=cls.__name__)
-        # Plain numbers all the way down, whatever went in:
+        # Coordinates are plain floats:
         npt.assert_equal(coords.dtype, np.float64)
-    # A conversion that does not land on a round number is no different:
+    # Non-round conversions work too:
     npt.assert_allclose(
         retina.ArgusII(z=0.0417 * mm).electrode_array.coordinates(),
         retina.ArgusII(z=41.7).electrode_array.coordinates(), rtol=1e-12)
 
 
 def test_implant_rot_units():
-    """`rot` is an ordinary angle; the grid does the conversion"""
+    """`rot` accepts angle units"""
     bare = GridImplant((6, 10), 575.0, rot=45).electrode_array.coordinates()
     for rot in (45 * deg, np.pi / 4 * rad):
         npt.assert_allclose(
@@ -412,7 +401,7 @@ def test_implant_rot_units():
 
 
 def test_implant_per_electrode_z_units():
-    """A per-electrode list of heights never reaches ElectrodeGrid"""
+    """A per-electrode list of unitful `z` matches the same list in um"""
     for cls, n in [(retina.PRIMAPivotal, 378),
                    (retina.Lorach2015Array, 142),
                    (retina.AlphaIMS, 1500)]:
@@ -438,19 +427,19 @@ def test_implant_dimension_errors():
 
 
 def test_Implant_max_current_units():
-    """`max_current` is a current, stored as a plain number of microamps"""
+    """`max_current` accepts current units and is stored in uA"""
     electrode_array = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     for value in (100, 100 * uA, 0.1 * mA, 100000 * nA):
         implant = Implant(electrode_array, max_current=value)
         npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
         npt.assert_equal(isinstance(implant.max_current, Quantity), False)
-    # An awkward conversion is no different:
+    # Non-round conversions work too:
     npt.assert_allclose(
         Implant(electrode_array, max_current=0.0417 * mA).max_current, 41.7,
         rtol=1e-12)
-    # None means no limit, and is left alone:
+    # None means no limit:
     npt.assert_equal(Implant(electrode_array).max_current, None)
-    # Assigning later goes through the same setter:
+    # The setter converts too:
     implant = Implant(electrode_array)
     implant.max_current = 0.1 * mA
     npt.assert_allclose(implant.max_current, 100, rtol=1e-12)
@@ -463,48 +452,41 @@ def test_Implant_max_current_units():
 
 
 def test_Implant_safety_checks_are_electrical():
-    """Electrical safety may only be asked about an electrical stimulus
+    """check_stim rejects safety checks on a non-electrical stimulus
 
-    In the ordinary flow ``prepare_stim`` has already refused anything that is
-    not a current (see ``test_Implant_requires_an_electrical_stimulus``),
-    so these guards are reached by calling ``check_stim`` directly -- which is
-    public, and which a subclass may call on a stimulus of its own making.
+    ``prepare_stim`` already rejects non-current input, so this calls the
+    public ``check_stim`` directly (as a subclass might).
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     sampled = ArgusII().reshape_stim(img)
 
-    # `safe_mode` is a claim about electricity, and cannot be made about a
-    # picture -- it must not integrate gray levels and pronounce them safe:
+    # `safe_mode` cannot integrate gray levels:
     implant = ArgusII(preprocess=False, safe_mode=True)
     with pytest.raises(DimensionMismatchError) as excinfo:
         implant.check_stim(sampled)
     npt.assert_equal("Safety check 'safe_mode'" in str(excinfo.value), True)
     npt.assert_equal('dimensionless' in str(excinfo.value), True)
 
-    # ... and so is `max_current`:
+    # Same for `max_current`:
     implant = ArgusII(preprocess=False, safe_mode=False)
     implant.max_current = 100 * uA
     with pytest.raises(DimensionMismatchError) as excinfo:
         implant.check_stim(sampled)
     npt.assert_equal("Safety check 'max_current'" in str(excinfo.value), True)
-    # Including an empty one: the guard sits before the empty-data fast path,
-    # since an empty picture is just as much the wrong kind of thing.
+    # Also for empty data (unit check comes before the empty-data shortcut):
     empty = Stimulus(np.zeros((60, 0)),
                      electrodes=ArgusII().electrode_names)._inherit_units(img)
     with pytest.raises(DimensionMismatchError):
         implant.check_stim(empty)
-    # An empty *electrical* stimulus is fine, as before:
+    # An empty electrical stimulus passes:
     implant.check_stim(Stimulus(np.zeros((60, 0)),
                                 electrodes=ArgusII().electrode_names))
 
 
 def test_Implant_requires_an_electrical_stimulus():
-    """An implant delivers current, so a picture it cannot encode is refused
+    """prepare_stim rejects a picture when the implant has no encoder
 
-    Not when a model eventually reads it: the preparation is the line that was
-    wrong, and without an encoder there is no principled default mapping from a
-    gray level onto an amplitude or a frequency for the implant to apply on the
-    user's behalf.
+    There is no default mapping from gray level to amplitude or frequency.
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     npt.assert_equal(Implant.stimulus_unit, uA)
@@ -516,16 +498,16 @@ def test_Implant_requires_an_electrical_stimulus():
             implant.prepare_stim(source)
         npt.assert_equal('encoder' in str(excinfo.value), True)
         npt.assert_equal('dimensionless' in str(excinfo.value), True)
-        # A generic system has no encoder either:
+        # Same for a generic Implant:
         with pytest.raises(DimensionMismatchError):
             Implant(ArgusII().electrode_array).prepare_stim(source)
 
-    # Encoded, the very same picture goes through:
+    # An encoded picture passes:
     implant = ArgusII(encoder=None)
     encoded = AmplitudeEncoder(implant, amp_range=(0, 50)).encode(img)
     npt.assert_equal(implant.prepare_stim(encoded).unit, uA)
 
-    # ... and so does everything that was electrical all along:
+    # So do electrical stimuli:
     for source in ({'A1': 20}, np.ones(60),
                    {'A1': BiphasicPulse(0.02 * mA, 0.45, stim_dur=50)}):
         npt.assert_equal(ArgusII().prepare_stim(source).unit, uA)
@@ -533,8 +515,7 @@ def test_Implant_requires_an_electrical_stimulus():
         single = Implant(DiskElectrode(0, 0, 0, 100))
         npt.assert_equal(single.prepare_stim(source).unit, uA)
 
-    # A subclass may declare that it delivers something else, in which case a
-    # picture is already what it delivers and the encoder stays out of it:
+    # A subclass that delivers dimensionless stimuli takes the picture as is:
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 
@@ -542,9 +523,7 @@ def test_Implant_requires_an_electrical_stimulus():
 
 
 def test_Implant_encoder():
-    """A picture prepared by an implant with an encoder is encoded on the way
-    through
-    """
+    """prepare_stim encodes a picture with the implant's encoder"""
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     implant = Implant(ArgusII().electrode_array)
     npt.assert_equal(implant.encoder, None)
@@ -553,7 +532,7 @@ def test_Implant_encoder():
     with pytest.raises(TypeError):
         Implant(ArgusII().electrode_array, encoder=ArgusII())
 
-    # Giving it one is all it takes:
+    # Assigning an encoder:
     unbound = AmplitudeEncoder(amp_range=(0, 50), freq=20)
     implant.encoder = unbound
     npt.assert_equal('encoder' in str(implant), True)
@@ -561,20 +540,20 @@ def test_Implant_encoder():
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.shape[0], implant.n_electrodes)
     npt.assert_almost_equal(np.abs(stim.data).max(), 50)
-    # What comes back is exactly what encoding it by hand gives:
+    # Result matches encoding by hand:
     by_hand = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20).encode(img)
     npt.assert_almost_equal(stim.data, by_hand.data)
     npt.assert_almost_equal(stim.time, by_hand.time)
     npt.assert_equal(list(stim.electrodes), list(by_hand.electrodes))
 
-    # The implant stores the encoder it was given, bound to itself:
+    # The stored encoder is bound to the implant:
     npt.assert_equal(implant.encoder is unbound, True)
     npt.assert_equal(unbound.implant is implant, True)
     # An encoder already bound to this implant is stored as is:
     bound = AmplitudeEncoder(implant)
     implant.encoder = bound
     npt.assert_equal(implant.encoder is bound, True)
-    # One bound to another implant cannot migrate:
+    # An encoder bound to another implant is rejected:
     other = Implant(ArgusII().electrode_array)
     with pytest.raises(ValueError, match='already bound'):
         other.encoder = bound
@@ -582,16 +561,16 @@ def test_Implant_encoder():
         Implant(ArgusII().electrode_array, encoder=unbound)
     npt.assert_equal(other.encoder, None)
     npt.assert_equal(bound.implant is implant, True)
-    # TraceEncoder is different because it needs a model:
+    # TraceEncoder requires a model, so it is rejected:
     trace = TraceEncoder(ScoreboardSpatial(implant))
     with pytest.raises(TypeError, match='ImplantEncoder'):
         implant.encoder = trace
     npt.assert_equal(implant.encoder is bound, True)
-    # A deep copy of the implant carries an encoder bound to the copy:
+    # A deep copy binds the copied encoder to the copied implant:
     clone = deepcopy(implant)
     npt.assert_equal(clone.encoder.implant is clone, True)
 
-    # A custom encoder is honored, and its parameters reach the stimulus:
+    # Encoder parameters reach the stimulus:
     implant.encoder = AmplitudeEncoder(amp_range=(10, 30), freq=50,
                                        frame_dur=100)
     stim = implant.prepare_stim(img)
@@ -601,8 +580,7 @@ def test_Implant_encoder():
                                        frame_dur=100)
     npt.assert_almost_equal(np.abs(implant.prepare_stim(img).data).max(), 42)
 
-    # An electrical stimulus bypasses the encoder entirely, whatever is
-    # installed -- there is nothing left to encode:
+    # Electrical stimuli bypass the encoder:
     implant.encoder = AmplitudeEncoder(amp_range=(0, 50))
     for source in ({'A1': 20}, np.ones(60),
                    BiphasicPulse(20, 0.45, stim_dur=50)):
@@ -610,10 +588,9 @@ def test_Implant_encoder():
         npt.assert_equal(stim.unit, uA)
         npt.assert_equal('encoder' in stim.metadata, False)
 
-    # The encoder sees the implant it is installed on, so it samples at that
-    # implant's electrodes and schedules against that implant's raster. An
-    # amplitude range that starts above zero keeps every electrode active, so
-    # the schedules are the raster groups and nothing else:
+    # The encoder samples at this implant's electrodes and uses its raster.
+    # amp_range > 0 keeps every electrode active, so schedules are the raster
+    # groups:
     implant.encoder = AmplitudeEncoder(amp_range=(10, 50))
     implant.raster = implants.SequentialRaster(6)
     stim = implant.prepare_stim(img)
@@ -624,17 +601,15 @@ def test_Implant_encoder():
 
 
 def test_Implant_encoded_stim_is_one_object():
-    """An encoded stimulus knows both what it delivers and what it was asked
-    for, so preparation returns one of it
-    """
+    """An encoded stimulus stores the pulse train and the requested values"""
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     implant = ArgusII()
     stim = implant.prepare_stim(img)
-    # What comes back is the delivered pulse train -- that invariant is what
-    # makes the safety checks and the temporal models meaningful:
+    # The result is the delivered pulse train (used by safety checks and
+    # temporal models):
     npt.assert_equal(stim.time.size > 1, True)
-    # ... and the same object says what the encoder asked each electrode for:
-    # one column, no waveform, no raster.
+    # The spatial view stores the requested amplitude per electrode: one
+    # column, no waveform, no raster.
     spatial = stim._spatial_view()
     npt.assert_equal(spatial.shape, (60, 1))
     npt.assert_equal(spatial.time, None)
@@ -646,28 +621,23 @@ def test_Implant_encoded_stim_is_one_object():
     vid = VideoStimulus(np.random.default_rng(0).random((6, 10, 4)),
                         metadata={'fps': 20})
     with pytest.warns(UserWarning, match='deliver no pulse'):
-        # 6 Hz against 20 fps; irrelevant here, but it is not the modulation
-        # that goes short of frames, only the train delivering it:
+        # 6 Hz pulses at 20 fps leave some frames without a pulse:
         stim = implant.prepare_stim(vid)
     npt.assert_equal(stim._spatial_view().shape, (60, 4))
     npt.assert_almost_equal(stim._spatial_view().time, np.arange(4) * 50.0)
 
-    # An encoded stimulus carries that description wherever it came from, so
-    # encoding by hand and preparing the result is the same thing as letting
-    # the implant do it:
+    # Encoding by hand, then preparing, gives the same spatial view:
     by_hand = ArgusII(encoder=None).prepare_stim(
         AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(img))
     npt.assert_almost_equal(by_hand._spatial_view().data,
                             ArgusII().prepare_stim(img)._spatial_view().data)
-    # A stimulus given as current has only the one description of itself:
+    # A current stimulus is its own spatial view:
     for source in ({'A1': 20}, np.ones(60)):
         stim = implant.prepare_stim(source)
         npt.assert_equal(stim._spatial_view() is stim, True)
         npt.assert_equal(stim._has_spatial_view, False)
 
-    # Switching an electrode off reaches both descriptions, or a model reading
-    # one of them would go on stimulating through a dead electrode -- and it
-    # does not cost the schedule:
+    # Deactivation applies to both the pulse train and the spatial view:
     implant = ArgusII()
     implant.deactivate(['A1', 'B2'])
     stim = implant.prepare_stim(img)
@@ -678,8 +648,7 @@ def test_Implant_encoded_stim_is_one_object():
 
 
 def test_Implant_preprocess_crosses_the_boundary():
-    """Preprocessing may turn a picture into current before the encoder sees it
-    """
+    """Preprocessing may convert a picture into current before encoding"""
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     bare = ArgusII(encoder=None, raster=None)
     encoder = AmplitudeEncoder(bare, amp_range=(0, 20), freq=20)
@@ -689,13 +658,11 @@ def test_Implant_preprocess_crosses_the_boundary():
     stim = implant.prepare_stim(img)
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.is_charge_balanced, True)
-    # Preprocessing that already crossed the boundary leaves the encoder with
-    # nothing to do, so an installed one does not encode twice:
+    # Already-encoded output from preprocessing is not encoded again:
     encoded = encoder.encode(img)
     twice = ArgusII(raster=None, preprocess=encoder.encode)
     npt.assert_almost_equal(twice.prepare_stim(img).data, encoded.data)
-    # The same chain, presented already-encoded, and this time with a limit
-    # tight enough to matter:
+    # Same encoded stimulus, with a max_current low enough to fail:
     implant = ArgusII(preprocess=False, safe_mode=True)
     implant.max_current = 100 * uA
     with pytest.raises(ValueError) as excinfo:
@@ -706,14 +673,14 @@ def test_Implant_preprocess_crosses_the_boundary():
 
 
 def test_Implant_historical_stimuli_unchanged():
-    """A bare stimulus is electrical by contract, and is checked as before"""
+    """A plain stimulus is treated as current and checked for safety"""
     implant = ArgusII(preprocess=False, safe_mode=True)
     npt.assert_equal(implant.prepare_stim({'A1': BiphasicPulse(50, 0.45)}).unit,
                      uA)
     with pytest.raises(ValueError) as excinfo:
         implant.prepare_stim({'A1': MonophasicPulse(50, 0.45)})
     npt.assert_equal('charge-balanced' in str(excinfo.value), True)
-    # A plain number is microamps, and the limit is read the same way:
+    # A plain number is in uA, and so is max_current:
     implant = ArgusII(preprocess=False)
     implant.max_current = 60
     source = {name: 2 for name in ArgusII().electrode_names}
@@ -725,26 +692,23 @@ def test_Implant_historical_stimuli_unchanged():
 
 
 def test_Implant_deactivated_electrodes_do_not_mutate_the_source():
-    # Filtering out deactivated electrodes rewrites the stimulus, so it
-    # happens on a copy. A stimulus defined by its pulse parameters cannot
-    # lose an electrode and remain one, so what comes back for it is an
-    # ordinary Stimulus -- presenting a perfectly good pulse must not fail
-    # merely because the electrode it names happens to be switched off.
+    # Removing deactivated electrodes works on a copy. A pulse stimulus that
+    # loses its electrode becomes a plain Stimulus (and does not fail):
     pulse = BiphasicPulse(20, 0.45, electrode='A1')
     implant = ArgusII()
     implant.deactivate('A1')
     stim = implant.prepare_stim(pulse)
     npt.assert_equal(type(stim), Stimulus)
     npt.assert_equal(stim.shape[0], 0)
-    # The caller still holds their pulse, unchanged:
+    # The caller's pulse is unchanged:
     npt.assert_equal(type(pulse), BiphasicPulse)
     npt.assert_equal(pulse.shape[0], 1)
     npt.assert_almost_equal(pulse.amp, 20)
 
-    # With every electrode on, the pulse keeps its own kind:
+    # With all electrodes active, the pulse keeps its type:
     npt.assert_equal(type(ArgusII().prepare_stim(pulse)), BiphasicPulse)
 
-    # An ordinary stimulus is not mutated by either path, which it used to be:
+    # A plain Stimulus source is not mutated either way:
     for deactivate_first in (True, False):
         source = Stimulus({'A1': 10, 'B2': 20})
         implant = ArgusII()
@@ -759,16 +723,15 @@ def test_Implant_deactivated_electrodes_do_not_mutate_the_source():
                          ['A1', 'B2'])
         npt.assert_equal([str(e) for e in stim.electrodes], ['B2'])
 
-    # Nothing deactivated means nothing is copied or removed:
+    # Nothing deactivated, nothing removed:
     source = Stimulus({'A1': 10, 'B2': 20})
     stim = ArgusII().prepare_stim(source)
     npt.assert_equal(sorted(str(e) for e in stim.electrodes), ['A1', 'B2'])
 
 
 def test_Implant_deactivated_electrode_does_not_render_the_others():
-    # An implant drops a deactivated electrode from a dict of pulse trains by
-    # forgetting the entry that drives it, so the trains on the electrodes
-    # that are still on never get sampled.
+    # Deactivating an electrode drops its pulse train entry, so the remaining
+    # trains stay unrendered:
     def unrendered(stim):
         return sum(c._Stimulus__stim['data'] is None
                    for c, _ in stim._components)
@@ -782,7 +745,7 @@ def test_Implant_deactivated_electrode_does_not_render_the_others():
     npt.assert_equal([str(e) for e in stim.electrodes], ['A1', 'A3'])
     npt.assert_equal(stim._components is None, False)
     npt.assert_equal(unrendered(stim), 2)
-    # The waveform is still the one the trains describe:
+    # The waveform still matches the trains:
     npt.assert_equal(stim.data.shape[0], 2)
     npt.assert_almost_equal(stim.time[-1], 200)
 
@@ -796,7 +759,7 @@ def test_Implant_thresholds():
     implant.thresholds = {'A1': 83 * uA, 'A2': 107 * uA}
     npt.assert_equal(sorted(implant.thresholds), ['A1', 'A2'])
     npt.assert_almost_equal(implant.thresholds['A2'], 107)
-    # The getter hands out a copy, not the dict the implant works from:
+    # The getter returns a copy:
     implant.thresholds['A1'] = 999
     npt.assert_almost_equal(implant.thresholds['A1'], 83)
     implant.thresholds = None
@@ -852,7 +815,7 @@ def test_Implant_thresholds_are_validated():
             implant.thresholds = bad
     # A rejected assignment leaves the implant as it was:
     npt.assert_equal(implant.thresholds, {})
-    # None is normalized away rather than stored:
+    # None entries are dropped:
     implant.thresholds = {'A1': 80 * uA, 'A2': None}
     npt.assert_equal(sorted(implant.thresholds), ['A1'])
 
@@ -861,7 +824,7 @@ def test_Implant_thresholds_calibrate_pulse_trains():
     implant = ArgusII()
     source = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
               'A2': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
-    # Uncalibrated, the stimulus is not a current at all:
+    # Without thresholds, the unit is xTh, not a current:
     npt.assert_equal(implant.prepare_stim(source).unit, xTh)
     implant.thresholds = {'A1': 80 * uA, 'A2': 120 * uA}
     stim = implant.prepare_stim(source)
@@ -904,7 +867,7 @@ def test_Implant_thresholds_beat_the_pulse_trains_own():
     implant.thresholds = 100 * uA
     stim = implant.prepare_stim(train)
     npt.assert_almost_equal(stim._structured_sources()[0][1].amp, 200)
-    # Clearing falls back to the train's own threshold, not the reference:
+    # Clearing falls back to the train's own threshold_amp:
     implant.thresholds = None
     source = implant.prepare_stim(train)._structured_sources()[0][1]
     npt.assert_almost_equal(source.amp, 100)
@@ -921,22 +884,18 @@ def test_Implant_thresholds_leave_raw_waveforms_alone():
 
 
 def test_Implant_thresholds_are_checked_when_the_stimulus_is():
-    """A threshold that puts a stimulus over the limit is caught on preparation
-
-    The implant holds no stimulus to recheck, so the pairing of thresholds and
-    delivery limits is decided the next time one is prepared.
-    """
+    """Thresholds are checked against max_current at the next prepare_stim"""
     implant = ArgusII()
     train = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
     implant.max_current = 250
     implant.thresholds = {'A1': 90 * uA}
     stim = implant.prepare_stim(train)
     npt.assert_almost_equal(stim._structured_sources()[0][1].amp, 180)
-    # 2 * 200 uA is over the limit, so preparing against it raises:
+    # 2 * 200 uA exceeds max_current:
     implant.thresholds = {'A1': 200 * uA}
     with pytest.raises(ValueError):
         implant.prepare_stim(train)
-    # The stimulus already handed out is the caller's, and is untouched:
+    # The previously returned stimulus is unchanged:
     npt.assert_almost_equal(stim._structured_sources()[0][1].amp, 180)
 
 
@@ -945,7 +904,7 @@ def test_Implant_thresholds_do_not_render_the_stimulus():
     implant.thresholds = 80 * uA
     stim = implant.prepare_stim({'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)})
     source = stim._structured_sources()[0][1]
-    # `data is None` is what says no waveform has been generated:
+    # `data is None` means no waveform has been generated:
     npt.assert_equal(source._Stimulus__stim['data'], None)
 
 
@@ -977,10 +936,9 @@ def test_Implant_thresholds_preserve_metadata():
 
 
 def test_Implant_thresholds_calibrate_from_the_original_source():
-    """Each preparation starts from the caller's source, not the last result
+    """Each prepare_stim calibrates from the source, not the previous result
 
-    Calibrating twice would compound the factors; calibrating from the source
-    every time preserves the original 2xTh basis.
+    Otherwise the 2 xTh factor would compound.
     """
     implant = ArgusII()
     train = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
@@ -1019,7 +977,7 @@ def test_Implant_partial_calibration_of_xTh_is_refused():
     with pytest.raises(DimensionMismatchError) as err:
         implant.prepare_stim(xth_source)
     npt.assert_equal('A2' in str(err.value), True)
-    # A current-valued train is already a current, threshold or no threshold:
+    # A current-valued train stays in uA, with or without thresholds:
     uA_source = {'A1': BiphasicPulseTrain(20, 160 * uA, 0.45),
                  'A2': BiphasicPulseTrain(20, 160 * uA, 0.45)}
     stim = implant.prepare_stim(uA_source)
@@ -1043,14 +1001,14 @@ def test_named_devices_say_where_they_sit(cls, expected):
 
 
 @pytest.mark.parametrize('cls,expected', [
-    # Driven by a camera the eye cannot move:
+    # Camera is head-mounted, so it does not move with the eye:
     (retina.ArgusI, 'head'),
     (retina.ArgusII, 'head'),
     (retina.Suprachoroidal24, 'head'),
     (retina.Suprachoroidal44, 'head'),
     (retina.IMIE, 'head'),
-    # Photodiode arrays are illuminated through the eye's own optics, and
-    # PRIMA projects its camera image through the eye onto the array:
+    # Photodiode arrays receive light through the eye's optics (PRIMA projects
+    # its camera image through the eye):
     (retina.AlphaIMS, 'eye'),
     (retina.AlphaAMS, 'eye'),
     (retina.PRIMAPivotal, 'eye'),
@@ -1063,8 +1021,7 @@ def test_named_devices_say_how_gaze_reaches_them(cls, expected):
 
 
 def test_a_generic_array_moves_its_input_with_the_eye():
-    # Only a head-fixed camera breaks the natural coupling, and a bare grid of
-    # electrodes is not one:
+    # Only a head-fixed camera decouples input from gaze; a bare grid has none:
     npt.assert_equal(implants.GridImplant._default_scene_input_frame, 'eye')
 
 
@@ -1088,9 +1045,8 @@ def test_one_system_can_override_how_gaze_reaches_it():
 
 
 def test_a_generic_array_says_nothing_about_placement():
-    # `placement` records what the literature is unambiguous about; a bare
-    # grid of electrodes is a shape, not a device, and models read `None` as
-    # "no claim" rather than as a placement of its own.
+    # `placement` is set only for named devices; models read `None` as
+    # unspecified:
     npt.assert_equal(implants.GridImplant(shape=(2, 2), spacing=500).placement, None)
     npt.assert_equal(
         implants.Implant(implants.PointSource(0, 0, 0)).placement,
@@ -1098,7 +1054,7 @@ def test_a_generic_array_says_nothing_about_placement():
 
 
 def test_Implant_electrode_array_is_the_canonical_name():
-    """The array is reached as `electrode_array`; `earray` is gone"""
+    """The array is `electrode_array`; `earray` was removed"""
     array = ElectrodeArray(DiskElectrode(0, 0, 0, 100))
     implant = Implant(electrode_array=array)
     npt.assert_equal(implant.electrode_array is array, True)
@@ -1110,7 +1066,7 @@ def test_Implant_electrode_array_is_the_canonical_name():
 
 
 def test_Implant_is_a_container():
-    """An implant indexes and sizes like the array it wraps"""
+    """Implant supports len() and indexing like its electrode array"""
     implant = ArgusII()
     npt.assert_equal(len(implant), 60)
     npt.assert_equal(len(implant), len(implant.electrode_array))
@@ -1124,7 +1080,7 @@ def test_Implant_is_a_container():
         implant[1.2]
 
 
-#: Every named device, which must describe hardware about its own origin.
+#: Every named device; each describes its geometry about its own origin.
 NAMED_IMPLANTS = [
     retina.ArgusI, retina.ArgusII, retina.AlphaIMS, retina.AlphaAMS,
     retina.Suprachoroidal24, retina.Suprachoroidal44, retina.IMIE,
@@ -1141,7 +1097,7 @@ def _name_of(implant_type):
 
 @pytest.mark.parametrize('implant_type', NAMED_IMPLANTS)
 def test_a_named_implant_has_no_whole_device_placement(implant_type):
-    """Where a device sits is the model's business, not the device's"""
+    """Named implants have no x/y arguments; placement is set on the model"""
     params = signature(implant_type).parameters
     for name in ('x', 'y'):
         npt.assert_equal(name in params, False,
@@ -1152,9 +1108,8 @@ def test_a_named_implant_has_no_whole_device_placement(implant_type):
 def test_a_named_implant_is_built_around_its_own_origin(implant_type):
     """Named implant footprints include the device-local origin."""
     xy = implant_type().electrode_array.coordinates()[:, :2]
-    # The suprachoroidal arrays' return electrodes sit far off to one side,
-    # so the bounding box is not the landmark; what every device shares is
-    # that its own origin lies inside the footprint rather than thousands of microns away from it.
+    # Suprachoroidal return electrodes sit far to one side, so check that the
+    # origin lies inside the footprint instead of checking the bounding box:
     npt.assert_array_less(xy.min(axis=0), 1e-9,
                           err_msg=_name_of(implant_type))
     npt.assert_array_less(-1e-9, xy.max(axis=0),
@@ -1178,7 +1133,7 @@ def test_model_side_placement_reproduces_an_old_absolute_position():
     npt.assert_almost_equal(placed[:, :2],
                             (R @ local[:, :2].T).T + [-1331, -850], decimal=3)
     npt.assert_almost_equal(placed[:, 2], local[:, 2] + 100, decimal=3)
-    # The device is untouched, so the placement is entirely the model's:
+    # The implant geometry is unchanged:
     npt.assert_array_equal(implant.electrode_array.coordinates(), local)
 
 
@@ -1199,7 +1154,7 @@ def test_one_implant_serves_two_models_at_different_depths():
     shallow, deep = z_of(implant_depth=0), z_of(implant_depth=150 * um)
     npt.assert_almost_equal(shallow, local[:, 2], decimal=3)
     npt.assert_almost_equal(deep - shallow, 150, decimal=3)
-    # Non-planarity is device geometry and is not flattened by placement:
+    # Placement does not flatten a non-planar array:
     npt.assert_almost_equal(np.diff(deep), np.diff(local[:, 2]), decimal=3)
     npt.assert_array_equal(implant.electrode_array.coordinates(), local)
 
@@ -1216,7 +1171,7 @@ def test_a_flat_named_array_is_flat_in_its_own_frame():
         z = implant_type().electrode_array.coordinates()[:, 2]
         npt.assert_almost_equal(z, 0, decimal=9,
                                 err_msg=_name_of(implant_type))
-    # Fixed shank lengths are real device geometry and stay:
+    # Fixed shank depths are kept:
     for implant_type, depths in [(cortex.NeuroPortArray, {-1500.0}),
                                  (cortex.ICVP, {-650.0, -850.0})]:
         z = implant_type().electrode_array.coordinates()[:, 2]

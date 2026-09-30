@@ -24,9 +24,8 @@ def test_scatter_correlation():
 
 
 def test_correlation_matrix():
-    # seaborn is an optional dependency (it ships in the 'dev' extra), and
-    # ``correlation_matrix`` is the only thing in p2p that needs it. Without it
-    # the function is documented to raise ImportError, so skip rather than fail:
+    # seaborn is optional (in the 'dev' extra); without it,
+    # ``correlation_matrix`` raises ImportError, so skip:
     pytest.importorskip('seaborn')
     df = pd.DataFrame()
     df['a'] = pd.Series(np.arange(100))

@@ -1,26 +1,14 @@
-# Subnormal-flushing control for the temporal models' inner loops.
+# Subnormal flushing for the temporal models' inner loops.
 #
-# Every temporal model in `pulse2percept.models` is a cascade of leaky
-# integrators stepped at `dt`, and between pulses each one decays exponentially
-# toward zero. A pulse train leaves them decaying for a long time: at the
-# default dt=5e-3 ms, a 6 Hz train puts ~33,000 steps between one pulse and the
-# next, which for a tau of half a millisecond is several hundred time
-# constants. Partway down that decay the state enters the subnormal range
-# (|x| < 1.2e-38 in float32), where x86 hands the operation to microcode and
-# takes roughly two orders of magnitude longer than the same arithmetic on
-# normal floats. It does not stay there long -- a few percent of steps -- but
-# at 100x each that is enough to dominate the run: measured on the Horsager
-# 2009 kernel with an Argus II pulse train, the loop runs ~9x slower than the
-# identical loop on values that never go subnormal.
+# Temporal models are leaky-integrator cascades stepped at `dt`, decaying
+# toward zero between pulses (at dt=5e-3 ms, a 6 Hz train has ~33,000 steps
+# between pulses). Part of that decay is in the float32 subnormal range
+# (|x| < 1.2e-38), where x86 arithmetic is ~100x slower. On the Horsager 2009
+# kernel with an Argus II pulse train, this made the loop ~9x slower.
+# Flushing these values to zero does not change percepts (order 1e-2).
 #
-# Flushing them to zero costs nothing that matters. These are magnitudes below
-# 1e-38 feeding a percept of order 1e-2, so the alternative to zero is not a
-# more accurate answer, it is the same answer reached slowly.
-#
-# The mode lives in a per-thread control register, so it has to be set inside
-# the parallel region rather than around it, and restored afterwards so that
-# importing this library does not silently change the floating-point behavior
-# of everything else in the process.
+# The mode is a per-thread register: set it inside the parallel region, and
+# restore it afterwards so other code in the process is unaffected.
 
 cdef extern from *:
     """
@@ -28,8 +16,8 @@ cdef extern from *:
         defined(_M_IX86)
       #include <xmmintrin.h>
       /* MXCSR bit 15 (FTZ) flushes subnormal results to zero; bit 6 (DAZ)
-         treats subnormal operands as zero. Both are present on every x86-64
-         CPU, and on 32-bit x86 back to Prescott. */
+         treats subnormal operands as zero. Available on all x86-64 CPUs and
+         32-bit x86 since Prescott. */
       static CYTHON_INLINE unsigned long long p2p_denormals_off(void) {
           unsigned int prev = _mm_getcsr();
           _mm_setcsr(prev | 0x8000u | 0x0040u);
@@ -39,8 +27,8 @@ cdef extern from *:
           _mm_setcsr((unsigned int) prev);
       }
     #elif defined(__aarch64__) && defined(__GNUC__)
-      /* FPCR bit 24 (FZ) is the AArch64 equivalent. Save and restore the whole
-         register rather than just the bit, so nothing else in it is disturbed. */
+      /* FPCR bit 24 (FZ) is the AArch64 equivalent. The whole register is
+         saved and restored. */
       static CYTHON_INLINE unsigned long long p2p_denormals_off(void) {
           unsigned long long prev;
           __asm__ __volatile__("mrs %0, fpcr" : "=r" (prev));
@@ -51,8 +39,8 @@ cdef extern from *:
           __asm__ __volatile__("msr fpcr, %0" : : "r" (prev));
       }
     #else
-      /* Unknown architecture: leave the floating-point mode alone. The models
-         are correct either way; only the speed differs. */
+      /* Unknown architecture: floating-point mode is unchanged (slower, same
+         results). */
       static CYTHON_INLINE unsigned long long p2p_denormals_off(void) {
           return 0ULL;
       }
@@ -61,8 +49,8 @@ cdef extern from *:
       }
     #endif
     """
-    # Stop subnormal results from being computed as subnormals, returning the
-    # previous mode of the calling thread for `c_fpmode_restore`.
+    # Flush subnormals to zero; returns the thread's previous mode for
+    # `c_fpmode_restore`:
     unsigned long long c_denormals_off "p2p_denormals_off" () noexcept nogil
     void c_fpmode_restore "p2p_fpmode_restore" (
         unsigned long long prev) noexcept nogil

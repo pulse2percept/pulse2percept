@@ -1,8 +1,8 @@
-"""The public shape of :py:mod:`pulse2percept.topography`
+"""Public API of :py:mod:`pulse2percept.topography`
 
-The root namespace is anatomy-neutral: it carries the generic machinery and
-the two anatomical subpackages, and nothing else. Anatomy-specific maps were
-removed from the root in v0.11 without a deprecation alias.
+The root namespace holds only anatomy-neutral classes and the ``retina`` and
+``cortex`` subpackages. Anatomy-specific maps were removed from the root in
+v0.11 without a deprecation alias.
 """
 import importlib
 
@@ -50,7 +50,7 @@ def test_canonical_imports(module, names):
     ('pulse2percept.topography.cortex.neuropythy', 'NeuropythyMap'),
 ])
 def test_defining_module(module, name):
-    """Each map is defined in the module its package re-exports it from"""
+    """Each map is defined in the module its package re-exports"""
     mod = importlib.import_module(module)
     package = importlib.import_module(module.rsplit('.', 1)[0])
     npt.assert_equal(getattr(mod, name) is getattr(package, name), True)

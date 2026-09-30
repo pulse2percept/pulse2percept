@@ -1,8 +1,8 @@
 """:py:func:`~pulse2percept.viz.correlation_matrix`,
    :py:func:`~pulse2percept.viz.scatter_correlation`
 
-Deprecated. Generic statistical plots with nothing pulse2percept-specific
-about them; they go away with :py:mod:`pulse2percept.viz`.
+Deprecated. Generic statistical plots, removed together with
+:py:mod:`pulse2percept.viz`.
 """
 import numpy as np
 import pandas as pd

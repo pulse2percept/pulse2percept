@@ -11,11 +11,11 @@ from ...utils._plotting import set_mm_ticks
 
 
 def _scalar_safe(dtype):
-    """Normalize transform inputs to arrays and restore scalar outputs."""
+    """Converts transform inputs to arrays and returns scalars for scalars"""
     def decorator(func):
         @wraps(func)
         def wrapper(self, x, y):
-            # np.array copies, so the caller's arrays are never written to:
+            # np.array copies, so the caller's arrays are not modified:
             x, y = np.array(x, dtype=dtype), np.array(y, dtype=dtype)
             scalar = x.ndim == 0 and y.ndim == 0
             x, y = func(self, np.atleast_1d(x), np.atleast_1d(y))
@@ -44,10 +44,8 @@ class Polimeni2006Map(CorticalMap):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        # The Schwartz log map is written in millimeters of cortex and
-        # degrees of eccentricity, and its output is scaled to microns at the
-        # end of `dva_to_v1` and friends. `alpha1`-`alpha3` are the shear
-        # factors of the three regions, which are ratios:
+        # The log map uses mm of cortex and dva of eccentricity; `dva_to_v*`
+        # scale the output to um. `alpha1`-`alpha3` (shear) are unitless:
         return {**super().get_param_units(), 'k': mm, 'a': dva, 'b': dva}
 
     def _invert_left_pol(self, theta, radius, inverted = None):
@@ -96,14 +94,14 @@ class Polimeni2006Map(CorticalMap):
         return x, y
 
     def _mask_inverse(self, x, y, theta, radius, w_imag, folded=False):
-        """Set dva outputs to NaN where tissue lies outside the region
+        """Sets dva outputs to NaN where tissue lies outside the region
 
         ``theta`` and ``radius`` are canonical (before hemisphere flips), as
         in :py:meth:`add_nans`. ``w_imag`` is the imaginary part of the
-        tissue coordinate (mm): the forward map's principal log cannot
+        tissue coordinate (mm); the forward map's principal log cannot
         produce ``|w_imag| >= k * pi``. For V2/V3 (``folded``), the inverse
-        picks its angular branch from ``sign(w_imag)``, which is only the
-        forward map's branch if ``theta`` has the same sign; ``theta = 0`` is
+        picks its angular branch from ``sign(w_imag)``, which matches the
+        forward branch only if ``theta`` has the same sign; ``theta = 0`` is
         excluded, as in ``dva_to_v2``/``dva_to_v3``. The fovea (``radius``
         0) has no polar angle and is kept.
         """
@@ -271,8 +269,7 @@ class Polimeni2006Map(CorticalMap):
             ax.plot(x[i, :], y[i, :], 'red', linewidth=1)
         
 
-        # Coordinates are stored in microns, but a cortical map is worth
-        # reading in millimeters:
+        # Coordinates are stored in um; label ticks in mm:
         set_mm_ticks(ax)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')

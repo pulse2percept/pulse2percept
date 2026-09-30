@@ -1,8 +1,8 @@
 """Lazily generated grid labels shared by image/video stimuli and electrode
 grids.
 
-Private: users address electrodes through :py:attr:`Stimulus.electrodes` and
-:py:attr:`ElectrodeGrid.electrode_names`, never through this container.
+Private: users access names through :py:attr:`Stimulus.electrodes` and
+:py:attr:`ElectrodeGrid.electrode_names`.
 """
 import re
 
@@ -10,20 +10,19 @@ import numpy as np
 
 from ..utils.base import bijective26_name
 
-# Channel suffixes for the common color models. Anything else falls back to a
-# numeric suffix, so that every channel remains addressable:
+# Channel suffixes for RGB/RGBA; other channel counts use numeric suffixes:
 _CHANNEL_LABELS = {3: ('R', 'G', 'B'), 4: ('R', 'G', 'B', 'A')}
 
-# 'A1', 'BC17', 'A1_R', 'A1_12' -- letters address the row, digits the column,
-# and the optional suffix the color channel:
+# 'A1', 'BC17', 'A1_R', 'A1_12': letters = row, digits = column, optional
+# suffix = color channel:
 _NAME_RE = re.compile(r'^([A-Z]+)([0-9]+)(?:_([A-Z0-9]+))?$')
 
 
 def _bijective26_index(letters):
     """Inverse of :py:func:`~pulse2percept.utils.bijective26_name`
 
-    Translates an "alphabetic number" back into the integer it names, e.g.
-    'A' -> 0, 'Z' -> 25, 'AA' -> 26.
+    Returns the integer for a letter code, e.g. 'A' -> 0, 'Z' -> 25,
+    'AA' -> 26.
     """
     value = 0
     for char in letters:
@@ -32,13 +31,11 @@ def _bijective26_index(letters):
 
 
 def _is_pure_selection(item):
-    """Whether an index expression can only ever select, never repeat
+    """Return True if an index expression cannot repeat elements
 
-    Slices, ellipses and boolean masks visit every element at most once, so
-    they preserve uniqueness of the names they select. Integer (fancy)
-    indexing does not: ``names[[0, 0]]`` repeats an element. Uniqueness
-    matters because :py:class:`~pulse2percept.stimuli.Stimulus` can skip its
-    duplicate-name check whenever it is guaranteed by construction.
+    Slices, ellipses and boolean masks preserve uniqueness; integer (fancy)
+    indexing does not (``names[[0, 0]]``). Lets
+    :py:class:`~pulse2percept.stimuli.Stimulus` skip its duplicate-name check.
     """
     if item is Ellipsis or isinstance(item, slice):
         return True
@@ -52,25 +49,21 @@ def _is_pure_selection(item):
 class _GridNames:
     """Lazily generated names for a grid of pixels or electrodes
 
-    Names every element of a (rows x columns [x channels]) grid after its
-    position in that grid: letters address the row, digits the column, and an
-    optional suffix the color channel. The first pixel of an RGB image is
-    therefore ``'A1_R'``, and the pixel in the third row and twelfth column of
-    a grayscale image is ``'C12'``.
+    Names each element of a (rows x columns [x channels]) grid by position:
+    letters = row, digits = column, optional suffix = color channel. The first
+    pixel of an RGB image is ``'A1_R'``; row 3, column 12 of a grayscale image
+    is ``'C12'``.
 
-    The names are *not* stored. Only the shape of the grid is, plus (for a
-    subset such as a cropped image) the indices that were kept. Both
-    directions of the mapping are computed from that: a name is generated from
-    its index on demand, and the index of a name is recovered by parsing it.
-    That keeps construction, copying and lookup independent of the number of
-    electrodes, which matters because an image or video stimulus assigns one
-    electrode per pixel -- a 576x720 RGBA image has 1.66 million of them.
+    Only the grid shape (and, for a subset such as a cropped image, the kept
+    indices) is stored. Names are generated from indices on demand, and
+    indices are recovered by parsing names, so construction, copying and
+    lookup do not scale with the number of electrodes (one per pixel: a
+    576x720 RGBA image has 1.66 million).
 
-    A ``_GridNames`` behaves like a read-only 1-D array of strings: it
-    supports ``len``, iteration, indexing, slicing, boolean masking,
-    ``reshape`` and ``ravel``, and converts to a NumPy array of strings via
-    ``np.asarray``. That conversion is the one operation whose cost scales
-    with the number of electrodes, so it is left to the caller to trigger.
+    Behaves like a read-only 1-D array of strings: supports ``len``,
+    iteration, indexing, slicing, boolean masking, ``reshape`` and ``ravel``.
+    ``np.asarray`` builds the string array; this is the only operation whose
+    cost scales with the number of electrodes.
 
     Parameters
     ----------
@@ -83,7 +76,7 @@ class _GridNames:
         row-major order.
     unique : bool, optional
         Whether ``idx`` is known to be free of duplicates. ``None`` means
-        "not known", in which case :py:meth:`check_unique` will work it out.
+        unknown; :py:meth:`check_unique` then computes it.
 
     Examples
     --------
@@ -108,7 +101,7 @@ class _GridNames:
         self._grid_shape = grid_shape
         if idx is None:
             self._idx = None
-            # The whole grid, in order, cannot contain duplicates:
+            # The full grid has no duplicates:
             self._unique = True
         else:
             self._idx = np.asarray(idx, dtype=np.intp)
@@ -163,8 +156,8 @@ class _GridNames:
     def is_unique(self):
         """Whether the names are known to be free of duplicates
 
-        ``False`` means "not known to be unique", not "known to contain
-        duplicates"; call :py:meth:`check_unique` to settle it.
+        ``False`` means "not known to be unique"; call
+        :py:meth:`check_unique` to find out.
         """
         return bool(self._unique)
 
@@ -175,24 +168,19 @@ class _GridNames:
         return shape[0]
 
     def __getitem__(self, item):
-        # A name is not a valid index. Raise KeyError so that callers which
-        # accept either an index or a name can fall back to `index`, the same
-        # way they do for a NumPy array (which raises IndexError):
+        # Raise KeyError on names, so callers can fall back to `index` (as they
+        # do on IndexError from a NumPy array):
         if isinstance(item, str):
             raise KeyError(item)
         idx = self.indices[item]
         if np.ndim(idx) == 0:
             return self._name_at(int(idx))
-        # Uniqueness only ever carries over; it is never ruled out here. An
-        # index expression that *may* repeat leaves it undetermined (None),
-        # for `check_unique` to settle if anyone asks:
+        # Fancy indexing may repeat names, so uniqueness is unknown (None):
         unique = True if (self._unique and _is_pure_selection(item)) else None
         return _GridNames(self._grid_shape, idx, unique=unique)
 
     def __iter__(self):
-        # Generating names one at a time is slower per element than building
-        # the whole array at once, but callers that break out early (or that
-        # only ever look at a handful of electrodes) never pay for the rest:
+        # Generate names lazily, so early exits don't build the full array:
         for i in self.indices.ravel():
             yield self._name_at(int(i))
 
@@ -211,8 +199,7 @@ class _GridNames:
 
     def __eq__(self, other):
         if isinstance(other, _GridNames):
-            # Two views of the same grid hold the same names iff they select
-            # the same indices, which is far cheaper to check than the names:
+            # Same grid: compare indices instead of strings:
             if self._grid_shape != other._grid_shape:
                 return np.asarray(self) == np.asarray(other)
             if self._idx is None and other._idx is None:
@@ -256,10 +243,8 @@ class _GridNames:
     def index(self, name):
         """Return the position of ``name``
 
-        Unlike ``list(names).index(name)``, this does not build (or even
-        generate) the names: the position is recovered by parsing the name
-        itself, which is why it costs the same for one electrode as for a
-        million.
+        Parses ``name`` instead of generating the names, so the cost does not
+        depend on the number of electrodes.
 
         Parameters
         ----------
@@ -274,21 +259,18 @@ class _GridNames:
         flat = self._flat_index_of(name)
         if self._idx is None:
             return int(flat)
-        # A subset (e.g. a cropped image) no longer has the grid's own
-        # ordering, so the parsed grid index still has to be located. This is
-        # a vectorized scan rather than a parse, but it touches integers
-        # instead of strings and stays in C:
+        # Subsets (e.g. a cropped image) require locating the grid index with
+        # a vectorized integer scan:
         hits = np.flatnonzero(self._idx.ravel() == flat)
         if hits.size == 0:
             raise ValueError(f"'{name}' is not in the list of electrodes.")
         return int(hits[0])
 
     def check_unique(self):
-        """Determine (and remember) whether the names are free of duplicates
+        """Compute (and cache) whether the names are free of duplicates
 
-        The grid names are unique by construction, so duplicates can only come
-        from a repeated index. Checking the indices is therefore equivalent to
-        checking the names, and much cheaper.
+        Grid names are unique, so this checks the indices instead of the
+        names.
 
         Returns
         -------
@@ -313,10 +295,8 @@ class _GridNames:
                          for r in range(self._grid_shape[0])])
 
     def _col_labels(self):
-        # Ask for exactly as many characters as the largest column number
-        # needs. NumPy's own int-to-str conversion sizes for the widest
-        # possible integer instead ('<U21'), which would make a materialized
-        # name array several times larger than the names in it:
+        # Size the string dtype to the largest column number; NumPy's default
+        # int-to-str ('<U21') would bloat the materialized array:
         n_cols = self._grid_shape[1]
         width = len(str(n_cols)) if n_cols else 1
         return (np.arange(n_cols) + 1).astype(f'<U{width}')
@@ -371,11 +351,7 @@ class _GridNames:
         return int(np.ravel_multi_index(tuple(coords), self._grid_shape))
 
     def _materialize(self):
-        """Build the actual array of name strings
-
-        This is the only operation whose cost scales with the number of
-        electrodes, so everything else is arranged to avoid it.
-        """
+        """Build the array of name strings (cost scales with grid size)"""
         idx = self.indices
         if idx.size == 0:
             return np.empty(idx.shape, dtype=self.dtype)
@@ -388,7 +364,7 @@ class _GridNames:
 
 
 def _names_equal(a, b):
-    """Whether two containers hold the same electrode names"""
+    """Return True if two containers hold the same electrode names"""
     if isinstance(a, _GridNames) and isinstance(b, _GridNames):
         if a.grid_shape == b.grid_shape:
             return np.array_equal(a.indices, b.indices)

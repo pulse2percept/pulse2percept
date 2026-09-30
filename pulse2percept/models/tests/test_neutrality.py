@@ -43,9 +43,9 @@ def test_generic_spatial_model_has_no_map():
     with pytest.raises(ValueError) as excinfo:
         model.build()
     npt.assert_equal('visual_field_map' in str(excinfo.value), True)
-    # ... and says so before it would trip over a missing attribute:
+    # Error names the missing map, not a NoneType attribute:
     npt.assert_equal('NoneType' in str(excinfo.value), False)
-    # Supplying one is all it takes:
+    # Supplying a map works:
     npt.assert_equal(BareSpatial(ArgusII(),
                                  visual_field_map=Curcio1990Map(),
                                  step=5).build().is_built, True)
@@ -61,7 +61,7 @@ def test_retinal_spatial_supplies_the_retinal_default():
                                         Thompson2003Spatial])
 def test_retinal_models_are_retinal_spatial(ModelClass):
     npt.assert_equal(issubclass(ModelClass, RetinalSpatial), True)
-    # Each keeps whichever map it installed before the split:
+    # Each has a retinal default map:
     npt.assert_equal(isinstance(ModelClass(ArgusII()).visual_field_map,
                                 RetinalMap), True)
 
@@ -81,7 +81,7 @@ def test_retinal_length_shorthand_is_retinal_only():
     expected = Curcio1990Map().ret_to_dva(2000.0, 0)[0]
     npt.assert_almost_equal(hi, expected)
     npt.assert_almost_equal(lo, -expected)
-    # ... the generic base does not:
+    # The generic base requires dva:
     with pytest.raises(DimensionMismatchError) as excinfo:
         BareSpatial(ArgusII(), xrange=(-2 * mm, 2 * mm))
     npt.assert_equal('dva' in str(excinfo.value), True)
@@ -101,14 +101,15 @@ def test_cortical_model_refuses_a_retinal_extent():
 
 
 def test_retinal_shorthand_needs_a_retinal_map():
-    """A retinal model handed a cortical map has no extent to resolve"""
+    """A length extent with a cortical map raises DimensionMismatchError"""
     with pytest.raises(DimensionMismatchError):
         BareRetinal(ArgusII(), visual_field_map=Polimeni2006Map(),
                     xrange=(-2 * mm, 2 * mm), ndim=[2])
 
 
 def test_step_never_takes_a_length():
-    """Only the *extent* is shorthand; the grid is always sampled in dva"""
+    """`step` must be in dva, even if the extent is given as a length"""
+
     with pytest.raises(DimensionMismatchError):
         BareRetinal(ArgusII(), step=100 * um)
     with pytest.raises(DimensionMismatchError):

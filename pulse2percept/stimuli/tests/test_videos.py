@@ -31,9 +31,8 @@ def test_VideoStimulus(tmp_path):
     npt.assert_equal(stim.metadata['source'], fname)
     npt.assert_equal(stim.metadata['source_size'], (shape[2], shape[1]))
     npt.assert_almost_equal(stim.time, np.arange(shape[0]) * 1000.0 / fps)
-    # One electrode per pixel, named after its place in the frame (a letter
-    # for the row, a number for the column). Frames are the time component,
-    # so they do not enter the name:
+    # One electrode per pixel, named by row letter and column number. Frames
+    # are the time component, so they are not part of the name:
     npt.assert_equal(len(stim.electrodes), np.prod(shape[1:]))
     npt.assert_equal(stim.electrodes[0], 'A1')
     npt.assert_equal(stim.electrodes[-1], 'AF48')
@@ -105,26 +104,25 @@ def test_VideoStimulus_resize(tmp_path):
 
 def test_VideoStimulus_resize_kwargs():
     """Keyword arguments reach scikit-image (Issue #501)"""
-    # A white square on black. Nearest-neighbor interpolation keeps the video
-    # binary; the default (bilinear, with anti-aliasing on the way down) does
-    # not, which is what makes the two distinguishable:
+    # A white square on black: nearest-neighbor keeps the video binary, the
+    # default (bilinear, anti-aliased when downsampling) does not:
     ndarray = np.zeros((8, 8, 3), dtype=np.float32)
     ndarray[2:6, 2:6] = 1
     stim = VideoStimulus(ndarray)
     nearest = stim.resize((4, 4), order=0, anti_aliasing=False)
     npt.assert_equal(np.isin(nearest.data, [0, 1]).all(), True)
     npt.assert_equal(np.isin(stim.resize((4, 4)).data, [0, 1]).all(), False)
-    # An unknown keyword argument is scikit-image's to reject, not ours:
+    # scikit-image raises TypeError for an unknown keyword argument:
     with pytest.raises(TypeError):
         stim.resize((4, 4), not_a_skimage_kwarg=0)
 
 
 @pytest.fixture
 def clip_source(tmp_path):
-    """A 20-frame RGB movie at 10 fps (100 ms per frame), plus its frames"""
+    """Return a 20-frame RGB movie at 10 fps (100 ms/frame) and its frames"""
     fname = str(tmp_path / 'clip.mp4')
     # 16x16 keeps ffmpeg from resizing to its macro block size, which would
-    # make the file's frames a different shape than the ones written here:
+    # change the frame shape:
     frames = (255 * np.random.default_rng(0).random((20, 16, 16, 3)))
     frames = frames.astype(np.uint8)
     mimwrite(fname, frames, fps=10)
@@ -137,7 +135,7 @@ def test_VideoStimulus_stop_time(clip_source):
     clip = VideoStimulus(fname, stop_time=500)
     npt.assert_equal(clip.vid_shape, (*full.vid_shape[:-1], 5))
     npt.assert_almost_equal(clip.data, full.data[:, :5])
-    # The interval is half-open, so the frame starting at 500 ms is not in it:
+    # The interval is half-open, so the frame starting at 500 ms is excluded:
     npt.assert_almost_equal(clip.time, np.arange(5) * 100.0)
 
 
@@ -146,13 +144,12 @@ def test_VideoStimulus_start_and_stop_time(clip_source):
     full = VideoStimulus(fname)
     clip = VideoStimulus(fname, start_time=500, stop_time=1000)
     npt.assert_almost_equal(clip.data, full.data[:, 5:10])
-    # A clip starts at t=0 wherever it was cut from, but keeps the frame
-    # interval of the source:
+    # A clip starts at t=0 but keeps the source's frame interval:
     npt.assert_almost_equal(clip.time, np.arange(5) * 100.0)
 
 
 def test_VideoStimulus_clip_units(clip_source):
-    """Bare milliseconds and unitful times name the same frames"""
+    """Bare milliseconds and unitful times select the same frames"""
     fname, _ = clip_source
     bare = VideoStimulus(fname, start_time=500, stop_time=1500)
     unitful = VideoStimulus(fname, start_time=0.5 * s, stop_time=1.5 * s)
@@ -172,7 +169,7 @@ def test_VideoStimulus_clip_rgb2gray_and_resize(clip_source):
 
 
 def test_VideoStimulus_stop_time_past_eof(clip_source):
-    """A stop time past the end of the file yields what is there"""
+    """A stop time past the end of the file returns all remaining frames"""
     fname, _ = clip_source
     npt.assert_almost_equal(VideoStimulus(fname, stop_time=60 * s).data,
                             VideoStimulus(fname).data)
@@ -187,7 +184,7 @@ def test_VideoStimulus_stop_time_past_eof(clip_source):
     ({'stop_time': 1 * uA}, DimensionMismatchError),
     # Past the end of the file, so nothing was loaded:
     ({'start_time': 60 * s}, ValueError),
-    # Falls between two frame starts (100 and 200 ms), so it names no frame:
+    # Between two frame starts (100 and 200 ms), so no frame is selected:
     ({'start_time': 110, 'stop_time': 150}, ValueError),
 ])
 def test_VideoStimulus_clip_invalid(clip_source, kwargs, err):
@@ -198,7 +195,7 @@ def test_VideoStimulus_clip_invalid(clip_source, kwargs, err):
 
 @pytest.mark.parametrize('source', ['array', 'stimulus'])
 def test_VideoStimulus_clip_rejects_in_memory_source(clip_source, source):
-    """An in-memory video is shortened by crop(), not while decoding"""
+    """In-memory videos are shortened with crop(), not start/stop times"""
     fname, _ = clip_source
     src = VideoStimulus(fname)
     if source == 'array':
@@ -208,11 +205,11 @@ def test_VideoStimulus_clip_rejects_in_memory_source(clip_source, source):
 
 
 def test_frame_index_on_frame_boundaries():
-    """A frame's own start time names that frame, not the one after it
+    """A frame's start time maps to that frame, not the next one
 
-    29.97 fps makes ``i * 1000 / fps * fps / 1000`` land just off ``i``, which
-    is what the tolerance in ``_frame_index`` is for. Every other clipping test
-    here runs at 10 fps, where the arithmetic happens to be exact.
+    At 29.97 fps, ``i * 1000 / fps * fps / 1000`` is slightly off ``i``, hence
+    the tolerance in ``_frame_index``. The other clipping tests use 10 fps,
+    where the arithmetic is exact.
     """
     fps = 29.97
     for i in (1, 10, 100, 1000):
@@ -220,11 +217,11 @@ def test_frame_index_on_frame_boundaries():
 
 
 def test_VideoStimulus_clip_does_not_decode_the_whole_file(monkeypatch):
-    """Clipping must bound the read, not slice a fully decoded movie"""
+    """Clipping limits the frames read instead of decoding the whole movie"""
     requested = []
 
     class FakeReader:
-        """Hands out 1000 frames of a 10 fps movie, recording each request"""
+        """Return 1000 frames of a 10 fps movie and record each request"""
 
         def __enter__(self):
             return self
@@ -286,8 +283,8 @@ def test_VideoStimulus_crop(tmp_path):
                      stim.data.reshape(stim.vid_shape)[16, 19, 6])
     npt.assert_equal(stim_cropped2.time, stim.time[5:8])
 
-    # y1/x1 are exclusive, so cropping time only must leave the spatial extent
-    # (and thus the electrode names) untouched (Issue #867):
+    # y1/x1 are exclusive, so cropping only time keeps the spatial extent (and
+    # the electrode names) unchanged (Issue #867):
     stim_cropped3 = stim.crop(front=3)
     npt.assert_equal(stim_cropped3.vid_shape, (48, 32, 7))
     npt.assert_almost_equal(stim_cropped3.data,
@@ -301,27 +298,25 @@ def test_VideoStimulus_crop(tmp_path):
     npt.assert_almost_equal(stim_cropped4.data, stim.data)
     npt.assert_array_equal(stim_cropped4.electrodes, stim.electrodes)
 
-    # crop-time and crop-length (start, end) cannot be existed at the same time
+    # idx_time and front/back cannot be combined:
     with pytest.raises(ValueError):
         stim.crop(idx_time=[0, 1], front=3)
     with pytest.raises(ValueError):
         stim.crop(idx_time=[3, 9], back=4)
-    # Crop time is invalid. It should be [t1, t2], where t1 is the starting
-    # frame and t2 is the ending frame
+    # idx_time must be [t1, t2], with t1 the first frame and t2 the last frame
     with pytest.raises(TypeError):
         stim.crop(idx_time=[0, 1, 2])
     with pytest.raises(ValueError):
         stim.crop(idx_time=[5, 4])
-    #"crop-length(start, end) cannot be negative"
+    # front/back cannot be negative
     with pytest.raises(ValueError):
         stim.crop(front=-1)
     with pytest.raises(ValueError):
         stim.crop(back=-1)
-    # crop-length(start, end) should be smaller than the duration of the video
+    # front + back must be smaller than the video duration
     with pytest.raises(ValueError):
         stim.crop(front=5, back=6)
-    # crop-indices and crop-width (left, right, up, down) cannot exist at the
-    # same time
+    # idx_space and left/right/top/bottom cannot be combined
     with pytest.raises(Exception):
         stim.crop(idx_space=[5, 10, 25], left=10)
     with pytest.raises(Exception):
@@ -332,7 +327,7 @@ def test_VideoStimulus_crop(tmp_path):
         stim.crop(idx_space=[5, 10, 25, 30], top=6)
     with pytest.raises(Exception):
         stim.crop(idx_space=[5, 10, 25, 30], bottom=7)
-    # "crop-width(left, right, up, down) cannot be negative"
+    # Crop widths cannot be negative
     with pytest.raises(ValueError):
         stim.crop(left=-1)
     with pytest.raises(ValueError):
@@ -341,12 +336,12 @@ def test_VideoStimulus_crop(tmp_path):
         stim.crop(top=-1)
     with pytest.raises(ValueError):
         stim.crop(bottom=-1)
-    # "crop-width should be smaller than the shape of the video frame"
+    # left + right and top + bottom must be smaller than the frame
     with pytest.raises(ValueError):
         stim.crop(left=14, right=20)
     with pytest.raises(ValueError):
         stim.crop(top=12, bottom=38)
-    # "crop-indices must be on the video frame"
+    # idx_space must lie within the frame
     with pytest.raises(ValueError):
         stim.crop(idx_space=[-1, 10, 25, 30])
     with pytest.raises(ValueError):
@@ -355,8 +350,8 @@ def test_VideoStimulus_crop(tmp_path):
         stim.crop(idx_space=[5, 10, 50, 30])
     with pytest.raises(ValueError):
         stim.crop(idx_space=[5, 10, 25, 51])
-    # crop-indices is invalid. It should be [y1,x1,y2,x2], where (y1,x1) is
-    # upperleft and (y2,x2) is bottom-right
+    # idx_space must be [y1, x1, y2, x2], with (y1, x1) the upper left and
+    # (y2, x2) the bottom right corner
     with pytest.raises(ValueError):
         stim.crop(idx_space=[5, 10, 4, 30])
     with pytest.raises(ValueError):
@@ -438,26 +433,25 @@ def test_VideoStimulus_rotate_units(shape):
 def test_VideoStimulus_rotate_kwargs(shape):
     """Keyword arguments reach scikit-image (Issue #501)
 
-    A grayscale video is rotated in one pass and a color one frame by frame,
-    so both paths have to forward what they are given.
+    Grayscale videos are rotated in one pass, color videos frame by frame, so
+    both paths must forward the keyword arguments.
     """
     ndarray = np.zeros(shape, dtype=np.float32)
     ndarray[2] = 1
     stim = VideoStimulus(ndarray)
-    # Nearest-neighbor interpolation keeps the bar binary, bilinear does not:
+    # Nearest-neighbor keeps the bar binary, bilinear does not:
     npt.assert_equal(np.isin(stim.rotate(45, order=0).data, [0, 1]).all(), True)
     npt.assert_equal(np.isin(stim.rotate(45, order=1).data, [0, 1]).all(),
                      False)
-    # 'cval' fills the corners the rotation leaves empty:
+    # 'cval' fills the empty corners after rotation:
     rot = stim.rotate(45, order=0, cval=0.3)
     npt.assert_almost_equal(rot.data.reshape(rot.vid_shape)[0, 0], 0.3)
-    # 'resize' grows each frame, so the result is named after its own grid
-    # rather than inheriting names it has no room for:
+    # 'resize' enlarges each frame, so pixel names come from the new grid:
     grown = stim.rotate(45, resize=True)
     npt.assert_equal(grown.vid_shape, (7, 7, *shape[2:]))
     npt.assert_equal(grown.shape[0], np.prod(grown.vid_shape[:-1]))
     npt.assert_equal(grown.electrodes[0], 'A1' if len(shape) == 3 else 'A1_R')
-    # Rotating in place keeps every pixel's name, and the time axis is intact:
+    # Rotating in place keeps every pixel's name and the time axis:
     same = stim.rotate(45)
     npt.assert_equal(same.vid_shape, shape)
     npt.assert_equal(np.asarray(same.electrodes), np.asarray(stim.electrodes))
@@ -552,16 +546,15 @@ def test_VideoStimulus_filter(tmp_path):
 
 
 def test_VideoStimulus_encode():
-    # 6 frames, 1 ms apart, so the encoded stimulus lasts 6 ms. Note that the
-    # frame duration is the time between frames; before v0.9.2 it was taken to
-    # be `1000 / that`, which made this stimulus 6000 ms long:
+    # 6 frames, 1 ms apart, so the encoded stimulus lasts 6 ms. Frame duration
+    # is the time between frames (before v0.9.2 it was `1000 / that`, giving
+    # 6000 ms):
     stim = VideoStimulus(np.random.rand(4, 5, 6))
     enc = stim.encode(freq=1000)
     npt.assert_almost_equal(enc.time[-1], 6, decimal=3)
     npt.assert_equal(enc.shape[0], stim.shape[0])
-    # Gray levels map onto the amplitude range absolutely, so the brightest
-    # pixel of the video reaches the top of the range and the rest fall short
-    # of it in proportion to how dark they are:
+    # Gray levels map onto the amplitude range absolutely: the brightest pixel
+    # reaches the top of the range, the rest scale in proportion:
     npt.assert_almost_equal(np.abs(enc.data).max(axis=1),
                             50 * stim.data.max(axis=1), decimal=4)
 
@@ -570,7 +563,7 @@ def test_VideoStimulus_encode():
     npt.assert_almost_equal(np.abs(enc.data).max(axis=1),
                             2 + 41 * stim.data.max(axis=1), decimal=4)
 
-    # `encode` is a shorthand for AmplitudeEncoder, and forwards to it:
+    # `encode` is a shorthand for AmplitudeEncoder:
     npt.assert_almost_equal(stim.encode(freq=1000).data,
                             AmplitudeEncoder(freq=1000).encode(stim).data)
     with pytest.raises(TypeError):
@@ -594,15 +587,15 @@ def test_VideoStimulus_apply(tmp_path):
                      np.asarray(stim.electrodes))
     npt.assert_equal(applied.vid_shape, stim.vid_shape)
 
-    # A function that changes the resolution is allowed, and the result is
-    # named after its own pixel grid (Issue #500):
+    # A function may change the resolution; pixel names then come from the new
+    # grid (Issue #500):
     resized = stim.apply(vid_resize, (16, 24))
     npt.assert_equal(resized.vid_shape, (16, 24, shape[0]))
     npt.assert_equal(resized.shape, (16 * 24, shape[0]))
     npt.assert_equal(resized.electrodes[0], 'A1')
     npt.assert_equal(resized.electrodes[-1], 'P24')
     npt.assert_almost_equal(resized.time, stim.time)
-    # Positional and keyword arguments both make it through:
+    # Positional and keyword arguments are both passed on:
     npt.assert_equal(stim.apply(vid_resize, (8, 12), order=0).vid_shape,
                      (8, 12, shape[0]))
     npt.assert_equal(stim.apply(vid_resize, output_shape=(8, 12)).vid_shape,
@@ -616,8 +609,7 @@ def test_VideoStimulus_apply(tmp_path):
     rgb = VideoStimulus(np.random.rand(6, 8, 3, 4).astype(np.float32))
     npt.assert_equal(rgb.apply(rgb2gray).vid_shape, (6, 8, 4))
 
-    # 'apply' is a low-level array operation that doesn't go through the
-    # public iterator
+    # 'apply' operates on the raw array, not through the public iterator
     def check(frame):
         npt.assert_equal(isinstance(frame, np.ndarray), True)
         npt.assert_equal(frame.flags.writeable, True)
@@ -638,7 +630,7 @@ def test_VideoStimulus_iter():
         npt.assert_equal(frame.img_shape, video.vid_shape[:-1])
         npt.assert_almost_equal(frame.data.reshape(frame.img_shape),
                                 ndarray[..., idx])
-        # A still image has no place on the video's time axis:
+        # A still image has no time axis:
         npt.assert_equal(frame.time, None)
         npt.assert_equal(np.asarray(frame.electrodes),
                          np.asarray(video.electrodes))
@@ -709,14 +701,14 @@ def test_VideoStimulus_play(n_frames):
 
 
 def test_VideoStimulus_play_fps_units():
-    """A frame rate is a frequency, however it is spelled
+    """The frame rate accepts any frequency unit
 
     .. versionadded:: 0.10.0
     """
     video = VideoStimulus(np.random.rand(2, 4, 5))
 
     def interval(fps):
-        """The frame delay (ms) the HTML player was configured with"""
+        """Return the frame delay (ms) of the HTML player"""
         html = video.play(fps=fps).to_jshtml()
         return float(re.search(r'"interval": ([0-9.]+)', html).group(1))
 
@@ -731,30 +723,30 @@ def test_VideoStimulus_play_fps_units():
 def test_VideoStimulus_play_compressed():
     """Compression changes the number of frames, and 'vid_shape' must follow
 
-    A video whose pixels are all nonzero survives spatial compression intact,
-    but runs of identical frames are still dropped from the time axis. The
-    player is handed a dense (Y, X, T) array, so a stale frame count in
-    'vid_shape' makes that reshape fail.
+    A video with all nonzero pixels keeps all pixels under compression, but
+    runs of identical frames are dropped from the time axis. The player
+    reshapes to a dense (Y, X, T) array, which fails with a stale frame count
+    in 'vid_shape'.
     """
     frame = np.random.rand(4, 5) * 0.5 + 0.5
     other = np.random.rand(4, 5) * 0.5 + 0.5
     ndarray = np.stack([frame] * 4 + [other] * 4, axis=-1)
-    # Compressing at construction time and compressing afterwards must leave
-    # the stimulus in the same state:
+    # Compressing at construction and compressing afterwards give the same
+    # stimulus:
     eager = VideoStimulus(ndarray, time=np.arange(8), compress=True)
     lazy = VideoStimulus(ndarray, time=np.arange(8))
     npt.assert_equal(lazy.vid_shape, (4, 5, 8))
     lazy.compress()
     for video in (eager, lazy):
-        # Four of the eight time points are redundant and have been dropped:
+        # Four of the eight time points are redundant and dropped:
         npt.assert_equal(video.data.shape[-1], 4)
         npt.assert_equal(video.vid_shape, (4, 5, 4))
-        # The compressed time axis is no longer homogeneous, hence the fps:
+        # The compressed time axis is not uniform, hence the fps:
         html = video.play(fps=10).to_jshtml()
         npt.assert_equal('"n": 4' in html, True)
         npt.assert_equal(f't = {video.time[-1]:.2f} ms' in html, True)
-    # An all-zero pixel is dropped instead, and no shape can describe what is
-    # left, so playback fails with an explanation rather than a reshape error:
+    # An all-zero pixel is dropped instead, so no video shape fits the data;
+    # playback raises ValueError with an explanation, not a reshape error:
     sparse = np.zeros((4, 5, 6))
     sparse[1, 1, :] = np.linspace(0, 1, 6)
     with pytest.raises(ValueError):
@@ -781,12 +773,11 @@ def test_VideoStimulus_play_fmt():
 
 
 def test_VideoStimulus_data_is_contiguous(tmp_path):
-    """Video data must reach the Stimulus constructor C-contiguous.
+    """Video data reaches the Stimulus constructor C-contiguous
 
-    Frames are decoded frame-first and then transposed so that time is the
-    last axis. Taking that transpose lazily leaves the array non-contiguous
-    all the way through the conversion to float, and the constructor then has
-    to copy it at four times the size.
+    Frames are decoded frame-first and transposed so time is the last axis. A
+    lazy transpose stays non-contiguous through the float conversion, and the
+    constructor then copies it at four times the size.
     """
     fname = str(tmp_path / 'test.mp4')
     ndarray = np.random.rand(12, 32, 48)
@@ -798,8 +789,8 @@ def test_VideoStimulus_data_is_contiguous(tmp_path):
 
 @pytest.mark.parametrize('dtype', [np.float32, np.float64, np.uint8])
 def test_VideoStimulus_owns_its_data(dtype):
-    # See `test_ImageStimulus_owns_its_data`: float32 is the dtype that
-    # `img_as_float32` passes through untouched.
+    # See `test_ImageStimulus_owns_its_data`: `img_as_float32` passes float32
+    # through unchanged.
     arr = (np.linspace(0, 1, 60).reshape((4, 5, 3)) if dtype != np.uint8
            else np.arange(60, dtype=np.uint8).reshape((4, 5, 3)))
     arr = np.ascontiguousarray(arr, dtype=dtype)
@@ -809,8 +800,7 @@ def test_VideoStimulus_owns_its_data(dtype):
     npt.assert_array_equal(stim.data, before)
     npt.assert_equal(np.shares_memory(arr, stim.data), False)
     npt.assert_equal(stim.data.flags.writeable, False)
-    # Freezing what the stimulus took must not reach back into what the
-    # caller kept:
+    # Making the stored data read-only does not affect the caller's array:
     npt.assert_equal(arr.flags.writeable, True)
 
 
@@ -822,7 +812,7 @@ def test_VideoStimulus_does_not_alias_another_stimulus():
 
 
 def test_VideoStimulus_accepts_a_path(tmp_path):
-    """A pathlib.Path names the same file a string does"""
+    """A pathlib.Path works like a string filename"""
     fname = tmp_path / 'test.mp4'
     ndarray = np.random.rand(10, 32, 48)
     mimwrite(str(fname), (255 * ndarray).astype(np.uint8), fps=1)
@@ -832,16 +822,16 @@ def test_VideoStimulus_accepts_a_path(tmp_path):
     npt.assert_equal(isinstance(from_path.metadata['source'], str), True)
     npt.assert_equal(from_path.metadata['source'],
                      from_str.metadata['source'])
-    # A Path is a filename, so the file-only arguments still apply:
+    # A Path is a filename, so file-only arguments still apply:
     npt.assert_equal(VideoStimulus(fname, stop_time=3000).vid_shape[-1], 3)
 
 
 @pytest.mark.parametrize('resize', [None, (5, 9)])
 def test_VideoStimulus_as_gray_from_uint8_rgb(resize):
-    """Grayscale ingest narrows to float32 before mixing the channels"""
+    """Grayscale conversion casts to float32 before mixing the channels"""
     n_rows, n_cols, n_frames = 10, 18, 4
-    # Each channel ramps along a different axis and each frame sits at its own
-    # blue level, so a swapped channel or a shuffled frame changes the gray:
+    # Each channel ramps along a different axis and each frame has its own
+    # blue level, so a swapped channel or frame changes the gray level:
     red = np.linspace(0, 255, n_cols)[np.newaxis, :, np.newaxis]
     green = np.linspace(255, 0, n_rows)[:, np.newaxis, np.newaxis]
     blue = np.linspace(40, 200, n_frames)[np.newaxis, np.newaxis, :]
@@ -855,7 +845,7 @@ def test_VideoStimulus_as_gray_from_uint8_rgb(resize):
     npt.assert_equal(stim.data.dtype, np.float32)
     npt.assert_equal(stim.shape, (rows * cols, n_frames))
     npt.assert_almost_equal(stim.time, np.arange(n_frames) * 1000.0 / 25)
-    # `rgb2gray` wants the channels last; the frames come along for the ride:
+    # `rgb2gray` requires channels last, so move frames before channels:
     expected = rgb2gray(rgb.transpose((0, 1, 3, 2)) / 255.0)
     if resize is not None:
         expected = vid_resize(expected, (rows, cols, n_frames))

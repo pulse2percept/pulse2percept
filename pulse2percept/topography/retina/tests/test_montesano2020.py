@@ -12,13 +12,12 @@ from pulse2percept.topography.retina import (Curcio1990Map, Montesano2020Map,
                                              Watson2014Map)
 
 # Reference values come from the directly solved reconstruction (7200
-# meridians, 1 um radial grid) the packaged field was resampled from, not from
-# the packaged field itself, so the tests check the runtime interpolation
-# instead of restating it. Anatomical angle: 0 nasal, 90 superior,
-# 180 temporal, 270 inferior.
+# meridians, 1 um radial grid) that the packaged field was resampled from, so
+# they test the runtime interpolation. Anatomical angle: 0 nasal,
+# 90 superior, 180 temporal, 270 inferior.
 
 #: r_rf (dva): inside the zone, at the global peak, in its outer half, and
-#: past the nasal/inferior extents where the map is the identity.
+#: past the nasal/inferior extents (identity).
 _FORWARD_RADII = (0.5, 1.0, 2.44, 5.0, 8.0, 12.0)
 
 #: r_soma = F(theta, r_rf) in dva
@@ -33,9 +32,9 @@ _FORWARD_REF = {
     315.0: (1.75812, 2.52205, 4.02135, 5.97731, 8.22723, 12.00000),
 }
 
-#: Eq. A5 evaluated at exactly 1, 2, 4, 6, 10 and 13 dva. ``ret_to_dva``
-#: inverts Eq. A5, so feeding it these microns reaches soma space exactly and
-#: the reference below tests the displacement inverse alone.
+#: Eq. A5 at exactly 1, 2, 4, 6, 10, and 13 dva. ``ret_to_dva`` inverts
+#: Eq. A5, so these um map exactly to soma dva and the reference below tests
+#: only the displacement inverse.
 _INVERSE_UM = (268.334369, 537.304153, 1076.950022, 1618.537726,
                2705.939100, 3523.613313)
 _INVERSE_SOMA = (1.0, 2.0, 4.0, 6.0, 10.0, 13.0)
@@ -56,10 +55,9 @@ _INVERSE_REF = {
 _ZONE_EXTENT = {0.0: 9.5426, 90.0: 14.0971, 180.0: 14.0971, 270.0: 10.5238}
 
 #: Soma eccentricity (dva) from ``vf2gc`` in visualFields 1.0.7 (CRAN), a
-#: displacement look-up table built by [Montesano2020]_'s own group. Unlike
-#: every other reference here it comes from an implementation this package did
-#: not derive, so it checks the reconstruction rather than the interpolation.
-#: ``tools/generate_montesano2020_map.py`` records the full audit.
+#: displacement look-up table by [Montesano2020]_'s group. Independent of this
+#: package, so it tests the reconstruction itself. Full audit:
+#: ``tools/generate_montesano2020_map.py``.
 _VISUALFIELDS_RADII = (1.0, 2.44, 5.0)
 _VISUALFIELDS_REF = {
     0.0: (2.6645, 4.2669, 6.2297),
@@ -80,12 +78,12 @@ _MAX_DISPLACEMENT = (2.0843, 182.75, 2.439)
 
 
 def _load_field():
-    """The packaged field as (angle deg, r_rf dva, r_soma dva)"""
+    """Returns the packaged field as (angle deg, r_rf dva, r_soma dva)"""
     path = resources.files('pulse2percept.topography.retina').joinpath(
         'data', 'montesano2020.npz')
     with path.open('rb') as f:
         with np.load(f, allow_pickle=False) as npz:
-            # The artifact is a right-eye reference; laterality is runtime.
+            # Stored for the right eye; laterality is applied at runtime:
             npt.assert_equal(str(npz['reference_eye']), 'right')
             return (np.asarray(npz['retinal_angle_deg'], dtype=np.float64),
                     np.asarray(npz['rf_eccentricity_dva'], dtype=np.float64),
@@ -94,18 +92,18 @@ def _load_field():
 
 
 def _visual_deg(theta_ret_deg, eye):
-    """Visual-field polar angle (deg) that falls on an anatomical meridian"""
+    """Returns the visual-field polar angle (deg) of an anatomical meridian"""
     return theta_ret_deg - 180.0 if eye == 'left' else -theta_ret_deg
 
 
 def _dva_point(theta_ret_deg, radius_dva, eye):
-    """Visual-field x,y (dva) at a radius along an anatomical meridian"""
+    """Returns visual-field x,y (dva) along an anatomical meridian"""
     theta = np.deg2rad(_visual_deg(theta_ret_deg, eye))
     return radius_dva * np.cos(theta), radius_dva * np.sin(theta)
 
 
 def _ret_point(theta_ret_deg, radius_um, eye):
-    """Retinal x,y (um) whose visual direction is that anatomical meridian
+    """Returns retinal x,y (um) along an anatomical meridian
 
     Eq. A6 flips y, so the retinal polar angle is the negated visual one.
     """
@@ -113,13 +111,13 @@ def _ret_point(theta_ret_deg, radius_um, eye):
     return radius_um * np.cos(theta), radius_um * np.sin(theta)
 
 
-#: float32 storage makes "undisplaced" exact only to ~1e-6 dva (3e-4 um);
-#: displaced points are tens of microns out.
+#: Tolerance for "undisplaced": float32 storage is exact to ~1e-6 dva
+#: (3e-4 um); displaced points move tens of um.
 _UNDISPLACED_UM = 1e-2
 
 
 def _displacement_um(vfmap, theta_ret_deg, radius_dva):
-    """How far the displacement moves a point (um)"""
+    """Returns the radial displacement of a point (um)"""
     xdva, ydva = _dva_point(theta_ret_deg, radius_dva, vfmap.eye)
     displaced = np.hypot(*vfmap.dva_to_ret(xdva, ydva))
     plain = np.hypot(*Watson2014Map().dva_to_ret(xdva, ydva))
@@ -127,7 +125,7 @@ def _displacement_um(vfmap, theta_ret_deg, radius_dva):
 
 
 def _radius_um(vfmap, theta_ret_deg, radius_dva):
-    """Retinal radius (um) a point on an anatomical meridian maps to"""
+    """Returns the retinal radius (um) of a point on an anatomical meridian"""
     return np.hypot(*vfmap.dva_to_ret(
         *_dva_point(theta_ret_deg, radius_dva, vfmap.eye)))
 
@@ -147,7 +145,7 @@ def test_Montesano2020Map_eye():
                      False)
     npt.assert_equal(Montesano2020Map() == copy.deepcopy(Montesano2020Map()),
                      True)
-    # Equality is exact-class, so a plain Watson map is not a Montesano one:
+    # Equality requires the exact class:
     npt.assert_equal(Montesano2020Map() == Watson2014Map(), False)
     npt.assert_equal(Montesano2020Map() == Curcio1990Map(), False)
 
@@ -166,9 +164,9 @@ def test_Montesano2020Map_forward_reference(eye):
     for theta_ret, expected in _FORWARD_REF.items():
         for r_rf, r_soma in zip(_FORWARD_RADII, expected):
             got = trafo.dva_to_ret(*_dva_point(theta_ret, r_rf, eye))
-            # Identical dva-to-micron step on both sides, so this
-            # compares the displacement alone: 0.003 um here, up to
-            # 0.003 dva (~0.8 um) elsewhere in the field.
+            # Same dva-to-um step on both sides, so this compares only the
+            # displacement: 0.003 um here, up to 0.003 dva (~0.8 um)
+            # elsewhere in the field:
             npt.assert_allclose(got,
                                 watson.dva_to_ret(*_dva_point(theta_ret,
                                                               r_soma, eye)),
@@ -183,30 +181,30 @@ def test_Montesano2020Map_inverse_reference(eye):
     for theta_ret, expected in _INVERSE_REF.items():
         for r_um, r_soma, r_rf in zip(_INVERSE_UM, _INVERSE_SOMA, expected):
             xret, yret = _ret_point(theta_ret, r_um, eye)
-            # The hard-coded microns are Eq. A5 at a whole number of soma dva:
+            # Hard-coded um are Eq. A5 at whole soma dva:
             npt.assert_allclose(
                 np.hypot(*Watson2014Map().dva_to_ret(r_soma, 0.0)), r_um,
                 atol=1e-5)
             got = np.hypot(*trafo.ret_to_dva(xret, yret))
-            # Measured agreement 2.6e-5 dva across all cases.
+            # Measured max error 2.6e-5 dva:
             npt.assert_allclose(got, r_rf, atol=1e-4,
                                 err_msg=f'{theta_ret} deg, {r_soma} dva')
 
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_horizontal_orientation(eye):
-    """Which side of the visual field is nasal retina depends on the eye
+    """The visual-field side of nasal retina depends on the eye
 
-    The nasal zone ends at 9.54 dva and the temporal one at 14.10, so a point
-    12 dva out is displaced on one horizontal side and not the other.
+    The nasal zone ends at 9.54 dva, the temporal at 14.10 dva, so a point
+    12 dva out is displaced on one horizontal side only.
     """
     trafo = Montesano2020Map(eye=eye)
     nasal_x = -1.0 if eye == 'left' else 1.0
-    # Anatomy first: nasal is undisplaced at 12 dva, temporal is not.
+    # By anatomical meridian: nasal undisplaced at 12 dva, temporal displaced:
     npt.assert_allclose(_displacement_um(trafo, 0.0, 12.0), 0.0,
                         atol=_UNDISPLACED_UM)
     npt.assert_equal(_displacement_um(trafo, 180.0, 12.0) > 50.0, True)
-    # The same two meridians, addressed through the visual field:
+    # Same meridians, by visual-field position:
     for x_sign, theta_ret in [(nasal_x, 0.0), (-nasal_x, 180.0)]:
         ref = Watson2014Map().dva_to_ret(
             *_dva_point(theta_ret, _FORWARD_REF[theta_ret][2], eye))
@@ -218,8 +216,8 @@ def test_Montesano2020Map_horizontal_orientation(eye):
 def test_Montesano2020Map_vertical_orientation(eye):
     """Superior/inferior anatomy is the same in both eyes
 
-    Positive y is inferior retina, whose zone ends at 10.52 dva; superior
-    reaches 14.10.
+    Positive y is inferior retina (zone ends at 10.52 dva); superior reaches
+    14.10 dva.
     """
     trafo = Montesano2020Map(eye=eye)
     npt.assert_allclose(_displacement_um(trafo, 270.0, 12.0), 0.0,
@@ -257,42 +255,39 @@ def test_Montesano2020Map_displacement_is_radial(eye):
     for radius in (0.3, 2.44, 7.0, 12.0, 20.0):
         x, y = radius * np.cos(theta), radius * np.sin(theta)
         xret, yret = trafo.dva_to_ret(x, y)
-        # The dva-to-micron step is itself radial, so the direction of
-        # the displaced point must match the undisplaced one:
+        # The dva-to-um step is radial, so directions must match:
         xref, yref = Watson2014Map().dva_to_ret(x, y)
         npt.assert_allclose(np.arctan2(yret, xret), np.arctan2(yref, xref),
                             atol=1e-12)
-        # Outward only, and monotonically increasing in radius:
+        # Outward only:
         npt.assert_array_less(-1e-9, np.hypot(xret, yret) -
                               np.hypot(xref, yref))
 
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_identity_beyond_the_support(eye):
-    """Beyond 15 dva nothing is displaced"""
+    """No displacement at or beyond 15 dva"""
     trafo = Montesano2020Map(eye=eye)
     theta = np.deg2rad(np.arange(0.0, 360.0, 3.0))
     for radius in (15.0, 15.5, 20.0, 45.0):
         x, y = radius * np.cos(theta), radius * np.sin(theta)
         npt.assert_allclose(trafo.dva_to_ret(x, y),
                             Watson2014Map().dva_to_ret(x, y), rtol=1e-12)
-        # With no displacement left, the reverse returns the input exactly:
+        # Round trip is exact without displacement:
         xret, yret = trafo.dva_to_ret(x, y)
         npt.assert_allclose(trafo.ret_to_dva(xret, yret), (x, y), atol=1e-9)
 
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_reverse_solves_eq_a5(eye):
-    """The reverse inverts Eq. A5 rather than evaluating Eq. A6
+    """ret_to_dva inverts Eq. A5 instead of evaluating Eq. A6
 
-    Watson fits the two directions separately, and they disagree by a few
-    percent. Reusing Eq. A6 here would leave ``ret_to_dva`` not inverting
-    ``dva_to_ret``, which ``location_noise`` relies on.
+    Watson's two fits disagree by a few percent; ``location_noise`` requires
+    ``ret_to_dva`` to invert ``dva_to_ret``.
     """
     trafo = Montesano2020Map(eye=eye)
     watson = Watson2014Map()
-    # Outside the displacement zone, so the Eq. A5/A6 choice is all that is
-    # left of the transform:
+    # Outside the displacement zone, so only the Eq. A5/A6 choice matters:
     r_dva = np.array([16.0, 20.0, 30.0, 45.0])
     xret, yret = watson.dva_to_ret(r_dva, np.zeros_like(r_dva))
     npt.assert_allclose(np.hypot(*trafo.ret_to_dva(xret, yret)), r_dva,
@@ -303,10 +298,10 @@ def test_Montesano2020Map_reverse_solves_eq_a5(eye):
 
 
 def test_Montesano2020Map_zone_boundary():
-    """Displacement dies out at the per-meridian zone extent
+    """Displacement ends at the per-meridian zone extent
 
-    9.54 dva nasally to 14.10 superiorly/temporally; the 751-node radial grid
-    resolves the boundary to about 0.05 dva.
+    9.54 dva nasally to 14.10 dva superiorly/temporally; the 751-node radial
+    grid resolves the boundary to about 0.05 dva.
     """
     trafo = Montesano2020Map()
     for theta_ret, extent in _ZONE_EXTENT.items():
@@ -315,16 +310,16 @@ def test_Montesano2020Map_zone_boundary():
         npt.assert_allclose(_displacement_um(trafo, theta_ret, extent + 0.1),
                             0.0, atol=_UNDISPLACED_UM,
                             err_msg=f'{theta_ret} deg')
-    # The extents genuinely differ, so a single meridian would not do:
+    # Extents differ between meridians:
     npt.assert_allclose(_displacement_um(trafo, 0.0, 12.0), 0.0,
                         atol=_UNDISPLACED_UM)
     npt.assert_equal(_displacement_um(trafo, 90.0, 12.0) > 50.0, True)
 
 
 def test_Montesano2020Map_periodic_seam():
-    """0 and 360 deg are the same meridian, with no seam between them"""
+    """Interpolation is continuous across 0/360 deg"""
     trafo = Montesano2020Map()
-    # 0 and 360 deg name one meridian, and 359.9 deg is 0.1 deg short of it:
+    # 360 deg == 0 deg, and 359.9 deg == -0.1 deg:
     npt.assert_allclose(trafo.dva_to_ret(*_dva_point(360.0, 2.44, 'right')),
                         trafo.dva_to_ret(*_dva_point(0.0, 2.44, 'right')),
                         rtol=1e-12, atol=1e-9)
@@ -332,13 +327,13 @@ def test_Montesano2020Map_periodic_seam():
                         trafo.dva_to_ret(*_dva_point(-0.1, 2.44, 'right')),
                         rtol=1e-12, atol=1e-9)
     for radius in (0.5, 2.44, 8.0):
-        # A query between the last stored meridian (359.75 deg) and the first
-        # (0 deg) lands between the two, rather than clamping to either:
+        # Between the last (359.75 deg) and first (0 deg) stored meridians,
+        # values are interpolated, not clamped:
         lo = _radius_um(trafo, 359.75, radius)
         hi = _radius_um(trafo, 0.0, radius)
         mid = _radius_um(trafo, 359.9, radius)
         npt.assert_allclose((mid - lo) / (hi - lo), 0.15 / 0.25, atol=1e-3)
-        # And the field is as smooth across the seam as it is anywhere:
+        # No jump at the seam:
         sweep = np.array([_radius_um(trafo, angle % 360.0, radius)
                           for angle in np.arange(-1.0, 1.0001, 0.05)])
         steps = np.abs(np.diff(sweep))
@@ -364,7 +359,7 @@ def test_Montesano2020Map_shapes():
     xret, yret = trafo.dva_to_ret(grid_x, grid_y)
     npt.assert_equal(xret.shape, grid_x.shape)
     npt.assert_equal(np.all(np.isfinite(xret)), True)
-    # A 2-D pass agrees elementwise with the 1-D one:
+    # 2D input agrees elementwise with 1D:
     npt.assert_allclose(xret[0], trafo.dva_to_ret(vec, grid_y[0])[0],
                         rtol=1e-12)
 
@@ -373,7 +368,7 @@ def test_Montesano2020Map_shapes():
     npt.assert_equal(xb.shape, (vec.size, vec.size))
     npt.assert_allclose(xb, xret.T, rtol=1e-12)
     npt.assert_allclose(yb, yret.T, rtol=1e-12)
-    # Lists are arrays too:
+    # Lists work like arrays:
     npt.assert_allclose(trafo.dva_to_ret([1.0, 2.0], [3.0, 4.0]),
                         trafo.dva_to_ret(np.array([1.0, 2.0]),
                                          np.array([3.0, 4.0])), rtol=1e-12)
@@ -398,7 +393,7 @@ def test_Montesano2020Map_coords():
 
 
 def test_Montesano2020Map_preserves_precision():
-    """A model grid is float32, and the spatial kernels require it back"""
+    """Output dtype matches input (float32 model grids require it)"""
     trafo = Montesano2020Map()
     for dtype in (np.float32, np.float64):
         x = np.array([0.5, 2.44, 12.0, 20.0], dtype=dtype)
@@ -417,7 +412,7 @@ def test_Montesano2020Map_Grid2D_build(eye):
     npt.assert_equal(grid.ret.x.shape, grid.x.shape)
     npt.assert_equal(np.all(np.isfinite(grid.ret.x)), True)
     npt.assert_equal(np.all(np.isfinite(grid.ret.y)), True)
-    # Every point is displaced outward, never inward:
+    # All points are displaced outward:
     plain = Grid2D((-14, 14), (-14, 14), step=1)
     plain.build(Watson2014Map())
     outward = np.hypot(plain.ret.x, plain.ret.y) - _UNDISPLACED_UM
@@ -426,7 +421,7 @@ def test_Montesano2020Map_Grid2D_build(eye):
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_round_trip_dva(eye):
-    """dva -> ret -> dva closes to the field's interpolation error"""
+    """dva -> ret -> dva round trip is within interpolation error"""
     trafo = Montesano2020Map(eye=eye)
     theta = np.deg2rad(np.arange(0.0, 360.0, 5.0))
     radius = np.array([0.05, 0.5, 2.44, 5.0, 9.0, 12.0, 14.0, 15.0, 25.0,
@@ -436,21 +431,19 @@ def test_Montesano2020Map_round_trip_dva(eye):
     err = np.hypot(*[back - fwd for back, fwd
                      in zip(trafo.ret_to_dva(*trafo.dva_to_ret(x, y)),
                             (x, y))])
-    # Measured max 7.6e-5 dva here, 8.3e-4 over the whole field; the residual
-    # is the inverse table in the outer displacement zone, where its radial
-    # nodes are coarsest.
+    # Measured max 7.6e-5 dva here, 8.3e-4 dva over the whole field (largest
+    # in the outer zone, where the inverse table's radial nodes are coarsest):
     npt.assert_array_less(err, 2e-3)
-    # Past the zone there is nothing to interpolate:
+    # Exact beyond the zone:
     npt.assert_allclose(err[radius >= 15.0], 0.0, atol=1e-9)
 
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Montesano2020Map_round_trip_ret(eye):
-    """ret -> dva -> ret closes, which is what location_noise needs
+    """ret -> dva -> ret round trip is within 0.2 um
 
-    ``location_noise`` maps an electrode into the visual field, adds an
-    offset and maps it back, so a zero offset has to return the electrode to
-    its own tissue coordinate.
+    Required by ``location_noise``, which maps an electrode to dva, adds an
+    offset, and maps back.
     """
     trafo = Montesano2020Map(eye=eye)
     theta = np.deg2rad(np.arange(0.0, 360.0, 5.0))
@@ -461,12 +454,12 @@ def test_Montesano2020Map_round_trip_ret(eye):
     err = np.hypot(*[back - fwd for back, fwd
                      in zip(trafo.dva_to_ret(*trafo.ret_to_dva(x, y)),
                             (x, y))])
-    # Measured max 0.054 um here, 0.073 um over the whole retina.
+    # Measured max 0.054 um here, 0.073 um over the whole retina:
     npt.assert_array_less(err, 0.2)
 
 
 def test_montesano2020_field_invariants():
-    """Invariants the runtime interpolators rely on
+    """Packaged field invariants required by the runtime interpolators
 
     The full audit (E2v fits, zone extents, figure comparisons) is in
     ``tools/generate_montesano2020_map.py``.
@@ -482,8 +475,7 @@ def test_montesano2020_field_invariants():
     npt.assert_allclose(table[:, -1], r_rf[-1], atol=1e-5)
     # Strictly increasing in r_rf, so each meridian is invertible:
     npt.assert_equal(np.diff(table, axis=1).min() > 0.0, True)
-    # Centrifugal everywhere; float32 storage puts the identity part
-    # within ~1e-6 dva of zero rather than exactly on it:
+    # Centrifugal everywhere (float32: identity part within ~1e-6 dva of 0):
     displacement = table - r_rf[np.newaxis, :]
     npt.assert_array_less(-2e-6, displacement)
     # The published global maximum:
@@ -495,27 +487,23 @@ def test_montesano2020_field_invariants():
 
 
 def test_montesano2020_matches_visualfields():
-    """The reconstruction agrees with an implementation we did not derive
+    """Packaged field agrees with the visualFields look-up table
 
-    Every other reference in this module comes from the same solve that
-    produced the packaged field, so it can only show that interpolation
-    preserves the generator's output. visualFields ships a displacement
-    look-up table from [Montesano2020]_'s own group; agreeing with it is
-    evidence about the reconstruction itself.
-
-    Compared in the degree domain on the stored meridians, which the eight
-    angles below all fall on exactly.
+    visualFields is an independent implementation by [Montesano2020]_'s
+    group, so this tests the reconstruction itself (the other references only
+    test interpolation). Compared in dva on stored meridians (the eight angles
+    below fall on them exactly).
     """
     angle, r_rf, table = _load_field()
     for theta_ret, expected in _VISUALFIELDS_REF.items():
         row = table[int(np.argmin(np.abs(angle - theta_ret)))]
-        # Measured max 0.073 dva across these 24 points.
+        # Measured max 0.073 dva across these 24 points:
         npt.assert_allclose(np.interp(_VISUALFIELDS_RADII, r_rf, row),
                             expected, atol=0.1,
                             err_msg=f'{theta_ret} deg')
     for theta_ret, peak in _VISUALFIELDS_PEAK.items():
         row = table[int(np.argmin(np.abs(angle - theta_ret)))]
-        # Measured max 0.014 dva.
+        # Measured max 0.014 dva:
         npt.assert_allclose((row - r_rf).max(), peak, atol=0.03,
                             err_msg=f'{theta_ret} deg')
 
@@ -523,8 +511,7 @@ def test_montesano2020_matches_visualfields():
 def test_montesano2020_field_loads_lazily():
     """The 3.7 MB field is read on first use, not at import
 
-    In a subprocess, so the check does not depend on what earlier tests
-    loaded.
+    Runs in a subprocess, independent of earlier tests.
     """
     script = """
 import numpy as np

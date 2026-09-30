@@ -26,9 +26,8 @@ class ScoreboardSpatial(CortexSpatial):
 
     .. warning::
 
-        ``rho`` is fixed: this model does not predict pulse-dependent
-        phosphene size. Doubling amplitude doubles brightness and leaves the
-        phosphene exactly as wide. Use
+        ``rho`` is fixed, so phosphene size does not depend on the pulse:
+        doubling amplitude doubles brightness at constant width. Use
         :py:class:`~pulse2percept.models.cortex.DynaphosModel` for a cortical
         model whose phosphene size follows the stimulus current.
 
@@ -42,12 +41,10 @@ class ScoreboardSpatial(CortexSpatial):
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     min_current_spread : float, optional
-        An electrode is skipped at grid points where its Gaussian current
-        spread has decayed below this fraction of its peak. The default
-        (1e-8, about 6.1 ``rho`` away) drops the Gaussian *times* the
-        stimulus amplitude, summed over the skipped electrodes, so the
-        error at a point is bounded by ``min_current_spread`` times the
-        summed amplitude across electrodes.
+        Fraction of peak Gaussian current spread below which an electrode is
+        skipped at a grid point. The default 1e-8 (about 6.1 ``rho``) bounds
+        the error at a point by ``min_current_spread`` times the summed
+        amplitude across electrodes.
     regions : list of str, optional
         The regions to simulate. Options are 'v1', 'v2', or 'v3'. Default:
         ['v1']
@@ -154,8 +151,7 @@ class ScoreboardSpatial(CortexSpatial):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        # Cortical coordinates are stored in microns (see `CorticalMap`), and
-        # the current spread is compared against them:
+        # Cortical coordinates are in microns (see `CorticalMap`):
         return {**super().get_param_units(), 'rho': um, 'meridian_blend': dva}
 
     def _build(self):
@@ -164,10 +160,8 @@ class ScoreboardSpatial(CortexSpatial):
     def _postprocess_spatial(self, resp):
         """Blend the percept across the vertical meridian
 
-        On this model rather than on `CortexSpatial`: the seam is a property
-        of the split map this one is built on, not of being cortical, and a
-        future cortical model without one should not inherit a correction for
-        it.
+        Defined here because the seam comes from the split map, which other
+        `CortexSpatial` models may not use.
         """
         blended = _blend_meridian(resp, self.grid, 'vertical',
                                   self.meridian_blend)
@@ -238,9 +232,8 @@ class ScoreboardModel(Model):
 
     .. warning::
 
-        ``rho`` is fixed: this model does not predict pulse-dependent
-        phosphene size. Doubling amplitude doubles brightness and leaves the
-        phosphene exactly as wide. Use
+        ``rho`` is fixed, so phosphene size does not depend on the pulse:
+        doubling amplitude doubles brightness at constant width. Use
         :py:class:`~pulse2percept.models.cortex.DynaphosModel` for a cortical
         model whose phosphene size follows the stimulus current.
 
@@ -254,12 +247,10 @@ class ScoreboardModel(Model):
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
     min_current_spread : float, optional
-        An electrode is skipped at grid points where its Gaussian current
-        spread has decayed below this fraction of its peak. The default
-        (1e-8, about 6.1 ``rho`` away) drops the Gaussian *times* the
-        stimulus amplitude, summed over the skipped electrodes, so the
-        error at a point is bounded by ``min_current_spread`` times the
-        summed amplitude across electrodes.
+        Fraction of peak Gaussian current spread below which an electrode is
+        skipped at a grid point. The default 1e-8 (about 6.1 ``rho``) bounds
+        the error at a point by ``min_current_spread`` times the summed
+        amplitude across electrodes.
     regions : list of str, optional
         The regions to simulate. Options are 'v1', 'v2', or 'v3'. Default:
         ['v1']

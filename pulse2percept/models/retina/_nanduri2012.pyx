@@ -182,23 +182,16 @@ cpdef temporal_fast(const float32[:, ::1] stim,
 
     all_r3 = np.empty((n_space, n_sim), dtype=np.float32)  # Py overhead
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
-    # Each leaky integrator below steps by `dt * (drive - state) / tau`, and
-    # `dt / tau` is the same number on every step at every location. Written
-    # that way it is still a division per stage per step, because reassociating
-    # it is not a transformation a C compiler may make on its own: the two
-    # forms round differently, and neither `/fp:fast` nor `-ffast-math` is on.
-    # Five divisions, each ~14 cycles of latency, sit right on the dependency
-    # chain the loop cannot start the next step without. Dividing once here
-    # turns all five into multiplies:
+    # Precompute `dt / tau`: without fast-math the compiler cannot reassociate
+    # the per-step divisions, which sit on the loop's dependency chain:
     dt_tau1 = dt / tau1
     dt_tau2 = dt / tau2
     dt_tau3 = dt / tau3
 
     for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
-        # Between pulses the integrators below decay down through the subnormal
-        # range, where the arithmetic costs ~100x what it does on normal
-        # floats; see `utils/_fpmode.pxd`. The mode is per-thread, hence set
-        # here rather than around the `prange`:
+        # Between pulses the integrators decay into subnormals, where arithmetic
+        # is ~100x slower; see `utils/_fpmode.pxd`. The FP mode is per-thread,
+        # so set it inside the `prange`:
         fpmode = c_denormals_off()
         # Because the stationary nonlinearity depends on `max_R3`, which is the
         # largest value of R3 over all time points, we have to process the
@@ -216,10 +209,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # We use that frame until `t_sim` advances past it. In other words,
             # we use the `idx_stim`-th frame for all times
             # t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1].
-            # `while`, not `if`: more than one stimulus frame can fall inside a
-            # single simulation step -- an encoded pulse puts its edges on the
-            # DT=1e-3 ms grid, finer than `dt` -- and advancing only one of them
-            # per step leaves this reading a frame that is already in the past:
+            # `while`, not `if`: encoded pulse edges lie on the DT=1e-3 ms grid,
+            # finer than `dt`, so several frames can fall inside one step:
             while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
                 idx_stim = idx_stim + 1
             amp = stim[idx_space, idx_stim]
@@ -247,9 +238,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
         idx_frame = 0
         # Scaling factor depends on `max_r3` from Step 1:
         scale = asymptote * c_expit((max_r3 - shift) / slope) / max_r3
-        # We have to restart the loop over all simulation time steps from 0.
-        # This step reads `all_r3`, which Step 1 already stored per simulation
-        # step, so it needs no stimulus frame lookup of its own:
+        # Restart the loop over all simulation time steps from 0. This step
+        # reads `all_r3`, so it needs no stimulus frame lookup:
         for idx_sim in range(n_sim):
             # Slow response (3-stage leaky integrator):
             r4a = r4a + dt_tau3 * (all_r3[idx_space, idx_sim] * scale - r4a)
@@ -264,7 +254,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                     r4c = 0.0
                 percept[idx_space, idx_frame] = r4c * scale_out
                 idx_frame = idx_frame + 1
-        # Hand the thread back in the floating-point mode it arrived in:
+        # Restore the thread's floating-point mode:
         c_fpmode_restore(fpmode)
 
     return np.asarray(percept)  # Py overhead

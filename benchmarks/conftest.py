@@ -1,9 +1,7 @@
 """Fixtures and measurement helpers for the benchmark suite.
 
-Benchmarks are skipped unless pytest is invoked with ``--benchmark-only``, so a
-bare ``pytest`` at the repository root stays a test run. If ``pytest-benchmark``
-is not installed, the benchmark modules are not collected at all, so
-contributors without the ``benchmark`` extra see nothing break.
+Benchmarks are skipped unless pytest is invoked with ``--benchmark-only``. If
+``pytest-benchmark`` is not installed, the benchmark modules are not collected.
 """
 import gc
 import tracemalloc
@@ -15,10 +13,8 @@ try:
     import pytest_benchmark  # noqa: F401
 except ImportError:  # pragma: no cover - depends on the local environment
     HAVE_BENCHMARK = False
-    # Only the modules that need the plugin. test_compare.py exercises the
-    # comparison logic on synthetic data, needs nothing from pytest-benchmark,
-    # and must stay collectable: it is what guards the pull request gate.
-    # A new module of benchmarks belongs in this list.
+    # Modules that need the plugin; add new benchmark modules here.
+    # test_compare.py does not need the plugin and must stay collectable.
     collect_ignore = ['test_predict.py']
 else:
     HAVE_BENCHMARK = True
@@ -39,22 +35,19 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    # pytest-benchmark registers this marker itself, but not when the plugin is
-    # disabled with ``-p no:benchmark``. Registering it here keeps that case
-    # free of PytestUnknownMarkWarning noise.
+    # Register the marker when pytest-benchmark is disabled (``-p no:benchmark``)
+    # to avoid PytestUnknownMarkWarning:
     if not config.pluginmanager.hasplugin('benchmark'):
         config.addinivalue_line('markers',
                                 'benchmark: mark a pulse2percept benchmark')
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip the benchmarks unless they were explicitly asked for.
+    """Skip tests that use the ``benchmark`` fixture unless
+    ``--benchmark-only`` is given.
 
-    Only the benchmarks: a test is treated as one when it asks for the
-    ``benchmark`` fixture, which every function in ``test_predict.py`` does and
-    no ordinary test does. Skipping the whole directory instead would take
-    ``test_compare.py`` with it, and the logic that decides whether a pull
-    request passes should run in a plain ``pytest benchmarks/`` too.
+    ``test_compare.py`` does not use the fixture, so it still runs in a plain
+    ``pytest benchmarks/``.
     """
     if config.getoption('benchmark_only', default=False):
         return
@@ -74,22 +67,21 @@ def n_threads(pytestconfig):
 
 @pytest.fixture(scope='session')
 def axon_pickle(tmp_path_factory):
-    """Path for the axon-map cache.
+    """Return a temporary path for the axon-map cache.
 
-    Keeps ``AxonMapSpatial`` from writing ``axons.pickle`` into the directory
-    the benchmarks happened to be run from, and keeps a stale cache from a
-    previous run out of the measurement.
+    Avoids writing ``axons.pickle`` into the working directory and reusing a
+    stale cache from a previous run.
     """
     return str(tmp_path_factory.mktemp('axon_cache') / 'axons.pickle')
 
 
 @pytest.fixture(scope='module', params=SCENARIOS, ids=lambda s: s.id)
 def scenario(request):
-    """The pipeline under test.
+    """Return the scenario under test.
 
-    Scenarios flagged ``slow`` are skipped unless ``--runslow`` is given. That
-    option comes from the repository's root ``conftest.py``, which is why it is
-    not registered here: adding it twice is a conflicting-option error.
+    Scenarios flagged ``slow`` are skipped unless ``--runslow`` is given.
+    ``--runslow`` is registered in the root ``conftest.py``; registering it
+    here too is a conflicting-option error.
     """
     if request.param.slow and not request.config.getoption('runslow',
                                                            default=False):
@@ -99,10 +91,10 @@ def scenario(request):
 
 @pytest.fixture(scope='module')
 def make_model(scenario, n_threads, axon_pickle):
-    """Factory for fresh, *unbuilt* models.
+    """Return a factory for fresh, *unbuilt* models.
 
-    Benchmarks that measure ``build`` need a new model for every round, and
-    they need it built outside the timed section.
+    ``build`` benchmarks need a new model per round, created outside the timed
+    section.
     """
     def _make(implant, ignore_pickle=False):
         kwargs = {'verbose': False, 'n_threads': n_threads}
@@ -123,20 +115,21 @@ def implant(scenario):
 
 @pytest.fixture(scope='module')
 def source(scenario, implant):
-    """What ``predict_percept`` is handed."""
+    """Return the input passed to ``predict_percept``."""
     return scenario.source(implant, scenario.stimulus())
 
 
 @pytest.fixture(scope='module')
 def built_model(make_model, implant):
-    """A model that has been built once, shared by the benchmarks that need
-    one. ``predict_percept`` does not mutate the model, so reuse is safe."""
+    """Return a built model, shared across benchmarks.
+
+    ``predict_percept`` does not mutate the model, so reuse is safe."""
     return make_model(implant).build()
 
 
 @pytest.fixture(scope='module')
 def percept(built_model, source):
-    """A predicted percept, for the benchmarks that consume one."""
+    """Return a predicted percept."""
     return built_model.predict_percept(source)
 
 
@@ -144,17 +137,13 @@ def percept(built_model, source):
 def peak_memory():
     """Return a helper that measures peak memory of a single call, in MB.
 
-    ``tracemalloc`` is used rather than RSS sampling because it is
-    deterministic, needs no extra dependency, and works on Windows (which
-    rules out ``pytest-memray``). It tracks NumPy data buffers, which is where
-    essentially all of the memory in these workloads goes.
+    Uses ``tracemalloc`` instead of RSS sampling: deterministic, no extra
+    dependency, and works on Windows (which rules out ``pytest-memray``). It
+    tracks NumPy data buffers, which hold nearly all memory in these workloads,
+    but not raw ``malloc`` inside the Cython/OpenMP kernels, so the numbers are
+    a floor for those code paths.
 
-    It does *not* see raw ``malloc`` inside the Cython/OpenMP kernels, so
-    treat the numbers as a floor for those code paths rather than a total.
-
-    Always call this outside the timed section: tracing inflates run time
-    several-fold, so a timing that included it would be measuring the
-    profiler.
+    Call outside the timed section: tracing inflates run time several-fold.
     """
     def _measure(fn, *args, **kwargs):
         gc.collect()

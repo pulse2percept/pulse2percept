@@ -148,10 +148,9 @@ def test_ArgusII(ztype):
 
 
 def test_ArgusII_defaults():
-    """Argus II brings its own encoder and raster, and each instance a fresh one
-    """
+    """Argus II has a default encoder and raster, new for each instance"""
     argus = retina.ArgusII()
-    # 6 Hz amplitude modulation, which is the rate the device runs video at:
+    # 6 Hz amplitude modulation (the device video rate):
     npt.assert_equal(isinstance(argus.encoder, AmplitudeEncoder), True)
     npt.assert_almost_equal(argus.encoder.freq, 6)
     # Six sequential groups (one row of ten electrodes each), 2 ms apart:
@@ -160,35 +159,32 @@ def test_ArgusII_defaults():
     npt.assert_almost_equal(argus.raster.group_dur, 2)
     npt.assert_equal(argus.raster.groups(argus.electrode_names),
                      np.repeat(np.arange(6), 10))
-    # The raster is bound to the implant that owns it, so it plots itself:
+    # The raster is bound to the implant, so `raster.plot()` needs no argument:
     npt.assert_equal(argus.raster.implant is argus, True)
 
-    # Each instance gets its own, so tweaking one implant's does not reach
-    # every other Argus II in the session:
+    # Each instance has its own encoder and raster:
     other = retina.ArgusII()
     npt.assert_equal(other.encoder is argus.encoder, False)
     npt.assert_equal(other.raster is argus.raster, False)
     other.encoder.freq = 20
     npt.assert_almost_equal(argus.encoder.freq, 6)
 
-    # An explicit None switches each feature off, and is told apart from the
-    # argument simply not being given:
+    # An explicit None disables each one (distinct from omitting the argument):
     npt.assert_equal(retina.ArgusII(encoder=None).encoder, None)
     npt.assert_equal(retina.ArgusII(raster=None).raster, None)
     npt.assert_equal(retina.ArgusII(raster=None).encoder is None, False)
-    # ... and switching the raster off really does stop the multiplexing: every
-    # electrode then fires on the same schedule, at the same instant.
+    # Without a raster, all electrodes fire on the same schedule:
     unrastered = retina.ArgusII(raster=None).prepare_stim(samples.logo_bvl())
     npt.assert_equal(unrastered.metadata['encoder']['cycle'], None)
-    # There is an instant at which every electrode is at its own peak, so the
-    # stimulator has to source the whole array at once:
+    # At some instant every electrode is at its peak, so the whole array draws
+    # current at once:
     npt.assert_almost_equal(np.abs(unrastered.data).sum(axis=0).max(),
                             np.abs(unrastered.data).max(axis=1).sum(),
                             decimal=3)
     rastered = retina.ArgusII().prepare_stim(samples.logo_bvl())
     npt.assert_array_less(np.abs(rastered.data).sum(axis=0).max(),
                           np.abs(unrastered.data).sum(axis=0).max())
-    # ... and either can be replaced outright:
+    # Either can be replaced:
     custom = retina.ArgusII(encoder=AmplitudeEncoder(freq=20),
                               raster=SequentialRaster(3))
     npt.assert_almost_equal(custom.encoder.freq, 20)
@@ -200,39 +196,37 @@ def test_ArgusII_defaults():
 
 
 def test_ArgusII_encodes_pictures_on_preparation(camera_video):
-    """The device's own defaults are what make `prepare_stim(picture)` work"""
+    """The default encoder and raster let `prepare_stim` accept a picture"""
     argus = retina.ArgusII()
     stim = argus.prepare_stim(samples.logo_bvl())
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.shape[0], argus.n_electrodes)
     npt.assert_equal(list(stim.electrodes), list(argus.electrode_names))
-    # 6 Hz over the 500 ms an image is treated as lasting is three pulses:
+    # An image lasts 500 ms, so 6 Hz gives three pulses:
     npt.assert_almost_equal(stim.time[-1], 500)
     npt.assert_almost_equal(np.abs(stim.data).max(), 50, decimal=4)
-    # The raster is in there too: six groups, each 2 ms behind the one before:
+    # Raster: six groups, each 2 ms after the previous one:
     npt.assert_almost_equal(stim.metadata['encoder']['cycle'], 12)
-    # ... which is what a raster is for: at no instant is more than one group
-    # of electrodes drawing current.
+    # At no instant does more than one group draw current:
     groups = argus.raster.groups(stim.electrodes)
     for column in stim.data.T:
         npt.assert_equal(np.unique(groups[column != 0]).size <= 1, True)
 
-    # A video keeps its own frame clock, which is what a model reports at:
+    # A video keeps its own frame clock (the model's output times):
     with pytest.warns(UserWarning, match='deliver no pulse'):
-        # 6 Hz against 29.97 fps: most frames carry no pulse of their own
+        # 6 Hz at 29.97 fps: most frames have no pulse
         stim = argus.prepare_stim(camera_video)
     npt.assert_equal(stim.unit, uA)
     meta = stim.metadata['encoder']
     npt.assert_equal(meta['frame_time'].size, 94)
     npt.assert_almost_equal(meta['frame_dur'], 1000 / 29.97, decimal=3)
 
-    # Without an encoder the very same picture is refused, since there is no
-    # default mapping from a gray level onto an amplitude:
+    # Without an encoder, the picture is rejected (no default gray level to
+    # amplitude mapping):
     with pytest.raises(DimensionMismatchError):
         retina.ArgusII(encoder=None).prepare_stim(samples.logo_bvl())
 
-    # And the whole point of it: a picture goes straight into a model, with no
-    # encoding step for the caller to spell out.
+    # A picture can be passed directly to a model:
     model = AxonMapModel(implant=argus, xrange=(-4, 4), yrange=(-3, 3), step=1,
                          rho=200, lam=100).build()
     percept = model.predict_percept(samples.logo_bvl())

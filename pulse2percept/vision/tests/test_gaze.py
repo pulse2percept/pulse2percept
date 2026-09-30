@@ -11,11 +11,11 @@ from pulse2percept.units import DimensionMismatchError, dva, ms, s, um
 from pulse2percept.vision import Gaze, Scene, Scotoma
 
 SCENE_PX = 41
-# One frame every 100 ms, so events at 0/200/300 land on frames 0, 2 and 3:
+# One frame every 100 ms, so events at 0/200/300 ms land on frames 0, 2, 3:
 FRAME_TIMES = np.arange(5) * 100.0
 EVENTS = [(0, 0), (6, 2), (-4, 3)]
 EVENT_TIMES = [0, 200, 300]
-# What EVENTS/EVENT_TIMES expand to on FRAME_TIMES:
+# EVENTS/EVENT_TIMES expanded onto FRAME_TIMES:
 EXPANDED = np.array([(0, 0), (0, 0), (6, 2), (-4, 3), (-4, 3)], dtype=float)
 
 
@@ -51,13 +51,13 @@ def test_gaze_validates_its_arguments():
 
 
 def test_an_empty_trajectory_is_refused():
-    """No fixation at all says nothing about where the eye was pointing"""
+    """Gaze requires at least one fixation"""
     with pytest.raises(ValueError):
         Gaze(np.zeros((0, 2)) * dva, time=np.zeros(0) * ms)
 
 
 def test_time_must_be_counted_in_a_unit_of_time():
-    """As for Percept: a length or an angle is not a clock"""
+    """Non-time units for 'time' are a DimensionMismatchError"""
     with pytest.raises(DimensionMismatchError):
         Gaze([(0, 0), (6, 2)] * dva, time=[0, 400] * um)
     with pytest.raises(DimensionMismatchError):
@@ -65,7 +65,7 @@ def test_time_must_be_counted_in_a_unit_of_time():
 
 
 def test_a_trajectory_cannot_be_edited_after_construction():
-    """Mutating it would change what an already-resolved gaze meant"""
+    """positions and time are read-only copies"""
     positions = np.array(EVENTS, dtype=float)
     times = np.array(EVENT_TIMES, dtype=float)
     gaze = Gaze(positions * dva, time=times * ms)
@@ -73,7 +73,7 @@ def test_a_trajectory_cannot_be_edited_after_construction():
         gaze.positions[0, 0] = 99
     with pytest.raises(ValueError):
         gaze.time[0] = 99
-    # Nor through the arrays it was built from:
+    # Changing the input arrays has no effect:
     positions[0, 0] = 99
     times[0] = 99
     npt.assert_almost_equal(gaze.positions, EVENTS)
@@ -81,10 +81,10 @@ def test_a_trajectory_cannot_be_edited_after_construction():
 
 
 def test_a_fixation_starts_at_its_timestamp_and_is_held():
-    """Right-continuous: a frame on an event already sees the new fixation"""
+    """A frame exactly on an event time uses the new fixation"""
     npt.assert_almost_equal(trajectory()._at(FRAME_TIMES, ms), EXPANDED)
-    # Between events the previous fixation stands, and the last one is held
-    # past the end of the trajectory:
+    # Between events the previous fixation holds; the last one holds past the
+    # end:
     npt.assert_almost_equal(trajectory()._at([199.9, 200, 5000], ms),
                             [(0, 0), (6, 2), (-4, 3)])
 
@@ -96,7 +96,7 @@ def test_gaze_before_the_first_event_is_undefined():
 
 
 def test_bare_times_are_milliseconds_and_units_convert():
-    """Seconds and milliseconds describe the same trajectory"""
+    """Bare times are ms; times in s give the same trajectory"""
     bare = Gaze(EVENTS * dva, time=EVENT_TIMES)
     npt.assert_equal(bare.time_unit, ms)
     npt.assert_almost_equal(bare.time, EVENT_TIMES)
@@ -105,12 +105,12 @@ def test_bare_times_are_milliseconds_and_units_convert():
     npt.assert_almost_equal(in_seconds.time, [0, 0.2, 0.3])
     for gaze in (bare, in_seconds):
         npt.assert_almost_equal(gaze._at(FRAME_TIMES, ms), EXPANDED)
-    # The target clock may count in something else again:
+    # Query times may use a different unit:
     npt.assert_almost_equal(in_seconds._at(FRAME_TIMES / 1000.0, s), EXPANDED)
 
 
 def test_rows_carry_their_own_timestamps():
-    """(x, y, time) rows describe the same trajectory as positions + time"""
+    """(x, y, time) rows match positions + time"""
     reference = trajectory()
     rows = [(0, 0, 0), (6 * dva, 2 * dva, 200 * ms),
             (-4 * dva, 3 * dva, 0.3 * s)]
@@ -154,7 +154,7 @@ def test_rows_are_validated():
 
 
 def test_sparse_events_render_like_the_expanded_trajectory():
-    """Sparse events stand in for one gaze per frame"""
+    """Sparse events render the same as one gaze per frame"""
     scene = video_scene()
     npt.assert_array_equal(scene.render(gaze=trajectory()).data,
                            scene.render(gaze=EXPANDED * dva).data)
@@ -183,7 +183,7 @@ def test_plot_draws_the_fixation_held_at_that_frame(frame):
 def test_play_accepts_a_trajectory_with_or_without_rings():
     scene = video_scene()
     scene.play(gaze=trajectory())
-    # Rings are eye-centered, like the displayed FOV, so they hold still:
+    # Rings are eye-centered, like the displayed FOV:
     scene.play(gaze=trajectory(), rings=True)
     plt.close('all')
 
@@ -197,7 +197,7 @@ def test_a_still_scene_has_no_clock_to_resolve_against():
 
 
 def test_the_output_clock_and_the_rendered_frames_never_disagree():
-    """One rule decides the frame count, whatever the scene and percept"""
+    """_output_clock frame count matches render() for any scene and percept"""
     grid = Grid2D((-4, 4), (-4, 4), step=1)
     untimed = Percept(np.random.rand(9, 9, 1), space=grid)
     timed = Percept(np.random.rand(9, 9, FRAME_TIMES.size), space=grid,
@@ -216,10 +216,10 @@ def test_the_output_clock_and_the_rendered_frames_never_disagree():
 
 
 def test_gaze_resolves_on_scene_frames_not_on_percept_response_times():
-    """A temporal model's output times label the render, but not the gaze
+    """Gaze is resolved at scene frame times, not percept time stamps
 
-    Its frames are reported one frame period late, which would shift every
-    fixation by a frame if gaze were resolved against them.
+    Percept frames are stamped one frame late, which would shift every
+    fixation by one frame.
     """
     scene = video_scene()
     late = Percept(np.random.rand(9, 9, FRAME_TIMES.size),
@@ -247,7 +247,7 @@ def test_play_resolves_gaze_as_render_does():
 
 
 def test_a_still_scene_resolves_against_a_timed_percept():
-    """With no scene clock the percept's own frame times are the output clock"""
+    """A still scene resolves gaze at the percept's frame times"""
     scene = Scene(ImageStimulus(np.zeros((8, 8))), fov=(8, 8),
                   scotoma=Scotoma.circle(2 * dva), scotoma_fill=0.5,
                   scotoma_blend=0)

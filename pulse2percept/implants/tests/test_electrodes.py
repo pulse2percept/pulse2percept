@@ -144,7 +144,7 @@ def test_HexElectrode():
 
 
 def _hex_extent(electrode, deactivated=False):
-    """Return the (x, y) bounding-box size of a hexagon's plotted body"""
+    """Returns the (x, y) bounding-box size of a hexagon's plotted body"""
     kwargs = (electrode.plot_deactivated_kwargs if deactivated
               else electrode.plot_kwargs)
     patch = RegularPolygon((electrode.x, electrode.y), **kwargs)
@@ -171,11 +171,10 @@ def test_HexElectrode_geometry():
     npt.assert_almost_equal(vert.plot_kwargs['orientation'], np.radians(30))
     npt.assert_almost_equal(_hex_extent(vert),
                             [2 * a / np.cos(np.radians(30)), 2 * a])
-    # Deactivated bodies have the same geometry, only a different color:
+    # Deactivated bodies have the same geometry, different color:
     npt.assert_almost_equal(_hex_extent(vert, deactivated=True),
                             _hex_extent(vert))
-    # A standalone hexagon defaults to flat-top, which is how HexElectrode
-    # has always been drawn; only a grid overrides it:
+    # A standalone hexagon defaults to flat-top; ElectrodeGrid overrides it:
     npt.assert_equal(HexElectrode(0, 0, 0, a).orientation, 'vertical')
     with pytest.raises(ValueError):
         HexElectrode(0, 0, 0, a, orientation='diagonal')
@@ -183,13 +182,13 @@ def test_HexElectrode_geometry():
 
 @pytest.mark.parametrize('orientation', ('horizontal', 'vertical'))
 def test_HexElectrode_rot(orientation):
-    """``rot`` turns the hexagon body, not just the lattice"""
+    """``rot`` rotates the hexagon body"""
     a = 50
     unrot = HexElectrode(0, 0, 0, a, orientation=orientation)
-    # A hexagon has 60 deg symmetry, so a 60 deg turn is a no-op:
+    # A hexagon has 60 deg symmetry, so a 60 deg rotation is a no-op:
     same = HexElectrode(0, 0, 0, a, orientation=orientation, rot=60)
     npt.assert_almost_equal(_hex_extent(same), _hex_extent(unrot))
-    # ...and a 30 deg turn swaps pointy-top for flat-top:
+    # A 30 deg rotation swaps pointy-top and flat-top:
     flipped = HexElectrode(0, 0, 0, a, orientation=orientation, rot=30)
     npt.assert_almost_equal(_hex_extent(flipped), _hex_extent(unrot)[::-1])
     # Positive `rot` is counter-clockwise, matching ElectrodeGrid:
@@ -200,26 +199,25 @@ def test_HexElectrode_rot(orientation):
 
 
 def test_Electrode_units():
-    """Equivalent spellings of a position must give the same electrode"""
+    """Electrode geometry accepts length units"""
     bare = DiskElectrode(1000, 0, 100, 200)
     unitful = DiskElectrode(1 * mm, 0 * mm, 0.1 * mm, 0.2 * mm)
     for attr in ('x', 'y', 'z', 'radius'):
         npt.assert_allclose(getattr(unitful, attr), getattr(bare, attr),
                             rtol=1e-12)
-        # Electrodes store plain numbers, whatever they were given:
+        # Electrodes store plain numbers in um:
         npt.assert_equal(isinstance(getattr(unitful, attr), Quantity), False)
-    # Including conversions that do not land on a round number:
+    # Non-round conversions work too:
     awkward = DiskElectrode(0.0417 * mm, -8.3 * um, 0, 0.0083 * mm)
     npt.assert_allclose([awkward.x, awkward.y, awkward.radius],
                         [41.7, -8.3, 8.3], rtol=1e-12)
-    # Every electrode type takes a unitful size:
+    # All electrode types accept a unitful size:
     npt.assert_allclose(SquareElectrode(0, 0, 0, 0.05 * mm).side_length, 50,
                         rtol=1e-12)
     npt.assert_allclose(HexElectrode(0, 0, 0, 0.05 * mm).apothem, 50,
                         rtol=1e-12)
     npt.assert_allclose(PointSource(1 * mm, 0, 0).x, 1000, rtol=1e-12)
-    # A quantity wrapping an array is refused for the same reason a bare array
-    # is, rather than being stored as one:
+    # An array quantity is rejected, like a plain array:
     with pytest.raises(TypeError):
         DiskElectrode(np.arange(3) * um, 0, 0, 100)
     with pytest.raises(TypeError):
@@ -234,7 +232,7 @@ def test_Electrode_dimension_errors():
     for electrode_type in (SquareElectrode, HexElectrode):
         with pytest.raises(DimensionMismatchError):
             electrode_type(0, 0, 0, 2 * dva)
-    # The message names the offending argument:
+    # The error message names the argument:
     with pytest.raises(DimensionMismatchError) as excinfo:
         DiskElectrode(0, 0, 0, 10 * uA)
     npt.assert_equal("Parameter 'radius' expects length (um), got electric"
@@ -252,7 +250,7 @@ def test_Electrode_coordinates():
 
 
 def test_electric_potential_units():
-    """The point a potential is evaluated at is a position like any other"""
+    """electric_potential accepts length units for the evaluation point"""
     disk = DiskElectrode(0, 0, 0, 100)
     npt.assert_allclose(disk.electric_potential(0.2 * mm, 0, 10 * um, 1),
                         disk.electric_potential(200, 0, 10, 1), rtol=1e-12)
@@ -267,7 +265,7 @@ def test_electric_potential_units():
 
 
 def test_electrode_geometry_names():
-    """Geometry is spelled out, and the old abbreviations are gone"""
+    """Geometry parameters use full names; `r` and `a` were removed"""
     disk = DiskElectrode(0, 0, 0, 100)
     npt.assert_almost_equal(disk.radius, 100)
     npt.assert_almost_equal(DiskElectrode(0, 0, 0, radius=100).radius, 100)

@@ -11,10 +11,9 @@ from ..units import DimensionMismatchError, as_value, dva, um
 def _resolve_region(visual_field_map, region, ndim=2):
     """Return the map region to place implants in.
 
-    Only a single-region map has an unambiguous default, so anything else
-    requires an explicit ``region``. ``ndim`` is what the caller can place on:
-    the generic ensemble anchors each implant at an ``(x, y)`` and so rejects
-    a 3D map, while a device that walks a surface normal passes ``ndim=3``.
+    ``region`` is required unless the map has exactly one region. ``ndim`` is
+    the maximum map dimensionality the caller supports (2 for ``(x, y)``
+    anchors, 3 for surface-normal placement).
     """
     if getattr(visual_field_map, 'ndim', 2) > ndim:
         raise NotImplementedError(
@@ -61,18 +60,14 @@ class EnsembleImplant(Implant):
 
         An implant of type ``implant_type`` is created for each visual field
         location specified either by ``locs`` or by ``xrange``, ``yrange`` and
-        ``step``, and centered at the tissue coordinates the map transforms
-        that location to.
+        ``step``, and centered at the corresponding tissue coordinates.
 
-        The map may be retinal, cortical, or any other 2D
-        :py:class:`~pulse2percept.topography.VisualFieldMap`. 3D maps are not
-        supported, because placing an implant on a folded surface needs more
-        than the ``(x, y)`` anchor this method passes on; see
+        Accepts any 2D :py:class:`~pulse2percept.topography.VisualFieldMap`
+        (retinal or cortical). 3D maps raise NotImplementedError; see
         :py:meth:`~pulse2percept.implants.cortex.Neuralink.from_neuropythy`.
 
         .. versionadded:: 0.11.0
-            Replaces ``from_cortical_map``, which knew about cortex
-            specifically.
+            Replaces ``from_cortical_map``.
 
         Parameters
         ----------
@@ -99,11 +94,10 @@ class EnsembleImplant(Implant):
 
         Notes
         -----
-        *  These are visual field coordinates, so they may be given as plain
-           numbers of degrees or as unitful quantities (e.g.
-           ``xrange=(-3 * dva, 3 * dva)``). Contrast
-           :py:meth:`from_coords`, which places implants by their physical
-           position in microns. See :py:mod:`pulse2percept.units`.
+        *  Visual field coordinates accept numbers (dva) or quantities (e.g.,
+           ``xrange=(-3 * dva, 3 * dva)``). :py:meth:`from_coords` uses
+           physical coordinates (um) instead. See
+           :py:mod:`pulse2percept.units`.
         """
         from ..topography import Grid2D
         from ..topography.base import VisualFieldMap
@@ -114,8 +108,7 @@ class EnsembleImplant(Implant):
             raise TypeError("implant_type must be a sub-type of Implant")
         region = _resolve_region(visual_field_map, region)
 
-        # Where in the *visual field* the implants go; `visual_field_map` turns
-        # that into a physical location further down:
+        # Locations in dva; the map converts them to tissue coordinates:
         locs = as_value(locs, dva, 'locs')
         xrange = as_value(xrange, dva, 'xrange')
         yrange = as_value(yrange, dva, 'yrange')
@@ -174,10 +167,8 @@ class EnsembleImplant(Implant):
            :py:mod:`pulse2percept.units`.
 
         .. versionchanged:: 0.10.0
-            The grid arguments no longer have defaults. They used to fall back
-            on ``(-3, 3)`` and ``1``, which are the degrees of visual angle
-            :py:meth:`from_visual_field_map` works in; here they are microns,
-            so the default laid every implant out inside a 6 um square.
+            The grid arguments no longer have defaults. The old dva defaults
+            ``(-3, 3)`` and ``1`` were read as um here.
 
         """
         from ..topography.base import _rectangular_mesh
@@ -185,19 +176,14 @@ class EnsembleImplant(Implant):
         if not issubclass(implant_type, Implant):
             raise TypeError("implant_type must be a sub-type of Implant")
 
-        # Physical coordinates, unlike the dva ranges `from_visual_field_map`
-        # takes:
+        # Physical coordinates (um):
         locs = as_value(locs, um, 'locs')
         xrange = as_value(xrange, um, 'xrange')
         yrange = as_value(yrange, um, 'yrange')
         step = as_value(step, um, 'step')
 
         if locs is None:
-            # There are two ways to say where the implants go, and no default
-            # for the second one: a physical grid has no universal extent the
-            # way a visual field does, and the dva defaults
-            # `from_visual_field_map` uses would put every implant inside a
-            # 6 um square here.
+            # No default extent for a physical grid:
             missing = [name for name, value in [('xrange', xrange),
                                                 ('yrange', yrange),
                                                 ('step', step)]
@@ -208,9 +194,7 @@ class EnsembleImplant(Implant):
                     f"'step' (missing: {', '.join(missing)}). Coordinates "
                     f"are physical, in microns.")
 
-            # Laid out directly rather than through a `Grid2D`, which is a
-            # grid of *visual field* coordinates and would read these microns
-            # as degrees:
+            # Not Grid2D, which would read um as dva:
             (xgrid, ygrid), _, _ = _rectangular_mesh(xrange, yrange, step)
             xlocs = xgrid.flatten()
             ylocs = ygrid.flatten()
@@ -226,9 +210,8 @@ class EnsembleImplant(Implant):
     def __init__(self, implants, preprocess=False, safe_mode=False):
         """Ensemble implant
 
-        An ensemble implant combines multiple implants that occupy the same
-        anatomical target into a single implant for the purpose of modeling
-        tandem implants, e.g. ICVP, Neuralink.
+        Combines multiple implants in the same anatomical target into a single
+        implant, to model tandem implants (e.g., ICVP, Neuralink).
 
         Constituents may differ in device type, but retinal and cortical
         implants cannot be mixed.
@@ -295,14 +278,14 @@ class EnsembleImplant(Implant):
     def prepare_stim(self, source):
         """Prepare stimulation for an ensemble implant.
 
-        ``source`` may address the combined electrode array directly, or be a dict
-        keyed by constituent implant keys. Per-implant sources are prepared by each
-        constituent implant, merged, then passed through ensemble-level preprocessing
-        and safety checks. Missing implant keys contribute zeros.
+        ``source`` may address the combined electrode array directly, or be a
+        dict keyed by constituent implant keys. Per-implant sources are
+        prepared by each constituent, merged, then passed through
+        ensemble-level preprocessing and safety checks. Missing implant keys
+        contribute zeros.
 
         .. versionchanged:: 0.11.0
-            Replaces ``merge_stimuli`` and the stimuli previously stored on
-            constituent implants.
+            Replaces ``merge_stimuli``.
 
         Parameters
         ----------
@@ -334,17 +317,15 @@ class EnsembleImplant(Implant):
                 key: implant._prepare_stim(
                     source.get(key), allow_dimensionless=allow_dimensionless)
                 for key, implant in self._implants.items()}
-            # Merge per-implant results before applying ensemble-level
-            # preprocessing and safety checks.
+            # Merge before ensemble-level preprocessing and safety checks:
             source = self._merged(prepared)
         return super()._prepare_stim(
             source, allow_dimensionless=allow_dimensionless)
 
     def _structured_children(self, prepared):
-        """One source per named ensemble electrode, or ``None``
+        """Return one source per driven ensemble electrode, or ``None``
 
-        Children may be sparse or missing; their other electrodes are
-        undriven.
+        Electrodes of sparse or missing children are undriven.
         """
         sources = {}
         for i, implant in self._implants.items():
@@ -360,17 +341,15 @@ class EnsembleImplant(Implant):
                     sources[f"{i}-{name}"] = child[name]
         if not sources:
             return None
-        # Ensemble order, not the order the children happened to be built in:
+        # Use ensemble electrode order:
         return {name: sources[name] for name in self.electrode_names
                 if name in sources}
 
     def _merged(self, prepared):
-        """Combine one prepared stimulus per constituent implant into one"""
+        """Merge the prepared stimuli of all constituent implants"""
         if not any(stim is not None for stim in prepared.values()):
             return None
-        # An implant with no stimulus contributes zeros and no
-        # interpretation of them, so only the ones that have a stimulus
-        # decide what the merged numbers mean:
+        # Units come from implants that have a stimulus:
         present = [stim for stim in prepared.values() if stim is not None]
         if len({(s.unit, s.time_unit) for s in present}) > 1:
             names = ', '.join(sorted({_describe_unit(s.unit)
@@ -379,8 +358,7 @@ class EnsembleImplant(Implant):
                 f"Cannot merge stimuli measured in different units "
                 f"({names}). Convert them to a common unit first.")
 
-        # The metadata of each implant is stored under 'user'; concatenate
-        # those, keyed by which implant they came from:
+        # Collect each implant's 'user' metadata, keyed by implant:
         user_metadata = {str(i): stim.metadata['user']
                          for i, stim in prepared.items()
                          if stim is not None}
@@ -390,21 +368,14 @@ class EnsembleImplant(Implant):
 
         sources = self._structured_children(prepared)
         if sources is not None:
-            # Every driven electrode has a source of its own, so the ensemble
-            # is that collection
+            # Every driven electrode has its own source:
             merged = Stimulus(sources, electrodes=list(sources),
                               metadata=user_metadata)
             return merged._inherit_units(present[0])
 
-        # Need to combine all stimuli
-        # The ith stim is a np array of shape (implant[i].n_electrodes, len(times[i]))
-        # i.e. the amplitude of each electrode at each time point in times[i]
-        # HOWEVER, the times are not necessarily the same across implants
-        # So we need to create a new times array that is the union of all times
-        # and then interpolate the stimuli for each implant to this new time array
-        # Also, times[i] can be None if the stim is not temporal; in this case, we
-        # just line it up with the first time point. Finally, if the
-        # stim is none, then we just set it to all 0's, for all the time points
+        # Interpolate each stim (n_electrodes, len(times[i])) onto the union of
+        # all time points. Static stims go to the first time point; missing
+        # stims are all zeros:
         stims = []
         times = []
         for i in self._implants:
@@ -420,10 +391,8 @@ class EnsembleImplant(Implant):
         valid_times = [t for t in times if t is not None]
         
         if valid_times:
-            # Get the union of all time points. Two implants that pulse at
-            # the same instant get there by accumulating their own way, so
-            # an exact `np.unique` would keep both copies and leave the
-            # merged axis with points closer together than DT:
+            # Union of time points with tolerance, since `np.unique` would
+            # keep float near-duplicates closer than DT:
             t_sorted, starts_group, _ = unique_time_points(valid_times)
             new_times = t_sorted[starts_group]
         else:
@@ -437,8 +406,7 @@ class EnsembleImplant(Implant):
             # Electrodes the child stimulus does not name stay at zero:
             new_stim = np.zeros((len(names), num_timepoints))
             if stim is not None:
-                # Rows are matched by name; a sparse stimulus need not follow
-                # the implant's electrode order:
+                # Match rows by name (sparse stimuli may be in any order):
                 row = {e: j for j, e in enumerate(stim.electrodes)}
                 data = stim.data
                 for k, name in enumerate(names):
@@ -454,10 +422,8 @@ class EnsembleImplant(Implant):
                                                 left=0, right=0)
             new_stims.append(new_stim)
         
-        # Combine all new_stims into a final array (stack along a new axis if needed)
         merged = Stimulus(np.concatenate(new_stims), time=new_times,
                           electrodes=self.electrode_names,
                           metadata=user_metadata)
-        # The merge concatenates raw data arrays, so the result would
-        # otherwise fall back to the default (current) reading of them:
+        # Raw arrays would otherwise default to current units:
         return merged._inherit_units(present[0])

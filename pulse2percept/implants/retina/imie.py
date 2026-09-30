@@ -9,11 +9,10 @@ from ..electrode_arrays import ElectrodeGrid
 class IMIE(RetinalImplant):
     """The 256-channel epiretinal prosthesis system (IMIE 256)
 
-    This class implements a 256-channel Intelligent Micro Implant Eye 
-    epiretinal prosthesis system (IMIE 256) [Xu2021]_. It was 
-    co-developed by Golden Eye Bionic, LLC (Pasadena CA) and 
-    IntelliMicro Medical Co., Ltd. (Changsha, Hunan Province, China) 
-    and is manufactured by IntelliMicro.
+    256-channel Intelligent Micro Implant Eye epiretinal prosthesis system
+    (IMIE 256) [Xu2021]_, co-developed by Golden Eye Bionic, LLC (Pasadena CA)
+    and IntelliMicro Medical Co., Ltd. (Changsha, Hunan Province, China), and
+    manufactured by IntelliMicro.
 
     IMIE contains 248 large electrodes (210 µm in diameter) and 8 
     smaller electrodes (160 µm in diameter) arranged in a 4.75mm×6.50mm
@@ -31,10 +30,9 @@ class IMIE(RetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 35 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 35 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional

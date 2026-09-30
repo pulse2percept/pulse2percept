@@ -28,9 +28,9 @@ from pulse2percept.vision import Scene, Scotoma
 GRID = dict(xrange=(-8, 8), yrange=(-6, 6), step=1)
 AXON = dict(n_axons=200, n_ax_segments=100, ignore_pickle=True)
 
-#: What the pre-refactor pipeline predicted: shape, (t_first, t_last), sum,
-#: max, sum of squares, and the brightness moments (mean_y, mean_sq_y,
-#: mean_x, mean_sq_x) that `moments` below computes.
+#: Pre-refactor reference values: shape, (t_first, t_last), sum, max, sum of
+#: squares, and the brightness moments (mean_y, mean_sq_y, mean_x, mean_sq_x)
+#: from `moments`.
 REFERENCE = {
     'scoreboard': ((13, 17, 1), None,
                    106.27331389391497, 29.729562759399414, 1590.841862258684,
@@ -75,9 +75,8 @@ REFERENCE = {
 }
 
 
-#: Sized from the spread actually observed across the platforms CI runs on,
-#: not from float32 epsilon: the AxonMap sum differs by 3e-6 between macOS and
-#: Linux for percepts that are otherwise bit-identical within a platform.
+#: Based on the observed CI cross-platform spread (not float32 epsilon): the
+#: AxonMap sum differs by 3e-6 between macOS and Linux.
 RTOL = 1e-5
 
 
@@ -159,8 +158,7 @@ def test_encoded_image_prediction_is_unchanged():
 
 
 def test_encoded_video_prediction_is_unchanged():
-    # Argus II's own 6 Hz encoder and six-group raster, so this covers the
-    # schedule as well as the encoding.
+    # Uses the default Argus II 6 Hz encoder and six-group raster:
     model = ScoreboardModel(implant=ArgusII(), rho=200, **GRID).build()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -169,8 +167,7 @@ def test_encoded_video_prediction_is_unchanged():
 
 
 def test_encoded_video_with_a_temporal_stage_is_unchanged():
-    # With a temporal stage, the spatial model reads the delivered pulse
-    # train rather than frame-level modulation.
+    # With a temporal stage, the spatial model uses the delivered pulse train:
     model = Model(spatial=ScoreboardSpatial(ArgusII(), rho=200, **GRID),
                   temporal=FadingTemporal(tau=100)).build()
     with warnings.catch_warnings():
@@ -196,7 +193,8 @@ def test_scene_with_gaze_prediction_is_unchanged():
 
 
 def test_scene_with_scotoma_composition_is_unchanged():
-    """The dense composition now lives in `Scene.render`, at the same numbers"""
+    """`Scene.render` composition matches the reference values"""
+
     model = ScoreboardModel(implant=encoding_grid(), rho=200, **GRID).build()
     scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0,
                      scotoma_blend=0)

@@ -26,7 +26,7 @@ def _as_threshold_amp(threshold_amp, name='threshold_amp'):
 
 
 def _is_threshold_relative(amp):
-    """Whether an amplitude was expressed as a multiple of threshold"""
+    """Return True if an amplitude is given as a multiple of threshold"""
     return getattr(amp, 'dimension', None) == xTh.dimension
 
 
@@ -46,18 +46,16 @@ def _tile_pulse(pulse, shift, n_pulses):
     if shifted[0] < 0:
         raise NotImplementedError("Appending a stimulus with a negative "
                                   "time axis is currently not supported.")
-    # ``append`` offsets copy k by the last time point of copy k-1, so the
-    # offsets follow the recurrence last[k] = shifted[-1] + last[k-1], seeded
-    # with last[0] = time[-1]. The cumsum accumulates in exactly the same
-    # order (and therefore rounds identically), which matters because temporal
-    # models resolve stimulus edges on a fixed simulation grid:
+    # ``append`` offsets copy k by the last time point of copy k-1:
+    # last[k] = shifted[-1] + last[k-1], last[0] = time[-1]. The cumsum
+    # accumulates in the same order, so it rounds identically (temporal models
+    # resolve stimulus edges on a fixed simulation grid):
     steps = np.full(n_pulses, shifted[-1], dtype=np.float64)
     steps[0] = time[-1]
     offsets = np.cumsum(steps, dtype=np.float64)[:-1, np.newaxis]
     if isclose(shifted[0], 0, abs_tol=DT):
-        # The last time point of one copy coincides with the first time point
-        # of the next, so the two are merged into one - but only if they carry
-        # the same amplitude(s):
+        # The last point of one copy coincides with the first point of the
+        # next. Merge them if their amplitudes match:
         if not np.allclose(data[:, 0], data[:, -1]):
             raise ValueError(f"Data mismatch: Cannot append other stimulus "
                              f"because other[t=0] != this[t={time[-1]}ms]. "
@@ -102,23 +100,18 @@ class PulseTrain(Stimulus):
 
     Notes
     -----
-    *  Only pulses that fit whole are delivered. If the pulse train frequency
-       does not exactly divide ``stim_dur``, the number of pulses is therefore
-       rounded down: a 30 Hz train in a 33.37 ms window has one pulse, not one
-       and a fraction of a second. A partial pulse would leave the train with a
-       net current.
-    *  A frequency slower than ``1000 / stim_dur`` cannot be realized, since
-       the window still holds one pulse. Pass ``freq=0`` for a silent train.
+    *  Only whole pulses are delivered: the number of pulses is rounded down
+       (e.g., a 30 Hz train in a 33.37 ms window has one pulse). A partial
+       pulse would leave a net current.
+    *  A frequency below ``1000 / stim_dur`` Hz still delivers one pulse. Pass
+       ``freq=0`` for a silent train.
     *  Arguments may be given as plain numbers in the units documented above,
        or as unitful quantities (e.g. ``0.02 * kHz``, ``1 * s``), which are
        converted to those units. See :py:mod:`pulse2percept.units`.
-    *  The train is measured in whatever ``pulse`` was measured in: tiling an
-       electrical pulse gives a train in microamps, and tiling a dimensionless
-       one gives a dimensionless train.
+    *  The train uses the unit of ``pulse`` (e.g., uA or dimensionless).
 
     """
-    #: Defined by the pulse it repeats rather than by its samples
-    #: (see `Stimulus._is_parametric`):
+    #: See `Stimulus._is_parametric`:
     _is_parametric = True
 
     __slots__ = ('_freq', '_pulse', '_n_pulses', '_n_pulses_asked',
@@ -142,15 +135,10 @@ class PulseTrain(Stimulus):
         # ``duration`` avoids rendering a parametric pulse.
         pulse_dur = pulse.duration
 
-        # How many pulses fit into stim dur. `freq` counts cycles per second
-        # and `stim_dur` counts milliseconds, so this is the one place the two
-        # clocks have to be reconciled:
+        # How many pulses fit into stim dur (`freq` in Hz, `stim_dur` in ms):
         n_max_pulses = freq * stim_dur / MS_PER_S
-        # Kept as it was asked for, alongside the count it resolves to below.
-        # The two are not interchangeable: this guard measures a request
-        # against `n_max_pulses`, while the default counts whole pulses from
-        # t=0 and can legitimately come out one higher. Rebuilding a train
-        # (see `_scaled`) has to pass the request back, not the result.
+        # Store the requested count for `_scaled`. The resolved default below
+        # counts whole pulses from t=0 and can exceed `n_max_pulses` by one:
         self._n_pulses_asked = n_pulses
         # The requested number of pulses cannot be greater than max pulses:
         if n_pulses is not None:
@@ -161,22 +149,15 @@ class PulseTrain(Stimulus):
         elif freq <= 0:
             n_pulses = 0
         else:
-            # Only whole pulses: a pulse that cannot finish before `stim_dur`
-            # is over is not delivered at all. Starting one and cutting it
-            # short would leave the train with a net current -- a 30 Hz train
-            # in a 33.37 ms window used to end on half a cathodic phase, and
-            # so was not charge-balanced.
+            # Only whole pulses; a truncated pulse would leave a net current:
             n_pulses = int(np.floor((stim_dur - pulse_dur) /
                                     (MS_PER_S / freq) + 1e-9)) + 1
-        # 0 Hz is allowed, and so is a pulse too long to fit even once. A
-        # silent train is a single row of zeros, whatever the pulse looked
-        # like, which is what this class has always produced:
+        # A silent train (0 Hz, or no pulse fits) is a single row of zeros:
         if n_pulses <= 0:
             n_rows = 1
         else:
             # Window duration (ms) is the inverse of pulse train frequency.
-            # Asked here rather than in `_render`, so that a pulse too long to
-            # fit is refused where the caller can see why:
+            # Checked at construction rather than in `_render`:
             window_dur = MS_PER_S / freq
             if pulse_dur > window_dur:
                 raise ValueError(f"Pulse (dur={pulse_dur:.2f} ms) does not fit into "
@@ -195,10 +176,8 @@ class PulseTrain(Stimulus):
         self._pulse = deepcopy(pulse)
         self._n_pulses = n_pulses
         self._stim_dur = stim_dur
-        # This class tiles whatever pulse it is handed, and the tiled numbers
-        # mean whatever that pulse's did -- including the zeros of a silent
-        # train. Without this the result would fall back to the default
-        # (current) reading of them:
+        # Inherit the pulse's units (also for a silent train), instead of the
+        # default uA:
         self._defer(names, unit=pulse.unit, time_unit=pulse.time_unit)
         self.metadata = {'user': metadata}
 
@@ -238,7 +217,7 @@ class PulseTrain(Stimulus):
         return self._stim_dur
 
     def _render(self):
-        """Tile the pulse into the train the parameters above describe"""
+        """Return the tiled pulse train"""
         pulse, freq = self._pulse, self._freq
         n_pulses, stim_dur = self._n_pulses, self._stim_dur
         if n_pulses <= 0:
@@ -255,9 +234,8 @@ class PulseTrain(Stimulus):
             last_col = [np.interp(stim_dur, time, row) for row in data]
             last_col = np.array(last_col).reshape((-1, 1))
             t_idx = time < stim_dur
-            # The interpolated end point has to stay at least DT away from the
-            # last point it follows, or the time axis is no longer strictly
-            # increasing:
+            # Keep the interpolated end point at least DT after the previous
+            # point, so the time axis stays strictly increasing:
             kept = np.flatnonzero(t_idx)
             if kept.size and time[kept[-1]] > stim_dur - DT:
                 t_idx[kept[-1]] = False
@@ -270,7 +248,7 @@ class PulseTrain(Stimulus):
         return {'data': data, 'electrodes': self.electrodes, 'time': time}
 
     def _scaled(self, factor):
-        """This train, tiling a pulse whose amplitudes were scaled"""
+        """Return this train with the pulse amplitudes scaled by ``factor``"""
         return PulseTrain(self.freq, self._pulse * factor,
                           n_pulses=self._n_pulses_asked,
                           stim_dur=self.stim_dur,
@@ -301,9 +279,9 @@ class BiphasicPulseTrain(Stimulus):
         ``cathodic_first``.
 
         May also be given as a multiple of perceptual threshold, e.g.
-        ``2 * xTh`` (see :py:data:`~pulse2percept.units.xTh`). The current
-        that realizes it is ``amp * threshold_amp``, so without a threshold
-        the train stays measured in ``xTh``.
+        ``2 * xTh`` (see :py:data:`~pulse2percept.units.xTh`). The current is
+        ``amp * threshold_amp``; without a threshold, the train stays in
+        ``xTh``.
     phase_dur : float
         Duration (ms) of the cathodic/anodic phase.
     interphase_dur : float, optional, default: 0
@@ -324,9 +302,8 @@ class BiphasicPulseTrain(Stimulus):
     metadata : dict
         A dictionary of meta-data
     threshold_amp : float, optional
-        Perceptual threshold (uA) of the electrode this train drives. It is
-        what converts between :py:attr:`amp_factor` and a current, in either
-        direction.
+        Perceptual threshold (uA) of the stimulated electrode. Converts
+        between :py:attr:`amp_factor` and current.
 
         .. versionadded:: 0.10.0
 
@@ -343,10 +320,8 @@ class BiphasicPulseTrain(Stimulus):
     *  Arguments may be given as plain numbers in the units documented above,
        or as unitful quantities (e.g. ``0.05 * mA``, ``450 * us``), which are
        converted to those units. See :py:mod:`pulse2percept.units`.
-    *  A train holds a current or a multiple of threshold, and ``unit`` says
-       which. Converting between them takes a threshold, so an ``xTh`` train
-       without one stays measured in ``xTh`` -- and is not yet something an
-       implant can deliver.
+    *  ``unit`` is uA or ``xTh``. An ``xTh`` train without a threshold cannot
+       be delivered by an implant until a threshold is assigned.
 
     Examples
     --------
@@ -358,21 +333,20 @@ class BiphasicPulseTrain(Stimulus):
     >>> pt.amp, pt.amp_factor
     (160.0, 2.0)
 
-    The same stimulation, expressed as the current it delivers:
+    The same stimulation, given as a current:
 
     >>> pt = BiphasicPulseTrain(20, 160.0 * uA, 0.45, threshold_amp=80 * uA)
     >>> pt.amp, pt.amp_factor
     (160.0, 2.0)
 
-    With no threshold it is still 2xTh, but it is no longer a current:
+    Without a threshold, the train stays in xTh:
 
     >>> pt = BiphasicPulseTrain(20, 2.0 * xTh, 0.45)
     >>> pt.amp_factor, pt.unit, pt.threshold_amp
     (2.0, xTh, None)
 
     """
-    #: Defined by the pulse it repeats rather than by its samples
-    #: (see `Stimulus._is_parametric`):
+    #: See `Stimulus._is_parametric`:
     _is_parametric = True
 
     __slots__ = ('_train', '_amp_relative', '_explicit_threshold_amp',
@@ -381,12 +355,9 @@ class BiphasicPulseTrain(Stimulus):
     def __init__(self, freq, amp, phase_dur, interphase_dur=0, delay_dur=0,
                  n_pulses=None, stim_dur=1000.0, cathodic_first=True,
                  electrode=None, metadata=None, threshold_amp=None):
-        # See `PulseTrain.__init__`. Normalizing here rather than leaving it
-        # to `BiphasicPulse` is what keeps the properties below in the units a
-        # model reading them back expects:
+        # Convert to plain numbers in Hz, uA, ms:
         freq = as_value(freq, Hz, 'freq')
-        # Preserve whether amp was specified as current or threshold
-        # multiple.
+        # Preserve whether amp was specified as current or threshold multiple:
         self._explicit_threshold_amp = _as_threshold_amp(threshold_amp)
         # Keep an implant override separate so it can be cleared later.
         self._threshold_override = None
@@ -407,9 +378,8 @@ class BiphasicPulseTrain(Stimulus):
                               interphase_dur=interphase_dur,
                               cathodic_first=cathodic_first,
                               electrode=electrode)
-        # Concatenate the pulses. Built here rather than in `_render`, so that
-        # every argument is still checked at construction; neither object
-        # generates a waveform until one is asked for.
+        # Concatenate the pulses. Built here so arguments are checked at
+        # construction; the waveform is still generated lazily:
         self._train = PulseTrain(freq, pulse, n_pulses=n_pulses,
                                  stim_dur=stim_dur)
         self._defer(_electrode_names(electrode), unit=unit)
@@ -442,10 +412,10 @@ class BiphasicPulseTrain(Stimulus):
 
     @property
     def threshold_amp(self):
-        """Perceptual threshold (uA) this train's amplitude is relative to
+        """Perceptual threshold (uA) of this train
 
-        The implant calibration in force, else the threshold this train was
-        built with, else None.
+        The implant calibration if set, else the constructor's
+        ``threshold_amp``, else None.
 
         .. versionadded:: 0.10.0
         """
@@ -457,8 +427,8 @@ class BiphasicPulseTrain(Stimulus):
     def amp_factor(self):
         """Amplitude as a multiple of :py:attr:`threshold_amp`
 
-        None only for a current with no threshold to measure it against: an
-        ``xTh`` amplitude is the multiple, threshold or no threshold.
+        None for a current amplitude without a threshold. An ``xTh``
+        amplitude is returned as-is.
 
         .. versionadded:: 0.10.0
         """
@@ -488,12 +458,12 @@ class BiphasicPulseTrain(Stimulus):
         return self._train._pulse.cathodic_first
 
     def _render(self):
-        """The tiled train the parameters above describe"""
+        """Return the tiled pulse train"""
         return {'data': self._train.data, 'electrodes': self.electrodes,
                 'time': self._train.time}
 
     def _rebuilt(self, amp, threshold_amp, cathodic_first=None):
-        """Rebuild this schedule with new electrodes, amplitudes, or frequency."""
+        """Return a copy of this train with a new amplitude and threshold"""
         if cathodic_first is None:
             cathodic_first = self.cathodic_first
         train = BiphasicPulseTrain(
@@ -509,7 +479,7 @@ class BiphasicPulseTrain(Stimulus):
         return train
 
     def _with_threshold(self, override):
-        """Calibrate a threshold-relative schedule to uA without rendering."""
+        """Return this train calibrated to threshold ``override`` (uA)"""
         if override == self._threshold_override:
             return self
         amp = self.amp_factor * xTh if self._amp_relative else self.amp
@@ -520,10 +490,9 @@ class BiphasicPulseTrain(Stimulus):
         return train
 
     def _scaled(self, factor):
-        """This train with every amplitude multiplied by ``factor``
+        """Return this train with every amplitude multiplied by ``factor``
 
-        Scaling keeps the amplitude in the terms it was given in: doubling a
-        ``2 * xTh`` train gives ``4 * xTh``, not a pinned current.
+        Keeps the amplitude unit: doubling ``2 * xTh`` gives ``4 * xTh``.
         """
         if self._amp_relative:
             amp = self.amp_factor * abs(factor) * xTh
@@ -536,8 +505,8 @@ class BiphasicPulseTrain(Stimulus):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        # The amplitude as given, not as resolved: two trains that deliver the
-        # same current recalibrate differently (see `_with_threshold`).
+        # Print the amplitude as given (xTh or uA), since the two recalibrate
+        # differently (see `_with_threshold`):
         amp = self.amp_factor * xTh if self._amp_relative else self.amp
         params = {'freq': self.freq, 'amp': amp,
                   'phase_dur': self.phase_dur,
@@ -551,9 +520,9 @@ class BiphasicPulseTrain(Stimulus):
 
 
 class AsymmetricBiphasicPulseTrain(Stimulus):
-    """Asymmetric biphasic pulse
+    """Asymmetric biphasic pulse train
 
-    A simple stimulus consisting of a single biphasic pulse: a cathodic and an
+    A train of asymmetric biphasic pulses, each with a cathodic and an
     anodic phase, optionally separated by an interphase gap.
     The two pulse phases can have different amplitudes and duration
     ("asymmetric").
@@ -582,7 +551,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         stimulation window (``stim_dur``) is filled.
     stim_dur : float, optional, default: 1000 ms
         Total stimulus duration (ms). Zeros will be inserted at the end of the
-        stimulus to make the the stimulus last ``stim_dur`` ms overall.
+        stimulus to make the stimulus last ``stim_dur`` ms overall.
     cathodic_first : bool, optional, default: True
         If True, will deliver the cathodic pulse phase before the anodic one.
     electrode : { int | string }, optional, default: 0
@@ -597,8 +566,7 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
        converted to those units. See :py:mod:`pulse2percept.units`.
 
     """
-    #: Defined by the pulse it repeats rather than by its samples
-    #: (see `Stimulus._is_parametric`):
+    #: See `Stimulus._is_parametric`:
     _is_parametric = True
 
     __slots__ = ('_train',)
@@ -683,12 +651,12 @@ class AsymmetricBiphasicPulseTrain(Stimulus):
         return self._train._pulse.cathodic_first
 
     def _render(self):
-        """The tiled train the parameters above describe"""
+        """Return the tiled pulse train"""
         return {'data': self._train.data, 'electrodes': self.electrodes,
                 'time': self._train.time}
 
     def _scaled(self, factor):
-        """This train with both phase magnitudes multiplied by ``factor``"""
+        """Return this train with both phases multiplied by ``factor``"""
         return AsymmetricBiphasicPulseTrain(
             self.freq, self.amp1 * abs(factor), self.amp2 * abs(factor),
             self.phase_dur1, self.phase_dur2,
@@ -764,8 +732,7 @@ class BiphasicTripletTrain(Stimulus):
        converted to those units. See :py:mod:`pulse2percept.units`.
 
     """
-    #: Defined by the pulse it repeats rather than by its samples
-    #: (see `Stimulus._is_parametric`):
+    #: See `Stimulus._is_parametric`:
     _is_parametric = True
 
     __slots__ = ('_train', '_pulse', '_interpulse_dur')
@@ -847,12 +814,12 @@ class BiphasicTripletTrain(Stimulus):
         return self._pulse.cathodic_first
 
     def _render(self):
-        """The tiled train the parameters above describe"""
+        """Return the tiled pulse train"""
         return {'data': self._train.data, 'electrodes': self.electrodes,
                 'time': self._train.time}
 
     def _scaled(self, factor):
-        """This train with every phase magnitude multiplied by ``factor``"""
+        """Return this train with every phase multiplied by ``factor``"""
         return BiphasicTripletTrain(
             self.freq, self.amp * abs(factor), self.phase_dur,
             interphase_dur=self.interphase_dur,

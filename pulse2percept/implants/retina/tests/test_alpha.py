@@ -39,8 +39,7 @@ def test_AlphaIMS(ztype):
         npt.assert_equal(alpha[e].side_length, 50)
 
 
-# The checks below don't depend on ztype, so they live outside the
-# parametrized test above.
+# Independent of ztype, so not parametrized:
 def test_AlphaIMS_indexing():
     # `h` must have the right dimensions
     with pytest.raises(ValueError):
@@ -107,7 +106,7 @@ def test_AlphaAMS(ztype):
         npt.assert_equal(alpha[e].radius, 15)
 
 
-# As above: independent of ztype, so run once rather than twice.
+# Independent of ztype, so not parametrized:
 def test_AlphaAMS_indexing():
     # `h` must have the right dimensions
     with pytest.raises(ValueError):

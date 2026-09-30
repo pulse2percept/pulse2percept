@@ -11,11 +11,8 @@ from importlib import reload
 @pytest.mark.parametrize('method', ('sparse', 'fft'))
 def test_conv(mode, method):
     reload(convolution)
-    # Time vector for stimulus. `np.convolve` below is a direct O(n*m)
-    # convolution and dominates the runtime of this test, so keep the sampling
-    # coarse: this still exercises every code path (long, sparse data with a
-    # much shorter kernel), it just doesn't spend 11 billion multiply-adds
-    # computing the expected value.
+    # Time vector for stimulus. Coarse sampling keeps the O(n*m) `np.convolve`
+    # reference fast, with data still long and sparse relative to the kernel:
     stim_dur = 0.5  # seconds
     tsample = 0.01 / 1000
     t = np.arange(0, stim_dur, tsample)

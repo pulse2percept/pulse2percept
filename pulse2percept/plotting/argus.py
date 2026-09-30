@@ -109,8 +109,8 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
             :py:class:`~pulse2percept.implants.retina.ArgusII`
         Either an Argus I or Argus II implant. If None, the data must contain
         an "implant_type_str" column naming the device, either "ArgusI" or
-        "ArgusII". Where it was implanted comes from ``implant_position`` and
-        ``implant_rotation`` below.
+        "ArgusII". Placement is set by ``implant_position`` and
+        ``implant_rotation``.
     scale : float
         Scaling factor to apply to the phosphenes
     axon_map : :py:class:`~pulse2percept.models.retina.AxonMapModel`
@@ -254,9 +254,9 @@ def plot_argus_phosphenes(data, argus=None, scale=1.0, axon_map=None,
                    zorder=ZORDER['foreground'])
 
     if axon_map is not None:
-        # `argus` is the implant this plot is about, so it is also what says
-        # which eye the bundles run in. A shallow copy takes the model's axon
-        # parameters without pointing the caller's model somewhere else:
+        # Axon bundles use the eye of `argus`, not of the model's implant. A
+        # shallow copy keeps the model's axon parameters without changing
+        # the caller's model:
         spatial = copy(axon_map.spatial)
         spatial.implant = argus
         spatial.implant_position = implant_xy * um

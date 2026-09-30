@@ -82,10 +82,9 @@ class GratingStimulus(VideoStimulus):
         -  None: no mask
 
     electrodes : int, string or list thereof; optional, default: None
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
@@ -96,8 +95,7 @@ class GratingStimulus(VideoStimulus):
     def __init__(self, shape, direction=0, spatial_freq=0.1,
                  temporal_freq=0.001, phase=0, contrast=1, time=None,
                  mask=None, electrodes=None, metadata=None):
-        # `time` is a point (or an end point) in time, so it may be given as
-        # a quantity; everything below works on plain milliseconds:
+        # Convert `time` to plain ms:
         time = as_value(time, ms, 'time')
         direction = np.deg2rad(as_value(direction, deg, 'direction'))
         phase = np.deg2rad(as_value(phase, deg, 'phase'))
@@ -196,10 +194,9 @@ class BarStimulus(VideoStimulus):
         -  None: no mask
 
     electrodes : int, string or list thereof; optional, default: None
-        Optionally, you can provide your own electrode names. If none are
-        given, each pixel is named after its place in the image: a letter for
-        the row, a number for the column, and a suffix for the color channel
-        (e.g. 'A1', 'C12', 'A1_R').
+        Optionally, you can provide your own electrode names. By default,
+        pixels are named by row letter, column number, and color-channel
+        suffix (e.g. 'A1', 'C12', 'A1_R').
 
     metadata : dict, optional, default: None
         Additional stimulus metadata can be stored in a dictionary.
@@ -222,8 +219,7 @@ class BarStimulus(VideoStimulus):
         spatial_freq = 1.0 / px_btw_bars
         temporal_freq = spatial_freq * speed
         phase = start_pos * spatial_freq * 360  # deg
-        # The caller already got this class's deprecation notice; building
-        # the grating internally must not warn a second time:
+        # Don't repeat the deprecation warning for the internal grating:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', DeprecationWarning)
             grating = GratingStimulus(shape, time=time, direction=direction,
@@ -231,8 +227,7 @@ class BarStimulus(VideoStimulus):
                                       spatial_freq=spatial_freq,
                                       temporal_freq=temporal_freq)
 
-        # A copy, because the loop below rewrites the grating frame by frame
-        # and a stimulus does not hand out a buffer anyone can write into:
+        # Copy, because stimulus data is read-only:
         bar = grating.data.reshape(grating.vid_shape).copy()
         for i in range(bar.shape[-1]):
             frame = bar[..., i]
@@ -276,22 +271,19 @@ class BarStimulus(VideoStimulus):
                                           compress=False)
 
 
-#: Landolt-C proportions, in multiples of the gap width. The stroke width is
-#: half the difference, and therefore one gap wide as well.
+#: Landolt-C proportions, in multiples of the gap width (stroke = 1 gap).
 _INNER_DIAMETER, _OUTER_DIAMETER = 3.0, 5.0
 
-#: Tumbling-E proportions: the glyph spans five stroke widths either way, with
-#: one-stroke bars separated by one-stroke gaps.
+#: Tumbling-E proportions: 5x5 strokes, with one-stroke bars and gaps.
 _E_EXTENT = 5.0
 
-#: Output rows rasterized at a time, which caps how much of the finer grid
-#: has to exist at once
+#: Output rows rasterized at a time (bounds supersampling memory)
 _BLOCK_ROWS = 64
 
 #: Supersampling used for optotype rasterization.
 _SUPERSAMPLE = 4
 
-#: Fewest pixels across a bar that still rasterize it as a bar, not a line
+#: Minimum output pixels across a bar
 _MIN_BAR_PX = 2
 
 #: Minimum output pixels across an optotype's critical feature. The 3-pixel
@@ -395,7 +387,7 @@ def _check_angles(**angles):
 def _time_points(time):
     """Return explicit sample times in ms, or None for a static image.
 
-    Scalar durations are rejected because these generators assume no frame rate.
+    Scalar durations are rejected, because there is no default frame rate.
     """
     time = as_value(time, ms, 'time')
     if time is None:
@@ -421,7 +413,7 @@ def _elapsed_s(time):
 
 
 def _check_motion_sampled(name, value, unit, time):
-    """Reject nonzero motion without explicit sample times."""
+    """Raise ValueError for nonzero motion without explicit sample times"""
     if value != 0 and time is None:
         raise ValueError(
             f"'{name}' is {value:g} {unit}, but 'time' is None, which "
@@ -434,11 +426,9 @@ def _check_motion_sampled(name, value, unit, time):
 def _aperture(x, y, mask, fov):
     """Radial aperture in [0, 1], measured in visual-field coordinates
 
-    Isotropic in dva, unlike :py:func:`~pulse2percept.utils.radial_mask`,
-    which normalizes each pixel axis separately and so becomes an ellipse on a
-    non-square frame. The aperture is the largest circle that fits the field,
-    i.e. half its shorter side in radius; ``'gauss'`` puts 3 standard
-    deviations at that radius.
+    Isotropic in dva (:py:func:`~pulse2percept.utils.radial_mask` becomes an
+    ellipse on a non-square frame). The radius is half the shorter side of the
+    field; ``'gauss'`` puts 3 standard deviations at that radius.
     """
     if mask is None:
         return None
@@ -454,8 +444,8 @@ def _aperture(x, y, mask, fov):
 def _to_gray(pattern, contrast, window):
     """Map a pattern in [-1, 1] onto gray levels around mean gray 0.5
 
-    ``window`` (an aperture in [0, 1], or None) multiplies the pattern rather
-    than the gray levels, so apertured regions fade to mean gray, not black.
+    ``window`` (an aperture in [0, 1], or None) multiplies the pattern, so
+    masked regions fade to mean gray.
     """
     if window is not None:
         pattern = pattern * window[..., np.newaxis]
@@ -470,15 +460,12 @@ def _raster_source(gray, time, metadata):
 
 
 def _check_spatial_nyquist(spatial_freq, direction, fov, shape):
-    """Raise unless the raster resolves the grating along both pixel axes
+    """Raise ValueError if the grating aliases along either pixel axis
 
-    A grating of frequency ``fs`` at angle ``theta`` has components
-    ``fs |cos(theta)|`` and ``fs |sin(theta)|`` along x and y, each of which
-    has to stay strictly below the Nyquist frequency of its own angular pixel
-    pitch. Direction is important: a grating that varies only vertically is
-    resolved by a frame of wide, short pixels. Equality is not enough either:
-    at exactly two samples per cycle the phase is unrecoverable, and a
-    quadrature-phase grating rasterizes as a uniform field.
+    The components ``fs |cos(theta)|`` (x) and ``fs |sin(theta)|`` (y) must
+    each stay strictly below the Nyquist frequency of that axis's angular
+    pixel pitch. At exactly two samples per cycle, a quadrature-phase grating
+    rasterizes as a uniform field.
     """
     n_rows, n_cols = shape
     theta = np.deg2rad(direction)
@@ -498,17 +485,15 @@ def _check_spatial_nyquist(spatial_freq, direction, fov, shape):
 
 
 def _check_temporal_nyquist(temporal_freq, time):
-    """Raise unless consecutive samples resolve the drift
+    """Raise ValueError if the sampled drift aliases
 
     Adjacent frames must advance the grating by less than half a temporal
-    cycle. At or past that, the sampled sequence is indistinguishable from a
-    slower or a reversed drift, which is the confusion that dropping
-    cycles/frame was meant to end.
+    cycle; otherwise the drift is indistinguishable from a slower or reversed
+    one.
     """
     if temporal_freq == 0 or time is None or time.size < 2:
         return
-    # The widest gap decides: one long gap aliases a sequence that is densely
-    # sampled everywhere else.
+    # Use the widest gap between samples:
     step = float(np.max(np.abs(np.diff(time)))) / MS_PER_S
     if temporal_freq * step >= 0.5:
         raise ValueError(
@@ -542,17 +527,15 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
     ----------
     spatial_freq : float or Quantity, optional
         Spatial frequency in cycles per degree of visual angle (e.g.
-        ``2 / dva``). One cycle is ``1 / spatial_freq`` dva wide, whatever
-        ``shape`` is. Its components along x and y must both stay strictly
-        below the Nyquist frequency of the corresponding angular pixel pitch.
+        ``2 / dva``), independent of ``shape``. Its x and y components must
+        stay strictly below the Nyquist frequency of the angular pixel pitch.
     temporal_freq : float or Quantity, optional
-        Drift rate in Hz (e.g. ``4 * Hz``), non-negative: ``direction`` alone
-        says which way the grating drifts. 0 leaves the pattern static; any
-        other rate requires ``time``.
+        Drift rate in Hz (e.g. ``4 * Hz``), non-negative (``direction`` sets
+        the drift direction). 0 is static; any other rate requires ``time``.
     direction : float or Quantity, optional
         Drift direction, in degrees counterclockwise from the positive x axis
-        (e.g. ``90 * deg``): 0 right, 90 up, 180 left, 270 down. The bars run
-        perpendicular to it, so ``direction=0`` gives vertical bars drifting
+        (e.g. ``90 * deg``): 0 right, 90 up, 180 left, 270 down. Bars are
+        perpendicular to it: ``direction=0`` gives vertical bars drifting
         rightwards.
     phase : float or Quantity, optional
         Spatial phase in degrees, at fixation and at ``t = 0``. 0 puts a
@@ -564,16 +547,15 @@ def grating(spatial_freq=1, temporal_freq=0, direction=0, phase=0, contrast=1,
         How much of the visual field the scene covers, in dva. A scalar is the
         horizontal extent, and the vertical one follows from ``shape``.
     shape : (rows, cols), optional
-        Size of the rasterized frame, in pixels. Raster resolution only: it
-        does not enter the spatial frequency.
+        Size of the rasterized frame, in pixels. Does not affect the spatial
+        frequency.
     time : array_like or None, optional
-        Sample times in ms (e.g. ``np.arange(0, 500, 10)``), which the scene's
-        source carries as a
-        :py:class:`~pulse2percept.stimuli.VideoStimulus`. None gives a static
-        :py:class:`~pulse2percept.stimuli.ImageStimulus` instead, and is only
-        allowed when ``temporal_freq`` is 0. There is no default frame rate,
-        so a scalar duration is rejected. Consecutive samples must advance the
-        drift by less than half a temporal cycle.
+        Sample times in ms (e.g. ``np.arange(0, 500, 10)``), giving a
+        :py:class:`~pulse2percept.stimuli.VideoStimulus` source. None gives a
+        static :py:class:`~pulse2percept.stimuli.ImageStimulus` and requires
+        ``temporal_freq=0``. Scalar durations are rejected (no default frame
+        rate). Consecutive samples must advance the drift by less than half a
+        temporal cycle.
     mask : {'gauss', 'circle', None}, optional
         Radial aperture applied to the pattern, which fades to mean gray
         outside it. Isotropic in dva and centered on fixation:
@@ -657,8 +639,7 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     The bar is a stripe perpendicular to the direction of motion, at
     ``0.5 + contrast / 2`` on a ``0.5 - contrast / 2`` background. Its center
     sits at ``offset + speed * t`` along the motion axis, measured from
-    fixation, so ``offset`` is where it is at ``t = 0`` and a given timestamp
-    puts it in the same place no matter how the video is sampled.
+    fixation. Bar position depends only on ``t``, not on the sampling.
 
     This generator draws one bar; use :func:`grating` for periodic patterns.
 
@@ -673,12 +654,12 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     direction : float or Quantity, optional
         Direction of motion, in degrees counterclockwise from the positive x
         axis (e.g. ``90 * deg``): 0 right, 90 up, 180 left, 270 down. The bar
-        itself is perpendicular to it, so ``direction=0`` is a vertical bar
-        moving rightwards.
+        is perpendicular to it: ``direction=0`` is a vertical bar moving
+        rightwards.
     speed : float or Quantity, optional
         Speed along ``direction``, in dva/s (e.g. ``5 * dva / s``),
-        non-negative: ``direction`` alone says which way the bar moves. 0
-        leaves the bar stationary; any other speed requires ``time``.
+        non-negative (``direction`` sets the direction of motion). 0 is
+        stationary; any other speed requires ``time``.
     offset : float or Quantity, optional
         Signed position of the bar's center at ``t = 0``, in dva along the
         motion axis, measured from fixation.
@@ -693,15 +674,13 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
         How much of the visual field the scene covers, in dva. A scalar is the
         horizontal extent, and the vertical one follows from ``shape``.
     shape : (rows, cols), optional
-        Size of the rasterized frame, in pixels. Raster resolution only: it
-        does not enter the bar's width or speed.
+        Size of the rasterized frame, in pixels. Does not affect the bar's
+        width or speed.
     time : array_like or None, optional
-        Sample times in ms (e.g. ``np.arange(0, 500, 10)``), which the scene's
-        source carries as a
-        :py:class:`~pulse2percept.stimuli.VideoStimulus`. None gives a static
-        :py:class:`~pulse2percept.stimuli.ImageStimulus` instead, and is only
-        allowed when ``speed`` is 0. There is no default frame rate, so a
-        scalar duration is rejected.
+        Sample times in ms (e.g. ``np.arange(0, 500, 10)``), giving a
+        :py:class:`~pulse2percept.stimuli.VideoStimulus` source. None gives a
+        static :py:class:`~pulse2percept.stimuli.ImageStimulus` and requires
+        ``speed=0``. Scalar durations are rejected (no default frame rate).
     mask : {'gauss', 'circle', None}, optional
         Radial aperture applied to the pattern, which fades to mean gray
         outside it. Isotropic in dva and centered on fixation:
@@ -766,13 +745,11 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
     _check_raster(width, 'bar width', 'bar', fov, x.shape, _MIN_BAR_PX)
     window = _aperture(x, y, mask, fov)
     theta = np.deg2rad(direction)
-    # Signed distance along the motion axis, in dva, and where the bar's
-    # center sits on that axis at each sample time:
+    # Signed distance along the motion axis (dva) and bar center per sample:
     u = x * np.cos(theta) + y * np.sin(theta)
     center = offset + speed * _elapsed_s(time)
     dist = np.abs(u[..., np.newaxis] - center)
-    # Plateau, then the raised-cosine ramp; `profile` is in [0, 1], with 0 the
-    # background:
+    # Plateau plus raised-cosine ramp; `profile` is in [0, 1], 0 = background:
     half = width / 2.0
     profile = (dist <= half).astype(float)
     if edge_width > 0:
@@ -790,16 +767,15 @@ def bar(width=1, direction=0, speed=0, offset=0, edge_width=0, contrast=1,
 def _landolt_mask(x, y, gap, position, orientation):
     """Boolean mask of the C: an annulus with a gap-wide slot cut out of it"""
     theta = np.deg2rad(orientation)
-    # Coordinates relative to the optotype's center, then rotated so that the
-    # opening always points along +u:
+    # Rotate coordinates about the optotype center so the opening points
+    # along +u:
     dx, dy = x - position[0], y - position[1]
     u = dx * np.cos(theta) + dy * np.sin(theta)
     v = -dx * np.sin(theta) + dy * np.cos(theta)
     radius = np.hypot(u, v)
     annulus = ((radius >= _INNER_DIAMETER / 2 * gap) &
                (radius <= _OUTER_DIAMETER / 2 * gap))
-    # The opening is a slot of width `gap` measured across the gap direction,
-    # which is what "gap size" means for a Landolt C:
+    # Gap size is the slot width measured across the gap direction:
     slot = (u > 0) & (np.abs(v) <= gap / 2)
     return annulus & ~slot
 
@@ -874,7 +850,7 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
                          f"'light' (white C on black), not {polarity!r}.")
     shape, (width, height) = _resolve_shape_fov(shape, fov)
 
-    # Cropping a C changes the task rather than the picture, so refuse it:
+    # A cropped C changes the task, so the optotype must fit the FOV:
     radius = _OUTER_DIAMETER / 2 * gap
     for name, offset, extent in (('horizontally', center[0], width),
                                  ('vertically', center[1], height)):
@@ -884,8 +860,7 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
                 f"{center.tolist()} dva reaches {abs(offset) + radius:g} dva "
                 f"{name} from fixation, past the {extent / 2:g} dva half-FOV. "
                 f"Increase 'fov', or move the optotype closer to fixation.")
-    # An opening narrower than a couple of pixels rasterizes as a closed ring,
-    # i.e. as a different optotype:
+    # Too narrow an opening rasterizes as a closed ring:
     _check_raster(gap, 'gap', 'opening', (width, height), shape,
                   _MIN_OPTOTYPE_PX)
     coverage = _rasterize(
@@ -904,8 +879,8 @@ def landolt_c(gap=1, position=(0, 0), orientation=0, fov=10, polarity='dark',
 def _tumbling_e_mask(x, y, stroke, position, orientation):
     """Boolean mask of the E: a spine column plus three full-width bars"""
     theta = np.deg2rad(orientation)
-    # Coordinates relative to the optotype's center, then rotated so that the
-    # bars always point along +u:
+    # Rotate coordinates about the optotype center so the bars point along
+    # +u:
     dx, dy = x - position[0], y - position[1]
     u = dx * np.cos(theta) + dy * np.sin(theta)
     v = -dx * np.sin(theta) + dy * np.cos(theta)
@@ -930,21 +905,18 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
     supersampled and area-averaged; ``stroke`` must span at least three
     output pixels.
 
-    The cardinal orientations form the conventional Tumbling-E task, although
-    any finite angle is accepted.
+    The conventional task uses cardinal orientations; any finite angle is
+    accepted.
 
     .. note::
        The Tumbling E and the Landolt C
        (:py:func:`~pulse2percept.stimuli.psychophysics.landolt_c`) are
-       different optotypes measured with different tasks (bar direction vs.
-       gap direction). Thresholds obtained with one are not numerically
-       interchangeable with the other.
+       different optotypes with different tasks (bar direction vs. gap
+       direction). Their thresholds are not interchangeable.
 
-    The analytic E is supersampled and area-averaged onto the requested
-    raster, so edge pixels carry the fraction of the glyph they cover. This
-    keeps bar and gap widths from depending on where the pixel grid happens to
-    fall, and matters most at off-cardinal orientations. ``stroke`` must still
-    span at least three output pixels.
+    Edge pixels store the fraction of the glyph they cover, so bar and gap
+    widths do not depend on pixel-grid alignment (most relevant at
+    off-cardinal orientations).
 
     .. versionadded:: 0.11.0
 
@@ -1004,9 +976,8 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
                          f"'light' (white E on black), not {polarity!r}.")
     shape, (width, height) = _resolve_shape_fov(shape, fov)
 
-    # Cropping an E changes the task rather than the picture, so refuse it.
-    # The glyph is a square, so off-cardinal angles need the axis-aligned
-    # extent of the rotated square, not its half-width:
+    # A cropped E changes the task, so the optotype must fit the FOV. Use the
+    # axis-aligned extent of the rotated square:
     theta = np.deg2rad(orientation)
     half = _E_EXTENT / 2 * stroke
     extent = half * (abs(np.cos(theta)) + abs(np.sin(theta)))
@@ -1019,8 +990,7 @@ def tumbling_e(stroke=1, position=(0, 0), orientation=0, fov=10,
                 f"reaches {abs(offset) + extent:g} dva {name} from fixation, "
                 f"past the {fov_size / 2:g} dva half-FOV. Increase 'fov', or "
                 f"move the optotype closer to fixation.")
-    # Bars narrower than a couple of pixels merge with their gaps, i.e. turn
-    # the E into a filled square:
+    # Too narrow bars merge with their gaps into a filled square:
     _check_raster(stroke, 'stroke', 'bars', (width, height), shape,
                   _MIN_OPTOTYPE_PX)
     coverage = _rasterize(

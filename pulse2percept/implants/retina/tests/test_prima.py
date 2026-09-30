@@ -29,7 +29,7 @@ def test_PhotovoltaicPixel():
     npt.assert_almost_equal(electrode.z, 2)
     npt.assert_almost_equal(electrode.radius, 3)
     npt.assert_almost_equal(electrode.apothem, 4)
-    # The geometry is spelled out, and the old abbreviations are gone:
+    # Parameters are `radius` and `apothem`; `r` and `a` were removed:
     npt.assert_equal(PhotovoltaicPixel(0, 1, 2, radius=3, apothem=4).radius, 3)
     for kwargs in ({'r': 3, 'apothem': 4}, {'radius': 3, 'a': 4}):
         with pytest.raises(TypeError):
@@ -52,7 +52,7 @@ def test_PRIMAPivotal(ztype):
     spacing = 100
     # Roughly a 12x15 grid, but edges are trimmed off:
     n_elec = 378
-    # Create an Prima and make sure location is correct
+    # Create a PRIMA and make sure location is correct
     # Height `z` can either be a float or a list
     z = -100 if ztype == 'float' else -np.ones(378) * 20
 
@@ -93,7 +93,7 @@ def test_Lorach2015Array(ztype):
     spacing = 75
     # Roughly a 12x15 grid, but edges are trimmed off:
     n_elec = 142
-    # Create an Prima and make sure location is correct
+    # Create a PRIMA and make sure location is correct
     # Height `z` can either be a float or a list
     z = -100 if ztype == 'float' else -np.ones(142) * 20
 
@@ -180,7 +180,7 @@ def test_Ho2019FlatArray(pixel_size, n_elec, elec_radius, ztype):
     np.fill_diagonal(dist, np.inf)
     npt.assert_almost_equal(dist.min(), pixel_size)
     npt.assert_almost_equal(dist.min(axis=1), pixel_size)
-    # Row spacing is derived, not independent:
+    # Row spacing is derived from the column spacing:
     npt.assert_almost_equal(prima.row_spacing, pixel_size * np.sqrt(3) / 2)
 
     for elec in prima.electrode_array.electrode_objects:
@@ -223,7 +223,7 @@ def test_Ho2019FlatArray_pixel_size():
             Ho2019FlatArray(pixel_size)
     with pytest.raises(TypeError):
         Ho2019FlatArray([40, 55])
-    # A size Huang2021Array does model is still not a Ho2019FlatArray size:
+    # A Huang2021Array size is not a Ho2019FlatArray size:
     npt.assert_equal(Huang2021Array(30).n_electrodes, 1388)
 
 
@@ -238,7 +238,7 @@ def test_Ho2019FlatArray_F55_layout():
     prima = Ho2019FlatArray(55)
     s = prima.spacing
     xy = prima.electrode_array.coordinates()[:, :2]
-    # Flat-top axial coordinates, read back off the pixel centers:
+    # Flat-top axial coordinates, computed from the pixel centers:
     q = xy[:, 0] / (s * np.sqrt(3) / 2)
     r = xy[:, 1] / s - q / 2
     npt.assert_allclose(q, np.round(q), atol=1e-9)
@@ -264,7 +264,7 @@ def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
     npt.assert_allclose(old.electrode_array.coordinates(),
                         new.electrode_array.coordinates())
     npt.assert_equal(old.pixel_size, pixel_size)
-    # Still frozen, and still take the rest of the old signature:
+    # Still slotted, and accept the rest of the old signature:
     npt.assert_equal(hasattr(old, '__dict__'), False)
     with pytest.deprecated_call():
         old_cls(-100, 'left', False, False)
@@ -282,7 +282,7 @@ def test_PRIMA_PRIMA75_are_deprecated(old_cls, new_cls):
                      list(new.electrode_array.electrodes))
     npt.assert_allclose(old.electrode_array.coordinates(),
                         new.electrode_array.coordinates())
-    # Still frozen, and still take the whole old signature:
+    # Still slotted, and accept the whole old signature:
     npt.assert_equal(hasattr(old, '__dict__'), False)
     with pytest.deprecated_call():
         old_cls(-100, 'left', False, False)
@@ -298,7 +298,7 @@ def test_implant_metadata():
     npt.assert_equal(PRIMAPivotal.family, 'PRIMA')
     for cls in (Lorach2015Array, Ho2019FlatArray, Huang2021Array):
         npt.assert_equal(cls.family, None)
-    # Unclassified implants default to None rather than to a guess:
+    # Unclassified implants default to None:
     generic = Implant(PointSource(0, 0, 0))
     npt.assert_equal((generic.placement, generic.technology, generic.family),
                      (None, None, None))
@@ -307,8 +307,8 @@ def test_implant_metadata():
 def test_prima_public_api():
     """Check canonical and deprecated public names.
 
-    The deprecated PRIMA spellings stay in the retinal namespace; they were
-    never re-exported from the root.
+    Deprecated PRIMA names are exported from the retina namespace only, not the
+    package root.
     """
     import pulse2percept.implants.retina as retina
     canonical = ['PRIMAPivotal', 'Lorach2015Array', 'Ho2019FlatArray',
@@ -359,15 +359,15 @@ def test_Huang2021Array(pixel_size, n_elec, n_total, elec_diam, ztype):
              np.column_stack([np.cos(corner), np.sin(corner)]))
     npt.assert_array_less(np.hypot(verts[..., 0], verts[..., 1]), 750)
 
-    # A per-electrode `z` is one entry per exposed pixel, not one per pixel on
-    # the die:
+    # A per-electrode `z` has one entry per exposed pixel, not per fabricated
+    # pixel:
     with pytest.raises(ValueError):
         Huang2021Array(pixel_size, z=np.ones(n_total))
 
 
 #: pixel size (um), smallest hex grid the mask is cut from, pixels in the
-#: leftmost and rightmost lattice columns, and a digest of the whole exposed
-#: -pixel set (see `_mask_fingerprint`).
+#: leftmost and rightmost lattice columns, and a digest of the exposed pixel
+#: set (see `_mask_fingerprint`).
 HUANG_MASKS = [(55, (22, 25), (7, 3), '9470661f9f60eb1c'),
                (40, (29, 35), (6, 11), 'f4411b9506ef49f2'),
                (30, (40, 45), (6, 10), 'ab65d1cbf16bed60'),
@@ -395,7 +395,7 @@ def test_Huang2021Array_pixel_size():
             Huang2021Array(pixel_size)
     with pytest.raises(TypeError):
         Huang2021Array([20, 30])
-    # A length quantity names the same variant a bare number of microns does:
+    # A length quantity selects the same variant as plain um:
     for unitful in (40 * um, 0.04 * mm):
         npt.assert_equal(Huang2021Array(unitful).n_electrodes, 821)
 
@@ -439,10 +439,9 @@ def test_PRIMA_round_substrate(implant_type, radius):
     ax, patch = _substrate(implant_type())
     npt.assert_almost_equal(patch.center, (x, y))
     npt.assert_almost_equal(patch.radius, radius)
-    # Behind the pixels, whatever order they were added in:
+    # Drawn behind the pixels:
     npt.assert_array_less(patch.get_zorder(), ZORDER['foreground'])
-    # ...and inside the view, so `autoscale` shows the chip and not just the
-    # pixels:
+    # and inside the axis limits, so autoscale shows the whole chip:
     npt.assert_array_less(ax.get_xlim()[0], x - radius)
     npt.assert_array_less(x + radius, ax.get_xlim()[1])
     npt.assert_array_less(ax.get_ylim()[0], y - radius)
@@ -459,8 +458,8 @@ def test_PRIMA_square_substrate():
     npt.assert_almost_equal(np.linalg.norm(edges, axis=1), 2000)
     # Square, and axis-aligned in the device's own frame:
     npt.assert_almost_equal(np.abs(np.sum(edges[0] * edges[1])), 0)
-    # Folded into (-45, 45] rather than [0, 90): a residual of -1e-14 is a
-    # rounding error, not an 89.99999999999997 deg mismatch.
+    # Fold into (-45, 45] so a -1e-14 rounding residual is not read as an
+    # 89.99999999999997 deg mismatch:
     off = np.degrees(np.arctan2(edges[0, 1], edges[0, 0]))
     npt.assert_almost_equal(np.mod(off + 45, 90) - 45, 0)
     npt.assert_array_less(patch.get_zorder(), ZORDER['foreground'])
@@ -525,7 +524,7 @@ def test_PRIMA_plot_passthrough(implant_type):
     npt.assert_equal(len(ax.texts), implant.n_electrodes)
     npt.assert_equal(len(ax.collections), 1)
     plt.close(fig)
-    # A unitful height draws the substrate the same way a bare one does:
+    # A unitful height draws the same substrate as plain um:
     _, bare = _substrate(implant_type(z=-100))
     _, unitful = _substrate(implant_type(z=-0.1 * mm))
     if isinstance(bare, Circle):
@@ -535,7 +534,7 @@ def test_PRIMA_plot_passthrough(implant_type):
 
 
 def test_PRIMA_plot_stim_cmap():
-    """Stimulus coloring reaches the active circle, not the pixel body"""
+    """Stimulus coloring applies to the active circle, not the pixel body"""
     implant = PRIMAPivotal()
     stim = implant.prepare_stim(samples.logo_bvl())
     fig, ax = plt.subplots()
@@ -549,38 +548,35 @@ def test_PRIMA_plot_stim_cmap():
     amp = np.max(stim.data, axis=1)
     npt.assert_almost_equal(actives[np.argmax(amp)][:3],
                             plt.get_cmap('YlOrRd')(1.0)[:3])
-    # A dark pixel keeps the ordinary black electrode fill:
+    # A dark pixel keeps the default black electrode fill:
     npt.assert_almost_equal(actives[np.argmin(amp)][:3], (0, 0, 0))
     plt.close(fig)
 
 
 def test_PRIMA40_reshape_stim():
     # Smoke test a high-res hex implant with an ImageStimulus, where the
-    # old approach runs out of memory easily. A picture is not a stimulus an
-    # implant can deliver, so the sampling is exercised where an encoder
-    # reaches it:
+    # old approach runs out of memory easily. `reshape_stim` is called
+    # directly, as an encoder does:
     Ho2019FlatArray(40).reshape_stim(samples.logo_bvl())
 
 
 @pytest.mark.parametrize('implant_type, offset', [
     (PRIMAPivotal, (0, 0)),
     (Lorach2015Array, (0, 0)),
-    # The reconstructed masks are centered on the substrate, since where they
-    # sit on the die is not published. Ho2019FlatArray(40) instead keeps the
-    # 502 lattice sites nearest the substrate center, and a discrete lattice
-    # leaves that footprint a quarter of a spacing off center:
+    # Reconstructed masks are centered on the substrate (their position on the
+    # die is not published). Ho2019FlatArray(40) keeps the 502 lattice sites
+    # nearest the substrate center, which puts the footprint a quarter spacing
+    # off center:
     (partial(Ho2019FlatArray, 55), (0, 0)),
     (partial(Ho2019FlatArray, 40), (0, -0.25 * 40)),
     (partial(Huang2021Array, 55), (0, 0)),
     (partial(Huang2021Array, 20), (0, 0)),
 ])
 def test_PRIMA_device_center(implant_type, offset):
-    """Where the trimmed device sits relative to its own origin
+    """Position of the trimmed device relative to its own origin
 
-    Each PRIMA is a regular hex grid with edge electrodes removed afterwards,
-    so the finished device is centered only if those removals are symmetric --
-    the grid's own centering says nothing about it. The per-electrode
-    coordinate tests would all still pass if a device drifted sideways.
+    Each PRIMA is a regular hex grid with edge electrodes removed, so the
+    device is centered only if the removals are symmetric.
     """
     xy = implant_type().electrode_array.coordinates()[:, :2]
     center = 0.5 * (xy.min(axis=0) + xy.max(axis=0))
@@ -588,7 +584,7 @@ def test_PRIMA_device_center(implant_type, offset):
 
 
 class LooseEncoder(PRIMAEncoder):
-    """PRIMAEncoder variant used to exercise ``safe_mode`` limits."""
+    """PRIMAEncoder with relaxed limits, for testing ``safe_mode``"""
     __slots__ = ()
 
     pulse_step = 0.35
@@ -600,9 +596,9 @@ def test_PRIMAPivotal_is_stimulated_optically():
     implant = PRIMAPivotal()
     npt.assert_equal(implant.stimulus_unit, mW / mm ** 2)
     npt.assert_equal(isinstance(implant.encoder, PRIMAEncoder), True)
-    # All photovoltaic pixels may be illuminated simultaneously.
+    # All photovoltaic pixels may be illuminated simultaneously:
     npt.assert_equal(implant.raster, None)
-    # Encoder state is per implant instance.
+    # Encoder state is per implant instance:
     implant.encoder.threshold = 0.9
     npt.assert_almost_equal(PRIMAPivotal().encoder.threshold, 0.5)
 
@@ -612,7 +608,7 @@ def test_PRIMAPivotal_is_stimulated_optically():
     npt.assert_almost_equal(stim.data.max(), 3.5)
     npt.assert_almost_equal(stim.duration, 500)
 
-    # Disabling the encoder rejects image input.
+    # Without an encoder, image input is rejected:
     with pytest.raises(DimensionMismatchError):
         PRIMAPivotal(encoder=None).prepare_stim(samples.logo_bvl())
     with pytest.raises(TypeError):
@@ -620,17 +616,17 @@ def test_PRIMAPivotal_is_stimulated_optically():
 
 
 def test_PRIMAPivotal_rejects_threshold_relative_stimuli():
-    # Threshold-relative current is invalid for an optical implant.
+    # Threshold-relative current is invalid for an optical implant:
     train = Stimulus({'A5': BiphasicPulseTrain(20, 2 * xTh, 0.45,
                                                stim_dur=50)})
     with pytest.raises(DimensionMismatchError) as excinfo:
         PRIMAPivotal().prepare_stim(train)
     npt.assert_equal('irradiance' in str(excinfo.value), True)
-    # Current-driven implants still accept xTh before calibration.
+    # Current-driven implants still accept xTh before calibration:
     npt.assert_equal(ArgusII(encoder=None).prepare_stim(train).unit, xTh)
 
 
-# Constructor variants must not change the optical input pipeline:
+# Every photovoltaic array, including constructor variants:
 PHOTOVOLTAIC = [PRIMAPivotal,
                 Lorach2015Array,
                 partial(Ho2019FlatArray, 55),
@@ -650,11 +646,12 @@ def test_photovoltaic_arrays_are_stimulated_optically(implant_type):
     # Only the pivotal device is driven by the PRIMA projector:
     npt.assert_equal(isinstance(implant.encoder, PRIMAEncoder),
                      isinstance(implant, PRIMAPivotal))
-    # All photovoltaic pixels may be illuminated simultaneously.
+    # All photovoltaic pixels may be illuminated simultaneously:
     npt.assert_equal(implant.raster, None)
 
 
-# optical protocol that each implant's default encoder represents:
+# Default encoder protocol of each implant: (wavelength in nm, irradiance in
+# mW/mm^2, frequency in Hz, pulse duration in ms):
 OPTICAL_PROTOCOLS = [
     # Pivotal PRIMA projector [Holz2026]_:
     (PRIMAPivotal, (880, 3.5, 30, 9.8)),
@@ -693,12 +690,12 @@ def test_photovoltaic_encoder_is_per_instance(implant_type):
 def test_photovoltaic_encoder_opt_out(implant_type):
     implant = implant_type(encoder=None)
     npt.assert_equal(implant.encoder, None)
-    # A picture is dimensionless, so nothing turns it into irradiance:
+    # A picture is dimensionless and cannot be converted to irradiance:
     with pytest.raises(DimensionMismatchError):
         implant.prepare_stim(samples.logo_bvl())
     with pytest.raises(TypeError):
         implant_type(encoder='binary')
-    # A custom encoder reaches the implant through the usual machinery:
+    # A custom encoder can be assigned:
     implant.encoder = PRIMAEncoder(irradiance=2.0)
     npt.assert_almost_equal(
         implant.prepare_stim(samples.logo_bvl()).data.max(), 2.0)
@@ -711,7 +708,7 @@ def test_photovoltaic_arrays_encode_images(implant_type):
     npt.assert_equal(stim.unit, mW / mm ** 2)
     npt.assert_equal(list(stim.electrodes),
                      list(implant.electrode_array.electrodes))
-    # A lit pixel sits at the encoder's own peak irradiance:
+    # A fully lit pixel receives the encoder's peak irradiance:
     npt.assert_almost_equal(stim.data.max(), implant.encoder.irradiance)
     npt.assert_equal(stim.data.min() >= 0, True)
     npt.assert_almost_equal(stim._spatial_view().data.max(), 1, decimal=5)
@@ -731,7 +728,7 @@ def test_photovoltaic_arrays_reject_current(implant_type):
 @pytest.mark.parametrize('safe_mode', (False, True))
 def test_photovoltaic_arrays_refuse_light_that_is_not_light(implant_type,
                                                             safe_mode):
-    # Negative or nonfinite irradiance is invalid regardless of safe_mode.
+    # Negative or nonfinite irradiance is invalid regardless of safe_mode:
     implant = implant_type(safe_mode=safe_mode)
     stim = implant_type().prepare_stim(samples.logo_bvl())
     for factor in (np.nan, np.inf):
@@ -750,7 +747,7 @@ def test_photovoltaic_arrays_refuse_light_that_is_not_light(implant_type,
 
 def test_PRIMAPivotal_safe_mode_checks_the_projector():
     """safe_mode checks the PRIMA projector envelope, not charge balance."""
-    # Light is never charge-balanced, so the electrical check must not run:
+    # Light is never charge-balanced, so the electrical check is skipped:
     implant = PRIMAPivotal(safe_mode=True)
     npt.assert_equal(implant.prepare_stim(samples.logo_bvl()).unit,
                      mW / mm ** 2)
@@ -768,18 +765,17 @@ def test_PRIMAPivotal_safe_mode_checks_the_projector():
 
 @pytest.mark.parametrize('implant_type', PHOTOVOLTAIC[1:])
 def test_photovoltaic_arrays_have_no_borrowed_safe_mode(implant_type):
-    """Arrays without a published envelope refuse safe_mode.
+    """Arrays without a published envelope reject safe_mode
 
-    The PRIMA projector limits belong to the pivotal system. Applying them to
-    a research array would silently misrepresent that array's own protocol,
-    which is brighter than PRIMA in the Ho and Huang cases.
+    The PRIMA projector limits apply to the pivotal system only. The Ho and
+    Huang protocols are brighter than PRIMA.
     """
     implant = implant_type(safe_mode=True)
     with pytest.raises(NotImplementedError) as excinfo:
         implant.prepare_stim(samples.logo_bvl())
     npt.assert_equal('safe_mode' in str(excinfo.value), True)
     npt.assert_equal('PRIMAPivotal' in str(excinfo.value), True)
-    # Its own default protocol is fine without safe_mode:
+    # The default protocol works without safe_mode:
     npt.assert_equal(implant_type().prepare_stim(samples.logo_bvl()).unit,
                      mW / mm ** 2)
 
@@ -793,33 +789,32 @@ def test_PRIMA_deprecated_alias_keeps_the_encoder():
 
 
 def test_PRIMAPivotal_safe_mode_accepts_the_full_device():
-    # Full-array illumination at the documented maximum is valid.
+    # Full-array illumination at the documented maximum is valid:
     implant = PRIMAPivotal(safe_mode=True)
     stim = implant.prepare_stim(ImageStimulus(np.ones((32, 32))))
     npt.assert_equal(np.count_nonzero(stim.data.max(axis=1)), 378)
     npt.assert_almost_equal(stim.duty_cycle.max(), 0.294)
-    # All documented pulse-duration levels are valid.
+    # All documented pulse-duration levels are valid:
     for pulse_dur in np.arange(1, 15) * 0.7:
         implant.encoder = PRIMAEncoder(pulse_dur=pulse_dur, grayscale=True)
         implant.prepare_stim(samples.logo_bvl())
 
 
 def test_PRIMAPivotal_safe_mode_checks_the_wavelength():
-    """The envelope is validated on the schedule, not the encoder class.
+    """safe_mode checks the wavelength on the schedule, not the encoder class
 
-    A PhotovoltaicEncoder can now put pivotal settings on a different
-    wavelength; photovoltaic response is wavelength dependent, so that is a
-    different operating point, not the PRIMA projector.
+    Photovoltaic response depends on wavelength, so pivotal settings at a
+    different wavelength are a different operating point.
     """
-    # Binary mode keeps ON durations on the projector's own 0.7 ms grid, so
-    # wavelength is the only thing left to fault.
+    # Binary mode keeps ON durations on the projector's 0.7 ms grid, so only
+    # the wavelength is out of range:
     off_color = PhotovoltaicEncoder(wavelength=915, irradiance=3.5, freq=30,
                                     pulse_dur=9.8, grayscale=False)
     implant = PRIMAPivotal(safe_mode=True, encoder=off_color)
     with pytest.raises(ValueError) as excinfo:
         implant.prepare_stim(samples.logo_bvl())
     npt.assert_equal('880 nm, not 915 nm' in str(excinfo.value), True)
-    # The same settings at 880 nm pass, so only wavelength was at fault:
+    # The same settings at 880 nm pass:
     on_color = PhotovoltaicEncoder(wavelength=880, irradiance=3.5, freq=30,
                                    pulse_dur=9.8, grayscale=False)
     npt.assert_equal(
@@ -835,9 +830,9 @@ def test_PRIMAPivotal_safe_mode_checks_the_wavelength():
     (LooseEncoder(irradiance=5.0), 'exceeds the 3.5 mW/mm^2'),
     (LooseEncoder(pulse_dur=14.0), 'longest documented ON duration'),
     (LooseEncoder(pulse_dur=1.05), 'whole multiples of 0.7 ms'),
-    # Combined frequency/pulse-duration violations are caught by duty cycle.
+    # Combined frequency/pulse-duration violations are caught by duty cycle:
     (PRIMAEncoder(freq=60), 'duty cycle'),
-    # Frame rate is checked independently.
+    # Frame rate is checked independently:
     (PRIMAEncoder(freq=60, pulse_dur=4.9), 'runs the projector at 60 Hz'),
 ])
 def test_PRIMAPivotal_safe_mode_rejects(encoder, msg):
@@ -845,14 +840,14 @@ def test_PRIMAPivotal_safe_mode_rejects(encoder, msg):
     with pytest.raises(ValueError) as excinfo:
         implant.prepare_stim(samples.logo_bvl())
     npt.assert_equal(msg in str(excinfo.value), True)
-    # The operating-envelope check is disabled when safe_mode=False.
+    # The envelope check is skipped when safe_mode=False:
     implant.safe_mode = False
     npt.assert_equal(implant.prepare_stim(samples.logo_bvl()).unit,
                      mW / mm ** 2)
 
 
 def test_PRIMAPivotal_safe_mode_reads_the_schedule_not_the_metadata():
-    # Envelope checks use schedule state, not mutable metadata.
+    # Envelope checks use schedule state, not mutable metadata:
     implant = PRIMAPivotal(safe_mode=True)
     stim = PRIMAPivotal(
         encoder=PRIMAEncoder(freq=60)).prepare_stim(samples.logo_bvl())
@@ -867,20 +862,20 @@ def test_PRIMAPivotal_safe_mode_reads_the_schedule_not_the_metadata():
 
 
 def test_PRIMAPivotal_refuses_light_that_is_not_light():
-    # Negative or nonfinite irradiance is invalid regardless of safe_mode.
+    # Negative or nonfinite irradiance is invalid regardless of safe_mode:
     stim = PRIMAPivotal().prepare_stim(samples.logo_bvl())
-    # Negative scaling is rejected by the schedule.
+    # Negative scaling is rejected by the schedule:
     with pytest.raises(ValueError):
         stim * -1
-    # Zero scaling turns illumination off.
+    # Zero scaling turns illumination off:
     npt.assert_almost_equal((stim * 0).irradiance, 0)
     PRIMAPivotal().check_stim(stim * 0)
-    # Nonfinite waveform samples are rejected.
+    # Nonfinite waveform samples are rejected:
     for factor in (np.nan, np.inf):
         with pytest.raises(ValueError) as excinfo:
             PRIMAPivotal().check_stim(stim * factor)
         npt.assert_equal('non-finite irradiance' in str(excinfo.value), True)
-    # Hand-built negative irradiance is also rejected.
+    # Hand-built negative irradiance is also rejected:
     negative = Stimulus(stim)
     negative.metadata = {'user': None}
     negative._stim = {'data': -np.abs(negative.data),
@@ -894,19 +889,19 @@ def test_PRIMAPivotal_refuses_light_that_is_not_light():
 def test_PRIMAPivotal_safe_mode_needs_the_projector_settings():
     implant = PRIMAPivotal(safe_mode=True)
     encoded = PRIMAPivotal().prepare_stim(samples.logo_bvl())
-    # Duty cycle cannot be checked after the projector schedule is lost.
+    # Duty cycle cannot be checked without the projector schedule:
     handmade = Stimulus(encoded)
     handmade.metadata = {'user': None}
     with pytest.raises(ValueError) as excinfo:
         implant.check_stim(handmade)
     npt.assert_equal('duty cycle cannot be verified' in str(excinfo.value),
                      True)
-    # Without safe_mode, the incomplete envelope check is skipped.
+    # Without safe_mode, the incomplete envelope check is skipped:
     PRIMAPivotal().check_stim(handmade)
-    # Optical safe_mode does not accept electrical stimulation.
+    # Optical safe_mode rejects electrical stimulation:
     with pytest.raises(DimensionMismatchError):
         implant.check_stim(Stimulus({'A5': BiphasicPulse(10, 0.45)}))
-    # max_current is not defined for this optical device.
+    # max_current is not defined for this optical device:
     implant = PRIMAPivotal()
     implant.max_current = 100
     with pytest.raises(DimensionMismatchError):

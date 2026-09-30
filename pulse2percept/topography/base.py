@@ -24,29 +24,26 @@ from ..utils.constants import ZORDER
 
 
 def _rectangular_mesh(x_range, y_range, step):
-    """Lay a rectangular mesh of coordinates over a range
+    """Rectangular mesh of coordinates over a range
 
-    The mesh generator behind :py:class:`Grid2D`, kept separate from it
-    because a grid of coordinates is not by itself a grid of *visual field*
-    coordinates: :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords`
-    lays implants out on a physical one, in microns. What unit the numbers are
-    in is the caller's to state; this only spaces them.
+    Used by :py:class:`Grid2D` (dva) and by
+    :py:meth:`~pulse2percept.implants.EnsembleImplant.from_coords` (um).
+    Unit-agnostic; the caller sets the unit.
 
     Parameters
     ----------
     x_range, y_range : (min, max)
-        The range each axis spans, end points included.
+        Range of each axis, end points included.
     step : float or (x_step, y_step)
         Target spacing along each axis. Both end points are included, so the
-        spacing actually laid down is the one nearest ``step`` that reaches
-        them. A zero-width range gets a single point whatever the step, since
-        ``linspace(0, 0, num=5)`` would otherwise return five copies of it.
+        actual spacing is the one nearest ``step`` that reaches them. A
+        zero-width range gets a single point regardless of step.
 
     Returns
     -------
     x, y : np.ndarray
         The mesh, in Cartesian (``indexing='xy'``) order with y running from
-        the top down, so that iterating it follows image convention.
+        the top down (image convention).
 
     .. versionadded:: 0.10.0
 
@@ -69,8 +66,8 @@ def _rectangular_mesh(x_range, y_range, step):
         x_step = y_step = step
 
     def axis(vrange, vstep):
-        # `np.diff` returns a 1-element array, so pull out the scalar: NumPy
-        # does not allow converting an array with ndim > 0 to a Python scalar.
+        # `np.diff` returns a 1-element array; NumPy does not convert ndim > 0
+        # arrays to Python scalars:
         diff = np.abs(np.diff(vrange)).item()
         num = int(np.round(diff / vstep) + 1) if diff != 0 else 1
         return np.linspace(*vrange, num=num, dtype=np.float32)
@@ -80,27 +77,24 @@ def _rectangular_mesh(x_range, y_range, step):
     return np.meshgrid(xflat, yflat[::-1], indexing='xy'), xflat, yflat
 
 
-#: Which arguments of a coordinate transform are coordinates. Everything a
-#: visual field map takes that is named x/y/z something -- ``x``, ``ydva``,
-#: ``x_um``, ``zv1`` -- and nothing that is named ``coords``, ``region``,
-#: ``hemi`` or ``surface``.
+#: Coordinate argument names of a transform: anything starting with x/y/z
+#: (``x``, ``ydva``, ``x_um``, ``zv1``), but not ``coords``, ``region``,
+#: ``hemi``, or ``surface``.
 _COORD_ARG = re.compile(r'^[xyz]($|[0-9_a-z])')
 
 
 def _unit_aware_transform(func, unit_attr):
-    """Wrap a coordinate transform so its inputs may carry units
+    """Wraps a coordinate transform so its inputs may carry units
 
-    Applied automatically to every ``dva_to_*`` and ``*_to_dva`` method of a
-    :py:class:`VisualFieldMap` subclass; see ``__init_subclass__``. The wrapped
-    function still receives, and still returns, ordinary numbers -- this is a
-    boundary, not a change of representation.
+    Applied to every ``dva_to_*`` and ``*_to_dva`` method of a
+    :py:class:`VisualFieldMap` subclass (see ``__init_subclass__``). The
+    wrapped function still receives and returns plain numbers.
     """
     @wraps(func)
     def wrapper(self, *args, **kwargs):
         if not (any(has_units(a) for a in args) or
                 any(has_units(v) for v in kwargs.values())):
-            # The overwhelmingly common case, and the one every internal
-            # caller takes: nothing to convert, so nothing is touched.
+            # Fast path (all internal calls): no units to convert:
             return func(self, *args, **kwargs)
         unit = getattr(self, unit_attr)
         bound = signature(func).bind(self, *args, **kwargs)
@@ -133,9 +127,8 @@ class CoordinateGrid:
                 return False
             for key in self.__dict__.keys():
                 mine, theirs = self.__dict__[key], other.__dict__[key]
-                # If either side is an array, compare as arrays: `!=` between
-                # None and an array is elementwise, not a bool (this is how a
-                # 2D grid, whose z is None, compares against a 3D one).
+                # Compare arrays with array_equal: `!=` between None and an
+                # array is elementwise (e.g., 2D grid with z=None vs. 3D):
                 if isinstance(mine, np.ndarray) or isinstance(theirs, np.ndarray):
                     if not np.array_equal(mine, theirs):
                         return False
@@ -162,10 +155,9 @@ class Grid2D(PrettyPrint):
     in visual field, and transformed with a retinotopic mapping to
     obtain the grid in other regions.
 
-    Its own coordinates are therefore **degrees of visual angle**: they are
-    what :py:meth:`build` hands to a visual field map, and what ``grid.x`` and
-    ``grid.y`` report. A grid of *physical* coordinates is a different thing
-    and is not this class; see
+    Its own coordinates (``grid.x``, ``grid.y``, and the input to
+    :py:meth:`build`) are in **degrees of visual angle**. For a grid of
+    physical coordinates, see
     :py:func:`~pulse2percept.topography.base._rectangular_mesh`.
 
     .. versionadded:: 0.6
@@ -180,11 +172,10 @@ class Grid2D(PrettyPrint):
         Step size (dva). If int or double, the same step will apply to both x
         and y ranges. If a tuple, it is interpreted as (x_step, y_step).
 
-        This is a *target* spacing rather than an exact one: both end points
-        of a range are always included, so a range that is not a whole
-        multiple of ``step`` is sampled at the nearest spacing that reaches
-        both. ``Grid2D((0, 1), (0, 0), step=0.3)`` gives four points spaced
-        0.333 apart, not three spaced 0.3 with the last one short.
+        This is a *target* spacing: both end points are always included, so a
+        range that is not a multiple of ``step`` uses the nearest spacing
+        that reaches both. ``Grid2D((0, 1), (0, 0), step=0.3)`` gives four
+        points spaced 0.333 apart.
     grid_type : {'rect', 'hex'}
         Grid type ('rect': rectangular, 'hex': hexagonal).
 
@@ -199,8 +190,8 @@ class Grid2D(PrettyPrint):
        stored as plain numbers. See :py:mod:`pulse2percept.units`.
 
     .. versionchanged:: 0.10.0
-        The visual field contract is explicit: the three range arguments are
-        degrees of visual angle, and a quantity in any other dimension raises.
+        ``x_range``, ``y_range``, and ``step`` are in dva; a quantity in any
+        other dimension is an error.
 
     Examples
     --------
@@ -273,15 +264,12 @@ class Grid2D(PrettyPrint):
     def y(self, value):
         self._grid['dva'] = CoordinateGrid(self.x, value)
 
-    #: The unit this grid's own coordinates are in. A grid is uniform in the
-    #: visual field, and a visual field map turns it into tissue coordinates.
+    #: Unit of the grid's own coordinates (uniform in the visual field; a
+    #: visual field map converts them to tissue coordinates).
     visual_unit = dva
 
     def __init__(self, x_range, y_range, step=1, grid_type='rect'):
-        # A grid of *visual field* coordinates, so its extent is measured in
-        # degrees of visual angle. How far a degree reaches on the retina or
-        # the cortex is what a visual field map is for, and is not a unit
-        # conversion:
+        # dva to tissue is a visual field map, not a unit conversion:
         x_range = as_value(x_range, self.visual_unit, 'x_range')
         y_range = as_value(y_range, self.visual_unit, 'y_range')
         step = as_value(step, self.visual_unit, 'step')
@@ -558,8 +546,7 @@ class Grid2D(PrettyPrint):
         """
         # avoid circular import
         from .cortex.neuropythy import NeuropythyMap
-        # 'c' is passed to the plotting call explicitly (as `color`), so it
-        # must not also be forwarded through **kwargs:
+        # 'c' is passed explicitly (as `color`), so exclude it from **kwargs:
         fig_kwargs = ['figsize', 'c']
         if ax is None:
             ax = plt.gca()
@@ -658,8 +645,8 @@ class Grid2D(PrettyPrint):
         if id(self) in memodict:
             return memodict[id(self)]
         copied = copy(self)
-        # Register before recursing, and pass `memodict` down, so that shared
-        # references are copied once and reference cycles terminate:
+        # Register before recursing, so shared references are copied once and
+        # cycles terminate:
         memodict[id(self)] = copied
         for attr in self.__dict__:
             copied.__setattr__(attr,
@@ -703,9 +690,8 @@ class Grid2D(PrettyPrint):
 class VisualFieldMap(Parametrized):
     """ Base template class for a visual field map (retinotopy)
 
-    A visual field map is handed to a model so it knows how to convert between
-    tissue and visual field coordinates. It is not itself a model: there is
-    nothing to build and no percept to predict.
+    Converts between tissue and visual field coordinates for a model. Not a
+    model itself (nothing to build or predict).
 
     .. versionchanged:: 0.10.0
 
@@ -714,7 +700,7 @@ class VisualFieldMap(Parametrized):
 
     .. versionchanged:: 0.10.0
 
-        Coordinates handed to a ``dva_to_*`` or ``*_to_dva`` method may carry
+        Coordinates passed to ``dva_to_*`` or ``*_to_dva`` methods may carry
         units; see ``visual_unit`` and ``tissue_unit``.
 
     """
@@ -722,11 +708,8 @@ class VisualFieldMap(Parametrized):
     # If the map is split into left and right hemispheres.
     split_map = False
 
-    # The two sides a visual field map converts between. A map is the one
-    # thing in p2p that turns one into the other, and it is a coordinate
-    # transformation rather than a unit conversion: `dva` is its own dimension
-    # precisely because how far a degree reaches on tissue is what the map is
-    # for.
+    # dva to tissue is a coordinate transform (this map), not a unit
+    # conversion, so dva is its own dimension:
 
     #: The unit of the visual field side of the map
     visual_unit = dva
@@ -734,13 +717,11 @@ class VisualFieldMap(Parametrized):
     tissue_unit = um
 
     def __init_subclass__(cls, **kwargs):
-        """Add unit handling to coordinate transforms defined by subclasses.
+        """Adds unit handling to subclass coordinate transforms
 
-        Methods named ``dva_to_*`` accept visual-field coordinates, while
-        ``*_to_dva`` methods accept tissue coordinates. Wrap them here so
-        subclasses do not need to handle unit conversion themselves.
-
-        Only coordinate arguments recognized by ``_COORD_ARG`` are converted.
+        ``dva_to_*`` methods take visual-field coordinates, ``*_to_dva``
+        methods take tissue coordinates. Only arguments matching
+        ``_COORD_ARG`` are converted.
         """
         super().__init_subclass__(**kwargs)
         for name, attr in list(vars(cls).items()):
@@ -771,8 +752,6 @@ class VisualFieldMap(Parametrized):
             'ndim': 2,
         }
 
-    # Equality and hashing come from Parametrized, which compares attributes
-    # with ``np.array_equal`` where they are arrays. Re-implementing either
-    # here with a plain ``self.__dict__ == other.__dict__`` raises ValueError
-    # as soon as any attribute is an array, and defining __eq__ without
-    # __hash__ would silently make the maps unhashable.
+    # __eq__ and __hash__ come from Parametrized (uses np.array_equal for
+    # array attributes). Do not override __eq__ alone: that makes the class
+    # unhashable.

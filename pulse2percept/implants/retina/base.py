@@ -5,12 +5,11 @@ from ..base import Implant
 class RetinalImplant(Implant):
     """Retinal prosthesis
 
-    A retinal prosthesis is an :py:class:`~pulse2percept.implants.Implant`
-    that stimulates the retina, and therefore sits in one eye. This is the
-    base class for devices such as
+    An :py:class:`~pulse2percept.implants.Implant` that stimulates the retina
+    of one eye. Base class for devices such as
     :py:class:`~pulse2percept.implants.retina.ArgusII` and
-    :py:class:`~pulse2percept.implants.retina.AlphaIMS`, and can be used
-    directly to give a custom electrode array an eye.
+    :py:class:`~pulse2percept.implants.retina.AlphaIMS`. Can be used directly
+    to assign an eye to a custom electrode array.
 
     .. versionadded:: 0.11.0
 
@@ -56,12 +55,9 @@ class RetinalImplant(Implant):
     def eye(self):
         """Implanted eye
 
-        A :py:class:`~pulse2percept.implants.retina.RetinalImplant` can be
-        implanted either in a left eye ('left') or right eye ('right').
-        Models such as
-        :py:class:`~pulse2percept.models.retina.AxonMapModel` will treat left
-        and right eyes differently (for example, adjusting the location of the
-        optic disc).
+        'left' or 'right'. Models such as
+        :py:class:`~pulse2percept.models.retina.AxonMapModel` treat left and
+        right eyes differently (e.g., optic disc location).
 
         Examples
         --------

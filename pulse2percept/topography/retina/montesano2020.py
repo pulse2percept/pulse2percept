@@ -126,14 +126,13 @@ class Montesano2020Map(Watson2014Map):
 
     Notes
     -----
-    *  An independent reconstruction of [Montesano2020]_ as opposed to a port
-       of the original code. The implementation was validated against that
-       paper's published figures and E2v fits, and cross-checked against the
-       ``visualFields`` implementation by the same group, which it matches to
-       0.07 dva inside the displacement zone. 
+    *  An independent reconstruction of [Montesano2020]_, not a port of the
+       original code. Validated against the paper's published figures and E2v
+       fits, and cross-checked against the ``visualFields`` implementation by
+       the same group (agreement within 0.07 dva inside the displacement
+       zone).
        See ``tools/generate_montesano2020_map.py``.
-    *  This is based on population anatomy [Curcio1990]_ and not to be
-       interpreted as a subject-specific eye.
+    *  Based on population anatomy [Curcio1990]_, not a subject-specific eye.
 
     """
 
@@ -170,10 +169,9 @@ class Montesano2020Map(Watson2014Map):
     def _remap_radius(self, theta_visual, radius_dva, inverse=False):
         """Map a radius (dva) between RF and soma space along one meridian.
 
-        Radii at or beyond ``SUPPORT_MAX_DVA`` pass through unchanged; nothing
-        is extrapolated past the modeled support. Interpolation runs in double
-        precision. The result comes back in the caller's dtype, which the
-        float32 model grids require.
+        Radii at or beyond ``SUPPORT_MAX_DVA`` are returned unchanged (no
+        extrapolation). Interpolates in float64; returns the input dtype
+        (float32 model grids require it).
         """
         given = np.asarray(radius_dva)
         theta_ret = np.ravel(self._retinal_angle(theta_visual))
@@ -182,8 +180,8 @@ class Montesano2020Map(Watson2014Map):
         if inside.any():
             field = _displacement_field()
             interp = field.inverse if inverse else field.forward
-            # The stored grid ends a few ulps short of 15 dva; clip so a
-            # radius inside the documented support stays in bounds.
+            # The stored grid ends a few ulps short of 15 dva; clip to stay in
+            # bounds:
             query = np.minimum(radius[inside], field.radial_max)
             radius[inside] = interp(np.column_stack([theta_ret[inside],
                                                      query]))

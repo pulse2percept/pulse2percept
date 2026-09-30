@@ -10,9 +10,7 @@ from ..rasters import SequentialRaster
 from ...stimuli import AmplitudeEncoder
 from ...units import Hz, ms
 
-# Distinguishes "the caller said nothing", which gets the device's own default,
-# from an explicit None, which switches the feature off. A plain None default
-# could not tell the two apart:
+# Distinguish the device default from an explicit None (feature off):
 _DEVICE_DEFAULT = object()
 
 
@@ -58,10 +56,9 @@ class ArgusI(RetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 16 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 16 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -185,10 +182,9 @@ class ArgusII(RetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 60 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 60 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -198,23 +194,22 @@ class ArgusII(RetinalImplant):
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
     encoder : :py:class:`~pulse2percept.stimuli.ImplantEncoder`, optional
-        How the device turns a picture into stimulation. Defaults to a fresh
-        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz, which is
-        the rate Argus II runs its video at. Pass ``encoder=None`` to switch
-        automatic encoding off, so that an image or video input is refused
-        rather than encoded.
+        Image/video encoder. Defaults to an
+        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` at 6 Hz (the
+        Argus II video rate). With ``encoder=None``, image and video input
+        raise DimensionMismatchError.
 
         .. versionadded:: 0.10.0
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
-        How the stimulator takes turns between electrodes. Defaults to a fresh
+        Electrode schedule. Defaults to a
         :py:class:`~pulse2percept.implants.SequentialRaster` of six groups
-        2 ms apart, i.e. one row of ten electrodes at a time. Pass
-        ``raster=None`` to drive every electrode at once.
+        2 ms apart (one row of ten electrodes at a time). With
+        ``raster=None``, all electrodes fire at once.
 
         .. versionadded:: 0.10.0
     thresholds : float, Quantity, or dict, optional
-        Perceptual threshold current (uA) of the participant this device is
-        modeling, used to calibrate threshold-relative (``xTh``) stimuli. A
+        Participant's perceptual threshold current (uA), used to calibrate
+        threshold-relative (``xTh``) stimuli. A
         scalar applies to every electrode; a dict calibrates the named
         electrodes only. See
         :py:attr:`~pulse2percept.implants.Implant.thresholds`.
@@ -241,8 +236,7 @@ class ArgusII(RetinalImplant):
     DiskElectrode(activated=True, name='E7', radius=112.5,
                   x=862.5, y=862.5, z=0.0)
 
-    Because the device brings its own encoder, a picture can be presented
-    directly and comes back as current:
+    The default encoder converts an image to current:
 
     >>> from pulse2percept.stimuli import samples
     >>> ArgusII().prepare_stim(samples.logo_bvl()).unit
@@ -268,9 +262,8 @@ class ArgusII(RetinalImplant):
             self.shape, spacing, z=z, radius=r,
             names=names, electrode_type=DiskElectrode)
 
-        # Built per instance rather than shared between them: a raster binds to
-        # the implant it schedules, and an encoder is a mutable object the
-        # caller may go on to tweak.
+        # New encoder/raster per instance (both are mutable and bind to the
+        # implant):
         self.encoder = (AmplitudeEncoder(freq=6 * Hz)
                         if encoder is _DEVICE_DEFAULT else encoder)
         self.raster = (SequentialRaster(6, group_dur=2 * ms)

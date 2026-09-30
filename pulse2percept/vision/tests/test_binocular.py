@@ -1,7 +1,7 @@
-"""Two independent monocular views, held side by side (#668)
+"""Tests for BinocularScene (#668)
 
-Scenes here are laid out one degree per pixel with an odd pixel count, as in
-`test_scene`, so pixel centers land on whole degrees.
+Test scenes use 1 dva per pixel and an odd pixel count, as in `test_scene`,
+so pixel centers land on whole degrees.
 """
 import numpy as np
 import numpy.testing as npt
@@ -18,14 +18,14 @@ HALF = (SCENE_PX - 1) // 2
 
 
 def flat_scene(level=0.5, px=SCENE_PX, **kwargs):
-    """A uniform gray field, so a percept drawn on it is the only structure"""
+    """Uniform gray scene"""
     data = np.full((px, px), float(level))
     kwargs.setdefault('scotoma_blend', 0)
     return Scene(ImageStimulus(data), fov=(px, px), **kwargs)
 
 
 def spot_percept(scene, x_dva=0.0, y_dva=0.0, brightness=10.0):
-    """A single bright grid point at an eye-centered location"""
+    """Percept with one bright pixel at an eye-centered location (dva)"""
     data = np.zeros((SCENE_PX, SCENE_PX, 1))
     col, row = scene.dva_to_pixel(x_dva, y_dva)
     data[int(round(float(row))), int(round(float(col)))] = brightness
@@ -33,7 +33,7 @@ def spot_percept(scene, x_dva=0.0, y_dva=0.0, brightness=10.0):
 
 
 def clipped_away(ax, point_dva):
-    """Whether the drawn image's support leaves out a visual-field location"""
+    """Returns True if the last image's clip path excludes ``point_dva``"""
     clip = ax.images[-1].get_clip_path()
     if clip is None:
         return False
@@ -63,7 +63,7 @@ def test_only_scenes_can_be_an_eye(bad):
 
 
 def test_the_two_eyes_are_independent_channels():
-    """Different source, FOV, shape, scotoma and aperture on the two sides"""
+    """Eyes may differ in source, FOV, shape, scotoma, and aperture"""
     left = Scene(ImageStimulus(np.full((9, 9), 0.3)), fov=(30, 30),
                  scotoma=Scotoma.circle(6), scotoma_fill=0.0,
                  aperture='round')
@@ -100,13 +100,13 @@ def test_plot_draws_the_two_eyes_in_order_on_their_own_axes():
 
 
 def test_a_percept_can_be_shown_in_one_eye_only():
-    """The fellow eye shows its own scene, whichever side is implanted"""
+    """The eye without a percept shows its scene, on either side"""
     left, right = flat_scene(0.2), flat_scene(0.8)
     binocular = BinocularScene(left=left, right=right)
     percept = spot_percept(left, x_dva=-4.0)
 
     ax_left, ax_right = binocular.plot(left_percept=percept, vmax=10)
-    # The implanted eye shows the phosphene on black, the fellow eye its scene
+    # Implanted eye: phosphene on black; fellow eye: its scene:
     npt.assert_almost_equal(ax_left.images[-1].get_array()[HALF, HALF - 4],
                             [1.0] * 3, decimal=6)
     npt.assert_almost_equal(ax_left.images[-1].get_array()[HALF, HALF], 0.0)
@@ -123,7 +123,7 @@ def test_a_percept_can_be_shown_in_one_eye_only():
 
 
 def test_two_percepts_stay_two_percepts():
-    """No fusion: neither eye is averaged, maxed or otherwise combined"""
+    """Percepts in the two eyes are not combined"""
     left, right = flat_scene(0.0), flat_scene(0.0)
     binocular = BinocularScene(left=left, right=right)
     on_the_left = spot_percept(left, x_dva=-6.0)
@@ -132,12 +132,12 @@ def test_two_percepts_stay_two_percepts():
                                        right_percept=on_the_right, vmax=10)
     seen_left = ax_left.images[-1].get_array()
     seen_right = ax_right.images[-1].get_array()
-    # Each eye shows its own phosphene, and only its own:
+    # Each eye shows only its own phosphene:
     npt.assert_almost_equal(seen_left[HALF, HALF - 6], [1.0] * 3, decimal=6)
     npt.assert_almost_equal(seen_left[HALF, HALF + 6], 0.0)
     npt.assert_almost_equal(seen_right[HALF, HALF + 6], [1.0] * 3, decimal=6)
     npt.assert_almost_equal(seen_right[HALF, HALF - 6], 0.0)
-    # ... and each panel matches that eye's scene drawn on its own:
+    # Each panel matches Scene.plot for that eye:
     npt.assert_almost_equal(seen_left,
                             left.plot(percept=on_the_left,
                                       vmax=10).images[-1].get_array(),
@@ -146,7 +146,7 @@ def test_two_percepts_stay_two_percepts():
 
 
 def test_an_omitted_vmax_is_shared_by_both_eyes():
-    """One automatic scale, so the two eyes' brightness stays comparable"""
+    """Default vmax is the maximum over both percepts"""
     left, right = flat_scene(0.0), flat_scene(0.0)
     binocular = BinocularScene(left=left, right=right)
     dim = spot_percept(left, x_dva=-6.0, brightness=5.0)
@@ -157,13 +157,13 @@ def test_an_omitted_vmax_is_shared_by_both_eyes():
     npt.assert_almost_equal(ax_right.images[-1].get_array()[HALF, HALF + 6],
                             [1.0] * 3, decimal=6)
     plt.close('all')
-    # Blank percepts in both eyes are drawn black, not refused:
+    # Blank percepts in both eyes are drawn black:
     blank = spot_percept(left, brightness=0.0)
     ax_left, ax_right = binocular.plot(left_percept=blank, right_percept=blank)
     npt.assert_almost_equal(ax_left.images[-1].get_array(), 0.0)
     npt.assert_almost_equal(ax_right.images[-1].get_array(), 0.0)
     plt.close('all')
-    # A raised vmin still meets the shared maximum, not a per-eye one:
+    # vmin is compared against the shared maximum:
     for peak in (5.0, 10.0):
         spot = spot_percept(left, brightness=peak)
         with pytest.raises(ValueError):
@@ -172,18 +172,17 @@ def test_an_omitted_vmax_is_shared_by_both_eyes():
 
 
 def test_each_eye_keeps_its_own_aperture():
-    """Support is geometry, so each panel is clipped to its own shape"""
+    """Each panel is clipped to its own aperture"""
     left = flat_scene(0.6, aperture='round')
     right = flat_scene(0.6)
     ax_left, ax_right = BinocularScene(left=left, right=right).plot()
-    # The corner is inside the rectangle but outside the ellipse, so it is
-    # clipped away rather than written black:
+    # The corner is outside the round aperture, so it is clipped (not black):
     npt.assert_equal([clipped_away(ax, (-HALF, HALF))
                       for ax in (ax_left, ax_right)], [True, False])
     for ax in (ax_left, ax_right):
         npt.assert_almost_equal(ax.images[-1].get_array()[0, 0], [0.6] * 3,
                                 decimal=6)
-    # ... and rendering the same two eyes does black it out:
+    # render() sets it to black:
     npt.assert_almost_equal(left.render().data[0, 0, :, 0], 0.0)
     npt.assert_almost_equal(right.render().data[0, 0, :, 0], [0.6] * 3,
                             decimal=6)
@@ -191,11 +190,10 @@ def test_each_eye_keeps_its_own_aperture():
 
 
 def test_two_fovs_are_drawn_on_one_angular_scale():
-    """A 31-degree field must not be stretched to look like a 41-degree one
+    """Eye view shares limits: max width and max height over both FOVs
 
-    Both fields are oblong and oblong the other way round, so the widest one
-    horizontally is the shorter one vertically. Reading a single dimension for
-    both axes, or swapping width and height, lands on different numbers.
+    One FOV is wide, the other tall, so swapping width and height would give
+    different limits.
     """
     left = Scene(ImageStimulus(np.full((21, 31), 0.4)), fov=(31, 21))
     right = Scene(ImageStimulus(np.full((51, 41), 0.4)), fov=(41, 51))
@@ -203,11 +201,10 @@ def test_two_fovs_are_drawn_on_one_angular_scale():
         view='eye')
     npt.assert_almost_equal(ax_left.get_xlim(), ax_right.get_xlim())
     npt.assert_almost_equal(ax_left.get_ylim(), ax_right.get_ylim())
-    # Both axes span the wider field's stated outer extent, per dimension,
-    # rather than the outermost pixel centers:
+    # Limits are outer FOV edges (not pixel centers), per dimension:
     npt.assert_almost_equal(ax_left.get_xlim(), (-20.5, 20.5))   # max width
     npt.assert_almost_equal(ax_left.get_ylim(), (-25.5, 25.5))   # max height
-    # ... and the images keep the extents their own geometry gives them:
+    # Each image keeps its own extent:
     npt.assert_almost_equal(ax_left.images[-1].get_extent(),
                             (-15.5, 15.5, -10.5, 10.5))
     npt.assert_almost_equal(ax_right.images[-1].get_extent(),
@@ -216,7 +213,7 @@ def test_two_fovs_are_drawn_on_one_angular_scale():
 
 
 def test_the_scene_view_shares_the_union_of_both_extents():
-    """Both panels use one world frame, so scene coordinates line up"""
+    """Scene view shares limits: the union of both extents"""
     source = np.full((21, 21), 0.4)
     left = Scene(ImageStimulus(source), fov=11, extent=(-30, 10, -5, 15))
     right = Scene(ImageStimulus(source), fov=11, extent=(-10, 20, -25, 5))
@@ -254,7 +251,7 @@ def test_plot_lays_out_only_the_figure_it_made(monkeypatch):
     binocular.plot()
     npt.assert_equal(len(laid_out), 1)
     plt.close('all')
-    # A caller's figure is left as the caller arranged it:
+    # A user-supplied figure is not laid out:
     _, axes = plt.subplots(1, 2)
     binocular.plot(axes=axes)
     npt.assert_equal(len(laid_out), 1)
@@ -282,7 +279,7 @@ def test_the_grid_reaches_both_eyes_about_each_fovea():
         lines = ax.get_lines()
         npt.assert_equal([line.get_linestyle() for line in lines],
                          ['--', '-', '-'])
-        # Eye-centered, so gaze does not move it:
+        # Eye-centered, so independent of gaze:
         ring = np.asarray(lines[0].get_data())
         npt.assert_almost_equal(np.hypot(ring[0], ring[1]), 4)
         for line in lines[1:]:
@@ -292,17 +289,17 @@ def test_the_grid_reaches_both_eyes_about_each_fovea():
 
 
 def test_it_has_no_implant_or_model_behavior():
-    """A container for two views, not a dispatcher"""
+    """BinocularScene has no implant, model, or fusion methods"""
     binocular = BinocularScene(left=flat_scene(), right=flat_scene())
     for absent in ('eye', 'implant', 'predict_percept', 'play', 'fuse',
                    '_compose', '_device_input', '_sample_at'):
         npt.assert_equal(hasattr(binocular, absent), False)
-    # A Scene is monocular; eye identity lives in the container, not the scene:
+    # Scene has no eye attribute; BinocularScene stores which eye is which:
     npt.assert_equal(hasattr(binocular.left, 'eye'), False)
 
 
 def packed_stereo(rows=10, half_cols=20, channels=None):
-    """A side-by-side frame whose halves are unmistakably different"""
+    """Side-by-side frame: left half 0, right half 1"""
     shape = (rows, 2 * half_cols) + (() if channels is None else (channels,))
     stereo = np.zeros(shape, dtype=np.float32)
     stereo[:, half_cols:] = 1.0
@@ -310,7 +307,7 @@ def packed_stereo(rows=10, half_cols=20, channels=None):
 
 
 def packed_ramp(rows=10, half_cols=20):
-    """A side-by-side ramp in which no two pixels share a value"""
+    """Side-by-side ramp with all pixel values distinct"""
     n_px = rows * 2 * half_cols
     return (np.arange(n_px, dtype=np.float32) / n_px).reshape(rows, -1)
 
@@ -321,7 +318,7 @@ def test_side_by_side_splits_left_from_right():
     for eye, half in ((binocular.left, stereo[:, :20]),
                       (binocular.right, stereo[:, 20:])):
         npt.assert_equal(eye.shape, (10, 20))
-        # Exact, so a flip along either axis or any resampling fails here:
+        # Exact match, so any flip or resampling fails:
         npt.assert_array_equal(eye.source.data.reshape(eye.shape), half)
 
 
@@ -333,7 +330,7 @@ def test_side_by_side_splits_columns_not_channels(channels):
     for eye in (binocular.left, binocular.right):
         npt.assert_equal(eye.source.img_shape, (6, 4, channels))
         npt.assert_equal(eye.shape, (6, 4))
-    # All channels survive, alpha included; nothing is dropped to RGB:
+    # All channels are kept, including alpha:
     right = binocular.right.source.data.reshape(6, 4, channels)
     npt.assert_array_equal(right[..., 0], np.ones((6, 4), dtype=np.float32))
     npt.assert_array_equal(right[..., 1:], np.full((6, 4, channels - 1), 0.25,
@@ -351,11 +348,11 @@ def test_an_odd_width_has_no_seam(n_cols):
 
 
 def test_a_scalar_fov_describes_one_eye_not_the_packed_frame():
-    """The packing geometry has no visual-field meaning"""
+    """Extent is inferred per eye, not from the packed frame"""
     binocular = BinocularScene.from_side_by_side(packed_stereo(), fov=40)
     for eye in (binocular.left, binocular.right):
         npt.assert_equal(eye.shape, (10, 20))
-        # 40 degrees down 10 rows, so 80 degrees across 20 columns:
+        # 40 dva over 10 rows, so 80 dva over 20 columns:
         npt.assert_almost_equal(eye.fov, (40.0, 40.0))
         npt.assert_almost_equal(eye.extent, (-40.0, 40.0, -20.0, 20.0))
 

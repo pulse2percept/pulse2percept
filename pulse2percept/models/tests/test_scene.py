@@ -1,11 +1,10 @@
-"""The model as the glue between a scene and an implant (#668)
+"""Scene-driven prediction: registering a scene onto an implant (#668)
 
-Registration lives here, not in the implant and not in the encoder: the model
-is the only object that holds a retinotopy *and* is handed an implant.
+Registration happens in the model, which has both the retinotopy and the
+implant.
 
-Scenes are laid out one degree per pixel with an odd pixel count, so that
-pixel centers land on whole degrees and the center pixel sits on the origin.
-Expected values are then plain arithmetic.
+Scenes use one degree per pixel with an odd pixel count, so pixel centers are
+on whole degrees and the center pixel is at the origin.
 """
 import numpy as np
 import numpy.testing as npt
@@ -27,21 +26,19 @@ from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
 from pulse2percept.units import deg, dva, ms, s, um
 from pulse2percept.vision import Gaze, Scene, Scotoma
 
-#: A square scene laid out so that one pixel is exactly one degree and the
-#: center pixel sits on the origin.
+#: Square scene: one pixel per degree, center pixel at the origin.
 SCENE_PX = 41
 HALF = (SCENE_PX - 1) // 2
 
-#: Gray level 1 maps onto this many microamps, so an electrode's amplitude
-#: reads back as the gray level it was given.
+#: Gray level 1 maps to this many uA, so amplitude / AMP_MAX = gray level.
 AMP_MAX = 100.0
 
 
 class SquareMap(RetinalMap):
     """A retinal map that is neither 280 um/dva nor linear
 
-    Retinal x grows as the square of eccentricity, so a registration that
-    assumes any fixed micron-per-degree ratio lands in the wrong place.
+    Retinal x grows as the square of eccentricity, so a fixed um/dva ratio
+    gives the wrong location.
     """
 
     def dva_to_ret(self, xdva, ydva):
@@ -52,12 +49,12 @@ class SquareMap(RetinalMap):
 
 
 def ramp_source():
-    """A picture whose gray level reads off x: 0 at -20 dva, 1 at +20"""
+    """Return an image with gray level 0 at x=-20 dva, 1 at x=+20 dva"""
     return ImageStimulus(np.tile(np.linspace(0, 1, SCENE_PX), (SCENE_PX, 1)))
 
 
 def ramp_at(x_dva):
-    """What `ramp_source` shows at a scene x"""
+    """Return the `ramp_source` gray level at scene x (dva)"""
     return (x_dva + HALF) / (2 * HALF)
 
 
@@ -68,7 +65,7 @@ def scene_of(source=None, **kwargs):
 
 
 def implant_at(x_um=0, y_um=0, encoder=True, input_frame='eye'):
-    """An implant whose single electrode sits where we want to look"""
+    """Return a single-electrode implant at (x_um, y_um)"""
     return Implant(
         PointSource(x_um, y_um, 0), scene_input_frame=input_frame,
         encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)) if encoder else None)
@@ -81,8 +78,7 @@ def grid_implant(input_frame='eye'):
 
 
 def model_for(implant, **kwargs):
-    # An explicit `visual_field_map`: the retinotopy is what the expected
-    # values below are computed through, so it cannot be left to a default.
+    # Explicit `visual_field_map`, since expected values are computed with it:
     params = {'rho': 200, 'xrange': (-3, 3), 'yrange': (-3, 3), 'step': 1,
               'visual_field_map': Curcio1990Map()}
     params.update(kwargs)
@@ -90,20 +86,18 @@ def model_for(implant, **kwargs):
 
 
 def composed(model, scene, vmax, gaze=None, **kwargs):
-    """What the field shows: the model percept rendered into the scene
+    """Return the model percept rendered into the scene
 
-    Prediction stops at the model grid, so putting the percept back in the
-    scene is a separate, explicit step.
+    Prediction returns a percept on the model grid; `Scene.render` composes it.
     """
     percept = model.predict_percept(scene, gaze=gaze)
     return scene.render(percept=percept, gaze=gaze, vmax=vmax, **kwargs).data
 
 
 def seen_by(model, scene, gaze=None):
-    """The gray level each electrode was handed, in electrode order
+    """Return the gray level sampled by each electrode, in electrode order
 
-    Read back off the amplitudes the encoder produced, which is the only place
-    the sampled scene shows up once registration is over.
+    Computed from the encoded amplitudes.
     """
     view = _scene_stim(model, scene, gaze)._spatial_view()
     return np.asarray(view.data, dtype=float).reshape(
@@ -111,14 +105,12 @@ def seen_by(model, scene, gaze=None):
 
 
 def test_the_model_supplies_its_own_visual_field_map():
-    """The caller never names a retinotopy; the model already has one"""
+    """Scene sampling uses the model's `visual_field_map`"""
     scene = scene_of()
     implant = implant_at(*Curcio1990Map().dva_to_ret(6.0, 0.0))
     npt.assert_almost_equal(seen_by(model_for(implant), scene),
                             [[ramp_at(6.0)]], decimal=4)
-    # Give the model a different retinotopy and the same electrode reads a
-    # different part of the scene, with nothing else changing and nothing
-    # about the map appearing at the call site:
+    # A different map makes the same electrode sample a different location:
     watson = model_for(implant, visual_field_map=Watson2014Map())
     npt.assert_equal(np.allclose(seen_by(watson, scene), ramp_at(6.0)),
                      False)
@@ -126,7 +118,7 @@ def test_the_model_supplies_its_own_visual_field_map():
 
 @pytest.mark.parametrize('x_dva', [-8.0, 2.5, 7.0])
 def test_a_nonlinear_retinal_map_still_registers(x_dva):
-    """Not 280 um/dva, and not linear either"""
+    """Registration works with a nonlinear map"""
     visual_field_map = SquareMap()
     implant = implant_at(*visual_field_map.dva_to_ret(x_dva, 0.0))
     model = model_for(implant, visual_field_map=visual_field_map)
@@ -135,17 +127,16 @@ def test_a_nonlinear_retinal_map_still_registers(x_dva):
 
 
 def test_gaze_moves_the_scene_past_an_eye_coupled_implant():
-    """Gaze is the scene point on the fovea, so scene = visual field + gaze"""
+    """Gaze is the scene point at the fovea: scene = visual field + gaze"""
     scene = scene_of()
     model = model_for(implant_at(0, 0))
     for gaze_x in (-4.0, 0.0, 6.0):
         npt.assert_almost_equal(seen_by(model, scene, gaze=(gaze_x, 0)),
                                 [[ramp_at(gaze_x)]], decimal=4)
-    # Units at the boundary, and the same answer through them:
+    # Unitful gaze gives the same result:
     npt.assert_almost_equal(seen_by(model, scene, gaze=(6, 0) * dva),
                             seen_by(model, scene, gaze=(6.0, 0.0)))
-    # Several electrodes keep their separation in the visual field whatever
-    # the gaze: shifting gaze shifts what all of them see by the same amount.
+    # Gaze shifts all electrodes by the same amount:
     on_grid = model_for(grid_implant())
     here = seen_by(on_grid, scene).ravel()
     there = seen_by(on_grid, scene, gaze=(2, 0)).ravel()
@@ -154,7 +145,7 @@ def test_gaze_moves_the_scene_past_an_eye_coupled_implant():
 
 
 def test_gaze_leaves_a_head_mounted_camera_looking_where_it_was():
-    """A camera on the head does not turn when the eye does"""
+    """Gaze does not affect a head-mounted camera"""
     scene = scene_of()
     model = model_for(implant_at(0, 0, input_frame='head'))
     fixating = seen_by(model, scene)
@@ -162,14 +153,14 @@ def test_gaze_leaves_a_head_mounted_camera_looking_where_it_was():
     for gaze in ((-4.0, 0.0), (6.0, 0.0), (0.0, 5.0), (6, 0) * dva):
         npt.assert_almost_equal(seen_by(model, scene, gaze=gaze), fixating,
                                 decimal=6)
-    # Same for several electrodes, and gaze=(0, 0) is the fixating case:
+    # Same for several electrodes; gaze=(0, 0) is fixation:
     on_grid = model_for(grid_implant(input_frame='head'))
     npt.assert_almost_equal(seen_by(on_grid, scene, gaze=(3, -2)),
                             seen_by(on_grid, scene, gaze=(0, 0)), decimal=6)
 
 
 def ramp_video_scene(n_frames=4):
-    """The ramp, unchanging, on a 100 ms frame clock"""
+    """Return a static ramp video with 100 ms frames"""
     frames = np.repeat(ramp_source().data.reshape(
         (SCENE_PX, SCENE_PX, 1)), n_frames, axis=-1)
     return scene_of(VideoStimulus(frames,
@@ -177,7 +168,7 @@ def ramp_video_scene(n_frames=4):
 
 
 def test_a_gaze_trajectory_is_resolved_on_the_scenes_own_frames():
-    """Sparse fixation events stand in for one gaze per source frame"""
+    """Sparse gaze events are expanded to one gaze per source frame"""
     scene = ramp_video_scene()
     model = model_for(implant_at(0, 0))
     sparse = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
@@ -198,7 +189,7 @@ def test_a_gaze_trajectory_does_not_move_a_head_mounted_camera():
 
 
 def test_a_gaze_trajectory_needs_a_scene_with_frame_times():
-    """A still scene has no clock the events could be resolved against"""
+    """A gaze trajectory with a still scene raises ValueError"""
     model = model_for(implant_at(0, 0))
     gaze = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
     with pytest.raises(ValueError):
@@ -206,11 +197,11 @@ def test_a_gaze_trajectory_needs_a_scene_with_frame_times():
 
 
 def test_an_unknown_scene_input_frame_is_refused():
-    """A typo would silently change the physics, so it raises instead"""
+    """An unknown `scene_input_frame` raises ValueError"""
     with pytest.raises(ValueError):
         implant_at(0, 0, input_frame='retinal')
 
-    # A device class may also declare a bad default, which no setter sees:
+    # Also for a bad class default (bypasses the setter):
     class Typo(Implant):
         __slots__ = ()
         _default_scene_input_frame = 'retinal'
@@ -222,29 +213,28 @@ def test_an_unknown_scene_input_frame_is_refused():
 
 
 def test_a_camera_driven_phosphene_still_travels_with_the_eye():
-    """Caspi-style: the same phosphene, drawn where the eye now points"""
+    """Head-mounted camera: same phosphene, drawn where the eye points"""
     scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
     model = model_for(implant_at(*Curcio1990Map().dva_to_ret(2.0, 0.0),
                                  input_frame='head'),
                       rho=100, xrange=(-4, 4), yrange=(-4, 4), step=0.5)
     fixating = composed(model, scene, vmax=2)[..., 0]
     shifted = composed(model, scene, vmax=2, gaze=(5, 0) * dva)[..., 0]
-    # Unchanged input, so the phosphene is the same one, still 2 degrees
-    # right of the fovea in the eye-centered display:
+    # Same input, so the phosphene is still 2 deg right of the fovea in the
+    # eye-centered display:
     npt.assert_almost_equal(shifted[HALF, HALF + 2],
                             fixating[HALF, HALF + 2], decimal=5)
     npt.assert_almost_equal(composed(model, scene, vmax=2, gaze=(0, 0))[...,
                                                                        0],
                             fixating, decimal=6)
-    # The model response itself never moved: a head-fixed camera hands the
-    # electrodes the same input whatever the eye does.
+    # The model percept does not depend on gaze:
     npt.assert_array_equal(
         model.predict_percept(scene, gaze=(5, 0) * dva).data,
         model.predict_percept(scene).data)
 
 
 def test_y_orientation_survives_the_map():
-    """Row 0 of the scene is +y in the visual field, both sides of the map"""
+    """Row 0 of the scene is +y in the visual field, on both sides of y=0"""
     data = np.tile(np.linspace(0, 1, SCENE_PX).reshape((-1, 1)),
                    (1, SCENE_PX))
     scene = scene_of(ImageStimulus(data))
@@ -256,93 +246,89 @@ def test_y_orientation_survives_the_map():
 
 
 def test_color_becomes_luminance_only_at_the_device():
-    """The scene stays RGB; the electrode gets one number"""
+    """The scene stays RGB; the electrode gets luminance"""
     rgb = np.zeros((SCENE_PX, SCENE_PX, 3))
     rgb[..., 0] = 1.0  # pure red everywhere
     scene = scene_of(ImageStimulus(rgb))
     npt.assert_almost_equal(scene._sample_at(0.0, 0.0)[0, :, 0], [1, 0, 0],
                             decimal=5)
-    # ... and the luminance of pure red reaches the implant:
+    # Luminance of pure red:
     npt.assert_almost_equal(seen_by(model_for(implant_at(0, 0)), scene),
                             [[0.2125]], decimal=3)
 
 
 def test_scene_driven_prediction_leaves_the_implant_alone():
-    """Predicting what someone sees is a question, not an assignment"""
+    """Scene prediction does not modify the implant"""
     implant = implant_at(0, 0)
     model = model_for(implant)
     model.predict_percept(scene_of())
-    # The implant holds no trial state to be disturbed, and the settings the
-    # scene path temporarily overrides are back the way the caller left them:
+    # No stored stimulus, and temporarily overridden settings are restored:
     npt.assert_equal(hasattr(implant, 'stim'), False)
     npt.assert_equal(implant.preprocess, False)
     npt.assert_equal(model.implant is implant, True)
 
 
 def test_a_scene_driven_stimulus_still_goes_through_the_device():
-    """The sampled scene is prepared by the implant, not written behind it"""
+    """The sampled scene goes through `implant.prepare_stim`"""
     grid = Implant(ElectrodeGrid((1, 3), 280),
                    encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
     grid.deactivate('A2')
     stim = _scene_stim(model_for(grid), scene_of(), None)
     npt.assert_equal('A2' in list(stim.electrodes), False)
     npt.assert_equal(len(stim.electrodes), 2)
-    # It is a current by the time it comes back, which is the encoder having
-    # run inside `prepare_stim`:
+    # The encoder converted it to current:
     npt.assert_equal(stim.unit, grid.stimulus_unit)
 
 
 def edge_source():
-    """A step edge down the middle: 0 to the left of x=0, 1 to the right"""
+    """Return a step edge: 0 left of x=0, 1 right of it"""
     data = np.zeros((SCENE_PX, SCENE_PX))
     data[:, HALF + 1:] = 1.0
     return ImageStimulus(data)
 
 
 def test_preprocessing_runs_on_the_picture_not_on_electrode_values():
-    """An edge filter needs an image, and by sampling time there is none left"""
+    """Preprocessing is applied to the image before sampling"""
     scene = scene_of(edge_source())
     at_edge = implant_at(*Curcio1990Map().dva_to_ret(0.5, 0.0))
     inside = implant_at(*Curcio1990Map().dva_to_ret(10.0, 0.0))
-    # Untouched, the two electrodes see the two sides of the step:
+    # Without preprocessing:
     npt.assert_almost_equal(seen_by(model_for(at_edge), scene), [[0.5]],
                             decimal=3)
     npt.assert_almost_equal(seen_by(model_for(inside), scene), [[1.0]],
                             decimal=3)
     for implant in (at_edge, inside):
         implant.preprocess = lambda stim: stim.filter('sobel')
-    # Sobel puts everything at the edge and nothing in the flat interior,
-    # which is the opposite ordering from the raw scene:
+    # Sobel is bright at the edge and zero in the flat interior:
     npt.assert_equal(seen_by(model_for(at_edge), scene)[0, 0] > 0.3, True)
     npt.assert_almost_equal(seen_by(model_for(inside), scene), [[0.0]],
                             decimal=4)
 
 
 def test_preprocessing_does_not_reach_native_vision():
-    """What the device does to its input is not what the eye goes through"""
+    """Implant preprocessing does not affect native vision"""
     source = ramp_source()
     scene = scene_of(source, scotoma=Scotoma.circle(6), scotoma_fill=0.0)
     implant = implant_at(*Curcio1990Map().dva_to_ret(0.0, 0.0))
     implant.preprocess = lambda stim: stim.invert()
     model = model_for(implant, rho=100)
-    # The electrode is at the fovea, where the ramp reads 0.5 either way, so
-    # look somewhere the inversion actually shows:
+    # The ramp is 0.5 at the fovea whether inverted or not, so shift gaze:
     npt.assert_almost_equal(seen_by(model, scene, gaze=(8, 0)),
                             [[1 - ramp_at(8.0)]], decimal=3)
     seen = composed(model, scene, vmax=100, gaze=(8, 0) * dva)
-    # Outside the scotoma: the original scene, 8 degrees left, uninverted.
+    # Outside the scotoma: the original scene, shifted 8 deg left, uninverted:
     original = np.repeat(source.data.reshape((SCENE_PX, SCENE_PX, 1)), 3,
                          axis=-1)
     x, y = scene._pixel_centers()
     intact = (scene.scotoma(x, y) == 0)[:, :-8]
     npt.assert_almost_equal(seen[:, :-8, :, 0][intact],
                             original[:, 8:][intact], decimal=6)
-    # ... and the caller's scene was not rewritten on the way through:
+    # The user's scene is unchanged:
     npt.assert_array_equal(scene.source.data, source.data)
 
 
 def test_preprocessing_runs_exactly_once():
-    """Scene sampling preprocesses once; preparation must not do it again"""
+    """Preprocessing runs once per prediction"""
     calls = []
 
     def counted(stim):
@@ -355,8 +341,7 @@ def test_preprocessing_runs_exactly_once():
     model = model_for(implant)
     model.predict_percept(scene)
     npt.assert_equal(len(calls), 1)
-    # Inversion is not idempotent, so a second pass would show up as the
-    # original ramp coming back:
+    # Inverting twice would restore the original ramp:
     npt.assert_almost_equal(seen_by(model, scene, gaze=(8, 0)),
                             [[1 - ramp_at(8.0)]], decimal=3)
     # The implant's own setting is untouched:
@@ -364,7 +349,7 @@ def test_preprocessing_runs_exactly_once():
 
 
 class _BindingCheck(AmplitudeEncoder):
-    """Records the implant each ``encode`` call is bound to"""
+    """Record the implant bound at each ``encode`` call"""
     __slots__ = ('seen',)
 
     def __init__(self, *args, **kwargs):
@@ -377,7 +362,7 @@ class _BindingCheck(AmplitudeEncoder):
 
 
 class _PreparingImplant(Implant):
-    """Records every implant object that prepares a stimulus"""
+    """Record every implant object that prepares a stimulus"""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -389,15 +374,15 @@ class _PreparingImplant(Implant):
 
 
 def test_scene_encodes_with_the_bound_implant():
-    """Scene input is prepared by the encoder's bound implant, not a copy"""
+    """Scene input is prepared by the encoder's bound implant"""
     encoder = _BindingCheck(amp_range=(0, AMP_MAX))
     implant = _PreparingImplant(PointSource(0, 0, 0), encoder=encoder)
     model = model_for(implant)
     model.predict_percept(scene_of())
     npt.assert_equal(len(encoder.seen), 1)
     npt.assert_equal(encoder.seen[0] is implant, True)
-    # The implant that prepared the stimulus is the one the encoder is bound
-    # to (a shallow copy would share `prepared` and record itself):
+    # Same implant object (a shallow copy would share `prepared` but record
+    # itself):
     npt.assert_equal(len(implant.prepared), 1)
     npt.assert_equal(implant.prepared[0] is encoder.implant, True)
 
@@ -416,7 +401,7 @@ def test_a_video_scene_is_preprocessed_the_same_way():
 @pytest.mark.parametrize('returns', [lambda stim: BiphasicPulse(20, 0.45),
                                      lambda stim: np.zeros((4, 4))])
 def test_scene_preprocessing_must_return_a_picture(returns):
-    """Crossing to current early leaves nothing to register spatially"""
+    """Preprocessing must return an image, not a current"""
     scene = scene_of()
     implant = implant_at(0, 0)
     implant.preprocess = returns
@@ -427,7 +412,7 @@ def test_scene_preprocessing_must_return_a_picture(returns):
 
 
 def test_scene_preprocessing_must_preserve_spatial_shape():
-    """A resize would reinterpret `fov`, not just change what is seen"""
+    """Preprocessing must not change the image shape (it would change `fov`)"""
     scene = scene_of()
     implant = implant_at(0, 0)
     implant.preprocess = lambda stim: stim.resize((20, 20))
@@ -437,7 +422,7 @@ def test_scene_preprocessing_must_preserve_spatial_shape():
 
 
 def test_scene_preprocessing_must_preserve_the_frame_clock():
-    """Frames are what a video scene is registered against in time"""
+    """Preprocessing must keep the video frame times"""
     frames = np.stack([np.full((SCENE_PX, SCENE_PX), v)
                        for v in (0.2, 0.8)], axis=-1)
     scene = scene_of(VideoStimulus(frames, time=[0, 100]))
@@ -447,8 +432,7 @@ def test_scene_preprocessing_must_preserve_the_frame_clock():
     with pytest.raises(ValueError) as excinfo:
         model_for(implant).predict_percept(scene)
     npt.assert_equal('frame' in str(excinfo.value), True)
-    # The same instants told in seconds rather than milliseconds are the same
-    # clock, and stay allowed:
+    # The same frame times in seconds are allowed:
     implant.preprocess = lambda stim: VideoStimulus(
         1 - stim.data.reshape(stim.vid_shape), time=stim.time / 1000 * s)
     npt.assert_almost_equal(seen_by(model_for(implant), scene).ravel(),
@@ -456,12 +440,12 @@ def test_scene_preprocessing_must_preserve_the_frame_clock():
 
 
 def test_a_scene_needs_an_encoder_and_a_spatial_model():
-    """Both failures name what is missing rather than dying downstream"""
+    """A scene requires an encoder and a spatial model"""
     scene = scene_of()
     with pytest.raises(ValueError) as excinfo:
         model_for(implant_at(0, 0, encoder=False)).predict_percept(scene)
     npt.assert_equal('encoder' in str(excinfo.value), True)
-    # A temporal-only model has no electrodes to place in the scene:
+    # A temporal-only model has no electrodes:
     from pulse2percept.models.retina import Nanduri2012Temporal
     temporal = Model(temporal=Nanduri2012Temporal()).build()
     with pytest.raises(ValueError):
@@ -481,28 +465,26 @@ class BareSpatial(SpatialModel):
 
 
 def test_scene_registration_is_a_spatial_model_capability():
-    """`models.base` refuses through the model, not by naming its anatomy
+    """Scene sampling requires `_scene_sampling_points`
 
-    Sampling a scene needs to know where an electrode lands in the visual
-    field, which only a model of some tissue can say. A model that does not
-    implement `_scene_sampling_points` refuses by name, and nothing in
-    `models.base` inspects what kind of model it is.
+    Models that do not implement it raise NotImplementedError naming the
+    model class.
     """
     scene = scene_of()
-    # A cortical model has no retinotopy to follow an electrode out along:
+    # Cortical model:
     cortical = CortexScoreboard(implant=implant_at(0, 0), rho=200,
                                 xrange=(-3, 3), yrange=(-3, 3),
                                 step=1).build()
     with pytest.raises(NotImplementedError) as excinfo:
         cortical.predict_percept(scene)
     npt.assert_equal('ScoreboardSpatial' in str(excinfo.value), True)
-    # ... and neither does a bare spatial model:
+    # Bare spatial model:
     bare = Model(spatial=BareSpatial(implant_at(0, 0), xrange=(-3, 3),
                                      yrange=(-3, 3), step=1)).build()
     with pytest.raises(NotImplementedError) as excinfo:
         bare.predict_percept(scene)
     npt.assert_equal('BareSpatial' in str(excinfo.value), True)
-    # A retinal model handed a map with no retinotopy says which one it is:
+    # A retinal model with a cortical map raises ValueError:
     retinal = model_for(implant_at(0, 0))
     retinal.spatial.visual_field_map = Polimeni2006Map()
     with pytest.raises(ValueError) as excinfo:
@@ -511,7 +493,7 @@ def test_scene_registration_is_a_spatial_model_capability():
 
 
 def test_scene_sampling_points_are_the_registration_the_model_uses():
-    """The hook reports exactly the coordinates the sampling path uses"""
+    """`_scene_sampling_points` returns the coordinates used for sampling"""
     x_dva = 4.0
     visual_field_map = Curcio1990Map()
     implant = implant_at(*visual_field_map.dva_to_ret(x_dva, 0.0))
@@ -519,19 +501,18 @@ def test_scene_sampling_points_are_the_registration_the_model_uses():
     x_vf, y_vf = model.spatial._scene_sampling_points()
     npt.assert_almost_equal(x_vf, [x_dva])
     npt.assert_almost_equal(y_vf, [0.0])
-    # Same numbers the encoder saw, read back off the gray level it sampled:
+    # Matches the gray level the encoder sampled:
     npt.assert_almost_equal(seen_by(model, scene_of()).ravel(),
                             [ramp_at(x_dva)], decimal=3)
 
 
 def test_an_unbuilt_model_builds_itself_before_it_samples_anything():
-    """A scene is sampled through a bound implant, so the build comes first"""
+    """An unbuilt model builds before sampling a scene"""
     unbuilt = ScoreboardModel(implant=implant_at(0, 0), rho=200,
                               xrange=(-3, 3), yrange=(-3, 3), step=1)
     npt.assert_equal(unbuilt.predict_percept(scene_of()) is not None, True)
     npt.assert_equal(unbuilt.is_built, True)
-    # An implant with no encoder still cannot turn gray levels into current,
-    # and that is now the first thing the caller hears about:
+    # An implant without an encoder raises ValueError:
     unbuilt = ScoreboardModel(implant=implant_at(0, 0, encoder=False),
                               rho=200, xrange=(-3, 3), yrange=(-3, 3), step=1)
     with pytest.raises(ValueError, match='encoder'):
@@ -539,13 +520,12 @@ def test_an_unbuilt_model_builds_itself_before_it_samples_anything():
 
 
 def test_an_ordinary_source_is_not_registered_as_a_scene():
-    """Only a Scene takes the registration path; a picture is stimulation"""
+    """Only a Scene is registered; an image is encoded directly"""
     grid = Implant(ElectrodeGrid((3, 3), 280),
                    encoder=AmplitudeEncoder(amp_range=(0, AMP_MAX)))
     model = model_for(grid)
-    # The same pixels, not wrapped in a Scene, are sampled onto the electrodes
-    # and encoded rather than registered through the retinotopy, so `gaze` is
-    # not a thing that can be asked of them:
+    # An image is mapped onto the electrodes by the encoder, so `gaze` raises
+    # ValueError:
     percept = model.predict_percept(ramp_source())
     npt.assert_equal(percept.is_rgb, False)
     npt.assert_equal(percept.data.ndim, 3)
@@ -554,7 +534,7 @@ def test_an_ordinary_source_is_not_registered_as_a_scene():
 
 
 def test_without_a_scene_nothing_changes():
-    """The ordinary path is untouched, and scene arguments are refused"""
+    """Without a scene, `gaze`, `vmin`, and `vmax` are rejected"""
     plain = ScoreboardModel(implant=implant_at(0, 0), rho=200,
                             xrange=(-3, 3), yrange=(-3, 3), step=1).build()
     percept = plain.predict_percept(BiphasicPulse(20, 0.45))
@@ -562,30 +542,30 @@ def test_without_a_scene_nothing_changes():
     npt.assert_equal(percept.data.ndim, 3)
     with pytest.raises(ValueError):
         plain.predict_percept(BiphasicPulse(20, 0.45), gaze=(1, 0))
-    # A display range is not a prediction argument at all any more:
+    # `vmin`/`vmax` are not prediction arguments:
     for kwargs in ({'vmax': 20}, {'vmin': 3}):
         with pytest.raises(TypeError):
             plain.predict_percept(BiphasicPulse(20, 0.45), **kwargs)
-    # No stimulus at all still says nothing rather than raising:
+    # Nothing in, None out:
     npt.assert_equal(plain.predict_percept(None), None)
 
 
 def test_scene_prediction_returns_the_model_percept():
-    """A scene changes where the input comes from, not what is predicted"""
+    """Scene prediction returns the model percept on the model grid"""
     model = model_for(implant_at(0, 0))
     for scene in (scene_of(),
                   scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)):
         percept = model.predict_percept(scene)
         npt.assert_equal(percept.is_rgb, False)
         npt.assert_equal(percept.data.ndim, 3)
-        # On the model's grid, not the scene's:
+        # Model grid, not scene grid:
         npt.assert_equal(percept.shape[:2], model.spatial.grid.shape)
         npt.assert_equal(percept.shape[:2] == (SCENE_PX, SCENE_PX), False)
         npt.assert_almost_equal(percept.xdva, model.spatial.grid.x[0])
 
 
 def test_a_scotoma_does_not_touch_the_prosthetic_percept():
-    """The scotoma describes native vision, not the implant's response"""
+    """The scotoma does not affect the prosthetic percept"""
     model = model_for(implant_at(0, 0))
     seeing = model.predict_percept(scene_of(), gaze=(3, -1) * dva)
     for fill in (0.0, 0.6, 'inpaint'):
@@ -594,7 +574,7 @@ def test_a_scotoma_does_not_touch_the_prosthetic_percept():
         npt.assert_array_equal(
             model.predict_percept(blind, gaze=(3, -1) * dva).data,
             seeing.data)
-    # The premise: the rendered field really does differ.
+    # The rendered scene does differ:
     npt.assert_equal(np.allclose(
         composed(model, scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0),
                  vmax=20), scene_of().render().data), False)
@@ -607,7 +587,7 @@ def test_display_range_is_not_a_prediction_argument():
     for kwargs in ({'vmax': 20}, {'vmin': 3}):
         with pytest.raises(TypeError):
             model.predict_percept(scene, **kwargs)
-    # ... and rendering defaults vmax to the percept's maximum:
+    # `render` defaults vmax to the percept max:
     percept = model.predict_percept(scene)
     npt.assert_array_equal(
         scene.render(percept=percept).data,
@@ -622,13 +602,13 @@ def test_rendering_a_scene_with_a_scotoma_gives_a_composed_rgb_percept():
     npt.assert_equal(rendered.shape, (SCENE_PX, SCENE_PX, 3, 1))
     npt.assert_equal(rendered.data.min() >= 0, True)
     npt.assert_equal(rendered.data.max() <= 1, True)
-    # Reported on the render grid, in scene coordinates:
+    # Render grid, in scene coordinates:
     npt.assert_almost_equal(rendered.xdva, np.arange(-HALF, HALF + 1),
                             decimal=4)
 
 
 def test_an_inpainted_scotoma_cannot_hold_a_prosthetic_percept():
-    """Filling-in would floor the phosphene; a numeric fill still works"""
+    """Inpainting cannot hold a phosphene; a numeric fill works"""
     model = model_for(implant_at(0, 0))
     filled = scene_of(scotoma=Scotoma.circle(6), scotoma_fill='inpaint')
     with pytest.raises(ValueError):
@@ -640,7 +620,7 @@ def test_an_inpainted_scotoma_cannot_hold_a_prosthetic_percept():
 
 
 def test_the_intact_periphery_is_the_scene_exactly():
-    """Outside the scotoma nothing is resampled, blended or rounded"""
+    """Outside the scotoma, the rendered scene equals the source exactly"""
     rng = np.random.default_rng(0)
     rgb = ImageStimulus(rng.random((SCENE_PX, SCENE_PX, 3)))
     scene = scene_of(rgb, scotoma=Scotoma.circle(6))
@@ -652,7 +632,7 @@ def test_the_intact_periphery_is_the_scene_exactly():
 
 
 def test_the_phosphene_lands_where_the_electrode_looks():
-    """Position and y orientation, all the way through the composed result"""
+    """Phosphene position and y orientation in the rendered scene"""
     visual_field_map = Curcio1990Map()
     scene = scene_of(scotoma=Scotoma.circle(12), scotoma_fill=0.0)
     for x_dva, y_dva in [(4.0, 0.0), (0.0, 4.0), (-4.0, 0.0), (0.0, -4.0)]:
@@ -661,7 +641,7 @@ def test_the_phosphene_lands_where_the_electrode_looks():
                           step=0.5)
         frame = composed(model, scene, vmax=2)[..., 0]
         row, col = int(round(HALF - y_dva)), int(round(x_dva + HALF))
-        # Brightest where the electrode looks, dark on the opposite side:
+        # Bright at the electrode location, dark on the opposite side:
         npt.assert_equal(frame[row, col].mean() > 0.5, True)
         npt.assert_equal(frame[SCENE_PX - 1 - row,
                                SCENE_PX - 1 - col].mean() < 0.1, True)
@@ -673,10 +653,10 @@ def test_gaze_moves_the_scotoma_and_the_phosphene_together():
                       yrange=(-2, 2), step=0.5)
     fixating = composed(model, scene, vmax=2)[..., 0]
     shifted = composed(model, scene, vmax=2, gaze=(5, 0) * dva)[..., 0]
-    # The eye-centered pair stays at the center of the FOV:
+    # Scotoma and phosphene stay at the center of the eye-centered display:
     npt.assert_almost_equal(shifted[HALF, HALF], fixating[HALF, HALF],
                             decimal=5)
-    # ... while the scene moved 5 degrees left past it:
+    # The scene shifts 5 deg left:
     source = scene.source.data.reshape((SCENE_PX, SCENE_PX))
     npt.assert_almost_equal(shifted[HALF, HALF - 10],
                             [source[HALF, HALF - 5]] * 3, decimal=5)
@@ -685,33 +665,31 @@ def test_gaze_moves_the_scotoma_and_the_phosphene_together():
 
 
 def test_a_fixed_vmax_does_not_renormalize_when_gaze_changes():
-    """Nothing rescales the display behind the user's back"""
+    """A fixed vmax is not renormalized when gaze changes"""
     scene = scene_of(scotoma=Scotoma.circle(12), scotoma_fill=0.0)
     model = model_for(implant_at(0, 0), rho=100, xrange=(-4, 4),
                       yrange=(-4, 4), step=0.5)
 
     def phosphene(gaze_x, **kwargs):
-        """The composed pixel the foveal electrode paints
+        """Return the rendered center (foveal) pixel
 
-        The display is eye-centered, so the fovea is the center pixel. That
-        pixel is pure phosphene; the intact periphery would otherwise
-        dominate any whole-frame maximum.
+        The display is eye-centered, so the center pixel is pure phosphene
+        (the intact periphery would dominate a whole-frame max).
         """
         seen = composed(model, scene, gaze=(gaze_x, 0) * dva, **kwargs)
         return float(seen[HALF, HALF, 0, 0])
 
     dim, bright = phosphene(-16, vmax=200), phosphene(16, vmax=200)
     npt.assert_equal(0 < dim < bright < 1, True)
-    # The ramp is 9x brighter at +16 than at -16, and that is what survives:
+    # The ramp is 9x brighter at +16 than at -16:
     npt.assert_almost_equal(bright / dim, ramp_at(16) / ramp_at(-16),
                             decimal=2)
-    # A different `vmax` rescales both, which is what says it is the only
-    # thing deciding the mapping:
+    # Doubling `vmax` halves the brightness:
     npt.assert_almost_equal(phosphene(16, vmax=400), bright / 2, decimal=3)
 
 
 def test_a_video_scene_keeps_its_own_timing():
-    """Native frames stay native, and the percept is read at their times"""
+    """A video scene keeps its frame times"""
     frames = np.stack([np.full((SCENE_PX, SCENE_PX), v)
                        for v in (0.2, 0.5, 0.9)], axis=-1)
     scene = scene_of(VideoStimulus(frames, time=[0, 100, 200]),
@@ -721,16 +699,16 @@ def test_a_video_scene_keeps_its_own_timing():
     percept = scene.render(percept=model.predict_percept(scene), vmax=200)
     npt.assert_equal(percept.shape, (SCENE_PX, SCENE_PX, 3, 3))
     npt.assert_almost_equal(percept.time, [0, 100, 200])
-    # Brighter frames make brighter phosphenes, in the right order. Read at
-    # the fovea, which is inside the scotoma and so is phosphene only:
+    # Brighter frames give brighter phosphenes (fovea is inside the scotoma,
+    # so phosphene only):
     peaks = [percept.data[HALF, HALF, 0, f] for f in range(3)]
     npt.assert_equal(np.all(np.diff(peaks) > 0), True)
-    # Outside the scotoma every video frame passes through untouched:
+    # Outside the scotoma, video frames are unchanged:
     npt.assert_almost_equal(percept.data[0, 0, 0], [0.2, 0.5, 0.9], decimal=6)
 
 
 def test_a_spatiotemporal_model_composes_against_a_video_scene():
-    """The ordinary spatial+temporal pipeline, with nothing asked of it"""
+    """A spatiotemporal model renders against a video scene"""
     frames = np.stack([np.full((SCENE_PX, SCENE_PX), v)
                        for v in (0.2, 0.5, 0.9)], axis=-1)
     source = VideoStimulus(frames, time=[0, 100, 200])
@@ -747,23 +725,23 @@ def test_a_spatiotemporal_model_composes_against_a_video_scene():
 
     raw = spatiotemporal().predict_percept(
         Scene(source, fov=(SCENE_PX, SCENE_PX)))
-    # The premise: the two clocks really do differ, frame for frame.
+    # Percept and scene frame times differ:
     npt.assert_almost_equal(raw.time, [100, 200, 300])
     npt.assert_almost_equal(scene.time, [0, 100, 200])
-    # Frames are paired through provenance, not through frame count:
+    # Frames are paired by source frame time, not frame count:
     npt.assert_almost_equal(raw.metadata['source_frame_time'], [0, 100, 200])
 
     percept = scene.render(
         percept=spatiotemporal().predict_percept(scene), vmax=5)
     npt.assert_equal(percept.shape, (SCENE_PX, SCENE_PX, 3, 3))
-    # The percept's clock describes the output, not the video's onsets:
+    # Rendered times are the percept's output times:
     npt.assert_almost_equal(percept.time, [100, 200, 300])
-    # ... and the native frames come through in order, one per output frame:
+    # Source frames appear in order, one per output frame:
     npt.assert_almost_equal(percept.data[0, 0, 0], [0.2, 0.5, 0.9], decimal=5)
 
 
 def test_a_one_frame_video_keeps_its_source_clock():
-    """One timed frame is a video, not a still"""
+    """A one-frame video keeps its source frame time"""
     source = VideoStimulus(np.full((SCENE_PX, SCENE_PX, 1), 0.5), time=[0])
     scene = Scene(source, fov=(SCENE_PX, SCENE_PX),
                   scotoma=Scotoma.circle(6), scotoma_fill=0.0)
@@ -774,14 +752,14 @@ def test_a_one_frame_video_keeps_its_source_clock():
                   temporal=FadingTemporal()).build()
     percept = model.predict_percept(scene)
     npt.assert_almost_equal(percept.metadata['source_frame_time'], [0])
-    # Labeled at the frame end, paired through provenance:
+    # Labeled at the frame end, paired by source frame time:
     rendered = scene.render(percept=percept, vmax=5)
     npt.assert_equal(rendered.shape[-1], 1)
     npt.assert_almost_equal(rendered.time, percept.time)
 
 
 def test_a_temporal_stage_does_not_lose_the_visual_field_grid():
-    """A percept rewritten frame by frame has not moved in the visual field"""
+    """A temporal stage keeps the percept's visual field grid"""
     model = Model(spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
                                             xrange=(-2, 2), yrange=(-2, 2),
                                             step=1),
@@ -794,7 +772,7 @@ def test_a_temporal_stage_does_not_lose_the_visual_field_grid():
 
 
 def test_a_single_timed_percept_is_not_broadcast_over_a_video():
-    """One frame at a named instant happened then, not throughout"""
+    """A single timed percept frame is not broadcast over a video"""
     source = VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20])
     scene = Scene(source, fov=(5, 5), scotoma=Scotoma.circle(3))
     grid = ScoreboardModel(implant=implant_at(0, 0), xrange=(-2, 2),
@@ -803,8 +781,7 @@ def test_a_single_timed_percept_is_not_broadcast_over_a_video():
     with pytest.raises(ValueError) as excinfo:
         scene.render(percept=at_10, vmax=20)
     npt.assert_equal('never simulated' in str(excinfo.value), True)
-    # A percept with no clock at all did not happen at any instant, so it does
-    # stand behind every frame:
+    # A percept without time is broadcast to every frame:
     timeless = Percept(np.full((5, 5, 1), 20.0), space=grid)
     npt.assert_equal(timeless.time, None)
     seen = scene.render(percept=timeless, vmax=20)
@@ -813,7 +790,7 @@ def test_a_single_timed_percept_is_not_broadcast_over_a_video():
 
 
 def test_a_temporal_percept_must_cover_the_video():
-    """Nothing is extrapolated in time, in either direction"""
+    """A percept must cover the video's time range (no extrapolation)"""
     source = VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20])
     scene = Scene(source, fov=(5, 5), scotoma=Scotoma.circle(3))
     values = np.stack([np.full((5, 5), b) for b in (0.0, 20.0)], axis=-1)
@@ -823,16 +800,16 @@ def test_a_temporal_percept_must_cover_the_video():
     with pytest.raises(ValueError) as excinfo:
         scene.render(percept=short, vmax=20)
     npt.assert_equal('never simulated' in str(excinfo.value), True)
-    # A percept that does cover it composes, endpoints included:
+    # A covering percept works, endpoints included:
     covering = Percept(values, space=grid, time=[0, 20])
     npt.assert_equal(scene.render(percept=covering, vmax=20).shape[-1], 3)
-    # ... and so does a still percept, which has no interval to run off:
+    # So does a percept without time:
     still = Percept(values[..., :1], space=grid)
     npt.assert_equal(scene.render(percept=still, vmax=20).shape[-1], 3)
 
 
 def test_the_time_range_check_crosses_units():
-    """A percept in seconds is held against a video in milliseconds"""
+    """The time range check converts a percept in s to a video in ms"""
     source = VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20])
     scene = Scene(source, fov=(5, 5), scotoma=Scotoma.circle(3))
     grid = ScoreboardModel(implant=implant_at(0, 0), xrange=(-2, 2),
@@ -849,7 +826,7 @@ def test_the_time_range_check_crosses_units():
 
 
 def labeled_percept(time, source=None, time_unit=ms):
-    """Three frames of brightness 1, 2, 3, optionally tagged with provenance"""
+    """Return frames of brightness 1, 2, 3, optionally with source times"""
     grid = ScoreboardModel(implant=implant_at(0, 0), xrange=(-2, 2),
                            yrange=(-2, 2), step=1).build().spatial.grid
     values = np.stack([np.full((5, 5), b) for b in (1.0, 2.0, 3.0)], axis=-1)
@@ -859,7 +836,7 @@ def labeled_percept(time, source=None, time_unit=ms):
 
 
 def test_equal_frame_counts_do_not_pair_frames():
-    """Three frames against three frames is not a temporal correspondence"""
+    """Equal frame counts alone do not pair frames"""
     scene = Scene(VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20]),
                   fov=(5, 5), scotoma=Scotoma.circle(3))
     for source in (None, [0, 20, 40]):
@@ -867,13 +844,13 @@ def test_equal_frame_counts_do_not_pair_frames():
         with pytest.raises(ValueError) as excinfo:
             scene.render(percept=percept, vmax=3)
         npt.assert_equal('never simulated' in str(excinfo.value), True)
-        # The whole clock is checked, even for one displayed frame:
+        # All times are checked, even for one frame:
         with pytest.raises(ValueError):
             scene._prosthetic_frames(percept, frame=1)
 
 
 def test_source_provenance_pairs_frames_by_index():
-    """Frame k was predicted from scene frame k, whatever its time label"""
+    """Source frame times pair percept frame k with scene frame k"""
     scene = Scene(VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20]),
                   fov=(5, 5), scotoma=Scotoma.circle(3))
     percept = labeled_percept([5, 15, 25], source=[0, 10, 20])
@@ -885,14 +862,14 @@ def test_source_provenance_pairs_frames_by_index():
     npt.assert_almost_equal(time, [15])
     npt.assert_almost_equal(scene.render(percept=percept, vmax=3).time,
                             [5, 15, 25])
-    # Provenance is in ms; the percept's own labels may be in seconds:
+    # Source frame times are in ms; percept times may be in s:
     percept = labeled_percept([0.005, 0.015, 0.025], source=[0, 10, 20],
                               time_unit=s)
     frames, time, unit = scene._prosthetic_frames(percept)
     npt.assert_almost_equal(frames[2, 2], [1, 2, 3])
     npt.assert_almost_equal(time, [0.005, 0.015, 0.025])
     npt.assert_equal(unit, s)
-    # ... and a scene given in seconds matches its ms provenance:
+    # A scene in s matches source frame times in ms:
     in_s = Scene(VideoStimulus(np.zeros((5, 5, 3)),
                                time=np.array([0, 0.01, 0.02]) * s),
                  fov=(5, 5), scotoma=Scotoma.circle(3))
@@ -918,19 +895,18 @@ def test_per_frame_gaze_moves_the_eye_between_video_frames():
     eye = model_for(implant_at(0, 0))
     seen = seen_by(eye, scene, gaze=gaze * dva)
     npt.assert_almost_equal(seen.ravel(), ramp_at(gaze[:, 0]), decimal=4)
-    # A head-mounted camera holds still through the same eye movements:
+    # Gaze does not affect a head-mounted camera:
     camera = model_for(implant_at(0, 0, input_frame='head'))
     npt.assert_almost_equal(seen_by(camera, scene, gaze=gaze * dva).ravel(),
                             [ramp_at(0.0)] * 3, decimal=4)
-    # A still scene has one frame, so there is no per-frame gaze to give
-    # it, whichever frame the device takes its input in:
+    # Per-frame gaze with a still scene raises ValueError:
     for model in (eye, camera):
         with pytest.raises(ValueError):
             seen_by(model, scene_of(), gaze=gaze)
 
 
 def test_a_bound_implant_survives_a_deepcopy():
-    """A copied model describes the same physical implant"""
+    """A deep-copied model keeps the same implant object"""
     from copy import deepcopy
     implant = implant_at(0, 0)
     model = model_for(implant)
@@ -942,7 +918,7 @@ def test_a_bound_implant_survives_a_deepcopy():
 
 
 def offset_implant(input_frame='eye'):
-    """Three electrodes with a noncentral device-local origin."""
+    """Return three electrodes with a non-central device-local origin"""
     array = ElectrodeArray([PointSource(0, 0, 0), PointSource(280, 0, 0),
                             PointSource(560, 0, 0)])
     return Implant(array, scene_input_frame=input_frame,
@@ -950,14 +926,14 @@ def offset_implant(input_frame='eye'):
 
 
 def placed_coords(model, implant):
-    """The tissue coordinates the model actually stimulates through"""
+    """Return the placed tissue coordinates (um) of the electrodes"""
     stim = _scene_stim(model, scene_of(), None)
     x, y, z = model.spatial._electrode_coords(implant.electrode_array, stim)
     return np.column_stack((x, y, z)).astype(float)
 
 
 def test_implant_position_defaults_to_the_tissue_origin():
-    """The default is exactly the unplaced implant, on any map"""
+    """Default `implant_position` leaves the implant unmoved"""
     scene = scene_of()
     implant = implant_at(*Curcio1990Map().dva_to_ret(3.0, 1.0))
     for visual_field_map in (Curcio1990Map(), SquareMap()):
@@ -973,19 +949,19 @@ def test_implant_position_defaults_to_the_tissue_origin():
 
 @pytest.mark.parametrize('visual_field_map', [Curcio1990Map(), SquareMap()])
 def test_implant_position_lands_on_the_local_origin(visual_field_map):
-    """Absolute placement of the array's own (0, 0), not of its centroid"""
+    """`implant_position` places the array's local (0, 0), not its centroid"""
     implant = offset_implant()
     model = model_for(implant, visual_field_map=visual_field_map,
                       implant_position=(6, -2) * dva)
     placed = placed_coords(model, implant)
-    # The electrode sitting at the implant's local origin lands on the
-    # requested visual field location; the centroid, 280 um away, does not.
+    # The electrode at the local origin lands on the requested location
+    # (the centroid is 280 um away):
     npt.assert_almost_equal(visual_field_map.ret_to_dva(placed[0, 0],
                                                         placed[0, 1]),
                             (6.0, -2.0), decimal=4)
     npt.assert_almost_equal(placed[0, :2],
                             visual_field_map.dva_to_ret(6.0, -2.0), decimal=3)
-    # A physical position says the same thing without going through the map:
+    # Same result with a position in um:
     same = model_for(implant, visual_field_map=visual_field_map,
                      implant_position=visual_field_map.dva_to_ret(
                          6.0, -2.0) * um)
@@ -994,7 +970,7 @@ def test_implant_position_lands_on_the_local_origin(visual_field_map):
 
 @pytest.mark.parametrize('visual_field_map', [Curcio1990Map(), SquareMap()])
 def test_implant_position_translates_not_warps(visual_field_map):
-    """One rigid tissue translation, so device geometry is untouched"""
+    """`implant_position` is a rigid translation"""
     implant = offset_implant()
     before = implant.electrode_array.coordinates()
     placed = placed_coords(model_for(implant,
@@ -1004,35 +980,34 @@ def test_implant_position_translates_not_warps(visual_field_map):
                             decimal=2)
     shift = placed - before
     npt.assert_almost_equal(shift - shift[0], 0, decimal=2)
-    # The implant itself never moved:
+    # The implant object is unchanged:
     npt.assert_array_equal(implant.electrode_array.coordinates(), before)
 
 
 def test_implant_rotation_turns_the_array_about_its_own_origin():
-    """Rigid rotation about the local (0, 0), positive counter-clockwise"""
+    """`implant_rotation` rotates about the local (0, 0), counter-clockwise"""
     implant = offset_implant()
     before = implant.electrode_array.coordinates()
     placed = placed_coords(model_for(implant, implant_rotation=90), implant)
-    # The electrode at the local origin does not move; the one 280 um along
-    # +x swings onto +y rather than turning about the centroid:
+    # The electrode at the origin stays put; the one at +280 um x moves to
+    # +280 um y:
     npt.assert_almost_equal(placed[0], before[0], decimal=6)
     npt.assert_almost_equal(placed[1, :2], (0, 280), decimal=6)
-    # Rigid: pairwise distances and local z are untouched, and so is the
-    # implant itself.
+    # Rigid: distances and z unchanged, implant object unchanged:
     npt.assert_almost_equal(np.linalg.norm(np.diff(placed[:, :2], axis=0),
                                            axis=1),
                             np.linalg.norm(np.diff(before[:, :2], axis=0),
                                            axis=1), decimal=6)
     npt.assert_almost_equal(placed[:, 2], before[:, 2], decimal=6)
     npt.assert_array_equal(implant.electrode_array.coordinates(), before)
-    # An angle is an angle, whichever way it is spelled:
+    # Unitful angle gives the same result:
     npt.assert_almost_equal(
         placed_coords(model_for(implant, implant_rotation=90 * deg), implant),
         placed, decimal=6)
 
 
 def test_implant_rotation_happens_before_the_translation():
-    """Rotate in the device frame, then place that frame in the tissue"""
+    """Rotation is applied before translation"""
     implant = offset_implant()
     before = implant.electrode_array.coordinates()
     model = model_for(implant, implant_rotation=30,
@@ -1042,8 +1017,7 @@ def test_implant_rotation_happens_before_the_translation():
     R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
     npt.assert_almost_equal(placed[:, :2],
                             (R @ before[:, :2].T).T + [400, -100], decimal=3)
-    # Rotating about the local origin is not the same as rotating about the
-    # placed one, so the order is observable:
+    # The opposite order gives a different result:
     npt.assert_equal(np.allclose(placed[:, :2],
                                  (R @ (before[:, :2] + [400, -100]).T).T),
                      False)
@@ -1055,11 +1029,11 @@ def test_implant_position_moves_scene_sampling_and_the_percept_alike():
     grid = {'rho': 80, 'xrange': (-8, 8), 'yrange': (-8, 8), 'step': 0.5}
     fovea = model_for(implant, **grid)
     placed = model_for(implant, implant_position=(4, -3) * dva, **grid)
-    # Same gray level, read four degrees to the right and three down:
+    # Same gray level as gazing 4 deg right and 3 deg down:
     npt.assert_almost_equal(seen_by(placed, scene_of()),
                             seen_by(fovea, scene_of(), gaze=(4, -3) * dva),
                             decimal=4)
-    # ... and the phosphene is drawn there too. Row is -y, column is +x:
+    # The phosphene moves there too (row is -y, column is +x):
     here = composed(fovea, scene, vmax=2)[..., 0]
     there = composed(placed, scene, vmax=2)[..., 0]
     npt.assert_almost_equal(there[HALF + 3, HALF + 4], here[HALF, HALF],
@@ -1067,7 +1041,7 @@ def test_implant_position_moves_scene_sampling_and_the_percept_alike():
 
 
 def test_implant_depth_translates_depth_without_flattening_the_array():
-    """Global placement depth on top of local, per-electrode z"""
+    """`implant_depth` is added to each electrode's local z"""
     array = ElectrodeArray([PointSource(0, 0, 0), PointSource(280, 0, 50),
                             PointSource(560, 0, -20)])
     implant = Implant(array,
@@ -1083,7 +1057,7 @@ def test_implant_depth_translates_depth_without_flattening_the_array():
 
 
 def test_one_implant_can_be_placed_in_several_models_at_once():
-    """Placement lives on the model, so the implant stays reusable"""
+    """Placement is stored on the model, so one implant can be reused"""
     implant = offset_implant()
     before = implant.electrode_array.coordinates()
     near = model_for(implant, implant_position=(2, 0) * dva, implant_depth=0)
@@ -1094,12 +1068,12 @@ def test_one_implant_can_be_placed_in_several_models_at_once():
     npt.assert_almost_equal(np.diff(a, axis=0), np.diff(b, axis=0), decimal=2)
     npt.assert_almost_equal(b[:, 2] - a[:, 2], 200, decimal=3)
     npt.assert_array_equal(implant.electrode_array.coordinates(), before)
-    # Neither model's placement leaked into the other:
+    # Placements are independent:
     npt.assert_almost_equal(placed_coords(near, implant), a, decimal=6)
 
 
 def test_a_cortical_implant_is_placed_by_visual_field_position():
-    """(6, -2) dva names the cortical representation of that location"""
+    """(6, -2) dva places the implant at the V1 location of that point"""
     visual_field_map = Polimeni2006Map(regions=['v1'])
     model = CortexScoreboard(implant=implant_at(0, 0),
                              implant_position=(6, -2) * dva,
@@ -1111,19 +1085,19 @@ def test_a_cortical_implant_is_placed_by_visual_field_position():
 
 
 def test_an_ambiguous_cortical_placement_is_refused():
-    """One visual field location, several tissue images: which one?"""
+    """A dva position with several cortical regions is ambiguous"""
     model = CortexScoreboard(implant=implant_at(0, 0), regions=['v1', 'v2'],
                              implant_position=(6, -2) * dva)
     with pytest.raises(NotImplementedError):
         _placement_shift(model.spatial, um)
-    # A physical position is unambiguous and still works:
+    # A position in um works:
     model.spatial.implant_position = (1000, 0) * um
     npt.assert_almost_equal(_placement_shift(model.spatial, um),
                             (1000, 0, 0), decimal=6)
 
 
 def test_implant_position_and_location_noise_stay_separate():
-    """Placement is physical and shared; location noise is per electrode"""
+    """`implant_position` and `location_noise` are independent"""
     scene = scene_of()
     implant = grid_implant()
     plain = model_for(implant)
@@ -1131,7 +1105,7 @@ def test_implant_position_and_location_noise_stay_separate():
     noisy = model_for(implant, location_noise=1.0)
     both = model_for(implant, implant_position=(5, 0) * dva,
                      location_noise=1.0)
-    # `location_noise` displaces the percept, not what the scene is sampled
-    # at, so only `implant_position` shows up in the sampled gray levels:
+    # `location_noise` displaces the percept, not the scene sampling points:
+
     npt.assert_array_equal(seen_by(noisy, scene), seen_by(plain, scene))
     npt.assert_array_equal(seen_by(both, scene), seen_by(placed, scene))

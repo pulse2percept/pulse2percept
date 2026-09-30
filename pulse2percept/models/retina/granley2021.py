@@ -248,7 +248,8 @@ _NO_THRESHOLD_MSG = (
 
 
 def _amp_factor(electrode, amp, unit, thresholds):
-    """Amplitude in multiples of threshold, calibrating current if need be"""
+    """Return amplitude in multiples of threshold, converting current via
+    ``thresholds`` if needed"""
     if unit.dimension == xTh.dimension:
         return amp
     threshold = (thresholds or {}).get(electrode)
@@ -258,7 +259,7 @@ def _amp_factor(electrode, amp, unit, thresholds):
     return amp / threshold
 
 
-#: The pulse-train contract [Granley2021]_ was derived from.
+#: Pulse-train type required by the [Granley2021]_ fit.
 _PULSE_CONTRACT = ("All stimuli must be cathodic-first BiphasicPulseTrains "
                    "with no delay dur")
 
@@ -266,10 +267,8 @@ _PULSE_CONTRACT = ("All stimuli must be cathodic-first BiphasicPulseTrains "
 def _pulse_train_params(stim, thresholds=None):
     """Return Granley pulse parameters for each electrode that delivers pulses.
 
-    Electrodes at zero amplitude, and trains that deliver no pulse at all
-    (``freq <= 0``, or ``n_pulses=0``), are dropped rather than handed to the
-    effect models: a train with no pulse in it stimulates nothing, whatever
-    amplitude its pulse would have had."""
+    Drops electrodes at zero amplitude and trains without pulses
+    (``freq <= 0`` or ``n_pulses=0``)."""
     described = getattr(stim, '_biphasic_params', None)
     if described is not None:
         encoded = described()
@@ -291,8 +290,8 @@ def _pulse_train_params(stim, thresholds=None):
         return params
     sources = stim._structured_sources()
     if sources is None:
-        # Preserve the historical zero-stimulus result; this is the only case
-        # that requires rendering a waveform.
+        # All-zero stimulus: no active electrodes. Only this case renders the
+        # waveform:
         if not np.any(stim.data):
             return []
         raise TypeError(_PULSE_CONTRACT)
@@ -318,20 +317,19 @@ def _pulse_train_params(stim, thresholds=None):
 class _BiphasicSpatialMixin:
     """Pulse-train handling shared by the [Granley2021]_ spatial models.
 
-    Turns a described biphasic pulse train into one per-electrode effect factor
-    per effect model, and summarizes the whole train as a single representative
-    spatial percept. Subclasses supply the spatial kernel in
-    ``_predict_spatial``."""
+    Converts a biphasic pulse train into per-electrode effect factors and
+    summarizes the train as one representative spatial percept. Subclasses
+    supply the spatial kernel in ``_predict_spatial``."""
 
     #: Amplitude may be given in multiples of perceptual threshold.
     extra_stimulus_units = (xTh,)
 
-    #: Effect models read frequency, amplitude and phase duration off the
-    #: described pulse train.
+    #: Effect models read frequency, amplitude and phase duration from the
+    #: pulse train.
     _needs_structured_stim = True
 
-    #: Phosphene brightness and size follow pulse parameters, so a
-    #: dimensionless picture is not valid input.
+    #: Brightness and size depend on pulse parameters, so dimensionless input
+    #: is rejected.
     _accepts_dimensionless_drive = False
 
     #: Spatial parameters mirrored to the effect model that scales them.
@@ -363,13 +361,12 @@ class _BiphasicSpatialMixin:
     def _effect_factors(self, name, elec_params, positive=False):
         """Return one factor per active electrode from effect model ``name``.
 
-        A scalar return (an effect model that ignores its arguments) is
-        broadcast to every active electrode. Any other length is an error:
-        the kernels index this array once per electrode with bounds checking
-        disabled, so a short array would read past its end.
+        A scalar return is broadcast to every active electrode. Any other
+        length raises ValueError, because the kernels index this array per
+        electrode without bounds checking.
 
-        ``positive`` additionally rejects factors <= 0, for a factor that
-        appears in an exponent denominator."""
+        ``positive`` also rejects factors <= 0 (used in an exponent
+        denominator)."""
         n_el = len(elec_params)
         factors = np.array(getattr(self, name)(elec_params[:, 0],
                                                elec_params[:, 1],
@@ -494,8 +491,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
     [Granley2021]_. The model returns one representative spatial percept for the
     full biphasic pulse train.
 
-    Stimuli must describe the cathodic-first pulse train they deliver, rather
-    than only its samples: either retained
+    Stimuli must retain their cathodic-first pulse-train description: either
     :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
     image encoded with the standard biphasic encoder pulse (see
     :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Amplitude may be
@@ -650,7 +646,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
     -----
     ``ax_segments_range`` values above 90 are outside the range for which this
     axon-map construction is considered reliable."""
-    #: ``lam`` is mirrored on top of the ``rho`` the mixin already mirrors.
+    #: Mirror ``lam`` in addition to the mixin's ``rho``.
     _shared_with_effect = {**_BiphasicSpatialMixin._shared_with_effect,
                            'lam': 'streak_model'}
 
@@ -749,8 +745,7 @@ class BiphasicAxonMapModel(Model):
     [Granley2021]_. The model returns one representative percept for the full
     biphasic pulse train.
 
-    Stimuli must describe the cathodic-first pulse train they deliver, rather
-    than only its samples: either retained
+    Stimuli must retain their cathodic-first pulse-train description: either
     :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
     image encoded with the standard biphasic encoder pulse (see
     :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Give amplitude in
@@ -909,8 +904,7 @@ class BiphasicAxonMapModel(Model):
 
     Examples
     --------
-    A picture, a device that encodes it, and a participant's measured
-    threshold:
+    Encode an image using a measured threshold:
 
     .. code-block:: python
 
@@ -920,8 +914,8 @@ class BiphasicAxonMapModel(Model):
         model = p2p.models.retina.BiphasicAxonMapModel(implant=implant)
         percept = model.predict_percept(p2p.stimuli.samples.logo_bvl())
 
-    An encoder that asks for threshold multiples in the first place needs no
-    measured threshold:
+    An encoder that outputs threshold multiples requires no measured
+    threshold:
 
     .. code-block:: python
 
@@ -1112,8 +1106,7 @@ class BiphasicScoreboardModel(Model):
     :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`: phosphenes stay
     round and centered on the electrode.
 
-    Stimuli must describe the cathodic-first pulse train they deliver, rather
-    than only its samples: either retained
+    Stimuli must retain their cathodic-first pulse-train description: either
     :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
     image encoded with the standard biphasic encoder pulse (see
     :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Give amplitude in
@@ -1150,12 +1143,11 @@ class BiphasicScoreboardModel(Model):
     .. note::
 
         The brightness and size functions are the empirical fits of
-        [Granley2021]_ (Eqs. 4-5), but this focal combination -- those fits
-        without the axonal streak term -- is not the model that paper
-        validated. [Granley2021]_ assumes an *epiretinal* implant and treats
-        axonal activation as part of phosphene shape, so here ``rho`` alone
-        carries the apparent size. The underlying psychophysics
-        ([Nanduri2012]_, [Weitz2015]_) is likewise epiretinal.
+        [Granley2021]_ (Eqs. 4-5), but that paper did not validate them
+        without the axonal streak term. [Granley2021]_ assumes an *epiretinal*
+        implant and treats axonal activation as part of phosphene shape; here
+        ``rho`` alone sets apparent size. The underlying psychophysics
+        ([Nanduri2012]_, [Weitz2015]_) is also epiretinal.
 
     Parameters
     ----------
@@ -1234,8 +1226,7 @@ class BiphasicScoreboardModel(Model):
         train = p2p.stimuli.BiphasicPulseTrain(20, 2 * p2p.units.xTh, 0.45)
         percept = model.predict_percept({'C5': train})
 
-    A picture, a device that encodes it, and a participant's measured
-    threshold:
+    Encode an image using a measured threshold:
 
     .. code-block:: python
 

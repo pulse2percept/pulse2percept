@@ -230,8 +230,7 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
     npt.assert_equal(pulse.is_charge_balanced,
                      np.isclose(trapezoid(pulse.data, pulse.time)[0], 0))
 
-    # If both phases have the same values, it's basically a symmetric biphasic
-    # pulse:
+    # If both phases have the same values, it is a symmetric biphasic pulse:
     abp = AsymmetricBiphasicPulse(amp1, amp1, phase_dur1, phase_dur1,
                                   interphase_dur=interphase_dur,
                                   delay_dur=delay_dur,
@@ -243,7 +242,7 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
                             bp[:, np.linspace(0, bp_min_dur, num=5)])
     npt.assert_equal(abp.cathodic_first, bp.cathodic_first)
 
-    # If one phase is zero, it's basically a monophasic pulse:
+    # If one phase is zero, it is a monophasic pulse:
     abp = AsymmetricBiphasicPulse(amp1, 0, phase_dur1, phase_dur2,
                                   interphase_dur=interphase_dur,
                                   delay_dur=delay_dur,
@@ -298,8 +297,8 @@ def test_pulse_append(amp, phase_dur):
 
 
 def test_pulse_units():
-    """Equivalent unit choices must produce numerically identical pulses"""
-    # The headline case from the spec:
+    """Equivalent unit choices produce numerically identical pulses"""
+    # 50 uA, 0.45 ms == 0.05 mA, 450 us:
     npt.assert_equal(BiphasicPulse(50, 0.45) == BiphasicPulse(0.05 * mA,
                                                               450 * us), True)
     pairs = [
@@ -317,7 +316,7 @@ def test_pulse_units():
                                  stim_dur=15 * ms)),
     ]
     for bare, unitful in pairs:
-        # Not merely close: the same arrays, bit for bit.
+        # Identical arrays, bit for bit:
         npt.assert_array_equal(bare.data, unitful.data)
         npt.assert_array_equal(bare.time, unitful.time)
         npt.assert_equal(bare.data.dtype, np.float32)
@@ -325,7 +324,8 @@ def test_pulse_units():
         npt.assert_equal(bare == unitful, True)
         npt.assert_equal(unitful.unit, uA)
         npt.assert_equal(unitful.time_unit, ms)
-    # A quantity of the wrong dimension is caught, and names the argument:
+    # A quantity of the wrong dimension raises DimensionMismatchError naming
+    # the argument:
     with pytest.raises(DimensionMismatchError) as excinfo:
         BiphasicPulse(10 * ms, 0.45 * ms)
     npt.assert_equal("Parameter 'amp' expects electric current (uA), got time"
@@ -344,7 +344,7 @@ def test_pulse_units():
 
 @contextmanager
 def counting_renders(cls):
-    """Count how often ``cls`` generates a waveform inside the block"""
+    """Count how often ``cls`` renders a waveform inside the block"""
     original = cls._render
     counts = []
 
@@ -359,15 +359,15 @@ def counting_renders(cls):
 
 
 def _rendered(stim):
-    """Whether the stimulus has generated its waveform yet
+    """Return True if the stimulus has rendered its waveform
 
-    Reads the private container, because every public attribute that could
-    answer the question would generate one first.
+    Reads the private container, because every public attribute would render
+    the waveform first.
     """
     return stim._Stimulus__stim['data'] is not None
 
 
-# One entry per (class, build, the parameters that define it):
+# One entry per (class, build, defining parameters):
 PULSES = [
     (MonophasicPulse,
      lambda: MonophasicPulse(-20, 1, delay_dur=2, stim_dur=10),
@@ -402,14 +402,13 @@ PULSES = [
 
 @pytest.mark.parametrize('cls, build, params', PULSES)
 def test_pulse_parameters_are_canonical(cls, build, params):
-    # A pulse reads back the parameters it was built from. The two amplitude
-    # conventions differ on purpose: a monophasic pulse gets its polarity from
-    # the sign of `amp`, a biphasic one from `cathodic_first`, so the latter
-    # keeps only the magnitude (which is all of it that reaches the waveform).
+    # A pulse returns the parameters it was built from. Monophasic pulses take
+    # polarity from the sign of `amp`, biphasic ones from `cathodic_first`, so
+    # biphasic pulses store only the magnitude of `amp`.
     pulse = build()
     for name, expected in params.items():
         npt.assert_almost_equal(getattr(pulse, name), expected)
-    # The asymmetric parameters stay distinct from one another:
+    # The asymmetric parameters stay distinct:
     if cls is AsymmetricBiphasicPulse:
         npt.assert_equal(pulse.amp1 != pulse.amp2, True)
         npt.assert_equal(pulse.phase_dur1 != pulse.phase_dur2, True)
@@ -417,8 +416,8 @@ def test_pulse_parameters_are_canonical(cls, build, params):
 
 @pytest.mark.parametrize('cls, build, params', PULSES)
 def test_pulse_parameters_are_read_only(cls, build, params):
-    # Assigning one would leave a cached waveform contradicting the pulse it
-    # is supposed to describe. Build another pulse instead:
+    # Assigning one would make the cached waveform inconsistent; build a new
+    # pulse instead:
     pulse = build()
     for name in params:
         with pytest.raises(AttributeError):
@@ -431,7 +430,7 @@ def test_pulse_renders_once_and_only_when_asked(cls, build, params):
         pulse = build()
         npt.assert_equal(_rendered(pulse), False)
         npt.assert_equal(counts, [])
-        # Everything a pulse knows from its parameters alone:
+        # Attributes available from parameters alone:
         for name in params:
             getattr(pulse, name)
         npt.assert_equal(list(pulse.electrodes), [0])
@@ -439,14 +438,14 @@ def test_pulse_renders_once_and_only_when_asked(cls, build, params):
         repr(pulse)
         npt.assert_equal(counts, [])
         npt.assert_equal(_rendered(pulse), False)
-        # ...and the waveform, which is generated exactly once:
+        # ... and the waveform, rendered exactly once:
         npt.assert_equal(pulse.data.shape[0], 1)
         npt.assert_equal(len(counts), 1)
         npt.assert_equal(_rendered(pulse), True)
         for _ in range(3):
             pulse.data, pulse.time, pulse.shape, pulse[0, 0.001]
         npt.assert_equal(len(counts), 1)
-        # `duration` is the same number the waveform ends on:
+        # `duration` equals the last time point of the waveform:
         npt.assert_almost_equal(pulse.duration, pulse.time[-1])
 
 
@@ -461,12 +460,11 @@ def test_pulse_rendered_state_is_immutable(cls, build, params):
 
 
 def test_pulse_electrode_names():
-    # An unnamed pulse is electrode 0, as `Stimulus` has always numbered it:
+    # An unnamed pulse is electrode 0:
     npt.assert_equal(list(MonophasicPulse(-20, 1).electrodes), [0])
     npt.assert_equal(list(BiphasicPulse(-20, 1, electrode='C3').electrodes),
                      ['C3'])
-    # A pulse drives one electrode, and says so at construction rather than
-    # leaving the mismatch to surface out of the waveform:
+    # A pulse drives one electrode; several raise ValueError at construction:
     for build in (lambda e: MonophasicPulse(-20, 1, electrode=e),
                   lambda e: BiphasicPulse(-20, 1, electrode=e),
                   lambda e: AsymmetricBiphasicPulse(-40, 10, 1, 4,
@@ -488,20 +486,18 @@ def test_pulse_electrode_names():
 ])
 def test_pulse_transformations_are_not_pulses(cls, build, params, label,
                                               transform):
-    # A pulse's parameters describe the waveform it was built with. An
-    # operation that rewrites those samples in a way no parameter of this
-    # class expresses -- a DC offset, a shift in time, a second pulse laid
-    # after it -- would leave them describing nothing, so what comes back is
-    # an ordinary Stimulus. Scaling is the exception; see below.
+    # Operations that no pulse parameter can express (DC offset, time shift,
+    # appending another pulse) return a plain Stimulus. Scaling is the
+    # exception; see below.
     pulse = build()
     with np.errstate(divide='ignore', invalid='ignore'):
         out = transform(pulse)
     npt.assert_equal(type(out), Stimulus)
     npt.assert_equal(out._is_parametric, False)
-    # ...and it no longer answers questions only a pulse can answer:
+    # ... without pulse parameters:
     for name in params:
         npt.assert_equal(hasattr(out, name), False)
-    # The original is untouched:
+    # The original is unchanged:
     for name, expected in params.items():
         npt.assert_almost_equal(getattr(pulse, name), expected)
     npt.assert_almost_equal(pulse.duration, pulse.time[-1])
@@ -510,18 +506,16 @@ def test_pulse_transformations_are_not_pulses(cls, build, params, label,
 @pytest.mark.parametrize('cls, build, params', PULSES)
 @pytest.mark.parametrize('factor', [2, 0.5, -1, -2, 1, 0, 1e-3])
 def test_pulse_scaling_stays_a_pulse(cls, build, params, factor):
-    # Multiplying every amplitude by a finite factor is exactly what a
-    # different `amp` does, so the result is still described by the
-    # parameters this class is made of -- and is built from them rather than
-    # from the samples.
+    # Scaling by a finite factor equals a different `amp`, so the result is
+    # still a pulse, built from parameters rather than samples.
     pulse = build()
     reference = factor * np.asarray(pulse.data)
     for scaled in (pulse * factor, factor * pulse):
         npt.assert_equal(type(scaled), cls)
-        # Scaling is expressible without sampling anything:
+        # Scaling does not render the waveform:
         npt.assert_equal(_rendered(scaled), False)
         npt.assert_allclose(scaled.data, reference, rtol=1e-6, atol=1e-6)
-        # Timing is a property of the pulse, not of its amplitude:
+        # Timing parameters do not change with amplitude:
         for name in ('phase_dur', 'phase_dur1', 'phase_dur2',
                      'interphase_dur', 'delay_dur', 'stim_dur'):
             if name in params:
@@ -534,21 +528,20 @@ def test_pulse_scaling_stays_a_pulse(cls, build, params, factor):
                     getattr(scaled, name),
                     params[name] * (factor if signed else abs(factor)))
         # A negative factor swaps which phase is cathodic. `MonophasicPulse`
-        # carries the polarity in `amp` instead, which the check above covers:
+        # stores polarity in `amp` instead (checked above):
         if 'cathodic_first' in params:
             npt.assert_equal(scaled.cathodic_first,
                              params['cathodic_first'] if factor >= 0
                              else not params['cathodic_first'])
-    # The original is untouched:
+    # The original is unchanged:
     for name, expected in params.items():
         npt.assert_almost_equal(getattr(pulse, name), expected)
 
 
 @pytest.mark.parametrize('cls, build, params', PULSES)
 def test_pulse_append_gives_a_plain_waveform(cls, build, params):
-    # Two pulses laid end to end are not one pulse, so the result stops
-    # answering as one rather than reporting parameters that describe half
-    # of it.
+    # Two pulses end to end are not one pulse, so the result is a plain
+    # Stimulus without pulse parameters.
     pulse = build()
     out = pulse.append(pulse >> DT)
     npt.assert_equal(type(out), Stimulus)
@@ -570,24 +563,21 @@ def test_pulse_transformations_are_numerically_right(cls, build, params):
     shifted = pulse >> 5
     npt.assert_almost_equal(shifted.time, pulse.time + 5)
     npt.assert_almost_equal(shifted.data, pulse.data)
-    # Units survive the fall back to a plain stimulus:
+    # Units are kept in the plain stimulus:
     npt.assert_equal((pulse * 2).unit, pulse.unit)
     npt.assert_equal((pulse * 2).time_unit, pulse.time_unit)
 
 
 @pytest.mark.parametrize('cls, build, params', PULSES)
 def test_pulse_compress_keeps_its_parameters_true(cls, build, params):
-    # Compression only drops samples the waveform does not need, so a pulse
-    # survives it: every model's predict_percept compresses a copy of the
-    # stimulus it was handed, and a pulse assigned straight to an implant is
-    # what arrives there.
+    # Compression only drops redundant samples, so the result is still a
+    # pulse. Every model's predict_percept compresses a copy of its stimulus,
+    # which may be a pulse assigned directly to an implant.
     pulse = build()
     peak = np.abs(pulse.data).max()
     pulse.compress()
     npt.assert_equal(pulse.is_compressed, True)
-    # Compression drops samples, but not the ones the parameters speak about:
-    # the pulse still ends where `stim_dur` says and still peaks where its
-    # amplitude says.
+    # Duration and peak amplitude are unchanged by compression:
     npt.assert_almost_equal(pulse.duration, pulse.time[-1])
     npt.assert_almost_equal(np.abs(pulse.data).max(), peak)
     for name, expected in params.items():
@@ -596,19 +586,18 @@ def test_pulse_compress_keeps_its_parameters_true(cls, build, params):
 
 @pytest.mark.parametrize('cls, build, params', PULSES)
 def test_pulse_remove_refuses_to_outdate_its_parameters(cls, build, params):
-    # Removing the electrode would leave a pulse advertising a pulse it no
-    # longer delivers, and an in-place method has no second object to hand
-    # back instead:
+    # Removing the electrode would leave pulse parameters that no longer match
+    # the data, and an in-place method cannot return a plain Stimulus instead:
     pulse = build()
     with pytest.raises(NotImplementedError):
         pulse.remove(pulse.electrodes[0])
     with pytest.raises(NotImplementedError):
         pulse.remove('all')
-    # Removing nothing is still a no-op, which Implant relies on:
+    # Removing nothing is still a no-op (used by Implant):
     for nothing in (None, [], (), np.array([])):
         pulse.remove(nothing)
     npt.assert_equal(pulse.shape[0], 1)
-    # And the documented way through is to take the waveform first:
+    # Convert to a plain Stimulus first:
     plain = Stimulus(pulse)
     plain.remove(plain.electrodes[0])
     npt.assert_equal(plain.shape[0], 0)

@@ -184,12 +184,12 @@ def test_polimeni_scalars():
         npt.assert_equal(np.isscalar(x_um) or np.ndim(x_um) == 0, True)
         npt.assert_almost_equal([x_um, y_um], np.ravel(to_tissue([5.], [-2.])),
                                 err_msg=region)
-        # Integers must survive the inverse, too (it divides coordinates):
+        # Integer inputs to the inverse match float inputs:
         xi, yi = int(x_um), int(y_um)
         npt.assert_almost_equal(to_visual(xi, yi),
                                 to_visual(float(xi), float(yi)),
                                 err_msg=region)
-        # Points outside the mapped eccentricity are NaN, not an error:
+        # Points beyond the mapped eccentricity are NaN:
         npt.assert_equal(np.isnan(to_tissue(100, 0)), True)
 
 
@@ -206,7 +206,7 @@ def test_polimeni_inverse_domain(region, params):
     inside = np.isfinite(xdva)
     npt.assert_equal(np.isfinite(ydva), inside)
     npt.assert_equal(0 < inside.sum() < inside.size, True)
-    # Both hemispheres' foveas invert to (0, 0) dva, which maps back to one:
+    # Exclude the foveas: both invert to (0, 0) dva, which maps back to one:
     inside &= np.hypot(np.nan_to_num(xdva), np.nan_to_num(ydva)) > 1e-3
     xb, yb = map.from_dva()[region](xdva[inside], ydva[inside])
     npt.assert_allclose(np.hypot(xb - x[inside], yb - y[inside]), 0,
@@ -214,8 +214,7 @@ def test_polimeni_inverse_domain(region, params):
 
 
 def test_polimeni_inverse_outside_v1():
-    # Past the vertical meridian, beyond 90 dva, and in the gap between
-    # hemispheres:
+    # Past the vertical meridian, beyond 90 dva, and between hemispheres:
     map = Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95)
     x, y = map.to_dva()['v1']([8450, 80000, -5000], [-14641, 0, 0])
     npt.assert_equal(np.isnan(x), True)
@@ -229,7 +228,7 @@ def test_polimeni_inverse_outside_v1():
 def test_polimeni_plot_mm_ticks():
     fig, ax = plt.subplots()
     Polimeni2006Map().plot(ax=ax)
-    # Limits changed after plotting relabel the new ticks:
+    # Tick labels (mm) follow limits changed after plotting:
     ax.set_xlim(0, 36000)
     ax.set_ylim(-5000, 5000)
     fig.canvas.draw()

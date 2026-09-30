@@ -187,7 +187,7 @@ def osf_is_reachable(test_url="https://osf.io/rduj4", timeout=5.0):
     Parameters
     ----------
     test_url : str, optional
-        An OSF GUID or URL used for the probe (defaults to a tiny file you own).
+        An OSF GUID or URL used for the probe (defaults to a small test file).
     timeout : float, optional
         Request timeout in seconds. Default is 5.0.
 
@@ -262,7 +262,7 @@ def download_from_osf(osf_id_or_url, filename, checksum=None,
     # quick preflight checks (fast + minimal)
     if not has_network():
         raise IOError("No internet connection.")
-    if not osf_is_reachable():  # probes your tiny OSF file
+    if not osf_is_reachable():  # probes a small OSF test file
         raise IOError("OSF downloads appear unavailable right now.")
 
     url = _normalize_osf_download(osf_id_or_url)

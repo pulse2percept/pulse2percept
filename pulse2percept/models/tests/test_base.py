@@ -136,55 +136,51 @@ def test_SpatialModel():
     with pytest.raises(ValueError):
         # stim.time==None but requesting t_percept != None
         model.predict_percept(np.ones(16), t_percept=[0, 1, 2])
-    # An unbuilt model builds itself rather than refusing:
+    # An unbuilt model builds itself:
     fresh = ValidSpatialModel(implant)
     npt.assert_equal(fresh.predict_percept(np.ones(16)) is not None, True)
     npt.assert_equal(fresh.is_built, True)
     with pytest.raises(TypeError):
-        # the implant must be an Implant
+        # The implant must be an Implant:
         ValidSpatialModel(Stimulus(3))
     with pytest.raises(TypeError):
         ValidSpatialModel(None)
     with pytest.raises(TypeError):
-        # ... and it cannot be unbound afterwards either
+        # The implant cannot be unset:
         model.implant = None
 
 
 def test_SpatialModel_predict_percept_time_order():
-    # Before predicting, identical stimulus frames are collapsed with
-    # np.unique, which orders what it returns by stimulus value rather than by
-    # time. The de-duplicated stimulus handed to _predict_spatial must still
-    # run forwards in time, and the frames must be put back where they belong.
+    # Duplicate frames are collapsed with np.unique, which sorts by value. The
+    # stimulus passed to _predict_spatial must still be in time order, and the
+    # frames must be restored to their original positions:
     seen_time = []
 
     class RecordingSpatialModel(ValidSpatialModel):
 
         def _predict_spatial(self, electrode_array, stim):
             seen_time.append(np.asarray(stim.time))
-            # Hand back the first electrode's amplitude at every grid point,
-            # so the caller can tell which frame ended up where:
+            # Return the first electrode's amplitude at every grid point:
             return np.tile(stim.data[0], (self.grid.x.size, 1))
 
     model = RecordingSpatialModel(implant=ArgusI(), step=2).build()
-    # Amplitudes chosen so that sorting the frames by value shuffles them with
-    # respect to time (sorted: 1, 2, 3 -> frames 1, 2, 0):
+    # Sorting by value reorders the frames (sorted: 1, 2, 3 -> frames 1, 2, 0):
     with warnings.catch_warnings():
         # A shuffled time axis makes Stimulus warn:
         warnings.simplefilter('error', UserWarning)
         percept = model.predict_percept({'A1': [3, 1, 2]})
 
-    # The model saw time running forwards:
+    # _predict_spatial received increasing time:
     npt.assert_equal(len(seen_time), 1)
     npt.assert_almost_equal(seen_time[0], [0, 1, 2])
-    # ...and every frame was restored to its original position:
+    # Every frame is back in its original position:
     npt.assert_almost_equal(percept.time, [0, 1, 2])
     for idx, amp in enumerate([3, 1, 2]):
         npt.assert_almost_equal(percept.data[..., idx], amp)
 
 
 def test_SpatialModel_predict_percept_deduplicates_frames():
-    # Repeated frames must be computed once and then handed back to every time
-    # point they belong to.
+    # Repeated frames are computed once and copied to each time point:
     n_calls = []
 
     class CountingSpatialModel(ValidSpatialModel):
@@ -204,8 +200,8 @@ def test_SpatialModel_predict_percept_deduplicates_frames():
 
 
 def test_SpatialModel_predict_percept_keeps_metadata():
-    # `_predict_spatial` only ever sees the de-duplicated copy of the
-    # stimulus, so the caller's metadata has to survive the trip:
+    # The de-duplicated stimulus passed to `_predict_spatial` keeps the user
+    # metadata:
     seen_metadata = []
 
     class RecordingSpatialModel(ValidSpatialModel):
@@ -221,7 +217,7 @@ def test_SpatialModel_predict_percept_keeps_metadata():
     model.predict_percept(source)
     npt.assert_equal(len(seen_metadata), 1)
     npt.assert_equal(seen_metadata[0]['user'], 'mine')
-    # ...also when the caller asks for time points of their own:
+    # Also with explicit `t_percept`:
     seen_metadata.clear()
     model.predict_percept(source, t_percept=[0, 5, 10])
     npt.assert_equal(seen_metadata[0]['user'], 'mine')
@@ -231,10 +227,8 @@ def test_SpatialModel_predict_percept_keeps_metadata():
                                           ('scheduler', 'dask'),
                                           ('xystep', 2)])
 def test_SpatialModel_removed_params(param, value):
-    # `engine` chose the Cython vs pure-Python axon-growth path and
-    # `scheduler` drove the joblib/dask backends, both removed in 0.10.0;
-    # `xystep` was renamed to `step` in 0.10.0 and removed in 0.11.0. All
-    # three are now unknown parameters:
+    # `engine` and `scheduler` were removed in 0.10.0; `xystep` (renamed to
+    # `step` in 0.10.0) was removed in 0.11.0:
     with pytest.raises(AttributeError):
         ValidSpatialModel(ArgusI(), **{param: value})
     with pytest.raises(AttributeError):
@@ -242,7 +236,7 @@ def test_SpatialModel_removed_params(param, value):
 
 
 def test_Model_has_no_parameter_namespace():
-    """Component parameters live on the component, not on the composite"""
+    """Component parameters are set on the component, not on the Model"""
     model = Model(spatial=ValidSpatialModel(ArgusI(), step=1),
                   temporal=ValidTemporalModel())
     # The composite accepts no component parameters:
@@ -314,8 +308,7 @@ def test_SpatialModel_plot():
     model = ValidSpatialModel(ArgusI(), xrange=(-20.5, 20.5),
                               yrange=(-16.1, 16.1))
     model.build()
-    # A fresh axes each time: `plot` autoscales onto the current one, so a
-    # figure left over from another test would widen these limits.
+    # Use new axes, since `plot` autoscales onto existing ones:
     ax = model.plot(use_dva=True, ax=plt.subplots()[1])
     npt.assert_almost_equal(ax.get_xlim(), (-22.55, 22.55))
     ax = model.plot(use_dva=False, ax=plt.subplots()[1])
@@ -334,8 +327,7 @@ class ValidTemporalModel(TemporalModel):
 
 
 def test_Model_units():
-    # A unitful value normalizes wherever a component parameter is reached:
-    # assignment, `set_params`, and `build`.
+    # Units are converted on assignment, `set_params`, and `build`:
     model = Model(temporal=FadingTemporal())
     model.temporal.tau = 0.1 * s
     npt.assert_almost_equal(model.temporal.tau, 100)
@@ -348,7 +340,7 @@ def test_Model_units():
         model.temporal.tau = 5 * uA
     with pytest.raises(DimensionMismatchError):
         Model(temporal=FadingTemporal()).temporal.build(dt=5 * um)
-    # Both halves of a spatial+temporal model normalize independently:
+    # Spatial and temporal components convert units independently:
     model = Model(spatial=ScoreboardSpatial(implant=ArgusII()), temporal=FadingTemporal())
     model.spatial.set_params(rho=0.3 * mm)
     model.temporal.set_params(tau=0.15 * s, dt=0.01 * ms)
@@ -358,16 +350,16 @@ def test_Model_units():
 
 
 def test_SpatialModel_units():
-    # A range can be given as a quantity wrapping a pair...
+    # A range can be a quantity wrapping a pair:
     model = ScoreboardSpatial(implant=ArgusII(), xrange=(-5, 5) * dva, yrange=(-4, 4) * dva,
                               step=1 * dva)
     npt.assert_almost_equal(model.xrange, [-5, 5])
     npt.assert_almost_equal(model.yrange, [-4, 4])
     npt.assert_almost_equal(model.step, 1)
-    # ... or as a pair of quantities, which keeps the tuple it was given:
+    # Or a pair of quantities (stored as a tuple):
     model = ScoreboardSpatial(implant=ArgusII(), xrange=(-5 * dva, 5 * dva))
     npt.assert_equal(model.xrange, (-5, 5))
-    # Either way it grids identically to the bare-number spelling:
+    # Both give the same grid as bare numbers:
     bare = ScoreboardSpatial(implant=ArgusII(), xrange=(-5, 5), yrange=(-5, 5), step=1).build()
     for unitful in (ScoreboardSpatial(implant=ArgusII(), xrange=(-5, 5) * dva,
                                       yrange=(-5, 5) * dva, step=1 * dva),
@@ -377,37 +369,33 @@ def test_SpatialModel_units():
         unitful.build()
         npt.assert_almost_equal(bare.grid.x, unitful.grid.x)
         npt.assert_almost_equal(bare.grid.y, unitful.grid.y)
-    # A range in the wrong dimension is caught elementwise too. A *length* is
-    # the one exception, and means something specific; see
-    # `test_SpatialModel_retinal_range`:
+    # Wrong dimensions raise DimensionMismatchError (lengths are allowed, see
+    # `test_SpatialModel_retinal_range`):
     with pytest.raises(DimensionMismatchError):
         ScoreboardSpatial(implant=ArgusII(), xrange=(-5 * ms, 5 * ms))
     with pytest.raises(DimensionMismatchError):
         ScoreboardSpatial(implant=ArgusII(), xrange=(-5, 5) * uA)
-    # The grid spacing takes dva and nothing else: a grid spaced evenly on the
-    # retina is a different grid, not a different spelling of this one.
+    # `step` must be in dva:
     with pytest.raises(DimensionMismatchError):
         ScoreboardSpatial(implant=ArgusII(), step=100 * um)
 
 
 def test_SpatialModel_retinal_range():
-    """A retinal extent is shorthand for the visual field range it covers"""
+    """A retinal length range is converted to dva through the map"""
     # Curcio1990Map puts 280 um to the degree, so 2.8 mm is 10 dva:
     model = ScoreboardSpatial(implant=ArgusII(), xrange=(-2.8 * mm, 2.8 * mm),
                               yrange=(-1.4 * mm, 1.4 * mm),
                               visual_field_map=Curcio1990Map(), step=1)
     npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
     npt.assert_allclose(model.yrange, (-5, 5), rtol=1e-12)
-    # What is stored is plain dva, not a quantity, and it grids exactly like
-    # the dva spelling does:
+    # Stored as plain dva, giving the same grid as the dva range:
     for value in (model.xrange, model.yrange):
         npt.assert_equal(isinstance(value, Quantity), False)
     bare = ScoreboardSpatial(implant=ArgusII(), xrange=(-10, 10), yrange=(-5, 5),
                              visual_field_map=Curcio1990Map(), step=1).build()
     npt.assert_almost_equal(bare.grid.x, model.build().grid.x)
     npt.assert_almost_equal(bare.grid.y, model.grid.y)
-    # Which map is installed decides the answer, so the user's map has to be
-    # applied first however the parameters were ordered:
+    # The user's map is applied first, regardless of parameter order:
     for order in ({'xrange': (-2.8 * mm, 2.8 * mm),
                    'visual_field_map': Curcio1990Map()},
                   {'visual_field_map': Curcio1990Map(), 'xrange': (-2.8 * mm,
@@ -424,75 +412,67 @@ def test_SpatialModel_retinal_range():
             ScoreboardModel(implant=ArgusII(),
                             step=1).spatial.build(**order).xrange, (-10, 10),
             rtol=1e-12)
-    # A quantity wrapping a pair says the same thing:
+    # Same for a quantity wrapping a pair:
     npt.assert_allclose(
         ScoreboardSpatial(implant=ArgusII(), xrange=(-2.8, 2.8) * mm, visual_field_map=Curcio1990Map(),
                           step=1).xrange, (-10, 10), rtol=1e-12)
-    # The retinal y axis points the other way, so the pair comes back sorted
-    # rather than reversed:
+    # Retinal y is flipped relative to dva, so the pair is returned sorted:
     yrange = ScoreboardSpatial(implant=ArgusII(), yrange=(1.4 * mm, -1.4 * mm),
                                visual_field_map=Curcio1990Map(), step=1).yrange
     npt.assert_allclose(yrange, (-5, 5), rtol=1e-12)
-    # Resolved once, at assignment: a later map does not reinterpret it.
+    # Converted once at assignment; changing the map later has no effect:
     model = ScoreboardSpatial(implant=ArgusII(), xrange=(-2.8 * mm, 2.8 * mm),
                               visual_field_map=Curcio1990Map(), step=1)
     model.visual_field_map = Watson2014Map()
     npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
-    # Direct assignment is sequential, and uses the map in place at the time:
+    # Direct assignment uses the current map:
     model = ScoreboardSpatial(implant=ArgusII(), step=1)
     model.visual_field_map = Curcio1990Map()
     model.xrange = (-2.8 * mm, 2.8 * mm)
     npt.assert_allclose(model.xrange, (-10, 10), rtol=1e-12)
-    # It must be a pair, whatever the units:
+    # Must be a pair:
     with pytest.raises(ValueError):
         ScoreboardSpatial(implant=ArgusII(), xrange=2.8 * mm, visual_field_map=Curcio1990Map())
 
 
 def test_SpatialModel_retinal_range_nonlinear_map():
-    """The motivating case: an axon map model sized in millimeters
+    """An axon map model range in mm, with a nonlinear map
 
-    Every other test here uses ``Curcio1990Map``, where the transform is a
-    single factor and so cannot tell a real conversion apart from a lucky one.
     ``AxonMapModel`` defaults to ``Watson2014Map``, whose inverse is a quartic
-    polynomial in the eccentricity, so this pins the answer to the map rather
-    than to a scale factor. No ``build``: growing axon bundles is expensive
-    and has nothing to do with what the range came out as.
+    polynomial in eccentricity (``Curcio1990Map`` is a single scale factor).
+    No ``build``, since growing axon bundles is slow.
     """
     model = AxonMapModel(implant=ArgusII(), xrange=(-4 * mm, 4 * mm),
                          yrange=(-2 * mm, 2 * mm)).spatial
     npt.assert_equal(isinstance(model.visual_field_map, Watson2014Map), True)
-    # Each range is resolved along its own meridian, which is what makes the
-    # two answers independent of one another:
+    # Each range is converted along its own meridian:
     watson = Watson2014Map()
     npt.assert_allclose(model.xrange,
                         (watson.ret_to_dva(-4000, 0)[0],
                          watson.ret_to_dva(4000, 0)[0]), rtol=1e-12)
-    # The retinal y axis points the other way, so the pair comes back sorted
-    # rather than in the order the eccentricities were given:
+    # Retinal y is flipped relative to dva, so the pair is returned sorted:
     npt.assert_allclose(model.yrange,
                         sorted((watson.ret_to_dva(0, -2000)[1],
                                 watson.ret_to_dva(0, 2000)[1])), rtol=1e-12)
-    # And the map really is consulted: a linear 280 um/dva reading would put
-    # the edge of the x range half a degree away from where Watson does.
+    # A linear 280 um/dva conversion would be off by >0.4 dva:
     npt.assert_equal(abs(model.xrange[1] - 4000 / 280.0) > 0.4, True)
-    # The spatial model alone answers identically, and is what the named model
-    # constructed:
+    # Same result for AxonMapSpatial:
     npt.assert_allclose(AxonMapSpatial(implant=ArgusII(), xrange=(-4 * mm, 4 * mm)).xrange,
                         model.xrange, rtol=1e-12)
 
 
 def test_SpatialModel_retinal_range_needs_a_retinal_map():
-    """Only a retinal map can say what visual field an extent covers"""
-    # A cortical map is not one, whether it was passed explicitly ...
+    """A length range requires a retinal map"""
+    # Explicit cortical map:
     with pytest.raises(DimensionMismatchError) as excinfo:
         ScoreboardSpatial(implant=ArgusII(), xrange=(-2 * mm, 2 * mm), visual_field_map=Polimeni2006Map())
     npt.assert_equal('in dva instead' in str(excinfo.value), True)
-    # ... or is the model's own default, which a cortical model installs only
-    # after its parameters have been applied:
+    # Default cortical map (installed after parameters are applied):
     with pytest.raises(DimensionMismatchError):
         CortexScoreboardSpatial(NeuroPortArray(), yrange=(-2 * mm, 2 * mm))
 
-    # A retinal map without an inverse cannot answer either, and says so:
+    # A retinal map without `ret_to_dva`:
+
     class NoInverse(RetinalMap):
         def dva_to_ret(self, xdva, ydva):
             return 280.0 * xdva, -280.0 * ydva
@@ -529,9 +509,8 @@ def test_TemporalModel():
                    {'A1': [1, 2]}, np.ones((16, 2))]:
         stim = implant.prepare_stim(source)
         percept = model.predict_percept(stim)
-        # By default, percept is output every 20ms. If stimulus is too short,
-        # output at t=[0, 20]. This is mentioned in the docs - for really short
-        # stimuli, users should specify the desired time points manually.
+        # Default output every 20 ms; for short stimuli, output at t=[0, 20]
+        # (users should pass `t_percept` for very short stimuli):
         n_time = 1 if stim.time is None else 2
         npt.assert_equal(percept.shape, (stim.shape[0], 1, n_time))
         npt.assert_almost_equal(percept.data, 0)
@@ -552,7 +531,7 @@ def test_TemporalModel():
     with pytest.raises(ValueError):
         # stim.time==None but requesting t_percept != None
         ValidTemporalModel().predict_percept(Stimulus(3), t_percept=[0, 1, 2])
-    # An unbuilt model builds itself rather than refusing:
+    # An unbuilt model builds itself:
     fresh = ValidTemporalModel()
     npt.assert_equal(
         fresh.predict_percept(Stimulus({'A1': [[1, 1]]}, time=[0, 1]))
@@ -615,42 +594,41 @@ def test_deepcopy_TemporalModel():
                          [(ValidSpatialModel, ArgusI),
                           (ValidTemporalModel, None)])
 def test_n_jobs_aliases_n_threads(cls, ImplantType):
-    # Only the spatial model takes an implant, and it is required there:
+    # Only the spatial model takes an implant (required):
     extra = {} if ImplantType is None else {'implant': ImplantType()}
-    # `n_jobs` and `n_threads` are two names for the OpenMP thread count, and
-    # must never disagree:
+    # `n_jobs` and `n_threads` are aliases for the OpenMP thread count:
     model = cls(**extra)
     npt.assert_equal(model.n_jobs, model.n_threads)
-    # Setting either name moves both, whether in the constructor...
+    # Setting either one sets both, in the constructor:
     model = cls(n_jobs=3, **extra)
     npt.assert_equal(model.n_threads, 3)
     npt.assert_equal(model.n_jobs, 3)
-    # ...or afterwards, by attribute or by set_params:
+    # Or afterwards, by attribute or `set_params`:
     model.n_jobs = 5
     npt.assert_equal(model.n_threads, 5)
     model.n_threads = 7
     npt.assert_equal(model.n_jobs, 7)
     model.set_params(n_jobs=2)
     npt.assert_equal(model.n_threads, 2)
-    # The default must not quietly drop us to a single thread:
+    # Default is all cores:
     npt.assert_equal(cls(**extra).n_threads, multiprocessing.cpu_count())
-    # None and -1 both mean "every core", following scikit-learn:
+    # None and -1 both mean all cores (as in scikit-learn):
     npt.assert_equal(cls(n_jobs=None, **extra).n_threads,
                      multiprocessing.cpu_count())
     npt.assert_equal(cls(n_jobs=-1, **extra).n_threads,
                      multiprocessing.cpu_count())
-    # Nonsense is rejected rather than silently ignored:
+    # Invalid values raise ValueError:
     for bad in (0, -2, 2.5, 'many'):
         with pytest.raises(ValueError):
             cls(n_jobs=bad, **extra)
-    # It is an alias, not a deprecation -- it must not warn:
+    # No DeprecationWarning (it is an alias):
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         cls(n_jobs=4, **extra)
 
 
 def test_Model_n_jobs_aliases_n_threads():
-    # Each component of a composite carries its own thread count:
+    # Each component has its own thread count:
     model = Model(spatial=ValidSpatialModel(ArgusI(), n_jobs=3),
                   temporal=ValidTemporalModel(n_jobs=3))
     npt.assert_equal(model.spatial.n_threads, 3)
@@ -662,7 +640,7 @@ def test_Model_n_jobs_aliases_n_threads():
 
 
 def test_Model():
-    # A component-free Model is meaningless:
+    # A Model requires at least one component:
     with pytest.raises(TypeError):
         Model()
 
@@ -701,14 +679,14 @@ def test_Model():
     npt.assert_equal(model.has_time, True)
     npt.assert_almost_equal(model.spatial.step, 0.25)
     npt.assert_almost_equal(model.temporal.dt, 5e-3)
-    # A name both components declare stays two separate parameters:
+    # A parameter declared by both components is stored separately:
     model.spatial.thresh_percept = 1.234
     npt.assert_almost_equal(model.spatial.thresh_percept, 1.234)
     npt.assert_almost_equal(model.temporal.thresh_percept, 0)
 
 
 class ValidCompositeModel(Model):
-    """A Model subclass that owns an attribute of its own"""
+    """A Model subclass with its own attributes"""
 
     def __init__(self, implant, *, step=0.25):
         super().__init__(spatial=ValidSpatialModel(implant, step=step),
@@ -722,13 +700,13 @@ def test_Model_subclass_constructor_owns_its_attributes():
     npt.assert_equal(model.n_calls, 0)
     npt.assert_equal('n_calls' in model.__dict__, True)
     npt.assert_equal(hasattr(model.spatial, 'n_calls'), False)
-    # Nothing new may be added once the constructor is done:
+    # No new attributes after the constructor:
     with pytest.raises(FreezeError):
         model.n_misses = 0
 
 
 def test_Model_subclass_params_go_to_the_component_model():
-    # Named-model constructor parameters are stored only on the component:
+    # Constructor parameters are stored only on the component:
     model = ValidCompositeModel(ArgusI(), step=2.5)
     npt.assert_almost_equal(model.spatial.step, 2.5)
     npt.assert_equal('step' in model.__dict__, False)
@@ -762,19 +740,19 @@ def test_Model_build():
 
 
 def test_a_new_parameter_value_un_builds_the_model():
-    """Which parameters a build depends on is not enumerated anywhere"""
+    """Changing any parameter value resets `is_built`"""
     model = ValidSpatialModel(ArgusI(), step=1).build()
-    # Assigning the value it already has changes nothing, so the build stands:
+    # Assigning the same value keeps the build:
     model.step = model.step
     model.thresh_percept = 0
     npt.assert_equal(model.is_built, True)
-    # A different value un-builds it, whether or not the grid depends on it:
+    # A different value resets it, whether or not the grid depends on it:
     model.step = 2
     npt.assert_equal(model.is_built, False)
     model.build()
     model.thresh_percept = 0.5
     npt.assert_equal(model.is_built, False)
-    # Attributes that are not parameters are not the build's business:
+    # Non-parameter attributes do not reset the build:
     model.build()
     model.grid = model.grid
     npt.assert_equal(model.is_built, True)
@@ -790,11 +768,9 @@ def test_a_composite_un_builds_the_stage_the_parameter_belongs_to():
 
 
 def test_predict_percept_rebuilds_only_the_stale_stage():
-    """A sweep over one stage's parameter must not rebuild the other
+    """Changing a temporal parameter does not rebuild the spatial model
 
-    The spatial build is the expensive one -- growing an axon map, loading a
-    pickle -- so a loop over a temporal parameter that quietly regrew it would
-    cost far more than the sweep itself.
+    The spatial build (e.g., growing an axon map) is the slow one.
     """
     builds = {'spatial': 0, 'temporal': 0}
 
@@ -819,11 +795,11 @@ def test_predict_percept_rebuilds_only_the_stale_stage():
     model.predict_percept({'A1': np.ones(10)})
     npt.assert_equal(builds, {'spatial': 2, 'temporal': 2})
 
-    # Nothing is stale, so predicting again builds nothing:
+    # Nothing changed, so nothing is rebuilt:
     model.predict_percept({'A1': np.ones(10)})
     npt.assert_equal(builds, {'spatial': 2, 'temporal': 2})
 
-    # `build` stays the way to force a full rebuild:
+    # `build` forces a full rebuild:
     model.build()
     npt.assert_equal(builds, {'spatial': 3, 'temporal': 3})
 
@@ -848,7 +824,7 @@ def test_predict_percept_builds_what_it_needs(make_model):
     (BiphasicAxonMapModel, ArgusII), (CortexScoreboardModel, NeuroPortArray),
     (DynaphosModel, NeuroPortArray)])
 def test_a_standalone_spatial_model_needs_an_implant(ModelClass, ImplantType):
-    """Which device is modeled is not something to fill in later"""
+    """A spatial model requires an implant at construction"""
     with pytest.raises(TypeError):
         ModelClass()
     with pytest.raises(TypeError):
@@ -868,15 +844,14 @@ def test_a_temporal_only_model_takes_no_implant():
 
 
 def test_Model_takes_a_bound_spatial_instance():
-    """`Model` composes spatial components; it does not construct them"""
+    """`Model` takes a spatial model instance, not a class"""
     with pytest.raises(TypeError, match='not the class itself'):
         Model(spatial=ValidSpatialModel, temporal=ValidTemporalModel())
-    # `implant` is constructor context for the spatial model, not something
-    # the composite takes:
+    # `Model` does not accept `implant`:
     with pytest.raises(TypeError):
         Model(spatial=ValidSpatialModel(ArgusI()), implant=ArgusII())
-    # Reading and rebinding delegate to the spatial model, and rebinding
-    # invalidates its build:
+    # `Model.implant` reads and sets the spatial model's implant; setting it
+    # resets the build:
     model = Model(spatial=ValidSpatialModel(ArgusI())).build()
     model.implant = ArgusII()
     npt.assert_equal(isinstance(model.implant, ArgusII), True)
@@ -890,7 +865,7 @@ def test_Model_takes_a_bound_spatial_instance():
 
 
 def test_Model_components_stay_swappable_but_valid():
-    """Replacing a component is allowed; breaking the composite is not"""
+    """Components can be replaced but must stay valid"""
     model = Model(ValidSpatialModel(ArgusI()), ValidTemporalModel())
     # Components may be replaced or removed when another remains:
     model.temporal = FadingTemporal(tau=50)
@@ -908,7 +883,7 @@ def test_Model_components_stay_swappable_but_valid():
 
 
 def test_Model_plots_its_spatial_model():
-    """Plotting a model means plotting where it samples the visual field"""
+    """`Model.plot` plots the spatial model"""
     model = Model(ValidSpatialModel(ArgusI()), ValidTemporalModel())
     _, ax = plt.subplots()
     npt.assert_equal(model.plot(ax=ax) is ax, True)
@@ -943,11 +918,8 @@ def test_Model_predict_percept():
 
 @pytest.mark.parametrize('fps', [29.97, 30, 24])
 def test_Model_predict_percept_frame_clock(fps):
-    # A stimulus that came out of an encoder knows the frame rate of the video
-    # behind it, and that is the rate worth reporting a percept at: one percept
-    # frame per video frame. The pulse train's own time points are far finer
-    # and carry no extra picture, and the hardcoded 20 ms default has nothing
-    # to do with the source.
+    # An encoded stimulus stores the source video frame rate, so the percept
+    # has one frame per video frame (not the 20 ms default):
     implant = ArgusI()
     vid = VideoStimulus(np.random.rand(4, 4, 6), metadata={'fps': fps})
     stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=60).encode(
@@ -956,40 +928,35 @@ def test_Model_predict_percept_frame_clock(fps):
     percept = model.predict_percept(stim)
     npt.assert_equal(percept.data.shape[-1], 6)
     npt.assert_allclose(percept.metadata['source_frame_time'], vid.time)
-    # Evenly spaced, and on the model's dt grid -- 1000/29.97 ms is neither a
-    # whole number of dt nor, if rounded point by point, evenly spaced:
+    # Evenly spaced and on the model's dt grid (1000/29.97 ms is neither a
+    # multiple of dt nor evenly spaced if rounded point by point):
     npt.assert_almost_equal(np.diff(percept.time),
                             np.diff(percept.time)[0])
     ratio = percept.time / model.temporal.dt
     npt.assert_allclose(ratio, np.round(ratio), atol=1e-3)
-    # Close enough to the source's own frame rate to animate at it:
+    # Approximately the source frame interval:
     npt.assert_almost_equal(frame_interval(percept.time), 1000.0 / fps,
                             decimal=1)
-    # The spatial model hands the temporal one a Percept rather than a
-    # Stimulus, so the frame clock has to survive that hop too. This leg needs
-    # real models: `ValidTemporalModel` returns one row per electrode, not one
-    # per grid point, so it cannot consume a spatial percept.
+    # Frame times also pass through the spatial Percept. Requires real models
+    # (`ValidTemporalModel` returns one row per electrode, not per grid point):
     both = Model(spatial=ScoreboardSpatial(implant, xrange=(-2, 2),
                                            yrange=(-2, 2), step=1),
                  temporal=FadingTemporal()).build()
     npt.assert_equal(both.predict_percept(stim).data.shape[-1], 6)
-    # An explicit `t_percept` still wins:
+    # Explicit `t_percept` overrides the frame times:
     npt.assert_equal(
         model.predict_percept(stim, t_percept=[0, 1, 2]).data.shape[-1], 3)
-    # ... and a stimulus that did not come from an encoder keeps the 20 ms
-    # default it always had:
+    # A stimulus not from an encoder uses the 20 ms default:
     plain = Stimulus(np.ones((16, 2)), time=[0, 100])
     npt.assert_almost_equal(model.predict_percept(plain).time,
                             np.arange(0, 101, 20))
 
 
 def test_Model_predict_percept_frame_peak():
-    # Electrical stimulation is pulsatile, so brightness rises and falls within
-    # a video frame. Reporting the single instant a frame happened to end on
-    # says more about where in the pulse cycle that instant fell than about the
-    # frame: at 20 Hz against a 29.97 fps video the period (50 ms) and the
-    # frame (33.37 ms) are incommensurate, so the sampling phase walks through
-    # the cycle and neighbouring frames came out two orders of magnitude apart.
+    # Brightness rises and falls within a video frame. At 20 Hz vs. 29.97 fps
+    # the pulse period (50 ms) and frame (33.37 ms) are incommensurate, so
+    # sampling one instant per frame drifts through the pulse cycle and
+    # neighboring frames can differ by two orders of magnitude:
     implant = ArgusI()
     rng = np.random.default_rng(0)
     vid = VideoStimulus(rng.random((4, 4, 16)), metadata={'fps': 29.97})
@@ -997,26 +964,24 @@ def test_Model_predict_percept_frame_peak():
         vid)
     model = Model(temporal=FadingTemporal(tau=100)).build()
     peak = model.predict_percept(stim)
-    # Same frames, but sampled only at the instant each one ends:
+    # Same frames, sampled at each frame end:
     at_end = model.predict_percept(stim, t_percept=peak.time)
     npt.assert_equal(peak.data.shape, at_end.data.shape)
     npt.assert_almost_equal(peak.time, at_end.time)
 
-    # The default reports the peak each frame reached, so it is never below the
-    # value at the instant the frame ended, and for most frames it is above it:
+    # The default reports each frame's peak, so it is >= the frame-end value
+    # (and > for most frames):
     npt.assert_array_less(at_end.data - 1e-6, peak.data)
     npt.assert_array_less(0.5, np.mean(peak.data > at_end.data + 1e-7))
-    # ... which is what stops the frame-to-frame swing from being an artifact
-    # of the sampling phase rather than a property of the video:
+    # Frame-to-frame variation is smaller with peaks:
     swing = lambda d: d.max() / np.median(d)
     npt.assert_equal(swing(peak.data.max(axis=(0, 1))) <
                      swing(at_end.data.max(axis=(0, 1))), True)
-    # A percept is still one frame per video frame, on an evenly spaced axis:
+    # One frame per video frame, evenly spaced:
     npt.assert_equal(peak.data.shape[-1], 16)
     npt.assert_almost_equal(np.diff(peak.time), np.diff(peak.time)[0])
 
-    # `reduce='last'` asks for the closing instant instead, which is what every
-    # version before 0.10.0 reported:
+    # `reduce='last'` returns the frame-end value:
     last = Model(temporal=FadingTemporal(tau=100, reduce='last')).build()
     npt.assert_array_equal(last.predict_percept(stim).data, at_end.data)
 
@@ -1065,11 +1030,11 @@ def test_Model_deepcopy_memo():
     npt.assert_equal(isinstance(copied, Model), True)
     npt.assert_equal(id(copied) != id(model), True)
 
-    # An object already in the memo is returned as-is, not re-copied:
+    # An object already in the memo is returned as is:
     sentinel = 'already copied'
     npt.assert_equal(model.__deepcopy__({id(model): sentinel}), sentinel)
 
-    # Shared references are copied once, not duplicated:
+    # Shared references are copied once:
     shared = ValidSpatialModel(ArgusI())
     pair = copy.deepcopy({'a': shared, 'b': shared})
     npt.assert_equal(pair['a'] is pair['b'], True)
@@ -1106,15 +1071,14 @@ def test_Model_pprint_params():
 
 
 def test_Model_deepcopy_preserves_submodels_and_params():
-    # A plain Model takes spatial/temporal as constructor arguments and does
-    # not recreate them, so they must survive the copy:
+    # Components are copied:
     model = Model(spatial=ValidSpatialModel(ArgusI()),
                   temporal=ValidTemporalModel())
     copied = copy.deepcopy(model)
     npt.assert_equal(isinstance(copied.spatial, ValidSpatialModel), True)
     npt.assert_equal(isinstance(copied.temporal, ValidTemporalModel), True)
     npt.assert_equal(copied == model, True)
-    # ... as real copies, not as shared references:
+    # As new objects:
     npt.assert_equal(id(copied.spatial) != id(model.spatial), True)
     npt.assert_equal(id(copied.temporal) != id(model.temporal), True)
 
@@ -1130,14 +1094,15 @@ def test_Model_deepcopy_preserves_submodels_and_params():
     copied.spatial.step = 3
     npt.assert_almost_equal(model.spatial.step, 5)
 
-    # The implant is context, and is shared rather than duplicated:
+    # The implant is shared, not copied:
     npt.assert_equal(copied.implant is model.implant, True)
 
     # A built model stays built:
     built = Model(spatial=ValidSpatialModel(ArgusI(), step=5)).build()
     npt.assert_equal(copy.deepcopy(built).is_built, True)
 
-    # A named model copies the same way, components and all:
+    # Same for a named model:
+
     named = ValidCompositeModel(ArgusI(), step=5)
     named.n_calls = 3
     twin = copy.deepcopy(named)
@@ -1182,8 +1147,7 @@ def test_model_electrode_coords_follow_the_stimulus():
     for arr in (x, y, z):
         npt.assert_equal(arr.dtype, np.float32)
         npt.assert_equal(arr.flags['C_CONTIGUOUS'], True)
-    # End to end: a one-electrode stimulus lights up the same place whether it
-    # is the only row or one of several.
+    # Adding zero-amplitude electrodes does not change the percept:
     model.build()
     only = model.predict_percept({'F10': 3})
     among = model.predict_percept({'F10': 3, 'A1': 0, 'C5': 0})
@@ -1191,7 +1155,7 @@ def test_model_electrode_coords_follow_the_stimulus():
 
 
 def test_model_t_percept_units():
-    """`t_percept` is a time, spelled however the caller likes"""
+    """`t_percept` accepts any time unit"""
     implant = ArgusII()
     source = BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)
     spatial = ScoreboardSpatial(implant=implant, xrange=(-2, 2),
@@ -1211,28 +1175,21 @@ def test_model_t_percept_units():
             npt.assert_allclose(unitful.time, [0, 20, 40], rtol=1e-12)
         with pytest.raises(DimensionMismatchError):
             model.predict_percept(stim, t_percept=[0, 20] * uA)
-    # A single unitful time point, not just a list:
+    # A single unitful time point:
     single = spatial.predict_percept(source, t_percept=0.02 * s)
     npt.assert_allclose(single.time, [20], rtol=1e-12)
 
 
 def test_model_requires_a_current_stimulus():
-    """A model reads current, so a picture has to be encoded first
+    """A current-based model requires an encoded (current) stimulus
 
-    Rejecting on *dimension*, not on unit: an amplitude spelled ``0.05 * mA``
-    is already 50 uA by the time a model sees it, because `Stimulus`
-    canonicalizes when it is built. Gray levels are a different quantity
-    altogether, and reading them as microamps is the silent reinterpretation
-    `stimulus_unit` exists to declare away.
+    The check is on dimension, not unit: `Stimulus` converts ``0.05 * mA`` to
+    50 uA on construction, while gray levels are dimensionless.
     """
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
-    # `implant.prepare_stim(img)` is either encoded by the implant or refused
-    # by it (see `Implant.stimulus_unit`), so the model-side guard is
-    # reached through an implant that claims to deliver something else. Both
-    # are needed: the implant one catches the call that was actually wrong,
-    # and this one is what a current-reading model may not be talked out of.
-    # Scale-free models are the exception and are covered separately by
-    # `test_spatial_only_model_reads_dimensionless_drive`.
+    # A normal implant encodes or rejects the image itself, so use one that
+    # declares dimensionless output to reach the model-side check. Scale-free
+    # models: see `test_spatial_only_model_reads_dimensionless_drive`.
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 
@@ -1255,7 +1212,7 @@ def test_model_requires_a_current_stimulus():
     with pytest.raises(DimensionMismatchError):
         temporal.predict_percept(projected)
 
-    # Encoded, it goes through:
+    # An encoded image works:
     encoded = AmplitudeEncoder(ArgusII(raster=None), amp_range=(0, 50)).encode(
         img)
     npt.assert_equal(encoded.unit, uA)
@@ -1267,8 +1224,7 @@ def test_model_requires_a_current_stimulus():
                         temporal=FadingTemporal()).build()):
         npt.assert_equal(model.predict_percept(encoded) is None, False)
 
-    # A current spelled in another unit is converted, not refused. `Stimulus`
-    # has already done the converting, which is the point:
+    # A current in mA is converted by `Stimulus`:
     npt.assert_equal(Stimulus([0.05 * mA]).unit, uA)
     npt.assert_allclose(Stimulus([0.05 * mA]).data, 50, rtol=1e-12)
     electrical = ScoreboardSpatial(implant=ArgusII(), xrange=(-2, 2),
@@ -1300,11 +1256,11 @@ def test_spatial_only_model_reads_dimensionless_drive():
                   AxonMapModel(argus, **grid)):
         percept = model.predict_percept(logo)
         npt.assert_equal(percept.data.max() > 0, True)
-        # Reshaping the picture onto the electrodes by hand is the same thing:
+        # Same as reshaping the image onto the electrodes manually:
         by_hand = model.predict_percept(argus.reshape_stim(logo))
         npt.assert_allclose(percept.data, by_hand.data, rtol=1e-12)
 
-    # A picture is sampled onto the array whatever its resolution:
+    # Images of any resolution are sampled onto the array:
     small = ImageStimulus(np.array([[1., 0.], [0., 1.]]))
     npt.assert_equal(list(small.electrodes), ['A1', 'A2', 'B1', 'B2'])
     npt.assert_allclose(
@@ -1317,10 +1273,10 @@ def test_spatial_only_model_reads_dimensionless_drive():
         ScoreboardSpatial(argus, **grid).predict_percept(logo).data,
         ScoreboardModel(argus, **grid).predict_percept(logo).data, rtol=1e-12)
 
-    # The implant itself still refuses to call gray levels deliverable:
+    # The implant still rejects gray levels:
     with pytest.raises(DimensionMismatchError):
         Orion().prepare_stim(logo)
-    # As does any model whose prediction depends on physical stimulation:
+    # So do models that require physical stimulation:
     with pytest.raises(DimensionMismatchError):
         DynaphosModel(Orion()).predict_percept(logo)
     with pytest.raises(DimensionMismatchError):
@@ -1331,7 +1287,7 @@ def test_spatial_only_model_reads_dimensionless_drive():
 
 
 def test_spatial_only_model_reads_dimensionless_video():
-    """Video drive keeps its frames, and each frame drives its own array"""
+    """Dimensionless video keeps its frames, each driving the array"""
     argus = ArgusII(encoder=None)
     grid = {'xrange': (-5, 5), 'yrange': (-5, 5), 'step': 1}
     # Two frames lighting opposite halves of the field, at 10 fps:
@@ -1349,7 +1305,7 @@ def test_spatial_only_model_reads_dimensionless_video():
     npt.assert_equal(percept.data[..., 1].max() > 0, True)
     npt.assert_equal(len(argus.reshape_stim(video).electrodes),
                      argus.n_electrodes)
-    # Same as driving the electrodes with the reshaped video by hand:
+    # Same as the manually reshaped video:
     npt.assert_allclose(
         percept.data,
         ScoreboardModel(argus, **grid).predict_percept(
@@ -1357,7 +1313,7 @@ def test_spatial_only_model_reads_dimensionless_video():
 
 
 def test_spatial_only_model_prefers_the_encoder():
-    """An encoder, where there is one, still decides what is delivered"""
+    """If the implant has an encoder, the model uses its output"""
     logo = samples.logo_bvl()
     grid = {'xrange': (-5, 5), 'yrange': (-5, 5), 'step': 1}
     encoded = ScoreboardModel(ArgusII(), **grid).predict_percept(logo)
@@ -1366,15 +1322,14 @@ def test_spatial_only_model_prefers_the_encoder():
     npt.assert_equal(encoded.data.max() > 0, True)
     npt.assert_equal(np.allclose(encoded.data, drive.data), False)
 
-    # Electrical safety limits are questions about current, so they do not
-    # apply to relative drive:
+    # Current limits do not apply to relative drive:
     loose = ArgusII(encoder=None)
     loose.safe_mode = True
     loose.max_current = 1
     npt.assert_equal(
         ScoreboardModel(loose, **grid).predict_percept(logo).data.max() > 0,
         True)
-    # but they still apply to what an encoder produces:
+    # But they apply to encoder output:
     strict = ArgusII()
     strict.max_current = 1
     with pytest.raises(ValueError):
@@ -1382,12 +1337,12 @@ def test_spatial_only_model_prefers_the_encoder():
 
 
 class RecordingSpatial(SpatialModel):
-    """A spatial model that reports what crossed the numerical boundary"""
+    """A spatial model that records the values passed to its kernel"""
     stimulus_unit = uA
     space_unit = um
 
     def get_default_params(self):
-        # `SpatialModel` is anatomy-neutral and supplies no map of its own:
+        # `SpatialModel` has no default map:
         return {**super().get_default_params(), 'seen': None,
                 'visual_field_map': Curcio1990Map()}
 
@@ -1400,22 +1355,19 @@ class RecordingSpatial(SpatialModel):
 
 
 class MilliSpatial(RecordingSpatial):
-    """The same model, declaring milli-units instead"""
+    """RecordingSpatial in mA, mm, and s"""
     stimulus_unit = mA
     space_unit = mm
     time_unit = s
 
 
 def test_model_units_are_a_numerical_contract():
-    """Declaring a unit has to deliver numbers in it, not just document one
+    """A model receives values in its declared units
 
-    Every model p2p ships works in uA/um/ms and every conversion below is the
-    identity for them, which is the point: the helpers are the boundary, so a
-    model that declares something else gets something else instead of
-    silently receiving microamps and being off by a thousand.
+    All shipped models use uA/um/ms (identity conversion). A model declaring
+    other units receives converted values.
     """
-    # A ramp, so that a time point picked out of it has an exact expected
-    # value and neighbouring columns never coincide:
+    # A ramp gives every time point a distinct, exact value:
     ramp = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
                     electrodes=['A1'], time=np.arange(10, dtype=float))
     implant = ArgusII()
@@ -1439,30 +1391,27 @@ def test_model_units_are_a_numerical_contract():
     # Time: ms in, s out
     npt.assert_allclose(m['time'], a['time'] / 1000, rtol=1e-12)
     npt.assert_allclose(a['time'], ramp.time, rtol=0, atol=0)
-    # ... and the canonical model really is the zero-conversion path:
+    # No conversion for uA/um/ms:
     npt.assert_allclose(a['amp'], ramp.data, rtol=0, atol=0)
 
-    # `t_percept` is read in the model's own unit, and converted back to the
-    # stimulus' unit to index it, so 0.005 s and 5 ms pick the same sample:
+    # `t_percept` is in the model's unit, so 0.005 s and 5 ms select the same
+    # sample:
     milli.predict_percept(ramp, t_percept=[0.0, 0.005])
     canonical.predict_percept(ramp, t_percept=[0.0, 5.0])
-    # rtol at float32 precision: `Stimulus.data` is float32, so 0.005 mA is
-    # only good to about seven digits however exact the conversion was.
+    # rtol=1e-6 because `Stimulus.data` is float32:
     npt.assert_allclose(canonical.seen['amp'], [[0, 5]], rtol=1e-6)
     npt.assert_allclose(milli.seen['amp'], [[0, 0.005]], rtol=1e-6)
-    # The percept is labelled in the model's unit, not in milliseconds:
+    # Percept time is in the model's unit:
     npt.assert_allclose(
         milli.predict_percept(ramp, t_percept=[0.0, 0.005]).time,
         [0.0, 0.005], rtol=1e-12)
-    # A quantity is normalized into that unit too:
+    # Quantities are converted to that unit:
     npt.assert_allclose(
         milli.predict_percept(ramp, t_percept=[0 * ms, 5 * ms]).time,
         [0.0, 0.005], rtol=1e-12)
 
-    # The dimension guard reads the declared unit: mA and uA are the same
-    # dimension, so an ordinary stimulus is fine and a picture is not. An
-    # implant with an encoder never carries one, so this needs an implant that
-    # claims to deliver gray levels:
+    # The dimension check uses the declared unit (mA is still a current), so
+    # an image is rejected. Requires an implant that outputs gray levels:
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 
@@ -1474,16 +1423,12 @@ def test_model_units_are_a_numerical_contract():
 
 
 class SecondSpatial(RecordingSpatial):
-    """A spatial model that labels its percept in seconds"""
+    """RecordingSpatial with percept time in seconds"""
     time_unit = s
 
 
 class MilliTemporal(TemporalModel):
-    """A temporal model that reports what crossed the numerical boundary
-
-    Milliseconds, which is the default and what every model p2p ships uses.
-    Named for what it is so that the pairing with ``SecondSpatial`` reads.
-    """
+    """A temporal model (in ms) that records the values passed to its kernel"""
     time_unit = ms
 
     def get_default_params(self):
@@ -1497,13 +1442,7 @@ class MilliTemporal(TemporalModel):
 
 
 def test_percept_time_crosses_model_boundary():
-    """A percept's time axis carries the unit it was written in
-
-    Before this, a percept's time was bare numbers whose meaning was implied
-    by whichever model happened to produce them -- so a spatial model counting
-    in seconds handed a temporal model counting in milliseconds a time axis a
-    thousand times too long, and neither of them could tell.
-    """
+    """Percept time is converted between models with different time units"""
     ramp = Stimulus(np.arange(21, dtype=float).reshape((1, -1)),
                     electrodes=['A1'], time=np.arange(21, dtype=float))
     spatial = SecondSpatial(implant=ArgusII(), xrange=(-2, 2), yrange=(-2, 2),
@@ -1512,41 +1451,37 @@ def test_percept_time_crosses_model_boundary():
     npt.assert_equal(spatial.time_unit, s)
     npt.assert_equal(temporal.time_unit, ms)
 
-    # The spatial model labels its percept in its own unit, and `t_percept`
-    # was read in that unit too:
+    # The spatial percept and `t_percept` are in the spatial model's unit (s):
     percept = spatial.predict_percept(ramp, t_percept=[0, .005, .010])
     npt.assert_equal(percept.time_unit, s)
     npt.assert_allclose(percept.time, [0, .005, .010], rtol=1e-12)
     npt.assert_allclose(percept.times(ms), [0, 5, 10], rtol=1e-12)
-    # `times()` with no unit is the stored array itself, unconverted:
+    # `times()` without a unit returns the stored array:
     npt.assert_allclose(percept.times(), percept.time, rtol=0, atol=0)
     npt.assert_equal(percept.time_quantity.unit, s)
     npt.assert_allclose(percept.time_quantity.to_value(ms), [0, 5, 10],
                         rtol=1e-12)
 
-    # ... and the temporal model reads that percept in *its* unit. This is the
-    # crossing: the kernel sees milliseconds, not the seconds it was labelled
-    # with.
+    # The temporal model receives the time in its unit (ms):
     temporal.predict_percept(percept, t_percept=[0, 5, 10])
     npt.assert_allclose(temporal.seen['time'], [0, 5, 10], rtol=1e-12)
-    # Brightness has no unit and is handed over exactly as it stands:
+    # Brightness values are passed unchanged:
     npt.assert_allclose(temporal.seen['values'], percept.data, rtol=0, atol=0)
 
-    # The same crossing through a composite, which is where it really happens:
+    # Same through a composite model:
     model = Model(spatial=SecondSpatial(ArgusII(), xrange=(-2, 2),
                                         yrange=(-2, 2), step=1),
                   temporal=MilliTemporal()).build()
-    # A composite reports the unit of the stage that reads `t_percept` and
-    # writes the percept, which is the temporal model:
+    # A composite reports the temporal model's time unit:
     npt.assert_equal(model.time_unit, ms)
     npt.assert_equal(model.spatial.time_unit, s)
     out = model.predict_percept(ramp, t_percept=[0, 5, 10])
     npt.assert_equal(out.time_unit, ms)
     npt.assert_allclose(out.time, [0, 5, 10], rtol=1e-12)
-    # The spatial model ran at every stimulus time point, in seconds, and the
-    # temporal model got those same instants back in milliseconds:
+    # The spatial model ran at every stimulus time point (in s); the temporal
+    # model received them in ms:
     npt.assert_allclose(model.temporal.seen['time'], ramp.time, rtol=1e-12)
-    # Spelling `t_percept` unitfully changes nothing:
+    # Unitful `t_percept` gives the same result:
     npt.assert_allclose(
         model.predict_percept(ramp, t_percept=[0 * ms, 5 * ms,
                                                10 * ms]).time,
@@ -1558,8 +1493,8 @@ def test_percept_time_crosses_model_boundary():
 
 
 def test_Model_units_follow_their_component():
-    """A composite's declared units are the ones its numbers are really in"""
-    # One component: its own.
+    """A composite's units come from its components"""
+    # One component: its units.
     space_only = Model(spatial=MilliSpatial(ArgusII()))
     npt.assert_equal(space_only.stimulus_unit, mA)
     npt.assert_equal(space_only.space_unit, mm)
@@ -1567,9 +1502,8 @@ def test_Model_units_follow_their_component():
     time_only = Model(temporal=MilliTemporal())
     npt.assert_equal(time_only.stimulus_unit, uA)
     npt.assert_equal(time_only.time_unit, ms)
-    # Both, disagreeing: the stimulus goes into the spatial model and the
-    # percept comes out of the temporal one, so they are read off different
-    # components rather than merged into the dict `__getattr__` would return.
+    # Both: stimulus/space units from the spatial model, time unit from the
+    # temporal model:
     both = Model(spatial=MilliSpatial(ArgusII()), temporal=MilliTemporal())
     npt.assert_equal(both.stimulus_unit, mA)
     npt.assert_equal(both.space_unit, mm)
@@ -1577,14 +1511,11 @@ def test_Model_units_follow_their_component():
 
 
 def test_TemporalModel_default_frame_rate_is_50Hz():
-    """The fallback output rate is a rate, not the number 20
+    """Default output rate is 50 Hz (20 ms) in any time unit
 
-    With no `t_percept` and no encoder frame clock to follow, a temporal model
-    reports at 50 Hz. That is 20 ms, which used to be written down as the
-    number 20 -- one frame every 20 *seconds* for a model counting in seconds.
+    Applies when there is no `t_percept` and no encoder frame times.
     """
-    # Cathodic, so that the stub kernel's all-zero output is not mistaken for
-    # a polarity problem and warned about:
+    # Cathodic, to avoid the polarity warning for the stub's all-zero output:
     stim = Stimulus(-np.ones((1, 3)), electrodes=['A1'], time=[0, 50, 100])
     milli = MilliTemporal().build()
     npt.assert_allclose(milli.predict_percept(stim).time,
@@ -1594,55 +1525,45 @@ def test_TemporalModel_default_frame_rate_is_50Hz():
         time_unit = s
 
         def get_default_params(self):
-            # dt in seconds too, so that `t_percept` still lands on its grid:
+            # dt in seconds, so output times stay on the dt grid:
             return {**super().get_default_params(), 'dt': 5e-6}
 
     second = SecondTemporal().build()
     percept = second.predict_percept(stim)
     npt.assert_equal(percept.time_unit, s)
     npt.assert_allclose(percept.time, [0, .02, .04, .06, .08, .10], rtol=1e-9)
-    # Same instants, same number of frames -- the rate is the same physical
-    # rate however the model counts:
+    # Same physical times:
     npt.assert_allclose(percept.times(ms), milli.predict_percept(stim).time,
                         rtol=1e-9)
 
-    # The clock also stops at the stimulus rather than past it. `arange`'s
-    # half-open end used to be nudged by the literal 1 -- a whole millisecond,
-    # enough to add a frame after the stimulus was over:
+    # Output times end at or before the end of the stimulus:
     ragged = Stimulus(-np.ones((1, 3)), electrodes=['A1'],
                       time=[0, 60, 119.5])
     late = milli.predict_percept(ragged)
     npt.assert_allclose(late.time, [0, 20, 40, 60, 80, 100], rtol=1e-12)
     npt.assert_equal(late.time[-1] <= ragged.time[-1], True)
 
-    # The one exception, and it is deliberate: a stimulus shorter than a
-    # single frame still gets one, so its time point does fall after the end
-    # of the stimulus. Reporting a 10 ms pulse only at t=0 would describe it
-    # before it had had any effect, and brightness outlives the stimulus that
-    # caused it -- so the frame containing it is what is worth reporting.
+    # Exception: a stimulus shorter than one frame still gets one frame after
+    # t=0 (at t=0 the stimulus has had no effect yet):
     for dur in (5, 10, 20):
         brief = Stimulus(-np.ones((1, 3)), electrodes=['A1'],
                          time=[0, dur / 2, dur])
         percept = FadingTemporal().build().predict_percept(brief)
         npt.assert_allclose(percept.time, [0, 20], rtol=1e-12)
-        # ... and the extra frame is not an empty one:
+        # The extra frame is not empty:
         npt.assert_equal(percept.data.ravel()[-1] > 0.1, True)
-    # The floor is one *frame*, not one unit of anything, so it means the same
-    # thing to a model counting in seconds:
+    # The minimum is one frame (20 ms), also for a model in seconds:
     brief = Stimulus(-np.ones((1, 3)), electrodes=['A1'], time=[0, 5, 10])
     npt.assert_allclose(SecondTemporal().build().predict_percept(brief).time,
                         [0, 0.02], rtol=1e-9)
 
 
 def test_spatial_model_reads_modulation_not_pulses(camera_video):
-    """Spatial models see modulation frames; temporal models see pulses.
+    """Spatial models use modulation frames; temporal models use pulses
 
-    A pulse train says *when* current flows and a raster says which electrodes
-    may flow together. Both are facts about time, and a model with no temporal
-    component has no way to express either: handed the delivered train, it
-    reports the stimulus one instant at a time, so an encoded image comes back
-    as a sequence of raster slots rather than as the image. Argus II rasters
-    six groups by default, which is exactly the case that showed it.
+    Pulse timing and raster order are temporal. Given the delivered train, a
+    spatial-only model would return one raster slot per time point instead of
+    the image (Argus II uses six raster groups by default).
     """
     logo = samples.logo_bvl()
     implant = ArgusII()
@@ -1650,41 +1571,36 @@ def test_spatial_model_reads_modulation_not_pulses(camera_video):
     spatial = ScoreboardSpatial(implant=implant, xrange=(-12, 12),
                                 yrange=(-8, 8), step=1).build()
 
-    # One frame in, one frame out -- not one per pulse edge:
+    # One frame in, one frame out (not one per pulse edge):
     percept = spatial.predict_percept(logo)
     npt.assert_equal(delivered.time.size > 50, True)
     npt.assert_equal(percept.data.shape[-1], 1)
-    # ... and every electrode the image lights is lit in it, rather than the
-    # one raster group that happened to be firing at the sampled instant:
+    # All electrodes driven by the image are lit, not just one raster group:
     lit = delivered._spatial_view().data.ravel() > 0
     npt.assert_equal(lit.sum() > 10, True)
     groups = implant.raster.groups(implant.electrode_names)
-    # No instant of the delivered train ever holds more than one group, so
-    # anything above one is more than a raster slot's worth of picture:
+    # The delivered train has at most one group on at any time:
     npt.assert_equal(len(np.unique(groups[lit])) > 1, True)
     for column in delivered.data.T:
         npt.assert_equal(np.unique(groups[column != 0]).size <= 1, True)
-    # Which is what the percept says too: it is the same picture the
-    # modulation asked for, run through the model.
+    # The percept equals the model applied to the modulation frame:
     bare = ScoreboardSpatial(implant=ArgusII(encoder=None), xrange=(-12, 12),
                              yrange=(-8, 8), step=1).build()
     direct = bare.predict_percept(delivered._spatial_view())
     npt.assert_almost_equal(percept.data, direct.data)
 
-    # A video reports one percept frame per *video* frame:
+    # One percept frame per video frame:
     with pytest.warns(UserWarning, match='deliver no pulse'):
         n_frames = spatial.predict_percept(camera_video).data.shape[-1]
     npt.assert_equal(n_frames, camera_video.vid_shape[-1])
 
-    # A model with a temporal component is the opposite case: the pulses are
-    # what it integrates, so it has to see them, and the spatial stage it is
-    # built on must not quietly swap them out.
+    # With a temporal component, the spatial stage receives the pulses:
     seen = []
 
     class Recording(ScoreboardSpatial):
         def _predict_spatial(self, electrode_array, stim):
-            # A pulse train has cathodic phases in it; modulation amplitudes
-            # are never negative. So the sign says which one arrived:
+            # Pulse trains have negative (cathodic) phases; modulation
+            # amplitudes are never negative:
             seen.append(float(stim.data.min()))
             return super()._predict_spatial(electrode_array, stim)
 
@@ -1693,16 +1609,15 @@ def test_spatial_model_reads_modulation_not_pulses(camera_video):
                  temporal=FadingTemporal(tau=100)).build()
     both.predict_percept(logo)
     npt.assert_array_less(seen[-1], 0)
-    # ... and the caller's own picture is untouched by that:
+    # The prepared stimulus is unchanged:
     npt.assert_equal(implant.prepare_stim(logo)._has_spatial_view, True)
-    # Spatial-only, the same model class reads the modulation instead:
+    # Spatial-only, the same class receives the modulation frames:
     seen.clear()
     Recording(implant=implant, xrange=(-12, 12), yrange=(-8, 8),
               step=1).build().predict_percept(logo)
     npt.assert_array_less(-1e-12, seen[-1])
 
-    # Nothing changes for a stimulus that was presented as current: there is
-    # no modulation behind it, so there is nothing to prefer.
+    # A current stimulus (no modulation frames) is used as is:
     plain = implant.prepare_stim(
         {'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)})
     npt.assert_equal(plain._has_spatial_view, False)
@@ -1711,17 +1626,18 @@ def test_spatial_model_reads_modulation_not_pulses(camera_video):
 
 
 def _blend_grid(step=0.5, extent=6):
-    """A plain dva grid to hand `_blend_meridian`"""
+    """Return a dva grid for `_blend_meridian`"""
+
     grid = Grid2D((-extent, extent), (-extent, extent), step=step)
     grid.build(Curcio1990Map())
     return grid
 
 
 def _step_across(grid, meridian, n_time=1):
-    """A response that jumps from 0 to 1 across one meridian
+    """Return a response that steps from 0 to 1 across one meridian
 
-    Shaped the way `_predict_spatial` returns it: space x time, with the
-    spatial axes flattened in the grid's own C order.
+    Shape (space, time), as returned by `_predict_spatial`, with space
+    flattened in the grid's C order.
     """
     coord = grid.x if meridian == 'vertical' else grid.y
     resp = np.where(coord > 0, 1.0, 0.0).astype(np.float32)
@@ -1729,12 +1645,12 @@ def _step_across(grid, meridian, n_time=1):
 
 
 def _as_grid(resp, grid):
-    """Undo the flattening, for reading rows and columns back out"""
+    """Reshape a flattened response back onto the grid"""
     return resp.reshape(grid.x.shape + (-1,))
 
 
 def _normal_profile(resp, grid, meridian):
-    """The response normal to the meridian, sorted by distance"""
+    """Return the response normal to the meridian, sorted by distance"""
     out = _as_grid(resp, grid)
     if meridian == 'vertical':
         coord, profile = grid.x[0, :], out[out.shape[0] // 2, :, 0]
@@ -1756,7 +1672,7 @@ def test_blend_meridian_off(meridian, width):
 
 @pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
 def test_blend_meridian_smooths_the_seam(meridian):
-    # A hard step across the meridian is what the blend exists to soften.
+    # A hard step across the meridian is smoothed:
     grid = _blend_grid()
     resp = _step_across(grid, meridian)
     blended = _blend_meridian(resp, grid, meridian, 1.0)
@@ -1767,17 +1683,17 @@ def test_blend_meridian_smooths_the_seam(meridian):
     _, profile = _normal_profile(blended, grid, meridian)
     npt.assert_almost_equal(np.abs(np.diff(was)).max(), 1.0)
     npt.assert_array_less(np.abs(np.diff(profile)).max(), 0.5)
-    # Still monotonic, so the seam was smoothed rather than rippled over:
+    # Still monotonic (no ringing):
     npt.assert_array_less(-1e-6, np.diff(profile))
-    # And the two ends are untouched, so nothing was globally blurred:
+    # The ends are unchanged (no global blur):
     npt.assert_allclose(profile[0], was[0], atol=1e-6)
     npt.assert_allclose(profile[-1], was[-1], atol=1e-6)
 
 
 @pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
 def test_blend_meridian_leaves_the_far_field_alone(meridian):
-    # The weight is a Gaussian centered on the meridian, so several widths
-    # away the response has to come back as it went in.
+    # The weight is a Gaussian centered on the meridian, so the response is
+    # unchanged beyond 5 widths:
     grid = _blend_grid()
     rng = np.random.default_rng(42)
     resp = rng.random((grid.x.size, 3)).astype(np.float32)
@@ -1787,27 +1703,26 @@ def test_blend_meridian_leaves_the_far_field_alone(meridian):
     far = np.abs(dist).ravel() > 5 * width
     npt.assert_equal(np.any(far), True)
     npt.assert_allclose(blended[far], resp[far], atol=1e-6)
-    # ...while the seam itself did move:
+    # Near the meridian it changes:
     near = np.abs(dist).ravel() < width
     npt.assert_array_less(1e-3, np.abs(blended[near] - resp[near]).max())
 
 
 def test_blend_meridian_is_one_dimensional():
-    # The blur runs normal to the meridian and nowhere else, so a step that
-    # runs the *other* way is invisible to it.
+    # Blending is only normal to the meridian:
     grid = _blend_grid()
-    # A vertical blend smooths along x, so a step across y survives it:
+    # A vertical blend smooths along x, so a step across y is unchanged:
     across_y = _step_across(grid, 'horizontal')
     npt.assert_array_equal(_blend_meridian(across_y, grid, 'vertical', 1.0),
                            across_y)
-    # ...and a horizontal blend smooths along y, so a step across x survives:
+    # A horizontal blend smooths along y, so a step across x is unchanged:
     across_x = _step_across(grid, 'vertical')
     npt.assert_array_equal(_blend_meridian(across_x, grid, 'horizontal', 1.0),
                            across_x)
 
 
 def test_blend_meridian_time_points_are_independent():
-    # Each frame is blended on its own; nothing leaks along the time axis.
+    # Each frame is blended independently:
     grid = _blend_grid()
     rng = np.random.default_rng(0)
     frames = [rng.random((grid.x.size, 1)).astype(np.float32)
@@ -1816,7 +1731,7 @@ def test_blend_meridian_time_points_are_independent():
     for t, frame in enumerate(frames):
         alone = _blend_meridian(frame, grid, 'vertical', 0.8)
         npt.assert_allclose(together[:, [t]], alone, atol=1e-6)
-    # A frame of zeros stays zero even sitting between bright ones:
+    # An all-zero frame stays zero:
     frames[2][:] = 0
     mixed = _blend_meridian(np.hstack(frames), grid, 'vertical', 0.8)
     npt.assert_array_equal(mixed[:, 2], 0)
@@ -1828,15 +1743,13 @@ def test_blend_meridian_is_a_distance_not_a_pixel_count():
     profiles = {}
     for step in (0.5, 0.25, 0.125):
         grid = _blend_grid(step=step)
-        # A step edge that sits at x=0 on every grid, rather than half a
-        # sample to one side of it: otherwise the three inputs differ before
-        # any blending happens and the comparison measures that instead.
+        # Step edge exactly at x=0 on every grid, so the inputs match:
+
         resp = (0.5 * (np.sign(grid.x) + 1)).astype(np.float32).reshape(-1, 1)
         blended = _blend_meridian(resp, grid, 'vertical', 1.0)
         coord, profile = _normal_profile(blended, grid, 'vertical')
         profiles[step] = np.interp(at, coord, profile)
-    # The coarsest grid samples the Gaussian with only two points per width,
-    # so it is allowed a little more slack than the two finer ones:
+    # The coarsest grid has only two samples per width, so looser tolerance:
     npt.assert_allclose(profiles[0.5], profiles[0.25], atol=0.02)
     npt.assert_allclose(profiles[0.25], profiles[0.125], atol=0.005)
 
@@ -1853,8 +1766,7 @@ def test_blend_meridian_needs_both_sides(meridian, half):
     rng = np.random.default_rng(7)
     resp = rng.random((grid.x.size, 2)).astype(np.float32)
     npt.assert_equal(_blend_meridian(resp, grid, meridian, 1.0) is resp, True)
-    # The same response on a grid that does straddle the meridian is blended,
-    # so it is the one-sidedness doing this and not the width or the data:
+    # A grid that straddles the meridian is blended:
     both = _blend_grid(step=0.5)
     resp = rng.random((both.x.size, 2)).astype(np.float32)
     npt.assert_equal(_blend_meridian(resp, both, meridian, 1.0) is resp, False)
@@ -1866,8 +1778,7 @@ def test_blend_meridian_keeps_precision():
         resp = _step_across(grid, 'vertical').astype(dtype)
         blended = _blend_meridian(resp, grid, 'vertical', 1.0)
         npt.assert_equal(blended.dtype, np.dtype(dtype))
-    # Blending float32 and then widening agrees with blending in float64, so
-    # the narrower working precision costs nothing that float32 could hold:
+    # float32 blending agrees with float64 to float32 precision:
     resp = _step_across(grid, 'vertical')
     npt.assert_allclose(
         _blend_meridian(resp, grid, 'vertical', 1.0).astype(np.float64),
@@ -1882,8 +1793,7 @@ def test_blend_meridian_bad_input():
         _blend_meridian(resp, grid, 'diagonal', 1.0)
     with pytest.raises(ValueError):
         _blend_meridian(resp, grid, 'vertical', -1.0)
-    # A grid with a single sample normal to the meridian has nothing to blur
-    # along, and says so by doing nothing:
+    # A grid with one sample normal to the meridian is returned unchanged:
     flat = Grid2D((0, 0), (-3, 3), step=0.5)
     flat.build(Curcio1990Map())
     thin = np.ones((flat.x.size, 1), dtype=np.float32)
@@ -1892,8 +1802,8 @@ def test_blend_meridian_bad_input():
 
 
 def test_postprocess_spatial_hook():
-    # The hook is a no-op by default, and a model that overrides it sees the
-    # finished response, at every requested time point.
+    # The hook is a no-op by default; an override receives the full response
+    # at every time point:
     plain = ScoreboardSpatial(implant=ArgusII(), xrange=(-2, 2), yrange=(-2, 2), step=1).build()
     resp = np.arange(12, dtype=np.float32).reshape(4, 3)
     npt.assert_equal(plain._postprocess_spatial(resp) is resp, True)
@@ -1916,10 +1826,8 @@ def test_postprocess_spatial_hook():
 
 
 def test_models_accept_read_only_stimulus_data():
-    # Every Cython kernel receives `Stimulus.data` as it is stored, and a
-    # stimulus stores it read-only. A memoryview that is not declared `const`
-    # rejects such an array outright ("buffer source array is read-only"),
-    # which is a failure no numerical test would catch on its own.
+    # `Stimulus.data` is read-only, so Cython memoryviews must be `const`
+    # (otherwise: "buffer source array is read-only"):
     from pulse2percept.models.retina import (Nanduri2012Spatial,
                                              Nanduri2012Temporal)
     implant = ArgusII()
@@ -1932,7 +1840,7 @@ def test_models_accept_read_only_stimulus_data():
     npt.assert_equal(np.all(np.isfinite(resp.data)), True)
     temporal = Nanduri2012Temporal().build()
     npt.assert_equal(temporal.predict_percept(stim) is not None, True)
-    # And the same for the axon map / scoreboard kernels:
+    # Same for the axon map and scoreboard kernels:
     for cls in (ScoreboardSpatial, AxonMapSpatial):
         model = cls(implant=implant, xrange=(-1, 1), yrange=(-1, 1),
                     step=1).build()
@@ -1942,11 +1850,7 @@ def test_models_accept_read_only_stimulus_data():
 
 @contextmanager
 def _no_schedule_expansion():
-    """Make expanding an encoder schedule into a waveform an error
-
-    The only way to state "this path never needs the pulses" as a test: if
-    anything reaches for them, it fails loudly.
-    """
+    """Make rendering an encoder schedule raise AssertionError"""
     from pulse2percept.stimuli.encoders import _EncodedStimulus
     original = _EncodedStimulus._render
 
@@ -1961,8 +1865,8 @@ def _no_schedule_expansion():
 
 @pytest.mark.parametrize('source', ['image', 'video'])
 def test_spatial_model_predicts_without_expanding_the_schedule(source):
-    # A spatial model reads one amplitude per electrode per frame. Nothing
-    # about that needs the pulse train the schedule would expand into.
+    # A spatial model uses one amplitude per electrode per frame, so the pulse
+    # train is never rendered:
     implant = ArgusII()
     spatial = ScoreboardSpatial(implant=implant, xrange=(-12, 12),
                                 yrange=(-8, 8), step=1).build()
@@ -1979,17 +1883,16 @@ def test_spatial_model_predicts_without_expanding_the_schedule(source):
 
 
 def test_combined_model_still_integrates_the_delivered_pulses():
-    # The opposite case: a temporal stage integrates pulses, so the spatial
-    # stage under it has to be handed them. That reading is unchanged, and the
-    # implant it was asked of keeps its own schedule.
+    # With a temporal stage, the spatial stage receives the pulses, and the
+    # prepared stimulus keeps its schedule:
     implant = ArgusII()
     delivered = implant.prepare_stim(samples.logo_bvl())
     seen = []
 
     class Recording(ScoreboardSpatial):
         def _predict_spatial(self, electrode_array, stim):
-            # A pulse train has cathodic phases in it; modulation amplitudes
-            # never do. The sign says which one arrived:
+            # Pulse trains have negative (cathodic) phases; modulation
+            # amplitudes are never negative:
             seen.append(float(stim.data.min()))
             return super()._predict_spatial(electrode_array, stim)
 
@@ -1998,8 +1901,7 @@ def test_combined_model_still_integrates_the_delivered_pulses():
                  temporal=FadingTemporal(tau=100)).build()
     both.predict_percept(samples.logo_bvl())
     npt.assert_array_less(seen[-1], 0)
-    # Stripping the modulation view happens on a stand-in, so the prepared
-    # stimulus the caller holds keeps its schedule:
+    # The user's prepared stimulus keeps its schedule:
     npt.assert_equal(delivered._has_spatial_view, True)
 
 
@@ -2016,12 +1918,12 @@ def test_deactivating_an_encoded_electrode_keeps_the_schedule():
     keep = [i for i, e in enumerate(before.electrodes)
             if str(e) not in ('A1', 'B2')]
     npt.assert_array_equal(after.data, before.data[keep])
-    # The waveform is still there to be had, and matches too:
+    # The waveform has the remaining electrodes:
     npt.assert_equal(stim.data.shape[0], 58)
 
 
 def test_SpatialModel_visual_field_map_is_the_canonical_name():
-    """The map is reached as `visual_field_map`; `vfmap` is gone"""
+    """The map is `visual_field_map`; `vfmap` was removed"""
     spatial = ScoreboardSpatial(ArgusII(), visual_field_map=Curcio1990Map())
     npt.assert_equal(isinstance(spatial.visual_field_map, Curcio1990Map), True)
     npt.assert_equal(hasattr(spatial, 'vfmap'), False)
@@ -2031,24 +1933,23 @@ def test_SpatialModel_visual_field_map_is_the_canonical_name():
 
 
 def _implant_at(coords, cls=Implant):
-    """A disk-electrode implant at the given tissue coordinates (um)"""
+    """Return a disk-electrode implant at the given tissue coordinates (um)"""
     return cls(ElectrodeArray(
         {f'A{i}': DiskElectrode(x, y, 0, 100)
          for i, (x, y) in enumerate(coords)}))
 
 
 def _latents(n, seed):
-    """The standard normals a model seeded with `seed` draws for n electrodes"""
+    """Return the standard normals drawn for n electrodes with `seed`"""
     np.random.seed(seed)
     return np.random.normal(size=(n, 2))
 
 
 def _scoreboard_at(coords, location_noise=None, seed=0, step=0.1,
                    visual_field_map=None):
-    """A scoreboard on electrodes at the given retinal coordinates (um)
+    """Return a scoreboard on electrodes at the given retinal coordinates (um)
 
-    Seeded before construction, since the subject's offsets are drawn when the
-    model is built.
+    Seeded before construction, since offsets are drawn at build time.
     """
     np.random.seed(seed)
     model = ScoreboardSpatial(
@@ -2060,12 +1961,12 @@ def _scoreboard_at(coords, location_noise=None, seed=0, step=0.1,
 
 
 def _one_electrode_model(location_noise=None, seed=0):
-    """A scoreboard on a single electrode 2 deg into the temporal retina"""
+    """Return a scoreboard on one electrode 2 deg into the temporal retina"""
     return _scoreboard_at([(560, 0)], location_noise=location_noise, seed=seed)
 
 
 def _blob_moments(percept, grid):
-    """Brightness-weighted centroid (dva) and 2x2 covariance of one frame"""
+    """Return the brightness-weighted centroid (dva) and 2x2 covariance"""
     w = np.asarray(percept.data[..., 0], dtype=np.float64)
     total = w.sum()
     x, y = np.asarray(grid.x), np.asarray(grid.y)
@@ -2169,7 +2070,7 @@ def test_location_noise_resets_on_a_new_implant():
     'ignore:Class Watson2014DisplaceMap is deprecated:DeprecationWarning')
 def test_location_noise_needs_an_invertible_map():
     model = _one_electrode_model(location_noise=1.0, seed=7)
-    # Watson displacement is eye-dependent, so it needs a lateralized implant:
+    # Watson displacement depends on the eye, so use a RetinalImplant:
     model.implant = _implant_at([(560, 0)], cls=RetinalImplant)
     model.visual_field_map = Watson2014DisplaceMap()
     model.build()
@@ -2179,7 +2080,7 @@ def test_location_noise_needs_an_invertible_map():
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_location_noise_works_with_a_displacement_map(eye):
-    """The same setup as above, with a map that reverses ret -> dva"""
+    """Location noise with an invertible displacement map"""
     def build(location_noise=None, seed=7):
         implant = _implant_at([(560, 0)], cls=RetinalImplant)
         implant.eye = eye
@@ -2189,8 +2090,8 @@ def test_location_noise_works_with_a_displacement_map(eye):
             location_noise=location_noise,
             visual_field_map=Montesano2020Map(eye=eye)).build()
 
-    # A zero offset has to put the electrode back where it started, which
-    # needs ret_to_dva to invert dva_to_ret rather than approximate it:
+    # A zero offset leaves the electrode in place (requires ret_to_dva to
+    # invert dva_to_ret exactly):
     still = build(location_noise=1.0)
     still._location_noise_z = np.zeros((1, 2))
     npt.assert_allclose(still.build().predict_percept({'A0': 1}).data,
@@ -2201,13 +2102,13 @@ def test_location_noise_works_with_a_displacement_map(eye):
     percept = model.predict_percept({'A0': 1})
     npt.assert_equal(np.all(np.isfinite(percept.data)), True)
     npt.assert_equal(percept.data.max() > 0, True)
-    # The offsets are the ones the seed draws, and they move the phosphene:
+    # Offsets are the seeded draws and move the phosphene:
     npt.assert_almost_equal(model._location_noise_z, _latents(1, 7))
     plain = build()
     was, _ = _blob_moments(plain.predict_percept({'A0': 1}), plain.grid)
     now, _ = _blob_moments(percept, model.grid)
     npt.assert_array_less(0.1, np.abs(now - was))
-    # Reproducible for a fixed seed, and different for another one:
+    # Reproducible for a fixed seed, different for another:
     npt.assert_array_equal(
         build(location_noise=1.0).predict_percept({'A0': 1}).data,
         percept.data)
@@ -2217,7 +2118,8 @@ def test_location_noise_works_with_a_displacement_map(eye):
 
 
 def test_location_noise_keeps_the_axon_map_kernel_joint():
-    # Location offsets must enter the joint AxonMap kernel before summation.
+    # Location offsets are applied inside the joint AxonMap kernel, before
+    # summation:
     implant = ArgusII()
     both = ['C4', 'C6']
     kwargs = dict(xrange=(-8, 8), yrange=(-8, 8), step=0.25, rho=200,
@@ -2230,7 +2132,7 @@ def test_location_noise_keeps_the_axon_map_kernel_joint():
     npt.assert_equal(joint.max() > 0, True)
     apart = sum(model.predict_percept({e: 1}).data for e in both)
     npt.assert_equal(np.allclose(joint, apart), False)
-    # Compare against an equivalent implant physically displaced in tissue.
+    # Compare to an implant physically displaced by the same offsets:
     vfmap = model.visual_field_map
     xyz = implant.electrode_array.coordinates(um, electrodes=both)
     rows = [implant.electrode_names.index(e) for e in both]
@@ -2261,7 +2163,7 @@ def test_cortical_location_noise_moves_the_phosphene():
     now, cov_now = _blob_moments(moved.predict_percept({electrode: 100}),
                                  moved.grid)
     npt.assert_allclose(now - was, offset, atol=0.1)
-    # Cortical magnification may change size, so only require compactness.
+    # Cortical magnification may change size, so only require compactness:
     for percept in (plain.predict_percept({electrode: 100}),
                     moved.predict_percept({electrode: 100})):
         npt.assert_equal(percept.data.max() > 70, True)
@@ -2269,7 +2171,8 @@ def test_cortical_location_noise_moves_the_phosphene():
 
 
 def _electrode_in(model, region):
-    """First electrode whose placed location lies in ``region``"""
+    """Return the first electrode whose placed location lies in ``region``"""
+
     names = model.implant.electrode_names
     x, y, _ = BaseModel._electrode_coords(
         model, model.implant.electrode_array, None, electrodes=names)
@@ -2306,7 +2209,7 @@ def test_cortical_location_noise_uses_home_region():
         placed = BaseModel._electrode_coords(
             model, implant.electrode_array, None, electrodes=names)
         offsets = _electrode_offsets(model, names)
-        # Each electrode moves through its own region, and only once:
+        # Each electrode is displaced once, through its own region:
         for i, region in enumerate(('v1', 'v2')):
             one = _displaced_coords(model, region, [names[i]],
                                     tuple(c[[i]] for c in placed),
@@ -2316,7 +2219,7 @@ def test_cortical_location_noise_uses_home_region():
                                          xyz[1] - placed[1]) > 0), True)
         coords.append(np.array(xyz))
     npt.assert_array_equal(*coords)
-    # An electrode in no region has no visual field location to displace:
+    # An electrode outside all regions raises ValueError:
     lost = [n for n in implant.electrode_names
             if n not in {_electrode_in(model, r) for r in ('v1', 'v2')}]
     x, y, _ = BaseModel._electrode_coords(model, implant.electrode_array,
@@ -2376,7 +2279,7 @@ class _Slab3DMap(VisualFieldMap):
 
 
 def test_location_noise_rejects_3d_maps():
-    # A dva round trip cannot preserve cortical depth.
+    # A dva round trip cannot preserve cortical depth:
     kwargs = dict(visual_field_map=_Slab3DMap(), regions=['v1'], rho=400,
                   xrange=(-10, 10), yrange=(-10, 10), step=0.5)
     CortexScoreboardSpatial(_implant_at([(560, 0)]), **kwargs).build()
@@ -2386,10 +2289,9 @@ def test_location_noise_rejects_3d_maps():
 
 
 def _square_implant(cls=Implant):
-    """Two square electrodes on the local +x axis, one at the origin
+    """Return two square electrodes on the local +x axis, one at the origin
 
-    Square bodies are asymmetric under rotation, so a plot that only moves
-    electrode centers reads back differently from one that turns the device.
+    Square bodies show rotation, unlike disks.
     """
     return cls(ElectrodeArray({'A1': SquareElectrode(0, 0, 0, 200),
                                'A2': SquareElectrode(600, 0, 0, 200)}))
@@ -2401,7 +2303,7 @@ def _square_model(**params):
 
 
 def _drawn_bodies(ax):
-    """Electrode-body vertices in data coordinates, as drawn"""
+    """Return the drawn electrode-body vertices in data coordinates"""
     collection = ax.collections[-1]
     to_data = ax.transData.inverted()
     return np.array([to_data.transform(
@@ -2416,13 +2318,13 @@ def _rotate(xy, deg_ccw):
 
 
 def test_implant_plot_is_the_device_frame_whatever_the_model_does():
-    """`implant.plot()` knows nothing about placement"""
+    """`implant.plot()` ignores model placement"""
     implant = _square_implant()
     local = implant.electrode_array.coordinates()
     with plt.ioff():
         fig, (ax0, ax1, ax2) = plt.subplots(1, 3)
         implant.plot(ax=ax0)
-        # The same implant, in two models placed differently:
+        # Same implant, placed differently in two models:
         _square_model(implant_position=(3000, 0) * um).implant.plot(ax=ax1)
         _square_model(implant_position=(0, -2000) * um,
                       implant_rotation=45).implant.plot(ax=ax2)
@@ -2434,7 +2336,7 @@ def test_implant_plot_is_the_device_frame_whatever_the_model_does():
 
 
 def test_show_implant_draws_the_device_where_the_model_places_it():
-    """Position moves the whole device, origin electrode included"""
+    """`show_implant` draws the device at `implant_position`"""
     model = _square_model(implant_position=(1500, -700) * um)
     local = model.implant.electrode_array.coordinates()
     with plt.ioff():
@@ -2444,12 +2346,12 @@ def test_show_implant_draws_the_device_where_the_model_places_it():
         npt.assert_almost_equal(_drawn_bodies(ax1),
                                 _drawn_bodies(ax0) + [1500, -700])
         plt.close(fig)
-    # Plotting a placed implant does not place the implant:
+    # The implant object is unchanged:
     npt.assert_array_equal(model.implant.electrode_array.coordinates(), local)
 
 
 def test_show_implant_rotates_the_device_not_just_the_centers():
-    """Square bodies turn with the array, about the device origin"""
+    """`show_implant` rotates electrode bodies about the device origin"""
     model = _square_model(implant_rotation=30)
     with plt.ioff():
         fig, (ax0, ax1) = plt.subplots(1, 2)
@@ -2457,7 +2359,7 @@ def test_show_implant_rotates_the_device_not_just_the_centers():
         model.plot(ax=ax1, show_implant=True)
         drawn, local = _drawn_bodies(ax1), _drawn_bodies(ax0)
         npt.assert_almost_equal(drawn, _rotate(local, 30))
-        # The corners moved, so this is not a translation of the bodies:
+        # Not just a translation of the bodies:
         centered = local - local.mean(axis=1, keepdims=True)
         npt.assert_equal(
             np.allclose(drawn - drawn.mean(axis=1, keepdims=True), centered),
@@ -2466,7 +2368,7 @@ def test_show_implant_rotates_the_device_not_just_the_centers():
 
 
 def test_show_implant_rotates_before_translating():
-    """The device frame is turned, then placed"""
+    """`show_implant` rotates before translating"""
     model = _square_model(implant_rotation=90,
                           implant_position=(1000, 0) * um)
     with plt.ioff():
@@ -2475,14 +2377,14 @@ def test_show_implant_rotates_before_translating():
         model.plot(ax=ax1, show_implant=True)
         local, drawn = _drawn_bodies(ax0), _drawn_bodies(ax1)
         npt.assert_almost_equal(drawn, _rotate(local, 90) + [1000, 0])
-        # Translating first would swing the array onto +y instead:
+        # The opposite order would put the array on +y:
         npt.assert_equal(np.allclose(drawn, _rotate(local + [1000, 0], 90)),
                          False)
         plt.close(fig)
 
 
 def test_show_implant_refuses_visual_field_coordinates():
-    """A nonlinear retinotopy does not carry electrode bodies rigidly"""
+    """`show_implant` with `use_dva` raises NotImplementedError"""
     model = _square_model(implant_position=(1500, 0) * um)
     with plt.ioff():
         fig = plt.figure()
@@ -2492,7 +2394,7 @@ def test_show_implant_refuses_visual_field_coordinates():
 
 
 def _drawn_substrate(ax):
-    """The last patch's vertices in data coordinates, as drawn"""
+    """Return the drawn vertices of the last patch in data coordinates"""
     patch = ax.patches[-1]
     local = patch.get_path().transformed(patch.get_patch_transform())
     return ax.transData.inverted().transform(
@@ -2500,7 +2402,7 @@ def _drawn_substrate(ax):
 
 
 def test_show_implant_works_on_the_axon_map_plot():
-    """`AxonMapSpatial.plot` draws its own anatomical window"""
+    """`show_implant` works with `AxonMapSpatial.plot`"""
     implant = _square_implant(cls=RetinalImplant)
     model = AxonMapSpatial(implant, rho=200, xrange=(-4, 4), yrange=(-4, 4),
                            step=0.5, implant_position=(1200, -400) * um,
@@ -2511,7 +2413,7 @@ def test_show_implant_works_on_the_axon_map_plot():
         model.plot(ax=ax1, show_implant=True, annotate=False)
         npt.assert_almost_equal(
             _drawn_bodies(ax1), _rotate(_drawn_bodies(ax0), 15) + [1200, -400])
-        # The +/-5 mm axon window is the frame this plot is about:
+        # Axes span the +/-5 mm axon window:
         npt.assert_array_less(ax1.get_xlim()[1] - ax1.get_xlim()[0], 1e5)
         with pytest.raises(NotImplementedError):
             model.plot(ax=ax1, use_dva=True, show_implant=True)
@@ -2519,7 +2421,7 @@ def test_show_implant_works_on_the_axon_map_plot():
 
 
 def test_show_implant_carries_the_prima_substrate_with_its_pixels():
-    """The substrate is a Patch, not part of the pixels' Collection"""
+    """`show_implant` moves the PRIMA substrate (a Patch) with its pixels"""
     implant = PRIMAPivotal()
     model = ScoreboardSpatial(implant, rho=50, xrange=(-4, 4),
                               yrange=(-4, 4), step=0.5,
@@ -2531,7 +2433,7 @@ def test_show_implant_carries_the_prima_substrate_with_its_pixels():
         model.plot(ax=ax1, show_implant=True)
         expected = _rotate(_drawn_substrate(ax0), 30) + [2000, -1000]
         npt.assert_almost_equal(_drawn_substrate(ax1), expected)
-        # The die still surrounds every pixel it is supposed to hold:
+        # The substrate still surrounds all pixels:
         collection = ax1.collections[-1]
         to_data = ax1.transData.inverted()
         pixels = to_data.transform(collection.get_transform().transform(
@@ -2559,7 +2461,7 @@ def test_show_implant_works_on_a_cortical_model():
 
 
 def _slab_model(**params):
-    """A cortical scoreboard on a 3D map, with two electrodes 560 um apart"""
+    """Return a cortical scoreboard on a 3D map, two electrodes 560 um apart"""
     return CortexScoreboardSpatial(
         _implant_at([(0, 0), (560, 0)]), visual_field_map=_Slab3DMap(),
         regions=['v1'], rho=400, xrange=(-10, 10), yrange=(-10, 10),
@@ -2567,7 +2469,7 @@ def _slab_model(**params):
 
 
 def test_identity_placement_is_allowed_on_a_3d_map():
-    """Implants built in the map's own frame keep working"""
+    """Identity placement works on a 3D map"""
     model = _slab_model().build()
     implant = model.implant
     stim = implant.prepare_stim({name: 1 for name in implant.electrode_names})
@@ -2575,7 +2477,7 @@ def test_identity_placement_is_allowed_on_a_3d_map():
         model._electrode_coords(implant.electrode_array, stim))
     npt.assert_almost_equal(placed, implant.electrode_array.coordinates(),
                             decimal=3)
-    # Spelling the identity out changes nothing:
+    # Explicit identity placement gives the same result:
     same = _slab_model(implant_position=(0, 0) * um, implant_rotation=0,
                        implant_depth=0).build()
     npt.assert_almost_equal(
@@ -2587,7 +2489,7 @@ def test_identity_placement_is_allowed_on_a_3d_map():
     {'implant_position': (100, 0)},
     {'implant_position': (100, 0) * um},
     {'implant_position': (1, 0) * dva},
-    # Even the visual field origin names a cortical location, not the origin:
+    # (0, 0) dva is a cortical location, not the tissue origin:
     {'implant_position': (0, 0) * dva},
     {'implant_rotation': 15},
     {'implant_rotation': 15 * deg},
@@ -2595,10 +2497,10 @@ def test_identity_placement_is_allowed_on_a_3d_map():
     {'implant_depth': 100 * um},
 ])
 def test_placement_is_refused_on_a_3d_map(params):
-    """`z` in a 3D tissue frame is an axis, not depth along the normal"""
+    """Placement raises NotImplementedError on a 3D map (z is not depth)"""
     with pytest.raises(NotImplementedError):
         _slab_model(**params).build()
-    # A pose set after the build is caught at prediction time too:
+    # Also when set after build:
     model = _slab_model().build()
     model.set_params(**params)
     implant = model.implant
@@ -2608,7 +2510,7 @@ def test_placement_is_refused_on_a_3d_map(params):
 
 
 def test_location_noise_matches_integer_electrode_names():
-    # Integer and string electrode IDs must remain distinct.
+    # Integer and string electrode IDs are distinct:
     array = ElectrodeArray([DiskElectrode(x, 0, 0, 100)
                             for x in (-1400, 0, 1400)])
     offsets = 1.0 * _latents(3, 4)
@@ -2625,7 +2527,7 @@ def test_location_noise_matches_integer_electrode_names():
 
 
 class _BoundedMap(RetinalMap):
-    """Linear retinal map that covers only the central +/-5 dva"""
+    """A linear retinal map covering only the central +/-5 dva"""
 
     def dva_to_ret(self, xdva, ydva):
         off = np.abs(xdva) > 5
@@ -2647,7 +2549,7 @@ def _bounded_model(x_um, location_noise, seed):
 
 
 def test_location_noise_refuses_an_unplaceable_electrode():
-    # Do not silently discard offsets at the map boundary.
+    # Electrodes off the map, or displaced off it, raise ValueError:
     off_map = _bounded_model(2000, 1.0, 7)
     with pytest.raises(ValueError, match='canonical'):
         off_map.predict_percept({'A0': 1})
@@ -2659,7 +2561,7 @@ def test_location_noise_refuses_an_unplaceable_electrode():
 def test_retinal_model_refuses_a_cortical_implant():
     with pytest.raises(TypeError, match='cortical implant'):
         BiphasicAxonMapModel(NeuroPortArray())
-    # Rebinding goes through the same check as construction:
+    # Same check when setting the implant:
     model = ScoreboardModel(ArgusII())
     with pytest.raises(TypeError, match='cortical implant'):
         model.implant = NeuroPortArray()
@@ -2677,15 +2579,14 @@ def test_cortical_model_refuses_a_retinal_implant(model_cls):
 
 
 def test_anatomy_neutral_implants_stay_usable():
-    # A bare Implant belongs to neither family and remains the escape hatch
-    # for custom arrays on either side.
+    # A bare Implant works with both retinal and cortical models:
     implant = _implant_at([(0, 0)])
     ScoreboardSpatial(implant, visual_field_map=Curcio1990Map()).build()
     CortexScoreboardSpatial(implant).build()
 
 
 def test_models_read_an_ensemble_by_its_constituents():
-    # Generic constituents do not decide the target; the specific ones do.
+    # The retinal or cortical members decide the target; generic ones do not:
     retinal = EnsembleImplant([ArgusII(), _implant_at([(0, 0)])])
     cortical = EnsembleImplant([NeuroPortArray(), _implant_at([(0, 0)])])
     neutral = EnsembleImplant([_implant_at([(0, 0)]),
@@ -2699,6 +2600,7 @@ def test_models_read_an_ensemble_by_its_constituents():
         CortexScoreboardModel(retinal)
     with pytest.raises(TypeError, match='retinal implant'):
         DynaphosModel(retinal)
-    # An all-generic ensemble carries no anatomy and works on either side:
+    # An all-generic ensemble works with both:
+
     ScoreboardSpatial(neutral, visual_field_map=Curcio1990Map()).build()
     CortexScoreboardSpatial(neutral).build()

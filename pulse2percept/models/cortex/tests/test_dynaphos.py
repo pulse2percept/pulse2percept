@@ -33,8 +33,8 @@ def test_DynaphosModel():
             model.regions = regions
     npt.assert_equal(model.regions, ['v1'])
 
-    # can't set frequency/pulse dur that don't match up. A failed build
-    # leaves the parameters the caller asked for in place, so put them back:
+    # Can't set incompatible freq/p_dur. A failed build keeps the requested
+    # values, so reset them:
     with pytest.raises(ValueError):
         model.build(freq=300,p_dur=10)
     model.build(freq=300, p_dur=1)
@@ -90,7 +90,7 @@ def test_predict_rejects_electrodes_outside_v1():
 
 
 def test_predict_spatial_unsplit_map():
-    # A map without hemifields must not be masked (used to raise NameError)
+    # A map without hemifields is not masked by hemisphere:
     class UnsplitMap(Polimeni2006Map):
         split_map = False
 
@@ -103,7 +103,7 @@ def test_predict_spatial_unsplit_map():
     percept = model.predict_percept(source).max(axis='frames')
     npt.assert_equal(np.all(np.isfinite(percept)), True)
     npt.assert_equal(np.any(percept > 0), True)
-    # Nothing is zeroed out by hemifield, so both halves get light
+    # Both halves are nonzero:
     half = percept.shape[1] // 2
     npt.assert_equal(np.any(percept[:, half + 1:] > 0), True)
 
@@ -113,8 +113,7 @@ def test_phosphene_size_matches_the_model_equations():
     # D = 2*sqrt(amp/K) the diameter of activated cortex (mm).
     ecc, amp = 8.0, 200.0
     implant = Implant(ElectrodeArray([DiskElectrode(0, 0, 0, 100)]))
-    # Window is +-5 sigma wide at a step of ~sigma/6, so the second moment
-    # recovers sigma to well under 1%:
+    # +-5 sigma window at a step of ~sigma/6 recovers sigma to <1%:
     model = DynaphosModel(implant=implant, implant_position=(ecc, 0) * dva,
                           xrange=(ecc - 0.75, ecc + 0.75),
                           yrange=(-0.75, 0.75), step=0.025, dt=20).build()
@@ -141,19 +140,14 @@ def test_temporal_predict():
     model.dt = 40
     npt.assert_equal(model.dt, 40)
 
-    # Can't request the same time more than once (this would break the Cython
-    # loop, because `idx_frame` is incremented after a write; also doesn't
-    # make much sense):
+    # Can't request the same time twice (the Cython loop increments
+    # `idx_frame` after each write):
     with pytest.raises(ValueError):
         source = np.ones((96, 100))
         model.predict_percept(source, t_percept=[0.2, 0.2])
 
-    # Brightness scales with amplitude. The train is built on the model's own
-    # clock, so that the duty cycle driving the activation is the one that
-    # produced the waveform. It used not to be: a train assigned on its own
-    # (rather than as {electrode: train}) carried no per-electrode metadata,
-    # so this model silently simulated it at `self.freq`/`self.p_dur` however
-    # it was actually built. It now reads the train itself.
+    # Brightness increases with amplitude. The train uses the model's
+    # freq/p_dur, so the simulated duty cycle matches the waveform:
     model.dt = 20
     sdur = 1000.0  # stimulus duration (ms)
     pdur = model.p_dur  # (ms)
@@ -185,8 +179,7 @@ def test_deepcopy_Dynaphos():
     original.build()
     npt.assert_equal(copied.is_built, False)
 
-    # The copied model should no longer have the same state as the original.
-    # Use NumPy's equality check because the dictionaries contain arrays.
+    # States now differ (NumPy check because the dicts contain arrays):
     npt.assert_raises(AssertionError, npt.assert_equal,
                       original.__dict__, copied.__dict__)
 
@@ -218,7 +211,7 @@ def test_dynaphos_plot_mm_ticks():
                           xrange=(-6, 0), yrange=(-1, 4.5), step=0.5).build()
     ax = model.plot()
     xlim = ax.get_xlim()
-    # Orion autoscales the shared axes after the model set its labels:
+    # Orion rescales the shared axes after the model sets its labels:
     npt.assert_equal(orion.plot(ax=ax) is ax, True)
     npt.assert_equal(ax.get_xlim() != xlim, True)
     ax.figure.canvas.draw()
@@ -237,11 +230,10 @@ def test_dynaphos_plot_mm_ticks():
 
 
 def test_DynaphosModel_units():
-    """A unitful parameter lands on the same percept as the bare one
+    """A unitful parameter gives the same percept as the bare value
 
-    `rheobase` is a current in microamps, and 0.0239 mA is 23.9 uA -- but
-    23.900000000000002 after the multiplication, which is why this compares
-    with a tolerance rather than for equality.
+    `rheobase` is in uA. 0.0239 mA converts to 23.900000000000002 uA, hence
+    the tolerance.
     """
     kwargs = dict(xrange=(-3, 3), yrange=(-3, 3), step=0.5)
     bare = DynaphosModel(implant=NeuroPortArray(), rheobase=23.9, **kwargs).build()
@@ -251,7 +243,7 @@ def test_DynaphosModel_units():
     source = {'11': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)}
     npt.assert_allclose(unitful.predict_percept(source).data,
                         bare.predict_percept(source).data, rtol=1e-6)
-    # The model states what its numbers mean:
+    # Model units:
     npt.assert_equal((bare.stimulus_unit, bare.space_unit, bare.time_unit),
                      (uA, um, ms))
     with pytest.raises(DimensionMismatchError):
@@ -259,7 +251,7 @@ def test_DynaphosModel_units():
 
 
 def test_DynaphosModel_t_percept_units():
-    """This model overrides `predict_percept`, so it normalizes for itself"""
+    """`t_percept` accepts time units (model overrides `predict_percept`)"""
     model = DynaphosModel(implant=NeuroPortArray(), implant_position=(20, -5) * mm,
                           xrange=(-3, 3), yrange=(-3, 3), step=1).build()
     source = {'11': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)}
@@ -273,37 +265,28 @@ def test_DynaphosModel_t_percept_units():
 
 
 def test_DynaphosModel_default_frame_clock_stops_at_the_stimulus():
-    """The default output clock does not run past the end of the stimulus
-
-    `arange`'s half-open end used to be nudged by the literal 1, which meant
-    one *millisecond*: with a `dt` finer than that it emitted frames after the
-    stimulus was over, and for a model counting in anything but milliseconds
-    it would have been meaningless.
-    """
+    """Default frame times end at the last stimulus time point"""
     source = {'11': BiphasicPulseTrain(20, 50, 0.1, stim_dur=10)}
     delivered = NeuroPortArray().prepare_stim(source)
     kwargs = dict(implant=NeuroPortArray(), implant_position=(20, -5) * mm,
                   xrange=(-2, 2), yrange=(-2, 2), step=1)
 
-    # Coarser than a millisecond, which is the case the literal was written
-    # for, and still the same clock it always produced:
+    # dt > 1 ms:
     model = DynaphosModel(dt=2, **kwargs).build()
     npt.assert_allclose(model.predict_percept(source).time,
                         np.arange(0, 11, 2), rtol=1e-12)
 
-    # Finer than a millisecond, which is where it overshot:
+    # dt < 1 ms:
     model = DynaphosModel(dt=0.5, **kwargs).build()
     percept = model.predict_percept(source)
     npt.assert_allclose(percept.time, np.arange(0, 10.25, 0.5), rtol=1e-12)
     npt.assert_equal(percept.time[-1] <= delivered.time[-1], True)
-    # The endpoint is included, not dropped:
+    # Endpoint is included:
     npt.assert_allclose(percept.time[-1], delivered.time[-1], rtol=1e-12)
 
 
 def test_dynaphos_reads_the_pulse_train_itself():
-    # The same train has to predict the same percept however it is assigned.
-    # That used to be false: a bare train carried no per-electrode metadata
-    # and was simulated on the model's default clock instead of its own.
+    # A bare train and {electrode: train} give the same percept:
     model = DynaphosModel(
         implant=Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
         step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
@@ -320,15 +303,14 @@ def test_dynaphos_reads_the_pulse_train_itself():
     npt.assert_array_equal(bare, predict({0: train()}))
     npt.assert_equal(np.any(bare), True)
 
-    # User metadata says nothing about the clock, however it is written:
+    # User metadata is ignored when reading freq/p_dur:
     corrupt = train()
     corrupt.metadata['user'] = {'freq': 1, 'amp': 0, 'phase_dur': 99}
     npt.assert_array_equal(bare, predict(corrupt))
 
 
 def test_dynaphos_uses_its_defaults_for_an_arbitrary_waveform():
-    # No pulse train behind the samples, so there is no clock to read and the
-    # model simulates on its own -- which is what it has always done:
+    # Stimulus is not a pulse train, so the model uses its own freq/p_dur:
     model = DynaphosModel(
         implant=Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 260))),
         step=0.5, xrange=(-2, 2), yrange=(-2, 2)).build()
@@ -336,8 +318,7 @@ def test_dynaphos_uses_its_defaults_for_an_arbitrary_waveform():
     source = Stimulus([[0, 100, 100, 0]], time=[0, 1, 199, 200])
     percept = model.predict_percept(source, t_percept=np.arange(0, 200, 20))
     npt.assert_equal(np.any(percept.data), True)
-    # A train whose own clock happens to be the model's gives the same answer
-    # as the defaults do, which is what says the defaults were used:
+    # Changing the model's freq/p_dur changes the percept:
     model.freq, model.p_dur = 111, 0.29
     other = model.predict_percept(source,
                                   t_percept=np.arange(0, 200, 20)).data
@@ -345,10 +326,8 @@ def test_dynaphos_uses_its_defaults_for_an_arbitrary_waveform():
 
 
 def test_dynaphos_reads_the_clock_before_compression():
-    # `compress` installs a new waveform, which is what says the trains behind
-    # it no longer describe it. The parameters have to be taken first -- and
-    # compression drops the electrodes driven at zero, so what is left has to
-    # still line up with the right train.
+    # freq/p_dur are read before `compress`, which replaces the waveform and
+    # drops zero-amplitude electrodes:
     implant = Implant(ElectrodeArray([
         DiskElectrode(0, 0, 0, 260), DiskElectrode(1000, 0, 0, 260)]))
     model = DynaphosModel(implant=implant, step=0.5, xrange=(-2, 2),
@@ -358,8 +337,7 @@ def test_dynaphos_reads_the_clock_before_compression():
         {0: BiphasicPulseTrain(300, 0, 0.17, stim_dur=200),
          1: BiphasicPulseTrain(300, 100, 0.17, stim_dur=200)},
         t_percept=np.arange(0, 200, 20))
-    # Only the second electrode survives compression, and it is the second
-    # train's clock that has to reach the simulation:
+    # Only electrode 1 survives compression and keeps its own train's clock:
     npt.assert_allclose(both.data,
                         model.predict_percept(
                             {1: BiphasicPulseTrain(300, 100, 0.17,
@@ -380,15 +358,12 @@ def _ensemble_of_two_clocks():
 
 
 def test_dynaphos_reads_ensemble_clocks():
-    # An ensemble keeps its members' trains rather than sampling them away,
-    # so every member is simulated at the clock it was built with instead of
-    # the model's own default.
+    # Each ensemble member keeps its own freq/p_dur:
     ensemble, source = _ensemble_of_two_clocks()
     stim = ensemble.prepare_stim(source)
     clocks = _pulse_train_clocks(stim)
     npt.assert_equal(len(clocks), len(stim.electrodes))
     npt.assert_equal(sorted(set(clocks.values())), [(20, 0.85), (50, 0.45)])
-    # ...and the members keep their own, rather than sharing one:
     npt.assert_equal(clocks['0-96'], (50, 0.45))
     npt.assert_equal(clocks['1-96'], (20, 0.85))
 
@@ -403,8 +378,7 @@ def test_dynaphos_ensemble_prediction_uses_those_clocks():
               for m, trains in source.items()}
     with_clocks = model.predict_percept(source).data
     npt.assert_equal(np.any(with_clocks), True)
-    # The same waveform with the trains behind it taken away is back on the
-    # model's default clock
+    # The bare waveform uses the model's default freq/p_dur:
     stim = ensemble.prepare_stim(source)
     waveform_only = Stimulus(stim.data, electrodes=stim.electrodes,
                              time=stim.time)
@@ -415,29 +389,27 @@ def test_dynaphos_ensemble_prediction_uses_those_clocks():
 
 
 def test_dynaphos_clocks_are_not_read_when_structure_says_otherwise():
-    # Samples with nothing behind them leave the model on its own clock:
+    # Raw samples:
     npt.assert_equal(
         _pulse_train_clocks(Stimulus([[0, 100, 100, 0]],
                                      time=[0, 1, 99, 100])), None)
-    # A DC offset leaves no train behind, and drops the parameters with it:
+    # Adding a DC offset drops the pulse train metadata:
     stim = Stimulus({'0': BiphasicPulseTrain(20, 100, 0.45, stim_dur=100)})
     npt.assert_equal(_pulse_train_clocks(stim + 5), None)
-    # A stimulus made of something other than biphasic trains stays on the
-    # defaults too:
+    # Non-biphasic trains:
     asym = Stimulus({'0': AsymmetricBiphasicPulseTrain(20, 100, 50, 0.45, 0.9,
                                                        stim_dur=100)})
     npt.assert_equal(_pulse_train_clocks(asym), None)
 
 
 def test_dynaphos_uses_its_defaults_for_an_encoded_stimulus():
-    # An encoder's schedule can change frequency from frame to frame, so there
-    # is no per-electrode clock to take from it. The model stays on its own:
+    # Encoder schedules can change frequency per frame, so the model uses its
+    # own freq/p_dur:
     implant = NeuroPortArray()
     encoded = AmplitudeEncoder(implant).encode(
         ImageStimulus(np.linspace(0, 1, 64).reshape(8, 8)))
     npt.assert_equal(_pulse_train_clocks(encoded), None)
-    # A single-electrode schedule is a structured source, and is refused on
-    # the same grounds rather than read as a pulse train:
+    # Same for a single-electrode schedule:
     solo = AmplitudeEncoder().encode(ImageStimulus(np.array([[0.7]])))
     npt.assert_equal(len(solo._structured_sources()), 1)
     npt.assert_equal(_pulse_train_clocks(solo), None)
@@ -452,13 +424,13 @@ def _brightest_dva(percept, grid):
 
 
 def test_dynaphos_places_an_implant_by_visual_field_position():
-    """A dva `implant_position` names the cortical image of that location"""
+    """A dva `implant_position` maps to the matching V1 location"""
     implant = NeuroPortArray()
     model = DynaphosModel(implant=implant, implant_position=(6, -2) * dva)
     npt.assert_almost_equal(
         _placement_shift(model, um)[:2],
         model.visual_field_map.dva_to_v1(6.0, -2.0), decimal=2)
-    # ... and it agrees with naming the same spot physically:
+    # Same as passing the location in um:
     physical = DynaphosModel(
         implant=implant,
         implant_position=model.visual_field_map.dva_to_v1(6.0, -2.0) * um)
@@ -493,8 +465,8 @@ def test_location_noise():
                         _brightest_dva(plain.predict_percept(source),
                                        plain.grid),
                         offset, atol=0.06)
-    # Compare totals, not peaks: the blob is ~0.013 dva wide here, so the
-    # sampled peak depends on where the grid happens to cut it.
+    # Compare totals: the blob is ~0.013 dva wide, so the sampled peak
+    # depends on grid alignment:
     npt.assert_allclose(got.sum(), expected.sum(), rtol=0.05)
     npt.assert_array_equal(moved.build().predict_percept(source).data, got)
 
@@ -524,7 +496,7 @@ def test_location_noise_crosses_meridian():
                         atol=0.06)
     npt.assert_allclose(got.data.sum(), canonical.data.sum(), rtol=0.05)
 
-    # Displacements outside the map domain must fail explicitly.
+    # Displacements outside the map domain raise ValueError:
     np.random.seed(2)
     off_map = DynaphosModel(implant=implant, location_noise=300.0,
                             **kwargs).build()

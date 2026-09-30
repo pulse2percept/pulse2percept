@@ -11,17 +11,12 @@ from skimage.transform import warp, SimilarityTransform
 
 
 def _as_writable(img):
-    """A buffer scikit-image's warping kernels will accept
+    """Return ``img``, or a writable copy if it is read-only
 
-    ``skimage.transform.warp`` and ``rotate`` pass the image straight into a
-    Cython kernel that declares a *writable* memoryview, so they reject a
-    read-only array outright even though neither of them writes into it. The
-    data of a :py:class:`~pulse2percept.stimuli.Stimulus` is read-only, so
-    every call into those two has to go through here.
-
-    Keep this at the scikit-image boundary. Handing out writable stimulus
-    data anywhere else would give up the guarantee that a stimulus cannot
-    change once it has been built.
+    ``skimage.transform.warp`` and ``rotate`` require a writable memoryview
+    (without writing to it), and
+    :py:class:`~pulse2percept.stimuli.Stimulus` data is read-only. Use only at
+    the scikit-image boundary, so stimulus data stays immutable elsewhere.
     """
     return img if img.flags.writeable else np.array(img)
 

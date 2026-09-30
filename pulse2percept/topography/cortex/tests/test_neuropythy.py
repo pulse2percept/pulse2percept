@@ -1,7 +1,7 @@
 """Tests for :class:`~pulse2percept.topography.cortex.NeuropythyMap`.
 
-Most behavior is tested against a deterministic toy cortex. Slow tests use one
-shared ``fsaverage`` map to exercise the real Neuropythy pipeline.
+Most tests use a deterministic toy cortex. Slow tests use one shared
+``fsaverage`` map with the real Neuropythy pipeline.
 """
 import numpy as np
 import numpy.testing as npt
@@ -34,7 +34,7 @@ class ToyMesh:
     """Minimal visual-field mesh used by the toy map."""
 
     def __init__(self, coordinates):
-        # `cortex_to_dva` looks a vertex's dva coordinates up here:
+        # Vertex dva coordinates, used by `cortex_to_dva`:
         self.coordinates = np.asarray(coordinates, dtype=float)
         self.addressed = []
 
@@ -119,7 +119,7 @@ def fsaverage(neuropythy):
 # -----------------------------------------------------------------------------
 
 def test_cortex_to_dva_shape_and_nans():
-    """Every input point must get its own output slot (Issue #774)."""
+    """Output has one entry per input point, NaN where unmapped (#774)"""
     nmap = ToyNeuropythyMap()
     # Vertex i is at i mm == i * 1000 um, and maps to (i, -i) dva:
     xc = np.array([0., 1000., 2000.])
@@ -127,27 +127,26 @@ def test_cortex_to_dva_shape_and_nans():
     npt.assert_almost_equal(xdva, [0, 1, 2])
     npt.assert_almost_equal(ydva, [0, -1, -2])
 
-    # A NaN input must not shift the points after it into its slot:
+    # A NaN input does not shift later points:
     xc = np.array([0., np.nan, 2000.])
     xdva, ydva = nmap.cortex_to_dva(xc, np.zeros(3), np.zeros(3))
     npt.assert_equal(xdva.shape, (3,))
     npt.assert_almost_equal(xdva, [0, np.nan, 2])
     npt.assert_almost_equal(ydva, [0, np.nan, -2])
-    # A NaN in any one of the three coordinates is enough:
+    # NaN in any one coordinate gives NaN:
     for coords in ([np.zeros(2), np.array([np.nan, 0.]), np.zeros(2)],
                    [np.zeros(2), np.zeros(2), np.array([np.nan, 0.])]):
         xdva, ydva = nmap.cortex_to_dva(*coords)
         npt.assert_almost_equal(xdva, [np.nan, 0])
         npt.assert_almost_equal(ydva, [np.nan, 0])
 
-    # The output has the shape of the input, whatever that shape is:
+    # Output shape matches input shape:
     for shape in [(), (1,), (4,), (2, 3), (2, 3, 4)]:
         zeros = np.zeros(shape)
         xdva, ydva = nmap.cortex_to_dva(zeros, zeros, zeros)
         npt.assert_equal(xdva.shape, shape)
         npt.assert_equal(ydva.shape, shape)
-        # ... including when every point is NaN, which must still return two
-        # arrays rather than a single stacked one:
+        # All-NaN input still returns two arrays:
         nans = np.full(shape, np.nan)
         xdva, ydva = nmap.cortex_to_dva(nans, nans, nans)
         npt.assert_equal(xdva.shape, shape)
@@ -159,16 +158,16 @@ def test_cortex_to_dva_shape_and_nans():
 
 
 def test_cortex_to_dva_interpolation():
-    """Nearby vertices are averaged; distant ones do not count at all."""
+    """Vertices within cort_nn_thresh are averaged; others are ignored"""
     nmap = ToyNeuropythyMap()
-    # Exact vertex hits must not divide by zero (Issue #774).
+    # Exact vertex hits do not divide by zero (#774):
     verts = nmap.cortex_tree.data * 1000  # mm -> um
     with np.errstate(divide='raise', invalid='raise'):
         xdva, ydva = nmap.cortex_to_dva(verts[:, 0], verts[:, 1], verts[:, 2])
     npt.assert_almost_equal(xdva, np.arange(len(verts)))
     npt.assert_almost_equal(ydva, -np.arange(len(verts)))
 
-    # Halfway between two vertices, both weigh the same:
+    # Halfway between two vertices, both have equal weight:
     xdva, ydva = nmap.cortex_to_dva(np.array([2500.]), np.zeros(1), np.zeros(1))
     npt.assert_almost_equal(xdva, [2.5])
     npt.assert_almost_equal(ydva, [-2.5])
@@ -186,7 +185,7 @@ def test_cortex_to_dva_interpolation():
 
 
 def test_cortex_to_dva_region_dispatch():
-    """v1/v2/v3 all read the same cortical mesh; only the name differs."""
+    """v1/v2/v3_to_dva all use the same cortical mesh"""
     nmap = ToyNeuropythyMap()
     coords = (np.array([500.]), np.zeros(1), np.zeros(1))
     expected = nmap.cortex_to_dva(*coords)
@@ -200,7 +199,7 @@ def test_cortex_to_dva_region_dispatch():
 # -----------------------------------------------------------------------------
 
 def test_dva_to_cortex_regions(neuropythy):
-    """A region the map was not built with has nothing to look a point up in."""
+    """Regions not in `regions` are a ValueError; each region uses its mesh"""
     nmap = ToyNeuropythyMap(regions=['v1'])
     npt.assert_equal(sorted(nmap.from_dva().keys()), ['v1'])
     nmap.dva_to_v1(1, 1)
@@ -208,7 +207,7 @@ def test_dva_to_cortex_regions(neuropythy):
         with pytest.raises(ValueError):
             dva_to(1, 1)
 
-    # Each region dispatches to its own mesh.
+    # Each region uses its own mesh:
     nmap = ToyNeuropythyMap()
     for region, dva_to in [('v1', nmap.dva_to_v1), ('v2', nmap.dva_to_v2),
                            ('v3', nmap.dva_to_v3)]:
@@ -223,7 +222,7 @@ def test_dva_to_cortex_regions(neuropythy):
 
 
 def test_dva_to_cortex_hemispheres_and_shapes(neuropythy):
-    """Points are split at x=0, looked up, and put back where they came from."""
+    """Points are split by hemisphere at x=0; output keeps input order/shape"""
     nmap = ToyNeuropythyMap()
     x, y = np.array([-1., 0., 2.]), np.array([1., 1., -1.])
     xc, yc, zc = nmap.dva_to_v1(x, y)
@@ -240,7 +239,7 @@ def test_dva_to_cortex_hemispheres_and_shapes(neuropythy):
         zeros = np.zeros(shape)
         npt.assert_equal([c.shape for c in nmap.dva_to_v1(zeros, zeros)],
                          [shape] * 3)
-    # ... including an empty one, which never reaches the mesh at all:
+    # Empty input returns empty arrays without querying the mesh:
     addressed = len(lh.addressed)
     npt.assert_equal([c.shape
                       for c in nmap.dva_to_v1(np.array([]), np.array([]))],
@@ -251,7 +250,7 @@ def test_dva_to_cortex_hemispheres_and_shapes(neuropythy):
         with pytest.raises(ValueError):
             dva_to(np.zeros(3), np.zeros(2))
 
-    # A point the mesh cannot address keeps its slot and comes back NaN:
+    # Points off the mesh return NaN in place:
     xc, yc, zc = nmap.dva_to_v1([1., TOY_MAX_ECC + 1], [0., 0.])
     npt.assert_almost_equal(xc, [1000, np.nan])
     npt.assert_almost_equal(yc, [0, np.nan])
@@ -260,23 +259,23 @@ def test_dva_to_cortex_hemispheres_and_shapes(neuropythy):
 
 @pytest.mark.parametrize('surface', ['white', 'midgray', 'pial'])
 def test_dva_to_cortex_surface(surface, neuropythy):
-    """`surface` picks which surface of the subject the point lands on."""
+    """`surface` selects the cortical surface"""
     nmap = ToyNeuropythyMap()
     npt.assert_almost_equal(nmap.dva_to_v1(2., 2., surface=surface),
                             toy_cortex_mm(2., 2., surface) * 1000, decimal=3)
     npt.assert_equal(nmap.subject.hemis['lh'].surfaces_asked, [surface])
     npt.assert_equal(nmap.subject.hemis['rh'].surfaces_asked, [])
-    # The address itself is what a caller asking for no surface wants:
+    # surface=None returns the mesh address:
     addr = nmap.dva_to_cortex(np.ones(1), np.ones(1), hemi='lh', surface=None)
     npt.assert_equal(sorted(addr.keys()), ['coordinates', 'faces'])
 
 
 @pytest.mark.parametrize('region', ['v1', 'v2', 'v3'])
 def test_dva_to_cortex_jitter_boundary(region, neuropythy):
-    """Jittering moves points off the meridians, which have no cortex of their own
+    """jitter_boundary moves points off discontinuous meridians
 
-    V1 spans the horizontal meridian, so only the vertical one is a
-    discontinuity there; V2 and V3 are bounded by both.
+    V1 spans the horizontal meridian, so only the vertical meridian is
+    jittered; V2 and V3 are bounded by both.
     """
     x, y = [0., 1.], [0., 1.]
     nmap = ToyNeuropythyMap(jitter_boundary=False)
@@ -294,7 +293,7 @@ def test_dva_to_cortex_jitter_boundary(region, neuropythy):
 
 
 def test_NeuropythyMap_units(neuropythy):
-    """The FreeSurfer map converts between the same two sides as any other"""
+    """NeuropythyMap uses dva and um and accepts unitful coordinates"""
     visual_field_map = ToyNeuropythyMap()
     npt.assert_equal(visual_field_map.visual_unit, dva)
     npt.assert_equal(visual_field_map.tissue_unit, um)
@@ -302,12 +301,12 @@ def test_NeuropythyMap_units(neuropythy):
     bare = visual_field_map.dva_to_v1(x, y)
     npt.assert_allclose(visual_field_map.dva_to_v1(x * dva, y * dva), bare,
                         rtol=1e-12)
-    # `surface=` is not a coordinate and travels through untouched:
+    # `surface=` is not a coordinate and is passed unchanged:
     npt.assert_allclose(visual_field_map.dva_to_v1(x * dva, y * dva,
                                                    surface='pial'),
                         visual_field_map.dva_to_v1(x, y,
                                                    surface='pial'), rtol=1e-12)
-    # Back again, with the three coordinates spelled differently:
+    # Inverse, with mixed units:
     xc, yc, zc = np.array([1000.0, 2500.0]), np.zeros(2), np.zeros(2)
     npt.assert_allclose(
         visual_field_map.v1_to_dva((xc / 1000) * mm, yc * um,
@@ -318,8 +317,7 @@ def test_NeuropythyMap_units(neuropythy):
     with pytest.raises(DimensionMismatchError):
         visual_field_map.v1_to_dva(xc * dva, yc, zc)
 
-    # `cort_nn_thresh` is a distance between mesh vertices, so it is stored in
-    # microns however it was handed over:
+    # `cort_nn_thresh` is stored in um:
     npt.assert_equal(ToyNeuropythyMap(cort_nn_thresh=1 * mm).cort_nn_thresh,
                      1000)
     npt.assert_equal(ToyNeuropythyMap(cort_nn_thresh=500 * um).cort_nn_thresh,
@@ -329,7 +327,7 @@ def test_NeuropythyMap_units(neuropythy):
 
 
 def test_ndim_mixup():
-    """A 3D cortical map cannot drive a model that only knows 2D grids."""
+    """A 3D map with a 2D-only model is a ValueError on build"""
     model = BeyelerScoreboard(ArgusII(), visual_field_map=ToyNeuropythyMap())
     npt.assert_equal(2 in model.spatial.ndim, True)
     npt.assert_equal(3 in model.spatial.ndim, False)
@@ -342,7 +340,7 @@ def test_ndim_mixup():
 # -----------------------------------------------------------------------------
 
 def fake_config():
-    """A stand-in for ``ny.config``, as unconfigured as a fresh install"""
+    """Stand-in for a fresh ``ny.config``"""
     return {'benson_winawer_2018_path': None, 'freesurfer_subject_paths': []}
 
 
@@ -363,7 +361,7 @@ class DownloadOnAccess:
 
 def test_parse_subject_passes_through_loaded_subject(neuropythy, tmp_path,
                                                      monkeypatch):
-    """A subject the caller loaded themselves is used as it is."""
+    """A loaded Subject is returned as is"""
     class LoadedSubject:
         pass
 
@@ -379,7 +377,7 @@ def test_parse_subject_passes_through_loaded_subject(neuropythy, tmp_path,
 
 
 def test_parse_subject_configures_cache(neuropythy, tmp_path, monkeypatch):
-    """The cache is created and pointed at before any subject is looked up."""
+    """The cache directory is created and configured before lookup"""
     config = fake_config()
     monkeypatch.setattr(neuropythy, 'config', config)
     monkeypatch.setattr(neuropythy, 'freesurfer_subject',
@@ -393,8 +391,7 @@ def test_parse_subject_configures_cache(neuropythy, tmp_path, monkeypatch):
     npt.assert_equal(config['benson_winawer_2018_path'], str(dataset))
     npt.assert_equal(config['freesurfer_subject_paths'],
                      [str(dataset / 'freesurfer_subjects')])
-    # A second subject must not point neuropythy anywhere else, nor add the
-    # same search path twice:
+    # A second subject keeps the path and adds no duplicate:
     nmap.parse_subject('S1201')
     npt.assert_equal(config['benson_winawer_2018_path'], str(dataset))
     npt.assert_equal(len(config['freesurfer_subject_paths']), 1)
@@ -432,7 +429,7 @@ def test_parse_subject_downloads_benson_winawer(neuropythy, tmp_path,
 
 def test_parse_subject_reraises_unknown_subject(neuropythy, tmp_path,
                                                 monkeypatch):
-    """A subject that is not ours to download stays neuropythy's error."""
+    """Unknown subjects re-raise neuropythy's ValueError"""
     def freesurfer_subject(name):
         raise ValueError(f"no such subject: {name}")
 
@@ -452,21 +449,21 @@ def test_Neuralink_from_neuropythy(neuropythy):
     nmap = ToyNeuropythyMap()
     locs = np.array([[0, 0], [3, 3], [-2, -2], [TOY_MAX_ECC, TOY_MAX_ECC]])
     nlink = Neuralink.from_neuropythy(nmap, locs=locs)
-    # The last location is off the mesh, so there is nowhere to put a thread:
+    # The last location is off the mesh, so no thread:
     npt.assert_equal(list(nlink.implants.keys()), ['A', 'B', 'C'])
     for name, (x, y) in zip(['A', 'B', 'C'], locs[:3]):
         implant = nlink.implants[name]
         pial = np.array(nmap.dva_to_v1(x, y, surface='pial'))
         npt.assert_almost_equal([implant.x, implant.y, implant.z], pial,
                                 decimal=3)
-        # A thread points from where it enters the cortex to where it ends up:
+        # Thread direction is pial -> midgray:
         orient = np.array(nmap.dva_to_v1(x, y, surface='midgray')) - pial
         npt.assert_almost_equal(implant.direction,
                                 orient / np.linalg.norm(orient), decimal=4)
 
 
 # -----------------------------------------------------------------------------
-# The real thing: Neuropythy and the Benson & Winawer (2018) data
+# Real Neuropythy with the Benson & Winawer (2018) data
 # -----------------------------------------------------------------------------
 
 # Regression points and expected fsaverage cortical coordinates.
@@ -547,7 +544,7 @@ def test_fsaverage_dva_to_cortex(region, jitter_boundary, fsaverage,
 def test_fsaverage_cortex_to_dva(region, fsaverage):
     """Check real fsaverage inverse mapping."""
     to_dva = fsaverage.to_dva()[region]
-    # The forward regression, run backwards:
+    # Invert the forward reference values:
     xc, yc, zc = (np.array(c) for c in FSAVERAGE_CORTEX[(region, False)])
     keep = ~np.isnan(xc)
     xdva, ydva = to_dva(xc[keep], yc[keep], zc[keep])
@@ -556,7 +553,7 @@ def test_fsaverage_cortex_to_dva(region, fsaverage):
     npt.assert_allclose(ydva, np.array(FSAVERAGE_POINTS[region][1])[keep],
                         rtol=.05, atol=0.1)
 
-    # ... and a whole diagonal of the lower left quadrant:
+    # Round trip along the lower-left diagonal:
     x = y = np.arange(-10, -1, .1)
     xdva, ydva = to_dva(*fsaverage.from_dva()[region](x, y))
     npt.assert_allclose(xdva, x, rtol=.05, atol=0.1)
@@ -566,9 +563,8 @@ def test_fsaverage_cortex_to_dva(region, fsaverage):
 @pytest.mark.slow
 def test_fsaverage_scoreboard(fsaverage):
     """Run one end-to-end real-map model integration."""
-    # `meridian_blend=0`: the sums below pin the neuropythy map, not the
-    # default postprocessing. The blend is covered by
-    # `test_CortexSpatial_meridian_blend`.
+    # `meridian_blend=0`, so the reference sums depend on the map only (blend
+    # is tested in `test_CortexSpatial_meridian_blend`):
     implants = [Neuralink.from_neuropythy(fsaverage, xrange=(-3, 3),
                                           yrange=(-3, 3), region=region)
                 for region in ['v1', 'v2', 'v3']]

@@ -16,13 +16,13 @@ from ..utils.constants import ZORDER
 
 
 def _finite(name, value):
-    """Reject NaN and infinity, which slip through every ``<`` comparison"""
+    """Raise ValueError for NaN or inf (both pass ``<`` checks silently)"""
     if not np.all(np.isfinite(np.asarray(value, dtype=np.float64))):
         raise ValueError(f"'{name}' must be finite, not {value}.")
 
 
 def _whole(name, value):
-    """Reject a non-integer count or index, which would silently truncate"""
+    """Return ``value`` as int; raise ValueError if it is not whole"""
     _finite(name, value)
     if int(value) != value:
         raise ValueError(f"'{name}' must be a whole number, not {value}.")
@@ -56,14 +56,13 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
     ----------
     group_dur : float, optional
         Duration of one group's slot (ms). If None, groups divide the
-        shortest pulse period evenly. An explicit value fixes the
-        raster sweep to ``n_groups * group_dur``.
+        shortest pulse period evenly. Otherwise, one raster sweep lasts
+        ``n_groups * group_dur``.
     """
     __slots__ = ('group_dur', '_implant')
 
     def __init__(self, group_dur=None):
-        # A slot is a duration, and it is combined with pulse periods, the
-        # encoder's clock and DT -- all in ms -- further down:
+        # ms, to match pulse periods, encoder clock, and DT:
         group_dur = as_value(group_dur, ms, 'group_dur')
         if group_dur is not None:
             _finite('group_dur', group_dur)
@@ -74,8 +73,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 
     def _pprint_params(self):
         """Return a dict of class arguments to pretty-print"""
-        # Deliberately without the implant: an Implant pretty-prints
-        # its raster, so naming it back here would recurse.
+        # Omit the implant to avoid infinite recursion (Implant prints raster):
         return {'group_dur': self.group_dur, 'n_groups': self.n_groups}
 
     @property
@@ -109,7 +107,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         return self
 
     def _bound(self, implant=None):
-        """The implant to answer a question about, bound or given"""
+        """Return the electrode array of ``implant`` or the bound implant"""
         implant = self.implant if implant is None else implant
         if implant is None:
             raise ValueError(
@@ -193,27 +191,21 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         if ax is None:
             ax = plt.gca()
         ax.set_aspect('equal')
-        # One color per group, spread over the colormap. A single group would
-        # otherwise sit at the very end of it:
+        # One color per group; a single group uses the colormap center:
         spread = (np.linspace(0, 1, self.n_groups) if self.n_groups > 1
                   else np.array([0.5]))
         colors = plt.get_cmap(cmap)(spread)
-        # Microns, which is what the axis labels below say and what the patch
-        # radii are sized in:
         xy = electrode_array.coordinates(um)[:, :2]
-        # Sized by the array rather than by what each electrode reports, since
-        # neither of the two shapes an implant is usually built from would show
-        # its color: a PointSource is a 5 um dot however far apart they are,
-        # and a HexElectrode is drawn nearly transparent. Just short of half
-        # the closest gap, so that neighbors nearly touch and never overlap:
+        # Size circles by the closest electrode gap rather than electrode
+        # shape (PointSource dots are 5 um, HexElectrodes nearly transparent).
+        # 0.38 * gap keeps neighbors from overlapping:
         gap = cKDTree(xy).query(xy, k=2)[0][:, 1].min() if len(xy) > 1 else 1.0
         patches = [Circle(pos, radius=0.38 * gap, fc=colors[g],
                           ec=(0.3, 0.3, 0.3, 1), lw=0.5)
                    for pos, g in zip(xy, group)]
         if annotate:
             for pos, g in zip(xy, group):
-                # A white backing, since a group index has to stay readable
-                # against both ends of the colormap:
+                # White box keeps labels readable on any colormap value:
                 ax.text(pos[0], pos[1], str(g), ha='center', va='center',
                         color='black', size='large',
                         bbox={'boxstyle': 'square,pad=0.1', 'ec': 'none',
@@ -235,8 +227,7 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         Parameters
         ----------
         period : float
-            The pulse period (ms) a sweep has to fit into, so that every group
-            gets its turn before the first one comes round again.
+            Pulse period (ms). One sweep over all groups must fit into it.
 
         Returns
         -------
@@ -251,14 +242,14 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         return float(period) / self.n_groups
 
     def offsets(self, electrodes, period):
-        """How far behind group 0 each electrode's slot begins
+        """Start time of each electrode's slot relative to group 0
 
         Parameters
         ----------
         electrodes : array_like
             Electrode names, in the order they appear in the stimulus.
         period : float
-            The pulse period (ms) a sweep has to fit into.
+            Pulse period (ms). One sweep over all groups must fit into it.
 
         Returns
         -------
@@ -272,9 +263,8 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
         if group.min(initial=0) < 0 or group.max(initial=0) >= self.n_groups:
             raise ValueError(f"'groups' must be in 0..{self.n_groups - 1}.")
         dur = self.slot_dur(period)
-        # A tick of slack: the period is generally not a round number of ms
-        # (a 300 Hz period is 3.333... ms), so an exact `>` would reject the
-        # even split this class computes itself:
+        # Relative tolerance, since periods are rarely round (300 Hz is
+        # 3.333 ms) and an exact `>` would reject the default even split:
         if self.n_groups * dur > period * (1 + 1e-9):
             raise ValueError(f"A raster of {self.n_groups} groups "
                              f"{dur:.3f} ms apart sweeps in "
@@ -288,11 +278,10 @@ class Raster(PrettyPrint, metaclass=ABCMeta):
 class SequentialRaster(Raster):
     """Split electrodes into groups that fire one after another
 
-    Electrodes are assigned to groups by their position in the stimulus, which
-    for an :py:class:`~pulse2percept.implants.ElectrodeGrid` runs row by row.
-    So on a 6x10 array such as
-    :py:class:`~pulse2percept.implants.retina.ArgusII`,
-    ``SequentialRaster(6)`` puts each row in its own group -- a line raster.
+    Electrodes are grouped by their order in the stimulus, which is row by row
+    for an :py:class:`~pulse2percept.implants.ElectrodeGrid`. On a 6x10 array
+    such as :py:class:`~pulse2percept.implants.retina.ArgusII`,
+    ``SequentialRaster(6)`` puts each row in its own group (a line raster).
 
     .. versionadded:: 0.10.0
 
@@ -301,10 +290,9 @@ class SequentialRaster(Raster):
     n_groups : int
         Number of groups to split the electrodes into.
     interleave : bool, optional
-        If False (the default), each group is a contiguous block of
-        electrodes. If True, groups are interleaved, so that consecutive
-        electrodes end up in different groups. Interleaving spreads each
-        group's current further across the array.
+        If False (default), each group is a contiguous block of electrodes.
+        If True, consecutive electrodes go to different groups, which spreads
+        each group's current across the array.
     group_dur : float, optional
         See :py:class:`~pulse2percept.implants.Raster`.
 
@@ -345,28 +333,21 @@ class SequentialRaster(Raster):
         idx = np.arange(len(electrodes))
         if self.interleave:
             return idx % self._n_groups
-        # Contiguous blocks, as evenly sized as the electrode count allows:
+        # Contiguous blocks of near-equal size:
         return idx * self._n_groups // max(1, len(electrodes))
 
 
 def _reduce(w1, w2):
     """Shortest basis of the lattice spanned by ``w1`` and ``w2``
 
-    Lagrange-Gauss reduction: repeatedly subtract the one vector from the other
-    until neither can be shortened. What comes back spans the same lattice, but
-    ``w1`` is now its shortest nonzero vector and ``w2`` the shortest one
-    independent of it -- so every short vector of the lattice is a combination
-    with small coefficients, and the searches below only have to look a few
-    steps in each direction.
+    Lagrange-Gauss reduction. Returns a basis of the same lattice where ``w1``
+    is the shortest nonzero vector and ``w2`` the shortest independent one, so
+    short lattice vectors have small coefficients.
     """
     w1, w2 = np.asarray(w1, dtype=float), np.asarray(w2, dtype=float)
     for _ in range(100):
-        # Compared with room to spare, and rounded off a step short of the
-        # halfway mark, because both decisions are otherwise made on the last
-        # bit of a float: on a square grid the two steps are exactly as long as
-        # each other, and on a hexagonal one they lean on each other by exactly
-        # half a step. Which way an exact comparison then falls is a matter of
-        # how the positions were arrived at, and differs between platforms.
+        # Tolerances make exact ties (square grid: equal lengths; hex grid:
+        # mu = 0.5) resolve the same way on every platform:
         if w1 @ w1 > w2 @ w2 * (1 + 1e-9):
             w1, w2 = w2, w1
         mu = np.round(np.round((w2 @ w1) / (w1 @ w1), 9))
@@ -377,18 +358,12 @@ def _reduce(w1, w2):
 
 
 def _canonical(vectors, scale):
-    """Two lattice steps picked out of ``vectors`` by a rule, not by position
+    """Return two lattice steps from ``vectors`` in a deterministic order
 
-    A grid has four shortest gaps, or six on a hexagonal one, all exactly as
-    long as each other, and every gap turns up with both signs. Which of them
-    is met first is an accident of how they were collected, so taking the
-    first would let the same implant come out mirrored on one machine and not
-    on another. Instead one of each +/- pair is dropped, and the rest are
-    ordered by length and then by direction, which leaves nothing to chance.
-
-    The second step comes back as None when every vector given points the same
-    way, which is for the caller to make sense of: it means the electrodes
-    considered so far are in a line, not that the array is.
+    Drops one of each +/- pair, then sorts by length and direction, so tied
+    shortest gaps (4 on a square grid, 6 on a hex grid) do not depend on input
+    order. The second step is None if all vectors are collinear (the
+    electrodes considered so far lie on a line).
     """
     d = np.linalg.norm(vectors, axis=1)
     tol = 1e-9 * scale
@@ -399,26 +374,23 @@ def _canonical(vectors, scale):
         raise NotImplementedError(
             "A checkerboard needs electrodes on a regular grid, and these are "
             "all in the same place.")
-    # Counted in units of the shortest gap, so that the order they come out in
-    # cannot depend on how wide a net was cast to find them:
+    # Sort by length relative to the shortest gap, so the order does not
+    # depend on how many neighbors were queried:
     vectors = vectors[np.lexsort((-vectors[:, 1], -vectors[:, 0],
                                   np.round(d / d.min(), 9)))]
     u = vectors[0]
-    # The second step has to leave the line the first one traces out:
+    # Second step must not be collinear with the first:
     cross = np.abs(u[0] * vectors[:, 1] - u[1] * vectors[:, 0])
     off_axis = np.flatnonzero(cross > 1e-6 * (u @ u))
     return u, (vectors[off_axis[0]] if len(off_axis) else None)
 
 
 def _closest(xy, labels, n_groups):
-    """Distance between the closest two electrodes that ever fire together
+    """Return the smallest distance between two electrodes of the same group
 
-    A pattern is judged by the closest pair it actually leaves active at the
-    same time, which is not the shortest step of the lattice it was cut from:
-    the implant is a finite piece of that lattice, and on a small or trimmed
-    one the electrodes that would have been closest need not be there at all.
-    Infinite when no group holds more than one electrode, since then there is
-    no pair to keep apart.
+    Measured on the actual electrodes, which on a small or trimmed array can
+    exceed the shortest sublattice vector. Returns inf if no group has more
+    than one electrode.
     """
     closest = np.inf
     for g in range(n_groups):
@@ -439,14 +411,10 @@ def _combos(w1, w2, reach):
 def _spectrum(w1, w2, n_terms=8):
     """Lengths of the shortest nonzero vectors of the lattice, ascending
 
-    This is what "maximally spaced" is measured by. Two electrodes of the same
-    group are always some lattice vector apart, so the shortest vector is the
-    closest two simultaneously active electrodes ever come, the next one is the
-    second-closest, and so on. Comparing whole spectra rather than just the
-    first entry settles the frequent ties: on a square grid, four groups can be
-    laid out as every other row and column, which puts *four* neighbours at the
-    minimum distance, or in the offset pattern this picks, which puts only two
-    there and the rest further out.
+    Used to rank how widely spaced a group is. Comparing the full spectrum
+    breaks ties: on a square grid with four groups, every-other-row-and-column
+    puts four neighbors at the minimum distance, while the offset pattern puts
+    only two there.
     """
     d = np.linalg.norm(_combos(*_reduce(w1, w2), reach=4), axis=1)
     return np.sort(d[d > 1e-9])[:n_terms]
@@ -455,37 +423,26 @@ def _spectrum(w1, w2, n_terms=8):
 def _min_rep(delta, w1, w2):
     """Shortest vector that differs from ``delta`` by a lattice vector
 
-    Two groups are the same pattern displaced by ``delta``, but the pattern
-    repeats with the lattice, so the eye is free to match any electrode of the
-    first group with any electrode of the second. What it sees is the shortest
-    of those matches, which is what this returns -- the jump the percept
-    appears to make when one group hands over to the next.
+    Approximates the apparent jump of the percept from one group to the next,
+    given two groups offset by ``delta`` on a periodic sublattice.
     """
     w1, w2 = _reduce(w1, w2)
     basis = np.column_stack([w1, w2])
-    # Land in the neighborhood of the origin first, so a short search finishes
-    # the job whatever `delta` came in as:
+    # Shift near the origin first so a small search suffices:
     delta = delta - basis @ np.round(np.linalg.solve(basis, delta))
     cand = delta + _combos(w1, w2, reach=2)
     d = np.linalg.norm(cand, axis=1) / np.linalg.norm(w1)
-    # Ties are common and are genuinely ambiguous percepts; break them the same
-    # way every time so that the schedule is reproducible:
+    # Break ties deterministically for a reproducible schedule:
     return cand[np.lexsort((cand[:, 1], cand[:, 0], np.round(d, 9)))[0]]
 
 
 def _drift(steps, scale):
-    """How far the percept wanders over every run of consecutive jumps
+    """Return (max, sum) of net displacement over all runs of consecutive jumps
 
-    ``steps`` holds the jump from each group to the next, so a run of them adds
-    up to the displacement the pattern accumulates over that stretch of the
-    sweep. A raster that shifts one electrode over and over is exactly the case
-    where those sums keep growing, which is the apparent motion the pattern is
-    there to avoid; one that doubles back keeps them bounded. The last run is
-    the whole sweep, so drift that survives from one sweep to the next is
-    counted too.
-
-    Returns the worst run and the total over all runs, both in units of the
-    electrode spacing. Smaller is better on both counts.
+    ``steps`` holds the jump from each group to the next. Growing cumulative
+    displacement means apparent motion; orders that double back keep it
+    bounded. Includes the full sweep, so drift across sweeps counts too. Both
+    values are in units of the electrode spacing; smaller is better.
     """
     n = steps.shape[-2]
     zero = np.zeros(steps.shape[:-2] + (1, 2))
@@ -497,32 +454,25 @@ def _drift(steps, scale):
 
 
 def _firing_order(jump, scale):
-    """The order to fire the groups in, as a list of group labels
-
-    Any order fires every group exactly once, so they all obey the current
-    limit equally; what differs is what the sequence looks like. This picks the
-    one whose percept wanders least (see :py:func:`_drift`).
-    """
+    """Return the group firing order with the least drift (see `_drift`)"""
     n = len(jump)
     if n < 3:
         return list(range(n))
     if n <= 8:
-        # Small enough to settle exactly. The first group is fixed, since
-        # rotating a sweep only moves the origin of time:
+        # Exhaustive search. Group 0 is fixed first, since rotating a sweep
+        # only shifts time zero:
         order = np.array([(0,) + p for p in permutations(range(1, n))])
         steps = jump[order, np.roll(order, -1, axis=1)]
         worst, total = _drift(steps, scale)
-        # `lexsort` is stable, so among equally good orders this takes the
-        # first, and `permutations` yields them in a fixed order:
+        # Stable lexsort + ordered permutations make ties deterministic:
         return order[np.lexsort((total, worst))[0]].tolist()
 
     def score(order):
         steps = jump[order, np.roll(order, -1)]
         return _drift(steps, scale)
 
-    # Too many orders to enumerate, so take the groups one at a time and then
-    # improve on that by reversing stretches until nothing helps. This lands on
-    # the same answer as the exhaustive search wherever both can be run:
+    # Heuristic for n > 8: greedy order, then 2-opt segment reversals until no
+    # improvement (matches the exhaustive search where both were compared):
     order = [0]
     while len(order) < n:
         rest = [g for g in range(n) if g not in order]
@@ -543,22 +493,17 @@ def _firing_order(jump, scale):
 
 
 def _lattice(xy):
-    """Integer coordinates of each electrode, and the two steps they count off
+    """Return integer lattice coordinates of each electrode and the basis
 
-    Every regular grid (rectangular or hexagonal, at any rotation) is a
-    lattice: two steps that reach every electrode by whole numbers of each.
+    Works for any regular grid (rectangular or hexagonal, any rotation).
     """
     n = len(xy)
     if n < 2:
         return np.zeros((n, 2), dtype=np.int64), np.eye(2)
     scale = float(np.linalg.norm(xy.max(axis=0) - xy.min(axis=0)))
     tree = cKDTree(xy)
-    # The lattice steps are among the shortest gaps between electrodes, and a
-    # handful of nearest neighbors usually turns both of them up. Usually, but
-    # not always: rows 1050 um apart with electrodes 100 um along them put
-    # twenty gaps in the near neighborhood of every electrode before the step
-    # to the next row appears. So the net is cast wider until the second step
-    # shows up, and only an array that is a line all the way out has none.
+    # Query more neighbors until a second, non-collinear step appears (e.g.,
+    # rows 1050 um apart with 100 um electrode spacing need k > 20):
     k = min(n, 9)
     while True:
         _, idx = tree.query(xy, k=k)
@@ -568,17 +513,14 @@ def _lattice(xy):
             break
         k = min(n, 2 * k)
     if v is None:
-        # Electrodes on a single line: any second step will do, since nothing
-        # is ever placed along it.
+        # Electrodes on a line: any perpendicular second step works:
         v = np.array([-u[1], u[0]])
-    # The gaps that were seen need not be the shortest two the lattice has, so
-    # they are reduced onto those -- and then settled by the rule a second
-    # time, since the reduction is free to hand them back either way round:
+    # Reduce to the shortest basis, then re-canonicalize (reduction may flip
+    # signs or order):
     u, v = _canonical(_combos(*_reduce(u, v), reach=2), np.linalg.norm(u))
     basis = np.column_stack([u, v])
     ij = np.linalg.solve(basis, (xy - xy[0]).T).T
-    # Negated so that a NaN, which fails every comparison, raises rather than
-    # slipping through as a grid:
+    # Negated so NaN also raises NotImplementedError:
     if not np.abs(ij - np.rint(ij)).max() <= 1e-6:
         raise NotImplementedError(
             "A checkerboard needs electrodes on a regular grid, and these do "
@@ -591,16 +533,13 @@ def _lattice(xy):
 def _sublattices(ij, n_groups, balance):
     """Every way of splitting the grid into ``n_groups`` even groups
 
-    A group is one coset of a sublattice of index ``n_groups``: take every
-    ``a``-th electrode along the first step and every ``d``-th along the
-    second, with ``a * d = n_groups``, and skew the two against each other by
-    ``k``. That enumeration is exhaustive -- every index-``n_groups``
-    sublattice has exactly one such (Hermite) form -- so the best pattern is
-    the best of these and there is nothing else to look for.
+    A group is one coset of an index-``n_groups`` sublattice: every ``a``-th
+    electrode along the first step and every ``d``-th along the second
+    (``a * d = n_groups``), skewed by ``k``. Every such sublattice has exactly
+    one (Hermite normal) form, so the enumeration is exhaustive.
 
-    Yields ``(labels, a, d, k, biggest)`` for the splits that come out even
-    enough, biggest group first, since that is the one the current limit is
-    read off.
+    Yields ``(labels, a, d, k, biggest)`` for splits within ``balance``, where
+    ``biggest`` is the largest group size (sets the peak current).
     """
     even = int(np.ceil(len(ij) / n_groups))
     for a in range(1, n_groups + 1):
@@ -608,20 +547,19 @@ def _sublattices(ij, n_groups, balance):
             continue
         d = n_groups // a
         for k in range(a):
-            # Which coset an electrode falls in: how far along the second step
-            # it sits, and how far along the first once the skew is undone.
+            # Coset index: position along the second step, then along the
+            # first after removing the skew:
             q = np.mod(ij[:, 1], d)
             p = np.mod(ij[:, 0] - k * ((ij[:, 1] - q) // d), a)
             labels = q * a + p
             count = np.bincount(labels, minlength=n_groups)
-            # An idle group is a group's worth of current left unused, and an
-            # oversized one is what the limit ends up being set by:
+            # Reject empty groups and groups larger than the balance allows:
             if count.min() and count.max() <= even * (1 + balance) + 1e-9:
                 yield labels, a, d, k, int(count.max())
 
 
 def _suggest(ij, n_groups, balance, n_show=4):
-    """The nearest group counts that do fit this grid, for an error message"""
+    """Return the nearest group counts that fit this grid, as a string"""
     reach = range(2, min(len(ij), 2 * n_groups + 8) + 1)
     fits = [n for n in reach
             if next(_sublattices(ij, n, balance), None) is not None]
@@ -632,50 +570,40 @@ def _suggest(ij, n_groups, balance, n_show=4):
 class CheckerboardRaster(Raster):
     """Split electrodes into groups that are spread as far apart as possible
 
-    Implements a generalized form of the checkerboard raster pattern tested
-    in [Kasowski2025]_, which found that scattering raster groups over the
-    whole array beat horizontal, vertical, and random rasters at letter
-    recognition and motion discrimination, and matched not rastering at all.
+    Generalizes the checkerboard raster tested in [Kasowski2025]_, where
+    spreading raster groups over the whole array outperformed horizontal,
+    vertical, and random rasters in letter recognition and motion
+    discrimination, and matched no rastering.
 
-    Mathematically speaking, a raster group is a coset of a sublattice of the
-    electrode grid. Within a group, electrodes sit as far from one another as
-    the electrode count allows. Each group is a coarser copy of the grid.
-    Between groups, the order is chosen so the pattern doubles back rather
-    than marching on (to reduce apparent motion). For example: Five groups on
-    a square grid come out one over, two over, one back, two over, so that
-    the percept steps right, down, left, down, and back rather than sliding
+    Each raster group is a coset of a sublattice of the electrode grid, with
+    electrodes as far apart as the electrode count allows. The firing order
+    doubles back to reduce apparent motion. For example, five groups on a
+    square grid step right, down, left, down, and back instead of sliding
     across the array.
 
-    The grid does not have to be rectangular: hexagonal grids, rotated grids,
-    grids with unequal row and column spacing, and grids with electrodes
-    trimmed off are all handled, since the pattern is derived from where the
-    electrodes actually are. Arrays whose electrodes do not lie on a grid at
-    all raise ``NotImplementedError``.
+    Supports hexagonal, rotated, anisotropic, and trimmed grids, since the
+    pattern is computed from electrode positions. Arrays not on a grid raise
+    ``NotImplementedError``.
 
-    The pattern depends on where the electrodes are, so it is worked out when
-    the raster is **bound** to an implant -- which assigning it to
-    :py:attr:`~pulse2percept.implants.Implant.raster` does. Until
-    then the raster knows how many groups it will have but not which electrode
-    goes in which, and :py:meth:`groups`, :py:attr:`min_spacing` and
-    :py:meth:`~pulse2percept.implants.Raster.plot` all raise. Binding it to a
-    second implant recomputes the pattern for that one.
+    The pattern is computed when the raster is bound to an implant (e.g., by
+    assigning it to :py:attr:`~pulse2percept.implants.Implant.raster`).
+    Before that, :py:meth:`groups`, :py:attr:`min_spacing`, and
+    :py:meth:`~pulse2percept.implants.Raster.plot` raise ValueError. Binding
+    to another implant recomputes the pattern.
 
     .. note::
 
-        Not every ``n_groups`` fits a given grid, and one that does not
-        raises a ``ValueError`` (naming counts that do) when the raster is
-        bound.
+        If ``n_groups`` does not fit the grid, binding raises ``ValueError``
+        and lists counts that do.
 
-        Both halves of the pattern are searched for at binding time, and the
-        order the groups fire in is settled exactly only up to eight groups;
-        beyond that a heuristic stands in for it, and the search grows with the
+        The firing order is found by exhaustive search for up to eight
+        groups and by a heuristic beyond that. Search time grows with the
         group count.
 
-        It is worth checking :py:attr:`min_spacing` on the ones that do fit,
-        because a count can be accepted and still leave neighbors in the same
-        group. The standard example is two groups on a hex grid, which
-        degenerates to a line raster. In other words, implants like PRIMA
-        cannot be two-colored; they want 3, 4, or 7 raster groups instead.
+        Check :py:attr:`min_spacing`: an accepted count can still put
+        neighbors in the same group. For example, two groups on a hex grid
+        degenerate to a line raster, so hex implants like PRIMA need 3, 4,
+        or 7 groups.
 
     .. versionadded:: 0.10.0
 
@@ -684,14 +612,11 @@ class CheckerboardRaster(Raster):
     n_groups : int
         Number of groups to split the electrodes into.
     balance : float, optional
-        How much bigger the largest group may be than an even split would make
-        it, as a fraction of it. The largest group is what sets the current the
-        stimulator has to source, so this is the price being paid; what it buys
-        is spacing, because the patterns that spread furthest do not always
-        land evenly on a grid whose edges have been trimmed. Pass 0 to add no
-        imbalance beyond the rounding an uneven electrode count forces anyway
-        -- 378 electrodes in 5 groups are 76, 76, 75, 75, 76 at ``balance=0``,
-        never 76 apiece -- and take whatever spacing comes with it.
+        Allowed excess size of the largest group over an even split, as a
+        fraction. The largest group sets the peak current; allowing imbalance
+        can buy wider spacing on trimmed grids. With 0, only rounding
+        imbalance is allowed (e.g., 378 electrodes in 5 groups: 76, 76, 75,
+        75, 76).
     group_dur : float, optional
         See :py:class:`~pulse2percept.implants.Raster`.
 
@@ -712,9 +637,9 @@ class CheckerboardRaster(Raster):
     >>> round(implant.raster.min_spacing / 575, 3)  # 575 um pitch
     2.236
 
-    The pattern is easiest to check by eye
-    (:py:meth:`~pulse2percept.implants.Raster.plot`), and the electrodes that
-    fire together are :py:meth:`~pulse2percept.implants.Raster.members`:
+    Plot the pattern with :py:meth:`~pulse2percept.implants.Raster.plot`, or
+    list a group's electrodes with
+    :py:meth:`~pulse2percept.implants.Raster.members`:
 
     >>> implant.raster.members(implant.electrode_names, 0)[:4].tolist()
     ['A1', 'A6', 'B3', 'B8']
@@ -733,22 +658,21 @@ class CheckerboardRaster(Raster):
             raise ValueError(f"'balance' cannot be negative, not {balance}.")
         self._n_groups = int(n_groups)
         self._balance = balance
-        # Which electrode goes in which group is a fact about a particular
-        # array, and is worked out in `bind`:
+        # Set in `bind`, since grouping depends on electrode positions:
         self._group_of = None
         self._min_spacing = None
 
     def bind(self, implant):
-        """Work the checkerboard out for this implant's electrode grid
+        """Compute the checkerboard for this implant's electrode grid
 
-        See :py:meth:`~pulse2percept.implants.Raster.bind`. Called for you
-        when the raster is assigned to
+        See :py:meth:`~pulse2percept.implants.Raster.bind`. Called
+        automatically when the raster is assigned to
         :py:attr:`~pulse2percept.implants.Implant.raster`.
         """
         electrode_array = _electrode_array(implant)
         names = list(electrode_array.electrode_names)
         n_groups, balance = self._n_groups, self._balance
-        # Microns, which is what `min_spacing` reports the answer in:
+        # um, the unit of `min_spacing`:
         xy = electrode_array.coordinates(um)[:, :2]
         if len(xy) < n_groups:
             raise ValueError(f"{len(xy)} electrode(s) cannot be split into "
@@ -757,14 +681,8 @@ class CheckerboardRaster(Raster):
         u, v = basis.T
         scale = min(np.linalg.norm(u), np.linalg.norm(v))
 
-        # Of the splits that are even enough, keep the one whose groups are
-        # spread furthest apart, and of those the most even. What "furthest
-        # apart" means is the closest pair of electrodes the split actually
-        # leaves firing together: the lattice a split is cut from says how far
-        # apart its sites are, but the implant only holds a finite piece of
-        # that lattice, and on a small or trimmed one the sites that would have
-        # been closest need not be there at all. The lattice spectrum comes in
-        # behind it, to settle ties and keep the pattern regular:
+        # Rank splits by actual closest same-group pair, then by lattice
+        # spectrum (ties, regularity), then by evenness:
         best = None
         for labels, a, d, k, biggest in _sublattices(ij, n_groups, balance):
             w1, w2 = a * u, k * u + d * v
@@ -784,9 +702,7 @@ class CheckerboardRaster(Raster):
                 f"'balance' to allow groups of unequal size.")
         labels, w1, w2, min_spacing = best[1:]
 
-        # Fire them in the order that wanders least. `labels` says which
-        # pattern an electrode belongs to; the group index it gets is when that
-        # pattern takes its turn:
+        # Map coset labels to firing slots in least-drift order:
         first = np.array([np.flatnonzero(labels == g)[0]
                           for g in range(n_groups)])
         jump = np.zeros((n_groups, n_groups, 2))
@@ -798,8 +714,7 @@ class CheckerboardRaster(Raster):
         slot = np.empty(n_groups, dtype=np.int64)
         slot[_firing_order(jump, scale)] = np.arange(n_groups)
 
-        # Only once the pattern is known, so that a raster that could not be
-        # laid out on this array keeps whatever it was bound to before:
+        # Bind only after success, so a failed bind keeps the previous state:
         super().bind(implant)
         self._min_spacing = min_spacing
         self._group_of = {str(name): int(slot[label])
@@ -822,13 +737,10 @@ class CheckerboardRaster(Raster):
     def min_spacing(self):
         """Distance (um) between the closest two electrodes of a group
 
-        How much the checkerboard bought over a line raster, which leaves
-        neighboring electrodes in the same group and so would report the
-        electrode pitch. Measured between electrodes the implant actually has,
-        so a small or trimmed array can come out better spaced than the pattern
-        it was cut from. Infinite when no group holds more than one electrode,
-        since then no two electrodes ever fire together. None until the raster
-        is bound to an implant, since there is no grid to measure yet.
+        A line raster would give the electrode pitch. Measured on the actual
+        electrodes, so small or trimmed arrays can exceed the sublattice
+        spacing. Infinite if no group has more than one electrode. None until
+        the raster is bound to an implant.
         """
         return self._min_spacing
 
@@ -858,18 +770,16 @@ class CustomRaster(Raster):
     Parameters
     ----------
     groups : list of lists, or dict
-        Either a list whose i-th element holds the names of the electrodes in
-        group i, or a dict mapping each electrode name onto its group index.
-        Every electrode in the stimulus must be accounted for, and no electrode
-        may appear in two groups.
+        A list whose i-th element holds the electrode names in group i, or a
+        dict mapping electrode names to group indices. Every electrode in the
+        stimulus must be assigned to exactly one group.
     group_dur : float, optional
         See :py:class:`~pulse2percept.implants.Raster`.
 
     Examples
     --------
-    Fire the four corners of Argus II before everything else. Every other
-    electrode has to be given a group too, or the current limit that the raster
-    exists to respect could be violated without anyone noticing:
+    Fire the four corners of Argus II first, then all other electrodes (every
+    electrode requires a group):
 
     >>> from pulse2percept.implants import CustomRaster
     >>> from pulse2percept.implants.retina import ArgusII
@@ -895,9 +805,7 @@ class CustomRaster(Raster):
                                     f"names, not the string '{names}'.")
                 for name in names:
                     name = str(name)
-                    # Silently letting the last group win would break the very
-                    # guarantee a raster exists to make, since the electrode
-                    # would go on firing in the group it was taken out of:
+                    # An electrode in two groups would fire in both slots:
                     if name in group_of:
                         raise ValueError(
                             f"Electrode '{name}' is in group "
