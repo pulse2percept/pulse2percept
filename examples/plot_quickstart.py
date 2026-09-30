@@ -23,7 +23,6 @@ threshold, ``xTh``), frequency (``Hz``), and pulse duration (``ms``):
 """
 # sphinx_gallery_thumbnail_number = 1
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 import pulse2percept as p2p
@@ -43,11 +42,13 @@ stim = {
     )
 }
 
-fig, axes = plt.subplots(ncols=2, figsize=(12, 5))
 percept = axon_map.predict_percept(stim)
-percept.plot(ax=axes[1], rings=True, meridians=True)
-axon_map.plot(show_implant=True, ax=axes[0])
-fig.tight_layout()
+_ = p2p.plotting.plot_implant_percept(
+    axon_map,
+    percept,
+    annotate=True,
+    percept_kwargs={'rings': True, 'meridians': True},
+)
 
 ###############################################################################
 # The biphasic axon map model [Granley2021]_ is based on human behavioral data
@@ -89,11 +90,12 @@ e = p2p.stimuli.psychophysics.tumbling_e(
     polarity='light',      # white E on black: only the E is stimulated
 )
 
-fig, axes = plt.subplots(ncols=2, figsize=(12, 5))
 percept = huang_model.predict_percept(e, t_percept=50 * ms)
-percept.plot(ax=axes[1], rings=True, meridians=True)
-huang_model.plot(show_implant=True, ax=axes[0])
-fig.tight_layout()
+_ = p2p.plotting.plot_implant_percept(
+    huang_model,
+    percept,
+    percept_kwargs={'rings': True, 'meridians': True},
+)
 
 
 ###############################################################################
@@ -188,9 +190,11 @@ encoder = p2p.stimuli.TraceEncoder(
 stim = encoder.encode(z)
 percept = dynaphos.predict_percept(stim)
 
-fig, axes = plt.subplots(ncols=2, figsize=(12, 5))
-dynaphos.plot(show_implant=True, ax=axes[0])
-percept.play(ax=axes[1], rings=[1.25, 2.5, 5], meridians=True);
+p2p.plotting.play_implant_percept(
+    dynaphos,
+    percept,
+    percept_kwargs={'rings': [1.25, 2.5, 5], 'meridians': True},
+)
 
 ###############################################################################
 # This is therefore an illustrative simulation, not a reproduction of the

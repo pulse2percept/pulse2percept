@@ -855,3 +855,42 @@ def test_ElectrodeArray_plot_color_stim():
     npt.assert_equal(array['A2'].plot_kwargs[-1]['fc'], 'w')
     npt.assert_equal(array['A1'].plot_kwargs['fc'], (1, 1, 1, 0.8))
     plt.close(fig)
+
+
+def test_ElectrodeArray_plot_color_stim_cathodic():
+    """Stimulus coloring uses the peak absolute amplitude"""
+    array = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 50),
+                            'A2': DiskElectrode(200, 0, 0, 50),
+                            'A3': DiskElectrode(400, 0, 0, 50)})
+    base = array['A1'].plot_kwargs['fc']
+    cmap = plt.get_cmap('OrRd')
+    # Cathodic-only stimulation is colored:
+    fig, ax = plt.subplots()
+    array.plot(ax=ax, color_stim=Stimulus({'A1': -10, 'A2': -20}),
+               cmap='OrRd')
+    fc = ax.collections[0].get_facecolor()
+    npt.assert_almost_equal(fc[0], cmap(0.5, alpha=0.8))
+    npt.assert_almost_equal(fc[1], cmap(1.0, alpha=0.8))
+    npt.assert_almost_equal(fc[2], base)
+    npt.assert_almost_equal(ax.collections[0].norm.vmax, 20)
+    plt.close(fig)
+    # Mixed signs share one magnitude scale; a biphasic waveform peaks at
+    # its larger phase:
+    stim = Stimulus({'A1': [-20, 10], 'A2': [5, -5], 'A3': [0, 0]},
+                    time=[0, 1])
+    fig, ax = plt.subplots()
+    array.plot(ax=ax, color_stim=stim, cmap='OrRd')
+    fc = ax.collections[0].get_facecolor()
+    npt.assert_almost_equal(fc[0], cmap(1.0, alpha=0.8))
+    npt.assert_almost_equal(fc[1], cmap(0.25, alpha=0.8))
+    npt.assert_almost_equal(fc[2], base)
+    plt.close(fig)
+
+
+def test_Implant_plot_stim_cmap_cathodic():
+    fig, ax = plt.subplots()
+    ArgusII().plot(ax=ax, stim={'A3': -20}, stim_cmap=True)
+    coll = ax.collections[0]
+    fc = coll.get_facecolor()[coll._stim_patches['A3']]
+    npt.assert_almost_equal(fc, plt.get_cmap('YlOrRd')(1.0, alpha=0.8))
+    plt.close(fig)

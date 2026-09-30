@@ -176,9 +176,14 @@ Scene and plotting
   plus ``time`` or as ``(x, y, time)`` rows. Accepted wherever ``Scene`` and
   ``predict_percept`` take a gaze array (:pull:`917`, :pull:`923`).
 
-* Added :py:mod:`pulse2percept.plotting` for stimulus/percept figures and
-  animations. :py:mod:`pulse2percept.viz` is deprecated until v0.12.0
-  (:issue:`872`).
+* Added :py:mod:`pulse2percept.plotting` for figures and animations that
+  pair model input with its percept: the source image or video
+  (:py:func:`~pulse2percept.plotting.plot_stimulus_percept`), or the
+  stimulated electrodes at their model-side placement
+  (:py:func:`~pulse2percept.plotting.plot_implant_percept`,
+  :py:func:`~pulse2percept.plotting.play_implant_percept`).
+  :py:mod:`pulse2percept.viz` is deprecated until v0.12.0
+  (:issue:`872`, :pull:`931`).
 
 
 Bug fixes

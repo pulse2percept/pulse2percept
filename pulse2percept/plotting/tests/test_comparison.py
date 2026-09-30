@@ -6,10 +6,22 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+from pulse2percept.implants import DiskElectrode, ElectrodeArray, Implant
+from pulse2percept.models import Model
+from pulse2percept.models.retina import ScoreboardSpatial
+from pulse2percept.models.temporal import FadingTemporal
 from pulse2percept.percepts import Percept
-from pulse2percept.stimuli import ImageStimulus, Stimulus, VideoStimulus
-from pulse2percept.units import Hz, s
-from pulse2percept.plotting import play_stimulus_percept, plot_stimulus_percept
+from pulse2percept.stimuli import (BiphasicPulseTrain, ImageStimulus,
+                                   MonophasicPulse, Stimulus, TraceEncoder,
+                                   VideoStimulus)
+from pulse2percept.topography import VisualFieldMap
+from pulse2percept.units import Hz, dva, ms, s, um
+from pulse2percept.plotting import (play_implant_percept,
+                                    play_stimulus_percept,
+                                    plot_implant_percept,
+                                    plot_stimulus_percept)
+from pulse2percept.plotting.comparison import (STIM_CMAP, _electrode_drive,
+                                               _electrode_stim)
 
 
 def video(n_frames=5, time=None, shape=(4, 6)):
@@ -108,6 +120,15 @@ def test_play_stimulus_percept_zero_order_hold():
     npt.assert_equal(source_index(ani), [0, 0, 1])
 
 
+def test_play_stimulus_percept_source_frame_time():
+    """A temporal percept frame ends the source frame it summarizes"""
+    # Source frames at 0, 33, 66 ms; percept frames at their ends:
+    p = percept(n_frames=3, time=[33.0, 66.0, 99.0],
+                metadata={'source_frame_time': [0.0, 33.0, 66.0]})
+    ani = play_stimulus_percept(video(n_frames=3), p)
+    npt.assert_equal(source_index(ani), [0, 1, 2])
+
+
 def test_play_stimulus_percept_time_units():
     """Source and percept are lined up in physical time, not in raw numbers"""
     ani = play_stimulus_percept(video(n_frames=5),
@@ -177,3 +198,380 @@ def test_play_stimulus_percept_errors():
     # The electrical stimulus an encoder made is not the source picture:
     with pytest.raises(TypeError):
         play_stimulus_percept(Stimulus({'A1': 1}), percept())
+
+
+class LinearMap(VisualFieldMap):
+    """1 dva = 1000 um"""
+
+    def dva_to_lin(self, x, y):
+        return (1000 * np.asarray(x, dtype=np.float32),
+                1000 * np.asarray(y, dtype=np.float32))
+
+    def lin_to_dva(self, x, y):
+        return (np.asarray(x, dtype=np.float32) / 1000,
+                np.asarray(y, dtype=np.float32) / 1000)
+
+    def from_dva(self):
+        return {'ret': self.dva_to_lin}
+
+    def to_dva(self):
+        return {'ret': self.lin_to_dva}
+
+
+def line_model(**params):
+    """Electrodes A, B, C at x = 0, 1000, 2000 um"""
+    implant = Implant(ElectrodeArray({
+        'A': DiskElectrode(0, 0, 0, 100),
+        'B': DiskElectrode(1000, 0, 0, 100),
+        'C': DiskElectrode(2000, 0, 0, 100)}))
+    return ScoreboardSpatial(implant, visual_field_map=LinearMap(),
+                             xrange=(-1, 3), yrange=(-1, 1), step=0.25,
+                             **params).build()
+
+
+def trace_stim(model):
+    """A, B, then C, 100 ms each"""
+    return TraceEncoder(model, step_dur=100 * ms).encode(
+        np.array([(0, 0), (1, 0), (2, 0)]) * dva)
+
+
+def stim_patches(ax):
+    """The electrode collection the implant drew on ``ax``"""
+    return next(c for c in ax.collections if hasattr(c, '_stim_patches'))
+
+
+def fill(ax, name):
+    coll = stim_patches(ax)
+    return coll.get_facecolor()[coll._stim_patches[name]]
+
+
+def overlay_pixel(ani, model, xy, frame, placed=True):
+    """RGBA of the implant layer at ``xy`` (um) in display frame ``frame``"""
+    layer = ani._layers[0]
+    im = layer.image
+    to_display = (stim_patches(im.axes).get_transform() if placed
+                  else im.axes.transData)
+    x, y = to_display.transform(xy)
+    bbox = im.get_window_extent()
+    h, w = layer.data.shape[:2]
+    col = int((x - bbox.x0) / bbox.width * w)
+    row = int((bbox.y1 - y) / bbox.height * h)
+    return layer.data[row, col, :, layer.index[frame]] / 255.0
+
+
+def electrode_pixel(ani, model, name, frame):
+    e = model.implant.electrode_array[name]
+    return overlay_pixel(ani, model, (e.x, e.y), frame)
+
+
+def test_plot_implant_percept_single_electrode():
+    model = line_model()
+    percept = model.predict_percept({'B': 20})
+    axes = plot_implant_percept(model, percept)
+    npt.assert_equal([ax.get_title() for ax in axes], ['Implant', 'Percept'])
+    cmap = plt.get_cmap(STIM_CMAP)
+    npt.assert_almost_equal(fill(axes[0], 'B'), cmap(1.0, alpha=0.8))
+    # Undriven electrodes keep the implant's own fill:
+    base = model.implant.electrode_array['A'].plot_kwargs['fc']
+    npt.assert_almost_equal(fill(axes[0], 'A'), base)
+    npt.assert_almost_equal(fill(axes[0], 'C'), base)
+    # Only the driven electrode is labeled:
+    npt.assert_equal([t.get_text() for t in axes[0].texts], [])
+    axes = plot_implant_percept(model, percept, annotate=True)
+    npt.assert_equal([t.get_text() for t in axes[0].texts], ['B'])
+
+
+def test_plot_implant_percept_shared_scale():
+    model = line_model()
+    axes = plot_implant_percept(model, model.predict_percept({'A': 10,
+                                                              'C': 20}))
+    cmap = plt.get_cmap(STIM_CMAP)
+    npt.assert_almost_equal(fill(axes[0], 'A'), cmap(0.5, alpha=0.8))
+    npt.assert_almost_equal(fill(axes[0], 'C'), cmap(1.0, alpha=0.8))
+
+
+def test_plot_implant_percept_cathodic():
+    model = line_model()
+    axes = plot_implant_percept(model, model.predict_percept({'A': -10,
+                                                              'C': 20}))
+    # Cathodic current is drive, too:
+    cmap = plt.get_cmap(STIM_CMAP)
+    npt.assert_almost_equal(fill(axes[0], 'A'), cmap(0.5, alpha=0.8))
+
+
+def test_plot_implant_percept_placed_implant():
+    model = line_model(implant_rotation=90, implant_position=(500, 0) * um)
+    axes = plot_implant_percept(model, model.predict_percept({'C': 20}))
+    _, ax = plt.subplots()
+    model.plot(ax=ax, show_implant=True)
+    # The colored implant is the placed one:
+    coll, placed = stim_patches(axes[0]), stim_patches(ax)
+    npt.assert_almost_equal(
+        (coll.get_transform() - axes[0].transData).get_matrix(),
+        (placed.get_transform() - ax.transData).get_matrix())
+    # C at local (2000, 0) um sits at (500, 2000) um:
+    xy = coll.get_transform().transform((2000, 0))
+    npt.assert_almost_equal(axes[0].transData.inverted().transform(xy),
+                            (500, 2000))
+
+
+def test_plot_implant_percept_errors():
+    model = line_model()
+    # Two frames have no single time point:
+    with pytest.raises(ValueError, match='play_implant_percept'):
+        plot_implant_percept(model, model.predict_percept(trace_stim(model)))
+    # A percept that does not record its stimulus:
+    with pytest.raises(ValueError, match='metadata'):
+        plot_implant_percept(model, Percept(np.zeros((3, 3, 1))))
+
+
+def test_electrode_stim_nested():
+    implant = line_model().implant
+    model = Model(spatial=ScoreboardSpatial(implant, xrange=(-1, 3),
+                                            yrange=(-1, 1), step=0.5),
+                  temporal=FadingTemporal()).build()
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    percept = model.predict_percept({'A': pt})
+    npt.assert_equal(isinstance(percept.metadata['stim'], Percept), True)
+    stim = _electrode_stim(percept)
+    npt.assert_equal(isinstance(stim, Stimulus), True)
+    npt.assert_equal(stim.electrodes, ['A'])
+    ani = play_implant_percept(model, percept)
+    npt.assert_equal(len(ani._layers), 2)
+
+
+def test_electrode_drive_zero_order_hold():
+    stim = trace_stim(line_model())
+    npt.assert_equal(stim.electrodes, ['A', 'B', 'C'])
+    # Frames at 0, 100, 200 ms, held in between; off once the stimulus ends:
+    drive = _electrode_drive(stim, [0, 50, 99, 100, 250, 300, 350])
+    on = drive > 0
+    npt.assert_equal(on[0], [1, 1, 1, 0, 0, 0, 0])
+    npt.assert_equal(on[1], [0, 0, 0, 1, 0, 0, 0])
+    npt.assert_equal(on[2], [0, 0, 0, 0, 1, 0, 0])
+    # The modulation, not the pulse phases:
+    npt.assert_almost_equal(drive[drive > 0], 100)
+    # A timeless percept summarizes the whole stimulus:
+    npt.assert_almost_equal(_electrode_drive(stim).ravel(), 100)
+
+
+def test_electrode_drive_causal_frames():
+    stim = trace_stim(line_model())
+    # A frame at t shows what was up over (t_prev, t]:
+    on = _electrode_drive(stim, [100, 200, 300], causal=True) > 0
+    npt.assert_equal(on, np.eye(3, dtype=bool))
+    # An instant takes the frame up just before it:
+    on = _electrode_drive(stim, [100], causal=True) > 0
+    npt.assert_equal(on.ravel(), [1, 0, 0])
+    npt.assert_equal(_electrode_drive(stim, [0], causal=True).ravel(), 0)
+    # Frames overlapping a longer interval are all counted:
+    on = _electrode_drive(stim, [50, 250], causal=True) > 0
+    npt.assert_equal(on[:, 1], [1, 1, 1])
+
+
+def test_electrode_drive_raw_waveform():
+    # Pulses start every 50 ms; percept frames are 20 ms apart:
+    stim = Stimulus({'A': BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)})
+    drive = _electrode_drive(stim, np.arange(20, 220, 20), causal=True)
+    npt.assert_almost_equal(drive[0], [10, 0, 10, 0, 0, 10, 0, 10, 0, 0])
+    # A cathodic pulse between percept frames is still drive:
+    stim = Stimulus({'A': MonophasicPulse(-20, 1, delay_dur=30,
+                                          stim_dur=100)})
+    npt.assert_almost_equal(
+        _electrode_drive(stim, [20, 40, 60], causal=True)[0], [0, 20, 0])
+    # A ramp peaks where the interval ends, between samples:
+    stim = Stimulus([[0, 5, 10]], time=[0, 15, 30])
+    npt.assert_almost_equal(
+        _electrode_drive(stim, [0, 20], causal=True)[0], [0, 20 / 3])
+    # A pulse starting at a frame boundary belongs to the next frame:
+    stim = Stimulus([[0, 0, 5, 0]], time=[0, 20, 21, 40])
+    npt.assert_almost_equal(
+        _electrode_drive(stim, [20, 40], causal=True)[0], [0, 5])
+    # A spatial-only model's columns are held, not interpolated:
+    stim = Stimulus([[0, 5, 0, 0]], time=[0, 10, 11, 40])
+    npt.assert_almost_equal(_electrode_drive(stim, [5, 10.5])[0], [0, 5])
+
+
+class SecondStimulus(Stimulus):
+    """A stimulus that stores its time axis in seconds"""
+    _default_time_unit = s
+
+
+def test_electrode_drive_time_unit():
+    ms_stim = Stimulus([[0, 5, 0, 0]], time=[0, 10, 11, 40])
+    s_stim = SecondStimulus([[0, 5, 0, 0]], time=[0, 0.010, 0.011, 0.040])
+    npt.assert_almost_equal(s_stim.times(ms), ms_stim.time)
+    for kwargs in ({}, {'causal': True}):
+        npt.assert_almost_equal(
+            _electrode_drive(s_stim, [5, 10.5, 20], **kwargs),
+            _electrode_drive(ms_stim, [5, 10.5, 20], **kwargs))
+
+
+def temporal_line_model():
+    spatial = line_model()
+    return spatial, Model(spatial=spatial, temporal=FadingTemporal()).build()
+
+
+def test_plot_implant_percept_single_frame_waveform():
+    _, model = temporal_line_model()
+    # A pulses at 0 ms, B at 30 ms:
+    stim = {'A': MonophasicPulse(-20, 1, stim_dur=200),
+            'B': MonophasicPulse(-20, 1, delay_dur=30, stim_dur=200)}
+    percept = model.predict_percept(stim, t_percept=20)
+    axes = plot_implant_percept(model, percept)
+    # A frame at 20 ms reflects stimulation since onset, not after 20 ms:
+    npt.assert_almost_equal(fill(axes[0], 'A'),
+                            plt.get_cmap(STIM_CMAP)(1.0, alpha=0.8))
+    base = model.implant.electrode_array['B'].plot_kwargs['fc']
+    npt.assert_almost_equal(fill(axes[0], 'B'), base)
+
+
+def test_electrode_drive_first_interval_from_onset():
+    # Stimulation ends long before the first requested percept frame:
+    stim = Stimulus({'A': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)})
+    npt.assert_almost_equal(
+        _electrode_drive(stim, [200, 250], causal=True)[0], [10, 0])
+    frames = trace_stim(line_model())
+    on = _electrode_drive(frames, [400, 450], causal=True) > 0
+    npt.assert_equal(on[:, 0], [1, 1, 1])
+    npt.assert_equal(on[:, 1], [0, 0, 0])
+
+
+def test_play_implant_percept_first_frame_from_onset():
+    _, model = temporal_line_model()
+    pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
+    percept = model.predict_percept({'A': pt}, t_percept=[200, 250])
+    ani = play_implant_percept(model, percept)
+    # The frame at 200 ms is still caused by A; nothing is delivered after:
+    npt.assert_equal(electrode_pixel(ani, model, 'A', 0)[3] > 0, True)
+    npt.assert_equal(electrode_pixel(ani, model, 'A', 1)[3], 0)
+
+
+def test_play_implant_percept_fps_keeps_color_scale():
+    model = line_model()
+    # A peaks at 20 in a frame that 5 Hz playback skips:
+    stim = Stimulus({'A': [10, 20, 10]}, time=[0, 50, 200])
+    percept = Percept(np.zeros((3, 3, 3)), time=[0, 50, 200],
+                      metadata={'stim': stim})
+    ani = play_implant_percept(model, percept, fps=5 * Hz)
+    npt.assert_equal(ani._layers[1].index, [0, 2])
+    npt.assert_allclose(electrode_pixel(ani, model, 'A', 0)[:3],
+                        plt.get_cmap(STIM_CMAP)(0.5)[:3], atol=0.02)
+
+
+def test_play_implant_percept_trace():
+    model = line_model()
+    percept = model.predict_percept(trace_stim(model))
+    npt.assert_almost_equal(percept.time, [0, 100, 200])
+    ani = play_implant_percept(model, percept, annotate=True)
+    npt.assert_equal(len(ani._layers), 2)
+    npt.assert_equal(ani._fmt, 'png')
+    # One rendered state per electrode:
+    npt.assert_equal(ani._layers[0].data.shape[-1], 3)
+    # A, then B, then C:
+    for frame, name in enumerate('ABC'):
+        for other in 'ABC':
+            alpha = electrode_pixel(ani, model, other, frame)[3]
+            npt.assert_equal(alpha > 0, other == name)
+    # Labels are baked into the implant layer:
+    npt.assert_equal(len(ani._layers[0].image.axes.texts), 0)
+    npt.assert_equal('<canvas' in ani.to_jshtml(), True)
+
+
+def test_play_implant_percept_spatial_fps():
+    model = line_model()
+    # The percept records the frame states the spatial model used:
+    percept = model.predict_percept(trace_stim(model))
+    ani = play_implant_percept(model, percept, fps=20 * Hz)
+    # Halfway between A and B (50 ms), only A is on, at full amplitude:
+    npt.assert_equal(ani._layers[0].data.shape[-1], 3)
+    npt.assert_equal(electrode_pixel(ani, model, 'B', 1)[3], 0)
+    cmap = plt.get_cmap(STIM_CMAP)
+    npt.assert_allclose(electrode_pixel(ani, model, 'A', 1)[:3],
+                        cmap(1.0)[:3], atol=0.02)
+    npt.assert_equal(electrode_pixel(ani, model, 'B', 2)[3] > 0, True)
+
+
+def test_play_implant_percept_clocks():
+    model = line_model()
+    stim = trace_stim(model)
+    # A percept sampled on its own clock, off the 100 ms modulation frames:
+    percept = Percept(np.zeros((3, 3, 5)), time=[0, 50, 150, 250, 300],
+                      metadata={'stim': stim})
+    ani = play_implant_percept(model, percept)
+    active = [[electrode_pixel(ani, model, name, frame)[3] > 0
+               for name in 'ABC'] for frame in range(5)]
+    npt.assert_equal(active, [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
+                              [0, 0, 0]])
+    # Resampled at 10 Hz, the implant follows the percept frame on screen:
+    # 100 ms still shows the 50 ms frame (A), 200 ms the 150 ms frame (B).
+    ani = play_implant_percept(model, percept, fps=10 * Hz)
+    active = [electrode_pixel(ani, model, 'B', frame)[3] > 0
+              for frame in range(3)]
+    npt.assert_equal(active, [False, False, True])
+
+
+def test_play_implant_percept_temporal_frames():
+    spatial = line_model()
+    model = Model(spatial=spatial, temporal=FadingTemporal()).build()
+    # A for 0-100 ms, then B for 100-200 ms:
+    stim = TraceEncoder(spatial, step_dur=100 * ms).encode(
+        np.array([(0, 0), (1, 0)]) * dva)
+    percept = model.predict_percept(stim)
+    # Each frame ends the interval it summarizes:
+    npt.assert_almost_equal(percept.time, [100, 200])
+    ani = play_implant_percept(model, percept)
+    active = [[electrode_pixel(ani, model, name, frame)[3] > 0
+               for name in 'AB'] for frame in range(2)]
+    npt.assert_equal(active, [[True, False], [False, True]])
+
+
+def test_play_implant_percept_shared_scale():
+    model = line_model()
+    stim = Stimulus({'A': [10, 0], 'C': [0, 20]}, time=[0, 100])
+    percept = Percept(np.zeros((3, 3, 2)), time=[0, 100],
+                      metadata={'stim': stim})
+    ani = play_implant_percept(model, percept)
+    cmap = plt.get_cmap(STIM_CMAP)
+    # Both frames share one scale; A is not renormalized to its own peak:
+    npt.assert_allclose(electrode_pixel(ani, model, 'A', 0)[:3],
+                        cmap(0.5)[:3], atol=0.02)
+    npt.assert_allclose(electrode_pixel(ani, model, 'C', 1)[:3],
+                        cmap(1.0)[:3], atol=0.02)
+
+
+def test_play_implant_percept_placed_implant():
+    model = line_model(implant_rotation=90, implant_position=(500, 0) * um)
+    stim = Stimulus({'C': [20, 20]}, time=[0, 100])
+    percept = Percept(np.zeros((3, 3, 2)), time=[0, 100],
+                      metadata={'stim': stim})
+    ani = play_implant_percept(model, percept)
+    npt.assert_equal(overlay_pixel(ani, model, (500, 2000), 0,
+                                   placed=False)[3] > 0, True)
+    # Not where C would sit in the device frame:
+    npt.assert_equal(overlay_pixel(ani, model, (2000, 0), 0,
+                                   placed=False)[3], 0)
+
+
+def test_implant_percept_leaves_data_alone():
+    model = line_model()
+    stim = trace_stim(model)
+    percept = model.predict_percept(stim)
+    data, time = percept.data.copy(), percept.time.copy()
+    stim_data, stim_time = stim.data.copy(), stim.time.copy()
+    ani = play_implant_percept(model, percept, annotate=True)
+    ani.to_jshtml()
+    plot_implant_percept(model, model.predict_percept({'A': 20}))
+    npt.assert_equal(percept.data, data)
+    npt.assert_equal(percept.time, time)
+    npt.assert_equal(stim.data, stim_data)
+    npt.assert_equal(stim.time, stim_time)
+
+
+def test_play_implant_percept_errors():
+    model = line_model()
+    with pytest.raises(ValueError, match='plot_implant_percept'):
+        play_implant_percept(model, model.predict_percept({'A': 20}))
+    percept = model.predict_percept(trace_stim(model))
+    with pytest.raises(TypeError):
+        play_implant_percept(model, percept, percept_kwargs={'kind': 'hex'})
