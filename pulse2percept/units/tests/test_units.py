@@ -67,7 +67,7 @@ def test_Unit():
     # Unit algebra produces units, not quantities:
     for unit in (uA * ms, uA / mm ** 2, mm ** 2, Hz * s):
         npt.assert_equal(isinstance(unit, Unit), True)
-    # Derived units line up with the predefined ones:
+    # Derived units equal the predefined ones:
     npt.assert_equal(uA * ms, nC)
     npt.assert_equal(1 / s == Hz, True)
     npt.assert_equal(mA * s, mC)
@@ -89,15 +89,14 @@ def test_Unit():
         Unit('time', 1, 's')
     with pytest.raises(ValueError):
         ms ** 0.5
-    # A unit's scale is how big it is: positive and finite, or it is not a unit
+    # Scale must be positive and finite:
     for bad_scale in (0, -1, np.nan, np.inf, -np.inf):
         with pytest.raises(ValueError):
             Unit(TIME, bad_scale, 'bad')
 
 
 def test_canonical_display():
-    # A composed unit that is EXACTLY a predefined one is spelled that way,
-    # because it is that unit and not merely convertible to it:
+    # A composed unit that equals a predefined one is displayed as that unit:
     npt.assert_equal(str(uA * ms), 'nC')
     npt.assert_equal(repr(uA * ms), 'nC')
     npt.assert_equal(str(200 * uA * 0.45 * ms), '90.0 nC')
@@ -105,32 +104,29 @@ def test_canonical_display():
     npt.assert_equal(str(mA * s), 'mC')
     npt.assert_equal(str(s ** -1), 'Hz')
     npt.assert_equal(str(1 * ms / ms), '1')  # dimensionless has no symbol
-    # ... and the magnitude is never touched, so a composed unit that is not
-    # exactly a predefined one keeps its composed spelling rather than being
-    # rescaled into one. `.to()` is the only thing that changes scale.
-    # Canonicalization happens at display time, so the pieces a compound symbol
-    # is built from are the ones it was composed from, not their canonical
-    # spellings: uA*ms/um^2, not nC/um^2.
+    # The magnitude is never rescaled, so a composed unit that does not equal a
+    # predefined one keeps its composed symbol (only `.to()` changes scale).
+    # Canonical symbols apply to the whole unit only, so the parts keep their
+    # composed symbols: uA*ms/um^2, not nC/um^2.
     charge_density = (200 * uA * 0.45 * ms) / (200 * um) ** 2
     npt.assert_equal(str(charge_density), '0.00225 uA*ms/um^2')
     npt.assert_equal(str(charge_density.to(uC / mm ** 2)), '2.25 uC/mm^2')
     npt.assert_equal(str(uA / mm ** 2), 'uA/mm^2')
     npt.assert_equal(str(uA * ms / mm ** 2), 'uA*ms/mm^2')
-    # The lookup is on the same (dimension, scale) pair that __eq__ compares,
-    # so display agrees with equality:
+    # Display uses the (dimension, scale) pair that __eq__ compares, so it
+    # agrees with equality:
     for composed, predefined in [(uA * ms, nC), (s ** -1, Hz), (mA * s, mC),
                                  (ms ** -1, kHz), (A / A, dimensionless)]:
         npt.assert_equal(composed == predefined, True)
         npt.assert_equal(str(composed), str(predefined))
-    # `symbol` still reports how the unit was built; only display is canonical:
+    # `symbol` keeps the composed spelling; only display is canonical:
     npt.assert_equal((uA * ms).symbol, 'uA*ms')
-    # An alias is not canonical unless it is listed as such:
+    # An unlisted alias displays as the canonical unit:
     npt.assert_equal(str(Unit(TIME, 1e-3, 'msec')), 'ms')
 
 
 def test_canonical_units_are_unambiguous():
-    # Each canonical unit claims a distinct (dimension, scale), so no predefined
-    # unit's spelling is decided by declaration order:
+    # Each canonical unit has a distinct (dimension, scale):
     npt.assert_equal(len(_CANONICAL_SYMBOLS), len(_CANONICAL_UNITS))
     for unit in _CANONICAL_UNITS:
         npt.assert_equal(_CANONICAL_SYMBOLS[(unit.dimension, unit.scale)],
@@ -138,12 +134,11 @@ def test_canonical_units_are_unambiguous():
 
 
 def test_snap_scale():
-    # Unit algebra lands exactly on the predefined units, rather than one ulp
-    # away from them:
+    # Unit algebra gives exactly the predefined scales (not one ulp off):
     npt.assert_equal((uA * ms).scale == nC.scale, True)
     npt.assert_equal((um ** 3).scale == 1e-18, True)
     npt.assert_equal((mA * s / uA).scale == 1e3, True)
-    # But a scale that is merely near a power of ten is left alone:
+    # A scale that is only near a power of ten is not snapped:
     npt.assert_equal(Unit(TIME, 1.0000001, 'almost').scale, 1.0000001)
 
 
@@ -200,13 +195,13 @@ def test_Quantity_conversion():
     # Equivalent unit choices convert consistently:
     npt.assert_equal(500 * uA == 0.5 * mA, True)
     npt.assert_equal(1000 * ms == 1 * s, True)
-    # ... including when the conversion cannot be exact in binary floating
-    # point: 0.0041 * 1000 is 4.1000000000000005, not 4.1.
+    # Also when the conversion is inexact in binary floating point:
+    # 0.0041 * 1000 is 4.1000000000000005, not 4.1.
     npt.assert_equal(0.0041 * mA == 4.1 * uA, True)
     npt.assert_equal((0.0041 * mA).to_value(uA) == 4.1, False)
     npt.assert_equal(0.1 * s + 0.05 * s == 150 * ms, True)
     npt.assert_equal([0.0041, 0.0082] * mA == [4.1, 8.2] * uA, [True, True])
-    # But a difference in the 10th significant digit is a real difference:
+    # A difference in the 10th significant digit is not equal:
     npt.assert_equal(4.1 * uA == 4.100000001 * uA, False)
     npt.assert_equal((500 * uA).to_value(mA), 0.5)
     npt.assert_equal((0.5 * mA).to_value(uA), 500.0)
@@ -273,20 +268,20 @@ def test_Quantity_comparison():
     npt.assert_equal(500 * uA <= 0.5 * mA, True)
     npt.assert_equal(500 * uA != 0.5 * mA, False)
     npt.assert_equal(500 * uA != 0.4 * mA, True)
-    # A quantity is never equal to something of another dimension, but does
-    # not raise: equality is asked, not asserted.
+    # A quantity is not equal to a value of another dimension, and equality
+    # does not raise:
     npt.assert_equal(500 * uA == 500 * ms, False)
     npt.assert_equal(500 * uA == 500, False)
     npt.assert_equal(500 * uA == 'foo', False)
-    # Including when the quantity is dimensionless, and the comparison would
-    # otherwise be handed straight to np.isclose:
+    # Also for a dimensionless quantity, which would otherwise pass the
+    # comparison to np.isclose:
     npt.assert_equal(5 * dimensionless == 'foo', False)
     for nothing in (None,):
         npt.assert_equal(500 * uA == nothing, False)
         npt.assert_equal(5 * dimensionless == nothing, False)
     npt.assert_equal(5 * dimensionless != 'foo', True)
     npt.assert_equal(5 * dimensionless == 5, True)
-    # Ordering, on the other hand, is meaningless across dimensions:
+    # Ordering across dimensions raises DimensionMismatchError:
     with pytest.raises(DimensionMismatchError):
         (5 * uA) < (2 * ms)
     with pytest.raises(DimensionMismatchError):
@@ -294,11 +289,10 @@ def test_Quantity_comparison():
 
 
 def test_dimensionless_compound_units():
-    # A bare number combined with a dimensionless quantity means a quantity in
-    # the canonical `dimensionless` unit -- NOT the magnitude in whatever
-    # compound dimensionless unit the quantity happens to carry. The two differ
-    # for every compound whose scale is not 1, which is most of them, and
-    # `5 * dimensionless` is exactly the case that hides the difference.
+    # A bare number combined with a dimensionless quantity is interpreted in
+    # the canonical `dimensionless` unit, not in the quantity's compound unit.
+    # The two differ for any compound whose scale is not 1; `5 *
+    # dimensionless` hides the difference.
     duty = 0.45 * ms * 50 * Hz  # a duty cycle: 0.0225, spelled 22.5 ms*Hz
     npt.assert_equal(duty.magnitude, 22.5)
     npt.assert_equal(duty.to_value(dimensionless), 0.0225)
@@ -322,33 +316,32 @@ def test_dimensionless_compound_units():
     npt.assert_equal(1 + ratio == 1001, True)
     npt.assert_equal(ratio - 1 == 999, True)
     npt.assert_equal(1 - ratio == -999, True)
-    # The result of mixing in a bare number is in `dimensionless`, so it does
-    # not silently inherit a compound spelling:
+    # Mixing in a bare number returns a result in `dimensionless`, not the
+    # compound unit:
     npt.assert_equal((duty + 1).unit, dimensionless)
     npt.assert_equal((1 - duty).unit, dimensionless)
-    # Quantity-to-quantity comparison already converted, and still does:
+    # Quantity-to-quantity comparison converts units:
     npt.assert_equal(duty == 0.0225 * dimensionless, True)
     npt.assert_equal(ratio == 1000 * dimensionless, True)
 
 
 def test_power_and_irradiance():
-    # Power is not a new base dimension: it is voltage times current, so the
-    # unit algebra already knows what a watt is.
+    # Power is voltage times current (no new base dimension):
     npt.assert_equal((V * A).dimension, W.dimension)
     npt.assert_equal((1 * V * A).to_value(W), 1)
     npt.assert_equal((1 * W).to_value(mW), 1000)
-    # Irradiance is then just power per area, whichever way it is spelled:
+    # Irradiance is power per area, in any units:
     npt.assert_equal(3500 * W / m ** 2 == 3.5 * mW / mm ** 2, True)
     npt.assert_almost_equal((3.5 * mW / mm ** 2).to_value(W / m ** 2), 3500)
     npt.assert_equal((mW / mm ** 2).dimension.name, 'irradiance')
     npt.assert_equal(str(mW / mm ** 2), 'mW/mm^2')
-    # ... and it is not a current density, however similar the two look:
+    # Irradiance is not a current density:
     with pytest.raises(DimensionMismatchError):
         (3.5 * mW / mm ** 2).to_value(uA / mm ** 2)
 
 
 def test_Quantity_arrays():
-    # A list or array times a unit is ONE quantity wrapping an array, not an
+    # A list or array times a unit is one quantity wrapping an array, not an
     # array of quantities:
     for magnitude in ([1, 2], (1, 2), np.array([1, 2])):
         q = magnitude * uA
@@ -364,30 +357,29 @@ def test_Quantity_arrays():
     # Comparisons are elementwise:
     npt.assert_equal([500, 1000] * uA == [0.5, 1.0] * mA, [True, True])
     npt.assert_equal([500, 1000] * uA > 0.6 * mA, [False, True])
-    # 2D magnitudes survive too:
+    # 2D magnitudes work too:
     q = np.ones((2, 3)) * mA
     npt.assert_equal(q.magnitude.shape, (2, 3))
     npt.assert_almost_equal(q.to_value(uA), 1000 * np.ones((2, 3)))
 
 
 def test_no_silent_unit_stripping():
-    # np.asarray must not quietly turn a quantity into its magnitude. It is
-    # allowed to produce a useless object array; it is not allowed to produce
-    # a float array that has forgotten the unit.
+    # np.asarray must not return the bare magnitude; an object array is
+    # acceptable, a float array without the unit is not.
     npt.assert_equal(np.asarray(5 * uA).dtype, object)
     npt.assert_equal(np.asarray([1, 2] * uA).dtype, object)
-    # Nor may a quantity sneak into a ufunc:
+    # Quantities are rejected by ufuncs:
     with pytest.raises(TypeError):
         np.sqrt(4 * uA)
     with pytest.raises(TypeError):
         np.array([1.0, 2.0]) + (5 * uA)
-    # Stripping is spelled out instead:
+    # Units are stripped explicitly:
     npt.assert_equal((5 * uA).to_value(uA), 5)
 
 
 def test_dva_is_not_a_length():
-    # A visual field map owns the dva <-> distance relationship; it is a
-    # coordinate transformation, not a unit conversion.
+    # dva <-> distance requires a visual field map (a coordinate transform),
+    # not a unit conversion:
     with pytest.raises(DimensionMismatchError):
         (5 * dva).to(mm)
     with pytest.raises(DimensionMismatchError):
@@ -397,19 +389,19 @@ def test_dva_is_not_a_length():
     with pytest.raises(DimensionMismatchError):
         as_value(5 * dva, um)
     npt.assert_equal(5 * dva == 5 * mm, False)
-    # dva is still a perfectly good unit on its own:
+    # dva works as a unit on its own:
     npt.assert_equal((5 * dva).to_value(dva), 5)
     npt.assert_equal(dva.dimension.name, 'visual angle')
 
 
 def test_deg_and_rad_are_ordinary_angles():
-    # Radians are the base scale, so the two convert by a plain factor:
+    # Radians are the base scale; deg converts by a constant factor:
     npt.assert_almost_equal((180 * deg).to_value(rad), np.pi)
     npt.assert_almost_equal((np.pi * rad).to_value(deg), 180)
     npt.assert_equal(180 * deg == np.pi * rad, True)
     npt.assert_equal(str(45 * deg), '45 deg')
     # An ordinary angle is not a visual angle, and neither converts to the
-    # other or to anything else:
+    # other or to any other dimension:
     npt.assert_equal(deg.dimension == dva.dimension, False)
     npt.assert_equal(45 * deg == 45 * dva, False)
     for bad in (dva, um, ms, dimensionless):
@@ -424,8 +416,8 @@ def test_deg_and_rad_are_ordinary_angles():
 
 
 def test_xTh_is_not_dimensionless():
-    # A multiple of threshold is not a plain number: turning it into a current
-    # takes a calibration, so nothing may convert between the two silently.
+    # A multiple of threshold is not a plain number: converting it to a current
+    # requires a calibration, so there is no implicit conversion:
     npt.assert_equal(xTh == dimensionless, False)
     npt.assert_equal(2 * xTh == 2, False)
     with pytest.raises(DimensionMismatchError):
@@ -434,7 +426,7 @@ def test_xTh_is_not_dimensionless():
         as_value(2 * xTh, dimensionless)
     with pytest.raises(DimensionMismatchError):
         (2 * xTh) + (2 * uA)
-    # It is still a perfectly good unit on its own:
+    # xTh works as a unit on its own:
     npt.assert_equal((2 * xTh).to_value(xTh), 2)
     npt.assert_equal(str(2 * xTh), '2 xTh')
     npt.assert_equal(xTh.dimension.name, 'threshold ratio')
@@ -454,7 +446,7 @@ def test_as_value():
     # A bare unit is the quantity 1:
     npt.assert_equal(as_value(ms, ms), 1)
     npt.assert_equal(as_value(s, ms), 1000)
-    # Mismatches name the offending parameter:
+    # Error messages name the parameter:
     with pytest.raises(DimensionMismatchError):
         as_value(3 * uA, ms)
     with pytest.raises(DimensionMismatchError) as excinfo:
@@ -465,14 +457,14 @@ def test_as_value():
         as_value(3 * uA, ms)
     npt.assert_equal("Expected time (ms), got electric current (uA)."
                      in str(excinfo.value), True)
-    # A dimensionless target says so rather than showing an empty symbol:
+    # A dimensionless target gives "is dimensionless", not an empty symbol:
     with pytest.raises(DimensionMismatchError) as excinfo:
         as_value(3 * uA, dimensionless, 'thresh_percept')
     npt.assert_equal("Parameter 'thresh_percept' is dimensionless, got "
                      "electric current (uA)." in str(excinfo.value), True)
     npt.assert_equal(as_value(3 * dimensionless, dimensionless), 3)
-    # A bad target unit is a bug in the calling API, and is caught even when
-    # the value passed is a bare number:
+    # An invalid target unit is a TypeError, even when the value is a bare
+    # number:
     with pytest.raises(TypeError):
         as_value(20, 'ms')
     with pytest.raises(TypeError):
@@ -480,21 +472,19 @@ def test_as_value():
 
 
 def test_DimensionMismatchError():
-    # Catchable as a TypeError, because that is what it is:
+    # DimensionMismatchError is a TypeError:
     npt.assert_equal(issubclass(DimensionMismatchError, TypeError), True)
     with pytest.raises(TypeError):
         as_value(3 * uA, ms)
 
 
 def test_units_copy_and_pickle():
-    # A Dimension and a Unit are immutable value objects: copying one hands
-    # back the very same object, which is also what keeps a deep-copied
-    # stimulus from allocating units.
+    # Dimension and Unit are immutable, so copy and deepcopy return the same
+    # object (deep-copied stimuli do not allocate new units):
     for obj in (Dimension(current=1), uA, uA / mm ** 2, dimensionless):
         npt.assert_equal(copy(obj) is obj, True)
         npt.assert_equal(deepcopy(obj) is obj, True)
-    # A Quantity does have something to copy, because its magnitude may be a
-    # mutable array:
+    # A Quantity is copied, since its magnitude may be a mutable array:
     q = np.array([1.0, 2.0]) * uA
     for copied in (copy(q), deepcopy(q)):
         npt.assert_equal(copied == q, [True, True])
@@ -502,13 +492,12 @@ def test_units_copy_and_pickle():
     copied = deepcopy(q)
     copied.magnitude[0] = 99
     npt.assert_almost_equal(q.magnitude, [1.0, 2.0])
-    # `copy` shares the magnitude, as a shallow copy should:
+    # `copy` shares the magnitude (shallow copy):
     copied = copy(q)
     copied.magnitude[0] = 99
     npt.assert_almost_equal(q.magnitude, [99.0, 2.0])
-    # All three survive a pickle round trip. They define __slots__ and refuse
-    # ordinary attribute assignment, so this only works because they say how
-    # to restore themselves:
+    # All three survive a pickle round trip (they use __slots__ and block
+    # attribute assignment, so they define their own state restore):
     for obj in (Dimension(current=1, length=-2), ms, uA * ms, dimensionless):
         restored = pickle.loads(pickle.dumps(obj))
         npt.assert_equal(restored, obj)
@@ -517,8 +506,8 @@ def test_units_copy_and_pickle():
         restored = pickle.loads(pickle.dumps(obj))
         npt.assert_equal(np.all(restored == obj), True)
         npt.assert_equal(restored.unit, obj.unit)
-    # A Unit restored from a pickle is still usable in unit algebra and in
-    # conversions, i.e. its dimension came back intact:
+    # An unpickled Unit works in unit algebra and conversions (its dimension is
+    # intact):
     restored = pickle.loads(pickle.dumps(mA))
     npt.assert_almost_equal((1 * restored).to_value(uA), 1000)
     npt.assert_equal(restored * s, mC)
@@ -534,13 +523,12 @@ class StaleDimension(object):
 
 
 def test_Dimension_rejects_stale_pickle():
-    # An exponent tuple written against a different set of base dimensions
-    # would restore into the wrong dimensions:
+    # Exponents from a different set of base dimensions are rejected:
     with pytest.raises(ValueError):
         pickle.loads(pickle.dumps(StaleDimension()))
 
-    # A Unit is protected through the Dimension it carries, and so is a
-    # Quantity through its Unit:
+    # A stale Dimension is also rejected inside a Unit, and inside a Quantity's
+    # Unit:
     class StaleUnit(object):
         def __reduce__(self):
             return (copyreg._reconstructor, (Unit, object, None),

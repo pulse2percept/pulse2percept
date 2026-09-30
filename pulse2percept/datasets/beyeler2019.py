@@ -192,9 +192,8 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
     df['img_shape'] = df.apply(lambda x: (x['img_shape_x'], x['img_shape_y']),
                                axis=1)
     df = df.drop(columns=['img_shape_x', 'img_shape_y'])
-    # 'xrange' and 'yrange' are rebuilt as tuples from ``subject_params``
-    # below, so the raw min/max columns they arrive in would just be
-    # undocumented duplicates of what ends up in those two columns:
+    # 'xrange' and 'yrange' are rebuilt from ``subject_params`` below, so drop
+    # the raw min/max columns:
     df = df.drop(columns=['xrange_x', 'xrange_y', 'yrange_x', 'yrange_y'])
 
     # Verify integrity of the dataset:
@@ -230,10 +229,9 @@ def fetch_beyeler2019(subjects=None, electrodes=None, data_path=None,
         idx &= idx_electrode
     df = df[idx]
 
-    # Augment with implant type & location data. Build each column in one go
-    # rather than pre-initializing it and then writing into it per subject:
-    # writing a float (e.g. `implant_rot`) into a column created as int is an
-    # incompatible-dtype setitem, which pandas will turn into an error.
+    # Augment with implant type & location data. Build each column at once:
+    # writing a float (e.g., `implant_rot`) into an int column per subject is
+    # an incompatible-dtype setitem, an error in newer pandas:
     params = df.subject.map(subject_params)
     df['implant_type_str'] = params.map(lambda p: p['implant_type_str'])
     df['implant_x'] = params.map(lambda p: p['implant_x'])

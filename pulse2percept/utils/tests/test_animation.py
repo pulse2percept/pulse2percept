@@ -38,18 +38,17 @@ def make_ani(data, labels=None, interval=25.0, repeat=True, colorbar=False,
 
 
 def parse(html):
-    """Pull the player config and the two embedded images out of the HTML"""
+    """Return the player config and the two embedded images"""
     cfg = json.loads(re.search(r'var cfg = (\{.*?\});', html, re.S).group(1))
     imgs = [Image.open(BytesIO(base64.b64decode(b64)))
             for b64 in re.findall(r'data:image/\w+;base64,([A-Za-z0-9+/=]+)',
                                   html)]
-    # These animations have a single animated image; read its geometry as the
-    # config's own, the way the player did before it could stack layers:
+    # Single animated image, so merge its layer config into the top level:
     return {**cfg, **cfg['layers'][0]}, imgs[0], imgs[1]
 
 
 def tile(cfg, sheet, i):
-    """Cut frame ``i`` out of the sprite sheet"""
+    """Return frame ``i`` of the sprite sheet"""
     col, row = i % cfg['ncols'], i // cfg['ncols']
     return np.asarray(sheet)[row * cfg['sh']:row * cfg['sh'] + cfg['fh'],
                              col * cfg['sw']:col * cfg['sw'] + cfg['fw']]
@@ -64,8 +63,7 @@ def test_sprite_grid():
             # Every frame must fit on the sheet, with at most one partial row:
             npt.assert_equal(n_rows * n_cols >= n_frames, True)
             npt.assert_equal((n_rows - 1) * n_cols < n_frames, True)
-            # Tiling must keep the sheet smaller than a single stack of
-            # frames, which is what browsers care about:
+            # Tiled sheet must be no larger than a single stack of frames:
             npt.assert_equal(max(n_rows * height, n_cols * width) <=
                              max(n_frames * height, width), True)
 
@@ -77,8 +75,7 @@ def test_frame_shape():
     npt.assert_equal(_frame_shape((100, 200), 5, (50, 100)), (50, 100))
     # Aspect ratio is preserved:
     npt.assert_equal(_frame_shape((100, 200), 5, (50, 400)), (50, 100))
-    # Huge stacks are shrunk until the sheet fits what browsers can decode,
-    # padding included:
+    # Huge stacks are shrunk until the padded sheet fits MAX_SPRITE_PX:
     for pad_to in (1, 8, 16):
         height, width = _frame_shape((2000, 2000), 1000, (2000, 2000), pad_to)
         pad_h = int(np.ceil(height / pad_to)) * pad_to
@@ -111,69 +108,68 @@ def test_frame_interval():
     npt.assert_almost_equal(frame_interval([0, 0.5, 1.0]), 0.5)
     # 'fps' wins over the time axis:
     npt.assert_almost_equal(frame_interval([0, 10, 20], fps=25), 40)
-    # A single frame has no time step of its own, but must still animate:
+    # A single frame has no time step:
     npt.assert_almost_equal(frame_interval([0]), SINGLE_FRAME_INTERVAL)
     npt.assert_almost_equal(frame_interval([0], fps=10), 100)
     # A non-homogeneous time axis needs an explicit 'fps':
     with pytest.raises(NotImplementedError):
         frame_interval([0, 1, 10])
     npt.assert_almost_equal(frame_interval([0, 1, 10], fps=20), 50)
-    # 'tol' decides how much jitter still counts as homogeneous:
+    # 'tol' sets how much jitter counts as homogeneous:
     npt.assert_almost_equal(frame_interval([0, 10, 20.005], tol=1), 10)
     with pytest.raises(NotImplementedError):
         frame_interval([0, 10, 20.005], tol=1e-6)
 
 
 def test_frame_interval_fps_units():
-    """A frame rate is a frequency, however it is spelled"""
+    """fps accepts plain Hz or any frequency unit"""
     bare = frame_interval([0, 10, 20], fps=25)
     for spelling in (25 * Hz, 0.025 * kHz):
         npt.assert_allclose(frame_interval([0, 10, 20], fps=spelling), bare,
                             rtol=1e-12)
-    # ... and nothing else is a frame rate:
+    # Other units are rejected:
     for wrong in (30 * ms, 30 * uA, 30 * dva):
         with pytest.raises(DimensionMismatchError):
             frame_interval([0, 10, 20], fps=wrong)
 
 
 def test_frame_timeline():
-    """`fps` decides how often the timeline is sampled, not how fast it runs"""
-    # At its own rate, every frame is shown for its own time step:
+    """fps sets the display sampling rate without changing duration"""
+    # Without fps, each frame is shown for its own time step:
     timeline = _frame_timeline([0, 10, 20, 30])
     npt.assert_equal(timeline.indices, [0, 1, 2, 3])
     npt.assert_almost_equal(timeline.times, [0, 10, 20, 30])
     npt.assert_almost_equal(timeline.intervals, [10, 10, 10, 10])
-    # A single frame has no time step at all:
+    # A single frame has no time step:
     timeline = _frame_timeline([7.5])
     npt.assert_equal(timeline.indices, [0])
     npt.assert_almost_equal(timeline.intervals, [SINGLE_FRAME_INTERVAL])
-    # An irregular axis keeps its own unequal time steps:
+    # An irregular axis keeps its unequal time steps:
     timeline = _frame_timeline([0, 0.45, 0.55, 166.67])
     npt.assert_almost_equal(timeline.intervals, [0.45, 0.1, 166.12, 166.12],
                             decimal=6)
 
-    # 40 ms of animation stays 40 ms of animation, whatever the display rate:
+    # Duration stays 40 ms at any display rate:
     for fps, n_frames in [(25, 1), (50, 2), (100, 4), (200, 8)]:
         timeline = _frame_timeline([0, 10, 20, 30], fps=fps)
         npt.assert_equal(timeline.indices.size, n_frames)
         npt.assert_almost_equal(timeline.intervals, [1000.0 / fps] * n_frames)
         npt.assert_almost_equal(timeline.intervals.sum(), 40, decimal=6)
-    # Zero-order hold: each display frame repeats the most recent one that was
-    # due, and frames in between are dropped rather than blended in:
+    # Zero-order hold: each display frame shows the most recent source frame;
+    # skipped frames are dropped, not blended:
     npt.assert_equal(_frame_timeline([0, 10, 20, 30], fps=200).indices,
                      [0, 0, 1, 1, 2, 2, 3, 3])
     npt.assert_equal(_frame_timeline([0, 10, 20, 30], fps=50).indices, [0, 2])
-    # An irregular axis resamples the same way. The frame that is only up
-    # between 0.45 and 0.55 ms falls between two display samples and is never
-    # shown, which is what a 30 fps display would do:
+    # Irregular axis: the frame shown from 0.45 to 0.55 ms falls between two
+    # 30 fps display samples and is dropped:
     npt.assert_equal(_frame_timeline([0, 0.45, 0.55, 166.67], fps=30).indices,
                      [0, 2, 2, 2, 2, 2, 3, 3, 3, 3])
 
-    # A frame rate is a frequency, however it is spelled ...
+    # fps accepts any frequency unit:
     for spelling in (25 * Hz, 0.025 * kHz):
         npt.assert_equal(_frame_timeline([0, 10, 20], fps=spelling).indices,
                          _frame_timeline([0, 10, 20], fps=25).indices)
-    # ... and nothing else is one:
+    # Other units are rejected:
     for wrong in (30 * ms, 30 * uA, 30 * dva):
         with pytest.raises(DimensionMismatchError):
             _frame_timeline([0, 10, 20], fps=wrong)
@@ -185,12 +181,7 @@ def test_frame_timeline():
 
 
 def test_frame_timeline_rejects_unordered_time():
-    """A frame cannot come up before the one in front of it
-
-    `searchsorted` assumes a sorted axis and would quietly pick the wrong
-    frames for anything else, and a negative interval would go straight to the
-    player as a negative delay.
-    """
+    """Time axes that are unsorted, repeated, or non-finite are rejected"""
     for wrong in ([0, 10, 5], [0, 10, 10], [10, 0], [0, np.nan, 10],
                   [0, np.inf]):
         for fps in (None, 30):
@@ -199,31 +190,22 @@ def test_frame_timeline_rejects_unordered_time():
 
 
 def test_frame_timeline_last_frame():
-    """The last frame is held for the interval in front of it
-
-    A time axis says when each frame comes up, not when the last one goes
-    away. Reading its final time point as an endpoint instead would give that
-    frame no duration at all, and a frame nobody can see is not a frame -- a
-    percept's time points are the instants a model was evaluated at, so the
-    last one is model output like any other.
-    """
+    """The last frame is held for the preceding interval"""
     for time in ([0, 10, 20], [0, 10, 30], [0, 0.45, 0.55, 166.67]):
         timeline = _frame_timeline(time)
         npt.assert_almost_equal(timeline.intervals[-1],
                                 timeline.intervals[-2])
         npt.assert_array_less(0, timeline.intervals)
-        # `n` frames of `dt` take `n * dt`, which is what a video means by `n`
-        # frames:
+        # `n` frames of `dt` take `n * dt`:
         npt.assert_almost_equal(_frame_timeline([0, 10, 20]).intervals.sum(),
                                 30)
-        # ... and a display clock fine enough to resolve it reaches it,
-        # which a zero-length last frame would not allow at any rate:
+        # A fine display clock reaches the last frame:
         npt.assert_equal(_frame_timeline(time, fps=1000).indices[-1],
                          len(time) - 1)
 
 
 def test_frame_timeline_does_not_mutate():
-    """The timeline is handed out, so it cannot alias the caller's axis"""
+    """The timeline does not alias the input time array"""
     time = np.array([0.0, 10.0, 30.0])
     timeline = _frame_timeline(time)
     timeline.times[0] = 999
@@ -237,24 +219,21 @@ def test_HTMLAnimation_sprite_sheet(n_frames, fmt):
     ani = make_ani(data, fmt=fmt)
     cfg, bg, sheet = parse(ani.to_jshtml())
     npt.assert_equal(cfg['n'], n_frames)
-    # Frames are embedded at their native size (they are magnified for
-    # display, and the browser can do that for free):
+    # Frames are embedded at native size; the browser magnifies them:
     npt.assert_equal((cfg['fh'], cfg['fw']), (6, 8))
-    # The sheet must be large enough to hold every frame:
+    # The sheet holds every frame:
     n_rows = int(np.ceil(n_frames / cfg['ncols']))
     npt.assert_equal(sheet.size, (cfg['ncols'] * cfg['sw'],
                                   n_rows * cfg['sh']))
     if fmt == 'png':
-        # Scalar data is shipped as a palettized PNG (one byte per pixel),
-        # with no padding needed between frames:
+        # Scalar data is a palettized PNG (one byte per pixel), unpadded:
         npt.assert_equal(sheet.mode, 'P')
         npt.assert_equal((cfg['sh'], cfg['sw']), (cfg['fh'], cfg['fw']))
     else:
-        # A gray colormap needs no chroma, so 8x8 DCT blocks are the unit
-        # that frames must be aligned to:
+        # Gray colormap has no chroma, so frames align to 8x8 DCT blocks:
         npt.assert_equal(sheet.mode, 'L')
         npt.assert_equal((cfg['sh'], cfg['sw']), (8, 8))
-    # The image is blitted into the figure, which is otherwise static:
+    # The image rect lies inside the static background:
     npt.assert_equal(bg.size, (800, 500))
     x, y, w, h = cfg['rect']
     npt.assert_equal(x >= 0 and y >= 0, True)
@@ -263,12 +242,7 @@ def test_HTMLAnimation_sprite_sheet(n_frames, fmt):
 
 @pytest.mark.parametrize('shape', ((6, 8), (61, 91), (37, 37), (13, 100)))
 def test_HTMLAnimation_rect_covers_image(shape):
-    """The frame must not leave a gap along the edge of the image
-
-    Rounding the *size* of the destination rect (rather than its edges) can
-    leave a row or column of figure background exposed, which shows up as a
-    bright line along the edge of the percept.
-    """
+    """The drawn rect covers the whole image, with no gap at the edges"""
     ani = make_ani(np.random.rand(*shape, 3))
     cfg, bg, _ = parse(ani.to_jshtml())
     bbox = ani._image.get_window_extent()
@@ -277,14 +251,13 @@ def test_HTMLAnimation_rect_covers_image(shape):
     npt.assert_equal(x <= bbox.x0 and x + w >= bbox.x1, True)
     npt.assert_equal(y <= height - bbox.y1, True)
     npt.assert_equal(y + h >= height - bbox.y0, True)
-    # ... but must not overshoot by more than a pixel on either side, which
-    # would visibly stretch the percept:
+    # Overshoot is less than 2 pixels:
     npt.assert_equal(w - (bbox.x1 - bbox.x0) < 2, True)
     npt.assert_equal(h - (bbox.y1 - bbox.y0) < 2, True)
 
 
 def test_HTMLAnimation_frame_values():
-    """Every frame must land on the sheet with the right gray levels"""
+    """Every frame is on the sheet with the correct gray levels"""
     n_frames = 7
     data = np.linspace(0, 1, 4 * 5 * n_frames).reshape((4, 5, n_frames))
     cfg, _, sheet = parse(make_ani(data, fmt='png').to_jshtml())
@@ -292,7 +265,7 @@ def test_HTMLAnimation_frame_values():
         # Matplotlib quantizes to 256 levels before the colormap lookup:
         expected = np.clip(data[..., i] / data.max() * 256, 0, 255)
         npt.assert_equal(tile(cfg, sheet, i), expected.astype(np.uint8))
-    # JPEG is lossy, but must still be visually indistinguishable:
+    # JPEG is lossy, but within 16 gray levels:
     cfg, _, sheet = parse(make_ani(data, fmt='jpg').to_jshtml())
     for i in range(n_frames):
         expected = np.clip(data[..., i] / data.max() * 256, 0, 255)
@@ -307,7 +280,7 @@ def test_HTMLAnimation_rgb(fmt):
     npt.assert_equal(sheet.mode, 'RGB')
     npt.assert_equal((cfg['fh'], cfg['fw']), (8, 8))
     if fmt == 'jpg':
-        # Color needs chroma, which is subsampled in 16x16 macroblocks:
+        # Chroma is subsampled in 16x16 macroblocks:
         npt.assert_equal((cfg['sh'], cfg['sw']), (16, 16))
     for i in range(5):
         expected = (data[..., i] * 255).astype(np.uint8)
@@ -320,11 +293,10 @@ def test_HTMLAnimation_rgb(fmt):
 
 @pytest.mark.parametrize('fmt', ('png', 'jpg'))
 def test_HTMLAnimation_rgba(fmt):
-    """Four channels are RGBA, not RGB
+    """Four-channel data is encoded as RGBA
 
-    ``Image.fromarray(sheet, mode='RGB')`` on an RGBA array does not drop the
-    alpha channel: PIL reads the 4-bytes-per-pixel buffer 3 bytes at a time, so
-    the channels shear across every row and the sheet turns to garbage.
+    ``Image.fromarray(sheet, mode='RGB')`` on an RGBA array reads 4-byte pixels
+    3 bytes at a time, which scrambles the channels.
     """
     data = np.zeros((6, 8, 4, 5), dtype=np.float32)
     data[:, :, 0, :] = 1.0     # pure red ...
@@ -334,13 +306,13 @@ def test_HTMLAnimation_rgba(fmt):
     for i in range(5):
         tile_i = tile(cfg, sheet, i).astype(float)
         if fmt == 'png':
-            # PNG carries the alpha channel, and the canvas composites it:
+            # PNG keeps alpha for the canvas to composite:
             npt.assert_equal(sheet.mode, 'RGBA')
             npt.assert_array_less(
                 np.abs(tile_i - [255, 0, 0, 64]).max(axis=-1), 2)
         else:
-            # JPEG cannot, so the frames are flattened onto the white axes
-            # background, which is what Matplotlib rasterizes as well:
+            # JPEG frames are flattened onto the white axes background, as
+            # Matplotlib rasterizes them:
             npt.assert_equal(sheet.mode, 'RGB')
             npt.assert_array_less(
                 np.abs(tile_i - [255, 191, 191]).max(axis=-1), 8)
@@ -348,15 +320,11 @@ def test_HTMLAnimation_rgba(fmt):
 
 @pytest.mark.parametrize('shape', ((65, 97), (30, 40), (16, 16), (13, 11)))
 def test_HTMLAnimation_no_frame_bleed(shape):
-    """JPEG blocks must never straddle two frames of the sprite sheet
-
-    Without padding each frame out to a whole number of blocks, a bright frame
-    bleeds into the edge of the dark frame next to it on the sheet.
-    """
+    """JPEG frames do not bleed into neighboring frames on the sheet"""
     n_frames = 8
     for data in [np.zeros((*shape, n_frames)),
                  np.zeros((*shape, 3, n_frames))]:
-        data[..., 1::2] = 1.0    # alternate pitch-black and pure-white frames
+        data[..., 1::2] = 1.0    # alternate black and white frames
         cfg, _, sheet = parse(make_ani(data, fmt='jpg').to_jshtml())
         for i in range(n_frames):
             npt.assert_array_less(
@@ -369,17 +337,17 @@ def test_HTMLAnimation_labels():
     cfg, _, _ = parse(make_ani(data, labels=labels).to_jshtml())
     npt.assert_equal(cfg['labels'], labels)
     npt.assert_equal(cfg['title'] is not None, True)
-    # The title band sits above the image and spans the whole figure:
+    # The title band is above the image:
     npt.assert_equal(cfg['title']['rect'][1] + cfg['title']['rect'][3] <=
                      cfg['rect'][1], True)
-    # Without labels, the player leaves the title alone:
+    # Without labels, the title is not redrawn:
     cfg, _, _ = parse(make_ani(data).to_jshtml())
     npt.assert_equal(cfg['title'], None)
     npt.assert_equal(cfg['labels'], [])
 
 
 def title_ink(label, dpi=100):
-    """The pixels a Matplotlib-rendered axes title actually covers"""
+    """Return the pixel extent of a Matplotlib-rendered axes title"""
     rendered = []
     for text in (label, ''):
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -395,32 +363,26 @@ def title_ink(label, dpi=100):
 
 @pytest.mark.parametrize('label', ('t = 0.00 ms', 't = 123.45 ms', 'gjpqy AWM'))
 def test_HTMLAnimation_title_band_covers_text(label):
-    """The band the player clears must cover a whole line of text
+    """The cleared title band covers a full line of text
 
-    The player redraws the title on the canvas for every frame, but can only
-    erase what it drew itself. A band that is too short (an empty ``Text`` has
-    a degenerate bounding box, so measuring it directly gives a zero-height
-    band) leaves every title standing, and they pile up into an unreadable
-    smear after a few frames.
+    A band that is too short leaves old titles on the canvas, where they pile
+    up over frames.
     """
     cfg, _, _ = parse(make_ani(np.random.rand(4, 4, 3),
                                labels=[label] * 3).to_jshtml())
     _, top, _, height = cfg['title']['rect']
     y0, y1, x0, x1 = title_ink(label)
     npt.assert_equal(top <= y0 and y1 < top + height, True)
-    # ... and the text must be anchored where Matplotlib would put it:
+    # Text is anchored where Matplotlib puts it:
     npt.assert_equal(cfg['title']['align'], 'center')
     npt.assert_array_less(abs((x0 + x1) / 2 - cfg['title']['x']), 2)
 
 
 def test_HTMLAnimation_title_not_in_background():
-    """A title left on the axes must not be baked into the background
+    """With labels, an existing axes title is excluded from the background
 
-    The background is a static ``<img>`` underneath the canvas, so anything
-    rendered into it survives the player's ``clearRect`` and shows through
-    every frame. Two ways to get a title onto the axes before the HTML is
-    built: pass in an axes that already has one, or render the inherited
-    ``FuncAnimation`` first (which leaves the last frame's title behind).
+    The background is a static ``<img>``, so a title rendered into it shows
+    through every frame.
     """
     data = np.random.rand(4, 4, 3)
     labels = ['t = 0.00 ms', 't = 1.00 ms', 't = 2.00 ms']
@@ -430,10 +392,9 @@ def test_HTMLAnimation_title_not_in_background():
         ani = make_ani(data, labels=labels)
         ani._image.axes.set_title(stale)
         npt.assert_equal(np.asarray(parse(ani.to_jshtml())[1]), reference)
-        # The caller's title is left the way it was found:
+        # The existing title is restored:
         npt.assert_equal(ani._image.axes.get_title(), stale)
-    # Without labels the player leaves the title alone, so a title on the axes
-    # belongs in the background:
+    # Without labels, the axes title is part of the background:
     ani = make_ani(data)
     ani._image.axes.set_title('A title')
     npt.assert_equal(np.any(np.asarray(parse(ani.to_jshtml())[1]) != reference),
@@ -441,7 +402,7 @@ def test_HTMLAnimation_title_not_in_background():
 
 
 def make_indexed(data, index):
-    """An HTMLAnimation whose display frames select from ``data``"""
+    """Return an HTMLAnimation whose display frames index into ``data``"""
     fig, ax = plt.subplots(figsize=(8, 5))
     mat = ax.imshow(np.zeros(data.shape[:-1]), cmap='gray', vmin=0,
                     vmax=data.max())
@@ -452,15 +413,15 @@ def make_indexed(data, index):
 
 
 def test_HTMLAnimation_packs_each_frame_once():
-    """Only the source frames a display frame lands on reach the sheet"""
+    """Only displayed source frames are packed, each once"""
     n_src = 6
     data = np.linspace(0, 1, 4 * 5 * n_src).reshape((4, 5, n_src))
-    # Showing a frame twice costs an index, not a second tile:
+    # Repeated frames reuse one tile:
     repeated = np.repeat(np.arange(n_src), 2)
     cfg, _, sheet = parse(make_indexed(data, repeated).to_jshtml())
     npt.assert_equal(cfg['n'], 2 * n_src)
     npt.assert_equal(cfg['map'], list(repeated))
-    # Skipped frames are left out, and the map is renumbered around them:
+    # Skipped frames are omitted, and the map is renumbered:
     skipped = [0, 2, 4]
     small_cfg, _, small = parse(make_indexed(data, skipped).to_jshtml())
     npt.assert_equal(small_cfg['map'], [0, 1, 2])
@@ -468,7 +429,7 @@ def test_HTMLAnimation_packs_each_frame_once():
         # Matplotlib quantizes to 256 levels before the colormap lookup:
         expected = np.clip(data[..., src] / data.max() * 256, 0, 255)
         npt.assert_equal(tile(small_cfg, small, i), expected.astype(np.uint8))
-    # Half the frames make for a smaller sheet:
+    # Fewer frames give a smaller sheet:
     npt.assert_equal(np.prod(small.size) < np.prod(sheet.size), True)
 
 
@@ -480,42 +441,41 @@ def test_HTMLAnimation_playback():
     npt.assert_equal(once['mode'], 'once')
     ani = make_ani(data, interval=40.0)
     npt.assert_almost_equal(parse(ani.to_jshtml())[0]['interval'], 40.0)
-    # 'fps' and 'default_mode' override the animation's own settings:
+    # 'fps' and 'default_mode' override the animation settings:
     cfg, _, _ = parse(ani.to_jshtml(fps=10, default_mode='reflect'))
     npt.assert_almost_equal(cfg['interval'], 100.0)
     npt.assert_equal(cfg['mode'], 'reflect')
 
 
 def test_HTMLAnimation_per_frame_intervals():
-    """Frames of unequal duration are what an irregular time axis needs"""
+    """Per-frame intervals are passed to the player"""
     data = np.random.rand(4, 4, 3)
     intervals = [0.45, 165.67, 0.45]
     cfg, _, _ = parse(make_ani(data, intervals=intervals).to_jshtml())
     npt.assert_almost_equal(cfg['intervals'], intervals)
-    # Matplotlib only knows a single frame delay, which is all its own
-    # machinery (`save`, `to_html5_video`) can express:
+    # Matplotlib (`save`, `to_html5_video`) uses the mean delay:
     ani = make_ani(data, intervals=intervals)
     npt.assert_almost_equal(ani._interval, np.mean(intervals))
     # A constant delay is still the default:
     cfg, _, _ = parse(make_ani(data, interval=40.0).to_jshtml())
     npt.assert_almost_equal(cfg['intervals'], [40.0] * 3)
-    # An explicit `fps` overrides the animation's own timing, as it does in
-    # Matplotlib -- it does not resample the frames:
+    # Explicit `fps` overrides the timing (as in Matplotlib) without
+    # resampling frames:
     cfg, _, _ = parse(make_ani(data, intervals=intervals).to_jshtml(fps=10))
     npt.assert_almost_equal(cfg['intervals'], [100.0] * 3)
     npt.assert_equal(cfg['n'], 3)
-    # There must be exactly one delay per frame:
+    # Requires one delay per frame:
     with pytest.raises(ValueError):
         make_ani(data, intervals=[10, 20])
 
 
 
 def test_HTMLAnimation_smoothing():
-    # Strongly magnified frames are drawn with nearest-neighbor, just like
-    # Matplotlib's 'antialiased' interpolation:
+    # Strongly magnified frames use nearest-neighbor, as in Matplotlib's
+    # 'antialiased' interpolation:
     small = parse(make_ani(np.random.rand(4, 4, 3)).to_jshtml())[0]
     npt.assert_equal(small['smooth'], False)
-    # Frames that are shown at roughly their native size are interpolated:
+    # Frames shown near native size are interpolated:
     large = parse(make_ani(np.random.rand(300, 300, 3)).to_jshtml())[0]
     npt.assert_equal(large['smooth'], True)
 
@@ -523,8 +483,8 @@ def test_HTMLAnimation_smoothing():
 def test_HTMLAnimation_html():
     data = np.random.rand(4, 4, 3)
     html = make_ani(data, labels=['a', 'b', 'c']).to_jshtml()
-    # Self-contained: no external resources, and everything is scoped to a
-    # unique id so that several animations can live in the same notebook:
+    # No external resources, and everything is scoped to a unique id so that
+    # several animations can share a notebook:
     npt.assert_equal('http://' in html or 'https://' in html, False)
     uids = set(re.findall(r'id="(p2p-anim-[0-9a-f]+)"', html))
     npt.assert_equal(len(uids), 1)
@@ -541,10 +501,10 @@ def test_HTMLAnimation_fmt():
     jpg = make_ani(data, fmt='jpg').to_jshtml()
     npt.assert_equal('data:image/png;base64,' in png, True)
     npt.assert_equal('data:image/jpeg;base64,' in jpg, True)
-    # The background is always a PNG: it is mostly text and thin lines, which
-    # is exactly what JPEG is bad at:
+    # The background is always PNG (text and thin lines compress poorly as
+    # JPEG):
     npt.assert_equal(jpg.count('data:image/png;base64,'), 1)
-    # 'jpeg' is accepted as an alias, and an unknown format is rejected:
+    # 'jpeg' is an alias; unknown formats are rejected:
     ani = make_ani(np.random.rand(4, 4, 2), fmt='JPEG')
     npt.assert_equal(ani._fmt, 'jpg')
     npt.assert_equal('data:image/jpeg;base64,' in ani.to_jshtml(), True)
@@ -555,10 +515,10 @@ def test_HTMLAnimation_fmt():
 def test_HTMLAnimation_caching():
     ani = make_ani(np.random.rand(4, 4, 3))
     html = ani.to_jshtml()
-    # The same call returns the identical (cached) player:
+    # The same call returns the cached player:
     npt.assert_equal(ani.to_jshtml(), html)
     npt.assert_equal(ani._repr_html_(), html)
-    # ... but changing the playback settings rebuilds it:
+    # Changing playback settings rebuilds it:
     npt.assert_equal(ani.to_jshtml(fps=1) != html, True)
 
 
@@ -568,8 +528,7 @@ def test_HTMLAnimation_matplotlib_compat():
     npt.assert_equal(isinstance(ani, FuncAnimation), True)
     npt.assert_equal(len(list(ani.frame_seq)), 3)
     npt.assert_equal('p2p-anim' in ani.to_jshtml(), True)
-    # Without frame data there is nothing to accelerate, so Matplotlib's own
-    # (slow) player is used:
+    # Without frame data, Matplotlib's player is used:
     ani = make_ani(data)
     ani._layers = None
     html = ani.to_jshtml()
@@ -578,7 +537,8 @@ def test_HTMLAnimation_matplotlib_compat():
 
 
 def make_layered_ani(src, percept, src_index):
-    """Two animated images in one figure, as ``play_stimulus_percept`` does"""
+    """Return two animated images in one figure, as in
+    ``play_stimulus_percept``"""
     fig, axes = plt.subplots(ncols=2)
     images = [ax.imshow(np.zeros(data.shape[:-1]), cmap='gray', vmin=0,
                         vmax=data.max())
@@ -593,7 +553,7 @@ def make_layered_ani(src, percept, src_index):
 
 
 def parse_layers(html):
-    """The player config and one sprite sheet per animated image"""
+    """Return the player config and one sprite sheet per animated image"""
     cfg = json.loads(re.search(r'var cfg = (\{.*?\});', html, re.S).group(1))
     sheets = [Image.open(BytesIO(base64.b64decode(b64)))
               for b64 in re.findall(r'data:image/\w+;base64,([A-Za-z0-9+/=]+)',
@@ -603,7 +563,7 @@ def parse_layers(html):
 
 
 def test_HTMLAnimation_layers():
-    """Each animated image ships its own sheet, drawn in its own order"""
+    """Each animated image has its own sheet and frame map"""
     src = np.linspace(0, 1, 4 * 5 * 3).reshape((4, 5, 3))
     percept = np.linspace(0, 1, 6 * 6 * 4).reshape((6, 6, 4))
     src_index = [0, 0, 1, 2]
@@ -611,10 +571,10 @@ def test_HTMLAnimation_layers():
         make_layered_ani(src, percept, src_index).to_jshtml())
     npt.assert_equal(cfg['n'], 4)
     npt.assert_equal(len(sheets), 2)
-    # The source lags the display clock; the percept advances with it:
+    # The source uses a frame map; the percept advances one frame at a time:
     npt.assert_equal(cfg['layers'][0]['map'], src_index)
     npt.assert_equal(cfg['layers'][1]['map'], None)
-    # Neither panel is drawn from the other's sheet or into the other's place:
+    # Each panel is drawn from its own sheet into its own rect:
     for layer, sheet, data in zip(cfg['layers'], sheets, (src, percept)):
         for i in range(data.shape[-1]):
             expected = np.clip(data[..., i] / data.max() * 256, 0, 255)
@@ -626,7 +586,7 @@ def test_HTMLAnimation_layers():
 
 @pytest.mark.parametrize('fmt', ('png', 'jpg'))
 def test_HTMLAnimation_overlapping_layers(fmt):
-    """A transparent layer drawn over another one must not hide it"""
+    """A transparent layer drawn over another keeps its alpha"""
     fig, ax = plt.subplots()
     frames = np.random.rand(6, 8, 3)
     overlay = np.zeros((6, 8, 4, 1), dtype=np.float32)
@@ -639,14 +599,13 @@ def test_HTMLAnimation_overlapping_layers(fmt):
                          frame_index=[None, [0, 0, 0]], fmt=fmt).to_jshtml()
     cfg, (under, over) = parse_layers(html)
     npt.assert_equal(cfg['layers'][0]['rect'], cfg['layers'][1]['rect'])
-    # The top layer keeps its alpha even when the frames under it are JPEG:
+    # The top layer stays RGBA PNG even when the layer below is JPEG:
     npt.assert_equal(under.format, 'JPEG' if fmt == 'jpg' else 'PNG')
     npt.assert_equal((over.format, over.mode), ('PNG', 'RGBA'))
     alpha = tile(cfg['layers'][1], over, 0)[..., 3]
     npt.assert_equal(alpha[2].min(), 255)
     npt.assert_equal(np.delete(alpha, 2, axis=0).max(), 0)
-    # Every layer is cleared before any is drawn, so a later layer's clear
-    # cannot erase an earlier layer's frame:
+    # All layers are cleared before any is drawn:
     draw = re.search(r'function draw\(\) \{(.*?)\n  \}', html, re.S).group(1)
     loops = [m.start() for m in re.finditer(r'cfg\.layers\.forEach', draw)]
     npt.assert_equal(len(loops), 2)
@@ -655,8 +614,11 @@ def test_HTMLAnimation_overlapping_layers(fmt):
 
 
 def test_HTMLAnimation_clips_images_to_their_axes():
-    """Pixel-edge extents reach half a pixel past axes set to pixel centers,
-    as in `Percept.play`; the player must not draw into the title band"""
+    """Images are clipped to their axes and stay out of the title band
+
+    Pixel-edge extents reach half a pixel past axes set to pixel centers, as in
+    `Percept.play`.
+    """
     fig, ax = plt.subplots()
     data = np.random.rand(4, 8, 3)
     im = ax.imshow(np.zeros((4, 8)), cmap='gray', vmin=0, vmax=1,
@@ -670,13 +632,13 @@ def test_HTMLAnimation_clips_images_to_their_axes():
                          fmt='png').to_jshtml()
     cfg, _, _ = parse(html)
     title, rect, crop = cfg['title'], cfg['rect'], cfg['crop']
-    # The drawn rect is the axes box, and stays clear of the title band:
+    # The drawn rect is the axes box, below the title band:
     box = ax.get_window_extent()
     height = fig.bbox.height
     npt.assert_allclose(rect, [box.x0, height - box.y1, box.width,
                                box.height], atol=1)
     npt.assert_equal(rect[1] >= title['rect'][1] + title['rect'][3], True)
-    # The source is cropped by half a data pixel on each side, not squeezed:
+    # The source is cropped by half a data pixel on each side:
     npt.assert_equal((cfg['fw'], cfg['fh']), (8, 4))
     npt.assert_allclose(crop, [0.5, 0.5, 7, 3], atol=0.05)
 
@@ -684,10 +646,9 @@ def test_HTMLAnimation_clips_images_to_their_axes():
 def test_HTMLAnimation_layers_agree_on_frame_count():
     src = np.random.rand(4, 5, 3)
     percept = np.random.rand(6, 6, 4)
-    # A layer that maps every display frame is as long as its map, not as its
-    # data ...
+    # A mapped layer's length is the length of its map:
     make_layered_ani(src, percept, [0, 1, 2, 2])
-    # ... and every layer must cover the same display frames:
+    # All layers require the same number of display frames:
     with pytest.raises(ValueError):
         make_layered_ani(src, percept, [0, 1, 2])
     with pytest.raises(ValueError):
@@ -695,7 +656,7 @@ def test_HTMLAnimation_layers_agree_on_frame_count():
 
 
 def test_HTMLAnimation_single_layer_aliases():
-    """A one-image animation still answers the questions it used to"""
+    """Single-image animations expose _image and _frame_data"""
     data = np.random.rand(4, 4, 3)
     ani = make_ani(data)
     npt.assert_equal(ani._image is ani._layers[0].image, True)

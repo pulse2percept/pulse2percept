@@ -196,8 +196,8 @@ def test_ElectrodeGrid(gtype):
                          radius=np.arange(1, np.prod(gshape) + 1))
     for i, (_, e) in enumerate(grid.electrodes.items()):
         npt.assert_almost_equal(e.radius, i + 1)
-    # A required electrode parameter that is missing is the electrode class's
-    # error, not the grid's:
+    # A missing required electrode parameter is a TypeError from the electrode
+    # class:
     with pytest.raises(TypeError):
         ElectrodeGrid(gshape, spacing, grid_type=gtype,
                       electrode_type=DiskElectrode)
@@ -239,10 +239,6 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
     npt.assert_equal(len(np.unique([e.y for e in egrid.electrode_objects])),
                      gshape[0])
     # Make sure the average of all x-coordinates == x:
-    # (Note: egrid has all electrodes in a dictionary, with (name, object)
-    # as (key, value) pairs. You can get the electrode names by iterating over
-    # egrid.keys(). You can get the electrode objects by iterating over
-    # egrid.values().)
     npt.assert_almost_equal(np.mean([e.x for e in egrid.electrode_objects]), x)
     # Same for y:
     npt.assert_almost_equal(np.mean([e.y for e in egrid.electrode_objects]), y)
@@ -390,12 +386,11 @@ def test_ElectrodeGrid__make_grid(gtype, orientation):
                                    (2, 2), (3, 3), (3, 4), (4, 3), (4, 4),
                                    (5, 7), (7, 5)])
 def test_ElectrodeGrid_is_centered(gtype, orientation, shape):
-    """(x, y) is the middle of the electrode extent, whatever the shape.
+    """(x, y) is the middle of the electrode extent, for any shape
 
     A hex grid staggers every other row, which widens its extent by half a
-    pitch -- but only once both staggers are present. A single-row (or, for a
-    vertical grid, single-column) hex grid used to come out a quarter pitch
-    off, because the correction was applied unconditionally.
+    pitch, but only when both staggers are present (not for a single hex
+    row/column).
     """
     x, y = 200, -300
     coords = ElectrodeGrid(shape, 100, x=x, y=y, grid_type=gtype,
@@ -405,12 +400,11 @@ def test_ElectrodeGrid_is_centered(gtype, orientation, shape):
 
 
 def test_ElectrodeGrid_centers_the_extent_not_the_centroid():
-    """The centroid is deliberately not the thing being centered.
+    """The grid centers the electrode extent, not the centroid
 
-    An odd number of rows carries one stagger more often than the other, so
-    the mean of the electrode centers sits a fraction of a pitch off. `x`/`y`
-    describe where the physical array sits, so the extent is what must land
-    on them.
+    With an odd number of rows, the mean of the electrode centers is a fraction
+    of a pitch off. `x`/`y` give the physical array position, so the extent is
+    centered on them.
     """
     coords = ElectrodeGrid((3, 4), 100, grid_type='hex').coordinates()
     npt.assert_almost_equal((coords[:, 0].min() + coords[:, 0].max()) / 2, 0)
@@ -420,20 +414,19 @@ def test_ElectrodeGrid_centers_the_extent_not_the_centroid():
 @pytest.mark.parametrize('orientation', ('horizontal', 'vertical'))
 @pytest.mark.parametrize('shape', [(2, 2), (3, 4), (4, 3), (5, 5)])
 def test_ElectrodeGrid_hex_is_a_triangular_lattice(orientation, shape):
-    """Scalar `spacing` is the nearest-neighbor distance, in every direction
+    """Scalar `spacing` is the nearest-neighbor distance in every direction
 
-    This is what makes a hex grid hexagonal: on a rectangular grid the
-    diagonal neighbor is further away than the orthogonal one.
+    On a rectangular grid, the diagonal neighbor is further away than the
+    orthogonal one.
     """
     spacing = 100
     coords = ElectrodeGrid(shape, spacing, grid_type='hex',
                            orientation=orientation).coordinates()[:, :2]
     dist = np.linalg.norm(coords[:, None, :] - coords[None, :, :], axis=-1)
     np.fill_diagonal(dist, np.inf)
-    # Every electrode has at least one neighbor exactly `spacing` away, and
-    # none any closer:
+    # Every electrode has a neighbor exactly `spacing` away, and none closer:
     npt.assert_almost_equal(dist.min(axis=1), spacing)
-    # An interior electrode has all six:
+    # An interior electrode has six:
     if min(shape) >= 3:
         n_neighbors = np.isclose(dist, spacing).sum(axis=1)
         npt.assert_equal(n_neighbors.max(), 6)
@@ -442,11 +435,11 @@ def test_ElectrodeGrid_hex_is_a_triangular_lattice(orientation, shape):
 @pytest.mark.parametrize('orientation', ('horizontal', 'vertical'))
 @pytest.mark.parametrize('rot', (0, 17))
 def test_ElectrodeGrid_hex_bodies_tile_the_lattice(orientation, rot):
-    """Hexagonal bodies face their nearest neighbors and turn with the grid
+    """Hexagonal electrodes face their nearest neighbors and rotate with the
+    grid
 
     A hexagon of apothem ``spacing / 2`` tiles the lattice only if its flats
-    are perpendicular to the nearest-neighbor axes; otherwise the drawn
-    pixels overlap their neighbors while leaving gaps elsewhere.
+    are perpendicular to the nearest-neighbor axes.
     """
     spacing = 100
     grid = ElectrodeGrid((3, 4), spacing, grid_type='hex', rot=rot,
@@ -456,14 +449,14 @@ def test_ElectrodeGrid_hex_bodies_tile_the_lattice(orientation, rot):
     npt.assert_equal(elec.orientation, orientation)
     npt.assert_almost_equal(elec.rot, rot)
     npt.assert_almost_equal(elec.width, spacing)
-    # The direction a flat faces, as an angle from +x:
+    # Direction a flat faces, as an angle from +x:
     flat = np.radians(rot) + (0 if orientation == 'horizontal'
                               else np.radians(90))
     coords = grid.coordinates()[:, :2]
     offsets = coords - coords[list(grid.electrodes).index('B2')]
     offsets = offsets[np.isclose(np.linalg.norm(offsets, axis=1), spacing)]
-    # Every nearest neighbor sits on a flat, i.e. its bearing differs from
-    # the flat direction by a multiple of 60 deg:
+    # Each nearest neighbor's bearing differs from the flat direction by a
+    # multiple of 60 deg:
     bearing = np.arctan2(offsets[:, 1], offsets[:, 0]) - flat
     npt.assert_almost_equal(np.sin(3 * bearing), 0)
 
@@ -493,21 +486,19 @@ def test_ElectrodeGrid___get_item__(gtype):
 @pytest.mark.parametrize('shape', [(3, 4), (5, 5), (1, 3), (30, 40), (2, 3),
                                    (1, 2), (2, 1), (1, 1)])
 def test_ElectrodeGrid_canonical_names(shape):
-    # A generic grid names its electrodes the same way an ImageStimulus names
-    # its pixels: a letter for the row, a number for the column. Both come
-    # from _GridNames, so this pins them together.
+    # Default grid names match ImageStimulus pixel names (row letter, column
+    # number); both come from _GridNames:
     grid = ElectrodeGrid(shape, 20, names=('A', '1'))
     npt.assert_equal(grid.electrode_names,
                      np.asarray(_GridNames(shape)).tolist())
-    # ... and the name still addresses the electrode it describes:
+    # The name addresses the matching electrode:
     npt.assert_equal(grid['A1'], grid[0])
     npt.assert_equal(grid[_GridNames(shape)[-1]], grid[np.prod(shape) - 1])
 
 
 def test_ElectrodeGrid_naming_schemes():
-    # The non-default schemes exist to reproduce published implants (ArgusI
-    # uses ('1', 'A'), Orion ('A', '-1')). They are pinned here so that
-    # routing the default through _GridNames cannot disturb them.
+    # Non-default schemes reproduce published implants (ArgusI uses ('1', 'A'),
+    # Orion ('A', '-1')):
     expected = {
         ('A', '1'): ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'],
         ('1', 'A'): ['A1', 'B1', 'C1', 'A2', 'B2', 'C2'],
@@ -519,12 +510,12 @@ def test_ElectrodeGrid_naming_schemes():
     for names, want in expected.items():
         npt.assert_equal(ElectrodeGrid((2, 3), 20, names=names).electrode_names,
                          want)
-    # An explicit list of names is passed through verbatim:
+    # An explicit list of names is used verbatim:
     npt.assert_equal(ElectrodeGrid((2, 2), 20,
                                    names=['w', 'x', 'y', 'z']).electrode_names,
                      ['w', 'x', 'y', 'z'])
-    # A two-entry tuple is the naming scheme at every grid size, including the
-    # two-electrode grids where it used to be read as the names themselves:
+    # A two-entry tuple is a naming scheme at every grid size, including
+    # two-electrode grids:
     npt.assert_equal(ElectrodeGrid((1, 2), 20,
                                    names=('A', '1')).electrode_names,
                      ['A1', 'A2'])
@@ -534,13 +525,12 @@ def test_ElectrodeGrid_naming_schemes():
     npt.assert_equal(ElectrodeGrid((1, 2), 20,
                                    names=('1', 'A')).electrode_names,
                      ['A1', 'B1'])
-    # On a two-electrode grid the two readings collide, so only something that
-    # could actually be a scheme is read as one. Entries that cannot be name
-    # the two electrodes instead:
+    # On a two-electrode grid, a tuple is read as a scheme only if it is a
+    # valid one; otherwise its entries are the electrode names:
     npt.assert_equal(ElectrodeGrid((1, 2), 20,
                                    names=('C1', '4')).electrode_names,
                      ['C1', '4'])
-    # ... as does a list or array, whatever it contains:
+    # Same for a list or array, whatever it contains:
     npt.assert_equal(ElectrodeGrid((1, 2), 20,
                                    names=['x', 'y']).electrode_names,
                      ['x', 'y'])
@@ -562,18 +552,18 @@ def test_ElectrodeArray_coordinates():
                                                                            0,
                                                                            0]],
                         rtol=1e-12)
-    # Ordinary arrays, in electrode order, never quantities:
+    # Returns a plain ndarray in electrode order:
     npt.assert_equal(isinstance(electrode_array.coordinates(mm), np.ndarray),
                      True)
     npt.assert_equal(electrode_array.coordinates().shape, (2, 3))
-    # An empty array still has the right shape, so callers can index into it:
+    # An empty array returns shape (0, 3):
     npt.assert_equal(ElectrodeArray([]).coordinates().shape, (0, 3))
     with pytest.raises(DimensionMismatchError):
         electrode_array.coordinates(ms)
 
 
 def test_ElectrodeGrid_units():
-    """Every spatial argument may be unitful, and they may be mixed"""
+    """All spatial arguments accept length units, and units may be mixed"""
     bare = ElectrodeGrid((2, 3), 575.0, x=1200.0, y=-100.0,
                          z=[100., 200., 300., 400., 500., 600.], radius=112.5,
                          electrode_type=DiskElectrode)
@@ -584,20 +574,20 @@ def test_ElectrodeGrid_units():
     npt.assert_allclose(unitful.coordinates(), bare.coordinates(), rtol=1e-12)
     npt.assert_allclose([e.radius for e in unitful.electrode_objects],
                         [e.radius for e in bare.electrode_objects], rtol=1e-12)
-    # The grid stores plain numbers, so its repr is unchanged:
+    # The grid stores plain numbers in um:
     npt.assert_almost_equal(unitful.spacing, 575.0)
     npt.assert_equal(isinstance(unitful.spacing, Quantity), False)
-    # x and y spacing may be spelled differently from each other:
+    # x and y spacing may use different units:
     split = ElectrodeGrid((2, 2), (0.5 * mm, 600 * um))
     npt.assert_allclose(split.coordinates(),
                         ElectrodeGrid((2, 2), (500., 600.)).coordinates(),
                         rtol=1e-12)
-    # A per-electrode radius, too:
+    # Also a per-electrode radius:
     radii = ElectrodeGrid((1, 2), 100, radius=[10 * um, 0.02 * mm],
                           electrode_type=DiskElectrode)
     npt.assert_allclose([e.radius for e in radii.electrode_objects], [10, 20],
                         rtol=1e-12)
-    # An awkward conversion still lands where the bare spelling does:
+    # Non-round conversions match the plain um value:
     npt.assert_allclose(ElectrodeGrid((1, 2), 0.0417 * mm).coordinates(),
                         ElectrodeGrid((1, 2), 41.7).coordinates(), rtol=1e-12)
 
@@ -611,12 +601,11 @@ def test_ElectrodeGrid_dimension_errors():
     with pytest.raises(DimensionMismatchError):
         ElectrodeGrid((2, 2), 400, radius=10 * uA,
                       electrode_type=DiskElectrode)
-    # A rotation is an ordinary angle. `dva` is visual angle, which is not the
-    # same thing, so it is refused rather than quietly reinterpreted:
+    # `rot` is an angle; `dva` (visual angle) is rejected:
     with pytest.raises(DimensionMismatchError) as excinfo:
         ElectrodeGrid((2, 2), 400, rot=5 * dva)
     npt.assert_equal("expects angle (deg)" in str(excinfo.value), True)
-    # A bare `rot` still means degrees, exactly as it always has:
+    # A plain `rot` is in degrees:
     phi = np.deg2rad(5)
     npt.assert_allclose(ElectrodeGrid((2, 2), 400, rot=5)['A1'].x,
                         -200 * np.cos(phi) + 200 * np.sin(phi), rtol=1e-12)
@@ -629,13 +618,13 @@ def test_ElectrodeGrid_rot_units():
         npt.assert_allclose(ElectrodeGrid((2, 3), 575.0, x=1200.0,
                                           rot=rot).coordinates(),
                             bare.coordinates(), rtol=1e-12)
-    # The grid stores a plain number of degrees, whatever it was given:
+    # The grid stores `rot` in degrees:
     npt.assert_almost_equal(
         ElectrodeGrid((2, 2), 400, rot=np.pi / 4 * rad).rot, 45)
 
 
 def test_ElectrodeArray_coordinates_subset():
-    """`electrodes=` selects and reorders, which is what a stimulus needs"""
+    """`electrodes=` selects and reorders coordinates"""
     implant = ArgusII()
     electrode_array = implant.electrode_array
     names = ['F10', 'A1', 'C5']
@@ -643,21 +632,20 @@ def test_ElectrodeArray_coordinates_subset():
     npt.assert_equal(coords.shape, (3, 3))
     npt.assert_almost_equal(coords[:, 0], [implant[e].x for e in names])
     npt.assert_almost_equal(coords[:, 1], [implant[e].y for e in names])
-    # Order follows the request, not the array:
+    # Rows follow the requested order:
     npt.assert_almost_equal(electrode_array.coordinates(electrodes=['A1',
                                                                     'F10']),
                             electrode_array.coordinates(
                                 electrodes=['F10', 'A1'])[::-1])
-    # Converted the same way as the full array:
+    # Unit conversion applies to the subset too:
     npt.assert_allclose(electrode_array.coordinates(mm, electrodes=names),
                         electrode_array.coordinates(electrodes=names) / 1000,
                         rtol=1e-12)
-    # An electrode the array does not have says so, rather than surfacing as
-    # an AttributeError somewhere downstream:
+    # An unknown electrode gives a KeyError:
     with pytest.raises(KeyError) as excinfo:
         electrode_array.coordinates(electrodes=['A1', 'Z99'])
     npt.assert_equal('Z99' in str(excinfo.value), True)
-    # Repeats are allowed: nothing here says an electrode may appear once.
+    # Repeats are allowed:
     npt.assert_almost_equal(electrode_array.coordinates(electrodes=['A1',
                                                                     'A1']),
                             electrode_array.coordinates(electrodes=['A1',
@@ -665,13 +653,12 @@ def test_ElectrodeArray_coordinates_subset():
 
 
 def test_ElectrodeArray_coordinates_selector():
-    """A selector means the same thing here as it does in
-    `electrode_array[...]`"""
+    """`electrodes=` accepts the same selectors as `electrode_array[...]`"""
     implant = ArgusII()
     electrode_array = implant.electrode_array
     grid = ElectrodeGrid((3, 3), 20)
-    # Only a list or an array stands for several electrodes. A name, an index,
-    # or a grid's (row, col) pair stands for one, and comes back as one row:
+    # Only a list or array selects several electrodes. A name, an index, or a
+    # grid's (row, col) pair selects one and returns one row:
     for selector, expected in [('A1', implant['A1']), (0, implant['A1'])]:
         coords = electrode_array.coordinates(electrodes=selector)
         npt.assert_equal(coords.shape, (1, 3))
@@ -682,19 +669,19 @@ def test_ElectrodeArray_coordinates_selector():
     # A one-character name is a name, not two electrodes:
     single = ElectrodeArray({'7': DiskElectrode(1, 2, 3, 4)})
     npt.assert_almost_equal(single.coordinates(electrodes='7'), [[1, 2, 3]])
-    # Whatever else can be iterated is a collection -- including the
-    # name container a stimulus reports, which is what models pass:
+    # Any other iterable is a collection, including Stimulus.electrodes (which
+    # models pass):
     npt.assert_equal(
         grid.coordinates(electrodes=_GridNames((3, 3))).shape, (9, 3))
     npt.assert_almost_equal(
         grid.coordinates(electrodes=Stimulus(np.ones(9)).electrodes),
         grid.coordinates())
-    # Lists and arrays are collections, and an empty one keeps the shape:
+    # Lists and arrays are collections; an empty one returns shape (0, 3):
     npt.assert_equal(grid.coordinates(electrodes=['A1', 'C3']).shape, (2, 3))
     npt.assert_equal(
         grid.coordinates(electrodes=np.array(['A1', 'C3'])).shape, (2, 3))
     npt.assert_equal(grid.coordinates(electrodes=[]).shape, (0, 3))
-    # Anything the array does not have says so, however it was spelled:
+    # Unknown electrodes give an error for any selector:
     with pytest.raises(KeyError):
         grid.coordinates(electrodes='Z99')
     with pytest.raises(IndexError):
@@ -734,7 +721,9 @@ def test_ElectrodeGrid_radius_per_electrode():
 
 
 def test_ElectrodeGrid_electrode_subclass():
-    """A subclass is built as itself, and owns its own radius contract"""
+    """An electrode subclass is instantiated as itself, with its own radius
+    default
+    """
     class DefaultDisk(DiskElectrode):
         __slots__ = ()
 
@@ -745,7 +734,7 @@ def test_ElectrodeGrid_electrode_subclass():
     for elec in grid.electrode_objects:
         npt.assert_equal(isinstance(elec, DefaultDisk), True)
         npt.assert_almost_equal(elec.radius, 50)
-    # An explicit radius still wins, and may still be given per electrode:
+    # An explicit radius overrides the default, also per electrode:
     npt.assert_almost_equal(
         [e.radius for e in ElectrodeGrid((1, 2), 400,
                                          electrode_type=DefaultDisk,
@@ -754,20 +743,20 @@ def test_ElectrodeGrid_electrode_subclass():
 
 
 def test_ElectrodeGrid_forwards_electrode_params():
-    """Anything but `radius` reaches the electrode class untouched"""
+    """Parameters other than `radius` are passed to the electrode class"""
     grid = ElectrodeGrid((2, 2), 400, electrode_type=HexElectrode,
                          apothem=150, activated=False)
     for elec in grid.electrode_objects:
         npt.assert_almost_equal(elec.apothem, 150)
         npt.assert_equal(elec.activated, False)
-    # An unknown parameter is the electrode class's error, not a silent drop:
+    # An unknown parameter gives a TypeError from the electrode class:
     with pytest.raises(TypeError):
         ElectrodeGrid((2, 2), 400, electrode_type=HexElectrode, apothem=150,
                       not_a_parameter=1)
 
 
 def test_ElectrodeArray_is_a_container():
-    """Lookup follows normal Python container semantics"""
+    """Lookup follows standard Python container semantics"""
     array = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 10),
                             'A2': DiskElectrode(10, 0, 0, 10),
                             'A3': DiskElectrode(20, 0, 0, 10)})
@@ -775,11 +764,11 @@ def test_ElectrodeArray_is_a_container():
     npt.assert_equal(array['A1'] is array[0], True)
     npt.assert_equal(array['A3'] is array[-1], True)
     npt.assert_equal(array['A2'] is array[np.int64(1)], True)
-    # Several selectors give a list, and may be mixed:
+    # A list of selectors returns a list, and may mix names and indices:
     npt.assert_equal(array[['A1', 1, -1]],
                      [array['A1'], array['A2'], array['A3']])
     npt.assert_equal(array[np.array([0, 2])], [array['A1'], array['A3']])
-    # So does a slice, which is always positional:
+    # A slice also returns a list and is always positional:
     npt.assert_equal(array[:], array.electrode_objects)
     npt.assert_equal(array[1:], [array['A2'], array['A3']])
     npt.assert_equal(array[::-1], array.electrode_objects[::-1])
@@ -795,21 +784,21 @@ def test_ElectrodeArray_is_a_container():
 
 
 def test_ElectrodeArray_prefers_a_name_over_a_position():
-    """Integer electrode names still resolve to the electrode of that name"""
+    """Integer electrode names resolve by name before position"""
     array = ElectrodeArray({2: DiskElectrode(0, 0, 0, 10),
                             0: DiskElectrode(10, 0, 0, 10),
                             1: DiskElectrode(20, 0, 0, 10)})
-    # Names, not positions: electrode 0 is the second one in the array.
+    # Electrode named 0 is the second one in the array:
     npt.assert_almost_equal(array[2].x, 0)
     npt.assert_almost_equal(array[0].x, 10)
     npt.assert_almost_equal(array[1].x, 20)
-    # Only an integer that names nothing falls through to a position:
+    # An integer that is not a name is used as a position:
     npt.assert_almost_equal(array[-1].x, 20)
 
 
 @pytest.mark.parametrize('gtype', ('rect', 'hex'))
 def test_ElectrodeGrid_is_a_container(gtype):
-    """A grid adds (row, col) lookup without giving up the rest"""
+    """A grid adds (row, col) lookup to standard container lookup"""
     grid = ElectrodeGrid((2, 3), 20, grid_type=gtype, names=('A', '1'))
     npt.assert_equal(len(grid), 6)
     npt.assert_equal(grid[0, 0] is grid['A1'], True)
@@ -831,10 +820,11 @@ def test_ElectrodeGrid_is_a_container(gtype):
 
 
 def test_ElectrodeArray_plot_color_stim():
-    """Stimulus coloring reaches the last patch of a multi-patch electrode"""
+    """Stimulus coloring applies to the last patch of a multi-patch
+    electrode"""
     array = ElectrodeArray({'A1': DiskElectrode(0, 0, 0, 50),
                             'A2': DiskElectrode(200, 0, 0, 50)})
-    # Give A2 a structural body plus an active patch drawn on top of it:
+    # A2 has a body patch plus an active patch drawn on top:
     body_fc = (0, 0, 0, 0.2)
     array['A2'].plot_patch = [RegularPolygon, Circle]
     array['A2'].plot_kwargs = [{'numVertices': 6, 'radius': 60,
@@ -846,9 +836,9 @@ def test_ElectrodeArray_plot_color_stim():
     fc = ax.collections[0].get_facecolor()
     npt.assert_equal(len(fc), 3)
     cmap = plt.get_cmap('OrRd')
-    # Single-patch electrode: colored as before.
+    # Single-patch electrode is colored:
     npt.assert_almost_equal(fc[0], cmap(0.5, alpha=0.8))
-    # Multi-patch electrode: body untouched, active patch colored.
+    # Multi-patch electrode: body unchanged, active patch colored:
     npt.assert_almost_equal(fc[1], body_fc)
     npt.assert_almost_equal(fc[2], cmap(1.0, alpha=0.8))
     # Stored kwargs must not be mutated:
@@ -874,8 +864,8 @@ def test_ElectrodeArray_plot_color_stim_cathodic():
     npt.assert_almost_equal(fc[2], base)
     npt.assert_almost_equal(ax.collections[0].norm.vmax, 20)
     plt.close(fig)
-    # Mixed signs share one magnitude scale; a biphasic waveform peaks at
-    # its larger phase:
+    # Mixed signs share one magnitude scale; a biphasic waveform uses its
+    # larger phase:
     stim = Stimulus({'A1': [-20, 10], 'A2': [5, -5], 'A3': [0, 0]},
                     time=[0, 1])
     fig, ax = plt.subplots()

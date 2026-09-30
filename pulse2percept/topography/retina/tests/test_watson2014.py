@@ -8,8 +8,7 @@ from pulse2percept.topography.retina import (Curcio1990Map,
                                              Watson2014DisplaceMap)
 from pulse2percept.utils.testing import assert_warns_msg
 
-# Every test below is about the deprecated class itself, so its construction
-# warning is expected. `pytest.warns` is unaffected by the filter.
+# Ignore the expected deprecation warning (`pytest.warns` is unaffected):
 pytestmark = pytest.mark.filterwarnings(
     'ignore:Class Watson2014DisplaceMap is deprecated:DeprecationWarning')
 
@@ -90,8 +89,7 @@ def test_Watson2014DisplaceMap():
 
 
 def test_Watson2014DisplaceMap_has_no_reverse_mapping():
-    # Eq. 5 was never inverted, in closed form or numerically; kept as
-    # documented behavior.
+    # Eq. 5 has no inverse implementation:
     with pytest.raises(NotImplementedError):
         Watson2014DisplaceMap().ret_to_dva(100, 100)
 
@@ -114,12 +112,12 @@ def test_Watson2014DisplaceMap_eye():
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Watson2014DisplaceMap_meridian(eye):
     trafo = Watson2014DisplaceMap(eye=eye)
-    # An eccentricity where the two fits differ clearly:
+    # Eccentricity where the two fits differ:
     rho = 2.0
     expect = {m: rho + trafo.watson_displacement(rho, meridian=m)
               for m in ('nasal', 'temporal')}
     npt.assert_equal(np.isclose(expect['nasal'], expect['temporal']), False)
-    # Nasal is on the right of a right eye and on the left of a left eye:
+    # Nasal is +x in a right eye, -x in a left eye:
     nasal_sign = -1 if eye == 'left' else 1
     for sign, meridian in [(nasal_sign, 'nasal'), (-nasal_sign, 'temporal')]:
         ref = Watson2014Map().dva_to_ret(sign * expect[meridian], 0)
@@ -139,7 +137,7 @@ def test_Watson2014DisplaceMap_mirror():
 
 @pytest.mark.parametrize('eye', ('right', 'left'))
 def test_Watson2014DisplaceMap_vertical_meridian(eye):
-    # Legacy tie-break: x == 0 takes the nasal fit for either eye.
+    # Legacy tie-break: x == 0 uses the nasal fit for either eye:
     trafo = Watson2014DisplaceMap(eye=eye)
     for ydva in [-5.0, -1.0, 1.0, 5.0]:
         rho = np.abs(ydva) + trafo.watson_displacement(np.abs(ydva),

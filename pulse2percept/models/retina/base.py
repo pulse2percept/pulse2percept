@@ -72,15 +72,14 @@ class RetinalSpatial(SpatialModel):
     """
 
     def __init__(self, implant, **params):
-        # `visual_field_map` first: `xrange`/`yrange` may be given as a retinal
-        # extent, which is resolved through the map as it is assigned. See
-        # `_visual_field_map_first`.
+        # Set `visual_field_map` first so a retinal `xrange`/`yrange` can be
+        # resolved through it:
         super().__init__(implant, **_visual_field_map_first(params))
         # Laterality the grid was last built for; see `is_built`.
         self._built_map_eye = None
 
     def _validate_implant(self, implant):
-        """Raise error unless ``implant`` is a non-cortical Implant"""
+        """Raise TypeError if ``implant`` is not an Implant or is cortical"""
         super()._validate_implant(implant)
         if _implant_target(implant) == 'cortex':
             raise TypeError(
@@ -133,7 +132,7 @@ class RetinalSpatial(SpatialModel):
         self
         """
         self.set_params(**build_params)
-        # Before the grid is laid out, so a mismatch cannot be baked into it:
+        # Validate before building the grid:
         self._validate_map_eye()
         super().build()
         self._built_map_eye = getattr(self.visual_field_map, 'eye', None)
@@ -200,8 +199,7 @@ class RetinalSpatial(SpatialModel):
                 f"on a retinal map, and this model's visual_field_map is a "
                 f"{type(visual_field_map).__name__}. Specify '{name}' in "
                 f"dva instead.")
-        # In the unit the map's tissue side is measured in, which is what its
-        # inverse transform below expects:
+        # Convert to the map's tissue unit, as its inverse transform expects:
         extent = np.asarray(as_value(value, visual_field_map.tissue_unit,
                                      name),
                             dtype=np.float64).ravel()
@@ -222,6 +220,6 @@ class RetinalSpatial(SpatialModel):
                 f"({type(visual_field_map).__name__}) cannot infer a visual "
                 f"field range from retinal distance. Specify "
                 f"'{name}' in dva instead.") from None
-        # Sorted, because the retinal y axis points the opposite way from the
-        # visual field's, so the two end points can come back swapped:
+        # Sort because the retinal and visual-field y axes point in opposite
+        # directions:
         return tuple(sorted((float(lo_dva), float(hi_dva))))

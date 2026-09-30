@@ -81,8 +81,7 @@ intersphinx_mapping = {
     "matplotlib": ("https://matplotlib.org/stable", None),
 }
 
-# Sphinx-Gallery: keep execution on (your examples produce images),
-# but never fail the build if an example hiccups.
+# Sphinx-Gallery: execute examples, but only warn if one fails:
 from sphinx_gallery.sorting import ExplicitOrder
 sphinx_gallery_conf = {
     "examples_dirs": ["../examples"],

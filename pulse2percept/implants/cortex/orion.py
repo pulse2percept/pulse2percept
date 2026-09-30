@@ -34,8 +34,8 @@ class Orion(CorticalImplant):
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
     hemisphere : 'left', 'right' or None, optional
-        Which hemisphere the device is implanted in. Metadata: it does not
-        move the array, which the model's ``implant_position`` places.
+        Implanted hemisphere. Metadata only: the model's ``implant_position``
+        sets the placement.
     
     Examples
     --------
@@ -62,7 +62,7 @@ class Orion(CorticalImplant):
         self.safe_mode = safe_mode
         self.hemisphere = hemisphere
         self.shape = (10, 7)
-        # The row offset is published in millimeters; coordinates are microns:
+        # Row offset is published in mm; convert to um:
         spacing = (4200, np.sqrt(3**2-2.1**2) * UM_PER_MM)
         self.electrode_array = ElectrodeGrid(
             self.shape, spacing, names=('A', '-1'),

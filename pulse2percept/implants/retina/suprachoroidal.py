@@ -31,8 +31,8 @@ class Suprachoroidal24(RetinalImplant):
 
     -   2 return electrodes with 2000um diameter (Electrodes R1, R2)
 
-    Electrodes C21a-m are typically being ganged to provide an external
-    ring for common ground. The array's own ``(0, 0)`` origin is assumed to
+    Electrodes C21a-m are typically ganged to form an external common-ground
+    ring. The array's own ``(0, 0)`` origin is assumed to
     lie between Electrodes C7, C8, C9, and C13.
 
     .. note::
@@ -50,10 +50,9 @@ class Suprachoroidal24(RetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 35 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 35 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -77,8 +76,7 @@ class Suprachoroidal24(RetinalImplant):
         self.safe_mode = safe_mode
         self.electrode_array = ElectrodeArray([])
         n_elecs = 35
-        # This implant lays out its own electrodes rather than handing the
-        # geometry to an ElectrodeGrid, so it normalizes for itself:
+        # Electrodes are placed by hand, so convert z here:
         z = as_value(z, um, 'z')
 
         # the positions of the electrodes 1-20, 21a-21m, R1-R2
@@ -161,10 +159,9 @@ class Suprachoroidal44(RetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 46 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 46 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -187,8 +184,7 @@ class Suprachoroidal44(RetinalImplant):
         self.safe_mode = safe_mode
         self.electrode_array = ElectrodeArray([])
         n_elecs = 46
-        # Placed by hand, like Suprachoroidal24, once the hex grid has
-        # supplied the in-array positions:
+        # Electrodes are placed by hand (from a hex grid), so convert z here:
         z = as_value(z, um, 'z')
 
         # The 44 stimulating electrodes are arranged in a hex grid; two return

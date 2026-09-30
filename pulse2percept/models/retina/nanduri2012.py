@@ -106,15 +106,15 @@ class Nanduri2012Spatial(RetinalSpatial):
             Number of gray levels in the returned percept. ``None`` disables
             gray-level quantization.
         implant_position : (x, y) or Quantity, optional
-            Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-            a length is a tissue position in microns; ``(6, -2) * dva`` is a
-            visual field location, resolved through ``visual_field_map``.
+            Position of the implant's local origin. A bare pair or length is a
+            tissue position in microns; a dva position such as
+            ``(6, -2) * dva`` is resolved through ``visual_field_map``.
 
             .. versionadded:: 0.11.0
 
         implant_rotation : float or Quantity, optional
-            Angle (deg) the implant is rotated by in the tissue plane,
-            positive counter-clockwise, about its own local origin.
+            In-plane rotation (deg) about the implant's local origin,
+            positive counter-clockwise.
 
             .. versionadded:: 0.11.0
 
@@ -390,15 +390,15 @@ class Nanduri2012Model(Model):
             Number of gray levels in the returned percept. ``None`` disables
             gray-level quantization.
         implant_position : (x, y) or Quantity, optional
-            Where the implant's local ``(0, 0)`` origin sits. A bare pair or
-            a length is a tissue position in microns; ``(6, -2) * dva`` is a
-            visual field location, resolved through ``visual_field_map``.
+            Position of the implant's local origin. A bare pair or length is a
+            tissue position in microns; a dva position such as
+            ``(6, -2) * dva`` is resolved through ``visual_field_map``.
 
             .. versionadded:: 0.11.0
 
         implant_rotation : float or Quantity, optional
-            Angle (deg) the implant is rotated by in the tissue plane,
-            positive counter-clockwise, about its own local origin.
+            In-plane rotation (deg) about the implant's local origin,
+            positive counter-clockwise.
 
             .. versionadded:: 0.11.0
 

@@ -51,14 +51,13 @@ def test_deprecated():
 
 
 def test_deprecated_extra_msg():
-    """A replacement that is not drop-in says so, where the caller sees it"""
+    """extra_msg is appended to the warning"""
     assert_warns_msg(DeprecationWarning, MockClass5,
                      'Use ``qwerty`` instead. Pass ``asdf=True`` to keep it.')
 
 
 def test_is_deprecated():
-    # Test if is_deprecated helper identifies wrapping via deprecated:
-    # NOTE it works only for class methods and functions
+    # Only works for class methods and functions:
     npt.assert_equal(is_deprecated(MockClass1.__init__), True)
     npt.assert_equal(is_deprecated(MockClass2().mymethod), True)
     npt.assert_equal(is_deprecated(MockClass3.__init__), True)
@@ -76,18 +75,18 @@ class MockClassProperty:
 
 
 def test_deprecated_property():
-    # A deprecated property warns on access, but still returns its value:
+    # A deprecated property warns on access and returns its value:
     obj = MockClassProperty()
     assert_warns_msg(DeprecationWarning, lambda: obj.deprecated_attribute,
                      'since version 0.5')
     npt.assert_equal(obj.deprecated_attribute, 42)
 
-    # The warning names the property. `property` objects only have a
-    # `__name__` on Python 3.13+, so the name has to come from the getter:
+    # The warning names the property (from the getter, since `property` has
+    # `__name__` only on Python 3.13+):
     assert_warns_msg(DeprecationWarning, lambda: obj.deprecated_attribute,
                      'Property deprecated_attribute is deprecated')
 
-    # The deprecation directive is prepended to the original docstring:
+    # The directive is prepended to the original docstring:
     doc = MockClassProperty.deprecated_attribute.__doc__
     npt.assert_equal('.. deprecated:: 0.5' in doc, True)
     npt.assert_equal('Use ``new_attribute`` instead' in doc, True)
@@ -95,17 +94,17 @@ def test_deprecated_property():
 
 
 def test_deprecated_update_doc():
-    # Without an explicit message, a generic one is generated:
+    # Without a message, a generic one is used:
     doc = deprecated(deprecated_version=0.6)._update_doc('Original.')
     npt.assert_equal('.. deprecated:: 0.6' in doc, True)
     npt.assert_equal('This feature is deprecated' in doc, True)
     npt.assert_equal('Original.' in doc, True)
-    # An empty original docstring is fine:
+    # An empty original docstring is allowed:
     npt.assert_equal('Original.' in deprecated()._update_doc(''), False)
 
 
 def test_is_deprecated_without_closure():
-    # A function with no closure cells at all (`__closure__` is None):
+    # No closure cells (`__closure__` is None):
     npt.assert_equal(is_deprecated(lambda: None), False)
 
 
@@ -130,7 +129,7 @@ def test_deprecate_parameter():
                      "version 0.2. It is ignored.", 1, old='x')
     assert_warns_msg(DeprecationWarning, mock_func_old_param,
                      "'old' parameter", 1, 'x')
-    # But the parameter is ignored: the return value is unaffected:
+    # The parameter is ignored:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         npt.assert_equal(mock_func_old_param(1, old='x'), 4)
@@ -154,27 +153,24 @@ def test_deprecate_parameter_method():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         npt.assert_equal(MockClassOldParam(1, old='x').a, 1)
-    # Docstring and name survive the wrapping:
+    # The name is preserved:
     npt.assert_equal(mock_func_old_param.__name__, 'mock_func_old_param')
 
 
 def test_deprecate_parameter_is_not_is_deprecated():
-    # Deprecating a parameter does not deprecate the callable itself, so
-    # `is_deprecated` must keep reporting False for it:
+    # A deprecated parameter does not make the callable deprecated:
     npt.assert_equal(is_deprecated(mock_func_old_param), False)
     npt.assert_equal(is_deprecated(MockClassOldParam.__init__), False)
 
 
 def test_deprecate_parameter_unknown_param():
-    # A typo'd or already-removed parameter fails loudly at decoration time,
-    # rather than silently never warning:
+    # An unknown parameter fails at decoration time:
     with pytest.raises(ValueError):
         @deprecate_parameter('nonexistent')
         def func(a, b=2):
             return a
 
-    # An invalid call is left to raise its own error, not preempted by the
-    # decorator's signature binding:
+    # An invalid call raises the wrapped callable's own TypeError:
     with pytest.raises(TypeError):
         mock_func_old_param()
 
@@ -193,22 +189,21 @@ class MockClassRenamedParam:
 
 
 def test_rename_parameter():
-    # The old name warns, and names the replacement:
+    # The old name warns and names the replacement:
     assert_warns_msg(DeprecationWarning, mock_func_renamed_param,
                      "The 'old' parameter of mock_func_renamed_param is "
                      "deprecated since version 0.1, and will be removed in "
                      "version 0.2. Use 'new' instead.", 1, old=10)
-    # But unlike a deprecated parameter, its value is *kept*:
+    # Unlike a deprecated parameter, the value is kept:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         npt.assert_equal(mock_func_renamed_param(1, old=10), 11)
-    # The new name behaves identically, and does not warn:
+    # The new name does not warn:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         npt.assert_equal(mock_func_renamed_param(1, new=10), 11)
         npt.assert_equal(mock_func_renamed_param(1), 4)
-    # Docstring and name survive the wrapping, and the callable itself is not
-    # deprecated:
+    # The name is preserved, and the callable is not deprecated:
     npt.assert_equal(mock_func_renamed_param.__name__,
                      'mock_func_renamed_param')
     npt.assert_equal(is_deprecated(mock_func_renamed_param), False)
@@ -225,8 +220,7 @@ def test_rename_parameter_method():
 
 
 def test_rename_parameter_both_names():
-    # The two names are the same parameter, so passing both is an error
-    # rather than a silent choice between them:
+    # Passing both names is an error:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         with pytest.raises(TypeError):
@@ -234,14 +228,13 @@ def test_rename_parameter_both_names():
 
 
 def test_rename_parameter_unknown_param():
-    # The new name has to exist...
+    # The new name must be in the signature:
     with pytest.raises(ValueError):
         @rename_parameter('old', 'nonexistent')
         def func(a, b=2):
             return a
 
-    # ...and the old one must be gone from the signature, which catches the
-    # rename never having been made:
+    # The old name must not be in the signature:
     with pytest.raises(ValueError):
         @rename_parameter('b', 'a')
         def func(a, b=2):
@@ -258,7 +251,7 @@ class MockClassAlias:
 
 def test_deprecated_alias():
     obj = MockClassAlias()
-    # Reading through the alias warns, but returns the current value:
+    # Reading through the alias warns and returns the current value:
     assert_warns_msg(DeprecationWarning, lambda: obj.old,
                      "The 'old' parameter of MockClassAlias is deprecated "
                      "since version 0.1, and will be removed in version 0.2. "
@@ -266,13 +259,13 @@ def test_deprecated_alias():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         npt.assert_equal(obj.old, 42)
-        # Writing through it warns too, and writes the new name:
+        # Writing through it warns and sets the new name:
         obj.old = 7
     npt.assert_equal(obj.new, 7)
     assert_warns_msg(DeprecationWarning,
                      lambda: setattr(obj, 'old', 9), "Use 'new' instead")
     npt.assert_equal(obj.new, 9)
-    # The new name stays silent:
+    # The new name does not warn:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         obj.new = 3
@@ -284,8 +277,7 @@ class MockSubclassAlias(MockClassAlias):
 
 
 def test_deprecated_alias_names_runtime_class():
-    # A subclass inherits the alias, but the warning has to name the class the
-    # user is actually holding, not the one the alias was declared on:
+    # The warning names the instance's class, not the declaring class:
     assert_warns_msg(DeprecationWarning, lambda: MockSubclassAlias().old,
                      "The 'old' parameter of MockSubclassAlias is deprecated")
     assert_warns_msg(DeprecationWarning,
@@ -294,8 +286,7 @@ def test_deprecated_alias_names_runtime_class():
 
 
 def test_deprecated_alias_blames_caller():
-    # A deprecation warning is only actionable if it points at the line that
-    # used the old name, so check where it lands and not just what it says:
+    # The warning points at the caller's line:
     obj = MockClassAlias()
     with pytest.warns(DeprecationWarning) as record:
         obj.old
@@ -306,21 +297,19 @@ def test_deprecated_alias_blames_caller():
 
 
 def test_deprecated_alias_on_class():
-    # Looked up on the class, the alias returns itself rather than warning:
-    # that is how the attribute machinery asks whether a name exists at all.
+    # Class-level lookup returns the descriptor without a warning:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         npt.assert_equal(isinstance(MockClassAlias.old, deprecated_alias),
                          True)
         npt.assert_equal(hasattr(MockClassAlias, 'old'), True)
-    # And it registered itself, so that `**params` constructors can find it:
+    # The alias is registered for `**params` constructors:
     npt.assert_equal(MockClassAlias._renamed_params['old'].new_name, 'new')
 
 
 def test_rename_deprecated_params():
     specs = MockClassAlias._renamed_params
-    # A renamed name is warned about, under the name the caller used, and
-    # rewritten:
+    # An old name warns under the model name and is rewritten:
     assert_warns_msg(DeprecationWarning, rename_deprecated_params,
                      "The 'old' parameter of MyModel is deprecated",
                      'MyModel', {'old': 1}, specs)
@@ -328,7 +317,7 @@ def test_rename_deprecated_params():
         warnings.simplefilter("ignore", DeprecationWarning)
         npt.assert_equal(rename_deprecated_params('MyModel', {'old': 1},
                                                   specs), {'new': 1})
-    # Everything else is passed straight through, untouched and unwarned:
+    # Other names pass through unchanged, without a warning:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         params = {'other': 1}
@@ -340,14 +329,11 @@ def test_rename_deprecated_params():
 
 def test_rename_deprecated_params_both_names():
     specs = MockClassAlias._renamed_params
-    # The two names are the same parameter, so supplying both must raise
-    # rather than let the order they were passed in decide which one wins.
-    # `**kwargs` preserves insertion order, so check it really is symmetric:
+    # Supplying both names is a TypeError, in either order:
     for params in ({'old': 1, 'new': 2}, {'new': 2, 'old': 1}):
         with pytest.raises(TypeError, match="same parameter"):
             rename_deprecated_params('MyModel', params, specs)
-    # And it raises *instead of* warning, not after it, exactly as the
-    # signature-level `rename_parameter` does:
+    # The TypeError comes before any warning, as in `rename_parameter`:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         with pytest.raises(TypeError):

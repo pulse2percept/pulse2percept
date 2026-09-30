@@ -1,9 +1,8 @@
 """Fixtures shared across the pulse2percept test suite.
 
-This lives inside the package rather than at the repository root so that it is
-found no matter where pytest is invoked from: the root ``conftest.py`` is only
-picked up when the working directory is inside the repository, which is not
-guaranteed for ``pytest --pyargs pulse2percept``.
+Lives inside the package so that ``pytest --pyargs pulse2percept`` finds it
+from any working directory; the root ``conftest.py`` is only found from inside
+the repository.
 """
 import os
 
@@ -12,19 +11,17 @@ import pytest
 
 from pulse2percept.stimuli import VideoStimulus
 
-#: Frame count and rate of a short camera clip, kept as the numbers several
-#: tests reason about: 29.97 fps is 33.365 ms per frame, which is
-#: incommensurate with the 6 Hz pulse rate Argus II runs at.
+#: Frame count and rate of a short camera clip. 29.97 fps (33.365 ms per
+#: frame) is incommensurate with the 6 Hz Argus II pulse rate.
 CAMERA_N_FRAMES, CAMERA_FPS = 94, 29.97
 
 
 @pytest.fixture
 def camera_video():
-    """A drifting grating standing in for a short grayscale camera clip"""
+    """A drifting grating as a short grayscale camera clip"""
     rows, cols = 60, 80
     x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
-    # A vertical ramp, so that sampling the frame at different rows -- which
-    # is what an implant does -- reads different gray levels:
+    # Vertical ramp, so that different rows have different gray levels:
     y = np.linspace(0.5, 1, rows)[:, np.newaxis, np.newaxis]
     phase = 2 * np.pi * np.arange(CAMERA_N_FRAMES) / CAMERA_N_FRAMES
     return VideoStimulus(y * (0.5 + 0.5 * np.sin(x - phase)),
@@ -35,16 +32,12 @@ def camera_video():
 def axon_cache_in_tmp(tmp_path_factory):
     """Keep the axon-map cache out of the working directory.
 
-    ``AxonMapSpatial`` pickles its grown axon bundles to ``axon_pickle``,
-    which defaults to the *relative* path ``axons.pickle``. Without this
-    fixture, any test run that builds an axon map drops that file into
-    whatever directory pytest happened to be started from, and silently reuses
-    whatever cache an earlier, unrelated run left behind -- which can mask a
-    change in the axon-growing code.
+    ``AxonMapSpatial`` pickles axon bundles to ``axon_pickle``, which defaults
+    to the relative path ``axons.pickle``. Without this fixture, tests write
+    the cache to the current directory and may reuse a stale cache from an
+    earlier run.
 
-    Module-scoped rather than function-scoped on purpose: tests in the same
-    module still share one cache, which is what keeps them fast, but the cache
-    cannot outlive the run or escape into the repository.
+    Module-scoped, so tests in one module share a cache for speed.
 
     Apply it to a whole test module with::
 

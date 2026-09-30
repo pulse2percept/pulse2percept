@@ -13,14 +13,14 @@ from skimage.measure import label
 
 
 def _pixel_spacing(coords, name):
-    """Spacing (dva) between neighboring pixel centers along one axis"""
+    """Return spacing (dva) between neighboring pixel centers along one axis"""
     coords = np.asarray(coords, dtype=np.float64).ravel()
     if coords.size < 2:
         raise ValueError(f"Phosphene measurements need at least two pixels "
                          f"along '{name}' to know how much of the visual "
                          f"field a pixel covers.")
-    # Grid2D spaces its axes with `linspace`, so the end points give the exact
-    # spacing even when the stored coordinates are float32:
+    # Grid2D uses `linspace`, so end points give the exact spacing (also for
+    # float32 coordinates):
     return abs(coords[-1] - coords[0]) / (coords.size - 1)
 
 
@@ -31,12 +31,11 @@ class FrameMetrics:
     Produced by :py:func:`measure_percept`, usually through
     :py:meth:`~pulse2percept.percepts.Percept.measure`.
 
-    Only positive brightness is measured: the frame is clipped at zero first.
-    The support is the set of pixels at or above ``threshold`` times the
-    frame's own positive maximum (half maximum by default). Geometry is
-    measured on that support as a binary set of pixels, unweighted by the
-    brightness within it, and describes the support in full even when it falls
-    into several components. For a sufficiently sampled circular support,
+    The frame is clipped at zero first. The support is the set of pixels at or
+    above ``threshold`` times the frame's positive maximum (half maximum by
+    default). Geometry is measured on the binary support (not weighted by
+    brightness), including all components. For a sufficiently sampled
+    circular support,
     :py:attr:`major_axis`, :py:attr:`minor_axis` and :py:attr:`diameter`
     converge to a common value.
 
@@ -50,8 +49,8 @@ class FrameMetrics:
     integrated_brightness : float
         Positive brightness integrated over the visual field (brightness units
         x dva^2): the pixel sum scaled by pixel area. Approximates a spatial
-        integral, so it is insensitive to sampling resolution up to
-        discretization.
+        integral, so it is independent of resolution up to discretization
+        error.
     max_brightness : float
         Largest positive brightness in the frame (arbitrary units).
     area : float
@@ -71,8 +70,8 @@ class FrameMetrics:
         ``major_axis / minor_axis``; approaches 1 for a circular phosphene.
     n_components : int
         Number of connected components in the support, using full 2D
-        connectivity so diagonal neighbors count as connected. Descriptive
-        only: the other measurements still describe the combined support.
+        connectivity (diagonal neighbors are connected). The other
+        measurements describe the combined support.
     touches_edge : bool
         Whether the support reaches the first or last row or column. If True,
         the percept may extend beyond the simulated field and the measurements
@@ -91,8 +90,7 @@ class FrameMetrics:
     touches_edge: bool
 
 
-# What a frame without positive brightness measures. Shared because
-# ``FrameMetrics`` is immutable:
+# Result for a frame without positive brightness (safe to share, immutable):
 _NO_PHOSPHENE = FrameMetrics(integrated_brightness=0.0, max_brightness=0.0,
                              area=0.0, centroid=(np.nan, np.nan),
                              diameter=np.nan, major_axis=np.nan,
@@ -204,7 +202,7 @@ class PerceptMetrics:
 def _measure_frame(frame, x, y, dx, dy, threshold):
     """Measure one (Y, X) frame on the 1D column/row coordinates ``x``/``y``"""
     frame = np.asarray(frame, dtype=np.float64)
-    # Before clipping, which would map -inf onto 0:
+    # Check before clipping, which maps -inf to 0:
     if not np.all(np.isfinite(frame)):
         raise ValueError("Percept data must be finite to be measured.")
     positive = np.clip(frame, 0, None)
@@ -212,18 +210,17 @@ def _measure_frame(frame, x, y, dx, dy, threshold):
     pixel_area = dx * dy
     if peak <= 0:
         return _NO_PHOSPHENE
-    # Relative to this frame's own maximum, so scaling brightness leaves the
-    # support, and every measurement derived from it, unchanged:
+    # Relative to the frame maximum, so the support is scale invariant:
     support = positive >= threshold * peak
     n_rows, n_cols = support.shape
-    # Index the 1D axes rather than building two full-field coordinate images:
+    # Index 1D axes to avoid full-field coordinate images:
     rows, cols = np.nonzero(support)
     xs, ys = x[cols], y[rows]
     area = rows.size * pixel_area
     cx, cy = xs.mean(), ys.mean()
     off_x, off_y = xs - cx, ys - cy
-    # Pixels are cells, not point samples: without the variance of a uniform
-    # cell, a support a pixel or two across would measure zero width.
+    # Add the variance of a uniform pixel cell (d^2 / 12), so a 1-pixel
+    # support has nonzero width:
     cov_xx = (off_x ** 2).mean() + dx ** 2 / 12
     cov_yy = (off_y ** 2).mean() + dy ** 2 / 12
     cov_xy = (off_x * off_y).mean()
@@ -260,9 +257,8 @@ def measure_percept(percept, threshold=0.5):
     ----------
     percept : :py:class:`~pulse2percept.percepts.Percept`
         A (Y, X, T) brightness percept built on a
-        :py:class:`~pulse2percept.topography.Grid2D`. The grid is required
-        because positions and sizes are reported in degrees of visual angle;
-        without one a percept carries pixel indices instead.
+        :py:class:`~pulse2percept.topography.Grid2D` (required, since results
+        are in dva).
     threshold : float, optional
         Fraction of a frame's own positive maximum at or above which a pixel
         belongs to the support. Must lie in (0, 1]. A Gaussian of standard
@@ -301,13 +297,11 @@ def measure_percept(percept, threshold=0.5):
         raise ValueError(f"'threshold' is a fraction of a frame's own maximum "
                          f"brightness and must lie in (0, 1], not "
                          f"{threshold}.")
-    # Left in its stored dtype; `_measure_frame` promotes and checks one frame
-    # at a time, so a long percept is never duplicated:
+    # Promote to float64 per frame to avoid copying the whole percept:
     data = percept.data
     dx = _pixel_spacing(percept.xdva, 'xdva')
     dy = _pixel_spacing(percept.ydva, 'ydva')
-    # Row 0 of a percept is drawn at the *top* of the visual field, so the row
-    # coordinates run the other way from the stored (ascending) 'ydva':
+    # Row 0 is the top of the visual field, so reverse the ascending 'ydva':
     x = np.asarray(percept.xdva, dtype=np.float64)
     y = np.asarray(percept.ydva, dtype=np.float64)[::-1]
     frames = tuple(_measure_frame(data[..., t], x, y, dx, dy, threshold)

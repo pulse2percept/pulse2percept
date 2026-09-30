@@ -48,8 +48,7 @@ class EllipsoidElectrode(Electrode):
               point in the direction after being rotated by this matrix)
         """
         super().__init__(x, y, z, name=name, activated=activated)
-        # The three radii are plotted and swept over below, so they are
-        # normalized here; the location is handled by Electrode:
+        # Convert radii to um (Electrode converts x, y, z):
         rx = as_value(rx, um, 'rx')
         ry = as_value(ry, um, 'ry')
         rz = as_value(rz, um, 'rz')
@@ -172,9 +171,7 @@ class LinearEdgeThread(NeuralinkThread):
            quantities (e.g. ``spacing=50 * um``, ``insertion_depth=1 * mm``).
            See :py:mod:`pulse2percept.units`.
         """
-        # This thread computes its own electrode positions -- it walks down
-        # the insertion direction in steps of `spacing` -- so every length it
-        # is given is normalized before any of that arithmetic:
+        # Convert lengths to um before computing electrode positions:
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
@@ -198,11 +195,8 @@ class LinearEdgeThread(NeuralinkThread):
         # calculate the coordinates of the electrodes
         electrodes = {}
         start = self.loc + self.insertion_depth * self.direction 
-        # this is a little hacky, but basically, we don't want the electrodes
-        # exactly on the thread, but rather, on the edge. 
-        # This chooses an arbitrary angle (facing x axis), rotates the direction vector 
-        # towards that angle, and puts the electrodes on the edge of the thread in that direction.
-        # also, the exact specs are unclear from the paper here
+        # Place electrodes on the thread edge, facing an arbitrary direction
+        # (rotated x axis). Exact geometry is not specified in [Musk2019]:
         offset = (parse_3d_orient([1, 0, 0], 'direction')[0] @
                   self.direction * (self.radius + 7 // 2))
         electrode_locs = [start + i*self.spacing*self.direction + offset for i in range(self.n_elecs)]
@@ -318,13 +312,12 @@ class Neuralink(EnsembleImplant):
             raise TypeError("visual_field_map must be a "
                             "p2p.topography.cortex.NeuropythyMap")
 
-        # Where in the *visual field* each thread goes; `visual_field_map`
-        # turns that into a place on the cortical surface below:
+        # Thread locations are in dva; the map converts them to cortex:
         locs = as_value(locs, dva, 'locs')
         xrange = as_value(xrange, dva, 'xrange')
         yrange = as_value(yrange, dva, 'yrange')
         step = as_value(step, dva, 'step')
-        # An ordinary rotation, unlike the visual-field coordinates above:
+        # Geometric angle (deg), not dva:
         rand_insertion_angle = as_value(rand_insertion_angle, deg,
                                         'rand_insertion_angle')
 
@@ -344,15 +337,13 @@ class Neuralink(EnsembleImplant):
             xlocs = locs[:, 0]
             ylocs = locs[:, 1]
         
-        # thread will extend from the pial point to the intracortical point
-        # will be (3, npoints) shape
+        # Threads run from the pial to the midgray surface, shape (3, npoints):
         surface_points = np.array(visual_field_map.from_dva()[region](xlocs, ylocs, surface='pial'))
         intra_points = np.array(visual_field_map.from_dva()[region](xlocs, ylocs, surface='midgray'))
         surface_points= surface_points[:, np.isnan(surface_points).sum(axis=0) == 0]
         intra_points = intra_points[:, np.isnan(intra_points).sum(axis=0) == 0]
-        # Both surfaces must have dropped the same points, or else the two
-        # arrays no longer line up (len() would compare the number of
-        # coordinates, which is always 3):
+        # Both surfaces must drop the same NaN points (compare shape[1], since
+        # len() is always 3):
         if surface_points.shape[1] != intra_points.shape[1]:
             raise ValueError('Unable to create implant, try using jitter_boundary=True')
 
@@ -394,18 +385,15 @@ class Neuralink(EnsembleImplant):
                               xrange=None,
                               yrange=None, step=None, region=None):
         """
-        Override of the generic ensemble factory.
+        Create a Neuralink implant from a cortical visual field map.
 
-        A :py:class:`~pulse2percept.topography.cortex.NeuropythyMap` is handed
+        A :py:class:`~pulse2percept.topography.cortex.NeuropythyMap` is passed
         to :py:meth:`from_neuropythy`, which inserts each thread along the
-        cortical surface normal; any other 2D cortical map goes through the
-        generic implementation.
+        cortical surface normal. Other 2D cortical maps use the generic
+        :py:class:`~pulse2percept.implants.EnsembleImplant` factory.
 
-        Only a :py:class:`~pulse2percept.topography.cortex.CorticalMap` is
-        accepted. The generic factory takes any 2D map, but the tissue
-        coordinates a retinal map returns are also microns, so placing threads
-        by one would produce a valid-looking implant sitting nowhere in
-        cortex.
+        Requires a :py:class:`~pulse2percept.topography.cortex.CorticalMap`
+        (retinal maps also return um, which would silently misplace threads).
 
         .. versionadded:: 0.11.0
             Replaces ``from_cortical_map``.
@@ -435,8 +423,7 @@ class Neuralink(EnsembleImplant):
         if not issubclass(implant_type, NeuralinkThread):
             raise TypeError("implant_type must be a subclass of NeuralinkThread")
         from ...topography.cortex import CorticalMap, NeuropythyMap
-        # A retinal map also returns microns, so nothing downstream would
-        # notice threads being placed by one:
+        # Retinal maps also return um, so check the map type explicitly:
         if not isinstance(visual_field_map, CorticalMap):
             raise TypeError(f"Neuralink is a cortical implant, so "
                             f"'visual_field_map' must be a "
@@ -446,8 +433,6 @@ class Neuralink(EnsembleImplant):
             return super().from_visual_field_map(
                 implant_type, visual_field_map, locs=locs, xrange=xrange,
                 yrange=yrange, step=step, region=region)
-        # A 3D map is what `from_neuropythy` is for, so only the region
-        # still needs resolving:
         region = _resolve_region(visual_field_map, region, ndim=3)
         return cls.from_neuropythy(visual_field_map, locs=locs, xrange=xrange, yrange=yrange,
                                     step=step, region=region, Thread=implant_type)
@@ -456,9 +441,8 @@ class Neuralink(EnsembleImplant):
     def hemisphere(self):
         """Implanted hemisphere
 
-        'left', 'right', or None if unspecified. Metadata: thread coordinates
-        and the model's ``implant_position`` place the implant, not this
-        attribute.
+        'left', 'right', or None if unspecified. Metadata only: placement is
+        set by thread coordinates and the model's ``implant_position``.
 
         .. versionadded:: 0.11.0
         """
@@ -472,7 +456,6 @@ class Neuralink(EnsembleImplant):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        # Omitted when unspecified, which is the default:
         if self.hemisphere is not None:
             params['hemisphere'] = self.hemisphere
         return params
@@ -483,9 +466,8 @@ class Neuralink(EnsembleImplant):
         Neuralink implant, consisting of one or more 
         :py:class:`~pulse2percept.implants.cortex.NeuralinkThread` objects.
 
-        This is just a wrapper class for EnsembleImplant, with extra
-        functionality for plotting in 3D and a factory method to easily create 
-        a Neuralink implant (see :py:meth:`~Neuralink.from_neuropythy`).
+        An EnsembleImplant with 3D plotting and a factory method
+        (see :py:meth:`~Neuralink.from_neuropythy`).
 
         Parameters
         ----------
@@ -499,8 +481,8 @@ class Neuralink(EnsembleImplant):
         safe_mode : bool, optional
             If safe mode is enabled, only charge-balanced stimuli are allowed.
         hemisphere : 'left', 'right' or None, optional
-            Which hemisphere the implant sits in. Metadata: thread
-            coordinates place the implant, not this attribute.
+            Implanted hemisphere. Metadata only: thread coordinates set the
+            placement.
         """
         self.hemisphere = hemisphere
         if isinstance(threads, dict):

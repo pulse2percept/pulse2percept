@@ -1,39 +1,33 @@
 """Compare two benchmark runs and fail on a regression.
 
-Reads two JSON files written by ``pytest --benchmark-json`` and reports, for
-every benchmark they have in common, how the contender's run time and peak
-memory moved relative to the baseline. Prints a Markdown table and exits
-non-zero if anything regressed past its threshold.
+Reads two JSON files written by ``pytest --benchmark-json`` and reports the
+contender's run time and peak memory relative to the baseline for every shared
+benchmark. Prints a Markdown table and exits non-zero if anything regressed
+past its threshold.
 
     python benchmarks/compare.py baseline.json contender.json
 
-Time and memory are held to deliberately different standards, because they are
-not equally trustworthy measurements.
+``tracemalloc`` counts allocations instead of sampling the process, so repeated
+runs of unchanged code report the same peak to the byte. It does not see raw
+``malloc`` inside the Cython/OpenMP kernels, so the number is a floor on total
+memory.
 
-``tracemalloc`` counts allocations rather than sampling the process, so
-repeated runs of unchanged code report the same peak to the byte. 
-It does not see raw ``malloc`` inside the Cython/OpenMP kernels,
-so the number is a floor on total memory rather than the whole of it.
+Run time varies with runner load, so the time threshold is a generous 2x and
+catches only major regressions.
 
-Processing time may vary depending on runner load, so we set a so we set a
-generous 2x threshold to catch major regressions instead of every small
-performance change.
-
-Both checks also require an absolute change, not just a ratio. Several
-benchmarks are small enough (a 0.17 ms build, a 0.08 MB prediction) that a
-large ratio there is noise on a number too small to matter. Ratio-only
-breaches are still shown, marked ``(under floor)``, so nothing is hidden.
+Both checks also require an absolute change, because some benchmarks are tiny
+(a 0.17 ms build, a 0.08 MB prediction). Ratio-only breaches are shown as
+``(under floor)`` and do not fail the run.
 """
 import argparse
 import json
 import sys
 
-# Well outside the 15-30% run-to-run drift measured for `min` on one machine;
-# see the module docstring for why this is loose and memory is not.
+# Well outside the 15-30% run-to-run drift measured for `min` on one machine:
 TIME_THRESHOLD = 2.0
 MEM_THRESHOLD = 1.15
 
-# Below these, a ratio is a large change to a number nobody notices.
+# Absolute changes below these never fail the run:
 TIME_FLOOR_MS = 1.0
 MEM_FLOOR_MB = 1.0
 
@@ -48,10 +42,8 @@ def compare_one(base, head, threshold, floor):
     """Compare a single metric.
 
     Returns ``(ratio, status)``, where status is ``'ok'``, ``'under-floor'``
-    (over the threshold but too small in absolute terms to count) or
-    ``'regressed'``. Either value being missing or zero yields
-    ``(None, 'ok')``: a benchmark that reports no memory, or a baseline of
-    exactly zero, is skipped rather than treated as an infinite regression.
+    (over the threshold but below the absolute floor) or ``'regressed'``.
+    A missing value or a baseline <= 0 returns ``(None, 'ok')``.
     """
     if base is None or head is None or base <= 0:
         return None, 'ok'
@@ -62,7 +54,7 @@ def compare_one(base, head, threshold, floor):
 
 
 def fmt_delta(ratio, status):
-    """Render a ratio as a signed percentage, marked if it broke a limit."""
+    """Return a ratio as a signed percentage, marked if over a limit."""
     if ratio is None:
         return '--'
     cell = f'{ratio - 1:+.0%}'
@@ -74,22 +66,16 @@ def fmt_delta(ratio, status):
 
 
 def compare(baseline, contender, args):
-    """Build the report rows and decide whether the run failed.
+    """Return ``(rows, added, removed, failed)``.
 
-    Returns ``(rows, added, removed, failed)``. Benchmarks present on only one
-    side are reported but never fail the run: adding or removing a scenario is
-    a legitimate thing for a pull request to do.
-
-    Having *nothing* in common does fail, though. An empty intersection means
-    the comparison checked no code at all, which a renamed benchmark, a changed
-    parametrization or a collection error can all cause silently.
+    Benchmarks present on only one side are reported but do not fail the run.
+    An empty intersection fails (e.g., renamed benchmarks, changed
+    parametrization, or a collection error).
     """
     rows, failed = [], False
     for name in baseline.keys() & contender.keys():
         base, head = baseline[name], contender[name]
-        # The baseline comes from an older commit, which may predate a
-        # benchmark recording memory at all; such a row is reported on time
-        # alone rather than crashing the comparison.
+        # An older baseline may have no memory entry; compare time only:
         base_m = base.get('extra_info', {}).get('peak_mem_mb')
         head_m = head.get('extra_info', {}).get('peak_mem_mb')
         t_ratio, t_status = compare_one(base['stats']['min'],
@@ -107,8 +93,7 @@ def compare(baseline, contender, args):
             'base_m': base_m, 'head_m': head_m,
             'm_ratio': m_ratio, 'm_status': m_status,
         })
-    # Anything that actually failed goes first, then everything else by how
-    # much it moved.
+    # Regressions first, then by largest ratio:
     rows.sort(key=lambda r: ('regressed' in (r['t_status'], r['m_status']),
                              max(r['t_ratio'] or 0, r['m_ratio'] or 0)),
               reverse=True)
@@ -118,7 +103,7 @@ def compare(baseline, contender, args):
 
 
 def render(rows, added, removed, failed, args):
-    """Render the whole report as Markdown."""
+    """Return the report as Markdown."""
     def mb(value):
         return '--' if value is None else f'{value:.3f} MB'
 
@@ -163,7 +148,7 @@ def render(rows, added, removed, failed, args):
         '',
     ]
     if not rows:
-        pass  # already explained above; do not also claim a regression
+        pass  # empty comparison is reported above
     elif failed:
         out += [
             ':warning: **A benchmark regressed past its threshold.**',

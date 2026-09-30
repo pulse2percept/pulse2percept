@@ -58,8 +58,7 @@ class FrozenGrandChild(FrozenChild):
 
 
 def test_Frozen_derived_constructor():
-    # The whole most-derived constructor counts as construction, not just the
-    # base one it delegates to:
+    # The most-derived constructor can set attributes after `super().__init__`:
     grandchild = FrozenGrandChild(1, 2)
     npt.assert_almost_equal(grandchild.a, 1)
     npt.assert_almost_equal(grandchild.c, 2)
@@ -68,15 +67,14 @@ def test_Frozen_derived_constructor():
 
 
 class Impostor:
-    """Anything whose constructor touches an already-built Frozen object"""
+    """Sets an attribute on a Frozen object from another constructor"""
 
     def __init__(self, victim):
         victim.newvar = 0
 
 
 def test_Frozen_other_object_constructor():
-    # Being called from *some* `__init__` is not permission to add an
-    # attribute to a finished object (#801):
+    # Another object's constructor cannot add attributes (#801):
     with pytest.raises(FreezeError):
         Impostor(FrozenChild(1))
 
@@ -91,20 +89,20 @@ class ParametrizedChild(Parametrized):
 
 
 def test_Parametrized_units():
-    # A parameter that declares a unit accepts any equivalent spelling, and
-    # stores the same plain number either way:
+    # A parameter with a unit accepts equivalent units and stores a plain
+    # number:
     for tau in (100, 100 * ms, 0.1 * s):
         obj = ParametrizedChild(tau=tau)
         npt.assert_almost_equal(obj.tau, 100)
         npt.assert_equal(isinstance(obj.tau, (int, float)), True)
     npt.assert_almost_equal(ParametrizedChild(radius=0.5 * um).radius, 0.5)
-    # Every assignment path converts, not just the constructor:
+    # `set_params` and attribute assignment also convert:
     obj = ParametrizedChild()
     obj.set_params(tau=0.25 * s)
     npt.assert_almost_equal(obj.tau, 250)
     obj.tau = 0.5 * s
     npt.assert_almost_equal(obj.tau, 500)
-    # A parameter with the wrong dimension is caught, and named:
+    # Wrong dimensions are rejected, naming the parameter:
     with pytest.raises(DimensionMismatchError) as excinfo:
         ParametrizedChild(tau=5 * uA)
     npt.assert_equal("Parameter 'tau' expects time (ms), got electric current"
@@ -113,8 +111,7 @@ def test_Parametrized_units():
         ParametrizedChild(radius=5 * dva)
     with pytest.raises(DimensionMismatchError):
         ParametrizedChild().set_params(tau=5 * mA)
-    # A parameter that declares no unit is dimensionless: a plain number, or a
-    # quantity that is explicitly dimensionless, but not a current.
+    # A parameter without a unit accepts plain or dimensionless values:
     npt.assert_almost_equal(ParametrizedChild(thresh=0.5).thresh, 0.5)
     npt.assert_almost_equal(
         ParametrizedChild(thresh=0.5 * dimensionless).thresh, 0.5)
@@ -122,7 +119,7 @@ def test_Parametrized_units():
         ParametrizedChild(thresh=5 * uA)
     npt.assert_equal("Parameter 'thresh' is dimensionless, got electric "
                      "current (uA)." in str(excinfo.value), True)
-    # Whatever happens, a Quantity never ends up stored in a parameter:
+    # Parameters never store a Quantity:
     for obj in (ParametrizedChild(tau=1 * s), ParametrizedChild(radius=1 * um)):
         for value in obj._pprint_params().values():
             npt.assert_equal(hasattr(value, 'to_value'), False)

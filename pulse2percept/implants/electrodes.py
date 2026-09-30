@@ -27,12 +27,10 @@ _HEX_CIRCUMRADIUS = 1.0 / np.cos(np.radians(30))
 
 
 def _is_nonscalar(value):
-    """Whether ``value`` is a sequence where a single number is expected
+    """Return True if ``value`` is a sequence or array
 
-    The ``float`` shortcut keeps grid building off the ABC
-    ``__instancecheck__`` path: a float is never a sequence, and every
-    coordinate an :py:class:`~pulse2percept.implants.ElectrodeGrid` lays out
-    is a ``np.float64``, which is a float.
+    The ``float`` check first skips the slow ABC ``isinstance`` for grid
+    coordinates (``np.float64``).
     """
     return (not isinstance(value, float) and
             isinstance(value, (Sequence, np.ndarray)))
@@ -56,24 +54,19 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
 
     Notes
     -----
-    *  Coordinates may be given as plain numbers of microns or as unitful
-       quantities (e.g. ``1.2 * mm``), which are converted to microns. See
-       :py:mod:`pulse2percept.units`. Electrodes always *store* plain numbers
-       in microns: :py:attr:`x`, :py:attr:`y` and :py:attr:`z` are ordinary
-       floats, and so is everything downstream of them.
+    *  Coordinates accept numbers (um) or quantities (e.g., ``1.2 * mm``).
+       See :py:mod:`pulse2percept.units`. :py:attr:`x`, :py:attr:`y`, and
+       :py:attr:`z` are always stored as plain floats in um.
     """
     __slots__ = ('x', 'y', 'z', 'name', 'activated', 'plot_patch',
                  'plot_kwargs', 'plot_deactivated_kwargs')
 
-    #: The unit electrode coordinates are stored in. Electrodes hold plain
-    #: numbers, which is what every kernel downstream of them expects; this
-    #: says what those numbers mean.
+    #: Unit of the stored (plain float) electrode coordinates.
     coordinate_unit = um
 
     def __init__(self, x, y, z, name=None, activated=True):
-        # Normalized before the checks below rather than after, so that a
-        # quantity wrapping an array (``np.arange(3) * um``) is refused for the
-        # same reason a bare array is, instead of being stored as one:
+        # Convert first, so array quantities (``np.arange(3) * um``) also
+        # fail the scalar checks:
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
@@ -115,8 +108,8 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
         Returns
         -------
         coords : (3,) np.ndarray
-            An ordinary NumPy array ``[x, y, z]``, never a
-            :py:class:`~pulse2percept.units.Quantity`.
+            Plain NumPy array ``[x, y, z]`` (not a
+            :py:class:`~pulse2percept.units.Quantity`).
 
         Examples
         --------
@@ -234,9 +227,8 @@ class PointSource(Electrode):
         point at which the voltage is being computed.
 
         """
-        # ``amp`` and ``sigma`` are deliberately left alone: current density
-        # and resistivity are dimensions p2p has not defined, and inventing
-        # them here to check two arguments would be worse than not checking.
+        # ``amp`` and ``sigma`` are not unit-checked (p2p defines no
+        # resistivity unit):
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')
@@ -324,8 +316,7 @@ class DiskElectrode(Electrode):
         and :math:`a` is the disk radius.
 
         """
-        # Only the location is normalized here; ``v0`` is an electrical
-        # quantity, not a geometric one:
+        # ``v0`` is not unit-checked:
         x = as_value(x, um, 'x')
         y = as_value(y, um, 'y')
         z = as_value(z, um, 'z')

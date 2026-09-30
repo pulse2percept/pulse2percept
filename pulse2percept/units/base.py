@@ -34,9 +34,9 @@ _DERIVED_LABELS = {
 
 
 def _snap_scale(scale):
-    """Snap near-exact decimal scale factors to powers of ten.
+    """Snaps near-exact decimal scale factors to powers of ten
 
-    This removes floating-point noise from equivalent compound units.
+    Removes floating-point noise from equivalent compound units.
     """
     if not math.isfinite(scale) or scale <= 0:
         return scale
@@ -53,7 +53,7 @@ _EQ_RTOL = 1e-12
 
 
 def _isclose(a, b):
-    """Compare magnitudes up to floating-point conversion noise."""
+    """Compares magnitudes up to floating-point conversion noise"""
     try:
         result = np.isclose(a, b, rtol=_EQ_RTOL, atol=0.0)
     except (TypeError, ValueError):
@@ -70,11 +70,10 @@ class DimensionMismatchError(TypeError):
 
 
 def _mismatch(expected, got, name=None):
-    """Build a :py:class:`DimensionMismatchError` for an API boundary"""
+    """Returns a :py:class:`DimensionMismatchError` for an API boundary"""
     got_str = f'{got.dimension.name} ({got})'
     if expected.dimension.is_dimensionless and not expected.symbol:
-        # "expects dimensionless ()" reads badly, and a parameter that takes a
-        # plain number is worth saying so about directly:
+        # Avoid "expects dimensionless ()"; say "plain number" instead:
         if name is None:
             return DimensionMismatchError(f"Expected a plain number, got "
                                           f"{got_str}.")
@@ -188,22 +187,20 @@ class Dimension(object):
     def __hash__(self):
         return hash(self._exponents)
 
-    # Immutable value objects can be shared across copies.
+    # Immutable, so copies can share the object:
     def __copy__(self):
         return self
 
     def __deepcopy__(self, memodict=None):
         return self
 
-    # Restore state without going through the immutability guard.
+    # Restore state without the immutability guard:
     def __getstate__(self):
         return {'_exponents': self._exponents}
 
     def __setstate__(self, state):
-        # An exponent tuple is only meaningful against the `BASE_DIMENSIONS`
-        # it was written with. One from a release with a different set of base
-        # dimensions would unpickle happily and mean something else, so refuse
-        # it rather than restore a quietly wrong dimension:
+        # Exponents are only valid for the `BASE_DIMENSIONS` they were pickled
+        # with, so reject a pickle with a different number of base dimensions:
         exponents = state['_exponents']
         if len(exponents) != len(BASE_DIMENSIONS):
             raise ValueError("Cannot restore Dimension with an incompatible "
@@ -227,7 +224,7 @@ _CANONICAL_SYMBOLS = {}
 
 
 def _symbol_mul(a, b):
-    """Compose the symbol of a product of two units"""
+    """Returns the symbol of a product of two units"""
     if not a:
         return b
     if not b:
@@ -236,7 +233,7 @@ def _symbol_mul(a, b):
 
 
 def _symbol_group(sym):
-    """Parenthesize a compound unit symbol when needed for composition."""
+    """Returns a compound unit symbol, parenthesized if needed"""
     if any(c in sym for c in '*/'):
         return f'({sym})'
     return sym
@@ -265,9 +262,9 @@ class Unit(object):
     """
     __slots__ = ('_dimension', '_scale', '_symbol')
 
-    # NumPy must not try to broadcast a unit into an object array: with these
-    # two attributes, ``np.array([1, 2]) * uA`` defers to ``Unit.__rmul__``
-    # and produces a single Quantity wrapping the array.
+    # Keeps NumPy from broadcasting a unit into an object array:
+    # ``np.array([1, 2]) * uA`` calls ``Unit.__rmul__`` and returns a single
+    # Quantity wrapping the array.
     __array_priority__ = 1000
     __array_ufunc__ = None
 
@@ -304,7 +301,7 @@ class Unit(object):
 
     @property
     def _display_symbol(self):
-        """Display symbol, preferring an exactly equivalent predefined unit."""
+        """Display symbol, preferring an exactly equivalent predefined unit"""
         return _CANONICAL_SYMBOLS.get((self._dimension, self._scale),
                                       self._symbol)
 
@@ -318,7 +315,8 @@ class Unit(object):
         return Quantity(other, self)
 
     def __rmul__(self, other):
-        # Reached by ``5 * uA``, ``[1, 2] * uA``, and ``np.array([1, 2]) * uA``:
+        # Called for ``5 * uA``, ``[1, 2] * uA``, and
+        # ``np.array([1, 2]) * uA``:
         return Quantity(other, self)
 
     def __truediv__(self, other):
@@ -332,7 +330,7 @@ class Unit(object):
         return Quantity(1.0 / other, self)
 
     def __rtruediv__(self, other):
-        # Reached by ``1 / ms`` and ``20 / ms``:
+        # Called for ``1 / ms`` and ``20 / ms``:
         return Quantity(other, self ** -1)
 
     def __pow__(self, exp):
@@ -344,10 +342,9 @@ class Unit(object):
         return Unit(self.dimension ** exp, self.scale ** exp, symbol)
 
     def __eq__(self, other):
-        # Exact, because `_snap_scale` has already canonicalized the scale:
-        # `uA * ms` and `nC` are the same float, not merely close ones. Two
-        # units are equal if they measure the same thing at the same size,
-        # whatever they are spelled.
+        # Exact comparison, since `_snap_scale` canonicalizes the scale
+        # (`uA * ms` and `nC` have the same float scale). Units are equal if
+        # dimension and scale match, regardless of symbol.
         if not isinstance(other, Unit):
             return NotImplemented
         return (self.dimension == other.dimension and
@@ -358,12 +355,11 @@ class Unit(object):
         return result if result is NotImplemented else not result
 
     def __hash__(self):
-        # Hashes exactly what `__eq__` compares:
+        # Hashes the fields `__eq__` compares:
         return hash((self.dimension, self.scale))
 
-    # Immutable, so a copy is the object itself; see `Dimension.__copy__`.
-    # This matters here: every stimulus carries two units, and the model
-    # pipeline deep-copies stimuli constantly.
+    # Immutable, so a copy is the object itself (see `Dimension.__copy__`).
+    # Stimuli carry two units each and are deep-copied often.
     def __copy__(self):
         return self
 
@@ -388,19 +384,17 @@ class Unit(object):
 class Quantity(object):
     """A number (or array of numbers) with a unit
 
-    Quantities are what users build by multiplying a number by a unit, and
-    they exist to be checked and converted at p2p's public API boundaries.
-    They are deliberately *not* NumPy arrays: p2p strips units before any
-    numerical work, so quantities never reach a Cython kernel and never
-    impose per-element overhead on a simulation.
+    Quantities are created by multiplying a number by a unit, and are checked
+    and converted at p2p's public API boundaries. They are not NumPy arrays:
+    p2p strips units before numerical work, so quantities never reach Cython
+    code and add no per-element overhead to a simulation.
 
-    For the same reason, ``np.asarray(5 * uA)`` does not silently yield ``5``.
-    Removing a unit is something you write down, using
-    :py:meth:`~pulse2percept.units.Quantity.to_value`.
+    ``np.asarray(5 * uA)`` therefore does not return ``5``. Use
+    :py:meth:`~pulse2percept.units.Quantity.to_value` to remove a unit.
 
-    Equivalent unit choices convert consistently up to floating-point
-    precision, and quantities compare accordingly: ``0.0041 * mA == 4.1 * uA``
-    is True even though rescaling the former gives ``4.1000000000000005``.
+    Equivalent units convert consistently up to floating-point precision, and
+    quantities compare accordingly: ``0.0041 * mA == 4.1 * uA`` is True even
+    though rescaling the former gives ``4.1000000000000005``.
 
     .. versionadded:: 0.10.0
 
@@ -427,14 +421,12 @@ class Quantity(object):
     __array_priority__ = 1000
     __array_ufunc__ = None
 
-    # There is deliberately no ``__array__``: it would make
-    # ``np.asarray(5 * uA)`` return ``5``, which is exactly the silent unit
-    # stripping this class exists to prevent.
+    # No ``__array__``, so ``np.asarray(5 * uA)`` does not silently strip the
+    # unit.
     #
-    # ``__len__``, ``__getitem__`` and ``__iter__`` are absent for a weaker
-    # reason: nothing needs them yet. They could be added safely -- indexing
-    # would have to return another Quantity, never a bare number, or NumPy
-    # would strip units through the sequence protocol instead.
+    # No ``__len__``, ``__getitem__`` or ``__iter__`` (not needed yet). If
+    # added, indexing must return a Quantity, or NumPy would strip units
+    # through the sequence protocol.
 
     def __init__(self, magnitude, unit):
         if not isinstance(unit, Unit):
@@ -473,8 +465,7 @@ class Quantity(object):
         unit : :py:class:`~pulse2percept.units.Unit`
             The target unit.
         name : str, optional
-            Name of the parameter being converted, used to make the error
-            message point at the offending argument.
+            Parameter name to include in the error message.
 
         Returns
         -------
@@ -487,16 +478,14 @@ class Quantity(object):
     def to_value(self, unit, name=None):
         """Convert to another unit and return the bare number(s)
 
-        This is the explicit way to remove a unit: after calling it you have
-        an ordinary float or NumPy array, expressed in ``unit``.
+        Returns an ordinary float or NumPy array, expressed in ``unit``.
 
         Parameters
         ----------
         unit : :py:class:`~pulse2percept.units.Unit`
             The target unit.
         name : str, optional
-            Name of the parameter being converted, used to make the error
-            message point at the offending argument.
+            Parameter name to include in the error message.
 
         Returns
         -------
@@ -520,13 +509,11 @@ class Quantity(object):
                 f"Cannot {verb} {self.unit.dimension.name} ({self.unit}) and "
                 f"{other.unit.dimension.name} ({other.unit}).")
 
-    # A bare number combined with a dimensionless quantity is a quantity in the
-    # canonical `dimensionless` unit -- not "the magnitude in whatever compound
-    # dimensionless unit this one happens to carry". The distinction is invisible
-    # for `dimensionless` itself (scale 1) and decisive for anything composed:
-    # a duty cycle of ``0.45 * ms * 50 * Hz`` is 0.0225, though its ms*Hz
-    # magnitude reads 22.5. So these branches rescale before they touch a
-    # number, and hand back a result in `dimensionless`.
+    # A bare number combined with a dimensionless quantity is interpreted in
+    # the canonical `dimensionless` unit (scale 1), not in the quantity's
+    # compound unit. E.g., a duty cycle of ``0.45 * ms * 50 * Hz`` is 0.0225,
+    # though its ms*Hz magnitude is 22.5. So these methods rescale to
+    # `dimensionless` first and return a result in `dimensionless`.
     def __add__(self, other):
         if isinstance(other, Unit):
             other = Quantity(1, other)
@@ -618,16 +605,15 @@ class Quantity(object):
         return self._compare(other, lambda a, b: a >= b, 'compare')
 
     def __eq__(self, other):
-        # Compared up to floating-point conversion noise: `0.0041 * mA` and
-        # `4.1 * uA` are the same current, but rescaling the first one yields
-        # 4.1000000000000005. See `_EQ_RTOL`.
+        # Compared up to floating-point conversion noise: rescaling
+        # `0.0041 * mA` to uA gives 4.1000000000000005. See `_EQ_RTOL`.
         if isinstance(other, Unit):
             other = Quantity(1, other)
         if not isinstance(other, Quantity):
             if self.dimension.is_dimensionless:
                 return _isclose(self.to_value(dimensionless), other)
-            # Equality must not raise: a quantity simply is not equal to a
-            # bare number of a different dimension.
+            # Never raise on equality; a bare number of a different dimension
+            # is not equal:
             return NotImplemented
         if self.dimension != other.dimension:
             return False
@@ -647,8 +633,7 @@ class Quantity(object):
         return Quantity(self.magnitude, self.unit)
 
     def __deepcopy__(self, memodict=None):
-        # Unlike a Dimension or a Unit, the magnitude may be a mutable array,
-        # so this one really does have something to copy:
+        # Unlike Dimension and Unit, the magnitude may be a mutable array:
         return Quantity(deepcopy(self.magnitude, memodict), self.unit)
 
     def __getstate__(self):
@@ -671,10 +656,10 @@ class Quantity(object):
 def as_value(value, unit, name=None):
     """Convert a value to a bare number expressed in ``unit``
 
-    This is p2p's standard Python-to-numerics boundary. A
+    This is p2p's standard conversion at API boundaries. A
     :py:class:`~pulse2percept.units.Quantity` is dimension-checked and
     rescaled to ``unit``; a bare number is assumed to already be expressed in
-    ``unit`` and is passed through untouched (including ``None``).
+    ``unit`` and is returned unchanged (including ``None``).
 
     Parameters
     ----------
@@ -683,8 +668,7 @@ def as_value(value, unit, name=None):
     unit : :py:class:`~pulse2percept.units.Unit`
         The unit the numerical code expects.
     name : str, optional
-        Name of the parameter, used to make the error message point at the
-        offending argument.
+        Parameter name to include in the error message.
 
     Returns
     -------
@@ -700,14 +684,12 @@ def as_value(value, unit, name=None):
     20.0
 
     """
-    # Unconditionally, before the bare-value fast path: a bad ``unit`` is a bug
-    # in the calling API, and it must not go unnoticed just because this
-    # particular caller happened to pass a plain number.
+    # Check `unit` before the plain-number shortcut, so an invalid `unit` is
+    # caught for every input:
     if not isinstance(unit, Unit):
         raise TypeError(f"'unit' must be a Unit object, not {type(unit)}.")
-    # A plain number is already what the caller wants and cannot match any of
-    # the cases below. Worth its own line: this is the boundary every
-    # coordinate of every electrode crosses, and `np.float64` is a `float`.
+    # Fast path for plain numbers (including `np.float64`), since every
+    # electrode coordinate goes through here:
     if isinstance(value, (int, float)):
         return value
     if isinstance(value, Unit):
@@ -716,10 +698,9 @@ def as_value(value, unit, name=None):
     if isinstance(value, Quantity):
         return value.to_value(unit, name=name)
     if isinstance(value, (list, tuple)) and has_units(value):
-        # A sequence built one element at a time, e.g. `(-15 * dva, 15 * dva)`
-        # for a parameter that takes an (x_min, x_max) pair. Converted
-        # elementwise, keeping the sequence type, so the caller still gets the
-        # tuple it expects:
+        # A sequence of quantities, e.g. `(-15 * dva, 15 * dva)` for an
+        # (x_min, x_max) pair. Converted elementwise, keeping the sequence
+        # type:
         return type(value)(as_value(v, unit, name=name) for v in value)
     return value
 
@@ -729,8 +710,8 @@ def has_units(value):
 
     True for a :py:class:`~pulse2percept.units.Quantity` or
     :py:class:`~pulse2percept.units.Unit`, and for a list or tuple containing
-    one. Cheap enough to call before every attribute assignment, which is what
-    :py:class:`~pulse2percept.utils.Parametrized` does.
+    one. Fast enough to call on every attribute assignment (as
+    :py:class:`~pulse2percept.utils.Parametrized` does).
     """
     if isinstance(value, (Quantity, Unit)):
         return True
@@ -742,10 +723,9 @@ def has_units(value):
 # -----------------------------------------------------------------------------
 # The public unit vocabulary
 #
-# Deliberately small and neuroscience-oriented: these are the units that appear
-# in p2p's own APIs, spelled the terse Brian way. There is no registry, no
-# string parsing, and no automatic prefix generation; anything else users need
-# they build with unit algebra (e.g. ``uA / mm ** 2``).
+# The units used in p2p's own APIs, with Brian-style names. No registry,
+# string parsing, or automatic prefixes; build other units with unit algebra
+# (e.g. ``uA / mm ** 2``).
 # -----------------------------------------------------------------------------
 
 TIME = Dimension(time=1)
@@ -757,8 +737,8 @@ VISUAL_ANGLE = Dimension(visual_angle=1)
 THRESHOLD_RATIO = Dimension(threshold_ratio=1)
 FREQUENCY = TIME ** -1
 CHARGE = CURRENT * TIME
-# Optical power, for photovoltaic implants. Not a new base dimension: power is
-# voltage times current, and irradiance is then ``mW / mm ** 2``.
+# Optical power, for photovoltaic implants. Power is voltage times current
+# (no new base dimension); irradiance is ``mW / mm ** 2``.
 POWER = VOLTAGE * CURRENT
 
 #: The unit of a plain number, used for image intensities and other
@@ -824,28 +804,26 @@ nC = Unit(CHARGE, 1e-9, 'nC')
 
 #: Radian, the base scale of ordinary angle
 rad = Unit(ANGLE, 1, 'rad')
-#: Degree of ordinary (geometric) angle. p2p's angle-valued APIs are spelled in
-#: degrees, so this is the unit their bare numbers are read in.
+#: Degree of ordinary (geometric) angle. Bare numbers in p2p's angle-valued
+#: APIs are in degrees.
 deg = Unit(ANGLE, np.pi / 180, 'deg')
 
-#: Degree of visual angle. Not an ordinary angle: converting dva to a distance
-#: on the retina or cortex requires a visual field map, not a scale factor, so
-#: ``dva`` and ``deg`` are deliberately incompatible.
+#: Degree of visual angle. Not an ordinary angle: converting dva to retinal
+#: or cortical distance requires a visual field map, not a scale factor, so
+#: ``dva`` and ``deg`` are incompatible.
 dva = Unit(VISUAL_ANGLE, 1, 'dva')
 
-#: Multiple of perceptual threshold ("times threshold"). Becomes a current
-#: only once a threshold is known; see
+#: Multiple of perceptual threshold ("times threshold"). Converts to a
+#: current only once a threshold is known; see
 #: :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain`.
 xTh = Unit(THRESHOLD_RATIO, 1, 'xTh')
 
 
-# The canonical spelling of each predefined unit, for `Unit._display_symbol`.
-# Written out here rather than harvested from this module's namespace: should
-# two units ever share a (dimension, scale) -- an alias such as ``sec`` for
-# ``s`` -- the one listed here is the one that wins, and that ought to be a
-# decision rather than an accident of declaration order. An alias simply does
-# not go in this tuple; listing both is a mistake, so it raises rather than
-# letting declaration order pick a winner.
+# The canonical symbol of each predefined unit, for `Unit._display_symbol`.
+# Listed explicitly so that, if two units share a (dimension, scale) (e.g.
+# an alias ``sec`` for ``s``), the canonical one is chosen here, not by
+# declaration order. Aliases are left out; listing two units with the same
+# key gives a RuntimeError.
 _CANONICAL_UNITS = (dimensionless,
                     s, ms, us, ns,
                     Hz, kHz,

@@ -22,7 +22,7 @@ matplotlib.use('Agg')
 
 
 def player(ani):
-    """The config the JavaScript player was handed"""
+    """Return the JavaScript player config"""
     html = ani.to_jshtml()
     return json.loads(re.search(r'var cfg = (\{.*?\});', html, re.S).group(1))
 
@@ -153,13 +153,13 @@ def test_Percept_plot():
 
 
 def grid_lines(ax, linestyle):
-    """Drawn rings ('--') or meridians ('-') as (2, n) coordinate arrays"""
+    """Return drawn rings ('--') or meridians ('-') as (2, n) arrays"""
     return [np.asarray(line.get_data()) for line in ax.get_lines()
             if line.get_linestyle() == linestyle]
 
 
 def test_Percept_plot_grid_is_centered_on_the_visual_field_origin():
-    """Not on the middle of an asymmetric grid"""
+    """Grid is centered at (0, 0), not at the center of an asymmetric field"""
     grid = Grid2D((-15, 5), (-4, 10), step=0.5)
     percept = Percept(np.random.rand(*grid.x.shape, 1), space=grid)
     ax = percept.plot(ax=plt.subplots()[1], rings=True,
@@ -196,7 +196,7 @@ def test_Percept_plot_grid_on_a_field_that_excludes_the_fovea():
 
 
 def test_Percept_grid_needs_visual_field_coordinates():
-    """Pixel indices are not visual angle"""
+    """Rings and meridians require a percept built with space"""
     bare = Percept(np.random.rand(3, 5, 2), time=[0, 10])
     temporal = Percept(np.random.rand(1, 1, 4), time=[0, 1, 2, 3])
     for percept in (bare, temporal):
@@ -205,7 +205,7 @@ def test_Percept_grid_needs_visual_field_coordinates():
                 percept.plot(ax=plt.subplots()[1], **grid)
             with pytest.raises(ValueError):
                 percept.play(**grid)
-    # Nothing requested, nothing refused or drawn:
+    # No grid requested:
     ax = bare.plot(ax=plt.subplots()[1], rings=False, meridians=None)
     npt.assert_equal(len(ax.lines) + len(ax.texts), 0)
     npt.assert_equal(len(bare.play(rings=None)._layers), 1)
@@ -213,7 +213,7 @@ def test_Percept_grid_needs_visual_field_coordinates():
 
 
 def test_Percept_play_shows_the_grid_as_a_still_layer():
-    """The player's canvas covers ordinary artists, so the grid is image data"""
+    """play draws the grid as a static image layer"""
     grid = Grid2D((-4, 4), (-2, 2), step=0.5)
     percept = Percept(np.random.rand(*grid.x.shape, 3), space=grid,
                       time=[0, 10, 20])
@@ -231,7 +231,7 @@ def test_Percept_play_shows_the_grid_as_a_still_layer():
     npt.assert_equal(middle[:, n_cols // 2 + 2:].max(axis=0).min() > 0.2, True)
     npt.assert_almost_equal(middle[:, :n_cols // 2 - 2].max(), 0)
     npt.assert_almost_equal(alpha[:n_rows // 4].max(), 0)
-    # ... in red, and it reaches the HTML player as one more sprite sheet:
+    # Red, and one extra sprite sheet in the HTML player:
     npt.assert_almost_equal(overlay.data[alpha > 0.5, :3, 0].mean(0),
                             (1, 0, 0), decimal=2)
     count = 'data:image/png;base64'
@@ -247,7 +247,7 @@ def test_Percept_play(n_frames):
     ani = percept.play()
     npt.assert_equal(isinstance(ani, FuncAnimation), True)
     npt.assert_equal(len(list(ani.frame_seq)), n_frames)
-    # The animation renders as a self-contained HTML player:
+    # Renders as a self-contained HTML player:
     html = ani.to_jshtml()
     npt.assert_equal('p2p-anim' in html, True)
     npt.assert_equal(f'"n": {n_frames}' in html, True)
@@ -270,7 +270,7 @@ def test_Percept_play_title_is_independent_of_time_annotation(own_axes):
 
 
 def test_Percept_omitted_vmax_is_the_whole_percepts_maximum():
-    """So brightness does not depend on the frame"""
+    """Default vmax is the maximum over all frames"""
     data = np.zeros((3, 5, 3))
     data[..., 0] = 1
     data[1, 1, 2] = 4
@@ -287,26 +287,25 @@ def test_Percept_omitted_vmax_is_the_whole_percepts_maximum():
 
 
 def test_Percept_play_single_frame():
-    """A percept with a single time point has no frame rate of its own"""
+    """play works for a single time point"""
     percept = Percept(np.random.rand(4, 4, 1), time=[3.5])
     html = percept.play().to_jshtml()
     npt.assert_equal('"n": 1' in html, True)
     npt.assert_equal('t = 3.50 ms' in html, True)
-    # Without a time axis it is not an animation at all:
+    # No time axis:
     with pytest.raises(ValueError):
         Percept(np.random.rand(4, 4, 1)).play()
 
 
 @pytest.mark.parametrize('gridded', (True, False))
 def test_Percept_play_uses_visual_field_axes(gridded):
-    """An animated percept lands on the same axes as a plotted one"""
+    """play uses the same dva axes as plot"""
     grid = Grid2D((-4, 4), (-2, 2), step=1) if gridded else None
     shape = grid.x.shape if gridded else (5, 9)
     percept = Percept(np.random.rand(*shape, 3), space=grid,
                       time=[0., 10., 20.])
     played = percept.play(colorbar=False)._layers[0].image.axes
     plotted = percept.plot(ax=plt.subplots()[1])
-    # Without an extent the player would show array indices instead:
     npt.assert_almost_equal(played.get_xlim(), plotted.get_xlim())
     npt.assert_almost_equal(played.get_ylim(), plotted.get_ylim())
     npt.assert_equal(played.get_xlabel(), 'x (degrees of visual angle)')
@@ -314,21 +313,21 @@ def test_Percept_play_uses_visual_field_axes(gridded):
     if gridded:
         npt.assert_almost_equal(played.get_xlim(), (-4, 4))
         npt.assert_almost_equal(played.get_ylim(), (-2, 2))
-        # The frames span the pixel edges, half a step outside the centers:
+        # Extent spans pixel edges, half a step outside the centers:
         npt.assert_almost_equal(played.images[0].get_extent(),
                                 (-4.5, 4.5, -2.5, 2.5))
 
 
 def test_Percept_play_orientation_matches_plot():
-    """The first data row animates where `plot` draws it"""
+    """play and plot draw the first data row at the same place"""
     grid = Grid2D((-4, 4), (-2, 2), step=1)
     data = np.zeros((*grid.x.shape, 1))
     data[0, 0, 0] = 1.0
     percept = Percept(data, space=grid, time=[0.])
 
     def brightest(ax):
-        # Its own Agg canvas: `play` closes its figure, which on some
-        # Matplotlib versions leaves it without a renderer to draw into.
+        # New Agg canvas: `play` closes its figure, which leaves no renderer
+        # on some Matplotlib versions:
         canvas = FigureCanvasAgg(ax.figure)
         canvas.draw()
         img = np.asarray(canvas.buffer_rgba())[..., :3].mean(-1)
@@ -336,7 +335,7 @@ def test_Percept_play_orientation_matches_plot():
         r0, r1 = int(height - box.y1) + 2, int(height - box.y0) - 2
         c0, c1 = int(box.x0) + 2, int(box.x1) - 2
         patch = img[r0:r1, c0:c1]
-        # Centroid of the lit pixels, so antialiasing cannot tip the answer:
+        # Centroid of lit pixels (robust to antialiasing):
         rows, cols = np.nonzero(patch >= 0.5 * patch.max())
         return ax.transData.inverted().transform(
             (c0 + cols.mean(), height - (r0 + rows.mean())))
@@ -346,10 +345,8 @@ def test_Percept_play_orientation_matches_plot():
     played = brightest(animation._layers[0].image.axes)
     plotted = brightest(percept.plot(ax=plt.subplots()[1]))
     npt.assert_allclose(played, plotted, atol=0.3)
-    # `grid.x[0, 0], grid.y[0, 0]` is the top-left corner; a flipped row order
-    # would put the lit cell in the bottom-left instead. The centroid sits
-    # inside the corner cell rather than on its center, which the axis limits
-    # clip, so check the quadrant rather than the exact coordinate.
+    # `grid.x[0, 0], grid.y[0, 0]` is the top-left corner. Axis limits clip
+    # the corner cell, so check the quadrant only:
     npt.assert_array_less(played[0], 0)
     npt.assert_array_less(0, played[1])
     npt.assert_equal((grid.x[0, 0] < 0, grid.y[0, 0] > 0), (True, True))
@@ -357,8 +354,7 @@ def test_Percept_play_orientation_matches_plot():
 
 def test_Percept_play_fmt():
     percept = Percept(np.random.rand(8, 8, 4))
-    # A percept is scalar, so the lossless default already costs only one byte
-    # per pixel -- and JPEG rings around high-contrast phosphenes:
+    # Default is lossless PNG (JPEG rings around high-contrast phosphenes):
     npt.assert_equal('data:image/jpeg;base64,' in percept.play().to_jshtml(),
                      False)
     npt.assert_equal('data:image/jpeg;base64,' in
@@ -397,18 +393,18 @@ def test_Percept_save(dtype, tmp_path):
 
 
 def test_Percept_save_single_frame(tmp_path):
-    """A percept with a single time point has no frame rate of its own"""
+    """save works for a single time point"""
     percept = Percept(np.random.rand(16, 16, 1), time=[3.5])
     for name in ['test.mp4', 'test.avi', 'test.gif']:
         fname = percept.save(str(tmp_path / name), vmin=0, vmax=1)
         npt.assert_equal(len(mimread(fname)), 1)
-    # An explicit frame rate is still honored:
+    # Explicit fps:
     fname = percept.save(str(tmp_path / 'fps.mp4'), fps=12, vmin=0, vmax=1)
     npt.assert_equal(len(mimread(fname)), 1)
 
 
 def test_Percept_fps_units(tmp_path):
-    """A frame rate is a frequency, however it is spelled
+    """fps accepts any frequency unit
 
     .. versionadded:: 0.10.0
     """
@@ -416,24 +412,24 @@ def test_Percept_fps_units(tmp_path):
     percept = Percept(np.random.rand(8, 8, 100), time=np.arange(0, 1000, 10))
 
     def interval(**kwargs):
-        """The frame delay (ms) the HTML player was configured with"""
+        """Return the HTML player frame delay (ms)"""
         html = percept.play(**kwargs).to_jshtml()
         return float(re.search(r'"interval": ([0-9.]+)', html).group(1))
 
-    # 33.33 ms, which is what 30 frames per second asks for:
+    # 30 fps = 33.33 ms:
     npt.assert_almost_equal(interval(fps=30), 1000 / 30, decimal=6)
     for spelling in (30 * Hz, 0.03 * kHz):
         npt.assert_almost_equal(interval(fps=spelling), interval(fps=30),
                                 decimal=12)
 
-    # ... and the same on the way out to a file:
+    # Same for save:
     fname = str(tmp_path / 'fps.mp4')
     npt.assert_equal(
         len(mimread(percept.save(fname, fps=30 * Hz, vmin=0, vmax=1))), 30)
     npt.assert_equal(
         len(mimread(percept.save(fname, fps=0.03 * kHz, vmin=0, vmax=1))), 30)
 
-    # Nothing else is a frame rate:
+    # Non-frequency units:
     for wrong in (30 * ms, 30 * uA):
         with pytest.raises(DimensionMismatchError):
             percept.play(fps=wrong)
@@ -442,84 +438,76 @@ def test_Percept_fps_units(tmp_path):
 
 
 def test_Percept_units():
-    """A percept's time axis knows what unit it is written in
+    """Percept time units
 
     .. versionadded:: 0.10.0
     """
     data = np.zeros((3, 3, 2))
-    # Milliseconds unless told otherwise, and a bare time axis keeps the
-    # meaning it has always had:
+    # Default: ms:
     percept = Percept(data, time=[0, 10])
     npt.assert_equal(percept.time_unit, ms)
     npt.assert_almost_equal(percept.time, [0, 10])
 
-    # A unitful time axis is normalized *into* the percept's unit rather than
-    # changing it. Deterministic, and the same rule as everywhere else in p2p:
+    # A unitful time axis is converted to `time_unit`:
     percept = Percept(data, time=[0, 0.01] * s)
     npt.assert_equal(percept.time_unit, ms)
     npt.assert_allclose(percept.time, [0, 10], rtol=1e-12)
-    # ... including a sequence built one element at a time:
+    # Also for a list of quantities:
     npt.assert_allclose(Percept(data, time=[0 * ms, 10000 * us]).time,
                         [0, 10], rtol=1e-12)
 
-    # Storing in another unit is the caller's choice -- a model passes its own
-    # `time_unit` -- and then bare numbers mean *that* unit:
+    # With another `time_unit`, bare numbers are in that unit:
     percept = Percept(data, time=[0, 0.01], time_unit=s)
     npt.assert_equal(percept.time_unit, s)
     npt.assert_allclose(percept.time, [0, 0.01], rtol=1e-12)
     npt.assert_allclose(percept.times(ms), [0, 10], rtol=1e-12)
-    # `times()` with no unit hands back the stored array, unconverted:
+    # `times()` without a unit returns the stored array:
     npt.assert_allclose(percept.times(), [0, 0.01], rtol=0, atol=0)
     npt.assert_equal(percept.time_quantity.unit, s)
     npt.assert_allclose(percept.time_quantity.to_value(ms), [0, 10],
                         rtol=1e-12)
-    # A quantity handed to a percept that stores seconds lands in seconds:
+    # Quantities are converted to s:
     npt.assert_allclose(Percept(data, time=[0, 10] * ms, time_unit=s).time,
                         [0, 0.01], rtol=1e-12)
 
-    # Nothing to express in any unit without a time axis:
+    # No time axis:
     spatial = Percept(np.zeros((3, 3, 1)))
     npt.assert_equal(spatial.time, None)
     npt.assert_equal(spatial.times(s), None)
     npt.assert_equal(spatial.time_quantity, None)
     npt.assert_equal(spatial.time_unit, ms)
 
-    # `data` is perceived brightness in arbitrary units, so it has no unit of
-    # its own and gains none here:
+    # Brightness is in arbitrary units (no `unit` attribute):
     npt.assert_equal(hasattr(percept, 'unit'), False)
 
-    # `time_unit` has to be a unit, and a unit of time:
+    # `time_unit` must be a time unit:
     with pytest.raises(TypeError):
         Percept(data, time=[0, 10], time_unit='ms')
     with pytest.raises(DimensionMismatchError):
         Percept(data, time=[0, 10], time_unit=um)
-    # ... and so does `time` itself:
+    # So must `time`:
     with pytest.raises(DimensionMismatchError):
         Percept(data, time=[0, 10] * um)
 
 
 def test_Percept_animates_in_wall_clock_time(tmp_path, monkeypatch):
-    """The label is in the percept's unit, the frame rate is in real time
-
-    Two percepts describing the same 50 Hz sequence play at the same speed
-    whether they were written down in milliseconds or in seconds.
-    """
+    """Labels use the percept's time unit; frame rate uses wall-clock time"""
     data = np.random.rand(4, 4, 3)
     milli = Percept(data, time=[0, 20, 40])
     second = Percept(data, time=[0, 0.02, 0.04], time_unit=s)
 
-    # `play`: same delay between frames...
+    # `play`: same frame delay:
     milli_ani, second_ani = milli.play(), second.play()
     npt.assert_almost_equal(milli_ani._interval, second_ani._interval)
     npt.assert_almost_equal(milli_ani._interval, 20)
-    # ... but each labelled in its own unit:
+    # Labels in each percept's unit:
     npt.assert_equal('t = 40.00 ms' in milli_ani.to_jshtml(), True)
     npt.assert_equal('t = 0.04 s' in second_ani.to_jshtml(), True)
-    # An explicit `fps` still wins over both:
+    # Explicit `fps` overrides:
     fixed = second.play(fps=50)
     npt.assert_almost_equal(fixed._interval, 20)
 
-    # `save`: same frame rate, so the movies run for the same length of time.
+    # `save`: same frame rate:
     seen = []
     monkeypatch.setattr(imageio, 'mimwrite',
                         lambda fname, data, **kwargs: seen.append(kwargs))
@@ -529,22 +517,19 @@ def test_Percept_animates_in_wall_clock_time(tmp_path, monkeypatch):
     npt.assert_almost_equal(seen[0]['fps'], 50)
     npt.assert_almost_equal(seen[1]['fps'], 50)
 
-    # A percept whose time axis is in seconds is not a ragged one either: an
-    # irregular axis plays at the speed it was recorded at, and that speed is
-    # counted in milliseconds.
+    # Irregular time in s plays with intervals in ms:
     ragged = Percept(data, time=[0, 0.02, 0.05], time_unit=s)
     npt.assert_almost_equal(player(ragged.play())['intervals'], [20, 30, 30])
-    # A movie file runs at a single frame rate, so this one needs an `fps`:
+    # Movies require a fixed frame rate:
     with pytest.raises(NotImplementedError):
         ragged.save(str(tmp_path / 'ragged.mp4'), vmin=0, vmax=1)
 
 
 def pulse_train_percept(n_pulses=3, period=1000.0 / 6):
-    """A percept whose time axis is as ragged as a pulse train's
+    """Return a percept with pulse-train timing
 
-    Two 0.45 ms phases and a 0.1 ms interphase gap every ``period`` ms, so the
-    time steps span three orders of magnitude. Each pulse lights up one frame,
-    which is what makes a dropped frame visible.
+    Two 0.45 ms phases and a 0.1 ms interphase gap every ``period`` ms. Each
+    pulse lights up one frame.
     """
     time, bright = [], []
     for i in range(n_pulses):
@@ -562,19 +547,19 @@ def test_Percept_play_fps_is_display_rate(fps):
     # One second of percept, sampled at 100 Hz:
     percept = Percept(np.random.rand(4, 4, 100), time=np.arange(0, 1000, 10))
     cfg = player(percept.play(fps=fps))
-    # One display frame per 1/fps of a second ...
+    # One display frame per 1/fps s:
     npt.assert_equal(cfg['n'], fps)
     npt.assert_almost_equal(cfg['interval'], 1000.0 / fps)
-    # ... and still one second of animation:
+    # Still 1 s of animation:
     npt.assert_almost_equal(np.sum(cfg['intervals']), 1000.0, decimal=6)
-    # The percept's own rate keeps every frame, and takes just as long:
+    # Native rate keeps every frame, same duration:
     native = player(percept.play())
     npt.assert_equal(native['n'], 100)
     npt.assert_almost_equal(np.sum(native['intervals']), 1000.0, decimal=6)
 
 
 def test_Percept_play_does_not_resample_the_data():
-    """Display sampling picks frames by index; it never copies the percept"""
+    """Display sampling selects frames by index without copying data"""
     percept = Percept(np.random.rand(4, 4, 8), time=np.arange(8) * 10.0)
     for fps, index in [(None, np.arange(8)),
                        (200, np.repeat(np.arange(8), 2)),
@@ -582,7 +567,7 @@ def test_Percept_play_does_not_resample_the_data():
         layer = percept.play(fps=fps)._layers[0]
         npt.assert_equal(layer.data is percept.data, True)
         npt.assert_equal(layer.index, index)
-    # Repeating and skipping still show the frames they always did:
+    # Repeated and skipped frames:
     npt.assert_almost_equal(percept.play(fps=200)._frame_data,
                             np.repeat(percept.data, 2, axis=-1))
     npt.assert_almost_equal(percept.play(fps=50)._frame_data,
@@ -595,23 +580,19 @@ def test_Percept_play_zero_order_hold():
     data[..., :] = [0.0, 0.25, 0.5, 1.0]
     # 40 ms of percept: four frames of 10 ms each.
     percept = Percept(data, time=[0, 10, 20, 30])
-    # 50 fps samples it at t = 0 and 20 ms ...
+    # 50 fps samples t = 0 and 20 ms:
     ani = percept.play(fps=50)
     npt.assert_equal(ani._frame_data.shape[-1], 2)
     npt.assert_almost_equal(ani._frame_data[0, 0], [0.0, 0.5])
-    # ... 100 fps lands on every frame, and 200 fps holds each one for two
-    # samples:
+    # 100 fps hits every frame; 200 fps shows each frame twice:
     npt.assert_almost_equal(percept.play(fps=100)._frame_data[0, 0],
                             [0.0, 0.25, 0.5, 1.0])
     npt.assert_almost_equal(percept.play(fps=200)._frame_data[0, 0],
                             [0, 0, 0.25, 0.25, 0.5, 0.5, 1.0, 1.0])
-    # A display sample that falls between two percept frames shows the earlier
-    # one, never an average of the two: at 25 ms per display frame, t = 25 ms
-    # shows the frame from t = 20 ms (0.5), not the 0.75 that averaging it
-    # with the frame from t = 30 ms would give:
+    # A sample between frames shows the earlier frame (t = 25 ms -> 0.5):
     held = percept.play(fps=40)._frame_data[0, 0]
     npt.assert_almost_equal(held, [0.0, 0.5])
-    # The label follows the frame that is held, not the display clock:
+    # Labels show the held frame's time:
     npt.assert_equal(player(percept.play(fps=50))['labels'],
                      ['t = 0.00 ms', 't = 20.00 ms'])
 
@@ -621,15 +602,15 @@ def test_Percept_play_irregular_time():
     period = 1000.0 / 6
     percept = pulse_train_percept(n_pulses=3, period=period)
     cfg = player(percept.play())
-    # Every frame is kept ...
+    # Every frame is kept:
     npt.assert_equal(cfg['n'], percept.time.size)
-    # ... each shown for as long as the axis says, 165 ms gaps included. The
-    # last frame is held for the interval in front of it, so it is seen:
+    # Each frame lasts until the next; the last frame lasts as long as the
+    # preceding interval:
     pulse = [0.45, 0.1, 0.45]
     steps = pulse + [period - 1.0]
     npt.assert_almost_equal(cfg['intervals'], steps * 2 + pulse + [0.45],
                             decimal=6)
-    # ... which adds up to the wall-clock time the percept covers:
+    # Total equals the percept duration:
     npt.assert_almost_equal(np.sum(cfg['intervals']),
                             percept.time[-1] - percept.time[0] + 0.45,
                             decimal=6)
@@ -640,11 +621,10 @@ def test_Percept_play_irregular_time_fps():
     percept = pulse_train_percept(n_pulses=3, period=1000.0 / 6)
     step = 1000.0 / 60
     cfg = player(percept.play(fps=60))
-    # The percept ends with its last pulse, 334.33 ms in, so 60 fps buys 20
-    # frames of equal length, however ragged the percept's own axis is:
+    # 334.33 ms at 60 fps gives 20 equal frames:
     npt.assert_equal(cfg['n'], 20)
     npt.assert_almost_equal(cfg['intervals'], [step] * 20)
-    # ... covering the percept's own duration, to within one display frame:
+    # Duration matches to within one display frame:
     duration = percept.time[-1] - percept.time[0] + 0.45
     npt.assert_array_less(abs(np.sum(cfg['intervals']) - duration), step)
 
@@ -653,15 +633,13 @@ def test_Percept_play_brief_events_are_missed():
     """Events between display samples are not interpolated."""
     percept = pulse_train_percept()
     brightest = percept.data.max()
-    # At its own rate, every pulse is on screen:
+    # At native rate, every pulse is shown:
     npt.assert_almost_equal(percept.play()._frame_data.max(), brightest)
-    # A 0.45 ms pulse every 166.67 ms almost never coincides with a display
-    # sample, so the pulses are simply not seen:
+    # 0.45 ms pulses every 166.67 ms fall between 30 fps samples:
     frames = percept.play(fps=30)._frame_data
     npt.assert_equal(frames.shape[-1], 10)
     npt.assert_almost_equal(frames.max(), 0)
-    # No interpolation either: every display frame is one percept frame,
-    # copied verbatim:
+    # No interpolation: display frames are percept frames:
     values = np.unique(percept.play(fps=1000)._frame_data)
     npt.assert_equal(np.isin(values, np.unique(percept.data)).all(), True)
 
@@ -680,11 +658,11 @@ def test_Percept_save_fps_resamples(tmp_path, monkeypatch):
         n_frames = fps if fps != 100 else 100
         npt.assert_equal(len(data), n_frames)
         npt.assert_almost_equal(kwargs['fps'], fps)
-        # Frame count over frame rate is one second of movie, every time:
+        # 1 s of movie:
         npt.assert_almost_equal(len(data) / kwargs['fps'], 1.0, decimal=6)
 
-    # An irregular percept is written out the same way. Its final frame uses
-    # the same preceding-interval display convention as play():
+    # Irregular percept; the last frame uses the preceding interval, as in
+    # play():
     seen.clear()
     percept = pulse_train_percept(n_pulses=3, period=1000.0 / 6)
     duration = (percept.time[-1] - percept.time[0] + 0.45) / 1000.0
@@ -701,18 +679,16 @@ def test_Percept_play_keeps_the_last_frame():
     cfg = player(percept.play())
     npt.assert_equal(cfg['n'], 3)
     npt.assert_equal(cfg['labels'][-1], 't = 50.00 ms')
-    # The last frame is on screen for as long as the interval in front of it:
+    # Last frame lasts as long as the preceding interval:
     npt.assert_almost_equal(cfg['intervals'], [20, 30, 30])
     npt.assert_almost_equal(percept.play()._frame_data[0, 0], [0, 0.5, 1.0])
-    # ... and a display clock fine enough to resolve it reaches it, which a
-    # zero-length last frame would not allow at any rate:
+    # A fine enough display clock reaches the last frame:
     for fps in (40, 100, 1000):
         frames = percept.play(fps=fps)._frame_data[0, 0]
         npt.assert_almost_equal(frames[-1], 1.0)
         npt.assert_equal(player(percept.play(fps=fps))['labels'][-1],
                          't = 50.00 ms')
-    # A clock too coarse to resolve it misses it, like any other frame: at
-    # 25 fps the 80 ms percept is sampled at 0 and 40 ms only.
+    # At 25 fps, the 80 ms percept is sampled at 0 and 40 ms only:
     npt.assert_almost_equal(percept.play(fps=25)._frame_data[0, 0], [0, 0.5])
 
 
@@ -727,7 +703,7 @@ def test_Percept_play_rejects_unordered_time(tmp_path):
 
 
 def test_Percept_play_save_do_not_mutate(tmp_path):
-    """Displaying a percept must leave the percept alone"""
+    """play and save do not modify the percept"""
     percept = pulse_train_percept()
     data, time = percept.data.copy(), percept.time.copy()
     for fps in (None, 10, 1000):
@@ -738,7 +714,7 @@ def test_Percept_play_save_do_not_mutate(tmp_path):
 
 
 def test_Percept_play_units_equivalent():
-    """The same timeline in another unit is the same animation"""
+    """The same timeline in ms or s gives the same animation"""
     data = np.random.rand(4, 4, 4)
     milli = Percept(data, time=[0, 0.45, 0.55, 166.67])
     second = Percept(data, time=np.asarray([0, 0.45, 0.55, 166.67]) / 1000,
@@ -755,26 +731,24 @@ def test_Percept_getitem_time():
     """A number on the time axis is a time, not a frame index"""
     data = np.arange(24, dtype=float).reshape((2, 3, 4))
     percept = Percept(data, time=[0.0, 10.0, 20.0, 30.0])
-    # One time point drops the time axis, the way a scalar index does on any
-    # other axis ...
+    # A scalar time drops the time axis:
     npt.assert_equal(percept[..., 10.0].shape, (2, 3))
     npt.assert_equal(percept[:, 0, 10.0].shape, (2,))
     npt.assert_equal(np.isscalar(percept[0, 1, 10.0]), True)
-    # ... and a stored time point comes back verbatim:
+    # Stored time points are returned as is:
     npt.assert_almost_equal(percept[..., 10.0], data[..., 1])
-    # One in between is interpolated between its neighbors:
+    # Intermediate times are interpolated:
     npt.assert_almost_equal(percept[..., 5.0],
                             (data[..., 0] + data[..., 1]) / 2)
     npt.assert_almost_equal(percept[0, 1, 5.0],
                             (data[0, 1, 0] + data[0, 1, 1]) / 2)
-    # Beyond the ends, the closest stored frame is held:
+    # Beyond the ends, the nearest frame is held:
     npt.assert_almost_equal(percept[..., -5.0], data[..., 0])
     npt.assert_almost_equal(percept[..., 99.0], data[..., -1])
-    # Space is indexed the NumPy way, and an index that stops short of the
-    # time axis returns the whole time series:
+    # NumPy indexing for space; a shorter index returns the time series:
     npt.assert_almost_equal(percept[0, 1], data[0, 1])
     npt.assert_almost_equal(percept[0], data[0])
-    # A float64 percept is not interpolated down to float32:
+    # float64 stays float64:
     npt.assert_equal(percept[..., 5.0].dtype, np.float64)
 
 
@@ -782,31 +756,30 @@ def test_Percept_getitem_multiple_times():
     """Lists, slices and masks of time points"""
     data = np.arange(24, dtype=float).reshape((2, 3, 4))
     percept = Percept(data, time=[0.0, 10.0, 20.0, 30.0])
-    # A list of time points is interpolated onto:
+    # A list of times is interpolated:
     npt.assert_almost_equal(percept[..., [5.0, 15.0]],
                             np.stack([(data[..., 0] + data[..., 1]) / 2,
                                       (data[..., 1] + data[..., 2]) / 2],
                                      axis=-1))
-    # One requested time point is still a time axis when asked for as a list:
+    # A one-element list keeps the time axis:
     npt.assert_equal(percept[..., [5.0]].shape, (2, 3, 1))
     npt.assert_equal(percept[0, 0, [5.0]].shape, (1,))
-    # A stepped slice is a time range, not a range of frame indices:
+    # A stepped slice is a time range:
     npt.assert_equal(percept[..., 0:30:5].shape, (2, 3, 6))
     npt.assert_almost_equal(percept[0, 0, 0:30:10], data[0, 0, :3])
-    # A stepless slice takes the stored frames by position:
+    # A stepless slice selects frames by position:
     npt.assert_almost_equal(percept[..., :], data)
     with pytest.raises(ValueError):
         percept[..., 0:20]
-    # A boolean mask selects stored frames without interpolating:
+    # A boolean mask selects stored frames:
     npt.assert_almost_equal(percept[..., percept.time < 20], data[..., :2])
-    # One of the wrong length is a shape error. It must not be read as the
-    # times t=1 and t=0, which is what its True and False would interpolate to:
+    # A mask of the wrong length raises IndexError (not read as t=1, t=0):
     with pytest.raises(IndexError):
         percept[..., np.array([True, False])]
 
 
 def test_Percept_getitem_irregular_time():
-    """Interpolation follows the recorded times, however unevenly spaced"""
+    """Interpolation uses irregular time points"""
     data = np.arange(8, dtype=float).reshape((2, 1, 4))
     percept = Percept(data, time=[0.0, 1.0, 10.0, 100.0])
     npt.assert_almost_equal(
@@ -821,7 +794,7 @@ def test_Percept_getitem_units():
     percept = Percept(data, time=[0.0, 10.0, 20.0, 30.0])
     npt.assert_almost_equal(percept[..., 15 * ms], percept[..., 15.0])
     npt.assert_almost_equal(percept[..., 0.015 * s], percept[..., 15.0])
-    # A percept that counts seconds reads bare numbers as seconds:
+    # With time_unit=s, bare numbers are in s:
     in_s = Percept(data, time=[0.0, 0.01, 0.02, 0.03], time_unit=s)
     npt.assert_almost_equal(in_s[..., 0.015], percept[..., 15.0])
     npt.assert_almost_equal(in_s[..., 15 * ms], percept[..., 15.0])
@@ -839,14 +812,14 @@ def test_Percept_getitem_no_time():
     npt.assert_almost_equal(percept[:, :, 0:1], data[:, :, 0:1])
     with pytest.raises(IndexError):
         percept[..., 1.5]
-    # A time axis that was filled in automatically is still a time axis:
+    # An automatic time axis is still a time axis:
     auto = Percept(np.arange(24, dtype=float).reshape((2, 3, 4)))
     npt.assert_almost_equal(auto.time, [0, 1, 2, 3])
     npt.assert_almost_equal(auto[0, 0, 1.5], 1.5)
 
 
 def test_Percept_play_clim():
-    """Explicit limits set the color scale and leave the timeline alone"""
+    """vmin/vmax set the color scale without changing the timeline"""
     percept = Percept(np.random.rand(4, 4, 10) * 20,
                       time=np.arange(10) * 10.0)
     auto = percept.play()
@@ -861,27 +834,27 @@ def test_Percept_play_clim():
 
 
 def test_Percept_play_clim_ignores_fps():
-    """The color scale spans the percept, not the frames the display samples"""
+    """The color scale spans all frames, not only the displayed ones"""
     data = np.zeros((4, 4, 10))
     data[..., 1] = 20.0
     percept = Percept(data, time=np.arange(10) * 10.0)
-    # 20 fps samples t = 0 and 50 ms, missing the flash at t = 10 ms ...
+    # 20 fps samples t = 0 and 50 ms, missing the flash at t = 10 ms:
     npt.assert_equal(percept.play(fps=20)._frame_data.max(), 0)
-    # ... but the brightness scale still knows about it:
+    # The color scale still includes it:
     npt.assert_almost_equal(percept.play(fps=20)._image.get_clim(), (0, 20))
     npt.assert_almost_equal(percept.play()._image.get_clim(), (0, 20))
 
 
 def test_Percept_save_common_clim(tmp_path):
-    """Two percepts saved on a common range come back on a common scale"""
+    """Percepts saved with the same range load on the same scale"""
     dim = Percept(np.linspace(0, 5, 256).reshape((16, 16, 1)))
     bright = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
     for percept, name in ((dim, 'dim.png'), (bright, 'bright.png')):
         percept.save(str(tmp_path / name), shape=(16, 16), vmin=0, vmax=20)
         loaded = Percept.load(str(tmp_path / name))
-        # 8 bits of gray spread over a range of 20:
+        # 8-bit gray over a range of 20:
         npt.assert_allclose(loaded.data, percept.data, atol=20 / 255)
-    # The dim percept does not get stretched to fill the gray levels:
+    # The dim percept is not stretched:
     npt.assert_equal(imread(str(tmp_path / 'dim.png')).max() < 255, True)
     npt.assert_equal(imread(str(tmp_path / 'bright.png')).max(), 255)
 
@@ -889,17 +862,17 @@ def test_Percept_save_common_clim(tmp_path):
 def test_Percept_save_clim_edge_cases(tmp_path):
     """Clipping, negative values, constant data, and nonsensical ranges"""
     percept = Percept(np.linspace(-5, 5, 256).reshape((16, 16, 1)))
-    # Negative values are just the bottom of the range:
+    # Negative values:
     fname = str(tmp_path / 'signed.png')
     percept.save(fname, shape=(16, 16), vmin=-5, vmax=5)
     npt.assert_allclose([Percept.load(fname).data.min(),
                          Percept.load(fname).data.max()], [-5, 5], atol=0.05)
-    # Everything below vmin is clipped to it:
+    # Values below vmin are clipped:
     fname = str(tmp_path / 'clipped.png')
     percept.save(fname, shape=(16, 16), vmin=0, vmax=5)
     npt.assert_almost_equal(Percept.load(fname).data.min(), 0)
     npt.assert_equal(np.mean(Percept.load(fname).data == 0) > 0.4, True)
-    # A constant percept has no range to stretch, and does not divide by zero:
+    # Constant percept (no division by zero):
     fname = str(tmp_path / 'constant.png')
     with pytest.warns(UserWarning):
         Percept(np.full((16, 16, 1), 3.0)).save(fname, shape=(16, 16))
@@ -909,10 +882,10 @@ def test_Percept_save_clim_edge_cases(tmp_path):
 
 
 def test_Percept_save_clim_ignores_fps(tmp_path):
-    """Export rate cannot change how bright the movie comes out"""
+    """Export fps does not change movie brightness"""
     data = np.zeros((16, 16, 10))
     data[..., :] = np.linspace(0, 1, 10)
-    # A flash that only the faster export rate samples:
+    # A flash sampled only at the faster fps:
     data[..., 1] = 10.0
     percept = Percept(data, time=np.arange(10) * 10.0)
     with pytest.warns(UserWarning):
@@ -926,7 +899,7 @@ def test_Percept_save_clim_ignores_fps(tmp_path):
 
 
 def test_Percept_save_warns_without_clim(tmp_path):
-    """Automatic normalization is not a shared scale, and says so"""
+    """save warns if vmin/vmax are omitted"""
     percept = Percept(np.random.rand(16, 16, 1))
     with pytest.warns(UserWarning, match='Pass'):
         percept.save(str(tmp_path / 'auto.png'), shape=(16, 16))
@@ -937,52 +910,46 @@ def test_Percept_save_warns_without_clim(tmp_path):
 
 
 def test_Percept_save_keeps_an_explicit_clim(tmp_path):
-    """A movie cannot hold the scale it was written on, but its name can
-
-    The round trip a fixed ``vmax`` promises: the file comes back on the
-    brightness scale the percept was on, not on the one it was encoded with.
-    """
+    """Movie file names store an explicit brightness range for load"""
     data = np.zeros((16, 16, 5))
     data[..., :] = np.linspace(0, 0.35, 5)
     percept = Percept(data, time=np.arange(5) * 100.0)
     fname = percept.save(str(tmp_path / 'percept.mp4'), shape=(32, 32),
                          vmax=0.5)
-    # The range `save` resolved, both bounds of it, is in the name it returns:
+    # Both bounds are in the returned file name:
     npt.assert_equal(os.path.basename(fname),
                      'percept__p2p_vmin=0.0_vmax=0.5.mp4')
     npt.assert_equal(os.path.isfile(fname), True)
-    # Loading it needs no arguments and has nothing to warn about...
+    # load needs no arguments and does not warn:
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         loaded = Percept.load(fname)
-    # ... and `vmax=0.5` was the scale the movie was encoded on, not the
-    # brightness the percept comes back with:
+    # vmax=0.5 is the encoding scale, not the data maximum:
     npt.assert_allclose(loaded.data.max(), 0.35, atol=0.02)
     npt.assert_allclose([loaded.data[..., i].mean() for i in range(5)],
                         np.linspace(0, 0.35, 5), atol=0.02)
 
 
 def test_Percept_save_range_tag(tmp_path):
-    """The file name records the range only where the file itself cannot"""
+    """The file name stores the range only if metadata cannot"""
     percept = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
-    # A PNG has metadata to hold the range, so its name is left alone:
+    # PNG metadata stores the range; name unchanged:
     fname = percept.save(str(tmp_path / 'p.png'), shape=(16, 16), vmin=0,
                          vmax=20)
     npt.assert_equal(os.path.basename(fname), 'p.png')
     npt.assert_allclose(Percept.load(fname).data.max(), 20, atol=0.1)
-    # Automatic normalization claims no scale, so it renames nothing:
+    # Automatic normalization does not rename:
     with pytest.warns(UserWarning):
         auto = percept.save(str(tmp_path / 'auto.bmp'), shape=(16, 16))
     npt.assert_equal(os.path.basename(auto), 'auto.bmp')
-    # A name that already claims a range has it rewritten, not appended to,
-    # so that it cannot end up naming a range the file was not written with:
+    # An existing tag is replaced, not appended:
     stale = str(tmp_path / 'stale__p2p_vmin=0.0_vmax=1.0.bmp')
     tagged = percept.save(stale, shape=(16, 16), vmin=0, vmax=20)
     npt.assert_equal(os.path.basename(tagged),
                      'stale__p2p_vmin=0.0_vmax=20.0.bmp')
     npt.assert_equal(os.path.isfile(stale), False)
     npt.assert_allclose(Percept.load(tagged).data.max(), 20, atol=0.1)
-    # ... including when the range was resolved rather than asked for:
+    # Also for an automatically resolved range:
     with pytest.warns(UserWarning):
         redone = percept.save(tagged, shape=(16, 16))
     npt.assert_equal(os.path.basename(redone),
@@ -990,7 +957,7 @@ def test_Percept_save_range_tag(tmp_path):
 
 
 def test_Percept_load_image(tmp_path):
-    """A static image is a single-frame percept with no time axis"""
+    """A static image loads as one frame with time=None"""
     fname = str(tmp_path / 'p.png')
     percept = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
     percept.save(fname, shape=(16, 16), vmin=0, vmax=20)
@@ -998,7 +965,7 @@ def test_Percept_load_image(tmp_path):
     npt.assert_equal(loaded.shape, (16, 16, 1))
     npt.assert_equal(loaded.time, None)
     npt.assert_allclose(loaded.data, percept.data, atol=20 / 255)
-    # A media file does not record where the pixels sit:
+    # Media files store no spatial coordinates:
     npt.assert_almost_equal(loaded.xdva, np.arange(16))
     grid = Grid2D((-1, 1), (-1, 1), step=2 / 15)
     npt.assert_almost_equal(Percept.load(fname, space=grid).xdva, grid._xflat)
@@ -1006,7 +973,7 @@ def test_Percept_load_image(tmp_path):
 
 @pytest.mark.parametrize('ext', ('.gif', '.mp4'))
 def test_Percept_load_video(ext, tmp_path):
-    """A GIF or movie is a multi-frame percept, timed by its frame rate"""
+    """A GIF or movie loads with times from its frame rate"""
     data = np.zeros((16, 16, 5))
     data[..., :] = np.linspace(0, 20, 5)
     percept = Percept(data, time=np.arange(5) * 100.0)
@@ -1015,13 +982,13 @@ def test_Percept_load_video(ext, tmp_path):
     loaded = Percept.load(fname, vmin=0, vmax=20)
     npt.assert_equal(loaded.shape[-1], 5)
     npt.assert_almost_equal(loaded.time, percept.time)
-    # Quantization and, for a movie, the codec cost a fraction of a gray level:
+    # Quantization and codec error:
     npt.assert_allclose([loaded.data[..., i].mean() for i in range(5)],
                         np.linspace(0, 20, 5), atol=0.5)
 
 
 def test_Percept_load_timing(tmp_path):
-    """Explicit timing overrides what the file records"""
+    """time and fps override the file's frame rate"""
     fname = str(tmp_path / 'p.gif')
     percept = Percept(np.random.rand(16, 16, 4), time=np.arange(4) * 100.0)
     percept.save(fname, shape=(16, 16), vmin=0, vmax=1)
@@ -1036,13 +1003,12 @@ def test_Percept_load_timing(tmp_path):
 
 
 def test_Percept_load_variable_frame_durations(tmp_path):
-    """A GIF that holds a different duration per frame has no frame rate"""
+    """A GIF with variable frame durations requires explicit time"""
     fname = str(tmp_path / 'ragged.gif')
     frames = [np.full((16, 16), level, dtype=np.uint8) for level in range(4)]
     imageio.mimwrite(fname, frames, duration=[100, 300, 50, 200])
     with pytest.raises(ValueError):
         Percept.load(fname)
-    # Saying when the frames happen is what the error asks for:
     with pytest.warns(UserWarning):
         loaded = Percept.load(fname, time=[0, 100, 400, 450])
     npt.assert_almost_equal(loaded.time, [0, 100, 400, 450])
@@ -1050,11 +1016,7 @@ def test_Percept_load_variable_frame_durations(tmp_path):
 
 @pytest.mark.parametrize('fps', (0, -30, np.nan, np.inf))
 def test_Percept_load_rejects_bad_fps(fps, tmp_path):
-    """A frame rate that is not a finite positive number is not a frame rate
-
-    ``nan`` would give the percept a nan time axis and ``inf`` an all-zero
-    one, neither of which announces itself later.
-    """
+    """load raises ValueError for a non-positive or non-finite fps"""
     fname = str(tmp_path / 'p.gif')
     percept = Percept(np.random.rand(16, 16, 4), time=np.arange(4) * 100.0)
     percept.save(fname, shape=(16, 16), vmin=0, vmax=1)
@@ -1063,16 +1025,16 @@ def test_Percept_load_rejects_bad_fps(fps, tmp_path):
 
 
 def test_Percept_load_grayscale(tmp_path):
-    """Color input is reduced to one brightness per pixel"""
+    """Color input is converted to grayscale"""
     rgb = np.zeros((8, 8, 3), dtype=np.uint8)
     rgb[..., 0] = 255
     imageio.imwrite(str(tmp_path / 'rgb.png'), rgb)
     with pytest.warns(UserWarning):
         loaded = Percept.load(str(tmp_path / 'rgb.png'))
     npt.assert_equal(loaded.shape, (8, 8, 1))
-    # The luminance of pure red:
+    # Luminance of pure red:
     npt.assert_allclose(loaded.data, 0.2125, atol=1e-3)
-    # Alpha is blended against black, as elsewhere in p2p:
+    # Alpha is blended against black:
     rgba = np.full((8, 8, 4), 255, dtype=np.uint8)
     rgba[..., 3] = 128
     imageio.imwrite(str(tmp_path / 'rgba.png'), rgba)
@@ -1082,12 +1044,11 @@ def test_Percept_load_grayscale(tmp_path):
 
 
 def test_Percept_load_range_precedence(tmp_path):
-    """Explicit limits beat file metadata, which beats the file name"""
+    """Explicit vmin/vmax > file metadata > file name"""
     from PIL.PngImagePlugin import PngInfo
     gray = np.linspace(0, 255, 256).astype(np.uint8).reshape((16, 16))
-    # `save` keeps a file's metadata and its name in step, so a file that
-    # disagrees with itself has to be written by hand. Metadata says [0, 20]
-    # and the name says [0, 5]:
+    # Hand-written file with conflicting ranges: metadata [0, 20], name
+    # [0, 5]:
     info = PngInfo()
     info.add_text('Comment', '__p2p_vmin=0.0_vmax=20.0')
     fname = str(tmp_path / 'p__p2p_vmin=0.0_vmax=5.0.png')
@@ -1095,17 +1056,16 @@ def test_Percept_load_range_precedence(tmp_path):
     npt.assert_allclose(Percept.load(fname).data.max(), 20, atol=0.1)
     npt.assert_allclose(Percept.load(fname, vmax=100).data.max(), 100,
                         atol=0.5)
-    # A BMP has nowhere to record the range, so the file name is what is left:
+    # BMP has no metadata, so the file name is used:
     named = str(tmp_path / 'q__p2p_vmin=0.0_vmax=5.0.bmp')
     imageio.imwrite(named, gray)
     npt.assert_allclose(Percept.load(named).data.max(), 5, atol=0.05)
 
 
 def test_Percept_load_unknown_range_warns(tmp_path):
-    """An unrecoverable range leaves the encoded values alone, and says so"""
+    """load warns and keeps [0, 1] values if the range is unknown"""
     percept = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
-    # Nothing was said about the scale, so nothing is recorded and the file
-    # keeps the name it was given:
+    # No vmin/vmax, so no range is stored and the name is unchanged:
     with pytest.warns(UserWarning, match='Normalizing'):
         fname = percept.save(str(tmp_path / 'plain.bmp'), shape=(16, 16))
     npt.assert_equal(fname, str(tmp_path / 'plain.bmp'))
@@ -1119,7 +1079,7 @@ def test_Percept_load_unknown_range_warns(tmp_path):
 
 
 def test_Percept_load_half_a_range_raises(tmp_path):
-    """One bound cannot place the other, and is not quietly dropped"""
+    """load raises ValueError if only one of vmin/vmax is known"""
     percept = Percept(np.linspace(0, 20, 256).reshape((16, 16, 1)))
     with pytest.warns(UserWarning):
         fname = percept.save(str(tmp_path / 'plain.bmp'), shape=(16, 16))
@@ -1127,7 +1087,7 @@ def test_Percept_load_half_a_range_raises(tmp_path):
         Percept.load(fname, vmax=20)
     with pytest.raises(ValueError, match="'vmax' is unknown"):
         Percept.load(fname, vmin=0)
-    # Saying what the other end is, is what the error asks for:
+    # Both bounds:
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         npt.assert_allclose(Percept.load(fname, vmin=0, vmax=20).data,
@@ -1135,7 +1095,7 @@ def test_Percept_load_half_a_range_raises(tmp_path):
 
 
 def rgb_percept(n_frames=3, shape=(4, 6), **kwargs):
-    """An RGB percept whose every value is distinct, on a known dva grid"""
+    """Return an RGB percept with distinct values on a known dva grid"""
     n_rows, n_cols = shape
     data = np.linspace(0, 1, n_rows * n_cols * 3 * n_frames, dtype=float)
     grid = Grid2D((-2, 2), (-1, 1),
@@ -1158,10 +1118,9 @@ def test_Percept_rgb_shape_contract():
     rgb = Percept(np.zeros((4, 6, 3, 2)))
     npt.assert_equal(rgb.is_rgb, True)
     npt.assert_equal(rgb.shape, (4, 6, 3, 2))
-    # A 3-D array stays grayscale even when its last axis happens to be 3:
+    # A 3D array is grayscale even if its last axis has size 3:
     npt.assert_equal(Percept(np.zeros((4, 6, 3))).is_rgb, False)
-    # The RGB axis is a channel index, not a spatial coordinate: `space` still
-    # describes (Y, X) only.
+    # `space` describes (Y, X) only:
     grid = Grid2D((-2, 2), (-1, 1))
     npt.assert_equal(Percept(np.zeros((*grid.x.shape, 3, 2)),
                              space=grid).xdva.size, grid.x.shape[1])
@@ -1178,10 +1137,10 @@ def test_Percept_rgb_still_and_multiframe():
 
 def test_Percept_rgb_indexing_and_frames():
     percept = rgb_percept(n_frames=3, time=[0, 10, 20])
-    # A frame keeps its color channels; time stays the last axis:
+    # A frame keeps its color channels:
     npt.assert_equal(percept[..., 0].shape, (4, 6, 3))
     npt.assert_almost_equal(percept[..., 0], percept.data[..., 0])
-    # A time between two frames is interpolated, not indexed:
+    # A time between frames is interpolated:
     npt.assert_almost_equal(percept[..., 5.0],
                             0.5 * (percept.data[..., 0] +
                                    percept.data[..., 1]))
@@ -1190,14 +1149,12 @@ def test_Percept_rgb_indexing_and_frames():
     for i, frame in enumerate(percept):
         npt.assert_equal(frame.shape, (4, 6, 3))
         npt.assert_almost_equal(frame, percept.data[..., i])
-    # There is no brightest pixel or frame to point at: ranking colors would
-    # have to call one of them brighter than another.
+    # No brightest pixel or frame for RGB:
     for axis in (None, 'frames'):
         with pytest.raises(ValueError):
             percept.argmax(axis=axis)
         with pytest.raises(ValueError):
             percept.max(axis=axis)
-    # The plain numerical answer is still one attribute away:
     npt.assert_almost_equal(percept.data.max(), 1.0)
 
 
@@ -1206,27 +1163,27 @@ def test_Percept_rgb_plot():
     ax = percept.plot()
     npt.assert_equal(isinstance(ax, Subplot), True)
     npt.assert_almost_equal(ax.axis(), [-2, 2, -1, 1])
-    # Drawn as an image with its own colors, not through a colormap:
+    # Drawn as an image without a colormap:
     npt.assert_equal(len(ax.images), 1)
     npt.assert_equal(len(ax.collections), 0)
     drawn = ax.images[0].get_array()
     npt.assert_equal(drawn.shape, (4, 6, 3))
     npt.assert_almost_equal(drawn, percept.data[..., 0])
-    # Row 0 sits at the top, the same way `pcolor` puts it there for grayscale:
+    # Row 0 at the top, as with `pcolor` for grayscale:
     left, right, bottom, top = ax.images[0].get_extent()
     npt.assert_equal(top > bottom, True)
     npt.assert_equal(right > left, True)
-    # A brightness scale and a colormap have nothing to say about RGB:
+    # vmin, vmax, cmap raise ValueError for RGB:
     for kwargs in ({'vmin': 0}, {'vmax': 1}, {'cmap': 'viridis'}):
         with pytest.raises(ValueError):
             percept.plot(**kwargs)
-    # A hexbin needs one number per pixel:
+    # hexbin requires one value per pixel:
     with pytest.raises(ValueError):
         percept.plot(kind='hex')
 
 
 def test_Percept_rgb_plot_will_not_pick_a_frame():
-    """Choosing the 'brightest' of several color frames needs a color metric"""
+    """plot raises ValueError for a multi-frame RGB percept"""
     percept = rgb_percept(n_frames=2, time=[0, 10])
     with pytest.raises(ValueError):
         percept.plot()
@@ -1236,7 +1193,7 @@ def test_Percept_rgb_play():
     percept = rgb_percept(n_frames=3, time=[0, 10, 20])
     ani = percept.play()
     npt.assert_equal(isinstance(ani, FuncAnimation), True)
-    # RGB frames reach the player as RGB, and it never gets a colorbar:
+    # RGB frames, no colorbar:
     npt.assert_equal(ani._frame_data.shape, (4, 6, 3, 3))
     npt.assert_equal(len(ani._fig.axes), 1)
     npt.assert_equal(player(ani)['n'], 3)
@@ -1246,7 +1203,7 @@ def test_Percept_rgb_play():
 
 @pytest.mark.parametrize('value', [1.8, -0.1, np.nan, np.inf])
 def test_Percept_rgb_rejects_values_outside_the_display_range(value):
-    """An RGB value that is not a color must fail loudly, not saturate quietly"""
+    """RGB values outside [0, 1] or non-finite raise ValueError"""
     data = np.full((4, 6, 3, 2), 0.5)
     data[1, 2, 0, 1] = value
     with pytest.raises(ValueError):
@@ -1257,14 +1214,14 @@ def test_Percept_rgb_accepts_the_ends_of_the_display_range():
     percept = Percept(np.array([0.0, 1.0] * 12).reshape((4, 2, 3, 1)))
     npt.assert_equal(percept.is_rgb, True)
     npt.assert_almost_equal((percept.data.min(), percept.data.max()), (0, 1))
-    # Brightness percepts stay unbounded:
+    # Brightness percepts are unbounded:
     npt.assert_almost_equal(Percept(np.full((4, 6, 2), 40.0)).data.max(), 40)
 
 
 def test_Percept_rgb_save_still_roundtrip(tmp_path):
     fname = str(tmp_path / 'still.png')
     percept = Percept(np.linspace(0, 1, 16 * 16 * 3).reshape((16, 16, 3, 1)))
-    # No brightness scale to choose, so no warning about picking one:
+    # No warning for RGB:
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         out = percept.save(fname, shape=(16, 16))
@@ -1272,9 +1229,9 @@ def test_Percept_rgb_save_still_roundtrip(tmp_path):
     loaded = Percept.load(out, as_gray=False)
     npt.assert_equal(loaded.is_rgb, True)
     npt.assert_equal(loaded.shape, (16, 16, 3, 1))
-    # Only 8-bit quantization stands between the two:
+    # 8-bit quantization error:
     npt.assert_allclose(loaded.data, percept.data, atol=1 / 255)
-    # The same file still loads as brightness by default:
+    # Default loads as brightness:
     npt.assert_equal(Percept.load(out).shape, (16, 16, 1))
 
 
@@ -1295,7 +1252,7 @@ def test_Percept_rgb_rejects_brightness_operations():
     data = np.random.rand(4, 6, 3, 2)
     with pytest.raises(ValueError):
         Percept(data, n_gray=4)
-    # Still available for a brightness percept:
+    # Brightness percept:
     npt.assert_equal(len(np.unique(Percept(np.random.rand(4, 6, 2),
                                            n_gray=4).data)), 4)
 
@@ -1305,7 +1262,7 @@ def test_Percept_load_rgb_rejects_a_brightness_range(tmp_path):
     imageio.imwrite(fname, np.zeros((8, 8, 3), dtype=np.uint8))
     with pytest.raises(ValueError):
         Percept.load(fname, as_gray=False, vmin=0, vmax=20)
-    # ... and needs no range of its own, so it loads without a warning:
+    # Loads without a warning:
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         npt.assert_equal(Percept.load(fname, as_gray=False).shape,
@@ -1313,7 +1270,7 @@ def test_Percept_load_rgb_rejects_a_brightness_range(tmp_path):
 
 
 def test_Percept_rgb_temporal_plot():
-    """A percept with no spatial extent plots one line per channel"""
+    """A 1x1 RGB percept plots one line per channel"""
     percept = Percept(np.random.rand(1, 1, 3, 5), time=np.arange(5) * 10.0)
     ax = percept.plot()
     npt.assert_equal(len(ax.lines), 3)
@@ -1321,7 +1278,7 @@ def test_Percept_rgb_temporal_plot():
 
 
 def test_model_prediction_stays_grayscale():
-    """Adding RGB must not change what a model returns"""
+    """Model predictions are grayscale (Y, X, T)"""
     from pulse2percept.implants.retina import ArgusII
     from pulse2percept.models.retina import ScoreboardModel
     model = ScoreboardModel(implant=ArgusII(), rho=200, xrange=(-4, 4),
@@ -1330,5 +1287,5 @@ def test_model_prediction_stays_grayscale():
     npt.assert_equal(percept.is_rgb, False)
     npt.assert_equal(percept.data.ndim, 3)
     npt.assert_equal(percept.shape, (9, 9, 1))
-    # A phosphene is there to see, so the shape above is not trivially right:
+    # Nonzero phosphene:
     npt.assert_equal(percept.data.max() > 0, True)

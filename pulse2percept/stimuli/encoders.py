@@ -34,26 +34,21 @@ _DEFAULT_FRAME_DUR = 500.0
 
 
 def _finite(name, value):
-    """Reject NaN and infinity, which slip through every ``<`` comparison"""
+    """Raise ValueError for NaN or infinity (which pass ``<`` checks)"""
     if not np.all(np.isfinite(np.asarray(value, dtype=np.float64))):
         raise ValueError(f"'{name}' must be finite, not {value}.")
 
 
 def _all_equal(a):
-    """Whether every element of ``a`` is the same value
-
-    Empty counts as equal: there is nothing there to differ.
-    """
+    """Return True if all elements of ``a`` are equal (True if empty)"""
     return a.size == 0 or bool(np.all(a == a.flat[0]))
 
 
 def _fps(metadata):
-    """Frame rate recorded in a (possibly wrapped) stimulus metadata dict
+    """Return the frame rate stored in stimulus metadata, or None
 
-    ``Stimulus`` stores metadata it does not recognize under a ``'user'`` key,
-    so the frame rate that ``VideoStimulus`` picked up from the movie file sits
-    at the top level on the video itself but one level down on anything derived
-    from it. Returns None if neither carries one.
+    Looks at the top level (``VideoStimulus``) and under ``'user'``
+    (stimuli derived from it).
     """
     if not isinstance(metadata, dict):
         return None
@@ -65,8 +60,7 @@ def _fps(metadata):
 
 class _EncodedStimulus(Stimulus):
     """A resolved encoder schedule, expanded into a waveform on demand"""
-    #: whether the stimulus is described by its schedule rather than by its
-    #: samples
+    #: See `Stimulus._is_parametric`:
     _is_parametric = True
 
     #: whether the stimulus has a special spatial view
@@ -135,10 +129,9 @@ class _EncodedStimulus(Stimulus):
         return stim._inherit_units(self)
 
     def _rebuilt(self, electrodes, amp, sched, freq, amp_unit=None):
-        """This schedule, driving different electrodes or amplitudes
+        """Return this schedule with new electrodes or amplitudes
 
-        ``amp_unit`` defaults to the unit this schedule already uses; only
-        threshold calibration changes it.
+        ``amp_unit`` defaults to the current unit.
         """
         rebuilt = _EncodedStimulus(
             electrodes, amp, self._ticks, sched, self._onsets, self._frames,
@@ -174,7 +167,7 @@ class _EncodedStimulus(Stimulus):
                 if a != 0 and f > 0]
 
     def _with_thresholds(self, thresholds):
-        """Calibrate a threshold-relative schedule to uA without rendering."""
+        """Return an xTh schedule calibrated to uA, without rendering"""
         if self.unit != xTh:
             return self
         driven = np.any(self._firing & (self._amp != 0), axis=1)
@@ -195,12 +188,12 @@ class _EncodedStimulus(Stimulus):
                              self._freq, amp_unit=uA)
 
     def _scaled(self, factor):
-        """This schedule, delivering amplitudes scaled by ``factor``"""
+        """Return this schedule with amplitudes scaled by ``factor``"""
         return self._rebuilt(self.electrodes, self._amp * factor, self._sched,
                              self._freq)
 
     def _without_electrodes(self, electrodes):
-        """This schedule, no longer driving ``electrodes``"""
+        """Return this schedule without ``electrodes``"""
         keep = self._keep_mask(electrodes)
         return self._rebuilt(self.electrodes[keep], self._amp[keep],
                              self._sched[keep], self._freq[keep])
@@ -532,20 +525,15 @@ class PulseEncoder(ImplantEncoder):
     def _ticks(t):
         """Round a time (ms) onto the simulation's ``DT`` grid
 
-        Every time point in the assembled stimulus is an integer number of
-        ``DT``. That is not a loss of precision -- ``Stimulus`` already refuses
-        to hold two time points closer together than ``DT`` -- and it makes the
-        union of several electrodes' time axes an exact integer operation
-        rather than a float comparison against a tolerance.
+        ``Stimulus`` cannot hold time points closer than ``DT`` anyway, and
+        integer ticks make merging electrode time axes exact.
         """
         return np.round(np.asarray(t, dtype=np.float64) / DT).astype(np.int64)
 
     def _unit_pulse(self):
-        """The pulse to repeat, as (ticks, values) with unit peak amplitude
+        """Return the pulse to repeat as (ticks, values), peak amplitude 1
 
-        The values peak at -1 (cathodic first) or +1, so that multiplying by an
-        amplitude in uA yields the pulse to deliver. The ticks start at zero,
-        whatever the supplied pulse's time axis did.
+        Values peak at -1 (cathodic first) or +1. Ticks start at zero.
         """
         if self.pulse is None:
             pulse = BiphasicPulse(1, self.phase_dur,
@@ -554,8 +542,7 @@ class PulseEncoder(ImplantEncoder):
             values = pulse.data.ravel().astype(np.float32)
         else:
             pulse = self.pulse
-            # `Stimulus.data` hands out the container itself, so copy before
-            # normalizing or the user's pulse is rescaled along with ours:
+            # Make sure we don't change the user's pulse:
             values = pulse.data.ravel().astype(np.float32).copy()
             peak = np.abs(values).max()
             if peak > 0:
@@ -565,14 +552,9 @@ class PulseEncoder(ImplantEncoder):
             raise ValueError(f"'pulse' has time points closer together than "
                              f"DT={DT} ms, which the simulation cannot "
                              f"resolve. Lengthen 'phase_dur'.")
-        # `Stimulus` only requires a time axis to be ordered, not to start at
-        # zero. What is borrowed from the supplied pulse is its shape, so
-        # anchor it at zero rather than rendering every copy of it that far
-        # into the train:
+        # Only the pulse shape is used, so start it at t=0:
         ticks = ticks - ticks[0]
-        # A pulse is tiled into a train, and the gaps between the copies carry
-        # whatever its end points carry. Anything but zero would smear across
-        # the whole train:
+        # Nonzero end points would fill the gaps between tiled pulses:
         if values[0] != 0 or values[-1] != 0:
             raise ValueError("'pulse' must start and end at zero amplitude, "
                              "since it is repeated to fill a train.")
@@ -581,12 +563,9 @@ class PulseEncoder(ImplantEncoder):
     def _periods(self, freq, pulse_len):
         """Pulse period for every electrode and frame
 
-        The period is carried as a (possibly fractional) number of ticks rather
-        than being rounded onto the ``DT`` grid, and each pulse onset is
-        rounded only when it is placed. Rounding the period instead would let
-        the error accumulate: a 30 Hz period is 33333.33 ticks, and stepping by
-        33333 of them drifts a third of a tick per pulse, which is enough to
-        walk the train off the frame it belongs to over the course of a video.
+        The period is a fractional number of ticks; only each onset is rounded
+        to ``DT``. Rounding the period would accumulate error (a 30 Hz period
+        is 33333.33 ticks, drifting 1/3 tick per pulse).
 
         Returns
         -------
@@ -600,9 +579,8 @@ class PulseEncoder(ImplantEncoder):
         period = np.zeros(freq.shape, dtype=np.float64)
         # Hz to a period in ms, and ms to ticks of the DT grid:
         period[firing] = MS_PER_S / freq[firing] / DT
-        # A clocked stimulator can only realize a period that is a whole number
-        # of clock cycles, which is what keeps the number of distinct schedules
-        # (and hence of time points) down. Round the period *up*:
+        # A clocked stimulator requires periods of whole clock cycles (this
+        # also reduces the number of time points). Round the period up:
         if self.clock is not None:
             tick = self.clock / DT
             period[firing] = tick * np.maximum(
@@ -618,28 +596,25 @@ class PulseEncoder(ImplantEncoder):
     def _raster_grid(self, electrodes, period, firing, pulse_len, raster):
         """The slot each electrode may pulse in, and the raster sweep
 
-        The sweep has to fit inside the shortest pulse period anyone asked for.
-        With no explicit ``group_dur`` it *is* that period, split evenly between
-        the groups; with one, it is ``n_groups * group_dur`` and generally much
-        shorter than the period.
+        The sweep must fit inside the shortest pulse period. Without
+        ``group_dur``, the sweep equals that period, split evenly between the
+        groups; otherwise it is ``n_groups * group_dur``.
 
         Returns
         -------
         offset : ``(n_electrodes,)`` float array
             How far behind group 0 (in ticks) each electrode may start a pulse.
         cycle : float or None
-            The sweep in ticks. Periods that differ from one another are
-            quantized onto it by ``_assemble``, so that groups cannot drift
-            together; a period they all share is left exactly as asked. None
-            when there is nothing to multiplex.
+            The sweep in ticks. ``_assemble`` quantizes differing periods onto
+            it so groups cannot drift together; a shared period is unchanged.
+            None if there is nothing to multiplex.
 
         """
         zero = np.zeros(len(electrodes), dtype=np.float64)
         if raster is None or raster.n_groups < 2 or not np.any(firing):
             return zero, None
-        # Derived from the requested frequencies, not from the amplitudes:
-        # whether a raster is a workable schedule is a property of the device,
-        # not of how bright today's video happens to be.
+        # Use the requested frequencies, not the amplitudes, so raster
+        # feasibility does not depend on the video content:
         fastest = float(np.min(period[firing]))
         group = np.asarray(raster.groups(electrodes), dtype=np.int64)
         if (group.min(initial=0) < 0 or
@@ -649,15 +624,12 @@ class PulseEncoder(ImplantEncoder):
         if self.clock is not None:
             tick = self.clock / DT
             if raster.group_dur is not None:
-                # An explicit slot is the primitive the cycle is made of, so
-                # round *it* onto the clock and rebuild the cycle from the
-                # result:
+                # Round the explicit slot onto the clock; the cycle is built
+                # from it:
                 slot = max(1.0, round(slot / tick)) * tick
             else:
-                # Splitting the cycle evenly generally lands the group
-                # boundaries between clock edges, and a stimulator can only
-                # start a pulse on one. Take the largest whole number of clock
-                # cycles that still fits every group into the period (floor):
+                # Pulses can only start on a clock edge. Use the largest whole
+                # number of clock cycles that fits every group into the period:
                 slot = np.floor(slot / tick + 1e-9) * tick
                 if slot < tick:
                     raise ValueError(
@@ -669,9 +641,8 @@ class PulseEncoder(ImplantEncoder):
                         f"frequency.")
         # With no explicit slot the groups divide the pulse period:
         cycle = fastest if raster.group_dur is None else raster.n_groups * slot
-        # Check the slot the hardware will actually use, not the one that was
-        # asked for: a 5.1 ms slot on a 1 ms clock is a 5 ms slot, and two of
-        # those do fit into a 10 ms period even though two of 5.1 ms do not.
+        # Check the clock-rounded slot (e.g., 5.1 ms on a 1 ms clock is 5 ms,
+        # two of which fit into a 10 ms period):
         if cycle > fastest * (1 + 1e-9):
             raise ValueError(
                 f"A raster of {raster.n_groups} groups {slot * DT:.3f} ms "
@@ -679,8 +650,7 @@ class PulseEncoder(ImplantEncoder):
                 f"not fit into the {fastest * DT:.3f} ms pulse period. Shorten "
                 f"'group_dur', use fewer groups, or lower the frequency.")
         offset = group.astype(np.float64) * slot
-        # Every group's turn has to be long enough to finish a pulse in, and
-        # each pulse has to clear the next group's turn by a whole tick:
+        # Each group's turn must fit a pulse plus one tick:
         edges = np.unique(np.round(offset))
         if edges.size < np.unique(group).size:
             raise ValueError(
@@ -708,9 +678,8 @@ class PulseEncoder(ImplantEncoder):
         last : int
             The last tick at which a pulse may *begin*.
         grid : float
-            The spacing of the onsets this schedule is allowed to use -- the
-            raster sweep, or failing that the stimulator's clock. A schedule
-            that goes silent has to come back onto it.
+            Onset spacing: the raster sweep, else the stimulator clock. A
+            schedule that goes silent resumes on this grid.
 
         Returns
         -------
@@ -722,9 +691,8 @@ class PulseEncoder(ImplantEncoder):
         """
         n_frames = frame_ticks.size
         empty = np.zeros(0, dtype=np.int64)
-        # Fast path: one period for the whole stimulus, which is what amplitude
-        # modulation always produces. The onsets are then an arithmetic
-        # sequence, and only the frames that deliver nothing drop out of it:
+        # Fast path for a single period (amplitude modulation): onsets are an
+        # arithmetic sequence, minus inactive frames:
         step = float(period[0])
         if step > 0 and np.all(period == step):
             if start > last:
@@ -735,15 +703,12 @@ class PulseEncoder(ImplantEncoder):
             np.clip(frame, 0, n_frames - 1, out=frame)
             keep = active[frame]
             return onset[keep], frame[keep]
-        # Frequency modulation: the rate is piecewise constant over the video's
-        # frames, so track the *phase* of the pulse clock rather than jumping
-        # straight to the next pulse. Phase advances at 1/period, which changes
-        # the instant a frame boundary goes by; a pulse fires whenever it
-        # reaches 1.
+        # Frequency modulation: the rate is piecewise constant over frames, so
+        # track the pulse-clock phase. Phase advances at 1/period; a pulse
+        # fires when it reaches 1:
         onset, frame = [], []
-        # A full phase to begin with, so that a schedule's first pulse lands at
-        # the start of its slot rather than one period into it. Start counting
-        # in the frame that actually contains that slot:
+        # Start at full phase, so the first pulse lands at the start of its
+        # slot. Start in the frame that contains that slot:
         phase, t = 1.0, float(start)
         k = int(np.searchsorted(frame_ticks, round(t), side='right')) - 1
         k = min(max(k, 0), n_frames - 1)
@@ -753,45 +718,37 @@ class PulseEncoder(ImplantEncoder):
             edge = float(frame_ticks[k + 1]) if k + 1 < n_frames else np.inf
             rate = 1.0 / period[k] if period[k] > 0 else 0.0
             if rate == 0.0:
-                # A stopped clock supplies no phase, so nothing can come due
-                # here however long the frame is. Whatever phase had built up
-                # waits for the frame that starts the clock again:
+                # A stopped clock (0 Hz) accumulates no phase; carry the
+                # current phase to the next frame:
                 if not np.isfinite(edge):
                     break
                 t, k = edge, k + 1
                 continue
             due = phase + (edge - t) * rate
             if due < 1.0:
-                # The frame runs out before the next pulse comes due, so carry
-                # the phase across the boundary and pick the new rate up there:
+                # No pulse due in this frame; carry the phase to the next one:
                 if not np.isfinite(edge):
                     break
                 phase, t, k = due, edge, k + 1
                 continue
-            # The pulse comes due inside this frame. Snap it forward onto the
-            # grid this schedule is allowed to use (i.e., the raster cycle, or
-            # the stimulator's clock. Forward rather than to the nearest point,
-            # because a grid is a timing constraint and no timing constraint may
-            # deliver a pulse earlier (and so at a higher rate) than asked for.
+            # The pulse is due in this frame. Snap it forward onto the grid
+            # (raster cycle or clock), so it is never delivered earlier (at a
+            # higher rate) than requested:
             cross = t + (1.0 - phase) / rate
             tick = int(round(start + grid * np.ceil(
                 (cross - start) / grid - 1e-9)))
             if tick <= prev:
-                # Never let the grid stall or reverse the train:
+                # Onsets must strictly increase:
                 tick = int(round(prev + grid))
             if tick > last:
                 break
-            # Which frame the pulse lands in is decided by where it actually
-            # goes, not where it came due: snapping can carry it over a boundary
-            # into a frame that wants something else entirely.
+            # Snapping can move the pulse into the next frame, so look up the
+            # frame at the snapped onset:
             j = int(np.searchsorted(frame_ticks, tick, side='right')) - 1
             j = min(max(j, 0), n_frames - 1)
             if period[j] <= 0:
-                # The pulse landed in a frame whose clock is stopped. Hold it
-                # rather than spending it there: a frame at 0 Hz should neither
-                # be given a pulse it did not ask for nor swallow one, and the
-                # frame that starts the clock again should come up at its full
-                # rate rather than a period short.
+                # The pulse landed in a 0 Hz frame. Hold it for the next frame
+                # that restarts the clock:
                 phase, t, k = 1.0, float(tick), j
                 continue
             if active[j]:
@@ -807,8 +764,7 @@ class PulseEncoder(ImplantEncoder):
         """Sample one schedule's pulse train onto the stimulus' time axis"""
         t = (onset[:, np.newaxis] + pulse_ticks[np.newaxis, :]).ravel()
         v = np.tile(pulse_vals, onset.size)
-        # Back-to-back pulses share an end point, which both copies of the
-        # pulse put at zero:
+        # Back-to-back pulses share a (zero) end point:
         t, keep = np.unique(t, return_index=True)
         return np.interp(ticks, t, v[keep])
 
@@ -816,15 +772,12 @@ class PulseEncoder(ImplantEncoder):
                   timed=False):
         """Build the pulse trains for every electrode and frame
 
-        Electrodes that pulse at the same times share the shape of their
-        waveform; only the amplitude that scales it differs. So rather than
-        building one waveform per electrode, this builds one per distinct
-        schedule and indexes into them, which is what keeps frequency
-        modulation (thousands of electrode-frames, a few dozen schedules)
-        tractable.
+        Electrodes that pulse at the same times share a waveform, scaled by
+        their amplitude. One waveform is built per distinct schedule, which
+        keeps frequency modulation tractable (thousands of electrode-frames,
+        a few dozen schedules).
 
-        The time axis is global rather than per-frame. Pulses live at absolute
-        times and no two frames' pulses coincide.
+        The time axis is global: pulses are placed at absolute times.
         """
         n_el, n_frames = len(electrodes), frame_time.size
         shape = (n_el, n_frames)
@@ -836,10 +789,9 @@ class PulseEncoder(ImplantEncoder):
         pulse_len = int(pulse_ticks[-1])
         frame_ticks = self._ticks(frame_time)
         total = float(frame_time[-1] + frame_dur)
-        # The stimulus lasts exactly as long as the source did. Flooring (with
-        # an epsilon so a duration that is a whole number of ticks does not
-        # lose one to binary rounding) leaves at least one tick between the
-        # last pulse and the end point that pins the duration:
+        # The stimulus lasts as long as the source. Floor (with an epsilon for
+        # binary rounding) to leave at least one tick between the last pulse
+        # and the end point:
         end = int(np.floor(total / DT + 1e-9))
         last = end - 1 - pulse_len
         if last < 0:
@@ -847,34 +799,27 @@ class PulseEncoder(ImplantEncoder):
                              f"fit into a stimulus of {total:.3f} ms. Shorten "
                              f"'phase_dur' or lengthen the source.")
         firing, period = self._periods(freq, pulse_len)
-        # An electrode delivering no current has nothing to schedule. Its clock
-        # keeps running ("firing"), so it stays in phase with its neighbors,
-        # but it costs no pulses and no time points:
+        # Zero-amplitude electrodes keep their clock running ("firing") to stay
+        # in phase, but add no pulses or time points:
         active = firing & (amp != 0)
-        # The implant is the one source of truth for how the device schedules
-        # its electrodes:
+        # The implant defines the electrode schedule:
         raster = getattr(self.implant, 'raster', None)
         offset, cycle = self._raster_grid(electrodes, period, firing, pulse_len,
                                           raster)
         if cycle is not None and not _all_equal(period[firing]):
-            # Electrodes on different periods drift relative to one another,
-            # and two groups would eventually land on the same instant. Pinning
-            # every period to a whole number of raster cycles is what stops
-            # that. Round the period up rather than to the nearest cycle:
+            # Different periods drift, so groups would eventually coincide.
+            # Round every period up to a whole number of raster cycles:
             period[firing] = cycle * np.maximum(
                 1.0, np.ceil(period[firing] / cycle - 1e-9))
 
-        # Everything about when an electrode pulses is fixed by its slot and by
-        # the period/activity it carries through the frames:
+        # An electrode's schedule is fixed by its slot, periods, and activity:
         key = np.concatenate([offset[:, np.newaxis], period,
                               active.astype(np.float64)], axis=1)
         uniq, sched = np.unique(key, axis=0, return_inverse=True)
-        # NumPy has changed the shape `return_inverse` comes back with between
-        # 2.x releases, and it indexes rows below:
+        # The shape of `return_inverse` differs between NumPy 2.x releases:
         sched = np.ravel(sched)
         origin = float(frame_ticks[0])
-        # The grid a schedule's onsets live on: the raster cycle if there is
-        # one, else the stimulator's clock, else the simulation's own step.
+        # Onset grid: raster cycle, else stimulator clock, else DT:
         grid = (cycle if cycle is not None else
                 (self.clock / DT if self.clock is not None else 1.0))
         onsets, frames = [], []
@@ -884,9 +829,7 @@ class PulseEncoder(ImplantEncoder):
                 row[1 + n_frames:].astype(bool), frame_ticks, last, grid)
             onsets.append(onset)
             frames.append(frame)
-        # A frame whose gray levels never reach an electrode is content thrown
-        # away, which is what asking for a pulse rate below the frame rate
-        # does. It is no longer a limit on the rate itself:
+        # Warn about frames that get no pulse (pulse rate below frame rate):
         hit = np.zeros(n_frames, dtype=bool)
         for f in frames:
             hit[f] = True
@@ -920,9 +863,7 @@ class PulseEncoder(ImplantEncoder):
                 f"encoder with an 'implant' to encode at electrode "
                 f"resolution instead.", category=UserWarning)
 
-        # The schedule is settled. Expanding it into an n_el x n_time matrix
-        # is the expensive half, and the half nothing needs until somebody
-        # asks for samples:
+        # Defer expanding the schedule into an n_el x n_time matrix:
         realized = np.zeros(shape, dtype=np.float64)
         realized[firing] = MS_PER_S / (period[firing] * DT)
         return _EncodedStimulus(
@@ -935,18 +876,13 @@ class PulseEncoder(ImplantEncoder):
             source_dur=frame_dur if timed else None)
 
     def _modulation(self, source):
-        """What the source asks each electrode for, frame by frame
+        """Per-electrode, per-frame amplitude and frequency
 
-        The first half of encoding, and the half with no time resolution in
-        it: the source is reduced to one gray level per electrode per frame,
-        stretched and quantized as asked, and ``_modulate`` turns those gray
-        levels into the amplitude and frequency each electrode is to run at.
-        There is no waveform here, no pulse clock and no raster -- those are
-        :py:meth:`_assemble`, and they are what makes the result a *train*
-        rather than a description of one.
+        Reduces the source to one gray level per electrode per frame, applies
+        ``stretch`` and ``n_levels``, and calls ``_modulate``. Pulse timing
+        and rasters are handled by :py:meth:`_assemble`.
 
-        Returns the arguments :py:meth:`_assemble` takes, in the order it
-        takes them.
+        Returns the positional arguments of :py:meth:`_assemble`.
         """
         gray, electrodes, frame_time, frame_dur = _sampled_frames(
             source, self.implant, self.frame_dur)
@@ -956,8 +892,8 @@ class PulseEncoder(ImplantEncoder):
             if peak > 0:
                 gray = gray / peak
         if self.n_levels is not None:
-            # Quantize before modulating rather than after, so that the same
-            # parameter means the same thing however a subclass modulates:
+            # Quantize gray levels before modulating, so `n_levels` means the
+            # same thing for every subclass:
             steps = self.n_levels - 1
             gray = np.round(gray * steps) / steps
         amp, freq = self._modulate(gray)
@@ -969,21 +905,16 @@ class PulseEncoder(ImplantEncoder):
         Parameters
         ----------
         source : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The image or video to encode. Gray levels are expected in [0, 1],
-            which is what :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-            :py:class:`~pulse2percept.stimuli.VideoStimulus` produce. It must
-            be dimensionless: this method is the boundary at which a picture
-            becomes stimulation, so an electrical stimulus is not a valid
-            source for it.
+            The image or video to encode, dimensionless, with gray levels in
+            [0, 1] (as produced by
+            :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+            :py:class:`~pulse2percept.stimuli.VideoStimulus`).
 
         Returns
         -------
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The encoded stimulus, ready for the implant to deliver. Its
-            amplitudes are in microamps, or in threshold multiples (``xTh``)
-            if the encoder's amplitude parameters were, and its time axis is
-            in milliseconds, whatever units the encoder's own parameters were
-            given in.
+            The encoded stimulus. Amplitudes are in uA, or in ``xTh`` if the
+            encoder's amplitude parameters were; time is in ms.
 
         Raises
         ------
@@ -1000,17 +931,14 @@ class PulseEncoder(ImplantEncoder):
 class AmplitudeEncoder(PulseEncoder):
     """Encode gray levels as pulse amplitudes
 
-    Every electrode emits a pulse train of the same fixed frequency, and the
-    gray level of the pixel it sees sets the amplitude of those pulses. This is
-    how most retinal prostheses encode a video.
+    Every electrode emits a pulse train of the same fixed frequency; the gray
+    level at the electrode sets the pulse amplitude. This is how most retinal
+    prostheses encode a video.
 
-    Because every electrode shares one pulse period, a raster costs no
-    frequency here: the groups hold fixed offsets from one another and so can
-    never drift together, which means nothing has to be quantized and ``freq``
-    is delivered exactly. With no explicit ``group_dur`` the groups also divide
-    that period evenly, one turn each per pulse; an explicit ``group_dur``
-    packs them into a shorter sweep at the start of every period instead.
-    Either way no two groups are ever active at the same instant.
+    Because all electrodes share one pulse period, a raster does not quantize
+    ``freq``. Without ``group_dur``, the groups divide the period evenly;
+    with ``group_dur``, they are packed into a shorter sweep at the start of
+    every period. No two groups are active at the same time.
 
     .. versionadded:: 0.10.0
 
@@ -1024,29 +952,24 @@ class AmplitudeEncoder(PulseEncoder):
         threshold (``xTh``). A gray level of 0 maps onto ``min_amp`` and a
         gray level of 1 onto ``max_amp``.
 
-        Bare numbers mean uA. Both endpoints must carry the same dimension, so
-        a threshold-relative range is spelled ``(0 * xTh, 3 * xTh)``; the half
-        spelling ``(0, 3 * xTh)`` is rejected rather than guessed at. A
-        threshold-relative range encodes to a ``xTh`` stimulus, which an
-        implant converts to current when it has
-        :py:attr:`~pulse2percept.implants.Implant.thresholds` for
+        Bare numbers mean uA. Both endpoints must have the same dimension,
+        e.g. ``(0 * xTh, 3 * xTh)``; ``(0, 3 * xTh)`` is rejected. An ``xTh``
+        range gives an ``xTh`` stimulus, which an implant converts to current
+        if it has :py:attr:`~pulse2percept.implants.Implant.thresholds` for
         every driven electrode.
 
         .. versionchanged:: 0.11.0
             Accepts ``xTh`` as well as current.
     freq : float, optional
-        Pulse train frequency (Hz), the same for every electrode. The pulse
-        clock runs independently of the video, so the frame rate has no say in
-        the rate delivered. Because every electrode shares this one period, a
-        raster does not quantize it either: the groups keep a fixed offset from
-        one another and cannot drift together. Only ``clock`` can lower it, by
-        rounding the period up to a whole number of cycles.
+        Pulse train frequency (Hz), the same for every electrode and
+        independent of the frame rate. A raster does not quantize it; only
+        ``clock`` can lower it, by rounding the period up to whole clock
+        cycles.
 
         .. note::
 
-           A frequency below the frame rate is realizable, but wasteful: some
-           frames then receive no pulse at all and their gray levels are never
-           delivered. Encoding warns when this happens.
+           With a frequency below the frame rate, some frames receive no pulse
+           and their gray levels are dropped. Encoding warns when this happens.
 
     phase_dur, interphase_dur, cathodic_first, frame_dur, stretch
         See :py:class:`~pulse2percept.stimuli.PulseEncoder`.
@@ -1081,8 +1004,8 @@ class AmplitudeEncoder(PulseEncoder):
     def __init__(self, implant=None, amp_range=(0, 50), freq=20, **kwargs):
         super().__init__(implant, **kwargs)
         amp_unit = self._amp_range_unit(amp_range)
-        # See `PulseEncoder.__init__`. `amp_range` is converted element by
-        # element, so its two endpoints may be given in different units:
+        # `amp_range` is converted element-wise, so its endpoints may use
+        # different (compatible) units:
         amp_range = as_value(amp_range, amp_unit, 'amp_range')
         freq = as_value(freq, Hz, 'freq')
         if np.size(amp_range) != 2:
@@ -1102,7 +1025,7 @@ class AmplitudeEncoder(PulseEncoder):
 
     @staticmethod
     def _amp_range_unit(amp_range):
-        """Return the uA or xTh unit of amp_range, rejecting mixtures."""
+        """Return the unit of amp_range (uA or xTh); mixtures raise an error"""
         dim = getattr(amp_range, 'dimension', None)
         if dim is not None:
             dims = [dim]
@@ -1111,7 +1034,7 @@ class AmplitudeEncoder(PulseEncoder):
                 dims = [getattr(a, 'dimension', uA.dimension)
                         for a in amp_range]
             except TypeError:
-                # Not a pair at all; the shape check reports that.
+                # Not a pair; the shape check reports the error:
                 return uA
         if all(d == xTh.dimension for d in dims):
             return xTh
@@ -1138,20 +1061,17 @@ class AmplitudeEncoder(PulseEncoder):
 class FrequencyEncoder(PulseEncoder):
     """Encode gray levels as pulse train frequencies
 
-    Every electrode emits pulses of the same fixed amplitude, and the gray
-    level of the pixel it sees sets how often they come.
+    Every electrode emits pulses of the same fixed amplitude; the gray level
+    at the electrode sets the pulse frequency.
 
     .. important::
 
        Frequency modulation is far more expensive to simulate than amplitude
-       modulation, because electrodes pulsing at different rates do not pulse
-       at the same *times*: the stimulus needs a time point wherever any
-       electrode's pulse has an edge, rather than the handful of time points
-       that amplitude modulation shares between all of them.
+       modulation: electrodes at different rates pulse at different times, so
+       the stimulus needs a time point at every pulse edge of every electrode.
 
-       ``clock`` is the lever that cuts that down, and it is physically
-       motivated: real stimulators have a time base. Encoding a 94-frame
-       clip for Argus II at frequencies in (0, 300] Hz:
+       ``clock`` (the stimulator's time base) reduces this. Encoding a
+       94-frame clip for Argus II at frequencies in (0, 300] Hz:
 
        =======================  ===========
        setting                  time points
@@ -1164,21 +1084,15 @@ class FrequencyEncoder(PulseEncoder):
        ``clock=1, n_levels=8``       20,917
        =======================  ===========
 
-       ``clock`` is not free, though: it buys those time points with frequency
-       resolution, and it spends it at the top of the range where the periods
-       are shortest. Against ``freq_range=(0, 300)``, ``clock=1`` delivers the
-       brightest pixels at 250 Hz rather than 300, and ``clock=2`` at 200 Hz.
-       Pick it against the fastest train you actually need.
+       ``clock`` reduces frequency resolution, most at the top of the range:
+       with ``freq_range=(0, 300)``, ``clock=1`` delivers the brightest pixels
+       at 250 Hz and ``clock=2`` at 200 Hz.
 
-       ``n_levels`` is a much weaker lever here than the numbers above might
-       suggest, and only worth reaching for once ``clock`` is set. Because the
-       pulse clock keeps its phase across frames, two electrodes quantized onto
-       the same gray level still pulse at different *times* unless their whole
-       history matches; quantizing gray levels no longer collapses them onto a
-       shared schedule the way it would if every frame restarted the train.
+       ``n_levels`` helps little: the pulse clock keeps its phase across
+       frames, so electrodes on the same gray level still pulse at different
+       times unless their whole history matches.
 
-       A raster cuts the cost too, and for the same reason a clock does: it
-       confines every onset to the raster grid.
+       A raster also reduces the cost by confining onsets to the raster grid.
 
     .. versionadded:: 0.10.0
 
@@ -1194,26 +1108,19 @@ class FrequencyEncoder(PulseEncoder):
 
         .. note::
 
-           Realizable frequencies are quantized by ``clock``, and, when a
-           raster is in play, onto the raster sweep -- which under frequency
-           modulation is the usual case, since the electrodes are by
-           construction on differing rates. Every period becomes a whole number
+           Realizable frequencies are quantized by ``clock`` and, with a
+           raster, onto the raster sweep: every period becomes a whole number
            of sweeps, so the realizable rates are ``1000 / (m * sweep)`` Hz.
 
-           How coarse that grid is depends on how the sweep was set. With
-           ``group_dur=None`` the sweep is the shortest period asked for, so
-           the fastest electrode keeps its rate and pulses once per sweep while
-           slower ones pulse every *m*-th. With an explicit ``group_dur`` the
-           sweep is ``n_groups * group_dur`` and unrelated to any requested
-           rate, so even the fastest electrode is generally rounded: against a
-           six-group 1 ms sweep, a requested 100 Hz (10 ms) is delivered as
-           83.3 Hz (12 ms, two sweeps).
+           With ``group_dur=None``, the sweep is the shortest requested
+           period, so the fastest electrode keeps its rate. With an explicit
+           ``group_dur``, the sweep is ``n_groups * group_dur``, so even the
+           fastest electrode is generally rounded: with a six-group 1 ms
+           sweep, 100 Hz (10 ms) is delivered as 83.3 Hz (12 ms, two sweeps).
 
-           Quantizing onto the sweep always rounds the *period* up, so an
-           electrode is never driven faster than it was asked for: against a
-           10 ms sweep, 67 Hz comes back as 50 Hz rather than 100 Hz. Rounding
-           to the nearest sweep instead would deliver up to twice the charge
-           the caller asked for. Shorten ``group_dur`` for a finer grid.
+           The period is always rounded up, so an electrode is never driven
+           faster than requested: with a 10 ms sweep, 67 Hz becomes 50 Hz.
+           Shorten ``group_dur`` for a finer grid.
     amp : float, optional
         Pulse amplitude (uA), the same for every electrode.
     phase_dur, interphase_dur, cathodic_first, pulse, clock, n_levels, \
@@ -1230,9 +1137,8 @@ frame_dur, stretch
     Examples
     --------
     Encode a movie for Argus II at 50 uA, mapping gray levels onto 0-300 Hz on
-    a 1 ms stimulator clock. A 300 Hz period is 3.3 ms, which Argus II's own
-    six-group 2 ms raster sweep does not fit into, so this device drives every
-    electrode at once:
+    a 1 ms stimulator clock. A 300 Hz period (3.3 ms) does not fit Argus II's
+    six-group 2 ms raster sweep, so the raster is disabled:
 
     >>> import numpy as np
     >>> import pulse2percept as p2p
@@ -1294,8 +1200,8 @@ def _pixel_graph(pixels):
                 j = index.get((r + dr, c + dc))
                 if j is None or j == i:
                     continue
-                # A diagonal step next to an orthogonal bridge pixel would
-                # make every right-angle bend look like a branch:
+                # Skip diagonals bridged by an orthogonal pixel, or every
+                # right-angle bend would look like a branch:
                 bridged = (r + dr, c) in index or (r, c + dc) in index
                 if dr and dc and bridged:
                     continue
@@ -1331,8 +1237,7 @@ def _prune_spurs(skeleton, mask):
             spurs.setdefault(junction, []).append(branch[:-1])
     pruned = skeleton.copy()
     for found in spurs.values():
-        # Two short end branches at one junction is a drawn fork, not a
-        # corner:
+        # Two short end branches at one junction are a drawn fork:
         if len(found) == 1:
             pruned[tuple(pixels[found[0]].T)] = False
     return pruned
@@ -1815,7 +1720,7 @@ class TraceEncoder(Encoder):
         return self._pulse_encoder().encode(frames)
 
 
-#: The unit an optical encoder measures its output in
+#: Output unit of optical encoders
 _IRRADIANCE = mW / mm ** 2
 
 
@@ -1833,7 +1738,7 @@ class _OpticalStimulus(Stimulus):
     Stores per-pixel ON duration for each pulse period, peak irradiance, and
     repetition rate. Waveform samples are generated on demand.
     """
-    #: described by its schedule rather than by its samples
+    #: See `Stimulus._is_parametric`:
     _is_parametric = True
 
     #: offers a normalized time-averaged view to spatial-only models
@@ -1848,7 +1753,7 @@ class _OpticalStimulus(Stimulus):
                  wavelength, grayscale, total, static, frame_time, frame_dur,
                  ref_drive, source_time=None, source_dur=None):
         irradiance = float(irradiance)
-        # Rebuilt/scaled schedules must also have physical irradiance.
+        # Also checked for rebuilt/scaled schedules:
         if not math.isfinite(irradiance) or irradiance < 0:
             raise ValueError(f"'irradiance' must be a finite, nonnegative "
                              f"power density, not {irradiance}.")
@@ -1954,7 +1859,7 @@ class _OpticalStimulus(Stimulus):
         return stim
 
     def _rebuilt(self, electrodes, dur, irradiance):
-        """This schedule, driving different pixels or at a different power"""
+        """Return this schedule with new pixels or irradiance"""
         rebuilt = _OpticalStimulus(
             electrodes, dur, self._ticks, self._onsets, irradiance, self._freq,
             self._wavelength, self._grayscale, self._total, self._static,
@@ -1977,7 +1882,7 @@ class _OpticalStimulus(Stimulus):
                              self._irradiance * factor)
 
     def _without_electrodes(self, electrodes):
-        """This schedule, no longer illuminating ``electrodes``"""
+        """Return this schedule without ``electrodes``"""
         keep = self._keep_mask(electrodes)
         return self._rebuilt(self.electrodes[keep], self._dur[keep],
                              self._irradiance)
@@ -2057,13 +1962,11 @@ class PhotovoltaicEncoder(ImplantEncoder):
 
     Notes
     -----
-    *  Grayscale mode scales ON duration linearly, ``gray * pulse_dur``. The
-       studies these arrays come from report fixed-duration pulses and do not
-       specify a natural-image grayscale transfer function, so this mapping is
-       a pulse2percept simulation convention, not the experimental encoding
-       protocol. Because durations are continuous, an image with many gray
-       levels produces more distinct time points than a device that quantizes
-       duration (see :py:class:`~pulse2percept.stimuli.PRIMAEncoder`).
+    *  Grayscale mode scales ON duration linearly, ``gray * pulse_dur``. This
+       is a pulse2percept convention: the source studies report
+       fixed-duration pulses and no grayscale transfer function. Continuous
+       durations produce more time points than a device that quantizes them
+       (see :py:class:`~pulse2percept.stimuli.PRIMAEncoder`).
     *  Videos are sampled at the pulse rate using zero-order hold.
     *  ``_spatial_view`` returns normalized time-averaged optical drive, where
        1.0 is a fully lit pixel at these settings (``ref_drive``). It is
@@ -2142,13 +2045,14 @@ class PhotovoltaicEncoder(ImplantEncoder):
 
     @property
     def ref_drive(self):
-        """Time-averaged irradiance (mW/mm^2) the normalized view calls 1.0
+        """Time-averaged irradiance (mW/mm^2) that maps to 1.0 in the
+        normalized view
 
         A fully lit pixel at these settings. Devices with a documented
-        projector maximum normalize against that maximum instead.
+        projector maximum use that maximum instead.
         """
         drive = self.irradiance * self.pulse_dur * self.freq / MS_PER_S
-        # A dark schedule has nothing to normalize by; its drive is 0 anyway.
+        # Avoid dividing by zero; a dark schedule has zero drive anyway:
         return drive if drive > 0 else 1.0
 
     def _durations(self, gray):
@@ -2170,17 +2074,16 @@ class PhotovoltaicEncoder(ImplantEncoder):
         Parameters
         ----------
         source : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The image or video to encode. Gray levels are expected in [0, 1],
-            which is what :py:class:`~pulse2percept.stimuli.ImageStimulus` and
-            :py:class:`~pulse2percept.stimuli.VideoStimulus` produce. It must
-            be dimensionless.
+            The image or video to encode, dimensionless, with gray levels in
+            [0, 1] (as produced by
+            :py:class:`~pulse2percept.stimuli.ImageStimulus` and
+            :py:class:`~pulse2percept.stimuli.VideoStimulus`).
 
         Returns
         -------
         stim : :py:class:`~pulse2percept.stimuli.Stimulus`
-            The projected irradiance, in ``mW/mm^2``, with a time axis in
-            milliseconds. The waveform is generated only when samples are
-            asked for.
+            The projected irradiance (``mW/mm^2``), time in ms. The waveform
+            is generated lazily.
 
         Raises
         ------
@@ -2255,11 +2158,9 @@ class PRIMAEncoder(PhotovoltaicEncoder):
     uses fixed peak irradiance and pulse-width modulation [Palanker2020]_,
     [Holz2026]_. This encoder returns irradiance in ``mW/mm^2``.
 
-    Unlike the generic
-    :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder`, ON durations are
-    quantized onto the projector's own 0.7 ms duration grid, and normalized
-    drive is referenced to the projector maximum rather than to these
-    settings.
+    Unlike :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder`, ON
+    durations are quantized onto the projector's 0.7 ms grid, and normalized
+    drive is referenced to the projector maximum.
 
     .. versionadded:: 0.11.0
 
@@ -2302,8 +2203,7 @@ class PRIMAEncoder(PhotovoltaicEncoder):
     mW/mm^2
 
     """
-    #: Smallest nonzero ON duration (ms) the projector can produce; every other
-    #: duration is a whole multiple of it
+    #: Smallest nonzero ON duration (ms); all durations are multiples of it
     pulse_step = 0.7
 
     #: Longest documented ON duration (ms), i.e. 14 steps
@@ -2321,9 +2221,8 @@ class PRIMAEncoder(PhotovoltaicEncoder):
     #: Largest documented duty cycle, ``max_freq * max_pulse_dur``
     max_duty_cycle = max_freq * max_pulse_dur / MS_PER_S
 
-    #: Time-averaged irradiance (mW/mm^2) the normalized spatial view calls
-    #: 1.0. Fixed at the projector maximum, so lowering any setting lowers the
-    #: normalized drive.
+    #: Time-averaged irradiance (mW/mm^2) that maps to 1.0 in the normalized
+    #: spatial view (projector maximum)
     ref_drive = max_irradiance * max_duty_cycle
 
     __slots__ = ()
@@ -2331,7 +2230,7 @@ class PRIMAEncoder(PhotovoltaicEncoder):
     def __init__(self, implant=None, irradiance=3.5 * mW / mm ** 2,
                  freq=30 * Hz, pulse_dur=9.8 * ms, grayscale=True,
                  threshold=0.5):
-        # Wavelength is a property of the projector, not a setting.
+        # Wavelength is fixed by the projector:
         super().__init__(implant, irradiance=irradiance, freq=freq,
                          pulse_dur=pulse_dur,
                          wavelength=self.projector_wavelength * nm,
@@ -2344,8 +2243,7 @@ class PRIMAEncoder(PhotovoltaicEncoder):
         return params
 
     def _check_pulse_dur(self, pulse_dur, freq):
-        """Also require an exact duration from the projector's own grid"""
-        # Require exact hardware-grid durations; do not round silently.
+        """Also require a duration on the projector's grid (no rounding)"""
         steps = pulse_dur / self.pulse_step
         if abs(steps - round(steps)) > 1e-9:
             raise ValueError(
@@ -2366,8 +2264,8 @@ class PRIMAEncoder(PhotovoltaicEncoder):
     def _durations(self, gray):
         """Map gray levels in [0, 1] to ON durations (ms)
 
-        Binary mode lights a pixel for the full ``pulse_dur``; grayscale mode
-        pulse-width modulates onto the projector's own duration grid.
+        Binary mode uses the full ``pulse_dur``; grayscale mode rounds onto
+        the projector's duration grid.
         """
         # Use float64 so durations land exactly on the hardware grid.
         gray = np.asarray(gray, dtype=np.float64)

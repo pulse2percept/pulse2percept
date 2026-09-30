@@ -22,10 +22,9 @@ def _version_clause(deprecated_version=None, removed_version=None):
 
 
 def _callable_name(func):
-    """Names a callable the way a user would refer to it"""
+    """Return the user-facing name of a callable"""
     obj_name = getattr(func, '__qualname__', None) or func.__name__
-    # A decorated constructor is really about the class, so report
-    # `MyClass`, not `MyClass.__init__`:
+    # Report a decorated constructor as `MyClass`, not `MyClass.__init__`:
     if obj_name.endswith('.__init__'):
         obj_name = obj_name[:-len('.__init__')]
     return obj_name
@@ -56,8 +55,8 @@ def _warn_external(message, category=DeprecationWarning):
     """
     frame = sys._getframe()
     stacklevel = 1
-    # Stop at the outermost frame even if it is ours, rather than walking off
-    # the top of the stack, which `warnings.warn` would blame on `sys`:
+    # Stop at the outermost frame, even if internal; past it, `warnings.warn`
+    # would blame `sys`:
     while (frame.f_back is not None and
            _is_internal_module(frame.f_globals.get('__name__', ''))):
         frame = frame.f_back
@@ -84,10 +83,9 @@ class deprecated:
         The package version in which the deprecated function/class will be
         removed.
     extra_msg : str, optional
-        Appended to the warning and to the docstring. Say here what a caller
-        has to change beyond the name when ``alt_func`` is not a drop-in
-        replacement -- different defaults, dropped behavior -- so that
-        swapping one for the other cannot silently change results.
+        Appended to the warning and to the docstring. Use it to describe
+        changes beyond the name when ``alt_func`` is not a drop-in replacement
+        (e.g., different defaults, dropped behavior).
 
         .. versionadded:: 0.11.0
     """
@@ -103,8 +101,7 @@ class deprecated:
         if isinstance(obj, type):
             return self._decorate_class(obj)
         elif isinstance(obj, property):
-            # Note that this is only triggered properly if the `property`
-            # decorator comes before the `deprecated` decorator, like so:
+            # Only works if `@property` is applied first, like so:
             #
             # @deprecated(msg)
             # @property
@@ -155,8 +152,7 @@ class deprecated:
     def _decorate_property(self, prop):
         """Mark a class property as deprecated
 
-        Note that this is only triggered properly if the `property` decorator
-        comes before the `deprecated` decorator, like so:
+        Only works if the `property` decorator is applied first, like so:
 
         .. code-block:: python
 
@@ -165,8 +161,7 @@ class deprecated:
             def deprecated_attribute_(self):
                 ...
         """
-        # Use the getter's name, not `prop.__name__`: properties only grew a
-        # `__name__` attribute in Python 3.13.
+        # Properties have `__name__` only since Python 3.13, so use the getter:
         msg = self._get_message(f"Property {prop.fget.__name__}")
 
         @property
@@ -195,11 +190,10 @@ def _deprecated_names(module, aliases, deprecated_version=None,
                       removed_version=None):
     """Return a module ``__getattr__`` (:pep:`562`) for renamed classes.
 
-    ``module`` is the installing module's ``__name__``, used in the
-    ``AttributeError`` raised for anything not in ``aliases``, which maps each
-    old name to the class it now refers to. The old name resolves to that very
-    class rather than to a deprecated subclass, so ``isinstance`` and
-    ``issubclass`` checks written against it keep working; only the lookup
+    ``aliases`` maps each old name to its new class. ``module`` is the
+    module's ``__name__``, used in the ``AttributeError`` for unknown names.
+    The old name returns the new class itself (not a deprecated subclass), so
+    ``isinstance`` and ``issubclass`` checks still work; only the lookup
     warns.
     """
     clause = _version_clause(deprecated_version, removed_version)
@@ -221,7 +215,7 @@ class deprecate_parameter:
     """Decorator for a deprecated function or method parameter.
 
     The parameter remains accepted but is ignored, and explicit use
-    raises ``DeprecationWarning``. Use :class:`rename_parameter` when
+    emits a ``DeprecationWarning``. Use :class:`rename_parameter` when
     the parameter is only being renamed.
 
     .. versionadded:: 0.9.1
@@ -255,7 +249,7 @@ class deprecate_parameter:
         return msg
 
     def _get_obj_name(self, func):
-        """Names the decorated callable the way a user would refer to it"""
+        """Return the user-facing name of the decorated callable"""
         return _callable_name(func)
 
     def __call__(self, func):
@@ -270,13 +264,12 @@ class deprecate_parameter:
             try:
                 passed = self.name in signature.bind(*args, **kwargs).arguments
             except TypeError:
-                # The call does not match the signature. Don't preempt the
-                # error the wrapped callable is about to raise itself:
+                # Signature mismatch: the wrapped callable raises its own
+                # TypeError below:
                 passed = False
             if passed:
-                # Build the message here rather than capturing it in the
-                # closure: `is_deprecated` looks for the word "deprecated" in
-                # closure cells, and the callable itself is *not* deprecated.
+                # Build the message at call time: `is_deprecated` searches
+                # closure cells for "deprecated", and this callable is not:
                 warnings.warn(self._get_message(obj_name),
                               category=DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
@@ -336,9 +329,8 @@ class rename_parameter:
                                     f"and '{self.new_name}', which are the "
                                     f"same parameter. Pass only "
                                     f"'{self.new_name}'.")
-                # Build the message here rather than capturing it in the
-                # closure: `is_deprecated` looks for the word "deprecated" in
-                # closure cells, and the callable itself is *not* deprecated.
+                # Build the message at call time: `is_deprecated` searches
+                # closure cells for "deprecated", and this callable is not:
                 warnings.warn(self._get_message(obj_name),
                               category=DeprecationWarning, stacklevel=2)
                 kwargs[self.new_name] = kwargs.pop(self.old_name)
@@ -348,7 +340,7 @@ class rename_parameter:
 
 
 class deprecated_alias:
-    """Descriptor that keeps a renamed model parameter usable by its old name.
+    """Descriptor that forwards a renamed model parameter from its old name.
 
     Use this for parameters stored in ``get_default_params``. For
     parameters declared in a function signature, use
@@ -367,8 +359,8 @@ class deprecated_alias:
 
     def __set_name__(self, owner, name):
         self.old_name = name
-        # Register on `owner` itself rather than mutate the dict it inherited,
-        # which every other class in the hierarchy is looking at too:
+        # Copy the inherited dict instead of mutating it, since parent classes
+        # share it:
         owner._renamed_params = {**getattr(owner, '_renamed_params', {}),
                                  name: self}
 
@@ -380,13 +372,11 @@ class deprecated_alias:
 
     def __get__(self, obj, objtype=None):
         if obj is None:
-            # Looked up on the class rather than on an instance, which is how
-            # the attribute machinery asks whether the name exists at all.
-            # Nothing is being read, so nothing is deprecated yet:
+            # Class-level lookup (e.g., `hasattr` on the class) returns the
+            # descriptor without a warning:
             return self
-        # Name the class the attribute was reached through, not the one the
-        # alias was declared on: a subclass inherits the alias, and it is the
-        # subclass the user is holding.
+        # Name the instance's class, which may be a subclass of the declaring
+        # class:
         _warn_external(self._get_message(type(obj).__name__))
         return getattr(obj, self.new_name)
 
@@ -398,11 +388,9 @@ class deprecated_alias:
 def warn_deprecated_params(obj_name, supplied, specs, stacklevel=3):
     """Warn about deprecated *model* parameters that were supplied by name
 
-    pulse2percept models take their parameters as ``**params``, validated
-    against ``get_default_params`` rather than declared in a signature, so
-    :py:class:`~pulse2percept.utils.deprecate_parameter` cannot see them. This
-    is the equivalent for that path: hand it the names the caller actually
-    supplied, and it warns for the deprecated ones.
+    Models take ``**params`` validated against ``get_default_params``, which
+    :py:class:`~pulse2percept.utils.deprecate_parameter` cannot inspect. This
+    function warns for each name in ``supplied`` that appears in ``specs``.
 
     .. versionadded:: 0.9.1
 
@@ -412,15 +400,15 @@ def warn_deprecated_params(obj_name, supplied, specs, stacklevel=3):
         Name of the model, as it should appear in the warning.
     supplied : iterable of str
         Parameter names the caller passed explicitly. Names that are not
-        deprecated are skipped, so it is fine to pass all of them.
+        deprecated are skipped.
     specs : dict
         Maps a deprecated parameter name to the
         :py:class:`~pulse2percept.utils.deprecate_parameter` describing it, so
-        that signature-level and model-level deprecations word alike.
+        that signature-level and model-level warnings use the same wording.
     stacklevel : int, optional
-        Passed to ``warnings.warn``. Exact attribution is not possible through
-        a chain of ``super().__init__`` calls of varying depth, so the message
-        names the parameter and the model rather than relying on it.
+        Passed to ``warnings.warn``. Attribution through nested
+        ``super().__init__`` calls is inexact, so the message names the
+        parameter and the model.
     """
     for name in supplied:
         spec = specs.get(name)
@@ -432,15 +420,11 @@ def warn_deprecated_params(obj_name, supplied, specs, stacklevel=3):
 def rename_deprecated_params(obj_name, params, specs):
     """Rewrite renamed *model* parameters that were supplied by their old name
 
-    The counterpart of :py:func:`~pulse2percept.utils.warn_deprecated_params`
-    for parameters that were renamed rather than retired: the value is kept,
-    but moves to the new name, and the warning names the replacement.
-
-    Handing the caller a rewritten dict, rather than letting the assignment
-    fall through to the
-    :py:class:`~pulse2percept.utils.deprecated_alias` descriptor, keeps the
-    warning to one per parameter and lets it name the model the user actually
-    called.
+    Counterpart of :py:func:`~pulse2percept.utils.warn_deprecated_params` for
+    renamed parameters: the value moves to the new name, and the warning names
+    the replacement. Rewriting the dict (instead of assigning through the
+    :py:class:`~pulse2percept.utils.deprecated_alias` descriptor) emits one
+    warning per parameter, naming the model that was called.
 
     .. versionadded:: 0.10.0
 
@@ -450,7 +434,7 @@ def rename_deprecated_params(obj_name, params, specs):
         Name of the model, as it should appear in the warning.
     params : dict
         Parameters the caller supplied. Names that were not renamed are left
-        alone, so it is fine to pass all of them.
+        unchanged.
     specs : dict
         Maps a renamed parameter's old name to the
         :py:class:`~pulse2percept.utils.deprecated_alias` describing it.
@@ -464,16 +448,13 @@ def rename_deprecated_params(obj_name, params, specs):
     Raises
     ------
     TypeError
-        If both names of the same parameter were supplied. Which one won
-        would otherwise come down to the order they were passed in.
+        If both names of the same parameter were supplied.
 
     """
     if not any(name in specs for name in params):
         return params
-    # Check every collision up front, so that an invalid call raises rather
-    # than warning about a value it is about to reject. Iterating `specs`
-    # rather than `params` keeps the error deterministic when more than one
-    # parameter was renamed:
+    # Check all collisions before warning. Iterating `specs` keeps the error
+    # deterministic when several parameters were renamed:
     for old_name, spec in specs.items():
         if old_name in params and spec.new_name in params:
             raise TypeError(f"{obj_name} got both '{old_name}' and "
@@ -490,7 +471,7 @@ def rename_deprecated_params(obj_name, params, specs):
 
 
 def is_deprecated(func):
-    """Helper to check if ``func`` is wrapped by the deprecated decorator"""
+    """Return whether ``func`` is wrapped by the ``deprecated`` decorator"""
     closures = getattr(func, '__closure__', [])
     if closures is None:
         closures = []

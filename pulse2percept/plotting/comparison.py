@@ -3,8 +3,7 @@
    :py:func:`~pulse2percept.plotting.plot_implant_percept`,
    :py:func:`~pulse2percept.plotting.play_implant_percept`
 
-Views that span more than one object: what went into the model next to what
-came out of it.
+Side-by-side views of a model's input and its predicted percept.
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -60,7 +59,7 @@ def _panel_axes(axes, figsize, layout=None):
 
 
 def _reject_non_visual(stim):
-    """The error for a stimulus that is not the source the model was shown"""
+    """Returns the TypeError for a stimulus that is not an image or video"""
     return TypeError(
         f"Cannot show a {type(stim).__name__} next to the percept. Pass the "
         f"image or video that went into the model, not the electrical "
@@ -68,11 +67,11 @@ def _reject_non_visual(stim):
 
 
 def _source_frames(stim, times):
-    """Source frames, and which of them to show at each display time (in ms)
+    """Returns the source frames and the frame index at each display time (ms)
 
-    Zero-order hold: a display time shows the source frame that is up at that
-    physical time. Times before the source starts hold its first frame, times
-    that outlast it hold its last. A still image contributes a single frame.
+    Zero-order hold: each display time shows the source frame active at that
+    time. Times before the source start show its first frame, times after its
+    end show its last. A still image has a single frame.
     """
     if isinstance(stim, VideoStimulus):
         if stim.time is None:
@@ -95,11 +94,11 @@ def _source_frames(stim, times):
 
 
 def _source_times(percept, timeline):
-    """Source time (ms) that each display frame shows
+    """Returns the source time (ms) shown at each display frame
 
-    A temporal model records the onset of the source-video frame that each
+    A temporal model stores the onset of the source-video frame that each
     output frame summarizes (``metadata['source_frame_time']``); the output
-    time itself is that frame's end.
+    time is that frame's end.
     """
     onsets = (percept.metadata or {}).get('source_frame_time')
     if onsets is None:
@@ -108,10 +107,10 @@ def _source_times(percept, timeline):
 
 
 def _image_artist(ax, frames, vmin=None, vmax=None):
-    """An empty image artist for the animation to write ``frames`` into"""
+    """Returns an empty image artist for the animation ``frames``"""
     blank = np.zeros_like(frames[..., 0])
     if blank.ndim == 3:
-        # RGB frames carry their own colors; no colormap, no color scale:
+        # RGB frames use no colormap or color scale:
         return ax.imshow(blank)
     return ax.imshow(blank, cmap='gray', vmin=vmin, vmax=vmax)
 
@@ -122,9 +121,8 @@ def plot_stimulus_percept(stim, percept, axes=None, figsize=None,
     """Plot an image next to the percept it produced
 
     Draws ``stim`` and ``percept`` side by side, each with its own ``plot``
-    method. A video has no single frame that stands for the whole sequence,
-    and neither does the percept it produced, so use
-    :py:func:`~pulse2percept.plotting.play_stimulus_percept` for those.
+    method. For a video, use
+    :py:func:`~pulse2percept.plotting.play_stimulus_percept`.
 
     .. versionadded:: 0.11.0
 
@@ -186,15 +184,12 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
                           vmin=None, vmax=None):
     """Animate a stimulus next to the percept it produced
 
-    Both panels run off a single clock. The percept's time axis is
-    authoritative: every displayed percept frame is paired with the source
-    frame that is up at the same physical time (zero-order hold), so a source
-    and a percept sampled at different rates stay in register, and a still
-    image stays put. A temporal percept frame that summarizes a source frame
-    ends when that frame does, and is paired with it
-    (``metadata['source_frame_time']``). ``fps`` resamples the whole
-    presentation, exactly as in
-    :py:meth:`~pulse2percept.percepts.Percept.play`.
+    Both panels use the percept's time axis: each percept frame is paired
+    with the source frame active at the same time (zero-order hold), so
+    source and percept may have different frame rates. A temporal percept
+    frame that summarizes a source frame ends when that frame ends, and is
+    paired with it (``metadata['source_frame_time']``). ``fps`` resamples the
+    display as in :py:meth:`~pulse2percept.percepts.Percept.play`.
 
     .. versionadded:: 0.11.0
 
@@ -223,13 +218,13 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
         Whether to show a brightness colorbar next to the percept. An RGB
         percept never gets one.
     fmt : {'png', 'jpg'}, optional
-        Image format used to encode animation frames. 'jpg' keeps notebooks
-        and doc pages smaller, which matters most for a video source; 'png'
-        keeps the frames pixel-exact.
+        Image format used to encode animation frames. 'jpg' gives smaller
+        notebooks and doc pages (useful for a video source); 'png' is
+        lossless.
     vmin, vmax : float, optional
         Brightness limits for the percept. By default, ``vmin=0`` and ``vmax``
         is the maximum brightness across the percept. Not available for an RGB
-        percept, whose values are shown as they are.
+        percept (values are shown as is).
 
     Returns
     -------
@@ -248,8 +243,8 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
     timeline = _frame_timeline(percept.times(ms), fps=fps)
     idx = timeline.indices
     src, src_idx = _source_frames(stim, _source_times(percept, timeline))
-    # No constrained layout: the player measures the figure with the time
-    # annotation blanked out, and a re-flow would move the panels under it.
+    # No constrained layout: the player measures the figure without the time
+    # label, and a re-layout would shift the panels.
     axes = _panel_axes(axes, figsize)
     fig = axes[0].figure
     im_stim = _image_artist(axes[0], src, vmin=0, vmax=float(np.max(src)))
@@ -267,7 +262,7 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
                                va='center')
     for ax, title in zip(axes, titles):
         ax.set_title(title)
-    # Both panels run off one clock, so the time is annotated once, above them:
+    # Both panels share one time axis, so the time is shown once above them:
     clock = labels = None
     if annotate_time:
         clock = fig.suptitle('')
@@ -286,8 +281,7 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
 
     plt.rcParams["animation.html"] = 'jshtml'
     plt.close(fig)
-    # Both panels are handed to the player, which shows the source frame that
-    # ``src_idx`` holds at each display frame:
+    # The player shows source frame ``src_idx[i]`` at display frame ``i``:
     return HTMLAnimation(fig, update, data_gen, repeat=repeat,
                          intervals=timeline.intervals, save_count=idx.size,
                          image=[im_stim, im_percept],
@@ -297,10 +291,10 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
 
 
 def _electrode_stim(percept):
-    """The electrode-level stimulus recorded in ``percept.metadata['stim']``
+    """Returns the electrode stimulus stored in ``percept.metadata['stim']``
 
-    A composite model stores its intermediate percept there, which in turn
-    stores the stimulus.
+    For a composite model, the stimulus is stored in the intermediate percept
+    stored there.
     """
     stim = percept
     while isinstance(stim, Percept):
@@ -313,10 +307,10 @@ def _electrode_stim(percept):
 
 
 def _is_causal(model):
-    """Whether ``model`` integrates stimulation over time
+    """Returns whether ``model`` integrates stimulation over time
 
-    A spatial-only model stores the frame states it used. Any other model's
-    percept at t reflects the stimulation delivered up to t.
+    A spatial-only model uses the stimulus state at each frame. Any other
+    model's percept at t depends on the stimulation delivered up to t.
     """
     if isinstance(model, Model):
         return model.has_time
@@ -324,16 +318,18 @@ def _is_causal(model):
 
 
 def _frame_intervals(times, start):
-    """``(lo, hi)``: the interval ``(lo, hi]`` that each percept frame ends
+    """Returns ``(lo, hi)``, where percept frame k ends interval
+    ``(lo[k], hi[k]]``
 
-    The first frame has no previous one, so its interval starts at stimulus
-    onset ``start``. A frame at or before onset is an instant.
+    The first interval starts at stimulus onset ``start``. A frame at or
+    before onset is an instant.
     """
     return np.concatenate(([min(start, times[0])], times[:-1])), times
 
 
 def _electrode_drive(stim, times=None, causal=False):
-    """Absolute drive, (n_electrodes, n_times), paired with percept ``times``
+    """Returns the absolute drive, (n_electrodes, n_times), at percept
+    ``times``
 
     All times are in ms.
 
@@ -343,8 +339,7 @@ def _electrode_drive(stim, times=None, causal=False):
       (``stim._spatial_view()``) is off once the stimulus ends.
     * ``causal=True``: the peak over ``(times[k - 1], times[k]]``, i.e., what
       was delivered since the previous frame; the first interval starts at
-      stimulus onset. A plain waveform is linear between
-      its samples.
+      stimulus onset. A plain waveform is linear between its samples.
     """
     view = stim._spatial_view()
     data = np.abs(np.asarray(view.data, dtype=np.float64)).reshape(
@@ -388,13 +383,13 @@ def _electrode_drive(stim, times=None, causal=False):
 
 
 def _drive_norm(drive):
-    """One color scale for every frame, from 0 to the peak drive"""
+    """Returns one color scale for all frames, from 0 to the peak drive"""
     vmax = float(np.max(drive)) if np.size(drive) else 0.0
     return Normalize(vmin=0, vmax=vmax if vmax > 0 else 1.0)
 
 
 def _drive_label(stim):
-    """Colorbar label for the electrode drive"""
+    """Returns the colorbar label for the electrode drive"""
     unit = stim._spatial_view().unit
     if unit is None or unit.dimension.is_dimensionless:
         return 'Electrode drive (a.u.)'
@@ -439,7 +434,8 @@ def _paint(panel, electrodes, drive, cmap, norm, only_active=False):
 
 
 def _labels(model, panel, electrodes):
-    """One hidden label per electrode, placed with its collection"""
+    """Returns one hidden label per electrode, in its collection's
+    coordinates"""
     labels = {}
     for coll, _, _ in panel:
         for name in electrodes:
@@ -477,8 +473,7 @@ def _overlay(ax, panel, labels, electrodes, states, cmap, norm):
     top = max(int(np.floor(height - box.y1)), 0)
     bottom = min(int(np.ceil(height - box.y0)), height)
     where = {name: i for i, name in enumerate(electrodes)}
-    # State-major, so that the (Y, X, 4, n_states) view below is exactly what
-    # the player packs, without a copy:
+    # State-major, so the (Y, X, 4, n_states) view below needs no copy:
     frames = np.empty((len(states), bottom - top, right - left, 4),
                       dtype=np.uint8)
     for s, state in enumerate(states):
@@ -502,12 +497,13 @@ def _overlay(ax, panel, labels, electrodes, states, cmap, norm):
 
 
 def _grid_kwargs(rings=False, meridians=False, grid_color=vf.GRID_COLOR):
-    """The visual-field grid options of ``Percept.play``"""
+    """Returns the visual-field grid options of ``Percept.play``"""
     return rings, meridians, grid_color
 
 
 def _percept_panel(percept, ax, vmin, vmax, colorbar):
-    """The image an animated percept is drawn into, as in ``Percept.play``"""
+    """Returns the image artist for an animated percept, as in
+    ``Percept.play``"""
     spatial = percept.xdva is not None and percept.ydva is not None
     extent = _pixel_extent(percept.xdva, percept.ydva) if spatial else None
     blank = np.zeros_like(percept.data[..., 0])
@@ -535,14 +531,14 @@ def plot_implant_percept(model, percept, axes=None, figsize=None,
     """Plot the stimulated implant next to the percept it produced
 
     The left panel shows ``model`` with its implant at the model-side
-    placement, each electrode filled by its absolute drive. The drive
-    comes from ``percept.metadata['stim']``, the prepared stimulus that entered
-    the model. Encoded stimuli (e.g., from
+    placement, each electrode filled by its absolute drive. The drive comes
+    from ``percept.metadata['stim']``, the prepared stimulus that entered the
+    model. Encoded stimuli (e.g., from
     :py:class:`~pulse2percept.stimuli.TraceEncoder`) are shown at their
     frame-level modulation, not at individual pulse phases.
 
-    A percept with more than one frame has no single time point to show the
-    implant at; use :py:func:`~pulse2percept.plotting.play_implant_percept`.
+    For a percept with more than one frame, use
+    :py:func:`~pulse2percept.plotting.play_implant_percept`.
 
     .. versionadded:: 0.11.0
 
@@ -551,8 +547,7 @@ def plot_implant_percept(model, percept, axes=None, figsize=None,
     model : Model or BaseModel
         The :py:class:`~pulse2percept.models.Model` or
         :py:class:`~pulse2percept.models.BaseModel` that predicted
-        ``percept``. Its ``plot(show_implant=True)``
-        draws the left panel.
+        ``percept``. Its ``plot(show_implant=True)`` draws the left panel.
     percept : :py:class:`~pulse2percept.percepts.Percept`
         The percept the model predicted, timeless or a single frame. A
         timeless percept shows the peak drive over the whole stimulus; a
@@ -622,25 +617,24 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
                          vmin=None, vmax=None, percept_kwargs=None):
     """Animate the stimulated implant next to the percept it produced
 
-    Both panels run off a single clock, and the percept's time axis is
-    authoritative: each percept frame at time t is shown with the stimulation
-    associated with it, taken from ``percept.metadata['stim']``:
+    Both panels use the percept's time axis. Each percept frame at time t is
+    shown with the electrode drive from ``percept.metadata['stim']``:
 
     *  A spatial-only model: the drive at t. Frame-level modulation (e.g.,
        from :py:class:`~pulse2percept.stimuli.TraceEncoder` or an image
        encoder) is held between its frames (zero-order hold).
     *  A model with time: the peak absolute drive since the previous percept
        frame, i.e., over ``(t_prev, t]``; for the first frame, since stimulus
-       onset. A frame-level modulation counts every frame up in that
+       onset. A frame-level modulation counts every frame active in that
        interval; a plain waveform counts every pulse, without resolving pulse
        phases. For automatic output times, this is the interval the percept
-       frame summarizes. This shows what was delivered in the interval, not
-       what the percept contains: a stateful model's frame can still carry
-       decay from earlier stimulation while the implant is dark.
+       frame summarizes. This is the delivered drive, not the percept: a
+       stateful model's frame may still show decay from earlier stimulation
+       while the implant is off.
 
-    ``fps`` resamples the percept frames, and the implant follows the percept
-    frame on screen. All frames share one color scale, from 0 to the peak
-    drive.
+    ``fps`` resamples the percept frames; the implant panel follows the
+    displayed percept frame. All frames share one color scale, from 0 to the
+    peak drive.
 
     .. versionadded:: 0.11.0
 
@@ -649,8 +643,7 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
     model : Model or BaseModel
         The :py:class:`~pulse2percept.models.Model` or
         :py:class:`~pulse2percept.models.BaseModel` that predicted
-        ``percept``. Its ``plot(show_implant=True)``
-        draws the left panel.
+        ``percept``. Its ``plot(show_implant=True)`` draws the left panel.
     percept : :py:class:`~pulse2percept.percepts.Percept`
         The percept the model predicted. Must have a time axis.
     fps : float, optional
@@ -699,10 +692,10 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
     timeline = _frame_timeline(percept.times(ms), fps=fps)
     idx = timeline.indices
     electrodes = list(stim.electrodes)
-    # One drive per percept frame, shown whenever that frame is:
+    # One drive per percept frame:
     drive = _electrode_drive(stim, percept.times(ms),
                              causal=_is_causal(model))
-    # The color scale spans every percept frame, whatever ``fps`` shows:
+    # The color scale spans all percept frames, regardless of ``fps``:
     cmap, norm = plt.get_cmap(STIM_CMAP), _drive_norm(drive)
     drive = drive[:, idx]
     states, state_idx = np.unique(drive.T, axis=0, return_inverse=True)
@@ -722,8 +715,8 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
         labels = [f't = {t:.2f} {percept.time_unit}'
                   for t in percept.time[idx]]
         clock = fig.suptitle(labels[0])
-    # Lay out once, then freeze: the player measures the figure with the time
-    # annotation blanked out, and a re-flow would move the panels under it.
+    # Lay out once, then freeze: the player measures the figure without the
+    # time label, and a re-layout would shift the panels.
     fig.canvas.draw()
     fig.set_layout_engine('none')
     if clock is not None:

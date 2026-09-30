@@ -214,8 +214,7 @@ def test_plot_mm_ticks(monkeypatch):
 
 
 def test_poli_nlink():
-    # make sure that the polimeni map and neuralink work togther with scoreboard
-    # since this is an odd combo of 2d map and 3d implant
+    # Scoreboard with a 2D Polimeni map and a 3D Neuralink implant:
     implant = LinearEdgeThread(x=20000)
     model = ScoreboardModel(implant=implant, rho=800, step=.5).build()
     npt.assert_equal(_spatial(model).grid.v1.z is None, True)
@@ -235,12 +234,11 @@ def _straddling_pair(coord):
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 def test_CortexSpatial_meridian_blend(ModelClass):
     def make(**params):
-        # Offset by half a step so no sample sits exactly on the
-        # meridian:
+        # Half-step offset so no sample sits on the meridian:
         return ModelClass(xrange=(-5.1, 4.9), yrange=(-5, 5), step=0.2,
                           rho=800, **params).build()
 
-    # Close to the midline, so the phosphenes land on the vertical meridian
+    # Implant near the midline, so phosphenes fall on the vertical meridian:
     implant = NeuroPortArray()
     source = {e: 1 for e in implant.electrode_names}
     plain = make(implant=implant, implant_position=(5, 0) * mm,
@@ -268,13 +266,13 @@ def test_CortexSpatial_meridian_blend(ModelClass):
     npt.assert_array_less(0, jump(unblended))
     npt.assert_array_less(jump(blended), jump(unblended))
 
-    # The change stays within a few widths of the meridian:
+    # Changes stay within 4 blend widths of the meridian:
     delta = np.abs(blended - unblended)
     cols = delta.max(axis=(0, 2)) > delta.max() * 1e-3
     npt.assert_equal(np.any(cols), True)
     npt.assert_array_less(np.abs(x[cols]).max(), 4 * width)
 
-    # *vertical* meridian:
+    # Blending only acts across the *vertical* meridian (dark rows stay dark):
     dark_rows = unblended.max(axis=(1, 2)) == 0
     npt.assert_equal(np.any(dark_rows), True)
     npt.assert_array_equal(blended[dark_rows], 0)
@@ -283,8 +281,8 @@ def test_CortexSpatial_meridian_blend(ModelClass):
 
 
 def test_CortexSpatial_meridian_blend_reapplies_threshold():
-    # Blending pulls brightness across the meridian, which could otherwise
-    # lift a point that `thresh_percept` had zeroed back off zero.
+    # Blending can lift sub-threshold points above zero, so `thresh_percept`
+    # is applied again afterward:
     implant = NeuroPortArray()
     model = ScoreboardModel(implant=implant, implant_position=(5, 0) * mm,
                             xrange=(-5, 5), yrange=(-5, 5),
@@ -293,12 +291,12 @@ def test_CortexSpatial_meridian_blend_reapplies_threshold():
     data = model.predict_percept(
         {e: 1 for e in implant.electrode_names}).data
     npt.assert_equal(np.any(data > 0), True)
-    # Nothing survives strictly between zero and the threshold:
+    # No values strictly between zero and the threshold:
     npt.assert_equal(np.any((np.abs(data) > 0) & (np.abs(data) < 0.1)), False)
 
 
 def _user_warnings(build):
-    """The UserWarning messages a build emits, and nothing else"""
+    """Return the UserWarning messages emitted by `build`"""
     import warnings
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
@@ -316,10 +314,9 @@ def _cortex_grid(ndim):
 
 @pytest.mark.parametrize('ndim', [2, 3])
 def test_cortical_scoreboard_warns_when_rho_is_wider_than_the_pitch(ndim):
-    """The same Gaussian spread as the retinal model, so the same warning"""
+    """Warns when rho exceeds the electrode pitch, as in the retinal model"""
     grid = _cortex_grid(ndim)
-    # NeuroPortArray's 400 um pitch, against a current spread three times as
-    # wide:
+    # NeuroPortArray has a 400 um pitch; rho is 3x that:
     said = _user_warnings(
         ScoreboardModel(implant=NeuroPortArray(), rho=1200, **grid).build)
     npt.assert_equal(any('pitch (400 um)' in w for w in said), True)
@@ -330,11 +327,10 @@ def test_cortical_scoreboard_warns_when_rho_is_wider_than_the_pitch(ndim):
 
 
 def test_a_three_dimensional_map_counts_depth_as_spacing():
-    """Pitch is measured in whichever dimensions the model reads
+    """Pitch includes depth (z) for a 3D map
 
-    A Neuralink thread stacks its electrodes along z at one (x, y). A 3-D map
-    reads that depth and sees 50 um neighbours; a 2-D one projects them onto
-    the same point, where there is no spacing left to compare rho against.
+    A Neuralink thread stacks electrodes along z at one (x, y): 50 um pitch in
+    3D, zero spacing (no warning) in 2D.
     """
     thread = LinearEdgeThread()
     said = _user_warnings(

@@ -97,10 +97,9 @@ class ScoreboardSpatial(RetinalSpatial):
 
     .. warning::
 
-        ``rho`` is fixed: this model does not predict pulse-dependent
-        phosphene size. Doubling amplitude doubles brightness and leaves the
-        phosphene exactly as wide, which is not what [Nanduri2012]_
-        reports. Use
+        ``rho`` is fixed, so phosphene size does not depend on the pulse:
+        doubling amplitude doubles brightness at constant width, unlike
+        [Nanduri2012]_. Use
         :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` for
         pulse-dependent brightness and size.
 
@@ -274,10 +273,9 @@ class ScoreboardModel(Model):
 
     .. warning::
 
-        ``rho`` is fixed: this model does not predict pulse-dependent
-        phosphene size. Doubling amplitude doubles brightness and leaves the
-        phosphene exactly as wide, which is not what [Nanduri2012]_
-        reports. Use
+        ``rho`` is fixed, so phosphene size does not depend on the pulse:
+        doubling amplitude doubles brightness at constant width, unlike
+        [Nanduri2012]_. Use
         :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` for
         pulse-dependent brightness and size.
 
@@ -562,10 +560,9 @@ class AxonMapSpatial(RetinalSpatial):
     def eye(self):
         """Eye used by the axon map.
 
-        Taken from the bound implant, which must therefore be a
-        :py:class:`~pulse2percept.implants.retina.RetinalImplant`: the optic
-        disc sits on the nasal side of the implanted eye, and a generic
-        implant does not say which eye that is.
+        Taken from the bound implant, which must be a
+        :py:class:`~pulse2percept.implants.retina.RetinalImplant` because the
+        optic disc lies nasal to the fovea of the implanted eye.
 
         .. versionchanged:: 0.11.0
             ``eye`` is no longer a separate model parameter."""
@@ -980,7 +977,7 @@ class AxonMapSpatial(RetinalSpatial):
         if self.lam < 10:
             raise ValueError('"lam" < 10 is not supported by this model. '
                              'Consider using ScoreboardModel instead.')
-        # Before the warnings, so a missing eye is the first thing reported:
+        # Check the eye first so a non-retinal implant fails before warnings:
         self._built_eye = self.eye
         self._warn_placement()
         _warn_rho_vs_pitch(self)
@@ -1148,15 +1145,14 @@ class AxonMapSpatial(RetinalSpatial):
             bundle[y_idx, 1] = np.nan
             ax.plot(bundle[:, 0], bundle[:, 1], c=(0.6, 0.6, 0.6),
                     linewidth=2, zorder=ZORDER['background'])
-        # Optic-disc dimensions used by the visualization:
+        # Draw the optic disc:
         ax.add_patch(Ellipse(od_xy, width=od_w, height=od_h, alpha=1,
                              color='white', zorder=ZORDER['background'] + 1))
         if self.is_built:
             self.grid.plot(ax=ax, style=style, zorder=ZORDER['background'] + 2,
                            use_dva=use_dva)
         if show_implant:
-            # The window below is the anatomical frame this plot is about, so
-            # the implant does not get to rescale it:
+            # Keep the anatomical plot window; the implant does not rescale it:
             _draw_placed_implant(self, ax, autoscale=False)
         ax.set_xlabel(f'x ({units})')
         ax.set_ylabel(f'y ({units})')
@@ -1208,10 +1204,9 @@ class AxonMapModel(Model):
     .. note::
 
         Dimensionless image or video values are read as relative electrode
-        drive, so an implant ``encoder`` is optional when you only care about
-        the spatial phosphene pattern. An encoder is required when physical
-        amplitude, pulse timing, safety constraints, or a temporal or
-        pulse-dependent model are important.
+        drive, so an implant ``encoder`` is optional for spatial phosphene
+        patterns. An encoder is required for physical amplitude, pulse timing,
+        safety constraints, or temporal and pulse-dependent models.
 
     .. important::
 

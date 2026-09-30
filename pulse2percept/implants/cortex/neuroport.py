@@ -35,8 +35,8 @@ class NeuroPortArray(CorticalImplant):
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
     hemisphere : 'left', 'right' or None, optional
-        Which hemisphere the device is implanted in. Metadata: it does not
-        move the array, which the model's ``implant_position`` places.
+        Implanted hemisphere. Metadata only: the model's ``implant_position``
+        sets the placement.
 
     Examples
     --------
@@ -74,7 +74,7 @@ class NeuroPortArray(CorticalImplant):
         names = np.array(names).reshape((10, 10))
         names = np.swapaxes(names, 0, 1)[:, ::-1].reshape(100)
 
-        # Shank depth, which is device geometry rather than placement:
+        # Shank depth (um):
         z = -1500
         self.electrode_array = ElectrodeGrid(
             self.shape, spacing, z=z, names=names,

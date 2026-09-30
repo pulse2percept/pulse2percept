@@ -32,8 +32,7 @@ def test_Nanduri2012Spatial():
     npt.assert_equal(percept.shape, list(model.grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
 
-    # Only works for DiskElectrode arrays, which is a fact about the implant
-    # the model is bound to, so it is caught when that model is built:
+    # Only works for DiskElectrode arrays (checked at build time):
     with pytest.raises(TypeError):
         Nanduri2012Spatial(
             implant=Implant(ElectrodeArray(PointSource(0, 0, 0)))
@@ -42,8 +41,7 @@ def test_Nanduri2012Spatial():
         Nanduri2012Spatial(implant=Implant(ElectrodeArray(
             [DiskElectrode(0, 0, 0, 100), PointSource(100, 100, 0)]))).build()
 
-    # The bound implant stays the caller's, so a build-time check alone would
-    # let a swapped array through to a kernel that reads a radius off it:
+    # Also checked at predict time, in case the array is swapped after build:
     model = Nanduri2012Spatial(implant=Implant(ElectrodeArray(
         DiskElectrode(0, 0, 0, 100))), step=5).build()
     model.implant.electrode_array = ElectrodeArray(PointSource(0, 0, 0))
@@ -132,9 +130,8 @@ def test_Nanduri2012Temporal(scale_out):
     npt.assert_equal(percept.shape, (16, 1, 3))
     npt.assert_almost_equal(percept.data, 0)
 
-    # Can't request the same time more than once (this would break the Cython
-    # loop, because `idx_frame` is incremented after a write; also doesn't
-    # make much sense):
+    # Can't request the same time twice (the Cython loop increments
+    # `idx_frame` after each write):
     with pytest.raises(ValueError):
         model.predict_percept(ArgusI().prepare_stim(np.ones((16, 100))),
                               t_percept=[0.2, 0.2])
@@ -153,10 +150,7 @@ def test_Nanduri2012Temporal(scale_out):
                                stim_dur=sdur))
         percept = model.predict_percept(stim, t_percept=t_percept)
         bright_amp.append(percept.data.max())
-    # These shifted by under 1.5% in 0.10.0, when the kernel stopped advancing
-    # only one stimulus frame per simulation step: a pulse edge and the sample
-    # after it share a step at this `dt`, so the integrator had been reading a
-    # frame that was already in the past.
+    # Reference values changed by <1.5% in 0.10.0 (kernel time-stepping fix):
     bright_amp_ref = np.array([0.0, 0.00881, 0.06477, 0.14975, 0.16964])
     npt.assert_almost_equal(bright_amp, scale_out * bright_amp_ref, decimal=3)
 
@@ -201,13 +195,12 @@ def test_Nanduri2012Model():
     with pytest.raises(FreezeError):
         model.temporal.rho = 100
 
-    # `thresh_percept` is declared by both components, and the constructor
-    # applies it to both:
+    # `thresh_percept` is passed to both components:
     th = 0.512
     both = Nanduri2012Model(implant=ArgusI(), thresh_percept=th)
     npt.assert_almost_equal(both.spatial.thresh_percept, th)
     npt.assert_almost_equal(both.temporal.thresh_percept, th)
-    # Afterwards each component owns its own:
+    # Each component then has its own copy:
     both.temporal.thresh_percept = 2 * th
     npt.assert_almost_equal(both.spatial.thresh_percept, th)
     npt.assert_almost_equal(both.temporal.thresh_percept, 2 * th)
@@ -247,8 +240,8 @@ def test_Nanduri2012Model_predict_percept():
                                 t_percept=t_percept)
     npt.assert_almost_equal(percept.data, temp.data, decimal=4)
 
-    # Only works for DiskElectrode arrays, which the bound implant either is
-    # or is not, so it is caught when the model is built:
+    # Only works for DiskElectrode arrays (checked at build time):
+
     with pytest.raises(TypeError):
         Nanduri2012Model(
             implant=Implant(ElectrodeArray(PointSource(0, 0, 0))),
@@ -272,9 +265,8 @@ def test_Nanduri2012Model_predict_percept():
         model.predict_percept(train, t_percept=np.arange(0, 0.5, 0.101))
     model.predict_percept(train, t_percept=np.arange(0, 0.5, 1.0000001))
 
-    # Can't request the same time more than once (this would break the Cython
-    # loop, because `idx_frame` is incremented after a write; also doesn't
-    # make much sense):
+    # Can't request the same time twice (the Cython loop increments
+    # `idx_frame` after each write):
     with pytest.raises(ValueError):
         model.predict_percept(train, t_percept=[0.2, 0.2])
 

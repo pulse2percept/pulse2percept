@@ -1,9 +1,8 @@
 """Waveform characterization for pulses, pulse trains and encoders
 
-These tests pin down numbers that no other test asserts directly -- the exact
-tick each signal edge sits on, the dtypes the data and time axes are stored
-in, and the shape of the container -- so that a change in how a stimulus is
-*represented* cannot quietly change what it *delivers*.
+Checks values no other test asserts directly (the exact tick of each signal
+edge, the data and time dtypes, and the container shape), so that a change
+in how a stimulus is stored cannot change what it delivers.
 """
 import numpy as np
 import numpy.testing as npt
@@ -23,17 +22,16 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
 
 
 def _fake_pulse():
-    """A three-point pulse, the minimum `PulseTrain` will tile"""
+    """Return a three-point pulse, the minimum `PulseTrain` will tile"""
     return Stimulus([[0, -1, 0]], time=[0, 0.1, 0.2])
 
 
 def _digest(stim):
-    """A compact fingerprint of a waveform
+    """Return a compact fingerprint of a waveform
 
-    Records where the signal changes rather than every sample, so that a long
-    train is described by a handful of numbers instead of a frozen array. The
-    two integrals catch a changed amplitude, and ``net_area`` doubles as the
-    charge-balance result.
+    Records where the signal changes instead of every sample, so a long train is
+    described by a few numbers. The two integrals catch a changed amplitude, and
+    ``net_area`` is the charge-balance result.
     """
     data, time = stim.data, stim.time
     edges = time[1:][np.any(np.diff(data, axis=1) != 0, axis=0)]
@@ -48,9 +46,9 @@ def _digest(stim):
                      round(float(data.max()), 6))}
 
 
-# One entry per (build, expected digest). Between them these cover a zero
-# frequency, a nonzero interphase gap, a delay, an explicit pulse count, a
-# 20-second train and a multi-electrode collection:
+# One entry per (build, expected digest). Covers a zero frequency, a
+# nonzero interphase gap, a delay, an explicit pulse count, a 20 s train,
+# and a multi-electrode collection:
 WAVEFORMS = [
     (lambda: MonophasicPulse(-20, 1, delay_dur=2, stim_dur=10),
      {'shape': (1, 6), 't_end': 10.0, 'n_edges': 2,
@@ -144,9 +142,9 @@ def test_waveform_characterization(build, expected):
 
 @pytest.mark.parametrize('build, expected', WAVEFORMS)
 def test_waveform_container_invariants(build, expected):
-    # Every model in the library reads the data as a C-contiguous float32
-    # matrix, and the time axis has to be float64: float32 cannot resolve two
-    # points a DT step apart past t = 8.4 s, which is well inside a 20 s train.
+    # Models read the data as a C-contiguous float32 matrix. Time must be
+    # float64: float32 cannot resolve two points one DT apart beyond
+    # t = 8.4 s, well within a 20 s train.
     stim = build()
     npt.assert_equal(stim.data.dtype, np.float32)
     npt.assert_equal(stim.time.dtype, np.float64)
@@ -154,8 +152,8 @@ def test_waveform_container_invariants(build, expected):
 
 
 def test_pulse_train_electrode_names():
-    # A train names the electrode it was built for, and a collection of them
-    # keeps the names it was keyed by:
+    # A train is named after its electrode, and a collection keeps its keys as
+    # names:
     npt.assert_equal(BiphasicPulseTrain(20, 50, 0.45, electrode='C3'
                                         ).electrodes, ['C3'])
     npt.assert_equal(PulseTrain(10, _fake_pulse(), n_pulses=2,
@@ -166,7 +164,7 @@ def test_pulse_train_electrode_names():
 
 
 def _encoded():
-    """The encoder cases the refactor has to reproduce exactly"""
+    """Return the amplitude-encoder cases with fixed expected values"""
     implant = ArgusII()
     rng = np.random.RandomState(0)
     img = ImageStimulus(rng.rand(60, 60).astype(np.float32))
@@ -194,7 +192,7 @@ def test_encoder_characterization(name, expected):
 
 
 def _encoded_waveforms():
-    """Frequency and optical encodings, as {name: build}"""
+    """Return frequency and optical encodings as {name: build}"""
     rng = np.random.RandomState(0)
     img = ImageStimulus(rng.rand(60, 60).astype(np.float32))
     vid = VideoStimulus(rng.rand(60, 60, 4).astype(np.float32),

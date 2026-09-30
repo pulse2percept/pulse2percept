@@ -23,7 +23,7 @@ cpdef fast_thompson2003(const float32[:, ::1] stim,
                         const uint8[:, ::1] dropout,
                         float32 radius,
                         float32 thresh_percept):
-    """Fast spatial response of the scoreboard model
+    """Fast spatial response of the Thompson 2003 model
 
     Parameters
     ----------
@@ -36,9 +36,11 @@ cpdef fast_thompson2003(const float32[:, ::1] stim,
     xgrid, ygrid : 1D float32 array
         An array of x or y coordinates at which to calculate the spatial
         response (microns)
-    rho : float32
-        The rho parameter of the scoreboard model (microns): exponential decay
-        constant for the current spread
+    dropout : 2D uint8 array
+        Nonzero entries mark electrodes dropped at each time point
+        (electrodes x time).
+    radius : float32
+        Phosphene radius (microns)
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
 

@@ -9,13 +9,13 @@ from pulse2percept.vision import Scotoma
 
 def test_Scotoma_circle():
     scotoma = Scotoma.circle(5 * dva)
-    # Complete loss inside, intact vision outside, and the rim counts as lost:
+    # Complete loss inside (rim included), intact outside:
     npt.assert_almost_equal(scotoma(0, 0), 1)
     npt.assert_almost_equal(scotoma(5, 0), 1)
     npt.assert_almost_equal(scotoma(0, -5), 1)
     npt.assert_almost_equal(scotoma(5.001, 0), 0)
     npt.assert_almost_equal(scotoma(4, 4), 0)
-    # Symmetric about the fovea, and it is a circle rather than a square:
+    # Symmetric about the fovea, and round:
     npt.assert_almost_equal(scotoma(3, 4), 1)
     npt.assert_almost_equal(scotoma(-3, -4), 1)
 
@@ -32,7 +32,7 @@ def test_Scotoma_ellipse():
     scotoma = Scotoma.ellipse(6 * dva, 2 * dva)
     npt.assert_almost_equal(scotoma(6, 0), 1)
     npt.assert_almost_equal(scotoma(0, 2), 1)
-    # A circle of radius 6 would have swallowed this, an ellipse does not:
+    # Inside a circle of radius 6, but outside this ellipse:
     npt.assert_almost_equal(scotoma(0, 3), 0)
     npt.assert_almost_equal(scotoma(4, 1.5), 0)
 
@@ -42,14 +42,13 @@ def test_Scotoma_broadcasts_over_a_grid():
     x, y = np.meshgrid(np.linspace(-10, 10, 21), np.linspace(-10, 10, 21))
     loss = scotoma(x, y)
     npt.assert_equal(loss.shape, x.shape)
-    # The mask is the disk it says it is:
     npt.assert_array_equal(loss, (x ** 2 + y ** 2 <= 25).astype(float))
-    # A scalar and a grid agree:
+    # Scalar and grid inputs agree:
     npt.assert_almost_equal(scotoma(x, y)[10, 10], scotoma(0, 0))
 
 
 def test_Scotoma_takes_a_callable():
-    """The seam a measured or graded defect arrives through"""
+    """A custom callable gives a graded scotoma"""
     scotoma = Scotoma(lambda x, y: np.clip(np.abs(x) / 10, 0, 1),
                       name='graded')
     npt.assert_almost_equal(scotoma(0, 0), 0)
@@ -59,7 +58,7 @@ def test_Scotoma_takes_a_callable():
 
 
 def test_Scotoma_rejects_a_mask_that_is_not_a_loss_fraction():
-    """0 is intact and 1 is total, so there is nothing outside [0, 1]"""
+    """Mask values outside [0, 1] or non-finite are a ValueError"""
     for bad in (lambda x, y: x * 0 + 1.5, lambda x, y: x * 0 - 0.1,
                 lambda x, y: x * 0 + np.nan):
         with pytest.raises(ValueError):
@@ -77,7 +76,7 @@ def test_Scotoma_rejects_a_radius_that_is_not_a_radius(radius):
 
 
 def test_Scotoma_is_unit_aware():
-    """dva at the boundary, plain numbers behind it"""
+    """Accepts dva Quantities or bare numbers (dva); other units fail"""
     npt.assert_almost_equal(Scotoma.circle(5 * dva)(3 * dva, 4 * dva),
                             Scotoma.circle(5)(3, 4))
     npt.assert_almost_equal(Scotoma.circle(5, center=(2, 0) * dva)(7, 0), 1)
@@ -88,7 +87,7 @@ def test_Scotoma_is_unit_aware():
 
 
 def test_Scotoma_does_not_move_with_gaze():
-    """A scotoma is eye-centered: it is asked about the visual field only"""
+    """Scotoma is eye-centered and takes no gaze argument"""
     scotoma = Scotoma.circle(5)
     npt.assert_equal(scotoma(0, 0), scotoma(0, 0))
     with pytest.raises(TypeError):
@@ -106,7 +105,7 @@ def test_Scotoma_rejects_a_non_finite_center(center):
 
 @pytest.mark.parametrize('coord', [np.nan, np.inf, -np.inf])
 def test_Scotoma_rejects_non_finite_coordinates(coord):
-    """Same trap on the way in: the mask would turn NaN into 0 loss"""
+    """Non-finite coordinates are a ValueError (the mask would return 0)"""
     scotoma = Scotoma.circle(5)
     with pytest.raises(ValueError):
         scotoma(coord, 0)
@@ -122,13 +121,13 @@ def test_Scotoma_mirror():
     right = left.mirror()
     npt.assert_almost_equal(right(-6, -3), 1)
     npt.assert_almost_equal(right(6, -3), 0)
-    # y is untouched, so a y-flip would fail here:
+    # y is not flipped:
     npt.assert_almost_equal(right(-6, 3), 0)
     npt.assert_equal('mirror' in repr(right), True)
 
 
 def test_Scotoma_mirror_an_arbitrary_mask():
-    """Any callable mirrors, not just circle/ellipse"""
+    """mirror() works for any callable mask"""
     # Graded and asymmetric in both x and y:
     def mask(x, y):
         return np.clip((x + 10) / 20, 0, 1) * np.clip((y + 5) / 10, 0, 1)

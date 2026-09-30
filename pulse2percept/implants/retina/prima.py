@@ -40,8 +40,8 @@ _HO2019_OPTICS = {'wavelength': 915, 'irradiance': 8.0, 'freq': 40,
                   'pulse_dur': 4.0}
 
 #: Representative optical stimulation in [Huang2021]_: 880 nm, 10 ms pulses at
-#: 2 Hz. Peak irradiance is the brightest of the 0.002-4.7 mW/mm^2 series that
-#: paper sweeps -- a measurement condition, not a device or safety maximum.
+#: 2 Hz. Irradiance is the top of the paper's 0.002-4.7 mW/mm^2 sweep (a
+#: measurement condition, not a device or safety maximum).
 _HUANG2021_OPTICS = {'wavelength': 880, 'irradiance': 4.7, 'freq': 2,
                      'pulse_dur': 10.0}
 
@@ -131,8 +131,8 @@ _HO2019_VARIANTS = {
     55: {'elec_radius': 7, 'n_pixels': 250,
          'shape': _axial_mask_shape(_HO2019_F55_AXIAL_SPANS),
          'spans': _HO2019_F55_AXIAL_SPANS},
-    # Smallest grid that holds the 502 nearest sites without the trim having
-    # to split a ring of equidistant ones:
+    # Smallest grid holding the 502 nearest sites without splitting a ring of
+    # equidistant sites:
     40: {'elec_radius': 5, 'n_pixels': 502, 'shape': (26, 27), 'spans': None},
 }
 
@@ -202,7 +202,7 @@ def _plot_substrate(ax, rot, radius=None, side=None, center=(0, 0)):
     style = {'fc': (0.92, 0.92, 0.92, 1), 'ec': (0.6, 0.6, 0.6, 1),
              'lw': 1, 'zorder': ZORDER['background']}
     if radius is not None:
-        # A disc is its own rotation, so `rot` does not enter here:
+        # A disc is rotation invariant:
         patch = Circle(center, radius=radius, **style)
     else:
         th = np.radians(rot) + np.radians(45 + 90 * np.arange(4))
@@ -303,7 +303,7 @@ class _PhotovoltaicRetinalImplant(RetinalImplant):
     stimulus_unit = mW / mm ** 2
 
     def _require_physical_light(self, stim):
-        """Reject negative or nonfinite irradiance."""
+        """Raise ValueError for negative or nonfinite irradiance."""
         if stim.unit.dimension != self.stimulus_unit.dimension:
             return
         schedule = _optical(stim)
@@ -321,7 +321,7 @@ class _PhotovoltaicRetinalImplant(RetinalImplant):
                 f"(got {values.min():.3f} mW/mm^2); a dark pixel is zero.")
 
     def _check_optical_safe_mode(self, stim):
-        """Reject ``safe_mode`` where no optical envelope is published."""
+        """Raise NotImplementedError (no published optical envelope)."""
         raise NotImplementedError(
             f"'safe_mode' is not available for {type(self).__name__}: no "
             f"optical operating envelope has been published for this array, "
@@ -331,10 +331,9 @@ class _PhotovoltaicRetinalImplant(RetinalImplant):
     def check_stim(self, stim):
         """Require finite, non-negative irradiance.
 
-        Charge balance does not apply to light and is not checked. With
-        ``safe_mode``, a subclass may additionally check its own documented
-        optical operating envelope; arrays without one reject ``safe_mode``
-        rather than borrow another device's limits.
+        Charge balance is not checked. With ``safe_mode``, subclasses check
+        their documented optical operating envelope; arrays without one raise
+        NotImplementedError.
 
         .. versionadded:: 0.11.0
         """
@@ -342,7 +341,7 @@ class _PhotovoltaicRetinalImplant(RetinalImplant):
         if self.safe_mode:
             self._check_optical_safe_mode(stim)
         if self.max_current is not None:
-            # The inherited current-limit check rejects optical units.
+            # Raises DimensionMismatchError for optical units:
             self._require_within_current_limit(stim)
 
 
@@ -371,10 +370,9 @@ class PRIMAPivotal(_PhotovoltaicRetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 378 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 378 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -404,9 +402,9 @@ class PRIMAPivotal(_PhotovoltaicRetinalImplant):
     *  :py:meth:`~pulse2percept.implants.Implant.prepare_stim`
        returns optical irradiance (``mW/mm^2``). Photovoltaic conversion is not
        modeled.
-    *  Gray levels map linearly onto the projector's 0.7 ms duration grid.
-       The clinical camera-to-pulse-duration transfer function is not
-       published, so that mapping is a pulse2percept convention.
+    *  Gray levels map linearly onto the projector's 0.7 ms duration grid
+       (a pulse2percept convention; the clinical transfer function is not
+       published).
     """
     # Frozen class: User cannot add more class attributes
     __slots__ = ('shape', 'spacing', 'pixel_width', 'gap')
@@ -425,13 +423,11 @@ class PRIMAPivotal(_PhotovoltaicRetinalImplant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
-        # Do not share mutable encoder state between implant instances.
+        # New encoder per instance (encoders hold mutable state):
         self.encoder = (PRIMAEncoder() if encoder is _DEVICE_DEFAULT
                         else encoder)
 
-        # Normalized here rather than in ElectrodeGrid, because a
-        # per-electrode list of heights never reaches the grid at all -- it is
-        # written onto the electrodes further down:
+        # Convert here, since a per-electrode z list bypasses ElectrodeGrid:
         z = as_value(z, um, 'z')
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
@@ -472,13 +468,12 @@ class PRIMAPivotal(_PhotovoltaicRetinalImplant):
                 f"irradiance first.")
         schedule = _optical(stim)
         if schedule is None:
-            # Duty cycle requires the projector schedule, not waveform samples.
+            # Duty cycle requires the projector schedule:
             raise ValueError(
                 "Safety check: stimulus no longer carries a projector "
                 "schedule, so its duty cycle cannot be verified. Build it "
                 "with a PRIMAEncoder, or set safe_mode=False.")
-        # The projector is an 880 nm system; photovoltaic pixel response is
-        # wavelength dependent, so another wavelength is another device.
+        # 880 nm projector; pixel response is wavelength dependent:
         if abs(schedule.wavelength - PRIMAEncoder.projector_wavelength) > 1e-9:
             raise ValueError(
                 f"Safety check: the projector illuminates at "
@@ -554,10 +549,9 @@ class Lorach2015Array(_PhotovoltaicRetinalImplant):
     Parameters
     ----------
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of 142 entries gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or a list of 142 entries. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -567,8 +561,8 @@ class Lorach2015Array(_PhotovoltaicRetinalImplant):
     safe_mode : bool, optional
         Not supported: no optical operating envelope has been published for
         this array, and the PRIMA projector limits are specific to
-        :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`. ``True``
-        raises when a stimulus is checked.
+        :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`. If True,
+        checking a stimulus raises NotImplementedError.
 
         .. versionchanged:: 0.11.0
             No longer applies the PRIMA projector envelope to this array.
@@ -588,9 +582,8 @@ class Lorach2015Array(_PhotovoltaicRetinalImplant):
        not modeled.
     *  The default encoder reproduces the 915 nm, 4 mW/mm^2, 4 ms, 40 Hz
        illumination of the [Lorach2015]_ grating experiments. Gray levels set
-       ON duration linearly, which is a pulse2percept simulation convention:
-       the paper does not specify a natural-image grayscale transfer
-       function.
+       ON duration linearly (a pulse2percept convention; the paper specifies
+       no grayscale transfer function).
     *  [Lorach2015]_ reports the 65 um row spacing as the "pixel pitch".
     *  Seven rim pixels extend beyond the nominal 1 mm substrate and are clipped
        when plotted.
@@ -611,13 +604,11 @@ class Lorach2015Array(_PhotovoltaicRetinalImplant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
-        # Do not share mutable encoder state between implant instances.
+        # New encoder per instance (encoders hold mutable state):
         self.encoder = (PhotovoltaicEncoder(**_LORACH2015_OPTICS)
                         if encoder is _DEVICE_DEFAULT else encoder)
 
-        # Normalized here rather than in ElectrodeGrid, because a
-        # per-electrode list of heights never reaches the grid at all -- it is
-        # written onto the electrodes further down:
+        # Convert here, since a per-electrode z list bypasses ElectrodeGrid:
         z = as_value(z, um, 'z')
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
@@ -695,10 +686,9 @@ class Ho2019FlatArray(_PhotovoltaicRetinalImplant):
     pixel_size : {55, 40}
         Pixel width (um), which selects the device variant.
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of them gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or one entry per electrode. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -720,8 +710,8 @@ class Ho2019FlatArray(_PhotovoltaicRetinalImplant):
        not modeled.
     *  The default encoder reproduces the 915 nm, 8 mW/mm^2, 4 ms, 40 Hz
        illumination of the [Ho2019]_ grating experiments. Gray levels set ON
-       duration linearly, which is a pulse2percept simulation convention: the
-       paper does not specify a natural-image grayscale transfer function.
+       duration linearly (a pulse2percept convention; the paper specifies no
+       grayscale transfer function).
     *  [Ho2019]_ also describes pillar arrays Pil55 and Pil40, which are not
        modeled here.
     *  The F55 layout is reconstructed from Fig. 2(a). The F40 outline is not
@@ -747,13 +737,11 @@ class Ho2019FlatArray(_PhotovoltaicRetinalImplant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
-        # Do not share mutable encoder state between implant instances.
+        # New encoder per instance (encoders hold mutable state):
         self.encoder = (PhotovoltaicEncoder(**_HO2019_OPTICS)
                         if encoder is _DEVICE_DEFAULT else encoder)
 
-        # Normalized here rather than in ElectrodeGrid, because a
-        # per-electrode list of heights never reaches the grid at all -- it is
-        # written onto the electrodes further down:
+        # Convert here, since a per-electrode z list bypasses ElectrodeGrid:
         z = as_value(z, um, 'z')
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))
@@ -825,10 +813,9 @@ class Huang2021Array(_PhotovoltaicRetinalImplant):
     pixel_size : {55, 40, 30, 20}
         Pixel width (um), which selects the device variant.
     z : float, list, or Quantity, optional
-        Electrode height (um) above the array's own plane: a scalar
-        applies to every electrode, a list of them gives each its own.
-        May be given as unitful quantities (e.g. ``z=100 * um``); see
-        :py:mod:`pulse2percept.units`.
+        Electrode height (um) above the array plane: a scalar for all
+        electrodes, or one entry per electrode. Accepts quantities (e.g.,
+        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional
@@ -838,8 +825,8 @@ class Huang2021Array(_PhotovoltaicRetinalImplant):
     safe_mode : bool, optional
         Not supported: no optical operating envelope has been published for
         this array, and the PRIMA projector limits are specific to
-        :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`. ``True``
-        raises when a stimulus is checked.
+        :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`. If True,
+        checking a stimulus raises NotImplementedError.
 
         .. versionchanged:: 0.11.0
             No longer applies the PRIMA projector envelope to this array.
@@ -889,13 +876,11 @@ class Huang2021Array(_PhotovoltaicRetinalImplant):
         self.eye = eye
         self.preprocess = preprocess
         self.safe_mode = safe_mode
-        # Do not share mutable encoder state between implant instances.
+        # New encoder per instance (encoders hold mutable state):
         self.encoder = (PhotovoltaicEncoder(**_HUANG2021_OPTICS)
                         if encoder is _DEVICE_DEFAULT else encoder)
 
-        # Normalized here rather than in ElectrodeGrid, because a
-        # per-electrode list of heights never reaches the grid at all -- it is
-        # written onto the electrodes further down:
+        # Convert here, since a per-electrode z list bypasses ElectrodeGrid:
         z = as_value(z, um, 'z')
         # Assign per-electrode z values after trimming:
         overwrite_z = isinstance(z, (list, np.ndarray))

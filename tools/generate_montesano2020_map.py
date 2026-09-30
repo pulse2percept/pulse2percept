@@ -28,13 +28,11 @@ Expected SHA256::
     b29a3eb50fb1bd56742b86e87a9f585488baf94ec8646993b762a91149734c2e
 
 The source file is not redistributed because no data-use license is stated.
-The hash is checked so that regenerating the packaged field uses the same
-audited input.
+The hash check requires the same audited input for regeneration.
 
 The original Montesano implementation was provided as a Shiny app at
-relayer.online/drasdo, which is no longer available. This script is therefore
-an independent reconstruction from the paper rather than a port of the
-authors' code.
+relayer.online/drasdo, which is no longer available. This script is an
+independent reconstruction from the paper, not a port of the authors' code.
 
 Coordinate conventions
 ----------------------
@@ -96,7 +94,7 @@ from Figure 4A.
 
 Known model features
 --------------------
-These features are preserved intentionally:
+These features are kept on purpose:
 
 * On the nasal meridian, the displacement-zone radius ``rDZ = 4.034 mm``
   extends slightly beyond the optic nerve head centre. The Curcio data contain
@@ -134,7 +132,7 @@ MM_PER_DEG_COLAT = 2 * np.pi * R0_MM / 360.0      # co-latitude deg -> mm
 R_RETINA = 11.459                    # retinal sphere radius (mm)
 C_RETINA = 12.381                    # retinal sphere centre (mm from cornea)
 R_CORNEA = 7.800                     # corneal apical radius of curvature (mm)
-K_CORNEA = -0.500                    # corneal conic constant; see ambiguity 1
+K_CORNEA = -0.500                    # corneal conic constant; see Implementation choices
 Z_LENS_ANT, R_LENS_ANT = 3.600, 10.000
 Z_LENS_POST, R_LENS_POST = 7.375, -6.000
 N_AIR, N_AQUEOUS, N_LENS = 1.0, 1.336, 1.430
@@ -194,7 +192,7 @@ def sample_meridian(interp, lon_deg, r_mm):
     """Density along one left-eye source longitude, clipped at zero."""
     th = np.deg2rad(lon_deg)
     dens = interp(r_mm * np.cos(th), r_mm * np.sin(th))
-    dens = np.maximum(dens, 0.0)     # cubic overshoot; see ambiguity 2
+    dens = np.maximum(dens, 0.0)     # cubic overshoot; see Implementation choices
     dens[0] = 0.0                    # no somas at the foveal centre
     return dens
 
@@ -408,7 +406,7 @@ class MeridianFit:
     def fit(self, bracket=E2V_BRACKET):
         # Eq. 3 has a pole where the two squared terms cancel. With Rv > Ro and
         # E2v below ~48 the denominator stays positive out to 20 deg, well past
-        # the displacement zone; guard rather than assume.
+        # the displacement zone; check anyway:
         e_max = self.e_deg.max()
         for e2v in bracket:
             den = ((RV * (1 + e_max / e2v)) ** 2 -
@@ -487,8 +485,8 @@ def resample(eye, r_mm, r_soma_mm):
 # ===========================================================================
 # Validation
 # ===========================================================================
-# Anchors from the audit of the fine (0.05 deg x 1 um) reconstruction. These
-# guard against orientation, unit and model regressions; the full figure and
+# Anchors from the audit of the fine (0.05 deg x 1 um) reconstruction. They
+# catch orientation, unit and model regressions; the full figure and
 # count-conservation audit is not repeated here.
 CARDINALS = (('nasal', 0.0), ('superior', 90.0), ('temporal', 180.0),
              ('inferior', 270.0))
@@ -497,7 +495,7 @@ E2V_EXPECTED = {'nasal': 2.18552, 'superior': 1.84865,
 ZONE_EXPECTED = {'nasal': 9.54, 'superior': 14.10,
                  'temporal': 14.10, 'inferior': 10.52}
 # The two first-crossing discontinuities (visible in Fig. 4B); angular jumps
-# here are model content, not regressions.
+# there are expected:
 DISCONTINUITY_DEG = (11.05, 354.4)
 
 
@@ -537,12 +535,11 @@ def validate(angles, nodes, table, field, eye):
           % (steps.min(), disp.min(), disp.max()))
 
     print('  angular continuity')
-    # A first difference between adjacent meridians measures the field's own
-    # angular gradient, which legitimately reaches 0.014 deg per 0.25 deg step
-    # in the outer displacement zone (e.g. the smooth 25-35 deg sector, where
-    # E2v and the crossing radius are constant). A second difference stays
-    # small under a steep but smooth gradient and spikes at a true jump, so
-    # that is what gates here.
+    # First differences between adjacent meridians reach 0.014 deg per 0.25 deg
+    # step in the smooth outer displacement zone (e.g., the 25-35 deg sector,
+    # where E2v and the crossing radius are constant). Second differences stay
+    # small under a steep smooth gradient and spike at a true jump, so they
+    # are the pass/fail criterion:
     n = len(angles)
     prev, nxt = np.roll(table, 1, axis=0), np.roll(table, -1, axis=0)
     curv = np.abs(prev - 2.0 * table + nxt).max(axis=1)
@@ -623,10 +620,10 @@ def validate(angles, nodes, table, field, eye):
 def save_npz(path, **arrays):
     """Write a savez_compressed-compatible archive with fixed timestamps.
 
-    ``np.savez_compressed`` stamps each member with the current time, so two
-    runs produce different bytes. Normalising the timestamps makes the artifact
-    byte-reproducible and its SHA256 a usable provenance record. Only numeric
-    and string arrays are stored, so the result loads with allow_pickle=False.
+    ``np.savez_compressed`` stamps each member with the current time. Fixed
+    timestamps make the file byte-reproducible, so its SHA256 is a provenance
+    record. Only numeric and string arrays are stored, so the result loads with
+    allow_pickle=False.
     """
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as zf:
         for name, arr in arrays.items():

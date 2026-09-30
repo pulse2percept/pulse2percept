@@ -18,15 +18,11 @@ from ...topography.cortex import Polimeni2006Map
 
 
 def _pulse_train_clocks(stim):
-    """``{electrode: (freq, phase_dur)}`` where the stimulus is pulse trains
+    """Return ``{electrode: (freq, phase_dur)}`` for pulse-train stimuli
 
-    Read off the trains the stimulus is made of. ``None`` when it is not made
-    of them, in which case this model simulates on its own default clock, as
-    it always has.
-
-    Has to be asked *before* the stimulus is compressed: compression installs
-    a new waveform, and that is exactly what says the trains no longer
-    describe it.
+    Returns None unless the stimulus consists of BiphasicPulseTrains; the
+    model then uses its default ``freq`` and ``p_dur``. Call before
+    compression, which replaces the pulse trains with a waveform.
     """
     sources = stim._structured_sources()
     if sources is None:
@@ -36,10 +32,9 @@ def _pulse_train_clocks(stim):
     return {str(e): (src.freq, src.phase_dur) for e, src in sources}
 
 
-#: Amperes in a microamp (1e-6). The activation cascade below is the published
-#: one, which is written in SI units, while a p2p stimulus is in microamps.
-#: Spelled out here at module scope because ``A`` names the activation array
-#: inside ``_predict_percept``.
+#: Amperes per microamp (1e-6). The published activation cascade uses SI
+#: units; p2p stimuli are in uA. Defined at module scope because ``A`` is the
+#: activation array in ``_predict_percept``.
 _A_PER_UA = Quantity(1, uA).to_value(A)
 
 
@@ -192,9 +187,7 @@ class DynaphosModel(BaseModel):
     def implant(self):
         """The prosthesis system this model predicts percepts for
 
-        Model context rather than trial input: named once, and
-        :py:meth:`predict_percept` is then given the stimulus. Rebinding
-        invalidates the build.
+        Rebinding invalidates the build.
 
         .. versionadded:: 0.11.0
         """
@@ -261,12 +254,8 @@ class DynaphosModel(BaseModel):
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in
 
-        This model's equations mix units: they take microamps, milliseconds
-        and hertz as input, and the published cascade they implement is
-        written in SI (seconds and amperes). What is declared here is the
-        *input* contract -- the units a caller supplies, which are the ones
-        the docstring documents. ``_predict_percept`` converts them to SI once
-        before its loop; see the conversion block there.
+        These are input units (uA, ms, Hz). The published cascade uses SI
+        (s, A); ``_predict_percept`` converts once before its loop.
         """
         return {
             **super().get_param_units(),
@@ -277,7 +266,7 @@ class DynaphosModel(BaseModel):
             'implant_depth': um,
             'location_noise': dva,
             'dt': ms,
-            # Decay constants, both converted to seconds where they are used:
+            # Decay constants, converted to seconds in `_predict_percept`:
             'tau_act': ms,
             'tau_trace': ms,
             'rheobase': uA,
@@ -302,18 +291,16 @@ class DynaphosModel(BaseModel):
         Parameters
         ----------
         build_params: additional parameters to set
-            You can overwrite parameters that are listed in
-            ``get_default_params``. Trying to add new class attributes outside
-            of that will cause a ``FreezeError``.
-            Example: ``model.build(param1=val)``
+            Parameters listed in ``get_default_params``, e.g.
+            ``model.build(param1=val)``. Other names raise ``FreezeError``.
 
         """
         # import at runtime to avoid circular import
         from ...topography import Grid2D
         # See `BaseModel.build`:
         self.set_params(**build_params)
-        # check that freq/pdur fit. `freq` counts cycles per second, and every
-        # duration in this model is in milliseconds:
+        # Check that the pulse fits into one period (`freq` in Hz, durations
+        # in ms):
         window_dur = MS_PER_S / self.freq
         if self.p_dur*2 > window_dur:
             raise ValueError(f"Pulse (dur={self.p_dur*2:.2f} ms) does not fit into "
@@ -325,7 +312,7 @@ class DynaphosModel(BaseModel):
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
         if _location_noise_sigma(self) is not None:
-            # Draw once so the first stimulus does not determine the subject.
+            # Draw offsets at build time, independent of the first stimulus:
             _latent_offsets(self)
         self._build()
         self._is_built = True
@@ -387,10 +374,8 @@ class DynaphosModel(BaseModel):
         n_time = len(t_percept)
         idx_percept = np.uint32(np.round(t_percept / self.dt))
 
-        # The model's own clock, unless the stimulus brought one per
-        # electrode. `clocks` is keyed by name because compression drops the
-        # electrodes that are driven at zero, and these have to line up with
-        # the ones that survived:
+        # Use per-electrode pulse clocks if available, else model defaults.
+        # Keyed by name because compression drops zero-driven electrodes:
         freq = self.freq
         p_dur = self.p_dur
         if clocks is not None:
@@ -422,19 +407,15 @@ class DynaphosModel(BaseModel):
         bright = np.zeros((n_space,n_time), dtype=np.float32)
 
         n_percept = len(idx_percept)
-        # Across the numerical boundary: microamps and milliseconds for
-        # this model, whatever the stimulus happens to store:
+        # Convert to uA and ms, whatever the stimulus units:
         stim_data = self._stim_values(stim)
         stim_time = self._stim_times(stim)
         n_stim = len(stim_time)
         n_sim = idx_percept[n_percept - 1] + 1 # no negative indices
         stim_idx = 0
         frame_idx = 0
-        # The cascade below is the published one, which is written in SI
-        # units, while this model is handed milliseconds and microamps.
-        # Convert the durations once, here, so that the loop is plain floats
-        # and no factor of a thousand is left implicit inside it (see
-        # `_A_PER_UA` for the current):
+        # The published cascade uses SI units; convert durations to seconds
+        # once (see `_A_PER_UA` for current):
         p_dur_s = p_dur / MS_PER_S
         tau_trace_s = tau_trace / MS_PER_S
         tau_act_s = self.tau_act / MS_PER_S
@@ -505,8 +486,7 @@ class DynaphosModel(BaseModel):
             What is presented to the device; see
             :py:meth:`~pulse2percept.implants.Implant.prepare_stim`.
         t_percept: float or list of floats, optional
-            The time points at which to output a percept (ms). This
-            model's numerical contract is fixed to milliseconds.
+            The time points at which to output a percept (ms).
             If None, the prepared stimulus' own time points are used.
             May be given as a unitful quantity (e.g. ``[0, 20] * ms``);
             see :py:mod:`pulse2percept.units`.
@@ -535,25 +515,14 @@ class DynaphosModel(BaseModel):
                              f"have a time component.")
         # Make sure we don't change the user's Stimulus object:
         stim = deepcopy(prepared)
-        # The pulse clock is a question about what the stimulus is made of,
-        # and compressing it answers "samples, and nothing else". So ask
-        # first; the waveform below is what the time evolution runs on:
+        # Read pulse clocks before compression replaces the pulse trains:
         clocks = _pulse_train_clocks(stim)
         # Make sure to operate on the compressed stim:
         if not stim.is_compressed:
             stim.compress()
         if t_percept is None:
-            # If no time vector is given, output at the frame rate determined
-            # by self.dt. We start at zero and stop at the last `dt` boundary
-            # the stimulus reaches, including its end when that lands exactly
-            # on one; `nextafter` is what makes `arange`'s half-open end
-            # behave that way. The `+ 1` it replaces was one *millisecond* of
-            # slack, which overshot the end of the stimulus whenever `dt` was
-            # finer than that, and would not have survived a model counting in
-            # anything but milliseconds. The floor at `dt` is the one case
-            # that still reports past the end: a stimulus shorter than a
-            # single step gets that step anyway, so that there is a percept to
-            # look at. Name `t_percept` to ask for other instants.
+            # Output every `dt` from 0 to the stimulus end, inclusive
+            # (`nextafter`). A stimulus shorter than `dt` still gets one step:
             end = np.maximum(self.dt, self._stim_times(stim)[-1])
             t_percept = np.arange(0, np.nextafter(end, np.inf), self.dt)
         t_percept = np.sort([t_percept]).flatten()
@@ -590,8 +559,8 @@ class DynaphosModel(BaseModel):
             * 'hull': Show the convex hull of the grid (that is, the outline of
               the smallest convex set that contains all grid points).
             * 'scatter': Scatter plot all grid points
-            * 'cell': Show the outline of each grid cell as a polygon. Note that
-              this can be costly for a high-resolution grid.
+            * 'cell': Show the outline of each grid cell as a polygon. Costly
+              for a high-resolution grid.
               
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant

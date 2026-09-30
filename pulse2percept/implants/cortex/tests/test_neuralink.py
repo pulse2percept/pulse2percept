@@ -19,18 +19,17 @@ from pulse2percept.topography.retina import Curcio1990Map, Watson2014Map
 
 
 class StubNeuropythyMap(NeuropythyMap):
-    """A NeuropythyMap whose dva -> cortex mapping is a simple known formula.
+    """NeuropythyMap stub with a simple dva -> cortex mapping
 
-    ``NeuropythyMap.__init__`` needs the optional ``neuropythy`` package plus a
-    FreeSurfer subject download, so the real thing is only exercised by the
-    ``slow`` tests in ``topography/tests/test_neuropythy.py``. Since
-    ``Neuralink.from_neuropythy`` only ever calls ``from_dva()[region]``, a stub
-    that implements that one mapping runs the whole factory method for free.
+    ``NeuropythyMap.__init__`` requires ``neuropythy`` and a FreeSurfer subject
+    download (tested in the ``slow`` tests of
+    ``topography/tests/test_neuropythy.py``). ``Neuralink.from_neuropythy``
+    only calls ``from_dva()[region]``, so this stub implements only that
+    mapping.
 
-    1 dva maps to 1 mm of cortex, and the cortical surface normal at ``(x, y)``
-    points along ``(x, y, -10)``, so that every thread gets its own insertion
-    direction. Locations at or beyond ``max_ecc`` are off the map and come back
-    as NaN, the way neuropythy reports points it cannot address.
+    1 dva maps to 1 mm of cortex, and the surface normal at ``(x, y)`` points
+    along ``(x, y, -10)``, so every thread has a different insertion direction.
+    Locations at or beyond ``max_ecc`` return NaN, as in neuropythy.
     """
     # Eccentricity (dva) at which the stub map ends:
     max_ecc = 4.0
@@ -70,11 +69,9 @@ class StubNeuropythyMap(NeuropythyMap):
 
 
 def stub_map_expected(locs, region='v1'):
-    """Locations and insertion directions the stub map implies for ``locs``
+    """Returns the stub map's insertion points and unit directions for ``locs``
 
-    Returns the (x, y, z) insertion points and unit insertion directions of the
-    threads that ``Neuralink.from_neuropythy`` should build, with the off-map
-    locations already dropped.
+    Off-map locations are dropped, as in ``Neuralink.from_neuropythy``.
     """
     locs = np.asarray(locs, dtype=float)
     locs = locs[np.hypot(locs[:, 0], locs[:, 1]) < StubNeuropythyMap.max_ecc]
@@ -86,7 +83,7 @@ def stub_map_expected(locs, region='v1'):
 
 
 def excel_names(n):
-    """The first ``n`` names in the A, B, ..., Z, AA, AB, ... sequence"""
+    """Returns the first ``n`` names of A, B, ..., Z, AA, AB, ..."""
     names = list(ascii_uppercase)
     for first in ascii_uppercase:
         names += [first + second for second in ascii_uppercase]
@@ -94,7 +91,7 @@ def excel_names(n):
 
 
 def angle_between(u, v):
-    """Angle (degrees) between two unit vectors"""
+    """Returns the angle (deg) between two unit vectors"""
     return np.degrees(np.arccos(np.clip(np.dot(u, v), -1, 1)))
 
 
@@ -124,7 +121,7 @@ def test_EllipsoidElectrode_defaults():
     npt.assert_almost_equal((electrode.rx, electrode.ry, electrode.rz),
                             (7, 7, 12))
     npt.assert_equal(electrode.activated, True)
-    # Defaults to pointing along +z, i.e. no rotation at all:
+    # Defaults to +z (no rotation):
     npt.assert_almost_equal(electrode.direction, [0, 0, 1])
     npt.assert_almost_equal(electrode.angles, [0, 0, 0])
     npt.assert_almost_equal(electrode.rot, np.eye(3))
@@ -198,7 +195,7 @@ def test_LinearEdgeThread():
     npt.assert_almost_equal(thread.y, 0)
     npt.assert_almost_equal(thread.z, 0)
 
-    # elecs arent actually at this spot, but are on the edge, a few microns off
+    # Electrodes are on the thread edge, a few um off from this spot:
     zs = []
     for e in thread.electrode_objects:
         npt.assert_almost_equal(e.x, thread.radius + 7 // 2)
@@ -237,7 +234,7 @@ def test_LinearEdgeThread_defaults():
     npt.assert_equal(thread.electrode, EllipsoidElectrode)
     npt.assert_equal(thread.safe_mode, False)
     npt.assert_equal(thread.preprocess, False)
-    # The thread also sticks out of the cortex, for visualization:
+    # The thread extends above the cortex, for visualization:
     npt.assert_almost_equal(thread.extracortical_depth, 1000)
     npt.assert_almost_equal(thread.thread_length,
                             32 * 50 + 1000 + 0)
@@ -254,7 +251,7 @@ def test_LinearEdgeThread_geometry():
     npt.assert_almost_equal(thread.thread_length, 4 * 25 + 1000 + 100)
     npt.assert_equal(thread.n_electrodes, 4)
     # Default orientation is +z, so electrodes start `insertion_depth` below
-    # the insertion point and are offset onto the edge of the thread:
+    # the insertion point, offset onto the thread edge:
     edge_offset = 8 + 7 // 2
     for i, e in enumerate(thread.electrode_objects):
         npt.assert_almost_equal(e.x, 10 + edge_offset)
@@ -272,7 +269,7 @@ def test_LinearEdgeThread_custom_electrode():
     for e in thread.electrode_objects:
         npt.assert_equal(isinstance(e, BigEllipsoid), True)
         npt.assert_almost_equal((e.rx, e.ry, e.rz), (20, 21, 22))
-        # The thread still hands the electrodes its own orientation:
+        # Electrodes use the thread's orientation:
         npt.assert_almost_equal(e.rot, thread.rot)
 
 
@@ -293,7 +290,7 @@ def test_LinearEdgeThread_pprint():
     npt.assert_equal(params['radius'], 8)
     npt.assert_equal(params['n_elecs'], 4)
     npt.assert_equal(params['spacing'], 25)
-    # The thread radius is spelled out; the old `r` is gone:
+    # The parameter is `radius`; `r` was removed:
     npt.assert_equal(hasattr(thread, 'r'), False)
     with pytest.raises(TypeError):
         LinearEdgeThread(1, 2, 3, r=8)
@@ -307,7 +304,7 @@ def test_Neuralink():
     t2 = LinearEdgeThread(500, 500, orient=[0, 1, 0])
     nlink = Neuralink([t1, t2])
 
-    # check that positions are the same
+    # Check that positions are the same:
     npt.assert_equal(nlink['0-1'].x, t1['1'].x)
     npt.assert_equal(nlink['0-1'].y, t1['1'].y)
     npt.assert_equal(nlink['1-1'].x, t2['1'].x)
@@ -325,7 +322,7 @@ def test_Neuralink_from_dict():
 
 def test_Neuralink_requires_threads():
     thread = LinearEdgeThread(n_elecs=2)
-    # Neither a list nor a dict may hold anything but NeuralinkThreads:
+    # A list or dict may hold only NeuralinkThreads:
     with pytest.raises(TypeError):
         Neuralink([thread, NeuroPortArray()])
     with pytest.raises(TypeError):
@@ -362,7 +359,7 @@ def _ax3d():
 ])
 def test_plot3d(make_obj):
     obj = make_obj()
-    # The method is spelled `plot3d`; the old `plot3D` is gone:
+    # The method is `plot3d`; `plot3D` was removed:
     npt.assert_equal(hasattr(obj, 'plot3D'), False)
 
     # Plots onto a given 3D axis:
@@ -374,7 +371,7 @@ def test_plot3d(make_obj):
     plt.close('all')
     npt.assert_equal(obj.plot3d() is not None, True)
 
-    # ... and honors `figsize` when it does:
+    # and uses `figsize`:
     plt.close('all')
     ax = obj.plot3d(figsize=(8, 6))
     npt.assert_almost_equal(ax.figure.get_size_inches(), (8, 6))
@@ -396,7 +393,7 @@ def test_plot3d(make_obj):
                  id='Neuralink'),
 ])
 def test_plot3d_reuses_existing_3d_axis(make_obj):
-    # An existing 3D axis is drawn onto rather than replaced:
+    # Draws onto an existing 3D axis:
     plt.close('all')
     ax = _ax3d()
     npt.assert_equal(make_obj().plot3d() is ax, True)
@@ -404,12 +401,12 @@ def test_plot3d_reuses_existing_3d_axis(make_obj):
 
 
 def test_plot3d_surfaces():
-    # The thread draws its own shaft plus one surface per electrode:
+    # A thread draws its shaft plus one surface per electrode:
     plt.close('all')
     ax = LinearEdgeThread(n_elecs=3).plot3d()
     npt.assert_equal(len(ax.collections), 4)
 
-    # ... and the implant draws every thread:
+    # The implant draws every thread:
     plt.close('all')
     ax = Neuralink([LinearEdgeThread(n_elecs=3),
                     LinearEdgeThread(500, 0, 0, n_elecs=3)]).plot3d()
@@ -418,8 +415,8 @@ def test_plot3d_surfaces():
 
 
 def test_Neuralink_from_neuropythy_requires_neuropythy_map():
-    # The visual_field_map must be a NeuropythyMap; this guard runs before any
-    # dataset is touched, so it is testable without neuropythy installed:
+    # The visual_field_map must be a NeuropythyMap; this is checked before any
+    # dataset is loaded, so it runs without neuropythy:
     from pulse2percept.topography.retina import Watson2014Map
     with pytest.raises(TypeError):
         Neuralink.from_neuropythy(Watson2014Map())
@@ -428,7 +425,7 @@ def test_Neuralink_from_neuropythy_requires_neuropythy_map():
 
 
 def test_Neuralink_from_neuropythy_locs():
-    # The last location is off the map and must be dropped:
+    # The last location is off the map and is dropped:
     locs = np.array([[1., 2.], [-2., 1.], [0., 0.], [3.5, 3.5]])
     nlink = Neuralink.from_neuropythy(StubNeuropythyMap(), locs=locs)
 
@@ -441,7 +438,7 @@ def test_Neuralink_from_neuropythy_locs():
         npt.assert_almost_equal((thread.x, thread.y, thread.z), point)
         # Threads are inserted perpendicular to the cortical surface:
         npt.assert_almost_equal(thread.direction, direction)
-    # The electrodes of all threads end up in one array:
+    # The electrodes of all threads are in one array:
     npt.assert_equal(nlink.n_electrodes, 3 * 32)
 
 
@@ -455,7 +452,7 @@ def test_Neuralink_from_neuropythy_default_grid():
     points, directions = stub_map_expected(locs)
 
     npt.assert_equal(len(nlink.implants), len(points))
-    # More than 26 threads, so the names wrap around to AA, AB, ...:
+    # More than 26 threads, so names continue with AA, AB, ...:
     npt.assert_equal(len(points) > 26, True)
     npt.assert_equal(list(nlink.implants.keys()), excel_names(len(points)))
     for thread, point, direction in zip(nlink.implants.values(), points,
@@ -477,8 +474,8 @@ def test_Neuralink_from_neuropythy_grid_args():
 
 @pytest.mark.parametrize('region', ['v1', 'v2', 'v3'])
 def test_Neuralink_from_neuropythy_region(region):
-    # Each region is a differently offset copy of the same map, so the threads
-    # land somewhere else depending on which one is asked for:
+    # Each region is a differently offset copy of the same map, so thread
+    # positions depend on the region:
     locs = np.array([[1., 1.], [-1., 2.]])
     nlink = Neuralink.from_neuropythy(
         StubNeuropythyMap(regions=['v1', 'v2', 'v3']), locs=locs, region=region)
@@ -488,7 +485,7 @@ def test_Neuralink_from_neuropythy_region(region):
 
 
 def test_Neuralink_from_neuropythy_unmapped_region():
-    # A region the map was not built for is not silently ignored:
+    # An unknown region gives a KeyError:
     locs = np.array([[1., 1.], [-1., 2.]])
     with pytest.raises(KeyError):
         Neuralink.from_neuropythy(StubNeuropythyMap(), locs=locs, region='v2')
@@ -516,15 +513,15 @@ def test_Neuralink_from_neuropythy_rand_insertion_angle():
                                       rand_insertion_angle=20)
     offsets = [angle_between(t.direction, d)
                for t, d in zip(nlink.implants.values(), perpendicular)]
-    # Every thread is tilted, but never by more than the requested angle:
+    # Every thread is tilted, by at most the requested angle:
     npt.assert_equal(np.all(np.less_equal(offsets, 20)), True)
     npt.assert_equal(np.all(np.greater(offsets, 0)), True)
-    # Insertion points are unaffected by the tilt:
+    # Insertion points do not depend on the tilt:
     points, _ = stub_map_expected(locs)
     npt.assert_almost_equal([[t.x, t.y, t.z] for t in nlink.implants.values()],
                             points)
 
-    # An angle of 0 leaves the threads perpendicular:
+    # An angle of 0 gives perpendicular threads:
     nlink = Neuralink.from_neuropythy(StubNeuropythyMap(), locs=locs,
                                       rand_insertion_angle=0)
     npt.assert_almost_equal([t.direction for t in nlink.implants.values()],
@@ -532,12 +529,11 @@ def test_Neuralink_from_neuropythy_rand_insertion_angle():
 
 
 def test_Neuralink_from_neuropythy_rand_insertion_angle_units():
-    """The insertion tilt is an ordinary angle, unlike the dva locations"""
+    """The insertion tilt accepts angle units (locations are in dva)"""
     locs = np.array([[1., 2.], [-2., 1.], [0., 1.], [2., -2.]])
 
     def directions(angle):
-        # The tilt is drawn at random, so the seed has to be reset for every
-        # spelling of the same angle:
+        # The tilt is random, so reset the seed for each unit:
         np.random.seed(0)
         nlink = Neuralink.from_neuropythy(StubNeuropythyMap(), locs=locs,
                                           rand_insertion_angle=angle)
@@ -553,7 +549,7 @@ def test_Neuralink_from_neuropythy_rand_insertion_angle_units():
 
 def test_Neuralink_from_neuropythy_surface_mismatch():
     class HoleyStubMap(StubNeuropythyMap):
-        """A map where a location is on the pial but not the midgray surface"""
+        """Returns NaN on the midgray surface for the first location"""
         def dva_to_v1(self, x, y, surface='midgray'):
             xc, yc, zc = super().dva_to_v1(x, y, surface=surface)
             if surface == 'midgray':
@@ -573,9 +569,8 @@ def test_Neuralink_from_visual_field_map_requires_thread():
 
 
 def test_Neuralink_from_visual_field_map_non_neuropythy():
-    # A plain CorticalMap falls through to
-    # EnsembleImplant.from_visual_field_map, which just centers a thread on
-    # each cortical location:
+    # A plain CorticalMap uses EnsembleImplant.from_visual_field_map, which
+    # centers a thread on each cortical location:
     visual_field_map = Polimeni2006Map()
     nlink = Neuralink.from_visual_field_map(LinearEdgeThread,
                                             visual_field_map,
@@ -588,17 +583,15 @@ def test_Neuralink_from_visual_field_map_non_neuropythy():
     for thread, x, y in zip(nlink.implants.values(), xc, yc):
         npt.assert_almost_equal(thread.x, x, decimal=3)
         npt.assert_almost_equal(thread.y, y, decimal=3)
-        # No 3D map, so the threads stay at the default depth/orientation:
+        # No 3D map, so threads keep the default depth and orientation:
         npt.assert_almost_equal(thread.z, 0)
         npt.assert_almost_equal(thread.direction, [0, 0, 1])
 
 
 def test_Neuralink_from_visual_field_map_rejects_a_retinal_map():
-    """A cortical device will not place its threads by a retinal map
+    """from_visual_field_map rejects a retinal map for a cortical device
 
-    The generic ensemble factory takes any 2D map, and a retinal map returns
-    microns just like a cortical one, so nothing downstream would notice the
-    threads landing nowhere in cortex.
+    A retinal map also returns um, so misplaced threads would go unnoticed.
     """
     for visual_field_map in (Curcio1990Map(), Watson2014Map()):
         with pytest.raises(TypeError) as excinfo:
@@ -609,8 +602,8 @@ def test_Neuralink_from_visual_field_map_rejects_a_retinal_map():
 
 
 def test_Neuralink_from_visual_field_map_neuropythy():
-    # A NeuropythyMap is instead routed to from_neuropythy, which knows about
-    # the third dimension and the insertion angle:
+    # A NeuropythyMap uses from_neuropythy, which handles depth and insertion
+    # angle:
     locs = np.array([[1., 2.], [-2., 1.]])
     nlink = Neuralink.from_visual_field_map(LinearEdgeThread,
                                             StubNeuropythyMap(), locs=locs)
@@ -623,7 +616,7 @@ def test_Neuralink_from_visual_field_map_neuropythy():
 
 
 def test_LinearEdgeThread_units():
-    """A thread walks down its own insertion direction, so it normalizes too"""
+    """LinearEdgeThread accepts length units, including insertion depth"""
     bare = LinearEdgeThread(1000., -500., 0., radius=5., n_elecs=8,
                             spacing=50., insertion_depth=100.)
     unitful = LinearEdgeThread(1 * mm, -0.5 * mm, 0 * um, radius=5 * um,
@@ -634,7 +627,7 @@ def test_LinearEdgeThread_units():
     for attr in ('x', 'y', 'z', 'radius', 'spacing', 'insertion_depth'):
         npt.assert_equal(isinstance(getattr(unitful, attr), Quantity), False)
     npt.assert_allclose(unitful.thread_length, bare.thread_length, rtol=1e-12)
-    # The electrode's own radii, too:
+    # Also the electrode radii:
     elec = EllipsoidElectrode(rx=0.007 * mm, ry=7 * um, rz=0.012 * mm)
     npt.assert_allclose([elec.rx, elec.ry, elec.rz], [7, 7, 12], rtol=1e-12)
     for kwargs in ({'x': 5 * ms}, {'radius': 10 * uA}, {'spacing': 1 * ms},

@@ -40,7 +40,7 @@ def percept(n_frames=4, time=None, **kwargs):
 
 
 def source_index(ani):
-    """Which source frame each display frame shows"""
+    """Returns the source frame index shown at each display frame"""
     return ani._layers[0].index
 
 
@@ -78,17 +78,17 @@ def test_plot_stimulus_percept_axes():
 
 
 def test_plot_stimulus_percept_errors():
-    """Only a visual source, and only one that has a single frame"""
-    # A video and its percept have no frame that stands for both of them:
+    """plot_stimulus_percept accepts only a single-frame image"""
+    # A video has no single frame to plot:
     with pytest.raises(TypeError):
         plot_stimulus_percept(video(), percept())
-    # The electrical stimulus an encoder made is not the source picture:
+    # An encoded electrical stimulus is not a visual source:
     with pytest.raises(TypeError):
         plot_stimulus_percept(Stimulus({'A1': 1}), percept(n_frames=1))
 
 
 def test_play_stimulus_percept_still_image():
-    """A still image stays put while the percept fades"""
+    """A still image stays fixed while the percept fades"""
     stim = ImageStimulus(np.random.rand(8, 10))
     ani = play_stimulus_percept(stim, percept())
     npt.assert_equal(len(list(ani.frame_seq)), 4)
@@ -107,14 +107,14 @@ def test_play_stimulus_percept_matching_rates():
 
 
 def test_play_stimulus_percept_zero_order_hold():
-    """A source on another time grid holds the frame that is up"""
+    """A source on a different time grid shows the frame active at each time"""
     # Source at 30 Hz, percept every 50 ms:
     ani = play_stimulus_percept(video(n_frames=5), percept(n_frames=4))
     npt.assert_equal(source_index(ani), [0, 1, 3, 4])
-    # A percept that outlasts its source holds the last frame:
+    # After the source ends, its last frame is shown:
     ani = play_stimulus_percept(video(n_frames=2), percept(n_frames=4))
     npt.assert_equal(source_index(ani), [0, 1, 1, 1])
-    # A percept whose clock starts before the source holds the first one:
+    # Before the source starts, its first frame is shown:
     ani = play_stimulus_percept(video(n_frames=3),
                                 percept(n_frames=3, time=[-20.0, 0.0, 40.0]))
     npt.assert_equal(source_index(ani), [0, 0, 1])
@@ -130,7 +130,7 @@ def test_play_stimulus_percept_source_frame_time():
 
 
 def test_play_stimulus_percept_time_units():
-    """Source and percept are lined up in physical time, not in raw numbers"""
+    """Source and percept are aligned in ms, whatever their time units"""
     ani = play_stimulus_percept(video(n_frames=5),
                                 percept(n_frames=3, time=[0, 0.05, 0.1],
                                         time_unit=s))
@@ -138,7 +138,7 @@ def test_play_stimulus_percept_time_units():
 
 
 def test_play_stimulus_percept_fps():
-    """'fps' resamples the whole presentation, both panels with it"""
+    """fps resamples both panels"""
     ani = play_stimulus_percept(video(n_frames=5), percept(n_frames=4),
                                 fps=40 * Hz)
     # 200 ms of percept at 40 Hz is eight display frames:
@@ -152,7 +152,7 @@ def test_play_stimulus_percept_rgb():
     ani = play_stimulus_percept(vid, percept(n_frames=3))
     npt.assert_equal(ani._layers[0].data.shape, (4, 6, 3, 3))
     npt.assert_equal('p2p-anim' in ani.to_jshtml(), True)
-    # An RGB percept carries its own colors, so it has no brightness range:
+    # An RGB percept has no brightness range:
     rgb = Percept(np.random.rand(3, 3, 3, 2), time=[0, 50.0])
     npt.assert_equal('p2p-anim' in
                      play_stimulus_percept(vid, rgb).to_jshtml(), True)
@@ -181,7 +181,7 @@ def test_play_stimulus_percept_leaves_data_alone():
 
 
 def test_play_stimulus_percept_untimed_video(monkeypatch):
-    """A source with no clock is refused, not frozen at its first frame"""
+    """A multi-frame source without a time axis is rejected"""
     vid = video()
     # ``Stimulus`` refuses to build a multi-frame stimulus without a time axis,
     # so make one report that it has none:
@@ -195,7 +195,7 @@ def test_play_stimulus_percept_errors():
     with pytest.raises(ValueError):
         play_stimulus_percept(ImageStimulus(np.random.rand(4, 4)),
                               Percept(np.random.rand(3, 3, 1)))
-    # The electrical stimulus an encoder made is not the source picture:
+    # An encoded electrical stimulus is not a visual source:
     with pytest.raises(TypeError):
         play_stimulus_percept(Stimulus({'A1': 1}), percept())
 
@@ -236,7 +236,7 @@ def trace_stim(model):
 
 
 def stim_patches(ax):
-    """The electrode collection the implant drew on ``ax``"""
+    """Returns the electrode collection the implant drew on ``ax``"""
     return next(c for c in ax.collections if hasattr(c, '_stim_patches'))
 
 
@@ -246,7 +246,7 @@ def fill(ax, name):
 
 
 def overlay_pixel(ani, model, xy, frame, placed=True):
-    """RGBA of the implant layer at ``xy`` (um) in display frame ``frame``"""
+    """Returns the implant-layer RGBA at ``xy`` (um) in display ``frame``"""
     layer = ani._layers[0]
     im = layer.image
     to_display = (stim_patches(im.axes).get_transform() if placed
@@ -271,7 +271,7 @@ def test_plot_implant_percept_single_electrode():
     npt.assert_equal([ax.get_title() for ax in axes], ['Implant', 'Percept'])
     cmap = plt.get_cmap(STIM_CMAP)
     npt.assert_almost_equal(fill(axes[0], 'B'), cmap(1.0, alpha=0.8))
-    # Undriven electrodes keep the implant's own fill:
+    # Undriven electrodes keep the default fill:
     base = model.implant.electrode_array['A'].plot_kwargs['fc']
     npt.assert_almost_equal(fill(axes[0], 'A'), base)
     npt.assert_almost_equal(fill(axes[0], 'C'), base)
@@ -294,7 +294,7 @@ def test_plot_implant_percept_cathodic():
     model = line_model()
     axes = plot_implant_percept(model, model.predict_percept({'A': -10,
                                                               'C': 20}))
-    # Cathodic current is drive, too:
+    # Cathodic current counts as drive:
     cmap = plt.get_cmap(STIM_CMAP)
     npt.assert_almost_equal(fill(axes[0], 'A'), cmap(0.5, alpha=0.8))
 
@@ -357,10 +357,10 @@ def test_electrode_drive_zero_order_hold():
 
 def test_electrode_drive_causal_frames():
     stim = trace_stim(line_model())
-    # A frame at t shows what was up over (t_prev, t]:
+    # A frame at t shows the drive over (t_prev, t]:
     on = _electrode_drive(stim, [100, 200, 300], causal=True) > 0
     npt.assert_equal(on, np.eye(3, dtype=bool))
-    # An instant takes the frame up just before it:
+    # An instant uses the frame active just before it:
     on = _electrode_drive(stim, [100], causal=True) > 0
     npt.assert_equal(on.ravel(), [1, 0, 0])
     npt.assert_equal(_electrode_drive(stim, [0], causal=True).ravel(), 0)
@@ -419,7 +419,7 @@ def test_plot_implant_percept_single_frame_waveform():
             'B': MonophasicPulse(-20, 1, delay_dur=30, stim_dur=200)}
     percept = model.predict_percept(stim, t_percept=20)
     axes = plot_implant_percept(model, percept)
-    # A frame at 20 ms reflects stimulation since onset, not after 20 ms:
+    # A frame at 20 ms shows stimulation since onset, not only after 20 ms:
     npt.assert_almost_equal(fill(axes[0], 'A'),
                             plt.get_cmap(STIM_CMAP)(1.0, alpha=0.8))
     base = model.implant.electrode_array['B'].plot_kwargs['fc']
@@ -442,7 +442,7 @@ def test_play_implant_percept_first_frame_from_onset():
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     percept = model.predict_percept({'A': pt}, t_percept=[200, 250])
     ani = play_implant_percept(model, percept)
-    # The frame at 200 ms is still caused by A; nothing is delivered after:
+    # The frame at 200 ms still shows A; nothing is delivered after:
     npt.assert_equal(electrode_pixel(ani, model, 'A', 0)[3] > 0, True)
     npt.assert_equal(electrode_pixel(ani, model, 'A', 1)[3], 0)
 
@@ -473,14 +473,14 @@ def test_play_implant_percept_trace():
         for other in 'ABC':
             alpha = electrode_pixel(ani, model, other, frame)[3]
             npt.assert_equal(alpha > 0, other == name)
-    # Labels are baked into the implant layer:
+    # Labels are rendered into the implant layer:
     npt.assert_equal(len(ani._layers[0].image.axes.texts), 0)
     npt.assert_equal('<canvas' in ani.to_jshtml(), True)
 
 
 def test_play_implant_percept_spatial_fps():
     model = line_model()
-    # The percept records the frame states the spatial model used:
+    # The percept stores the frame states the spatial model used:
     percept = model.predict_percept(trace_stim(model))
     ani = play_implant_percept(model, percept, fps=20 * Hz)
     # Halfway between A and B (50 ms), only A is on, at full amplitude:
@@ -495,7 +495,7 @@ def test_play_implant_percept_spatial_fps():
 def test_play_implant_percept_clocks():
     model = line_model()
     stim = trace_stim(model)
-    # A percept sampled on its own clock, off the 100 ms modulation frames:
+    # Percept times differ from the 100 ms modulation frames:
     percept = Percept(np.zeros((3, 3, 5)), time=[0, 50, 150, 250, 300],
                       metadata={'stim': stim})
     ani = play_implant_percept(model, percept)
@@ -503,8 +503,8 @@ def test_play_implant_percept_clocks():
                for name in 'ABC'] for frame in range(5)]
     npt.assert_equal(active, [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],
                               [0, 0, 0]])
-    # Resampled at 10 Hz, the implant follows the percept frame on screen:
-    # 100 ms still shows the 50 ms frame (A), 200 ms the 150 ms frame (B).
+    # At 10 Hz, the implant follows the displayed percept frame: 100 ms
+    # shows the 50 ms frame (A), 200 ms the 150 ms frame (B).
     ani = play_implant_percept(model, percept, fps=10 * Hz)
     active = [electrode_pixel(ani, model, 'B', frame)[3] > 0
               for frame in range(3)]

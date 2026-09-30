@@ -84,9 +84,8 @@ def _subsample(t_out, dt, n_sub, start=None):
         Start index of each interval in ``t``.
     """
     ticks = np.round(np.asarray(t_out, dtype=np.float64) / dt).astype(np.int64)
-    # An interval runs from the previous output point up to and including this
-    # one. Brightness is continuous, so the value carried across the boundary
-    # is a floor on what the next interval reaches:
+    # Each interval spans (previous output point, this point]. Brightness is
+    # continuous, so the boundary value is a lower bound for the next interval:
     first = ticks[0] if start is None else int(round(float(start) / dt))
     lo = np.concatenate(([min(first, ticks[0])], ticks[:-1]))
     parts = []
@@ -129,12 +128,11 @@ def _frame_clock(stim, dt, unit=ms):
         return None
     enc = meta.get('encoder')
     if not isinstance(enc, dict):
-        # `Stimulus` files metadata it does not recognize under 'user':
+        # `Stimulus` stores unrecognized metadata under 'user':
         user = meta.get('user')
         enc = user.get('encoder') if isinstance(user, dict) else None
     if not isinstance(enc, dict) and 'stim' in meta:
-        # A `Percept` on its way from the spatial model to the temporal one
-        # carries the stimulus it came from, and the frame clock with it:
+        # A spatial-stage `Percept` stores its source stimulus and frame clock:
         return _frame_clock(meta['stim'], dt, unit=unit)
     if not isinstance(enc, dict):
         return None
@@ -147,14 +145,12 @@ def _frame_clock(stim, dt, unit=ms):
     source = frame_time if prefix == 'source_frame_' else None
     if frame_time.size == 0 or not np.isfinite(frame_dur) or frame_dur <= 0:
         return None
-    # Encoder frame metadata is stored in milliseconds; convert it to the
-    # model's time unit before comparing it with `dt` or `t_percept`.
+    # Encoder frame metadata is in ms; convert to the model's time unit:
     if unit != ms:
         frame_time = Quantity(frame_time, ms).to_value(unit)
         frame_dur = Quantity(frame_dur, ms).to_value(unit)
-    # Count in whole `dt` steps rather than rounding each frame time, so that
-    # the spacing comes out exactly even and every point is exactly a multiple
-    # of `dt` (which `predict_percept` insists on):
+    # Count whole `dt` steps so frame ends are evenly spaced exact multiples
+    # of `dt`, as `predict_percept` requires:
     step = max(1, int(round(frame_dur / dt)))
     start = int(round(float(frame_time[0]) / dt))
     ends = start + np.arange(1, frame_time.size + 1, dtype=np.int64) * step
@@ -171,8 +167,7 @@ def _length_valued(value):
 def _require_stim_dimension(model, stim, allow_dimensionless=False):
     """Require a stimulus with a physical dimension accepted by ``model``.
 
-    Percepts are not checked because they represent model output rather
-    than electrical stimulation. ``allow_dimensionless`` admits ordinary
+    Percepts (model output) are not checked. ``allow_dimensionless`` accepts
     dimensionless values as relative electrode drive; see
     ``SpatialModel._accepts_dimensionless_drive``.
     """
@@ -209,8 +204,8 @@ def _spatial_input(stim):
 def _delivered(stim):
     """Return the delivered pulse train for a prepared stimulus.
 
-    Encoded stimuli carry a frame-level view for spatial-only models. Remove that
-    view before a temporal stage integrates the waveform.
+    Drops the frame-level view that encoded stimuli store for spatial-only
+    models, so the temporal stage integrates the pulse waveform.
     """
     if stim is None or not stim._has_spatial_view:
         return stim
@@ -218,17 +213,16 @@ def _delivered(stim):
 
 
 def _check_implant(implant):
-    """Raise unless ``implant`` is an Implant"""
+    """Raise TypeError if ``implant`` is not an Implant"""
     if not isinstance(implant, Implant):
         raise TypeError(f"'implant' must be an Implant object, not "
                         f"{type(implant)}.")
 
 
 def _check_component(name, model, kind, example):
-    """Raise unless ``model`` is a ``kind`` instance or None.
+    """Raise TypeError if ``model`` is not a ``kind`` instance or None.
 
-    ``example`` is what the class would have to be called with, quoted back in
-    the error message.
+    ``example`` is the constructor-argument string shown in the error message.
     """
     if model is None or isinstance(model, kind):
         return
@@ -240,7 +234,7 @@ def _check_component(name, model, kind, example):
 
 
 def _device_scene(scene, implant):
-    """The visual scene the implant's own input pipeline sees"""
+    """Return the scene after the implant's preprocessing"""
     source = implant._preprocess(scene.source)
     if source is scene.source:
         return scene
@@ -266,7 +260,7 @@ def _device_scene(scene, implant):
     if device.shape != scene.shape:
         refuse('shape', scene.shape, device.shape)
     if scene.time is not None:
-        # Same instants:
+        # Preprocessing must preserve frame times:
         mine = np.asarray(scene.time)
         theirs = np.asarray(as_value(Quantity(np.asarray(device.time),
                                               device.time_unit),
@@ -298,8 +292,7 @@ def _scene_stim(model, scene, gaze):
         raise ValueError(
             f"'scene_input_frame' must be 'eye' or 'head', not {frame!r}.")
 
-    # Against the source frame clock, not `t_percept`: gaze moves the scene
-    # across the electrodes, not the temporal model's output sampling.
+    # Gaze is sampled on the source frame clock, independent of `t_percept`:
     points = _gaze_points(gaze, device_scene.n_frames,
                           time=device_scene.time,
                           time_unit=device_scene.time_unit)
@@ -352,9 +345,8 @@ def _blend_meridian(resp, grid, meridian, width):
                                 mode='nearest')
     weight = np.exp(-dist ** 2 / (2.0 * width ** 2))[..., np.newaxis]
     weight = weight.astype(work.dtype, copy=False)
-    # `work + weight * (blurred - work)`, accumulated into the buffer
-    # `gaussian_filter1d` already returned. Written as one expression it costs
-    # three more arrays the size of the whole response:
+    # In-place `work + weight * (blurred - work)`, avoids three response-sized
+    # temporaries:
     np.subtract(blurred, work, out=blurred)
     np.multiply(blurred, weight, out=blurred)
     np.add(blurred, work, out=blurred)
@@ -425,11 +417,10 @@ def _placement_shift(model, unit):
     pos = getattr(model, 'implant_position', (0, 0))
     is_2d = _tissue_map_ndim(model) == 2
     if has_units(pos) and not _length_valued(pos):
-        # A visual field position is a tissue location even at (0, 0) dva, so
-        # it is never the identity placement a 3D map still allows.
+        # A dva position is never the identity placement, even at (0, 0):
         if not is_2d:
             _refuse_3d_placement(model, 'implant_position')
-        # Resolved here, not at assignment: `visual_field_map` may change.
+        # Resolve here because `visual_field_map` may change after assignment:
         xy = _dva_pos_to_tissue(model, pos)
     else:
         xy = np.asarray(as_value(pos, um, 'implant_position'),
@@ -576,12 +567,13 @@ def _electrode_offsets(model, electrodes):
 def _displaced_coords(model, region, electrodes, xyz, offsets):
     """Return displaced tissue coordinates via tissue -> dva -> tissue.
 
-    The physical implant is unchanged. Raises if either location is unmappable.
+    The physical implant is unchanged. Raises NotImplementedError if the map is
+    not invertible, ValueError if either location is unmappable.
     """
     vfmap = model.visual_field_map
     try:
         inverse = vfmap.to_dva()[region]
-        # Some maps mutate their inputs.
+        # Copy inputs because some maps modify them in place:
         x_dva, y_dva = inverse(*[np.array(a, dtype=np.float64)
                                  for a in xyz[:2]])
     except (NotImplementedError, KeyError):
@@ -605,14 +597,14 @@ def _home_regions(model, electrodes, xyz):
     """Return the one region containing each electrode, for location_noise.
 
     An electrode is in a region if that region's ``to_dva`` maps its placed
-    location to finite coordinates. Raises unless exactly one region does.
+    location to finite coordinates. Raises ValueError unless exactly one
+    region does.
     """
     vfmap = model.visual_field_map
     regions = list(vfmap.from_dva())
     try:
         inverses = vfmap.to_dva()
-        # Every mapped region needs an inverse, or its electrodes would be
-        # reported as lying in no region:
+        # Every region requires an inverse to test membership:
         inside = np.array([np.all(np.isfinite(inverses[r](
             *[np.array(c, dtype=np.float64) for c in xyz[:2]])), axis=0)
             for r in regions]).reshape((len(regions), -1))
@@ -636,7 +628,7 @@ def _home_regions(model, electrodes, xyz):
 
 
 def _require_placed(model, region, electrodes, coords, which):
-    """Raise if the map returned a non-finite coordinate for an electrode."""
+    """Raise ValueError if the map returned a non-finite electrode coordinate."""
     placed = np.ones(len(electrodes), dtype=bool)
     for coord in coords:
         placed &= np.isfinite(np.asarray(coord, dtype=np.float64))
@@ -689,7 +681,7 @@ def _electrode_pitch(model):
     coords = coords[:, :model.visual_field_map.ndim]
     if len(coords) < 2:
         return None
-    # The nearest *other* electrode, so the query asks for two:
+    # k=2 skips each electrode's zero distance to itself:
     distances, _ = cKDTree(coords).query(coords, k=2)
     pitch = float(np.median(distances[:, 1]))
     return pitch if pitch > 0 else None
@@ -735,8 +727,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         if not _unchanged(before, getattr(self, name, None)):
             object.__setattr__(self, '_is_built', False)
 
-    # Numerical kernels receive plain values in these canonical units.
-    # They define the model's numerical contract, not user-configurable units.
+    # Numerical kernels receive plain values in these fixed units:
 
     #: The unit stimulus values are expressed in
     stimulus_unit = uA
@@ -774,7 +765,7 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
             if stim.unit.dimension == unit.dimension:
                 return unit
         if stim.unit.dimension.is_dimensionless:
-            # Relative drive: read the numbers as they are.
+            # Relative drive is used as-is:
             return stim.unit
         return self.stimulus_unit
 
@@ -864,9 +855,8 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
         -----
         Subclasses should override ``_build``, not this method.
         """
-        # Via `set_params`, not a bare `setattr` loop, so that a deprecated or
-        # renamed parameter is handled here exactly as it is in the
-        # constructor:
+        # `set_params` handles deprecated/renamed parameters as the
+        # constructor does:
         self.set_params(**build_params)
         self._build()
         self._is_built = True
@@ -880,14 +870,13 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def __deepcopy__(self, memodict=None):
         if memodict is None:
             memodict = {}
-        # Guard here as well as in the base implementation: without it, an
-        # already-copied model would be rebuilt on every revisit.
+        # Return the existing copy so a revisited model is not rebuilt:
         if id(self) in memodict:
             return memodict[id(self)]
         implant = getattr(self, '_implant', None)
         if implant is not None:
-            # The implant is model context, not model state. Share it across
-            # copies so geometry-dependent build state remains valid.
+            # Share the implant across copies so geometry-dependent build
+            # state stays valid:
             memodict.setdefault(id(implant), implant)
         copied = super().__deepcopy__(memodict)
         if self.is_built:
@@ -958,7 +947,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Map between visual-field and tissue coordinates. ``None`` until an
         anatomy-specific subclass such as
         :py:class:`~pulse2percept.models.retina.RetinalSpatial` supplies one;
-        building without a map raises.
+        building without a map raises ValueError.
     n_gray : int or None, optional
         Number of gray levels in the returned percept. ``None`` disables
         gray-level quantization.
@@ -1009,11 +998,11 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         self._location_noise_z = None
 
     def _validate_implant(self, implant):
-        """Raise unless ``implant`` can be simulated by this model.
+        """Raise TypeError if this model does not support ``implant``.
 
-        Called on construction and on every rebind of ``implant``. Subclasses
-        for a specific anatomy override this to reject implants of the wrong
-        family; see :py:class:`~pulse2percept.models.retina.RetinalSpatial`.
+        Called on construction and on every rebind of ``implant``. Anatomy-
+        specific subclasses override this to reject other implant families;
+        see :py:class:`~pulse2percept.models.retina.RetinalSpatial`.
         """
         _check_implant(implant)
 
@@ -1045,9 +1034,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def _normalize_param_value(self, name, value):
         """Normalize a parameter to its stored unit.
 
-        A visual-field extent given as a physical length is refused here:
-        resolving one requires a map between tissue distance and visual angle,
-        which is anatomy-specific. See
+        Raises DimensionMismatchError for a visual-field extent given as a
+        physical length, because converting it requires an anatomy-specific
+        map. See
         :py:class:`~pulse2percept.models.retina.RetinalSpatial`.
         """
         if name in ('xrange', 'yrange') and _length_valued(value):
@@ -1085,11 +1074,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Return a dict of the units that parameters are stored in"""
         return {
             **super().get_param_units(),
-            # The simulated patch of visual field is specified in degrees of
-            # visual angle; the visual field map turns those into tissue
-            # coordinates when the grid is built:
-            # `implant_position` is not listed: its unit is what
-            # distinguishes a tissue position from a visual field one.
+            # `implant_position` is not listed: its unit distinguishes a
+            # tissue position from a visual field one.
             'implant_rotation': deg,
             'implant_depth': um,
             'xrange': dva,
@@ -1155,7 +1141,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                            grid_type=self.grid_type)
         self.grid.build(self.visual_field_map)
         if _location_noise_sigma(self) is not None:
-            # Draw once so the first stimulus does not determine the subject.
+            # Draw offsets at build time, independent of the first stimulus:
             _latent_offsets(self)
         self._build()
         self._is_built = True
@@ -1218,8 +1204,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     def _scene_sampling_points(self):
         """Return placed electrode positions in dva, for sampling a scene.
 
-        Where an electrode lands in the visual field follows from the tissue
-        a model stimulates, so only a subclass that models one can answer.
+        Requires an anatomy-specific subclass.
 
         Returns
         -------
@@ -1295,9 +1280,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if not stim.is_compressed:
             stim.compress()
         if t_percept is None:
-            # In `time_unit`, like everything else on this side of the
-            # boundary; `_to_stim_time` converts back where the stimulus is
-            # indexed by it below:
+            # In `time_unit`; `_to_stim_time` converts back for indexing below:
             t_percept = self._stim_times(stim)
         n_time = 1 if t_percept is None else np.array([t_percept]).size
         if stim.data.size == 0:
@@ -1306,9 +1289,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         else:
             # Calculate the Stimulus at requested time points:
             if t_percept is not None:
-                # Save electrode parameters
-                # np.asarray: indexing a single-electrode stimulus returns a
-                # scalar, which has no `reshape`:
+                # np.asarray: a single-electrode stimulus indexes to a scalar:
                 at = self._to_stim_time(t_percept, stim)
                 # Preserve the normalized-drive marker through resampling.
                 rebuild = type(stim) if stim._is_normalized_drive else Stimulus
@@ -1331,8 +1312,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 uniq_time = stim.time[t_unique]
                 if len(uniq_time) == 1:
                     uniq_time = None
-                # `_predict_spatial` only ever sees this de-duplicated
-                # copy, so the stimulus' metadata has to come along:
+                # `_predict_spatial` only sees this de-duplicated copy, so
+                # keep the metadata:
                 stim_unique = rebuild(
                     stim[:, stim.time[t_unique]], electrodes=stim.electrodes,
                     time=uniq_time
@@ -1365,8 +1346,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             * 'hull': Show the convex hull of the grid (that is, the outline of
               the smallest convex set that contains all grid points).
             * 'scatter': Scatter plot all grid points
-            * 'cell': Show the outline of each grid cell as a polygon. Note that
-              this can be costly for a high-resolution grid.
+            * 'cell': Show the outline of each grid cell as a polygon. Costly
+              for a high-resolution grid.
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
         ax : matplotlib.axes._subplots.AxesSubplot, optional
@@ -1471,8 +1452,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        # `dt` is the simulation step, so it counts in whatever the model
-        # counts time in -- milliseconds for every model p2p ships:
+        # `dt` is stored in the model's time unit (ms for all bundled models):
         return {**super().get_param_units(), 'dt': self.time_unit}
 
     @abstractmethod
@@ -1550,7 +1530,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             _space = [len(stim.electrodes), 1]
         elif isinstance(stim, Percept):
             _space = [len(stim.ydva), len(stim.xdva)]
-        # In `time_unit`: `_frame_clock`, `dt` and `t_percept` all count in it
+        # `_frame_clock`, `dt` and `t_percept` all use `time_unit`:
         _time = self._stim_times(stim)
 
         reduce, t_out, sub_idx, source = 'last', None, None, None
@@ -1563,9 +1543,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Prefer encoder frame timing; otherwise report at 50 Hz.
             frames = _frame_clock(stim, self.dt, unit=self.time_unit)
             if frames is None:
-                # Convert 20 ms into the model's unit. `nextafter` makes an exact
-                # frame boundary inclusive. The minimum one-frame duration keeps
-                # sub-frame stimuli visible instead of reporting only t=0.
+                # 20 ms frames. `nextafter` includes an exact frame boundary; the
+                # one-frame minimum keeps sub-frame stimuli from reporting only t=0:
                 frame_dur = as_value(20 * ms, self.time_unit)
                 end = np.maximum(frame_dur, _time[-1])
                 t_out = np.arange(0, np.nextafter(end, np.inf), frame_dur)
@@ -1574,9 +1553,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                 t_out, first, source = frames
             t_percept = t_out
             if reduce == 'peak' and not self._reduces_intervals:
-                # This model can only be asked for instants, so approximate the
-                # peak by asking for several per interval and keeping the
-                # largest:
+                # Approximate the peak as the max over several instants per
+                # interval:
                 t_percept, sub_idx = _subsample(t_out, self.dt,
                                                 _FRAME_SUBSAMPLES, first)
         # We need to make sure the requested `t_percept` are sorted and
@@ -1592,8 +1570,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Stimulus was compressed to zero:
             resp = np.zeros(_space + [t_percept.size], dtype=np.float32)
         elif self._reduces_intervals:
-            # This model tracks the peak inside its own integrator, which is
-            # exact however coarse the output rate is:
+            # The integrator tracks the exact peak at any output rate:
             resp = self._predict_temporal(_stim, t_percept, reduce)
             self._warn_if_blank(_stim, resp)
         else:
@@ -1610,8 +1587,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Output frame k summarizes the source-video frame starting at
             # source_frame_time[k] (ms); percept.time marks its end.
             metadata['source_frame_time'] = source
-        # A temporal model rewrites a spatial percept frame by frame; it does
-        # not move it in the visual field, so it hands the grid back on:
+        # Temporal models do not move the percept, so reuse the input grid:
         return Percept(resp, space=None, time=t_percept,
                        time_unit=self.time_unit,
                        metadata=metadata)._inherit_space(stim)
@@ -1663,14 +1639,13 @@ class Model(Frozen, PrettyPrint):
     """
 
     # Composite units come from the component that consumes or emits the
-    # quantity, and at least one component always exists.
+    # quantity:
 
     @property
     def stimulus_unit(self):
         """The unit stimulus values are expressed in
 
-        The stimulus goes to the spatial model if there is one, and straight
-        to the temporal model otherwise.
+        Uses the spatial model's unit if present, else the temporal model's.
         """
         if self.has_space:
             return self.spatial.stimulus_unit
@@ -1687,7 +1662,7 @@ class Model(Frozen, PrettyPrint):
     def space_unit(self):
         """The unit spatial coordinates are expressed in
 
-        The temporal model never sees a coordinate.
+        Temporal-only models use the ``BaseModel`` default.
         """
         if self.has_space:
             return self.spatial.space_unit
@@ -1840,12 +1815,11 @@ class Model(Frozen, PrettyPrint):
             so that ``scene = eye-centered visual field + gaze``. Requires
             ``source`` to be a scene. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved against the
-            scene's frame times, not against ``t_percept``. Gaze decides
-            which part of the scene
-            reaches the electrodes unless the implant's
+            scene's frame times, not against ``t_percept``. Gaze selects the
+            scene region sampled by the electrodes unless the implant's
             :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is
-            ``'head'``; the percept itself stays on the model's eye-centered
-            grid either way.
+            ``'head'``; the percept stays on the model's eye-centered grid
+            either way.
 
         Returns
         -------
@@ -1879,7 +1853,7 @@ class Model(Frozen, PrettyPrint):
         """Whether dimensionless input counts as relative electrode drive.
 
         Only a spatial-only composite of a scale-free spatial model qualifies;
-        a temporal stage needs physical stimulation.
+        a temporal stage requires physical stimulation.
         """
         return (self.has_space and not self.has_time and
                 self.spatial._accepts_dimensionless_drive)
@@ -1897,8 +1871,7 @@ class Model(Frozen, PrettyPrint):
     def _predict_percept(self, stim, t_percept=None):
         """Predict the percept a prepared stimulus produces"""
         self._build_stale()
-        # The sub-models normalize too; doing it here as well keeps the error
-        # message below reading in plain milliseconds:
+        # Normalize here too so the error message below uses plain ms:
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         if stim is None:
             # Nothing to see here:
@@ -1908,9 +1881,8 @@ class Model(Frozen, PrettyPrint):
         _require_stim_dimension(
             self, _spatial_input(stim) if spatial_only else stim,
             allow_dimensionless=self._accepts_dimensionless_drive)
-        # `_has_time_axis`, not `stim.time`: whether there is a time axis is a
-        # question a stimulus can answer from its structure, and asking it for
-        # the axis itself would generate the waveform behind it.
+        # `_has_time_axis` checks structure; `stim.time` would generate the
+        # waveform:
         has_time_axis = _has_time_axis(stim)
         if not has_time_axis and t_percept is not None:
             raise ValueError(f"Cannot calculate temporal response at times "

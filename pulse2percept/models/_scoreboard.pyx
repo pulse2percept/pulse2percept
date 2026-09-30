@@ -14,11 +14,9 @@ ctypedef Py_ssize_t index_t
 cdef cnp.uint8_t[::1] _active_electrodes(const float32[:, ::1] stim):
     """Flag the electrodes that carry a nonzero amplitude at any time point.
 
-    The spatial kernels loop over electrodes *outside* the loop over time, so
-    they cannot skip an electrode that happens to be zero at one time point
-    the way a time-innermost loop could. Electrodes that are zero for the
-    whole stimulus can still be skipped, and for a sparse stimulus that is
-    most of them -- hence this one-off pass.
+    Spatial kernels loop over electrodes outside the time loop, so they can
+    only skip electrodes that are zero for the whole stimulus (most of them
+    for a sparse stimulus).
     """
     cdef:
         index_t idx_el, idx_time
@@ -49,12 +47,10 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
                       uint32 n_threads):
     """Fast spatial response of the scoreboard model
 
-    The Gaussian current spread of an electrode at a grid point depends only
-    on the two of them, not on time, so it is computed once per
-    (grid point, electrode) pair and then applied to every time point. The
-    innermost loop is over time, which is the contiguous axis of both ``stim``
-    and the output, and whose iterations are independent -- so it vectorizes
-    without needing relaxed floating-point semantics.
+    The Gaussian spread is time-independent, so it is computed once per
+    (grid point, electrode) pair. The innermost loop runs over time (the
+    contiguous axis of ``stim`` and the output) with independent iterations,
+    so it vectorizes without relaxed floating-point semantics.
 
     Parameters
     ----------
@@ -143,8 +139,7 @@ cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
                       uint32 n_threads):
     """Fast spatial response of the scoreboard model
 
-    The three-dimensional counterpart of :func:`fast_scoreboard`; see there
-    for why the loop nest is ordered the way it is.
+    3D counterpart of :func:`fast_scoreboard`.
 
     Parameters
     ----------
@@ -153,9 +148,9 @@ cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
         time points as columns. The spatial response will be calculated for
         each column independently.
     xel, yel, zel : 1D float32 array
-        An array of x or y coordinates for each electrode (microns)
+        An array of x, y, or z coordinates for each electrode (microns)
     xgrid, ygrid, zgrid : 1D float32 array
-        An array of x or y coordinates at which to calculate the spatial
+        An array of x, y, or z coordinates at which to calculate the spatial
         response (microns)
     rho : float32
         The rho parameter of the scoreboard model (microns): exponential decay

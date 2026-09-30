@@ -47,9 +47,8 @@ from pulse2percept.stimuli import BiphasicPulse, BiphasicPulseTrain
 # Temporal response
 # -----------------
 #
-# ``Horsager2009Temporal`` models the temporal response only and therefore
-# does not require an implant. The example below shows the response to a
-# single cathodic-first biphasic pulse.
+# ``Horsager2009Temporal`` models the temporal response only and does not
+# require an implant. Response to a single cathodic-first biphasic pulse:
 
 model = Horsager2009Temporal()
 model.build()
@@ -79,8 +78,8 @@ fig.tight_layout()
 #
 # Behavioral threshold is the stimulus amplitude detected on 50% of trials.
 # [Horsager2009]_ represents this as the amplitude for which the peak model
-# response reaches a fitted criterion :math:`\theta`. The corresponding
-# amplitude can be found with a one-dimensional root search.
+# response reaches a fitted criterion :math:`\theta`. That amplitude is found by
+# a 1D root search:
 
 
 def threshold_amp(make_stim, theta, amp_range=(0, 300)):

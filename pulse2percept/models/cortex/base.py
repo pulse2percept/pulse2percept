@@ -8,7 +8,7 @@ from ...utils.constants import ZORDER
 
 
 def _check_cortical_implant(implant):
-    """Raise error unless ``implant`` is a non-retinal Implant"""
+    """Raise TypeError if ``implant`` is not an Implant or is retinal"""
     _check_implant(implant)
     if _implant_target(implant) == 'retina':
         raise TypeError(
@@ -41,11 +41,9 @@ class CortexSpatial(SpatialModel):
     rho : double, optional
         Exponential decay constant describing current spread size (microns).
     min_current_spread : float, optional
-        An electrode is skipped at grid points where its Gaussian current
-        spread has decayed below this fraction of its peak. The default
-        (1e-8, about 6.1 ``rho`` away) drops the Gaussian *times* the
-        stimulus amplitude, summed over the skipped electrodes, so the error
-        at a point is bounded by ``min_current_spread`` times the summed
+        Fraction of peak Gaussian current spread below which an electrode is
+        skipped at a grid point. The default 1e-8 (about 6.1 ``rho``) bounds
+        the error at a point by ``min_current_spread`` times the summed
         amplitude across electrodes.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
@@ -117,7 +115,7 @@ class CortexSpatial(SpatialModel):
         self._regions = regions
 
     def _validate_implant(self, implant):
-        """Raise error unless ``implant`` is a non-retinal Implant"""
+        """Raise TypeError if ``implant`` is not an Implant or is retinal"""
         _check_cortical_implant(implant)
 
     def __init__(self, implant, *, regions=None, visual_field_map=None,
@@ -170,8 +168,8 @@ class CortexSpatial(SpatialModel):
             * 'hull': Show the convex hull of the grid (that is, the outline of
               the smallest convex set that contains all grid points).
             * 'scatter': Scatter plot all grid points
-            * 'cell': Show the outline of each grid cell as a polygon. Note that
-              this can be costly for a high-resolution grid.
+            * 'cell': Show the outline of each grid cell as a polygon. Costly
+              for a high-resolution grid.
               
         autoscale : bool, optional
             Whether to adjust the x,y limits of the plot to fit the implant
@@ -226,7 +224,7 @@ class CortexSpatial(SpatialModel):
         if not self.is_built:
             self.build()
         ax = self.grid.plot3d(style=style, ax=ax, **kwargs)
-        # this is only ever for cortex right now so this is safe
+        # plot3d is cortex-only, so coordinates are in microns:
         set_mm_ticks(ax)
         ax.set_xlabel('x (mm)')
         ax.set_ylabel('y (mm)')

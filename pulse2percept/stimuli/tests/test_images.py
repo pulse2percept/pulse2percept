@@ -39,13 +39,12 @@ def test_ImageStimulus():
     npt.assert_equal(stim.metadata['source'], fname)
     npt.assert_equal(stim.metadata['source_shape'], shape)
     npt.assert_equal(stim.time, None)
-    # Every pixel is named after its place in the image: a letter for the row,
-    # a number for the column, and a suffix for the color channel:
+    # Pixel names: row letter, column number, and a color-channel suffix:
     npt.assert_equal(len(stim.electrodes), np.prod(shape))
     npt.assert_equal(stim.electrodes[0], 'A1_R')
     npt.assert_equal(stim.electrodes[3], 'A1_A')
     npt.assert_equal(stim.electrodes[-1], 'Y37_A')
-    # ... and the name maps back onto that same pixel:
+    # ... and each name maps back onto its pixel:
     npt.assert_equal(stim.electrodes.index('C12_G'),
                      np.ravel_multi_index((2, 11, 1), shape))
     os.remove(fname)
@@ -100,16 +99,15 @@ def test_ImageStimulus_resize():
 
 def test_ImageStimulus_resize_kwargs():
     """Keyword arguments reach scikit-image (Issue #501)"""
-    # A white square on black. Nearest-neighbor interpolation keeps the image
-    # binary; the default (bilinear, with anti-aliasing on the way down) does
-    # not, which is what makes the two distinguishable:
+    # A white square on black: nearest-neighbor keeps the image binary, the
+    # default (bilinear, anti-aliased when downsampling) does not:
     ndarray = np.zeros((8, 8), dtype=np.float32)
     ndarray[2:6, 2:6] = 1
     stim = ImageStimulus(ndarray)
     nearest = stim.resize((4, 4), order=0, anti_aliasing=False)
     npt.assert_equal(np.isin(nearest.data, [0, 1]).all(), True)
     npt.assert_equal(np.isin(stim.resize((4, 4)).data, [0, 1]).all(), False)
-    # An unknown keyword argument is scikit-image's to reject, not ours:
+    # scikit-image raises TypeError for an unknown keyword argument:
     with pytest.raises(TypeError):
         stim.resize((4, 4), not_a_skimage_kwarg=0)
 
@@ -123,14 +121,14 @@ def test_ImageStimulus_apply():
     npt.assert_equal(halved.img_shape, (8, 12))
     npt.assert_equal(np.asarray(halved.electrodes),
                      np.asarray(stim.electrodes))
-    # A function that changes the resolution is allowed, and the result is
-    # named after its own pixel grid (Issue #500):
+    # A function may change the resolution; pixel names then come from the new
+    # grid (Issue #500):
     resized = stim.apply(img_resize, (4, 6))
     npt.assert_equal(resized.img_shape, (4, 6))
     npt.assert_equal(resized.shape, (24, 1))
     npt.assert_equal(resized.electrodes[0], 'A1')
     npt.assert_equal(resized.electrodes[-1], 'D6')
-    # Positional and keyword arguments both make it through:
+    # Positional and keyword arguments are both passed on:
     npt.assert_equal(stim.apply(img_resize, (4, 6), order=0).img_shape, (4, 6))
     npt.assert_equal(stim.apply(img_resize, output_shape=(4, 6)).img_shape,
                      (4, 6))
@@ -184,7 +182,7 @@ def test_ImageStimulus_crop():
     npt.assert_equal(stim_cropped2.data.reshape(stim_cropped2.img_shape)[10, 28],
                      stim.data.reshape(stim.img_shape)[16, 38])
 
-    #"crop-indices and crop-width (left, right, up, down) cannot exist at the same time"
+    # idx_rect and left/right/top/bottom cannot be combined
     with pytest.raises(ValueError):
         stim.crop(idx_rect=[5, 10, 25, 40], left=10)
     with pytest.raises(ValueError):
@@ -193,7 +191,7 @@ def test_ImageStimulus_crop():
         stim.crop([5, 10, 25, 40], top=6)
     with pytest.raises(ValueError):
         stim.crop([5, 10, 25, 40], bottom=7)
-    # "crop-width(left, right, up, down) cannot be negative"
+    # Crop widths cannot be negative
     with pytest.raises(ValueError):
         stim.crop(left=-1)
     with pytest.raises(ValueError):
@@ -202,12 +200,12 @@ def test_ImageStimulus_crop():
         stim.crop(top=-1)
     with pytest.raises(ValueError):
         stim.crop(bottom=-1)
-    # "crop-width should be smaller than the shape of the image"
+    # left + right and top + bottom must be smaller than the image
     with pytest.raises(ValueError):
         stim.crop(left=32, right=20)
     with pytest.raises(ValueError):
         stim.crop(top=12, bottom=18)
-    # "crop-indices must be on the image"
+    # idx_rect must lie within the image
     with pytest.raises(ValueError):
         stim.crop([-1, 10, 25, 40])
     with pytest.raises(ValueError):
@@ -216,7 +214,8 @@ def test_ImageStimulus_crop():
         stim.crop([5, 10, 31, 40])
     with pytest.raises(ValueError):
         stim.crop([5, 10, 25, 51])
-    # "crop-indices is invalid. It should be [y1,x1,y2,x2], where (y1,x1) is upperleft and (y2,x2) is bottom-right"
+    # idx_rect must be [y1, x1, y2, x2], with (y1, x1) the upper left and
+    # (y2, x2) the bottom right corner
     with pytest.raises(ValueError):
         stim.crop([5, 10, 4, 40])
     with pytest.raises(ValueError):
@@ -308,7 +307,7 @@ def test_ImageStimulus_rotate():
 
 
 def test_ImageStimulus_rotate_units():
-    """`angle` is an ordinary angle, not a visual angle"""
+    """`angle` is a plain angle, not a visual angle"""
     ndarray = np.zeros((5, 5), dtype=np.float32)
     ndarray[2, :] = 1
     stim = ImageStimulus(ndarray)
@@ -331,14 +330,14 @@ def test_ImageStimulus_rotate_kwargs():
     npt.assert_equal(np.isin(stim.rotate(45, order=0).data, [0, 1]).all(), True)
     npt.assert_equal(np.isin(stim.rotate(45, order=1).data, [0, 1]).all(),
                      False)
-    # 'cval' fills the corners the rotation leaves empty:
+    # 'cval' fills the empty corners after rotation:
     corners = ([0, 0, 4, 4], [0, 4, 0, 4])
     npt.assert_almost_equal(
         stim.rotate(45, order=0, cval=0.3).data.reshape(5, 5)[corners], 0.3)
     npt.assert_almost_equal(
         stim.rotate(45, order=0).data.reshape(5, 5)[corners], 0)
-    # 'resize' grows the canvas, so the result is named after its own grid
-    # rather than inheriting 25 names it has no room for:
+    # 'resize' enlarges the canvas, so pixel names come from the new grid (the
+    # original 25 names do not fit):
     grown = stim.rotate(45, resize=True)
     npt.assert_equal(grown.img_shape, (7, 7))
     npt.assert_equal(grown.shape, (49, 1))
@@ -444,7 +443,7 @@ def test_ImageStimulus_encode():
     npt.assert_almost_equal(enc.time[-1], 500)
     npt.assert_equal(enc.shape[0], stim.shape[0])
     # Gray levels map onto the amplitude range absolutely, so the darkest and
-    # brightest pixels of this ramp land on its two ends:
+    # brightest pixels of this ramp map to its two ends:
     npt.assert_almost_equal(np.abs(enc.data).max(axis=1), 50 * stim.data[:, 0],
                             decimal=4)
 
@@ -454,7 +453,7 @@ def test_ImageStimulus_encode():
     npt.assert_almost_equal(np.abs(enc.data).max(axis=1).min(), 2, decimal=4)
     npt.assert_almost_equal(np.abs(enc.data).max(axis=1).max(), 43, decimal=4)
 
-    # `encode` is a shorthand for AmplitudeEncoder, and forwards to it:
+    # `encode` is a shorthand for AmplitudeEncoder:
     npt.assert_almost_equal(stim.encode().data,
                             AmplitudeEncoder().encode(stim).data)
     with pytest.raises(TypeError):
@@ -490,7 +489,7 @@ def test_ImageStimulus_save():
     os.remove(fname)
     os.remove(fname2)
 
-    # Test that TIFF retains scaling between saving and loading
+    # TIFF keeps the scaling between saving and loading
     fname3 = 'test.tif'
     shape = (5,5)
     ndarray = np.random.rand(*shape).astype('float32')
@@ -504,11 +503,10 @@ def test_ImageStimulus_save():
 
 
 def test_ImageStimulus_rgb2gray_matches_skimage():
-    """The fused RGBA blend must agree with skimage's two-step conversion.
+    """The fused RGBA blend matches skimage's two-step conversion
 
-    ``rgb2gray`` blends the alpha channel against black itself rather than
-    calling ``rgba2rgb``, to avoid building a full-resolution intermediate.
-    This pins the arithmetic to what skimage would have produced.
+    ``rgb2gray`` blends alpha against black directly instead of calling
+    ``rgba2rgb``, which avoids a full-resolution intermediate.
     """
     from skimage.color import rgba2rgb, rgb2gray as sk_rgb2gray
 
@@ -518,7 +516,7 @@ def test_ImageStimulus_rgb2gray_matches_skimage():
     want = sk_rgb2gray(rgba2rgb(rgba, background=(0, 0, 0)))
     npt.assert_array_equal(got.ravel(), want.ravel().astype(got.dtype))
 
-    # Three channels take the other branch and must be untouched by the above:
+    # Three channels use the other branch and must match skimage:
     rgb = rng.random((37, 53, 3)).astype(np.float32)
     npt.assert_array_equal(ImageStimulus(rgb).rgb2gray().data.ravel(),
                            sk_rgb2gray(rgb).ravel())
@@ -535,7 +533,7 @@ def test_ImageStimulus_rgb2gray_matches_skimage():
 
 
 def test_ImageStimulus_invert_preserves_alpha():
-    """Inverting must leave the alpha channel alone and not touch the source"""
+    """Inverting keeps the alpha channel and leaves the source unchanged"""
     rng = np.random.default_rng(1)
     rgba = rng.random((11, 13, 4)).astype(np.float32)
     stim = ImageStimulus(rgba)
@@ -543,14 +541,14 @@ def test_ImageStimulus_invert_preserves_alpha():
     inverted = stim.invert().data.reshape(11, 13, 4)
     npt.assert_allclose(inverted[..., :3], 1.0 - rgba[..., :3], rtol=1e-6)
     npt.assert_array_equal(inverted[..., 3], rgba[..., 3])
-    # The original is untouched:
+    # The original is unchanged:
     npt.assert_array_equal(stim.data, before)
 
 
 @pytest.mark.parametrize('dtype', [np.float32, np.float64, np.uint8])
 def test_ImageStimulus_owns_its_data(dtype):
-    # `img_as_float32` hands back an already-float32 image unchanged, so that
-    # is the dtype where an image could end up sharing the caller's buffer:
+    # `img_as_float32` returns float32 input unchanged, so float32 is the
+    # dtype that could share the caller's buffer:
     arr = (np.linspace(0, 1, 24).reshape((4, 6)) if dtype != np.uint8
            else np.arange(24, dtype=np.uint8).reshape((4, 6)))
     arr = np.ascontiguousarray(arr, dtype=dtype)
@@ -560,8 +558,7 @@ def test_ImageStimulus_owns_its_data(dtype):
     npt.assert_array_equal(stim.data, before)
     npt.assert_equal(np.shares_memory(arr, stim.data), False)
     npt.assert_equal(stim.data.flags.writeable, False)
-    # Freezing what the stimulus took must not reach back into what the
-    # caller kept:
+    # Making the stored data read-only does not affect the caller's array:
     npt.assert_equal(arr.flags.writeable, True)
 
 
@@ -573,7 +570,7 @@ def test_ImageStimulus_does_not_alias_another_stimulus():
 
 
 class _BytesPath:
-    """A PathLike whose __fspath__ returns bytes, as the protocol allows"""
+    """PathLike whose __fspath__ returns bytes (allowed by the protocol)"""
 
     def __init__(self, path):
         self._path = os.fsencode(path)
@@ -583,32 +580,32 @@ class _BytesPath:
 
 
 def test_ImageStimulus_accepts_a_bytes_pathlike(tmp_path):
-    """A path is decoded, so `source` is a string whatever __fspath__ gives"""
+    """Bytes paths are decoded, so `source` is always a string"""
     fname = tmp_path / 'test.png'
     create_dummy_img(str(fname), (8, 12), 'rand')
     stim = ImageStimulus(_BytesPath(fname))
     npt.assert_equal(isinstance(stim.metadata['source'], str), True)
     npt.assert_equal(stim.metadata['source'],
                      ImageStimulus(fname).metadata['source'])
-    # The extension check in `save` needs a string too:
+    # The extension check in `save` also requires a string:
     out = tmp_path / 'out.tif'
     stim.save(_BytesPath(out))
     npt.assert_equal(out.exists(), True)
 
 
 def test_ImageStimulus_accepts_a_path(tmp_path):
-    """A pathlib.Path names the same file a string does"""
+    """A pathlib.Path works like a string filename"""
     fname = tmp_path / 'test.png'
     create_dummy_img(str(fname), (8, 12), 'rand')
     from_path = ImageStimulus(fname)
     from_str = ImageStimulus(str(fname))
     npt.assert_almost_equal(from_path.data, from_str.data)
-    # Metadata records a string either way, so two spellings of one file do
-    # not look like two different sources:
+    # Metadata stores a string either way, so both spellings give the same
+    # source:
     npt.assert_equal(isinstance(from_path.metadata['source'], str), True)
     npt.assert_equal(from_path.metadata['source'],
                      from_str.metadata['source'])
-    # And `save` takes one too:
+    # `save` accepts a Path too:
     out = tmp_path / 'out.tif'
     from_path.save(out)
     npt.assert_equal(out.exists(), True)

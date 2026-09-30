@@ -17,7 +17,7 @@ from string import ascii_uppercase
 
 from .deprecation import warn_deprecated_params, rename_deprecated_params
 from ..units import as_value, dimensionless
-# Plumbing for the parameter hook below, not part of the public unit API:
+# Private helper for the parameter hook below:
 from ..units.base import has_units
 
 
@@ -71,10 +71,8 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
                 sparam = key + '=\'' + str(val) + '\', '
             else:
                 if isinstance(val, np.ndarray):
-                    # Print NumPy arrays without line breaks. Pass the
-                    # shortening options to `array2string` rather than calling
-                    # `np.set_printoptions`, which would change how arrays
-                    # print globally for anyone who reprs a p2p object.
+                    # Print NumPy arrays without line breaks. Options go to
+                    # `array2string` to leave global print settings unchanged:
                     strobj = np.array2string(val, precision=3, threshold=7,
                                              edgeitems=3).replace('\n', ',')
                     # If still too long, show shape:
@@ -112,17 +110,15 @@ class PrettyPrint(object, metaclass=abc.ABCMeta):
 
 
 class FreezeError(AttributeError):
-    """Exception class used to raise when trying to add attributes to Frozen
-    Classes of type Frozen do not allow for new attributes to be set outside
-    the constructor.
+    """Raised when adding an attribute to a Frozen object outside the
+    constructor
     """
 
 
 def has_own_attr(obj, name):
-    """Return whether ``obj`` owns ``name`` without invoking its getter.
+    """Return whether ``obj`` or its type defines ``name``.
 
-    Unlike ``hasattr``, this avoids triggering properties such as
-    deprecated aliases.
+    Unlike ``hasattr``, does not invoke properties such as deprecated aliases.
     """
     return name in getattr(obj, '__dict__', {}) or hasattr(type(obj), name)
 
@@ -139,8 +135,8 @@ def _is_constructing(obj):
 def freeze_class(set, normalize=None):
     """Freezes a class
 
-    Raise an error when trying to set an undeclared name from anywhere but
-    the object's own constructor.
+    Returns a ``__setattr__`` that raises :py:class:`FreezeError` when an
+    undeclared name is set outside the object's constructor.
 
     Parameters
     ----------
@@ -148,20 +144,19 @@ def freeze_class(set, normalize=None):
         The ``__setattr__`` to delegate to once the assignment is allowed.
     normalize : callable, optional
         ``normalize(self, name, value)``, called before the assignment when
-        ``value`` carries a physical unit, and returning the value to store.
-        See ``_normalize_param``, which dispatches to the object's own
-        ``_normalize_param_value``.
+        ``value`` has a physical unit. Returns the value to store. See
+        ``_normalize_param``.
 
     """
 
     def set_attr(self, name, value):
         if normalize is not None and has_units(value):
-            # Normalize unitful parameters before storage.
+            # Convert unitful parameters before storage:
             value = normalize(self, name, value)
         if _is_constructing(self):
             set(self, name, value)
             return
-        # Avoid probing descriptors while the object is only half-built.
+        # Check own attributes first to avoid invoking property getters:
         if has_own_attr(self, name) or hasattr(self, name):
             # If attribute already exists, simply set it
             set(self, name, value)
@@ -174,9 +169,9 @@ def freeze_class(set, normalize=None):
 
 class Frozen(object):
     """Frozen
-    "Frozen" classes (and subclasses) do not allow for new class attributes to
-    be set outside the constructor. On attempting to add a new attribute, the
-    class will raise a FreezeError.
+
+    Frozen classes (and subclasses) do not allow new attributes to be set
+    outside the constructor. Adding one raises a :py:class:`FreezeError`.
     """
     __slots__ = ()
 
@@ -221,18 +216,16 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
     .. versionadded:: 0.10.0
     """
 
-    #: Units are stripped on the way in; see ``_normalize_param``.
+    #: Converts unitful values to storage units; see ``_normalize_param``.
     __setattr__ = freeze_class(object.__setattr__, normalize=_normalize_param)
 
-    # Parameters that are still accepted, but that nothing reads any more.
-    # Maps a name to the ``deprecate_parameter`` describing it; subclasses
-    # override this (see ``SpatialModel``).
+    # Deprecated parameters that are accepted but unused. Maps a name to its
+    # ``deprecate_parameter``; subclasses override this (see ``SpatialModel``).
     _deprecated_params = {}
 
-    # Parameters that were renamed, and are still accepted under their old
-    # name. Maps the old name to the ``deprecated_alias`` that forwards it; an
-    # alias registers itself here when it is assigned in a subclass's body
-    # (see ``AxonMapSpatial``).
+    # Renamed parameters, still accepted under their old name. Maps the old
+    # name to its ``deprecated_alias``, which is registered here when assigned
+    # in a subclass body (see ``AxonMapSpatial``).
     _renamed_params = {}
 
     def __init__(self, **params):
@@ -247,8 +240,7 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
         defaults = self.get_default_params()
         for key, val in defaults.items():
             setattr(self, key, val)
-        # Warn on the ones the user named explicitly, before they are set:
-        # applying a default must stay silent.
+        # Warn only for explicitly passed deprecated params, not defaults:
         warn_deprecated_params(type(self).__name__, params,
                                self._deprecated_params)
         params = rename_deprecated_params(type(self).__name__, params,
@@ -356,9 +348,7 @@ class Parametrized(Frozen, PrettyPrint, metaclass=abc.ABCMeta):
             return False
         for key in self.__dict__.keys():
             mine, theirs = self.__dict__[key], other.__dict__[key]
-            # If either side is an array, compare as arrays: `!=` between an
-            # array and anything else is elementwise, and the result cannot be
-            # coerced to a bool.
+            # Elementwise `!=` on arrays cannot be coerced to a bool:
             if isinstance(mine, np.ndarray) or isinstance(theirs, np.ndarray):
                 if not np.array_equal(mine, theirs):
                     return False
@@ -546,7 +536,7 @@ def cached(f):
     """Cached property decorator
 
     Decorator can be added to the property of a class to maintain a cache.
-    This is useful when computing the property is computationall expensive.
+    This is useful when computing the property is computationally expensive.
     The property will only be computed on first call, and subsequent calls will
     refer to the cached result.
 

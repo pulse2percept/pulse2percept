@@ -1,25 +1,20 @@
 #!/usr/bin/env python3
-"""Verify an *installed* p2p, beyond what `import pulse2percept` proves.
+"""Verify an *installed* p2p beyond `import pulse2percept`.
 
-Run this from a directory that is not the repo root. It answers four things a
-plain import does not:
+Run from a directory other than the repo root. Checks:
 
-1. Are we testing the installed package, or did a source checkout on sys.path
-   shadow it? (Running a smoke test from the repo root silently tests the
-   checkout, which has no compiled extensions in it.)
-2. Did every C extension load as a real binary, or did something quietly fall
-   back to pure Python? A broken extension that degrades silently is worse
-   than one that raises an error, because the install looks healthy.
-3. Do the installed dependencies satisfy the versions the distribution
-   metadata asks for?
-4. Does a model actually build?
+1. The installed package is imported, not a source checkout on sys.path
+   (the checkout has no compiled extensions).
+2. Every C extension loads from a compiled binary, not a pure-Python
+   fallback.
+3. Installed dependencies satisfy the distribution metadata.
+4. A model builds.
 
 Usage:
     python check_install.py [--source-root /path/to/repo]
 
---source-root is optional. When given, the set of C extensions to expect is
-derived from the .pyx files in that checkout, so adding a new .pyx extends
-this check automatically rather than needing a hardcoded list updated.
+--source-root is optional. When given, the expected C extensions are derived
+from the .pyx files in that checkout.
 """
 
 from __future__ import annotations
@@ -47,7 +42,7 @@ def import_name(dist_name: str) -> str:
 
 
 def check_not_shadowed(source_root: Path | None) -> list[str]:
-    """Confirm we resolved the installed package, not a source checkout."""
+    """Return failures if the package resolves to the source checkout."""
     spec = importlib.util.find_spec(PKG)
     if spec is None or not spec.origin:
         return [f"{PKG} is not importable at all"]
@@ -65,14 +60,13 @@ def check_not_shadowed(source_root: Path | None) -> list[str]:
             ]
 
     if not any(part in ("site-packages", "dist-packages") for part in origin.parts):
-        # Not fatal on its own: an editable install legitimately resolves
-        # outside site-packages
+        # Not fatal: an editable install resolves outside site-packages
         print(f"note: {origin} is outside site-packages (editable install?)")
     return []
 
 
 def expected_extensions(source_root: Path | None) -> list[str]:
-    """Module names for every Cython extension, derived from the .pyx files."""
+    """Return module names for every Cython extension, from the .pyx files."""
     if source_root is None:
         return []
     root = Path(source_root).resolve()
@@ -83,7 +77,7 @@ def expected_extensions(source_root: Path | None) -> list[str]:
 
 
 def check_extensions(modules: list[str]) -> list[str]:
-    """Every extension must load, and must load from a compiled binary."""
+    """Return failures for extensions that fail to import or are not compiled."""
     failures = []
     if not modules:
         print("\nNo .pyx sources given, skipping the compiled-extension check.")
@@ -111,7 +105,7 @@ def check_extensions(modules: list[str]) -> list[str]:
 
 
 def check_dependencies() -> list[str]:
-    """Every declared runtime dep must be importable and satisfy its specifier."""
+    """Return failures for runtime deps that fail to import or violate specifiers."""
     from packaging.requirements import Requirement
     from packaging.version import InvalidVersion, Version
 
@@ -136,8 +130,7 @@ def check_dependencies() -> list[str]:
             print(f"  {req.name}: IMPORT FAILED")
             continue
 
-        # Trust installed metadata over a module's __version__ attribute; the
-        # two can disagree, but metadata is what pip resolved against.
+        # Use installed metadata (what pip resolved), not __version__:
         try:
             version = metadata.version(req.name)
         except metadata.PackageNotFoundError:
@@ -161,7 +154,7 @@ def check_dependencies() -> list[str]:
 
 
 def check_model_builds() -> list[str]:
-    """The install is only useful if a model actually builds."""
+    """Return failures from building small example models."""
     print("\nBuilding models:")
     return _check_scoreboard() + _check_prima_ho2018()
 
@@ -172,10 +165,8 @@ def _check_scoreboard() -> list[str]:
         from pulse2percept.implants.retina import ArgusII
         from pulse2percept.models.retina import ScoreboardModel
 
-        # This runs against released versions too, and 0.10.0 renamed the
-        # grid spacing parameter `xystep` -> `step`. Inspect the constructor
-        # because as of 0.11 model parameters are accessed through their
-        # components.
+        # Also runs against releases: 0.10.0 renamed `xystep` -> `step`.
+        # Inspect the constructor, since 0.11 parameters live on components:
         params = inspect.signature(ScoreboardModel).parameters
         spacing = "step" if "step" in params else "xystep"
         model = ScoreboardModel(implant=ArgusII(), xrange=(-4, 4),
@@ -192,9 +183,9 @@ def _check_scoreboard() -> list[str]:
 def _check_prima_ho2018() -> list[str]:
     """ImageStimulus -> PRIMAPivotal optical encoder -> Ho2018Model.
 
-    Skipped below 0.11, where Ho2018Model was added; this script also runs
-    against the released PyPI package. Skip by version, not by catching
-    ImportError, which on 0.11+ is the failure this check exists to report.
+    Skipped below 0.11 (Ho2018Model added), since this script also runs
+    against PyPI releases. Skips by version, because an ImportError on 0.11+
+    is a real failure.
     """
     from packaging.version import InvalidVersion, Version
 
@@ -246,7 +237,7 @@ def main() -> int:
 
     failures = check_not_shadowed(source_root)
     if failures:
-        # Everything downstream would be testing the wrong package.
+        # Later checks would test the wrong package:
         print("\nFAILED:")
         for failure in failures:
             print(f"  - {failure}")

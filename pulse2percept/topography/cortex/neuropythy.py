@@ -68,8 +68,7 @@ class NeuropythyMap(CorticalMap):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        # A distance between cortical mesh vertices, which are in microns.
-        # `jitter_thresh` is a fraction of the distance to a region boundary:
+        # `cort_nn_thresh` is a mesh distance (um); `jitter_thresh` is not:
         return {**super().get_param_units(), 'cort_nn_thresh': um}
 
     def parse_subject(self, subject):
@@ -332,22 +331,18 @@ class NeuropythyMap(CorticalMap):
         -------
         x, y : array_like
             The x and y-coordinate(s) of the visual field point(s) (in dva).
-            Both have the same shape as the input. Points that cannot be
-            mapped are NaN: either because the input was NaN, or because no
-            mesh vertex lies within ``cort_nn_thresh`` of them.
+            Same shape as the input. NaN where the input is NaN or no mesh
+            vertex lies within ``cort_nn_thresh``.
         """
         xc = np.array(xc, dtype='float32')
         yc = np.array(yc, dtype='float32')
         zc = np.array(zc, dtype='float32')
         if np.shape(xc) != np.shape(yc) or np.shape(xc) != np.shape(zc):
             raise ValueError("x, y, and z must have the same shape")
-        # The output has the shape of the input, and stays NaN wherever the
-        # point cannot be mapped:
+        # NaN wherever a point cannot be mapped:
         out = np.full((*np.shape(xc), 2), np.nan)
         id_nan = np.isnan(xc) | np.isnan(yc) | np.isnan(zc)
-        # Boolean indexing flattens, so the query is always (npoints, 3). The
-        # tree is built on the FreeSurfer mesh, which is in millimeters, while
-        # the coordinates coming in are in microns:
+        # Query is (npoints, 3). Tree is in mm (FreeSurfer), input in um:
         query = np.stack([xc[~id_nan], yc[~id_nan], zc[~id_nan]],
                          axis=-1) / UM_PER_MM
         if np.size(query) == 0:
@@ -358,18 +353,14 @@ class NeuropythyMap(CorticalMap):
         neighbors = np.array([[self.region_meshes[self.addr_idxs['region'][i]][self.addr_idxs['hemi'][i]].coordinates[:, self.addr_idxs['addr'][i]]
                                for i in nb_pts]
                               for nb_pts in idx])
-        # Weight each neighbor by 1/distance, ignoring the ones that are too
-        # far away:
+        # Weight neighbors by 1/distance, ignoring those beyond threshold:
         weights = np.zeros_like(dist)
         np.divide(1, dist, out=weights, where=~too_far & (dist > 0))
-        # A query point that landed exactly on a mesh vertex is at zero
-        # distance, which would divide by zero. Give those vertices all of the
-        # weight instead, so the point maps to the vertex itself:
+        # A point exactly on a vertex (zero distance) maps to that vertex:
         exact = dist == 0
         id_exact = np.any(exact, axis=-1)
         weights[id_exact] = exact[id_exact]
-        # Points with no neighbor within cort_nn_thresh have no weight at all
-        # to average over, and stay NaN:
+        # No neighbor within cort_nn_thresh: stays NaN:
         id_ok = ~np.all(too_far, axis=-1)
         pts = np.full((len(query), 2), np.nan)
         pts[id_ok] = (np.sum(neighbors[id_ok] * weights[id_ok, :, None], axis=1) /

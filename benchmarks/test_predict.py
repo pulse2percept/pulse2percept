@@ -1,14 +1,12 @@
 """Benchmarks for the core pipeline: stimulus -> implant -> model -> percept.
 
-Every scenario in :mod:`scenarios` is measured at each stage of that pipeline
-separately, and once end to end. The decomposition is the point: an end-to-end
-number on its own cannot say whether a regression moved into stimulus
-construction, the model build, or the percept computation.
+Every scenario in :mod:`scenarios` is measured at each stage separately, and
+once end to end, so a regression can be located in stimulus construction, the
+model build, or the percept computation.
 
 Each benchmark reports wall-clock time through the ``benchmark`` fixture and
-peak memory through ``benchmark.extra_info``, so both land in the same JSON
-when the run is saved. The two are measured in separate runs on purpose; see
-the ``peak_memory`` fixture for why.
+peak memory through ``benchmark.extra_info``, both saved in the same JSON. Time
+and memory are measured in separate runs (see the ``peak_memory`` fixture).
 """
 import matplotlib.pyplot as plt
 import pytest
@@ -16,7 +14,7 @@ import pytest
 
 @pytest.mark.benchmark(group='stimulus')
 def test_stimulus(benchmark, scenario, peak_memory):
-    """Constructing the stimulus, before any implant is involved."""
+    """Construct the stimulus, before any implant is involved."""
     stim = benchmark(scenario.stimulus)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(scenario.stimulus)
     benchmark.extra_info['stim_shape'] = str(stim.shape)
@@ -24,13 +22,10 @@ def test_stimulus(benchmark, scenario, peak_memory):
 
 @pytest.mark.benchmark(group='implant')
 def test_implant(benchmark, scenario, implant, peak_memory):
-    """Turning a source into the stimulation the device delivers.
+    """Convert a source into the stimulation the device delivers.
 
-    This is not just bookkeeping: an image stimulus has far more pixels than
-    the array has electrodes, so it has to be resampled onto the electrode
-    grid first. That resampling is ``scenario.source``, so it is timed here
-    rather than done once in a fixture. Constructing the stimulus itself
-    happens in ``setup`` and is not timed.
+    Includes ``scenario.source``, which resamples an image onto the electrode
+    grid. Stimulus construction happens in ``setup`` and is not timed.
     """
     def prepare(stim):
         return implant.prepare_stim(scenario.source(implant, stim))
@@ -48,16 +43,14 @@ def test_implant(benchmark, scenario, implant, peak_memory):
 @pytest.mark.benchmark(group='build')
 def test_build(benchmark, scenario, implant, make_model, peak_memory,
                n_threads):
-    """Building the model, with any on-disk cache already warm.
+    """Build the model with any on-disk cache already warm.
 
-    This is the path a user hits on every run after the first, so it is the
-    number that describes their experience. For the axon-map models it is
-    dominated by reading the pickled bundles and recomputing axon
-    sensitivity; see ``test_build_cold`` for the underlying computation.
+    This is every run after the first. For axon-map models it is dominated by
+    reading the pickled bundles and recomputing axon sensitivity; see
+    ``test_build_cold`` for the full computation.
     """
     if scenario.caches_axons:
-        # Populate the cache first so this benchmark measures the warm path
-        # no matter which order the tests run in.
+        # Populate the cache first, independent of test order:
         make_model(implant, ignore_pickle=False).build()
 
     def setup():
@@ -73,10 +66,9 @@ def test_build(benchmark, scenario, implant, make_model, peak_memory,
 @pytest.mark.benchmark(group='build')
 def test_build_cold(benchmark, scenario, implant, make_model, peak_memory,
                     n_threads):
-    """Building the model from scratch, ignoring the on-disk cache.
+    """Build the model from scratch, ignoring the on-disk cache.
 
-    This is the actual Jansonius-model computation -- the part worth
-    optimizing -- rather than the cost of unpickling last run's result.
+    Measures the Jansonius axon-map computation instead of unpickling.
     """
     if not scenario.caches_axons:
         pytest.skip(f'{scenario.id} has no on-disk cache, so a cold build is '
@@ -95,11 +87,10 @@ def test_build_cold(benchmark, scenario, implant, make_model, peak_memory,
 @pytest.mark.benchmark(group='predict_percept')
 def test_predict_percept(benchmark, built_model, source, peak_memory,
                          n_threads):
-    """Predicting the percept: the headline number for this library.
+    """Predict the percept (headline number).
 
-    Includes the bound implant's own preparation of the source, which
-    ``predict_percept`` performs. The ``implant`` group above times that same
-    work separately, so the two groups overlap rather than add up.
+    Includes the implant's preparation of the source, also timed separately in
+    the ``implant`` group, so the two groups overlap.
     """
     percept = benchmark(built_model.predict_percept, source)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(
@@ -110,11 +101,10 @@ def test_predict_percept(benchmark, built_model, source, peak_memory,
 
 @pytest.mark.benchmark(group='end_to_end')
 def test_end_to_end(benchmark, scenario, make_model, peak_memory, n_threads):
-    """The whole pipeline, as a user would write it in one line.
+    """Run the whole pipeline, as in the one-liners in :mod:`scenarios`.
 
-    The only departure from the one-liner in :mod:`scenarios` is that the
-    model is constructed through ``make_model``, so that it writes its axon
-    cache to a temporary directory instead of the current one.
+    The model is built through ``make_model``, which writes the axon cache to
+    a temporary directory.
     """
     def run():
         implant = scenario.implant()
@@ -129,13 +119,11 @@ def test_end_to_end(benchmark, scenario, make_model, peak_memory, n_threads):
 
 @pytest.mark.benchmark(group='plot')
 def test_plot(benchmark, scenario, percept, peak_memory):
-    """Drawing the percept.
+    """Draw the percept.
 
-    Mostly a matplotlib measurement rather than a pulse2percept one, kept in
-    its own group so it never gets read as part of the model cost. The axes
-    are cleared and reused between rounds: a fresh figure per round would
-    accumulate hundreds of them, and clearing inside the timed section would
-    charge the teardown to the plot.
+    Mostly matplotlib time, kept in its own group. The axes are cleared in
+    ``setup`` and reused, to avoid hundreds of figures and to keep teardown out
+    of the timed section.
     """
     if not scenario.plottable:
         pytest.skip(f'{scenario.id} has a temporal-only model, whose percept '

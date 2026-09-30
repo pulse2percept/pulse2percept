@@ -35,12 +35,9 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-# A library must not configure logging on behalf of the application that
-# imports it: handlers, levels and destinations are the application's to
-# choose. Attaching a NullHandler to our own logger silences the "no handler
-# could be found" fallback without touching the root logger, which is what the
-# logging documentation prescribes for libraries. Call ``set_debug_logging``
-# to opt in to the debug file that used to be configured on import.
+# Libraries should not configure logging (see the logging docs). A NullHandler
+# silences the "no handler" fallback without touching the root logger. Call
+# ``set_debug_logging`` to write a debug file.
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
@@ -48,12 +45,9 @@ logger.addHandler(logging.NullHandler())
 def set_debug_logging(fname="debug.log", level=logging.DEBUG, filemode="w"):
     """Write pulse2percept's log messages to a file
 
-    Importing pulse2percept does not configure logging: which messages are
-    emitted, and where they go, is the application's decision. Call this to
-    opt in to a file-based log of pulse2percept's own messages.
-
-    Note that this configures the ``pulse2percept`` logger only, not the root
-    logger, so it will not capture messages from other libraries.
+    Importing pulse2percept does not configure logging. This function adds a
+    file handler to the ``pulse2percept`` logger only (not the root logger),
+    so messages from other libraries are not captured.
 
     Parameters
     ----------

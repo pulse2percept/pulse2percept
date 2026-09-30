@@ -54,29 +54,28 @@ def test_samples_legacy_classes_deprecated(legacy, alt):
 
 
 def test_samples_namespace():
-    # The module is reachable, but its loaders are not promoted to the
-    # top-level namespace:
+    # The module is importable, but its loaders are not in the top-level
+    # namespace:
     npt.assert_equal(p2p.stimuli.samples is samples, True)
     for name in samples.__all__:
         npt.assert_equal(hasattr(p2p.stimuli, name), False)
-    # `samples` publishes the loaders only: the deprecated classes stay
-    # importable for `pulse2percept.stimuli`, but are not new public API here.
+    # `samples.__all__` lists only the loaders; the deprecated classes stay
+    # importable from `pulse2percept.stimuli`:
     for legacy in ('LogoBVL', 'LogoUCSB'):
         npt.assert_equal(legacy in samples.__all__, False)
         npt.assert_equal(hasattr(p2p.stimuli, legacy), True)
-    # Removed outright, along with their assets:
+    # Removed, together with their assets:
     for gone in ('BostonTrain', 'GirlPool', 'SnellenChart'):
         npt.assert_equal(hasattr(p2p.stimuli, gone), False)
     for gone in ('boston_train', 'girl_pool', 'snellen_chart'):
         npt.assert_equal(hasattr(samples, gone), False)
-    # The procedural optotypes are generated, not bundled, so they live in
-    # `psychophysics` now:
+    # Optotypes are generated procedurally and now live in `psychophysics`:
     for gone in ('landolt_c', 'tumbling_e'):
         npt.assert_equal(hasattr(samples, gone), False)
 
 
-#: Properties of the packaged clip, as decoded (not as the container claims:
-#: the MP4 header advertises more frames than the file actually holds).
+#: Properties of the packaged clip as decoded (the MP4 header lists more
+#: frames than the file holds).
 _BUNNY_SHAPE, _BUNNY_FRAMES, _BUNNY_FPS = (359, 640), 115, 24.0
 
 
@@ -106,7 +105,7 @@ def test_big_buck_bunny_metadata():
     npt.assert_equal(video.metadata['title'], 'Big Buck Bunny')
     npt.assert_equal(video.metadata['creator'], 'Blender Foundation')
     npt.assert_equal(video.metadata['license'], 'CC BY 3.0')
-    # User metadata merges the usual way, and wins over the defaults:
+    # User metadata is merged and overrides the defaults:
     user = samples.big_buck_bunny(resize=(8, 8),
                                   metadata={'foo': 'bar', 'title': 'clip'})
     npt.assert_equal(user.metadata['foo'], 'bar')
@@ -118,9 +117,9 @@ def test_big_buck_bunny_not_top_level():
     npt.assert_equal(hasattr(p2p.stimuli, 'big_buck_bunny'), False)
 
 
-#: Properties of the two packaged NLM clips, as decoded. Both sources are
-#: variable-frame-rate, so the reader pads them to a constant rate: the frame
-#: counts here are the padded ones, not the number of distinct frames.
+#: Properties of the two packaged NLM clips as decoded. Both are
+#: variable-frame-rate, so the reader pads them to a constant rate; frame
+#: counts are the padded ones, not the number of distinct frames.
 _NLM_CLIPS = [
     (samples.ucsb_flyover, 53, 24.32),
     (samples.ucsb_pedestrians, 45, 24.52),
@@ -155,7 +154,7 @@ def test_samples_nlm_clip_metadata(loader, title):
                      'Courtesy of the National Library of Medicine')
     npt.assert_equal(video.metadata['license'],
                      'Public domain (U.S. government work)')
-    # User metadata merges the usual way, and wins over the defaults:
+    # User metadata is merged and overrides the defaults:
     user = loader(resize=(8, 8), metadata={'foo': 'bar', 'title': 'clip'})
     npt.assert_equal(user.metadata['foo'], 'bar')
     npt.assert_equal(user.metadata['title'], 'clip')
@@ -196,11 +195,11 @@ def test_samples_photo_metadata():
     npt.assert_equal(cake.metadata['license'], 'BSD-3-Clause')
     surf = samples.ucsb_surf(resize=(8, 8))
     npt.assert_equal(surf.metadata['title'], 'UCSB surf')
-    # Provenance lives under 'credit': ImageStimulus overwrites 'source' with
-    # the local file name.
+    # Provenance is stored under 'credit', because ImageStimulus overwrites
+    # 'source' with the local file name.
     npt.assert_equal(surf.metadata['credit'],
                      'Courtesy of the National Library of Medicine')
-    # User metadata merges the usual way, and wins over the defaults:
+    # User metadata is merged and overrides the defaults:
     user = samples.ucsb_surf(resize=(8, 8), metadata={'title': 'frame'})
     npt.assert_equal(user.metadata['title'], 'frame')
     npt.assert_equal(user.metadata['credit'],

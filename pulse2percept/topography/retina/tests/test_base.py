@@ -8,14 +8,14 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, dva, mm,
 
 
 def test_retinal_map_units():
-    """dva in, microns out -- and either may be spelled with a unit"""
+    """Retinal maps take dva, return um, and accept unitful inputs"""
     for cls in (Curcio1990Map, Watson2014Map, Montesano2020Map):
         visual_field_map = cls()
         bare = visual_field_map.dva_to_ret(5, -2)
         npt.assert_allclose(visual_field_map.dva_to_ret(5 * dva, -2 * dva),
                             bare,
                             rtol=1e-12, err_msg=cls.__name__)
-        # The output is a plain number of microns, never a Quantity:
+        # Output is plain um, not a Quantity:
         for value in bare:
             npt.assert_equal(isinstance(value, Quantity), False)
         with pytest.raises(DimensionMismatchError):
@@ -23,7 +23,7 @@ def test_retinal_map_units():
         with pytest.raises(DimensionMismatchError):
             visual_field_map.dva_to_ret(5, -2 * ms)
 
-    # The inverse takes a length, and mixed spellings round-trip:
+    # Inverse takes lengths, including mixed units:
     for cls in (Curcio1990Map, Watson2014Map, Montesano2020Map):
         visual_field_map = cls()
         x_um, y_um = visual_field_map.dva_to_ret(5 * dva, -2 * dva)
@@ -32,15 +32,14 @@ def test_retinal_map_units():
         npt.assert_allclose(mixed, bare, rtol=1e-9, err_msg=cls.__name__)
         with pytest.raises(DimensionMismatchError):
             visual_field_map.ret_to_dva(5 * dva, -2)
-    # Curcio is exactly linear, so its round trip closes exactly. (Watson's
-    # forward and inverse are separate fits and only agree to ~2%, which is a
-    # property of that map and not of the unit conversion.)
+    # Curcio is linear, so its round trip is exact (Watson's forward and
+    # inverse are separate fits that agree to ~2%):
     npt.assert_allclose(
         Curcio1990Map().ret_to_dva(*Curcio1990Map().dva_to_ret(5 * dva,
                                                                -2 * dva)),
         [5, -2], rtol=1e-12)
 
-    # A non-coordinate keyword travels through untouched:
+    # Non-coordinate keywords are passed unchanged:
     watson = Watson2014Map()
     npt.assert_allclose(watson.dva_to_ret(3 * dva, 1 * dva, coords='cart'),
                         watson.dva_to_ret(3, 1, coords='cart'), rtol=1e-12)

@@ -78,27 +78,27 @@ class Ho2018Temporal(TemporalModel):
     (9 mW/mm^2 for 4 ms) peaks at a drive of 1. Evaluated in closed form at
     the requested output times; ``dt`` only fixes the lattice they lie on.
 
-    Rectification models the pON pathway: a negative excursion is a drop below
-    the spontaneous firing rate, which
-    :py:class:`~pulse2percept.percepts.Percept` brightness cannot represent.
+    Rectification models the pON pathway: a negative excursion (firing below
+    the spontaneous rate) has no :py:class:`~pulse2percept.percepts.Percept`
+    brightness.
 
-    Input is network-response drive, not stimulation. In a
-    :py:class:`~pulse2percept.models.retina.Ho2018Model` that is the percept
-    :py:class:`~pulse2percept.models.retina.Ho2018Spatial` returns; used
-    alone, this model also accepts a dimensionless normalized drive. Injected
-    current and raw gray levels are refused.
+    Input is network drive, not stimulation: the percept returned by
+    :py:class:`~pulse2percept.models.retina.Ho2018Spatial` in a
+    :py:class:`~pulse2percept.models.retina.Ho2018Model`, or a dimensionless
+    normalized drive when used alone. Injected current and raw gray levels are
+    rejected.
 
     .. warning::
 
-        The functional form and the timing landmarks come from [Ho2018]_, the
-        coefficients do not: [Ho2018]_ publishes none. Given ``n=6``, ``p1=1``
+        The functional form and timing landmarks are from [Ho2018]_; the
+        coefficients are not (none are published). Given ``n=6``, ``p1=1``
         and zero DC gain (:math:`p_1\tau_1 = p_2\tau_2`, which makes the
         filter purely transient), ``tau1``, ``tau2`` and ``p2`` are the unique
-        solution reproducing Table 1 of [Ho2018]_ -- the per-cell RCS pON
-        summary of a 50 +/- 3 ms first peak and a 94 +/- 5 ms first zero
-        crossing. Averaged per retina the same paper reports 51 +/- 3 ms and
-        87 +/- 3 ms, and the 20 Hz white-noise stimulus sampled the time
-        course only every 50 ms, so both landmarks are coarse.
+        solution reproducing Table 1 of [Ho2018]_: per-cell RCS pON first
+        peak at 50 +/- 3 ms and first zero crossing at 94 +/- 5 ms. Per-retina
+        averages are 51 +/- 3 ms and 87 +/- 3 ms, and the 20 Hz white-noise
+        stimulus sampled the time course only every 50 ms, so both landmarks
+        are coarse.
 
     .. versionadded:: 0.11.0
 
@@ -250,11 +250,12 @@ class Ho2018Spatial(ScoreboardSpatial):
 
         .. important::
 
-            ``rho = pitch / 2`` is a pulse2percept convention: a spread on the
-            scale of the device, so that neighboring pixels stay resolvable.
-            It is neither a measured perceptual point-spread function nor the
-            receptive-field size [Ho2018]_ reports. Electrode-retina distance
-            (``z``) does not affect it, and nonzero ``z`` raises a warning.
+            ``rho = pitch / 2`` is a pulse2percept convention (spread on the
+            device scale, keeping neighboring pixels resolvable). It is
+            neither a measured perceptual point-spread function nor the
+            receptive-field size reported by [Ho2018]_. Electrode-retina
+            distance (``z``) does not affect it; nonzero ``z`` issues a
+            warning.
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle, or a
@@ -302,15 +303,15 @@ class Ho2018Spatial(ScoreboardSpatial):
     #: An optical schedule, not injected current.
     stimulus_unit = _IRRADIANCE
 
-    #: A normalized drive no longer carries the irradiance and ON duration the
-    #: activation law requires.
+    #: A normalized drive lacks the irradiance and ON duration the activation
+    #: law requires.
     extra_stimulus_units = ()
 
     #: The activation law reads irradiance and ON duration off the schedule.
     _needs_structured_stim = True
 
-    #: Network drive is dimensionless, but gray levels are not network
-    #: drive: this model reads the pulse schedule.
+    #: Gray levels are not network drive; this model reads the pulse
+    #: schedule.
     _accepts_dimensionless_drive = False
 
     def __init__(self, implant, *, rho=None, xrange=(-15, 15),
@@ -353,8 +354,8 @@ class Ho2018Spatial(ScoreboardSpatial):
                     f"{type(self.implant).__name__} has none: that needs at "
                     f"least two electrodes at distinct positions. Pass 'rho' "
                     f"explicitly.")
-            # Past the parameter setter, so resolving neither invalidates the
-            # build in progress nor clears the sentinel.
+            # Bypass the parameter setter so this neither invalidates the
+            # build in progress nor clears the sentinel:
             object.__setattr__(self, 'rho', pitch / 2)
         super()._build()
 
@@ -394,8 +395,8 @@ class Ho2018Spatial(ScoreboardSpatial):
             time = np.sort(np.array([t_percept], dtype=np.float64).ravel())
             at = np.searchsorted(t_pulse, time, side='right') - 1
             resp = resp[..., np.clip(at, 0, t_pulse.size - 1)]
-            # Before the first pulse and after the stimulus ends, nothing is
-            # delivered; holding the nearest period would invent light.
+            # No light is delivered before the first pulse or after the
+            # stimulus ends:
             resp[..., (at < 0) | (time >= stim.duration)] = 0
         # Drive stays on the pulse clock. `_frame_clock` reports a video on
         # its source clock and a still image on the pulse clock.

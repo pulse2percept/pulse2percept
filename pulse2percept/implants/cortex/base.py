@@ -19,17 +19,15 @@ def _validate_hemisphere(hemisphere):
 class CorticalImplant(Implant):
     """Cortical prosthesis
 
-    A cortical prosthesis is an :py:class:`~pulse2percept.implants.Implant`
-    that stimulates visual cortex, and therefore sits in one hemisphere. This
-    is the base class for devices such as
-    :py:class:`~pulse2percept.implants.cortex.Orion`, and can be used directly
-    to give a custom electrode array a hemisphere.
+    An :py:class:`~pulse2percept.implants.Implant` that stimulates visual
+    cortex in one hemisphere. Base class for devices such as
+    :py:class:`~pulse2percept.implants.cortex.Orion`. Can be used directly to
+    assign a hemisphere to a custom electrode array.
 
-    ``hemisphere`` is device metadata only. Where the array sits in cortex is
-    set by the model's ``implant_position`` and by the electrode coordinates
-    themselves, which stay authoritative: recording a hemisphere neither moves
-    the array nor reflects its coordinates, and a hemisphere that disagrees
-    with the coordinates is not rejected.
+    ``hemisphere`` is metadata only. Placement is set by the model's
+    ``implant_position`` and the electrode coordinates. Setting a hemisphere
+    does not move or mirror the array, and a hemisphere inconsistent with the
+    coordinates is not rejected.
 
     .. versionadded:: 0.11.0
 
@@ -69,7 +67,6 @@ class CorticalImplant(Implant):
     def _pprint_params(self):
         """Return dict of class attributes to pretty-print"""
         params = super()._pprint_params()
-        # Omitted when unspecified, which is the default:
         if self.hemisphere is not None:
             params['hemisphere'] = self.hemisphere
         return params
@@ -78,9 +75,8 @@ class CorticalImplant(Implant):
     def hemisphere(self):
         """Implanted hemisphere
 
-        'left', 'right', or None if unspecified. Metadata: cortical models
-        place the array from its coordinates and their own
-        ``implant_position``, not from this attribute.
+        'left', 'right', or None if unspecified. Metadata only: cortical
+        models use electrode coordinates and ``implant_position``.
         """
         return getattr(self, '_hemisphere', None)
 

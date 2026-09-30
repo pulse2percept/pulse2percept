@@ -1,10 +1,9 @@
-"""The public shape of :py:mod:`pulse2percept.implants`
+"""Public API of :py:mod:`pulse2percept.implants`
 
-The root namespace is anatomy-neutral: it carries the generic device
-machinery (electrodes, arrays, rasters, ensembles, the implant pipeline) and
-the two anatomical subpackages, and nothing else. Retinal devices were
-removed from the root in v0.11 without a deprecation alias, and anatomical
-laterality lives with the target: ``eye`` on
+The root namespace is anatomy-neutral: generic device classes (electrodes,
+arrays, rasters, ensembles, Implant) and the two anatomical subpackages.
+Retinal devices were removed from the root in v0.11 without a deprecation
+alias. Laterality is set per target: ``eye`` on
 :py:class:`~pulse2percept.implants.retina.RetinalImplant`, ``hemisphere`` on
 :py:class:`~pulse2percept.implants.cortex.CorticalImplant`.
 """
@@ -44,7 +43,7 @@ def test_root_namespace_is_anatomy_neutral():
     npt.assert_equal(sorted(implants.__all__), sorted(GENERIC))
     for name in ('Implant', 'GridImplant', 'retina', 'cortex'):
         npt.assert_equal(hasattr(implants, name), True, err_msg=name)
-    # No device, retinal or cortical, and no anatomical base class:
+    # No devices and no anatomical base classes:
     for name in ('ArgusI', 'ArgusII', 'AlphaIMS', 'AlphaAMS',
                  'Suprachoroidal24', 'Suprachoroidal44', 'IMIE', 'PRIMAPivotal', 'PRIMA', 'PRIMA75', 'PRIMA55',
                  'PRIMA40', 'Lorach2015Array', 'Ho2019FlatArray',
@@ -58,7 +57,7 @@ def test_root_namespace_is_anatomy_neutral():
 @pytest.mark.parametrize('name', ['argus', 'alpha', 'suprachoroidal', 'imie',
                                   'prima'])
 def test_flat_device_modules_are_gone(name):
-    """Device implementations live under the target they stimulate"""
+    """Device classes live in the subpackage of their target"""
     with pytest.raises(ImportError):
         importlib.import_module(f'pulse2percept.implants.{name}')
     importlib.import_module(f'pulse2percept.implants.retina.{name}')
@@ -103,7 +102,7 @@ def test_canonical_imports(module, names):
     ('pulse2percept.implants.cortex.neuralink', 'Neuralink'),
 ])
 def test_defining_module(module, name):
-    """Each class is defined in the module its package re-exports it from"""
+    """Each class is defined in the module its package imports it from"""
     mod = importlib.import_module(module)
     package = importlib.import_module(module.rsplit('.', 1)[0])
     npt.assert_equal(getattr(mod, name) is getattr(package, name), True)
@@ -122,12 +121,12 @@ def test_generic_implants_have_no_laterality(implant):
 
 
 def test_generic_ensemble_knows_nothing_about_cortex():
-    """``from_cortical_map`` became ``from_visual_field_map`` in 0.11"""
+    """``from_cortical_map`` is ``from_visual_field_map`` since 0.11"""
     npt.assert_equal(hasattr(implants.EnsembleImplant, 'from_cortical_map'),
                      False)
     npt.assert_equal(
         hasattr(implants.EnsembleImplant, 'from_visual_field_map'), True)
-    # And the module itself does not reach into topography.cortex:
+    # The module does not import topography.cortex:
     source = importlib.import_module('pulse2percept.implants.ensemble')
     npt.assert_equal('CorticalMap' in open(source.__file__).read(), False)
 
@@ -139,16 +138,16 @@ def test_retinal_implant_owns_the_eye():
     # Case-insensitive, stored lowercase:
     npt.assert_equal(RetinalImplant(array, eye='LEFT').eye, 'left')
     npt.assert_equal(RetinalImplant(array, eye='Right').eye, 'right')
-    # A retinal implant is not a hemisphere:
+    # A retinal implant has no hemisphere:
     npt.assert_equal(hasattr(RetinalImplant(array), 'hemisphere'), False)
-    # The pre-0.11 codes are gone, not deprecated aliases:
+    # The pre-0.11 codes were removed without deprecation:
     for bad in ('LE', 'RE', 'both', 'left eye', ''):
         with pytest.raises(ValueError):
             RetinalImplant(array, eye=bad)
     for bad in (None, 1, ['left']):
         with pytest.raises(TypeError):
             RetinalImplant(array, eye=bad)
-    # Device arguments still reach Implant:
+    # Other arguments are passed to Implant:
     implant = RetinalImplant(array, eye='left', preprocess=True,
                              safe_mode=True, max_current=100)
     npt.assert_equal(implant.preprocess, True)
@@ -159,12 +158,12 @@ def test_retinal_implant_owns_the_eye():
 @pytest.mark.parametrize('eye', ['left', 'right'])
 @pytest.mark.parametrize('implant_type', EYE_SENSITIVE_DEVICES)
 def test_canonicalized_eye_drives_the_geometry(implant_type, eye):
-    """Case is normalized before the device lays out its electrodes
+    """`eye` is lowercased before the device lays out its electrodes
 
-    These devices reverse their column names in the left eye, so reading the
-    raw constructor argument rather than the canonical
-    :py:attr:`~pulse2percept.implants.retina.RetinalImplant.eye` would let the
-    metadata say 'left' while the geometry stayed right-eye.
+    These devices reverse their column names in the left eye, so using the raw
+    argument instead of the canonical
+    :py:attr:`~pulse2percept.implants.retina.RetinalImplant.eye` could give
+    'left' metadata with right-eye geometry.
     """
     lower, upper = implant_type(eye=eye), implant_type(eye=eye.upper())
     npt.assert_equal(lower.eye, eye)
@@ -178,7 +177,7 @@ def test_canonicalized_eye_drives_the_geometry(implant_type, eye):
 def test_a_retinal_device_is_a_retinal_implant(implant_type):
     implant = implant_type()
     npt.assert_equal(isinstance(implant, RetinalImplant), True)
-    # Suprachoroidal44 is the one device published for the left eye:
+    # Suprachoroidal44 is the only device published for the left eye:
     npt.assert_equal(implant.eye,
                      'left' if implant_type is Suprachoroidal44 else 'right')
     npt.assert_equal(implant_type(eye='left').eye, 'left')
@@ -187,7 +186,8 @@ def test_a_retinal_device_is_a_retinal_implant(implant_type):
 
 @pytest.mark.parametrize('implant_type', [Ho2019FlatArray, Huang2021Array])
 def test_a_sized_retinal_device_is_a_retinal_implant(implant_type):
-    """The two families whose constructor takes a pixel size first"""
+    """Ho2019FlatArray and Huang2021Array (pixel size first) are retinal
+    implants"""
     npt.assert_equal(isinstance(implant_type(55), RetinalImplant), True)
     npt.assert_equal(implant_type(55).eye, 'right')
     npt.assert_equal(implant_type(55, eye='left').eye, 'left')
@@ -195,22 +195,22 @@ def test_a_sized_retinal_device_is_a_retinal_implant(implant_type):
 
 def test_cortical_implant_owns_the_hemisphere():
     array = ElectrodeGrid((2, 3), 400)
-    # Unspecified by default: cortical coordinates and the model's
-    # `implant_position` already say which side the device is on.
+    # None by default: cortical coordinates and the model's `implant_position`
+    # already determine the side:
     npt.assert_equal(CorticalImplant(array).hemisphere, None)
     npt.assert_equal(CorticalImplant(array, hemisphere='left').hemisphere,
                      'left')
     npt.assert_equal(CorticalImplant(array, hemisphere='RIGHT').hemisphere,
                      'right')
     npt.assert_equal(hasattr(CorticalImplant(array), 'eye'), False)
-    # The pre-0.11 codes are gone, not deprecated aliases:
+    # The pre-0.11 codes were removed without deprecation:
     for bad in ('LH', 'RH', 'both', 'L', ''):
         with pytest.raises(ValueError):
             CorticalImplant(array, hemisphere=bad)
     for bad in (1, ['left']):
         with pytest.raises(TypeError):
             CorticalImplant(array, hemisphere=bad)
-    # Unspecified is not printed; a recorded side is:
+    # The repr includes `hemisphere` only if set:
     npt.assert_equal('hemisphere' in repr(CorticalImplant(array)), False)
     npt.assert_equal("hemisphere='left'" in repr(
         CorticalImplant(array, hemisphere='left')), True)
@@ -227,7 +227,7 @@ def test_a_cortical_device_is_a_cortical_implant(implant_type):
 
 @pytest.mark.parametrize('implant_type', CORTICAL_DEVICES)
 def test_hemisphere_does_not_move_a_cortical_device(implant_type):
-    """Recording a side is metadata, not a placement"""
+    """`hemisphere` is metadata only; it does not change the geometry"""
     plain = implant_type()
     for hemisphere in ('left', 'right'):
         sided = implant_type(hemisphere=hemisphere)
@@ -237,7 +237,8 @@ def test_hemisphere_does_not_move_a_cortical_device(implant_type):
 
 
 def test_neuralink_has_the_same_hemisphere_contract():
-    """Neuralink is an ensemble, not a CorticalImplant, but says the same"""
+    """Neuralink (an ensemble, not a CorticalImplant) handles `hemisphere` the
+    same way"""
     threads = [LinearEdgeThread(x, 0, 0) for x in (0, 1000)]
     npt.assert_equal(isinstance(Neuralink(threads), CorticalImplant), False)
     npt.assert_equal(Neuralink(threads).hemisphere, None)
@@ -247,7 +248,7 @@ def test_neuralink_has_the_same_hemisphere_contract():
         Neuralink(threads, hemisphere='RH')
     with pytest.raises(TypeError):
         Neuralink(threads, hemisphere=1)
-    # ... and it does not move the threads:
+    # It does not move the threads:
     npt.assert_array_equal(
         Neuralink(threads, hemisphere='left').electrode_array.coordinates(),
         Neuralink(threads).electrode_array.coordinates())

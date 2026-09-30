@@ -88,9 +88,8 @@ class TestMapDouble(VisualFieldMap):
             "double": lambda x, y: (2*x, 2*y)
         }
 
-# Parametrize over a factory, not over instances: arguments to `parametrize`
-# are built at import time (on every pytest run, even when this test is
-# deselected) and are shared across invocations.
+# Parametrize over factories: `parametrize` arguments are built at import
+# time and shared across invocations:
 @pytest.mark.parametrize('make_visual_field_map', [
     pytest.param(Watson2014Map, id='Watson2014Map'),
     pytest.param(lambda: Polimeni2006Map(regions=['v1', 'v2', 'v3']),
@@ -235,12 +234,11 @@ def test_Grid2D_deepcopy_memo():
     npt.assert_equal(copied == grid, True)
     npt.assert_equal(id(copied) != id(grid), True)
 
-    # The default memo must not persist between calls (a shared mutable
-    # default would leak copies from one call into the next):
+    # The default memo does not persist between calls:
     other = Grid2D((-1, 1), (-1, 1), step=1)
     npt.assert_equal(other.__deepcopy__() == other, True)
 
-    # An object already in the memo is returned as-is, not re-copied:
+    # An object already in the memo is returned as is:
     sentinel = 'already copied'
     npt.assert_equal(grid.__deepcopy__({id(grid): sentinel}), sentinel)
 
@@ -259,13 +257,13 @@ def test_Grid2D_plot3d_validation():
     with pytest.raises(ValueError):
         grid.plot3d(ax=ax2d)
 
-    # A 2D visual field map has nothing to plot in 3D:
+    # A 2D visual field map cannot be plotted in 3D:
     fig = plt.figure()
     ax3d = fig.add_subplot(111, projection='3d')
     with pytest.raises(ValueError):
         grid.plot3d(ax=ax3d)
 
-    # A 3D map gets past the ndim check, so style and surface are validated:
+    # With a 3D map, style and surface are validated:
     grid3d = Grid2D((-2, 2), (-2, 2), step=1)
     grid3d.build(Valid3DTransform())
     with pytest.raises(ValueError):
@@ -309,7 +307,7 @@ def test_CoordinateGrid():
 
 
 class Valid3DMap(RetinalMap):
-    """A 3D retinal map, so `plot3d` can be exercised without neuropythy."""
+    """3D retinal map for testing `plot3d` without neuropythy"""
 
     def get_default_params(self):
         params = super().get_default_params()
@@ -346,8 +344,8 @@ def test_Grid2D_plot3d():
     # An explicit color overrides `color_by`:
     npt.assert_equal(grid.plot3d(ax=new_ax(), c='blue') is not None, True)
 
-    # Without an `ax`, a 3D axis is created. Close any open figures first:
-    # if a 3D axis is already current, `plot3d` reuses it as-is.
+    # Without `ax`, a 3D axis is created (close figures first, since a current
+    # 3D axis would be reused):
     plt.close('all')
     npt.assert_equal(grid.plot3d() is not None, True)
     plt.close('all')
@@ -362,9 +360,7 @@ def test_Grid2D_plot3d():
     pytest.param(lambda: Polimeni2006Map(regions=['v1']), id='Polimeni2006Map'),
 ])
 def test_VisualFieldMap_is_not_a_model(make_visual_field_map):
-    # A visual field map is handed *to* a model; it is not one itself. It must
-    # therefore not carry the build workflow, nor the `_is_built` attribute
-    # that used to be set (and immediately forced to True) by BaseModel.
+    # A visual field map is not a model: no build workflow or `_is_built`:
     visual_field_map = make_visual_field_map()
     npt.assert_equal(isinstance(visual_field_map, Parametrized), True)
     npt.assert_equal(isinstance(visual_field_map, BaseModel), False)
@@ -378,15 +374,11 @@ def test_VisualFieldMap_is_not_a_model(make_visual_field_map):
     pytest.param(lambda: Polimeni2006Map(regions=['v1']), id='Polimeni2006Map'),
 ])
 def test_VisualFieldMap_eq_handles_arrays(make_visual_field_map):
-    # Comparing attributes with a plain `self.__dict__ == other.__dict__`
-    # raises ValueError as soon as one of them is an array, and defining
-    # __eq__ without __hash__ makes the map unhashable. Both are inherited
-    # from Parametrized, so neither can regress silently.
+    # __eq__ and __hash__ come from Parametrized and handle array attributes:
     one, two = make_visual_field_map(), make_visual_field_map()
     npt.assert_equal(one == two, True)
 
-    # Bypass Frozen to attach an array: no map ships one today, but nothing
-    # stops a user-defined map from caching one.
+    # Bypass Frozen to attach an array (as a user-defined map might cache):
     one.__dict__['cached'] = np.arange(4)
     two.__dict__['cached'] = np.arange(4)
     npt.assert_equal(one == two, True)
@@ -398,15 +390,14 @@ def test_VisualFieldMap_eq_handles_arrays(make_visual_field_map):
 
 
 def test_VisualFieldMap_subclasses_do_not_compare_equal():
-    # Equality is exact-class, as it is for every other Parametrized object:
-    # a displacement map computes a different transform than a plain one.
+    # Equality requires the exact class, as for any Parametrized object:
     npt.assert_equal(Montesano2020Map() == Watson2014Map(), False)
     npt.assert_equal(Watson2014Map() == Montesano2020Map(), False)
     npt.assert_equal(Watson2014Map() == Watson2014Map(), True)
 
 
 def test_Grid2D_units():
-    """A Grid2D is a grid of visual field coordinates, measured in dva"""
+    """Grid2D coordinates are in dva; other units are an error"""
     bare = Grid2D((-3, 3), (-3, 3), 0.5)
     unitful = Grid2D((-3 * dva, 3 * dva), (-3 * dva, 3 * dva), 0.5 * dva)
     npt.assert_allclose(unitful.x, bare.x, rtol=1e-12)
@@ -419,8 +410,7 @@ def test_Grid2D_units():
     # A per-axis step, too:
     npt.assert_allclose(Grid2D((-3, 3), (-3, 3), (1 * dva, 0.5 * dva)).x,
                         Grid2D((-3, 3), (-3, 3), (1, 0.5)).x, rtol=1e-12)
-    # A length is not a visual angle: how far a degree reaches on tissue is
-    # what a visual field map is for, and is not a unit conversion.
+    # Lengths are not converted to dva (that requires a visual field map):
     for kwargs in ({'x_range': (-3 * mm, 3 * mm)}, {'y_range': (-3, 3 * um)},
                    {'step': 1 * um}, {'step': 1 * ms}):
         with pytest.raises(DimensionMismatchError):
@@ -429,7 +419,7 @@ def test_Grid2D_units():
         Grid2D((-3, 3), (-3, 3), 1 * um)
     npt.assert_equal("Parameter 'step' expects visual angle (dva), got length"
                      in str(excinfo.value), True)
-    # Building keeps everything numeric on the other side:
+    # Built tissue coordinates are plain arrays:
     unitful.build(Curcio1990Map())
     bare.build(Curcio1990Map())
     npt.assert_equal(isinstance(unitful.ret.x, np.ndarray), True)
@@ -437,40 +427,37 @@ def test_Grid2D_units():
 
 
 def test_rectangular_mesh_is_unitless():
-    """The mesh generator spaces numbers; what they mean is the caller's
+    """_rectangular_mesh is unit-agnostic
 
-    `Grid2D` reads them as degrees; `EnsembleImplant.from_coords` reads the
-    same numbers as microns. Keeping the ambiguity out of the generator is why
-    the two do not share a class.
+    `Grid2D` uses it for dva, `EnsembleImplant.from_coords` for um.
     """
     (x, y), xflat, yflat = _rectangular_mesh((-3, 3), (-3, 3), 1)
     npt.assert_equal(x.shape, (7, 7))
     npt.assert_almost_equal(xflat, np.arange(-3, 4))
-    # y runs from the top down, following image convention:
+    # y runs from the top down (image convention):
     npt.assert_almost_equal(y[0, 0], 3)
     npt.assert_almost_equal(y[-1, 0], -3)
-    # It agrees with the grid built on top of it:
+    # Matches Grid2D:
     grid = Grid2D((-3, 3), (-3, 3), 1)
     npt.assert_almost_equal(x, grid.x)
     npt.assert_almost_equal(y, grid.y)
-    # A zero-width range is one point, whatever the step:
+    # A zero-width range is one point regardless of step:
     (x0, _), _, _ = _rectangular_mesh((2, 2), (-1, 1), 0.5)
     npt.assert_equal(x0.shape, (5, 1))
-    # It takes plain numbers only -- a unit would have to mean something:
+    # Ranges must be (min, max) sequences:
     with pytest.raises(TypeError):
         _rectangular_mesh(3, (-3, 3), 1)
 
 
 def test_VisualFieldMap_unit_contract():
-    """Every map declares the two sides it converts between"""
+    """Every map declares visual_unit (dva) and tissue_unit (um)"""
     for cls in (Curcio1990Map, Watson2014Map, Montesano2020Map,
                 Polimeni2006Map):
         visual_field_map = cls()
         npt.assert_equal(visual_field_map.visual_unit, dva)
         npt.assert_equal(visual_field_map.tissue_unit, um)
 
-    # A map written outside p2p gets the same boundary, without its author
-    # having to do anything: the wrapping is by method name.
+    # User-defined maps get unit handling automatically (by method name):
     class DoubleMap(RetinalMap):
         def dva_to_ret(self, x, y):
             return 2.0 * np.asarray(x), 2.0 * np.asarray(y)

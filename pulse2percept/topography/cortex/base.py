@@ -52,8 +52,7 @@ class CorticalMap(VisualFieldMap):
 
     def get_param_units(self):
         """Return a dict of the units that parameters are stored in"""
-        # Cortical coordinates are stored in microns, and the offset shifts
-        # one hemisphere's x coordinates:
+        # Offset (um) of the left hemisphere's x coordinates:
         return {**super().get_param_units(), 'left_offset': um}
 
     @abstractmethod

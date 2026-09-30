@@ -88,11 +88,10 @@ def predict(freq, amp, pdur):
 # Amplitude is expressed in multiples of perceptual threshold (``xTh``),
 # defined at a phase duration of 0.45 ms.
 #
-# Threshold varies with phase duration (``a0 * pdur + a1``, Eq. 3). Without
-# compensation, a fixed ``1 xTh`` at long phase durations would therefore
-# correspond to a much larger threshold-scaled amplitude. For the
-# phase-duration sweep, amplitude is adjusted by the same threshold relation
-# so that the row isolates the effect on streak length.
+# Threshold varies with phase duration (``a0 * pdur + a1``, Eq. 3), so a fixed
+# ``1 xTh`` at long phase durations corresponds to a much larger
+# threshold-scaled amplitude. The phase-duration sweep scales amplitude by the
+# same relation to isolate the effect on streak length.
 
 AMPS = [1, 2, 3, 4, 5, 6]              # xTh, at 5 Hz / 0.45 ms
 FREQS = [5, 10, 20, 40, 80, 120]       # Hz, at 1 xTh / 0.45 ms
@@ -115,8 +114,7 @@ rows = [
 
 
 ###############################################################################
-# Use one gray scale for all 18 panels. Autoscaling each panel separately
-# would obscure the modeled brightness differences.
+# One gray scale for all 18 panels, so brightness is comparable across panels:
 
 vmax = max(frame.max() for _, _, frames in rows for frame in frames)
 
@@ -141,7 +139,7 @@ fig.tight_layout()
 #
 # * The scaling factors are phenomenological fits to data from a small number
 #   of Argus I/II subjects, not a biophysical model. Extrapolation outside the
-#   fitted stimulus ranges should therefore be treated cautiously.
+#   fitted stimulus ranges is uncertain.
 # * v0.11 uses an Argus II refit of the [Horsager2009]_ phase-duration
 #   threshold relation, so the bottom row does not exactly reproduce the
 #   published panel. The compensating amplitudes use the model's own

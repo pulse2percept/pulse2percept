@@ -101,13 +101,9 @@ def radial_mask(shape, mask='gauss', sd=3):
 def _interp_rows(x, xp, fp):
     """Linearly interpolate every row of ``fp`` at the time points ``x``
 
-    Vectorized equivalent of ``[np.interp(x, xp, row) for row in fp]``, which
-    is otherwise a Python-level loop over (potentially many thousands of)
-    electrodes.
-
-    The arithmetic is deliberately carried out in double precision and in the
-    same order as ``np.interp``'s C loop, because temporal models resolve
-    stimulus edges on a fixed simulation grid.
+    Vectorized equivalent of ``[np.interp(x, xp, row) for row in fp]``.
+    Uses float64 and the same operation order as ``np.interp``'s C loop, so
+    temporal models resolve stimulus edges identically on the simulation grid.
 
     Parameters
     ----------
@@ -126,35 +122,32 @@ def _interp_rows(x, xp, fp):
     x = np.asarray(x, dtype=np.float64)
     xp = np.asarray(xp, dtype=np.float64)
     fp = np.asarray(fp)
-    # np.interp's C loop is hard to beat per element; what the vectorized path
-    # saves is one Python-level call per electrode:
+    # Vectorizing only saves one Python call per electrode, so use np.interp
+    # for few rows or many time points:
     if (fp.shape[0] < 32 or x.size > 256 or xp.size < 2 or
             not np.all(np.diff(xp) > 0)):
         return np.array([np.interp(x, xp, row)
                          for row in fp]).reshape((-1, x.size))
-    # Bracket index j such that xp[j] <= x < xp[j+1], as np.interp does. Note
-    # that `j`, `x0` and `x1` are all 1-D (one entry per requested time point):
+    # Bracket index j such that xp[j] <= x < xp[j+1], as in np.interp. `j`,
+    # `x0`, and `x1` are 1-D (one entry per requested time point):
     j = np.clip(np.searchsorted(xp, x, side='right') - 1, 0, xp.size - 2)
     x0, x1 = xp[j], xp[j + 1]
-    # Gather first and widen afterwards: upcasting all of `fp` would touch the
-    # whole (potentially large) data container instead of just two columns
-    # per requested time point:
+    # Upcast only the gathered columns, not all of `fp`:
     y0 = fp[:, j].astype(np.float64)
     y1 = fp[:, j + 1].astype(np.float64)
     with np.errstate(invalid='ignore', divide='ignore'):
         out = (y1 - y0) / (x1 - x0)     # slope; reused in place below
         out *= x - x0
         out += y0
-        # np.interp retries from the right end of the interval if that gave a
-        # NaN (which happens for infinite slopes), then gives up:
+        # As in np.interp, retry NaNs (infinite slopes) from the right end of
+        # the interval:
         nan = np.isnan(out)
         if nan.any():
             slope = (y1 - y0) / (x1 - x0)
             out = np.where(nan, slope * (x - x1) + y1, out)
             out = np.where(np.isnan(out) & (y0 == y1), y0, out)
-    # The remaining corrections all select whole columns, so build the masks
-    # on the 1-D time axis and write in place rather than allocating another
-    # full-size array per correction:
+    # The remaining corrections select whole columns, so use 1-D masks and
+    # write in place:
     exact = x == x0
     if exact.any():
         # Exact hits on a knot return the stored value verbatim:
@@ -173,12 +166,11 @@ def _interp_rows(x, xp, fp):
 
 
 def _slice_times(sl, time, time_unit):
-    """The time points a slice of a time axis asks for
+    """Return the time points selected by a slice of the time axis
 
-    Slicing a time axis asks for a time *range*, not for a range of column
-    indices: ``stim[:, 0:10:0.5]`` is the stimulus every 0.5 ms from 0 to
-    10 ms. All three of ``start``, ``stop`` and ``step`` are therefore times,
-    and may be given as quantities.
+    ``start``, ``stop``, and ``step`` are times (not column indices) and may
+    be quantities: ``stim[:, 0:10:0.5]`` is the stimulus every 0.5 ms from 0
+    to 10 ms.
 
     Parameters
     ----------

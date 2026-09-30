@@ -22,8 +22,7 @@ from pulse2percept.stimuli._merge import merge_time_axes
 from pulse2percept.stimuli.base import _interp_rows
 from pulse2percept.units import (DimensionMismatchError, Quantity,
                                  dimensionless, mA, ms, uA, us)
-# `s` is a loop variable elsewhere in this module, so import the unit
-# under a name that cannot be shadowed by one:
+# Alias the unit because `s` is a loop variable in this module:
 from pulse2percept.units import s as sec
 from pulse2percept.utils.constants import DT
 from pulse2percept.utils.testing import assert_warns_msg
@@ -31,7 +30,7 @@ from pulse2percept.utils.testing import assert_warns_msg
 
 @pytest.mark.parametrize('cls', [ImageStimulus, Stimulus, VideoStimulus])
 def test_core_types_live_in_base(cls):
-    """The three containers are one module, not a taxonomy of three"""
+    """Stimulus, ImageStimulus, and VideoStimulus live in stimuli.base"""
     npt.assert_equal(cls.__module__, 'pulse2percept.stimuli.base')
 
 
@@ -144,8 +143,7 @@ def test_Stimulus():
     # Duplicate names will be fixed (with a warning message):
     stim = Stimulus([Stimulus(1), Stimulus(2)])
     npt.assert_equal(stim.electrodes, [0, 1])
-    # When passing a dict and the stimuli already have electrode names, the
-    # keys of the dict prevail:
+    # Dict keys override electrode names stored in the stimuli:
     stim = Stimulus({'A1': Stimulus(1, electrodes='B2')})
     npt.assert_equal(stim.electrodes, ['A1'])
 
@@ -188,22 +186,20 @@ def test_Stimulus():
 
 
 def test_Stimulus_time_resolution():
-    # Time is stored as float64 while data stays float32. float32 reaches a
-    # resolution of DT at t = 8.4 s, past which two time points a time step
-    # apart are no longer distinguishable:
+    # Time is stored as float64, data as float32. In float32, time points one
+    # DT apart become indistinguishable beyond t = 8.4 s:
     stim = Stimulus(np.ones((2, 3)), time=[0, DT, 2 * DT])
     npt.assert_equal(stim.time.dtype, np.float64)
     npt.assert_equal(stim.data.dtype, np.float32)
     far = 30000.0
     stim = Stimulus(np.ones((2, 3)), time=[far, far + DT, far + 2 * DT])
     npt.assert_almost_equal(np.diff(stim.time), DT)
-    # Slicing the time axis does not round it back down either:
+    # Slicing the time axis keeps float64:
     npt.assert_almost_equal(stim[0, far + DT], 1)
 
 
 def test_Stimulus_nonmonotonic_warning():
-    # The warning names the offending points rather than dumping the whole
-    # time axis, which for a long stimulus ran to megabytes:
+    # The warning lists only the offending time points, not the whole axis:
     time = np.arange(1000, dtype=float)
     time[500] = time[499]
     with pytest.warns(UserWarning, match='strictly monotonically') as record:
@@ -222,8 +218,7 @@ def test_Stimulus_compress():
     npt.assert_equal(stim.is_compressed, False)
     stim.compress()
     npt.assert_equal(stim.is_compressed, True)
-    # Compress gets rid of the second electrode, and only keeps the signal
-    # edges:
+    # Compress removes the second electrode and keeps only the signal edges:
     npt.assert_equal(stim.shape, (1, 3))
     npt.assert_almost_equal(stim.time, [0, 1, 6])
     # Repeated calls don't change the outcome:
@@ -362,14 +357,14 @@ def test_Stimulus_plot():
         axes[1] = 0
         stim.plot(ax=axes)
     with pytest.raises(TypeError):
-        # A heatmap has nowhere to put a second Axes:
+        # A heatmap requires a single Axes:
         _, axes = plt.subplots(nrows=3)
         Stimulus(np.ones((3, 10))).plot(ax=axes, kind='heatmap')
     plt.close('all')
 
 
 def test_Stimulus_plot_kind_default():
-    """A named electrode asks for detail, a whole implant for an overview"""
+    """Default plot kind: traces for one electrode, heatmap for many"""
     single = Stimulus([[0, -10, 10, 0]], time=[0, 1, 2, 3])
     npt.assert_equal(len(single.plot().lines), 1)
     plt.close('all')
@@ -380,17 +375,17 @@ def test_Stimulus_plot_kind_default():
     npt.assert_equal(len(ax.lines), 0)
     npt.assert_equal(len(ax.collections), 1)
     plt.close('all')
-    # Naming electrodes means traces, however many are named:
+    # Selecting electrodes gives traces, however many are selected:
     axes = multi.plot(electrodes=['E0', 'E1', 'E2'])
     npt.assert_equal(len(axes), 3)
     npt.assert_equal([ax.get_ylabel() for ax in axes], ['E0', 'E1', 'E2'])
     plt.close('all')
-    # Handing over an Axes per electrode says the same thing:
+    # So does passing one Axes per electrode:
     _, axes = plt.subplots(nrows=4)
     multi.plot(ax=axes)
     npt.assert_equal([len(ax.lines) for ax in axes], [1, 1, 1, 1])
     plt.close('all')
-    # `kind` overrides all of that:
+    # `kind` overrides the default:
     npt.assert_equal(len(multi.plot(kind='traces')), 4)
     plt.close('all')
     ax = multi.plot(electrodes=['E2', 'E0'], kind='heatmap')
@@ -398,14 +393,14 @@ def test_Stimulus_plot_kind_default():
                      ['E2', 'E0'])
     plt.close('all')
     with pytest.raises(TypeError):
-        # ... including into a request a heatmap cannot honor:
+        # A heatmap cannot be drawn into multiple Axes:
         _, axes = plt.subplots(nrows=4)
         multi.plot(ax=axes, kind='heatmap')
     plt.close('all')
 
 
 def test_Stimulus_plot_electrode_order():
-    """Electrodes are shown in the order they were asked for, not stored in"""
+    """Electrodes are plotted in the requested order"""
     stim = Stimulus(np.arange(12, dtype=float).reshape((3, 4)),
                     electrodes=['A1', 'A2', 'A3'], time=[0, 1, 2, 3])
     axes = stim.plot(electrodes=['A3', 'A1'])
@@ -424,10 +419,10 @@ def test_Stimulus_plot_electrode_order():
 
 
 def test_Stimulus_plot_heatmap_time_is_not_uniform():
-    """A compressed pulse train is not sampled at a constant rate
+    """Heatmap cell widths follow the time axis of a compressed stimulus
 
-    Drawing it with equal-width columns would stretch the DT-wide edges of a
-    pulse until they look as long as the gaps between pulses.
+    Equal-width columns would stretch DT-wide pulse edges to look as long as
+    the gaps between pulses.
     """
     stim = Stimulus({'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100),
                      'A2': BiphasicPulseTrain(20, 25, 0.45, stim_dur=100)})
@@ -437,14 +432,13 @@ def test_Stimulus_plot_heatmap_time_is_not_uniform():
     # One cell per stored sample, spanning exactly the stimulus duration:
     npt.assert_equal(len(x), len(stim.time) + 1)
     npt.assert_almost_equal([x[0], x[-1]], [stim.time[0], stim.time[-1]])
-    # Cells are as wide as the intervals they stand for, so a pulse edge stays
-    # a pulse edge and the gaps stay long:
+    # Cell widths equal the time intervals, so pulse edges stay narrow:
     npt.assert_almost_equal(x[1:-1], (stim.time[:-1] + stim.time[1:]) / 2)
     widths = np.diff(x)
     npt.assert_equal(widths.min() < DT, True)
     npt.assert_equal(widths.max() > 10, True)
     plt.close('all')
-    # A time selection is drawn on the same footing:
+    # Same for a time selection:
     x = stim.plot(time=(1 * ms, 3 * ms)).collections[0]
     x = x.get_coordinates()[0, :, 0]
     npt.assert_almost_equal([x[0], x[-1]], [1, 3])
@@ -452,20 +446,19 @@ def test_Stimulus_plot_heatmap_time_is_not_uniform():
 
 
 def test_Stimulus_plot_heatmap_color_scale():
-    # A signed stimulus is normalized symmetrically around zero, so that the
-    # middle of the colormap is "no current":
+    # Signed data: colormap is symmetric around zero (center = no current):
     signed = Stimulus([[0, -30, 10, 0], [0, 5, -2, 0]], time=[0, 1, 2, 3])
     mesh = signed.plot().collections[0]
     npt.assert_almost_equal([mesh.norm.vmin, mesh.norm.vmax], [-30, 30])
     plt.close('all')
-    # Nonnegative data has no sign to show and is not drawn as if it did:
+    # Nonnegative data uses a range of [0, max] and a different colormap:
     unsigned = Stimulus([[0, 1, 2, 3], [0, 2, 4, 6]], time=[0, 1, 2, 3])
     unsigned_mesh = unsigned.plot().collections[0]
     npt.assert_almost_equal([unsigned_mesh.norm.vmin, unsigned_mesh.norm.vmax],
                             [0, 6])
     npt.assert_equal(unsigned_mesh.cmap.name == mesh.cmap.name, False)
     plt.close('all')
-    # An all-zero stimulus has no magnitude to scale by, and must not blow up:
+    # All-zero data (nothing to normalize by) still gives vmin < vmax:
     mesh = Stimulus(np.zeros((3, 4)), time=[0, 1, 2, 3]).plot().collections[0]
     npt.assert_equal(mesh.norm.vmin < mesh.norm.vmax, True)
     plt.close('all')
@@ -486,12 +479,7 @@ def test_Stimulus_plot_heatmap_electrode_selection():
 
 
 def test_Stimulus_plot_leaves_the_callers_figure_alone():
-    """A supplied Axes is the whole canvas `plot` gets
-
-    Positions are only compared between Axes `plot` was not given, so this
-    does not pin down what a plot looks like -- only that the rest of the
-    figure survives it.
-    """
+    """plot(ax=...) leaves the rest of the caller's figure unchanged"""
     stim = Stimulus(np.random.rand(3, 8), electrodes=['E0', 'E1', 'E2'])
     for kwargs in ({'kind': 'heatmap'}, {'electrodes': ['E0']}):
         fig, (mine, theirs) = plt.subplots(ncols=2)
@@ -500,13 +488,12 @@ def test_Stimulus_plot_leaves_the_callers_figure_alone():
         npt.assert_almost_equal(theirs.get_position().bounds, before)
         # A figure-wide layout engine would move every Axes at draw time:
         npt.assert_equal(fig.get_layout_engine(), None)
-        # Nothing figure-level was added either: no shared label, and no
-        # colorbar Axes squeezing in next to the caller's own:
+        # No figure-level label or colorbar Axes is added:
         npt.assert_equal(fig.get_supylabel(), '')
         npt.assert_equal(fig.texts, [])
         npt.assert_equal(fig.axes, [mine, theirs])
         plt.close(fig)
-    # Owning the figure is what earns `plot` the decoration:
+    # Without a supplied Axes, `plot` adds a colorbar and a shared label:
     ax = stim.plot()
     npt.assert_equal(ax.collections[0].colorbar is not None, True)
     npt.assert_equal(stim.plot(kind='traces')[0].figure.get_supylabel(),
@@ -523,9 +510,7 @@ def _unique_timepoints(stim, data):
 
 def test_Stimulus__stim():
     stim = Stimulus(3)
-    # User could try and motify the data container after the constructor, which
-    # would lead to inconsistencies between data, electrodes, time. The new
-    # property setting mechanism prevents that.
+    # The data setter keeps data, electrodes, and time consistent:
     # Requires dict:
     with pytest.raises(AttributeError):
         stim._stim = np.array([0, 1])
@@ -573,8 +558,7 @@ def test_Stimulus__stim():
 
 
 def test_Stimulus___eq__():
-    # Two Stimulus objects created from the same source data are considered
-    # equal:
+    # Stimuli built from the same source data are equal:
     for source in [3, [], np.ones(3), [3, 4, 5], np.ones((3, 6))]:
         npt.assert_equal(Stimulus(source) == Stimulus(source), True)
     stim = Stimulus(np.ones((2, 3)), compress=True)
@@ -740,8 +724,7 @@ def test_Stimulus_arithmetic(scalar):
                             stim.time + scalar, decimal=5)
     npt.assert_almost_equal((stim << scalar).time,
                             stim.time - scalar, decimal=5)
-    # 10 / stim is not supported because it will always give a division by
-    # zero error:
+    # 10 / stim is not supported (it would always divide by zero):
     with pytest.raises(TypeError):
         s = scalar / stim
     with pytest.raises(TypeError):
@@ -770,7 +753,7 @@ def test_Stimulus_remove():
     npt.assert_equal('A1' in stim.electrodes, False)
     npt.assert_equal('C3' in stim.electrodes, True)
 
-    # Electrode 0 must be removable: `0` is falsy, but it is a valid index:
+    # Electrode 0 is removable even though `0` is falsy:
     stim = Stimulus([[0, 1, 2], [3, 4, 5]])
     stim.remove(0)
     npt.assert_equal(stim.shape, (1, 3))
@@ -786,16 +769,15 @@ def test_Stimulus_remove():
     stim.remove(['A1', 'C3'])
     npt.assert_equal(stim.shape, (0, 3))
 
-    # Removing "nothing" is a no-op. Implant relies on this when none
-    # of its electrodes are deactivated:
+    # Removing nothing is a no-op. Implant uses this when no electrode is
+    # deactivated:
     for nothing in (None, [], (), np.array([])):
         stim = Stimulus([[0, 1, 2], [3, 4, 5]])
         stim.remove(nothing)
         npt.assert_equal(stim.shape, (2, 3))
         npt.assert_equal(stim.electrodes, [0, 1])
 
-    # After 'all', `electrodes` must stay an array of the same dtype, so that
-    # it can still be indexed with a boolean mask:
+    # After 'all', `electrodes` keeps its dtype for boolean-mask indexing:
     stim = Stimulus([[0, 1, 2], [3, 4, 5]], electrodes=['A1', 'C3'])
     dtype = stim.electrodes.dtype
     stim.remove('all')
@@ -819,8 +801,8 @@ def test_Stimulus_duplicate_electrodes():
     with pytest.warns(UserWarning, match='Duplicate electrode names'):
         stim = Stimulus([Stimulus(1), Stimulus(2)])
     npt.assert_equal(stim.electrodes, [0, 1])
-    # The integer replacements must not be truncated by a string dtype that is
-    # too narrow to hold them - the "fixed" names would be duplicates again:
+    # Replacement indices must not be truncated by a narrow string dtype (they
+    # would be duplicates again):
     n_el = 200
     with pytest.warns(UserWarning, match='Duplicate electrode names'):
         stim = Stimulus(np.ones((n_el, 2)), electrodes=['A'] * n_el)
@@ -830,8 +812,7 @@ def test_Stimulus_duplicate_electrodes():
 
 
 def test_Stimulus_shift_without_time():
-    # Shifting a stimulus that has no time component must be reported as such,
-    # not as a TypeError from adding a scalar to None:
+    # No time component: ValueError, not a TypeError from None + scalar:
     stim = Stimulus(3)
     npt.assert_equal(stim.time, None)
     for shift in (lambda: stim.shift(1.0), lambda: stim.pad(1.0),
@@ -847,8 +828,7 @@ def test_Stimulus_shift_without_time():
 def test_Stimulus_shift():
     stim = Stimulus([[0, 1, 2], [3, 4, 5]], time=[0, 1, 2],
                     electrodes=['A1', 'B2'], metadata='meta')
-    # Forwards, nowhere, and backwards: a stimulus may live at negative times,
-    # so a negative shift is not an error:
+    # Shift forward, by zero, and backward (negative times are allowed):
     npt.assert_almost_equal(stim.shift(10).time, [10, 11, 12])
     npt.assert_almost_equal(stim.shift(0).time, [0, 1, 2])
     npt.assert_almost_equal(stim.shift(-10).time, [-10, -9, -8])
@@ -856,13 +836,13 @@ def test_Stimulus_shift():
     for dt in (-2.5, 0, 2.5):
         npt.assert_almost_equal((stim >> dt).time, stim.shift(dt).time)
         npt.assert_almost_equal((stim << dt).time, stim.shift(-dt).time)
-    # A unitful shift is converted into the stimulus' own time unit, in either
-    # direction; a quantity that is not a time is refused:
+    # A unitful shift is converted to the stimulus time unit; a non-time
+    # quantity is rejected:
     npt.assert_almost_equal(stim.shift(0.02 * sec).time, [20, 21, 22])
     npt.assert_almost_equal(stim.shift(-1000 * us).time, [-1, 0, 1])
     with pytest.raises(DimensionMismatchError):
         stim.shift(5 * uA)
-    # Everything but the time axis survives, and the original stays put:
+    # Everything except the time axis is kept; the original is unchanged:
     shifted = stim.shift(10)
     npt.assert_almost_equal(shifted.data, stim.data)
     npt.assert_equal(shifted.electrodes, stim.electrodes)
@@ -870,9 +850,8 @@ def test_Stimulus_shift():
     npt.assert_equal(shifted.time_unit, stim.time_unit)
     npt.assert_equal(shifted.metadata, stim.metadata)
     npt.assert_almost_equal(stim.time, [0, 1, 2])
-    # A pulse is defined by its parameters, so shifting one hands back a
-    # plain stimulus rather than a pulse whose `stim_dur` contradicts the
-    # time axis it now has (see test_pulses.py):
+    # Shifting a pulse returns a plain Stimulus, because `stim_dur` would no
+    # longer match the time axis (see test_pulses.py):
     pulse = BiphasicPulse(-20, 1)
     shifted = pulse.shift(5)
     npt.assert_equal(type(shifted), Stimulus)
@@ -881,9 +860,8 @@ def test_Stimulus_shift():
 
 
 def test_Stimulus_pad():
-    # `duration` is the time the padded stimulus ends at, not an amount of
-    # time to add: a pulse shifted into the middle of a 10 s window keeps its
-    # shifted times and gains zero-valued endpoints at t=0 and t=10000:
+    # `duration` is the end time of the padded stimulus, not an increment: a
+    # pulse shifted into a 10 s window gains zeros at t=0 and t=10000 ms:
     pulse = BiphasicPulse(-20, 1)
     padded = pulse.shift(3000).pad(10000)
     npt.assert_almost_equal(padded.time[0], 0)
@@ -899,14 +877,12 @@ def test_Stimulus_pad():
     npt.assert_almost_equal(stim.pad(4).time, [0, 2, 4])
     npt.assert_almost_equal(stim.pad(4).data, [[1, 0, 0]])
 
-    # One that starts before t=0 keeps its beginning: padding must not crop or
-    # rewrite negative-time data:
+    # A stimulus starting before t=0 keeps its negative-time data:
     neg = Stimulus([[1, 0]], time=[-3, 2])
     npt.assert_almost_equal(neg.pad(4).time, [-3, 2, 4])
     npt.assert_almost_equal(neg.pad(4).data, [[1, 0, 0]])
 
-    # Padding to the duration the stimulus already has adds only the missing
-    # leading zero, and does not duplicate the endpoint it already has:
+    # Padding to the current duration adds only the missing leading zero:
     stim = Stimulus([[0, 2]], time=[1, 2])
     npt.assert_almost_equal(stim.pad(stim.duration).time, [0, 1, 2])
     npt.assert_almost_equal(stim.pad(stim.duration).data, [[0, 0, 2]])
@@ -921,30 +897,29 @@ def test_Stimulus_pad():
     with pytest.raises(DimensionMismatchError):
         stim.pad(5 * uA)
 
-    # An endpoint can only be added next to a data point that is already zero:
-    # the stimulus is interpolated between its time points, so a zero next to
-    # a nonzero endpoint would be a ramp rather than padding.
+    # An endpoint can only be added next to a zero sample; otherwise
+    # interpolation would create a ramp:
     with pytest.raises(ValueError):
         Stimulus([[1, 0]], time=[1, 2]).pad(4)
     with pytest.raises(ValueError):
         Stimulus([[0, 1]], time=[0, 2]).pad(4)
-    # Every electrode has to be zero there, not just the first one:
+    # All electrodes must be zero there:
     with pytest.raises(ValueError):
         Stimulus([[0, 0], [0, 1]], time=[0, 2]).pad(4)
-    # ... and "zero" means exactly zero:
+    # Zero means exactly zero:
     with pytest.raises(ValueError):
         Stimulus([[0, 1e-9]], time=[0, 2]).pad(4)
-    # Padding that isn't needed at that end doesn't care what the data is:
+    # Data is not checked at an end that needs no padding:
     npt.assert_almost_equal(Stimulus([[1, 0]], time=[0, 2]).pad(2).time, [0, 2])
 
-    # Every electrode gets a zero, not just the first one:
+    # Every electrode gets a zero:
     multi = Stimulus([[0, 1, 0], [0, 3, 0]], time=[1, 2, 3],
                      electrodes=['A1', 'B2'], metadata='meta')
     padded = multi.pad(5)
     npt.assert_almost_equal(padded.time, [0, 1, 2, 3, 5])
     npt.assert_almost_equal(padded.data,
                             [[0, 0, 1, 0, 0], [0, 0, 3, 0, 0]])
-    # The original is untouched, and the copy keeps everything else:
+    # The original is unchanged; the copy keeps all other attributes:
     npt.assert_almost_equal(multi.time, [1, 2, 3])
     npt.assert_almost_equal(multi.data, [[0, 1, 0], [0, 3, 0]])
     npt.assert_equal(padded.electrodes, multi.electrodes)
@@ -952,8 +927,7 @@ def test_Stimulus_pad():
     npt.assert_equal(padded.time_unit, multi.time_unit)
     npt.assert_equal(padded.metadata, multi.metadata)
 
-    # A pad that has nothing to add still returns an independent copy, rather
-    # than a stimulus sharing the buffers of the original:
+    # A no-op pad still returns an independent copy (no shared buffers):
     noop = Stimulus([[0, 1, 0]], time=[0, 2, 4])
     padded = noop.pad(noop.duration)
     npt.assert_almost_equal(padded.time, noop.time)
@@ -961,7 +935,7 @@ def test_Stimulus_pad():
     npt.assert_equal(np.shares_memory(padded.data, noop.data), False)
     npt.assert_equal(np.shares_memory(padded.time, noop.time), False)
 
-    # Padding a compressed stimulus does not make it uncompressed:
+    # Padding keeps a compressed stimulus compressed:
     compressed = Stimulus([[0, 1, 2, 0]], time=[0, 1, 2, 3], compress=True)
     npt.assert_equal(compressed.is_compressed, True)
     npt.assert_equal(compressed.pad(9).is_compressed, True)
@@ -969,10 +943,8 @@ def test_Stimulus_pad():
 
 
 def test_Stimulus_no_global_side_effects():
-    # Importing the module must not change NumPy's print options for the rest
-    # of the user's session (`Stimulus` used to call `np.set_printoptions` at
-    # module level). This has to run in a subprocess, because by the time this
-    # test executes the module has long been imported.
+    # Importing the module must not change NumPy's global print options. Runs
+    # in a subprocess because the module is already imported here.
     code = ("import numpy as np;"
             "before = np.get_printoptions();"
             "import pulse2percept.stimuli.base;"
@@ -982,16 +954,14 @@ def test_Stimulus_no_global_side_effects():
     out = subprocess.run([sys.executable, '-c', code], capture_output=True,
                          text=True, check=True)
     npt.assert_equal(out.stdout.strip().splitlines()[-1], 'UNCHANGED')
-    # Long arrays are still abbreviated in the repr, which is what the global
-    # print options used to (redundantly) take care of:
+    # Long arrays are still abbreviated in the repr:
     stim = Stimulus(np.arange(1000).reshape((10, 100)))
     npt.assert_equal('...' in repr(stim), True)
     npt.assert_equal('\n'.join(repr(stim).split()).count('electrodes='), 1)
 
 
 def test_merge_time_axes_merge_tolerance():
-    # Test issue where not enough unique points were collected
-    # Leading to interpolation to corrupt stimuli data.
+    # Too few unique time points made interpolation corrupt the data.
     # See: https://github.com/pulse2percept/pulse2percept/issues/392
     a = BiphasicPulseTrain(20, 1, 0.45)
     b = BiphasicPulseTrain(30, 1, 0.45)
@@ -1005,30 +975,27 @@ def test_merge_time_axes_merge_tolerance():
 
 
 def test_merge_time_axes_float32_resolution():
-    # Time is stored as float32, whose resolution is coarser than the absolute
-    # merge tolerance for t > ~10 ms. Two stimuli that sample the same instant
-    # then hand us time points a few ulps apart, which used to survive the
-    # merge as separate columns: they were closer together than DT (so the
-    # merged stimulus was not strictly increasing anymore) and interpolating
-    # one stimulus at the other's time point invented data values halfway up a
-    # pulse edge.
+    # float32 time resolution is coarser than the absolute merge tolerance for
+    # t > ~10 ms, so two samples of the same instant can differ by a few ulps.
+    # They must merge into one column; otherwise columns end up closer than DT
+    # and interpolation creates values halfway up a pulse edge.
     freqs = (10, 11, 12, 13, 20, 30, 41)
     trains = {f'A{f}': BiphasicPulseTrain(f, 10, 0.45, stim_dur=1000)
               for f in freqs}
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         stim = Stimulus(trains)
-    # Every pair of time points is at least a time step apart:
+    # Time points are at least one time step apart:
     npt.assert_equal(np.diff(stim.time.astype(np.float64)) >= 0.95 * DT, True)
-    # And no data value was invented that is not in one of the sources:
+    # No data values appear that are not in a source:
     src_amps = np.unique(np.concatenate([t.data.ravel()
                                          for t in trains.values()]))
     npt.assert_equal(np.isin(np.unique(stim.data), src_amps), True)
 
 
 def test_merge_time_axes_keeps_distinct_points():
-    # The magnitude-scaled tolerance must never merge time points that are a
-    # genuine time step apart, however large `t` gets:
+    # The magnitude-scaled tolerance never merges points one time step apart,
+    # however large `t` is:
     for t0 in (0.0, 10.0, 100.0, 1000.0, 4000.0):
         t1 = np.float32([t0, t0 + DT, t0 + 2 * DT])
         t2 = np.float32([t0, t0 + 3 * DT, t0 + 4 * DT])
@@ -1038,11 +1005,9 @@ def test_merge_time_axes_keeps_distinct_points():
 
 
 def test_Stimulus_shallow_copy():
-    # `append` and the arithmetic operators return a copy that shares nothing
-    # mutable with the original, even though the data container is no longer
-    # deep-copied first.
-    # A stimulus that is defined by its samples keeps its class; one defined
-    # by pulse parameters does not (see `Stimulus._derived` and
+    # `append` and arithmetic operators return copies that share nothing
+    # mutable with the original. Sample-defined stimuli keep their class;
+    # pulse-parameter-defined ones do not (see `Stimulus._derived` and
     # test_pulse_trains.py):
     stim = Stimulus([[0, 1, 0]], time=[0, 1, 2], metadata={'x': 1})
     for derive in (lambda s: s * 2, lambda s: s + 1, lambda s: -s,
@@ -1052,18 +1017,16 @@ def test_Stimulus_shallow_copy():
         npt.assert_equal(type(copied), type(stim))
         npt.assert_equal(copied.unit, stim.unit)
         npt.assert_equal(copied.is_compressed, stim.is_compressed)
-        # Metadata is independent. Its contents need not be identical: both
-        # `append` and the operators keep any waveform parameters in sync with
-        # the data, dropping them where they no longer describe it (see
-        # test_pulse_trains.py):
+        # Metadata is independent. Contents may differ: waveform parameters
+        # that no longer match the data are dropped (see test_pulse_trains.py):
         npt.assert_equal(copied.metadata is stim.metadata, False)
         copied.metadata['mine'] = 'changed'
         npt.assert_equal('mine' in stim.metadata, False)
-        # The data container is independent, too:
+        # The data container is independent:
         npt.assert_equal(copied._stim is stim._stim, False)
         npt.assert_equal(np.shares_memory(copied.data, stim.data), False)
 
-    # Subclass-specific attributes survive as well:
+    # Subclass-specific attributes are kept:
     img = ImageStimulus(np.ones((4, 5), dtype=np.float32))
     npt.assert_equal(type(img * 2), ImageStimulus)
     npt.assert_equal((img * 2).img_shape, img.img_shape)
@@ -1074,14 +1037,11 @@ def test_Stimulus_shallow_copy():
                                             (40, 8, 400), (64, 300, 64),
                                             (33, 4, 257)])
 def test_interp_rows(n_el, n_t, n_q):
-    # `_interp_rows` replaces a per-electrode np.interp loop, and switches
-    # between a vectorized and a looped implementation depending on the shape.
-    # Both must agree with np.interp, because temporal models resolve stimulus
-    # edges on a fixed simulation grid.
-    #
-    # Interior points are allowed to differ by a rounding: a C compiler may
-    # contract `slope * dx + y0` into a single fused multiply-add inside
-    # np.interp (it does on arm64), where the NumPy expression rounds twice.
+    # `_interp_rows` (vectorized or looped, depending on shape) must match
+    # np.interp, because temporal models resolve stimulus edges on a fixed
+    # grid.
+    # Interior points may differ by one rounding: a compiler can fuse
+    # `slope * dx + y0` into one FMA inside np.interp (it does on arm64).
     # Points that need no arithmetic must match exactly on every platform.
     rng = np.random.default_rng(n_el * 1000 + n_t * 10 + n_q)
     xp = np.unique(np.sort(rng.random(n_t).astype(np.float32) * 100))
@@ -1093,14 +1053,14 @@ def test_interp_rows(n_el, n_t, n_q):
         expected = np.array([np.interp(x, xp, row) for row in fp])
         expected = expected.reshape((-1, x.size))
         actual = _interp_rows(x, xp, fp)
-        # Scale the tolerance by the size of the data, not of the result: the
-        # rounding happens on the intermediate product, which stays the size
-        # of the inputs even where the result is near zero (any interpolation
-        # across a zero crossing, which biphasic pulses do all the time).
+        # Scale the tolerance by the input magnitude, not the result: rounding
+        # happens on the intermediate product, which stays input-sized even
+        # where the result is near zero (e.g., across a biphasic zero
+        # crossing).
         npt.assert_allclose(actual, expected, rtol=1e-12,
                             atol=1e-10 * np.abs(fp).max())
-        # End points and exact knots are assigned verbatim, never computed,
-        # so those must agree exactly on every platform:
+        # End points and exact knots are copied, not computed, so they match
+        # exactly:
         verbatim = (x <= xp[0]) | (x >= xp[-1]) | np.isin(x, xp)
         npt.assert_array_equal(actual[:, verbatim], expected[:, verbatim])
 
@@ -1115,8 +1075,8 @@ def test_interp_rows_edge_cases():
     # No electrodes at all:
     npt.assert_equal(_interp_rows(x, np.array([0., 1.], np.float32),
                                   np.zeros((0, 2), np.float32)).shape, (0, 3))
-    # A non-monotonic time axis is allowed (it only warns), but np.interp's
-    # bracket search is guess-based there, so we must defer to it verbatim:
+    # A non-monotonic time axis only warns; np.interp's bracket search is
+    # guess-based there, so the result must equal np.interp exactly:
     xp = np.array([0., 1., 1., 2., 2.], dtype=np.float32)
     fp = np.array([[1., 0., 1., 0., 2.]] * 40, dtype=np.float32)
     x = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0], dtype=np.float32)
@@ -1125,10 +1085,9 @@ def test_interp_rows_edge_cases():
 
 
 def test_Stimulus_getitem_many_electrodes():
-    # Interpolating a stimulus with many electrodes takes the vectorized path;
-    # the result must match interpolating each electrode by itself, to within
-    # the one float32 ULP that a fused multiply-add inside np.interp can cost
-    # (see `test_interp_rows`):
+    # Many electrodes use the vectorized path, which must match interpolating
+    # each electrode separately to within one float32 ULP (FMA, see
+    # `test_interp_rows`):
     rng = np.random.default_rng(0)
     data = rng.random((200, 25)).astype(np.float32)
     stim = Stimulus(data)
@@ -1144,8 +1103,8 @@ def test_Stimulus_getitem_many_electrodes():
 
 
 def test_Stimulus_scalar_sequence():
-    # A flat sequence of scalars takes a fast path in the constructor, which
-    # must agree with the generic per-element path in every respect:
+    # Flat sequences of scalars use a constructor fast path, which must match
+    # the generic per-element path:
     for source in ([3, 5], (3, 5), [7], [3.5, -2.25, 0.0], [True, False],
                    [np.float32(3), np.float64(5), np.int32(7)]):
         stim = Stimulus(source)
@@ -1155,32 +1114,31 @@ def test_Stimulus_scalar_sequence():
         npt.assert_equal(stim.data.dtype, np.float32)
         npt.assert_almost_equal(stim.data.ravel(),
                                 np.asarray(source, dtype=np.float32))
-    # Electrode names, metadata and compression still work:
+    # Electrode names, metadata, and compression still work:
     stim = Stimulus([3, 5], electrodes=['A1', 'B2'], metadata={'x': 1})
     npt.assert_equal(stim.electrodes, ['A1', 'B2'])
     npt.assert_equal(stim.metadata['user'], {'x': 1})
     npt.assert_equal(Stimulus([0, 3, 0, 5], compress=True).shape, (2, 1))
 
-    # An empty sequence still yields a 1-D (empty) data container:
+    # An empty sequence gives an empty 1-D data container:
     for source in ([], ()):
         npt.assert_equal(Stimulus(source).shape, (0,))
         npt.assert_equal(Stimulus(source).time, None)
 
-    # Sequences that are not flat scalars must keep their old meaning: a
-    # nested sequence is a single electrode in time, not several electrodes
+    # A nested sequence is still a single electrode in time:
     npt.assert_equal(Stimulus([[1, 5, 7, 2, 4]]).shape, (1, 5))
     npt.assert_equal(Stimulus([[1, 1], [1, 1]]).shape, (2, 2))
     npt.assert_equal(Stimulus(((1, 1), (1, 1))).shape, (2, 2))
-    # ...and invalid elements must still raise, not be coerced. `None` in
-    # particular converts to NaN if handed straight to np.asarray:
+    # Invalid elements raise TypeError/ValueError (np.asarray would convert
+    # `None` to NaN):
     for source in (['a', 'b'], [1, 'a'], [1, None], [1, [2, 3]]):
         with pytest.raises((TypeError, ValueError)):
             Stimulus(source)
 
 
 def test_Stimulus_near_identical_time_axes():
-    # Merging is skipped when all time axes are *close*, not just equal - the
-    # fast path added for the common case must not tighten that tolerance.
+    # Merging is skipped when all time axes are within tolerance, not only when
+    # they are equal; the fast path must not tighten that tolerance:
     t1 = np.array([0., 1., 2.], dtype=np.float32)
     t2 = np.array([0., 1. + 3e-7, 2.], dtype=np.float32)
     npt.assert_equal(np.array_equal(t1, t2), False)   # differ in float32...
@@ -1188,23 +1146,22 @@ def test_Stimulus_near_identical_time_axes():
     stim1 = Stimulus([[0., 5., 0.]], time=t1)
     stim2 = Stimulus([[0., 7., 0.]], time=t2)
     merged = Stimulus([stim1, stim2])
-    # No interpolation: the first time axis is adopted verbatim
+    # No interpolation: the first time axis is used as is
     npt.assert_array_equal(np.asarray(merged.time), t1)
     npt.assert_array_equal(merged.data, np.vstack((stim1.data, stim2.data)))
-    # Genuinely different axes are still merged by interpolation:
+    # Different axes are still merged by interpolation:
     stim3 = Stimulus([[0., 9., 0.]], time=[0., 1.5, 2.])
     merged = Stimulus([stim1, stim3])
     npt.assert_equal(len(merged.time) > 3, True)
 
 
 def test_Stimulus___eq___tolerance():
-    # __eq__ compares with a tolerance; the exact-equality fast path must not
-    # change that:
+    # __eq__ uses a tolerance, and the exact-equality fast path keeps it:
     npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.0]]), True)
     npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.0 + 1e-9]]),
                      True)
     npt.assert_equal(Stimulus([[1.0, 2.0]]) == Stimulus([[1.0, 2.5]]), False)
-    # NaN never compares equal, with or without the fast path:
+    # NaN never compares equal:
     npt.assert_equal(Stimulus([[np.nan, 1.0]]) == Stimulus([[np.nan, 1.0]]),
                      False)
     npt.assert_equal(Stimulus([[np.inf, 1.0]]) == Stimulus([[np.inf, 1.0]]),
@@ -1212,7 +1169,7 @@ def test_Stimulus___eq___tolerance():
 
 
 def test_Stimulus_user_metadata_is_never_unpacked():
-    # `metadata` is the caller's, whatever it holds
+    # User metadata is stored under 'user' as is, even if it is a dict
     for metadata in ({'user': 'Michael'}, {'user': None},
                      {'user': 'Michael', 'encoder': 'not ours'}):
         npt.assert_equal(Stimulus(1, metadata=metadata).metadata,
@@ -1220,7 +1177,7 @@ def test_Stimulus_user_metadata_is_never_unpacked():
 
 
 def test_Stimulus_rewrap_keeps_the_metadata_structure():
-    # Re-wrapping a stimulus carries its metadata dict across as it stands
+    # Re-wrapping a stimulus keeps its metadata dict unchanged
     plain = Stimulus([[1, 2, 3]], time=[0, 1, 2], metadata='mine')
     npt.assert_equal(Stimulus(plain).metadata, {'user': 'mine'})
     npt.assert_equal(Stimulus(plain, electrodes=['Z']).metadata,
@@ -1233,14 +1190,14 @@ def test_Stimulus_rewrap_keeps_the_metadata_structure():
     npt.assert_equal(rewrapped.metadata['encoder'],
                      encoded.metadata['encoder'])
     npt.assert_equal(rewrapped.metadata['user'], encoded.metadata['user'])
-    # ...and a video's own `fps` is not the caller's metadata either:
+    # A video's `fps` is stored at the top level as well:
     video = VideoStimulus(np.ones((2, 2, 3)), metadata={'fps': 10})
     npt.assert_equal(Stimulus(video).metadata['fps'], 10)
 
 
 def test_Stimulus_rename_keeps_the_sources_with_their_electrodes():
-    # Renaming addresses the sources by position, so it must not shuffle which
-    # train drives which electrode:
+    # Renaming maps sources by position, so each train stays with its
+    # electrode:
     def build():
         return {'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=100),
                 'B3': BiphasicPulseTrain(40, 20, 0.45, stim_dur=100)}
@@ -1252,20 +1209,17 @@ def test_Stimulus_rename_keeps_the_sources_with_their_electrodes():
                    ._structured_sources())
     npt.assert_equal(swapped['B3'].freq, 20)
     npt.assert_equal(swapped['A1'].freq, 40)
-    # A waveform-only stimulus has no sources to keep, and renames anyway:
+    # A waveform-only stimulus has no sources; renaming still works:
     plain = Stimulus(np.ones((2, 3)))
     npt.assert_equal(Stimulus(plain, electrodes=['P1', 'P2']).electrodes,
                      ['P1', 'P2'])
 
 
 def test_Stimulus_data_is_contiguous():
-    """The data container must stay C-contiguous.
+    """The data container stays C-contiguous
 
-    Every Cython kernel in the library declares its stimulus argument as
-    ``float32[:, ::1]``. Selecting columns, as ``compress`` does, hands back
-    an F-ordered array for a multi-electrode stimulus, which used to surface
-    much later as a "ndarray is not C-contiguous" from whichever kernel
-    received it.
+    Cython kernels require ``float32[:, ::1]``. Selecting columns (as
+    ``compress`` does) returns an F-ordered array for multi-electrode stimuli.
     """
     rng = np.random.default_rng(0)
     data = (rng.random((3, 5)) - 0.5).astype(np.float32)
@@ -1274,7 +1228,7 @@ def test_Stimulus_data_is_contiguous():
 
     stim.compress()
     npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
-    # ...so compressing an already-compressed stimulus works:
+    # Compressing an already-compressed stimulus works:
     stim.compress()
     npt.assert_equal(stim.data.flags['C_CONTIGUOUS'], True)
 
@@ -1285,7 +1239,7 @@ def test_Stimulus_data_is_contiguous():
 
 
 def test_Stimulus_units():
-    # An electrical stimulus is stored in uA and ms, whatever it was given in:
+    # Electrical stimuli are stored in uA and ms, whatever the input unit:
     stim = Stimulus([500, 1000] * uA)
     npt.assert_equal(stim.unit, uA)
     npt.assert_equal(stim.time_unit, ms)
@@ -1307,7 +1261,7 @@ def test_Stimulus_units():
     for time in ([0, 20] * ms, (0 * ms, 0.02 * sec), [0, 20]):
         npt.assert_almost_equal(
             Stimulus(np.ones((2, 2)), time=time).time, [0, 20])
-    # Dimensional errors are caught at the boundary:
+    # Wrong dimensions are rejected at construction:
     with pytest.raises(DimensionMismatchError):
         Stimulus([5, 10] * ms)
     with pytest.raises(DimensionMismatchError):
@@ -1318,8 +1272,7 @@ def test_Stimulus_units():
 
 def test_Stimulus_unit_views():
     stim = Stimulus([[500, 1000]] * uA, time=[0, 20] * ms)
-    # The stored containers are untouched, plain numbers on a Cython-ready
-    # array:
+    # Stored containers are plain numeric arrays for Cython:
     npt.assert_equal(isinstance(stim.data, np.ndarray), True)
     npt.assert_equal(stim.data.dtype, np.float32)
     npt.assert_equal(isinstance(stim.time, np.ndarray), True)
@@ -1330,7 +1283,7 @@ def test_Stimulus_unit_views():
     npt.assert_equal(stim.time_quantity.unit, ms)
     npt.assert_almost_equal(stim.time_quantity.magnitude, [0, 20])
     npt.assert_equal(stim.quantity == [[0.5, 1.0]] * mA, [[True, True]])
-    # The converted numeric views are ordinary arrays, never quantities:
+    # Converted numeric views are plain arrays, not quantities:
     for values in (stim.values(), stim.values(uA), stim.values(mA),
                    stim.times(), stim.times(sec)):
         npt.assert_equal(isinstance(values, np.ndarray), True)
@@ -1338,14 +1291,14 @@ def test_Stimulus_unit_views():
     npt.assert_almost_equal(stim.values(mA).ravel(), [0.5, 1.0])
     npt.assert_almost_equal(stim.values(uA).ravel(), [500, 1000])
     npt.assert_almost_equal(stim.times(sec), [0, 0.02])
-    # Asking for the stored unit hands back the stored array itself, and the
-    # data stays float32 through a conversion:
+    # Requesting the stored unit returns the stored array; data stays float32
+    # after conversion:
     npt.assert_equal(stim.values() is stim.data, True)
     npt.assert_equal(stim.values(mA).dtype, np.float32)
     # A stimulus with no time component has no time views:
     npt.assert_equal(Stimulus([1, 2]).time_quantity, None)
     npt.assert_equal(Stimulus([1, 2]).times(sec), None)
-    # And a unit of the wrong dimension is refused:
+    # A unit of the wrong dimension is rejected:
     with pytest.raises(DimensionMismatchError):
         stim.values(ms)
     with pytest.raises(DimensionMismatchError):
@@ -1353,8 +1306,8 @@ def test_Stimulus_unit_views():
 
 
 def test_Stimulus_units_are_read_only():
-    # The canonical storage unit is a contract, not a setting: models, safety
-    # checks and Cython kernels all rely on uA/ms.
+    # The storage unit is fixed: models, safety checks, and Cython kernels
+    # require uA/ms.
     stim = Stimulus([1, 2])
     with pytest.raises(AttributeError):
         stim.unit = mA
@@ -1370,12 +1323,12 @@ def test_Stimulus_dimensionless():
     # A copy of one is still made of gray levels:
     npt.assert_equal(Stimulus(img).unit, dimensionless)
     npt.assert_equal(deepcopy(img).unit, dimensionless)
-    # But a bare Stimulus keeps its historical electrical reading:
+    # A bare Stimulus defaults to electrical units:
     npt.assert_equal(Stimulus(np.ones((3, 3))).unit, uA)
-    # Gray levels cannot be converted to a current without an encoder:
+    # Gray levels cannot be converted to current without an encoder:
     with pytest.raises(DimensionMismatchError):
         img.values(uA)
-    # ... and the encoder output is electrical:
+    # The encoder output is electrical:
     npt.assert_equal(img.encode().unit, uA)
     npt.assert_equal(img.encode().time_unit, ms)
     # Two stimuli holding the same numbers in different units are not equal:
@@ -1383,7 +1336,7 @@ def test_Stimulus_dimensionless():
 
 
 def test_Stimulus_units_preserved():
-    """Every operation that returns a stimulus must carry its units along"""
+    """Operations that return a stimulus keep its units"""
     elec = Stimulus(np.ones((2, 3)), time=[0, 1, 2])
     img = ImageStimulus(np.ones((3, 3)))
     for stim, unit in [(elec, uA), (img, dimensionless)]:
@@ -1416,7 +1369,7 @@ def test_Stimulus_units_preserved():
     npt.assert_equal(Stimulus([BiphasicPulseTrain(20, 10, 0.45)]).unit, uA)
     npt.assert_equal(
         Stimulus({'A1': ImageStimulus(np.ones((1, 1)))}).unit, dimensionless)
-    # ... and refuses to guess when they disagree:
+    # Members with different units raise DimensionMismatchError:
     with pytest.raises(DimensionMismatchError):
         Stimulus([ImageStimulus(np.ones((1, 1))),
                   BiphasicPulseTrain(20, 10, 0.45)])
@@ -1424,8 +1377,7 @@ def test_Stimulus_units_preserved():
 
 def test_Stimulus_arithmetic_units():
     stim = Stimulus(np.ones((2, 3)) * 100, time=[0, 1, 2])
-    # Adding an amplitude: a bare number means the stimulus own unit, and a
-    # quantity is converted into it.
+    # Adding: a bare number is in the stimulus unit; a quantity is converted.
     npt.assert_almost_equal((stim + 500).data, (stim + 0.5 * mA).data)
     npt.assert_almost_equal((stim - 500).data, (stim - 0.5 * mA).data)
     npt.assert_almost_equal((500 - stim).data, (0.5 * mA - stim).data)
@@ -1436,15 +1388,15 @@ def test_Stimulus_arithmetic_units():
     # Shifting in time:
     npt.assert_almost_equal((stim >> 20).time, (stim >> 0.02 * sec).time)
     npt.assert_almost_equal((stim << 1).time, (stim << 1000 * us).time)
-    # A stimulus stays a stimulus: multiplying by a unit would make it a
-    # charge, and that is not something this class represents.
+    # Multiplying by a unit would give a charge, which Stimulus does not
+    # represent.
     with pytest.raises(DimensionMismatchError):
         stim * ms
     with pytest.raises(DimensionMismatchError):
         stim * (2 * ms)
     with pytest.raises(DimensionMismatchError):
         stim / (2 * ms)
-    # Nor can a time be added to a current, or a current to gray levels:
+    # A time cannot be added to a current, nor a current to gray levels:
     with pytest.raises(DimensionMismatchError):
         stim + 5 * ms
     with pytest.raises(DimensionMismatchError):
@@ -1454,9 +1406,8 @@ def test_Stimulus_arithmetic_units():
 
 
 def test_Stimulus_append_units():
-    # `append` copies `self` and concatenates `other`'s data onto its own, so
-    # without a check the result would label another stimulus' numbers with
-    # this one's unit.
+    # `append` concatenates `other`'s data onto a copy of `self`, so mismatched
+    # units must be rejected.
     elec = Stimulus(np.ones((1, 3)), time=[0, 1, 2])
     dimless = Stimulus(VideoStimulus(np.ones((1, 1, 3)), time=[0, 1, 2]))
     npt.assert_equal(elec.unit, uA)
@@ -1478,16 +1429,16 @@ def test_Stimulus_getitem_units():
     # A requested time point can be given in any unit of time:
     npt.assert_almost_equal(stim[:, 3.45], stim[:, 3.45 * ms])
     npt.assert_almost_equal(stim[:, 3.45], stim[:, 0.00345 * sec])
-    # As can a list of them...
+    # As can a list of them:
     npt.assert_almost_equal(stim[:, [1, 2]], stim[:, [1, 2] * ms])
     npt.assert_almost_equal(stim[:, [1, 2]], stim[:, [1 * ms, 2 * ms]])
-    # ...and the endpoints and step of a slice:
+    # And the endpoints and step of a slice:
     npt.assert_almost_equal(stim[:, 1:3:1],
                             stim[:, 0.001 * sec:0.003 * sec:1 * ms])
     npt.assert_almost_equal(stim[:, 1:3:1], stim[:, 1 * ms:3 * ms:1000 * us])
-    # Interpolation still happens where it always did:
+    # Interpolation is unchanged:
     npt.assert_almost_equal(stim[:, 3.45 * ms], 3.45, decimal=5)
-    # The other indexing forms are untouched:
+    # Other indexing forms are unchanged:
     npt.assert_almost_equal(stim[:, stim.time < 2].ravel(), [0, 1])
     npt.assert_equal(stim[:, ...].shape, (1, 10))
     # A current is not a point in time:
@@ -1508,14 +1459,14 @@ def test_Stimulus_plot_units():
     npt.assert_equal(isinstance(stim.plot(time=[1, 2] * ms), Subplot), True)
     with pytest.raises(DimensionMismatchError):
         stim.plot(time=(1 * uA, 3 * uA))
-    # The axes say what the stimulus is actually made of:
+    # Axis labels show the stimulus units:
     ax = stim.plot()
     npt.assert_equal(ax.get_xlabel(), 'Time (ms)')
     npt.assert_equal(ax.figure.get_supylabel(), r'Amplitude ($\mu$A)')
     dimless = Stimulus(VideoStimulus(np.ones((1, 1, 3)), time=[0, 1, 2]))
     npt.assert_equal(dimless.plot().figure.get_supylabel(), 'Value')
     plt.close('all')
-    # A heatmap says it on the colorbar instead:
+    # A heatmap shows them on the colorbar:
     two = Stimulus(np.ones((2, 3)), time=[0, 1, 2])
     npt.assert_equal(two.plot().collections[0].colorbar.ax.get_ylabel(),
                      r'Amplitude ($\mu$A)')
@@ -1526,12 +1477,10 @@ def test_Stimulus_plot_units():
 
 
 def test_Stimulus_time_slice():
-    """A slice of the time axis means the same thing everywhere
+    """`plot` and `__getitem__` resolve a time slice the same way
 
-    Slicing the time axis asks for a time *range*, which `__getitem__`
-    interpolates onto. `plot` has to resolve it the same way, or the curve
-    would be drawn against whatever time points happen to sit at those column
-    indices.
+    A time slice is a time range that `__getitem__` interpolates onto; `plot`
+    must not use column indices instead.
     """
     # A ramp whose value equals its time, so a wrong x axis is visible:
     stim = Stimulus(np.arange(10, dtype=float).reshape((1, -1)),
@@ -1552,39 +1501,37 @@ def test_Stimulus_time_slice():
     plt.close('all')
     with pytest.raises(DimensionMismatchError):
         stim.plot(time=slice(1 * uA, 4 * uA, 1 * uA))
-    # A slice without a step is the stored samples themselves, taken by
-    # position -- the one reading that needs no interpolation:
+    # A slice without a step selects stored samples by position (no
+    # interpolation):
     ax = stim.plot(time=slice(None))
     npt.assert_almost_equal(ax.lines[0].get_data()[0], stim.time)
     npt.assert_almost_equal(stim[:, :].ravel(), stim.data.ravel())
     plt.close('all')
-    # And a partial slice with no step is refused identically by both:
+    # Both reject a partial slice without a step:
     for call in (lambda: stim[:, 1:4], lambda: stim.plot(time=slice(1, 4))):
         with pytest.raises(ValueError):
             call()
 
 
 def test_Stimulus_is_charge_balanced_needs_a_current():
-    """Gray levels integrate to a number, but that number is not a charge"""
-    # Not applicable, which is not the same as unbalanced:
+    """is_charge_balanced is None for gray-level (dimensionless) stimuli"""
+    # None means not applicable, which differs from False:
     img = ImageStimulus(np.linspace(0, 1, 16).reshape((4, 4)))
     vid = VideoStimulus(np.ones((2, 2, 3)) * 0.5, time=[0, 20, 40])
     for stim in (img, vid, Stimulus(img), Stimulus(vid)):
         npt.assert_equal(stim.is_charge_balanced, None)
-    # A dimensionless stimulus whose values happen to sum to zero is still not
-    # "balanced" -- there is nothing there to balance:
+    # A dimensionless stimulus that sums to zero is still None:
     zeros = Stimulus(VideoStimulus(np.zeros((1, 1, 3)), time=[0, 1, 2]))
     npt.assert_equal(zeros.unit, dimensionless)
     npt.assert_equal(zeros.is_charge_balanced, None)
-    # Electrical stimuli answer exactly as they always have:
+    # Electrical stimuli are unchanged:
     npt.assert_equal(BiphasicPulse(50, 0.45).is_charge_balanced, True)
     npt.assert_equal(MonophasicPulse(50, 0.45).is_charge_balanced, False)
     npt.assert_equal(BiphasicPulseTrain(20, 50, 0.45).is_charge_balanced, True)
     npt.assert_equal(Stimulus([0]).is_charge_balanced, True)
     npt.assert_equal(Stimulus([1]).is_charge_balanced, False)
     npt.assert_equal((50 * uA * 0 + Stimulus([0])).is_charge_balanced, True)
-    # Pretty-printing evaluates the property, so it must not raise on a
-    # picture:
+    # str() evaluates the property, so it must work for images and videos:
     for stim in (img, vid):
         npt.assert_equal('is_charge_balanced' in str(stim), True)
 
@@ -1603,53 +1550,46 @@ def test_Stimulus_is_immutable(build):
     if stim.time is not None:
         with pytest.raises(ValueError):
             stim.time[0] = 1
-    # `ImageStimulus` generates its pixel names from a grid instead of
-    # storing them, so there is no way to set one at all:
+    # `ImageStimulus` generates pixel names from a grid, so none can be set:
     with pytest.raises((ValueError, TypeError)):
         stim.electrodes[0] = 'X'
-    # Metadata stays writable: it is the user's, and describes the stimulus
-    # rather than being it.
+    # Metadata stays writable:
     stim.metadata['user'] = 'mine'
     npt.assert_equal(stim.metadata['user'], 'mine')
 
 
 def test_Stimulus_owns_its_arrays():
-    # Building a stimulus must neither take the caller's array away from them
-    # nor leave them a handle on the stimulus:
+    # The stimulus copies the input array and leaves it writable:
     arr = np.ones((2, 3), dtype=np.float32)
     stim = Stimulus(arr, time=[0, 1, 2])
     npt.assert_equal(arr.flags.writeable, True)
     npt.assert_equal(np.shares_memory(arr, stim.data), False)
     arr[0, 0] = 99
     npt.assert_almost_equal(stim.data, np.ones((2, 3)))
-    # Nor may one stimulus write through to another's buffers:
+    # Copies of a stimulus do not share buffers:
     copied = Stimulus(stim)
     npt.assert_equal(np.shares_memory(stim.data, copied.data), False)
     npt.assert_equal(np.shares_memory(stim.time, copied.time), False)
 
-    # A contiguous view of a larger buffer needs no dtype or layout
-    # conversion, and an ndarray subclass is handed back as a *different*
-    # ndarray over the very same memory. Neither is a private array, so
-    # neither may be stored as it came:
+    # A contiguous view of a larger buffer, or an ndarray subclass, would skip
+    # conversion and share memory, so both must be copied:
     class Tagged(np.ndarray):
-        """A minimal ndarray subclass; only its type matters here"""
+        """Minimal ndarray subclass"""
 
     big = np.arange(12, dtype=np.float32).reshape((4, 3))
     for source in (big[:2], big[:2].view(Tagged)):
         stim = Stimulus(source, time=[0, 1, 2])
         npt.assert_equal(np.shares_memory(big, stim.data), False)
         npt.assert_equal(big.flags.writeable, True)
-        # ...and what comes out is an ordinary array, whatever went in:
+        # The stored data is always a plain ndarray:
         npt.assert_equal(type(stim.data), np.ndarray)
 
 
 def test_Stimulus_deepcopy():
-    # Duplicating arrays nobody can write into buys nothing, and NumPy would
-    # deep-copy a read-only array into a writable one -- so the copy shares
-    # the data container and only `metadata` is made independent:
+    # deepcopy shares the immutable data container (NumPy would make a
+    # writable copy); only `metadata` is copied:
     stim = BiphasicPulseTrain(20, 20, 0.45, stim_dur=100)
-    # Materialize first: a train that has not generated its waveform yet has
-    # no container to share, and the copy generates its own (see
+    # Materialize first: an unrendered train has no container to share (see
     # test_pulse_trains.py):
     stim.data
     copied = deepcopy(stim)
@@ -1660,16 +1600,15 @@ def test_Stimulus_deepcopy():
     npt.assert_equal(stim.metadata['user'], None)
     npt.assert_equal(copied.freq, stim.freq)
     npt.assert_equal(type(copied), type(stim))
-    # Metadata is arbitrary user data and may point back at the stimulus it
-    # describes. The copy has to resolve that as one object graph:
+    # Metadata may reference the stimulus itself; the copy's reference must
+    # point at the copy:
     stim.metadata['self'] = stim
     copied = deepcopy(stim)
     npt.assert_equal(copied.metadata['self'] is copied, True)
 
 
 def test_Stimulus_immutable_operations():
-    # Everything that returns or rebuilds a stimulus still works, and hands
-    # back one that is immutable in its turn:
+    # Derived stimuli are immutable and C-contiguous:
     stim = Stimulus({'A1': [0, 1, 1, 0], 'B2': [0, 0, 0, 0]},
                     time=[0, 1, 2, 3])
     derived = [stim * 2, -stim, stim + 1, stim >> 1.0, stim / 2,
@@ -1683,16 +1622,16 @@ def test_Stimulus_immutable_operations():
         npt.assert_equal(out.data.flags.writeable, False)
         npt.assert_equal(out.time.flags.writeable, False)
         npt.assert_equal(out.data.flags['C_CONTIGUOUS'], True)
-    # The operations themselves are unaffected:
+    # The operations still give the right result:
     npt.assert_equal(compressed.shape, (1, 3))
     npt.assert_equal(list(removed.electrodes), ['B2'])
 
 
 class CountingLazy(Stimulus):
-    """A stimulus that counts how often it generates its waveform
+    """Stimulus that counts how often it renders its waveform
 
-    Stands in for the parameter-backed stimuli that follow: it is defined by
-    ``n_time``, not by samples, and only ``_render`` ever builds any.
+    Stand-in for parameter-defined stimuli: defined by ``n_time``; only
+    ``_render`` builds samples.
     """
     __slots__ = ('n_time', 'n_renders')
 
@@ -1713,7 +1652,7 @@ class CountingLazy(Stimulus):
 def test_Stimulus_lazy_construction_does_not_render():
     stim = CountingLazy(metadata={'x': 1})
     npt.assert_equal(stim.n_renders, 0)
-    # Everything a stimulus knows without sampling anything:
+    # Attributes available without rendering:
     npt.assert_equal(list(stim.electrodes), ['A1', 'B2'])
     npt.assert_equal(len(stim.electrodes), 2)
     npt.assert_equal(stim.unit, uA)
@@ -1728,14 +1667,14 @@ def test_Stimulus_lazy_renders_once():
     stim = CountingLazy()
     npt.assert_almost_equal(stim.data, [[0, 1, 2, 3], [4, 5, 6, 7]])
     npt.assert_equal(stim.n_renders, 1)
-    # The cache serves every later read, of either array:
+    # Later reads of `data` and `time` use the cache:
     for _ in range(3):
         npt.assert_equal(stim.data.shape, (2, 4))
         npt.assert_almost_equal(stim.time, [0, 1, 2, 3])
         npt.assert_almost_equal(stim[0, 1.5], 1.5)
         npt.assert_equal(stim.duration, 3)
     npt.assert_equal(stim.n_renders, 1)
-    # Asking for `time` first renders just the same:
+    # Reading `time` first also renders once:
     other = CountingLazy()
     npt.assert_almost_equal(other.time, [0, 1, 2, 3])
     npt.assert_equal(other.n_renders, 1)
@@ -1744,8 +1683,8 @@ def test_Stimulus_lazy_renders_once():
 
 
 def test_Stimulus_lazy_state_is_immutable():
-    # A rendered waveform is installed through the same setter as any other,
-    # so it is owned, immutable and C-contiguous on the same terms:
+    # A rendered waveform goes through the regular setter, so it is private,
+    # immutable, and C-contiguous:
     stim = CountingLazy()
     npt.assert_equal(stim.data.flags.writeable, False)
     npt.assert_equal(stim.time.flags.writeable, False)
@@ -1754,7 +1693,7 @@ def test_Stimulus_lazy_state_is_immutable():
     npt.assert_equal(stim.time.dtype, np.float64)
     with pytest.raises(ValueError):
         stim.electrodes[0] = 'X'
-    # And it is validated on the same terms, too:
+    # It is validated the same way:
 
     class BadShape(CountingLazy):
         __slots__ = ()
@@ -1768,9 +1707,8 @@ def test_Stimulus_lazy_state_is_immutable():
 
 
 def test_Stimulus_lazy_electrodes_must_match_render():
-    # Naming the electrodes up front is what lets them be read without
-    # generating a waveform, so a render that disagrees with them would make
-    # the answer depend on when it was asked for:
+    # Electrodes given up front are readable without rendering, so a render
+    # with different electrodes raises ValueError:
     class Renamer(CountingLazy):
         __slots__ = ()
 
@@ -1790,8 +1728,7 @@ def test_Stimulus_lazy_copy_does_not_render():
         npt.assert_equal(stim.n_renders, 0)
         npt.assert_equal(list(copied.electrodes), ['A1', 'B2'])
         npt.assert_equal(copied.n_renders, 0)
-    # A copy taken after materialization shares the cached waveform, which is
-    # immutable and so has nothing to gain from being duplicated:
+    # A copy after rendering shares the immutable cached waveform:
     npt.assert_equal(stim.data.shape, (2, 4))
     shared = deepcopy(stim)
     npt.assert_equal(np.shares_memory(shared.data, stim.data), True)
@@ -1799,14 +1736,14 @@ def test_Stimulus_lazy_copy_does_not_render():
 
 
 def test_Stimulus_render_is_not_implemented_by_default():
-    # A plain `Stimulus` is its waveform and never renders, so the base
-    # implementation exists only to name what a subclass forgot:
+    # A plain `Stimulus` never renders; the base `_render` raises
+    # NotImplementedError for subclasses that do not implement it:
     with pytest.raises(NotImplementedError):
         Stimulus._render(Stimulus(3))
 
 
 def _n_renders(stim):
-    """How often the `CountingLazy` entries of a collection have rendered"""
+    """Return how often the collection's `CountingLazy` entries rendered"""
     return sum(getattr(c, 'n_renders', 0) for c, _ in stim._components)
 
 
@@ -1836,7 +1773,7 @@ COLLECTIONS = [
 def test_Stimulus_collection_defers_the_merge(name, build):
     stim = Stimulus(build())
     npt.assert_equal(_lazy(stim), True)
-    # Everything a collection knows before its entries have been sampled:
+    # Attributes available before any entry is rendered:
     npt.assert_equal(_n_renders(stim), 0)
     npt.assert_equal(len(stim.electrodes) > 1, True)
     npt.assert_equal(stim.unit, uA)
@@ -1846,7 +1783,7 @@ def test_Stimulus_collection_defers_the_merge(name, build):
     npt.assert_equal(_n_renders(stim), 0)
     for copied in copies:
         npt.assert_equal(_lazy(copied), True)
-    # ...and the first read of the waveform is what builds one, once:
+    # The first read of the waveform renders once:
     n_lazy = sum(isinstance(c, CountingLazy) for c, _ in stim._components)
     data = stim.data
     npt.assert_equal(_n_renders(stim), n_lazy)
@@ -1904,7 +1841,7 @@ def test_Stimulus_heterogeneous_pulse_parameters_merge_unchanged(vary,
 
 
 def test_Stimulus_collection_with_a_silent_child(monkeypatch):
-    # A 0 Hz train is a flat row, and it still has to end where the others do:
+    # A 0 Hz train is a flat row that must end where the others do:
     def build():
         return {'A1': BiphasicPulseTrain(0, 10, 0.45, stim_dur=200),
                 'B2': BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)}
@@ -1918,11 +1855,11 @@ def test_Stimulus_collection_with_a_silent_child(monkeypatch):
 
 
 def test_Stimulus_collection_of_raw_sources_stays_eager():
-    # Nothing to save: these entries are already the numbers they describe.
+    # Raw entries are already samples, so nothing is deferred:
     for source in ({'A1': [1, 2, 3], 'B2': [4, 5, 6]}, [[1, 2], [3, 4]],
                    {'A1': 1, 'B2': 2}):
         npt.assert_equal(Stimulus(source)._components, None)
-    # An explicit time axis and `compress` both ask about the merged waveform:
+    # An explicit time axis and `compress` both require the merged waveform:
     stim = Stimulus({'A1': CountingLazy(3, ['A1'])}, time=[0, 1, 2])
     npt.assert_equal(stim._components, None)
     npt.assert_equal(Stimulus({'A1': CountingLazy(3, ['A1'])},
@@ -1936,7 +1873,7 @@ def test_Stimulus_collection_snapshots_its_entries():
     raw[0] = 99.0
     npt.assert_equal(stim._components[0][0] is child, False)
     npt.assert_almost_equal(stim.data[1], [1, 2, 3, 4])
-    # Rendering the caller's object is not what rendered the collection:
+    # Rendering the caller's object does not render the collection:
     npt.assert_equal(child.n_renders, 0)
 
 
@@ -1979,11 +1916,11 @@ def test_Stimulus_collection_removes_whole_entries_without_rendering():
     npt.assert_equal(_lazy(stim), True)
     npt.assert_equal(list(stim.electrodes), ['B2'])
     npt.assert_equal(_n_renders(stim), 0)
-    # Only the entry that survived is ever generated:
+    # Only the remaining entry is rendered:
     npt.assert_equal(stim.data.shape, (1, 7))
     npt.assert_equal(_n_renders(stim), 1)
-    # Dropping every entry is the exception: an emptied stimulus keeps the
-    # time axis it ran on, which only the merged waveform knows.
+    # Exception: removing every entry keeps the time axis, which requires the
+    # merged waveform.
     empty = Stimulus({'A1': CountingLazy(4, ['A1'])})
     empty.remove('all')
     npt.assert_equal(_lazy(empty), False)
@@ -2009,13 +1946,12 @@ def test_Stimulus_collection_removing_part_of_an_entry_materializes():
 
 
 def test_Stimulus_rewriting_a_waveform_forgets_the_components():
-    # The components describe one waveform: the one they render to. An
-    # operation that installs a different one has to drop them, or a stimulus
-    # would go on carrying a structured source that says something else.
+    # Components describe the waveform they render to, so operations that
+    # install a different waveform must drop them.
     stim = Stimulus({'A1': CountingLazy(4, ['A1']),
                      'B2': CountingLazy(4, ['B2'])})
     npt.assert_equal(stim.data.shape, (2, 4))
-    # Rendering is the one install that keeps them -- it built that waveform:
+    # Rendering is the only install that keeps them:
     npt.assert_equal(stim._components is None, False)
     for rewrite in (lambda s: s + 5, lambda s: s >> 1):
         npt.assert_equal(rewrite(stim)._components, None)
@@ -2026,7 +1962,7 @@ def test_Stimulus_rewriting_a_waveform_forgets_the_components():
 
 @pytest.mark.parametrize('render', [False, True])
 def test_Stimulus_collection_emptied_keeps_its_time_axis(render, monkeypatch):
-    # `remove('all')` leaves zero rows on the axis the stimulus ran on, so an
+    # `remove('all')` leaves zero rows on the original time axis, so an
     # emptied collection still has a duration
     def build():
         return Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
@@ -2050,7 +1986,7 @@ def test_Stimulus_collection_emptied_keeps_its_time_axis(render, monkeypatch):
     lambda s: s * 2, lambda s: -s, lambda s: s._without_electrodes('A1')])
 def test_Stimulus_collection_exact_operations_ignore_a_cached_waveform(
         operate):
-    # Reading `.data` caches a waveform, it does not rewrite one
+    # Reading `.data` caches the waveform without changing it
     def build():
         return Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
                          'B2': BiphasicPulseTrain(23, 20, 0.45,
@@ -2083,13 +2019,13 @@ def test_Stimulus_collection_scaling_stays_deferred(factor):
                             [10 * abs(factor), 20 * abs(factor)])
     npt.assert_allclose(scaled.data, factor * Stimulus(build()).data,
                         rtol=1e-6, atol=1e-6)
-    # The original is untouched:
+    # The original is unchanged:
     npt.assert_almost_equal([c.amp for c, _ in stim._components], [10, 20])
 
 
 def test_Stimulus_collection_scaling_needs_every_entry_to_be_a_stimulus():
-    # A raw entry would have to be sampled to be scaled, which is the work
-    # staying unmerged exists to avoid -- so the collection gives way instead:
+    # Scaling a raw entry would require sampling it, so the collection
+    # materializes instead:
     stim = Stimulus({'A1': CountingLazy(4, ['A1']), 'B2': [1, 2, 3, 4]})
     scaled = stim * 2
     npt.assert_equal(scaled._components, None)
@@ -2097,9 +2033,8 @@ def test_Stimulus_collection_scaling_needs_every_entry_to_be_a_stimulus():
 
 
 def test_Stimulus_collection_offset_materializes():
-    # A DC offset is not something an entry's parameters express, so the
-    # collection materializes and hands back a plain waveform with no
-    # structured source left behind it:
+    # A DC offset cannot be expressed in entry parameters, so the result is a
+    # plain waveform without structured sources:
     stim = Stimulus({'A1': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100),
                      'B2': BiphasicPulseTrain(23, 20, 0.45, stim_dur=100)})
     out = stim + 5

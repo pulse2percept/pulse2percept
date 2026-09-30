@@ -45,8 +45,8 @@ def _linkcode_resolve(domain, info, package, url_fmt, revision):
     try:
         obj = attrgetter(info['fullname'])(module)
     except AttributeError:
-        # Documented but not a runtime attribute, as an annotation-only
-        # dataclass field is. There is nothing to point a source link at:
+        # Documented but not a runtime attribute (e.g., an annotation-only
+        # dataclass field), so there is no source to link:
         return
 
     try:

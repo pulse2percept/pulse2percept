@@ -1,8 +1,6 @@
 """Merging the time axes of several stimuli
 
-Kept apart from :py:mod:`~pulse2percept.stimuli.base` because
-:py:class:`~pulse2percept.implants.EnsembleImplant` merges its children on the
-same notion of "the same instant".
+Also used by :py:class:`~pulse2percept.implants.EnsembleImplant`.
 """
 import numpy as np
 
@@ -10,16 +8,12 @@ from ..utils.constants import DT
 
 
 def _same_time_point(t, merge_tolerance):
-    """How close two time points have to be to count as the same point
+    """Return the tolerance within which two time points are the same point
 
-    Two stimuli that sample the very same instant hand us time points that
-    differ by a few ulps: pulse trains build their time axis by accumulating a
-    window duration, so the drift between two frequencies grows with t. Those
-    are too far apart to merge on an exact comparison, yet far closer than the
-    DT that the rest of the code expects to separate two distinct time points,
-    so the tolerance scales with the magnitude of ``t``. The cap keeps it below
-    DT no matter how large ``t`` gets, so that points which really are a time
-    step apart are never merged.
+    Pulse trains build their time axis by accumulating a window duration, so
+    the same instant can differ by a few ulps, growing with ``t``. The
+    tolerance therefore scales with ``|t|``, capped at 0.5 * DT so that points
+    one time step apart are never merged.
 
     Parameters
     ----------
@@ -42,10 +36,8 @@ def _same_time_point(t, merge_tolerance):
 def unique_time_points(time, merge_tolerance=1e-6):
     """Sorted union of several time axes, merging points that coincide
 
-    Two stimuli that sample the same instant rarely agree on it to the last
-    bit, because each accumulated its own way there. An exact ``np.unique``
-    would keep both copies, leaving the merged axis with a pair of points far
-    closer together than the DT that separates two genuinely distinct ones.
+    Unlike ``np.unique``, points that differ only by accumulated rounding
+    error are merged.
 
     Parameters
     ----------
@@ -77,9 +69,8 @@ def unique_time_points(time, merge_tolerance=1e-6):
 def merge_time_axes(data, time, merge_tolerance=1e-6):
     """Merge the time axes of a collection of sources into a single one
 
-    Sources passed together may sample different instants, or run for
-    different durations. Interpolating them onto one axis is expensive, so
-    identical axes are detected and returned untouched.
+    Sources may sample different instants or have different durations.
+    Identical axes are returned unchanged, skipping interpolation.
 
     Parameters
     ----------
@@ -104,10 +95,7 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     t0_tol = None
     identical = True
     for t in time:
-        # np.array_equal is a lot cheaper than the element-wise comparison
-        # (which builds several full-size temporaries) and, whenever it
-        # succeeds, implies it. Use it as a fast path for the common case
-        # where all stimuli share the very same time axis:
+        # Fast path for the common case where all axes are exactly equal:
         if len(t) != len(t0):
             identical = False
             break
@@ -115,10 +103,8 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
             continue
         if t0_tol is None:
             t0_tol = _same_time_point(t0, merge_tolerance)
-        # The axes may still be the same axis up to float32 noise. This used
-        # to be an `np.allclose`, whose relative tolerance is 0.01 ms at
-        # t = 1000 ms - ten time steps, which silently threw away time points
-        # that differ by much more than float32 noise:
+        # Same axis up to float32 noise? (`np.allclose` is too loose: its
+        # rtol is 0.01 ms at t = 1000 ms, i.e. ten time steps.)
         if not np.all(np.abs(np.subtract(t, t0, dtype=np.float64)) <= t0_tol):
             identical = False
             break
@@ -127,9 +113,8 @@ def merge_time_axes(data, time, merge_tolerance=1e-6):
     lengths = [len(t) for t in time]
     t_sorted, starts_group, order = unique_time_points(time, merge_tolerance)
     new_time = t_sorted[starts_group]
-    # Snap every time axis onto the merged one, so that interpolating below
-    # reproduces each stimulus exactly at its own sample points rather than an
-    # ulp before or after them:
+    # Snap every time axis onto the merged one, so interpolation reproduces
+    # each stimulus exactly at its own sample points:
     snapped = np.empty_like(t_sorted)
     snapped[order] = new_time[np.cumsum(starts_group) - 1]
     new_data = []

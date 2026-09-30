@@ -82,8 +82,8 @@ implant = Implant(ElectrodeArray(DiskElectrode(0, 0, 0, 250)))
 # Temporal response
 # -----------------
 #
-# First evaluate the model at a single retinal location. Here, brightness
-# refers to the maximum of the predicted temporal response.
+# Response at a single retinal location. Brightness is the maximum of the
+# predicted temporal response:
 
 model = Nanduri2012Model(implant=implant, xrange=(0, 0), yrange=(0, 0))
 
@@ -151,8 +151,7 @@ model_freq = np.array([brightness(1.25, f) for f in freqs]) / reference
 
 ###############################################################################
 # Ratings and model output use different scales, so both are normalized to
-# their reference condition. The comparison is therefore between curve shapes,
-# not absolute brightness.
+# their reference condition; only curve shapes are comparable.
 
 fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharey='row')
 
@@ -234,8 +233,7 @@ fig.tight_layout()
 # Phosphene size
 # --------------
 #
-# Rebuild the model over an 8 x 8 dva spatial grid and evaluate the amplitude
-# and frequency conditions from Fig. 7.
+# Amplitude and frequency conditions from Fig. 7 on an 8 x 8 dva grid:
 
 model = Nanduri2012Model(
     implant=implant,
@@ -333,16 +331,16 @@ plt.legend();
 #
 # * Model brightness is in arbitrary units and is not a perceptual rating
 #   scale. Values should only be compared within a figure.
-# * ``AMP_TH = 30`` uA is assumed rather than measured for these electrodes.
-#   The amplitude prediction therefore depends on this choice.
+# * ``AMP_TH = 30`` uA is assumed, not measured, for these electrodes. The
+#   amplitude prediction depends on this choice.
 # * Changing electrode-retina distance rescales the current reaching the
 #   nonlinearity but does not widen the nonlinearity itself, so electrode
 #   geometry cannot recover the measured amplitude curve.
 # * Argus I thresholds vary by more than an order of magnitude across subjects
 #   and electrodes, and thresholds for the eight pooled electrodes are not
 #   reported in the dataset.
-# * The rating experiment included one subject and eight electrodes. The
-#   amplitude-frequency difference is therefore a pooled trend rather than a
-#   per-electrode prediction.
+# * The rating experiment included one subject and eight electrodes, so the
+#   amplitude-frequency difference is a pooled trend, not a per-electrode
+#   prediction.
 # * Phosphene area is defined here as the number of model pixels above the
 #   reference brightness, not the reported or drawn phosphene size.

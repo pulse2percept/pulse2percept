@@ -9,8 +9,8 @@ from ..utils import PrettyPrint
 
 
 def _share_visual_field(axes, scenes, view):
-    """Draw both eyes over the same angular extent: the largest FOV in the
-    eye view, the union of both extents in the scene view"""
+    """Sets both panels to the same limits: the largest FOV in the eye view,
+    the union of both extents in the scene view"""
     if view == _EYE_VIEW:
         half_w, half_h = (max(scene.fov[i] for scene in scenes) / 2
                           for i in (0, 1))
@@ -25,21 +25,17 @@ def _share_visual_field(axes, scenes, view):
 
 
 class BinocularScene(PrettyPrint):
-    """The left and right monocular views, side by side
+    """Left and right monocular views
 
-    A :py:class:`~pulse2percept.vision.Scene` is one eye's visual field.
-    ``BinocularScene`` holds two of them, and says which eye each belongs to.
-    The two sides are equal peers: neither is the implanted or the primary
-    one, and they need not share a source, FOV, shape, scotoma or aperture.
+    Holds one :py:class:`~pulse2percept.vision.Scene` per eye. Neither eye is
+    primary, and the two may differ in source, FOV, shape, scotoma, and
+    aperture.
 
-    It does *not* model how the visual system combines them. There is no
-    fusion, suppression, rivalry, stereopsis or ocular dominance here: this is
-    what the left eye sees, and this is what the right eye sees. Plotting them
-    is therefore an HMD-style pair of monocular views rather than one
-    binocularly fused image.
+    Binocular combination is not modeled (no fusion, suppression, rivalry,
+    stereopsis, or ocular dominance). Plots show an HMD-style pair of
+    monocular views, not a fused image.
 
-    Models remain monocular in v0.11, so a prediction names the eye it is
-    about::
+    Models are monocular in v0.11, so predict per eye::
 
         percept = model.predict_percept(binocular.left)
 
@@ -48,11 +44,11 @@ class BinocularScene(PrettyPrint):
     Parameters
     ----------
     left, right : :py:class:`~pulse2percept.vision.Scene`
-        What each eye sees. Stored as given, not copied.
+        Scene for each eye. Stored as given, not copied.
 
     Examples
     --------
-    A unilateral implant: a scotoma in the left eye, the fellow eye intact.
+    Unilateral implant: scotoma in the left eye, fellow eye intact:
 
     >>> import numpy as np
     >>> from pulse2percept.units import dva
@@ -64,7 +60,7 @@ class BinocularScene(PrettyPrint):
     >>> binocular.left.scotoma is None, binocular.right.scotoma is None
     (False, True)
 
-    A bilateral loss that is symmetric about the vertical meridian, built with
+    Bilateral loss, mirror-symmetric about the vertical meridian, using
     :py:meth:`~pulse2percept.vision.Scene.fellow_eye`:
 
     >>> left = Scene(picture, fov=40 * dva,
@@ -73,7 +69,7 @@ class BinocularScene(PrettyPrint):
     >>> float(binocular.right.scotoma(-6, 0))
     1.0
 
-    Imagery already packed left-right side by side, split with
+    Side-by-side stereo imagery, split with
     :py:meth:`~pulse2percept.vision.BinocularScene.from_side_by_side`:
 
     >>> stereo = np.zeros((10, 40))
@@ -96,38 +92,34 @@ class BinocularScene(PrettyPrint):
 
     @classmethod
     def from_side_by_side(cls, source, fov, **scene_kwargs):
-        """Build a binocular scene from a side-by-side stereo image.
+        """Build a binocular scene from a side-by-side stereo image
 
-        The left half of the image becomes the left-eye scene and the right
-        half becomes the right-eye scene. The split is exact: neither view is
-        flipped, resampled, or interpolated.
+        The left half becomes the left-eye scene, the right half the
+        right-eye scene. Neither half is flipped or resampled.
 
-        This method unpacks existing stereo imagery; it does not create
-        disparity or infer depth.
+        Does not create disparity or infer depth.
 
         .. versionadded:: 0.11.0
 
         Parameters
         ----------
         source : ImageStimulus or image
-            Side-by-side stereo image. Filenames, NumPy arrays, and other
-            inputs accepted by
-            :py:class:`~pulse2percept.stimuli.ImageStimulus` are converted to
-            one first. Metadata is preserved in both eye images.
-            Stereo video is not supported.
+            Side-by-side stereo image. Other inputs accepted by
+            :py:class:`~pulse2percept.stimuli.ImageStimulus` (e.g., file
+            names, NumPy arrays) are converted first. Metadata is copied to
+            both eyes. Stereo video is not supported.
         fov : float or ``(width, height)``
-            Per-eye field of view in degrees of visual angle. Unless
-            ``extent`` is passed, each eye's extent is inferred from one half
-            of the image, not the packed stereo frame.
+            Per-eye field of view in dva. Unless ``extent`` is passed, each
+            eye's extent is inferred from one half of the image.
         **scene_kwargs :
-            Additional arguments passed unchanged to both
-            :py:class:`~pulse2percept.vision.Scene` constructors. Use separate
-            scenes when the two eyes need different scotomas or other settings.
+            Passed to both :py:class:`~pulse2percept.vision.Scene`
+            constructors. For per-eye settings (e.g., different scotomas),
+            build the two scenes separately.
 
         Returns
         -------
         binocular : :py:class:`~pulse2percept.vision.BinocularScene`
-            The left and right monocular scenes.
+            Left and right monocular scenes.
 
         Examples
         --------
@@ -151,9 +143,8 @@ class BinocularScene(PrettyPrint):
                              f"into a left and a right half, so its width "
                              f"must be even, not {n_cols}.")
         halves = np.split(source.data.reshape(source.img_shape), 2, axis=1)
-        # Each half is derived from the packed frame, so it inherits its
-        # metadata (including a `source_shape` of the packed frame), as
-        # `ImageStimulus.crop` does:
+        # Each half keeps the packed frame's metadata (including its
+        # `source_shape`), as `ImageStimulus.crop` does:
         return cls(*[Scene(ImageStimulus(half, metadata=source.metadata),
                            fov=fov, **scene_kwargs)
                      for half in halves])
@@ -164,12 +155,12 @@ class BinocularScene(PrettyPrint):
 
     @property
     def left(self):
-        """What the left eye sees, as a Scene"""
+        """Left-eye Scene"""
         return self._left
 
     @property
     def right(self):
-        """What the right eye sees, as a Scene"""
+        """Right-eye Scene"""
         return self._right
 
     def plot(self, left_percept=None, right_percept=None, gaze=None, frame=0,
@@ -177,29 +168,28 @@ class BinocularScene(PrettyPrint):
              view=_SCENE_VIEW, context_alpha=_CONTEXT_ALPHA, **kwargs):
         """Plot the two eyes side by side
 
-        Each panel is its own :py:meth:`~pulse2percept.vision.Scene.plot`: an
-        eye given no percept shows its native or residual scene, and an eye
-        given one shows that percept in its own field. The two are drawn
-        independently and never combined.
+        Each panel is a separate :py:meth:`~pulse2percept.vision.Scene.plot`
+        call: without a percept, the eye's native or residual scene; with
+        one, that percept in the eye's field. Eyes are never combined.
 
         Parameters
         ----------
         left_percept, right_percept : \
 :py:class:`~pulse2percept.percepts.Percept`, optional
-            A brightness percept for that eye, or None to draw its scene.
+            Brightness percept for that eye, or None to draw its scene.
         gaze : (x, y), optional
-            Where both eyes are pointing, in dva. Defaults to the origin.
-            One gaze is shared: vergence is not modeled.
+            Scene location (dva) on both foveas. Defaults to the origin.
+            Shared by both eyes (vergence is not modeled).
         frame : int, optional
-            Which frame of a video scene to draw. Ignored for still scenes.
+            Frame of a video scene to draw. Ignored for still scenes.
         rings, meridians : bool, float, or sequence, optional
-            Visual-field grid about each eye's fovea, as in
+            Visual-field grid centered on each eye's fovea, as in
             :py:meth:`~pulse2percept.vision.Scene.plot`.
         vmax : float, optional
-            The percept brightness that displays as white, shared by both
-            eyes. Defaults to the maximum across both percepts.
+            Percept brightness shown as white, shared by both eyes. Defaults
+            to the maximum over both percepts.
         vmin : float, optional
-            The percept brightness that displays as black. Defaults to 0.
+            Percept brightness shown as black. Defaults to 0.
         axes : sequence of two matplotlib.axes.Axes, optional
             Axes to draw the left and right eye on, in that order. If None,
             makes a new side-by-side pair.
@@ -216,7 +206,7 @@ class BinocularScene(PrettyPrint):
         Returns
         -------
         axes : (ax_left, ax_right)
-            The two axes, always in left-eye, right-eye order.
+            Left-eye and right-eye axes, in that order.
 
         """
         view = _resolve_view(view)
@@ -232,17 +222,17 @@ class BinocularScene(PrettyPrint):
         for percept in percepts:
             _check_prosthetic(percept)
         if vmax is None and percepts:
-            # One scale for both eyes, so their brightness is comparable:
+            # One scale for both eyes, so brightness is comparable:
             vmax = max(np.max(p.data) for p in percepts)
             if vmin is None and vmax == 0:
-                # Blank under the default range: `Scene.plot` draws it black
+                # All-zero percepts: let `Scene.plot` draw them black:
                 vmax = None
         drawn = []
         for ax, label, scene, percept in zip(axes, ('left', 'right'),
                                              (self.left, self.right),
                                              (left_percept, right_percept)):
-            # A shared display range only reaches the eye it has a percept
-            # for; `Scene.plot` refuses one it has nothing to map.
+            # Pass vmin/vmax only with a percept; `Scene.plot` rejects them
+            # otherwise:
             scale = {'vmax': vmax, 'vmin': vmin} if percept is not None else {}
             drawn.append(scene.plot(gaze=gaze, frame=frame, ax=ax,
                                     rings=rings, meridians=meridians,

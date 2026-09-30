@@ -37,8 +37,8 @@ class ICVP(CorticalImplant):
     safe_mode : bool, optional
         If safe mode is enabled, only charge-balanced stimuli are allowed.
     hemisphere : 'left', 'right' or None, optional
-        Which hemisphere the device is implanted in. Metadata: it does not
-        move the array, which the model's ``implant_position`` places.
+        Implanted hemisphere. Metadata only: the model's ``implant_position``
+        sets the placement.
 
     Examples
     --------
@@ -87,7 +87,6 @@ class ICVP(CorticalImplant):
         names = np.rot90(names).flatten()
 
         # These electrodes have a shaft length of 650 microns, the rest 850.
-        # Shank length is device geometry rather than placement:
         length_650 = {'9', '2', '6', '11', '15', '4', '8', '13'}
         z = -np.array([650 if name in length_650 else 850 for name in names],
                       dtype=float)

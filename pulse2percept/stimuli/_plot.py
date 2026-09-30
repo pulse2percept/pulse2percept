@@ -1,8 +1,7 @@
 """Drawing a :py:class:`~pulse2percept.stimuli.Stimulus`
 
-Imported by :py:meth:`~pulse2percept.stimuli.Stimulus.plot` rather than at the
-top of :py:mod:`~pulse2percept.stimuli.base`, so that the stimulus itself does
-not depend on Matplotlib.
+Imported lazily by :py:meth:`~pulse2percept.stimuli.Stimulus.plot`, so that
+:py:mod:`~pulse2percept.stimuli.base` does not depend on Matplotlib.
 """
 import numpy as np
 from matplotlib.axes import Axes
@@ -13,23 +12,22 @@ from ..utils.constants import DT
 
 
 def _cell_edges(t):
-    """Turn sample times into the cell edges a heatmap colors between"""
+    """Return heatmap cell edges for the given sample times"""
     t = np.asarray(t, dtype=float)
     if t.size == 1:
-        # No neighbor to split an interval with; one sample is one time step:
+        # A single sample spans one time step:
         return np.array([t[0] - DT / 2, t[0] + DT / 2])
     return np.concatenate(([t[0]], 0.5 * (t[:-1] + t[1:]), [t[-1]]))
 
 
 def _times(stim, time):
-    """Resolve a requested time range into an index and its x values"""
+    """Return the time index and x values for the requested time range"""
     # The user can ask for a range, slice, or list of time points, which are
     # either interpolated or loaded directly.
     if time is None:
         # Ask for a slice instead of `stim.time` to avoid interpolation:
         time = slice(None)
-    # A range, a list of time points, or the endpoints and step of a slice
-    # may all be given as quantities:
+    # Ranges, lists, and slice endpoints/steps may be quantities:
     time = stim._as_time(time)
     if isinstance(time, tuple):
         t_idx = (stim.time > time[0]) & (stim.time < time[1])
@@ -57,7 +55,7 @@ def _times(stim, time):
 
 
 def _value_label(stim):
-    """What the stimulus values are, as an axis or colorbar label"""
+    """Return the axis or colorbar label for the stimulus values"""
     if stim.unit.dimension.is_dimensionless:
         return 'Value'
     if stim.unit == uA:
@@ -123,7 +121,7 @@ def _heatmap(stim, electrodes, t_idx, t_vals, ax):
     electrodes = list(electrodes)
     owns_figure = ax is None
     if ax is None:
-        # Give every electrode a readable row of its own:
+        # Scale figure height with the number of electrodes:
         height = float(np.clip(0.18 * len(electrodes), 2.5, 12))
         ax = plt.subplots(figsize=(8, height), layout='constrained')[1]
     elif not isinstance(ax, Axes):
@@ -141,7 +139,7 @@ def _heatmap(stim, electrodes, t_idx, t_vals, ax):
                          data, cmap=cmap, vmin=vmin, vmax=vmax)
     ax.set_yticks(np.arange(len(data)) + 0.5,
                   labels=[str(e) for e in electrodes])
-    # Read top to bottom, in the order the electrodes were asked for:
+    # List electrodes top to bottom in the requested order:
     ax.invert_yaxis()
     ax.set_xlabel(f'Time ({stim.time_unit})')
     ax.set_ylabel('Electrode')

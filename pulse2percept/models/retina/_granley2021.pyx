@@ -34,13 +34,10 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     and returns this percept repeated at each time point
 
     The activation of a segment by an electrode is
-    ``exp(-r^2 / (2 rho^2 F_size)) * sensitivity ** (1 / F_streak)``. Both
-    factors are exponentials, so they are evaluated as a single ``exp`` of the
-    summed exponents: the power becomes ``exp(log(sensitivity) / F_streak)``,
-    and ``log(sensitivity)`` depends only on the segment, so it is taken once
-    per segment instead of once per segment and electrode. That trades a
-    ``powf`` per pair (i.e., the most expensive call in the loop) for one
-    ``logf`` per segment.
+    ``exp(-r^2 / (2 rho^2 F_size)) * sensitivity ** (1 / F_streak)``,
+    evaluated as one ``exp`` of the summed exponents. ``log(sensitivity)`` is
+    computed once per segment, replacing a ``powf`` per (segment, electrode)
+    pair with one ``logf`` per segment.
 
     ``F_streak`` is finite and strictly positive: the default streak model
     clamps it to ``min_lambda ** 2 / lam ** 2``, and ``_predict_spatial``
@@ -61,14 +58,14 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         ``idx_start`` and ``idx_end`` are used to slice the ``axon`` array.
         For example, the axon belonging to the i-th pixel has segments
         axon[idx_start[i]:idx_end[i]].
-        This arrangement is necessary in order to access ``axon`` in parallel.
+        This layout allows parallel access.
     idx_start, idx_end : 1D uint32 array
         Start and stop indices of the i-th axon.
     rho : float32
         The rho parameter of the axon map model: exponential decay constant
         (microns) away from the axon.
-        Note that lambda was already taken into account when calculating the
-        axon contribution (stored/passed in ``axon``).
+        Lambda is already included in the axon contribution (third column of
+        ``axon_segments``).
     thresh_percept : float32
         Spatial responses smaller than ``thresh_percept`` will be set to zero
     cutoff_r2 : float32
@@ -100,8 +97,7 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     # An array containing n_space entries
     bright = np.zeros((n_space), dtype=np.float32)  # Py overhead
 
-    # Everything that depends only on the electrode is worked out once here,
-    # rather than once for every (segment, electrode) pair:
+    # Precompute per-electrode terms:
     size_np = np.asarray(size_model_el, dtype=np.float32)
     neg_inv_2rho2 = (-1.0 / (2.0 * rho * rho * size_np)).astype(np.float32)
     inv_streak = (1.0 / np.asarray(streak_model_el,
@@ -110,10 +106,8 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     active = (np.abs(np.asarray(amp_el, dtype=np.float32)) >
               0).astype(np.uint8)
 
-    # Parallel loop over all pixels to be rendered. `guided` rather than
-    # `static`: axons differ several-fold in how many segments they have, and
-    # with the cutoff above, how many electrodes reach a given segment varies
-    # too, so equal-sized chunks are not equal-sized work.
+    # Parallel loop over pixels. `guided` schedule because segment counts and
+    # electrodes within the cutoff vary across pixels:
     for idx_space in prange(n_space, schedule='guided', nogil=True,
                             num_threads=n_threads):
         # Find the brightness value of each pixel (`px_bright`) by finding
@@ -127,16 +121,11 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
         for idx_ax in range(idx_start[idx_space], idx_end[idx_space]):
             ax_x = axon_segments[idx_ax, 0]
             ax_y = axon_segments[idx_ax, 1]
-            # A segment with no location cannot be activated. That is a
-            # property of the segment, so it is checked once here rather than
-            # once per electrode:
+            # Skip segments without a location:
             if c_isnan(ax_x) or c_isnan(ax_y):
                 continue
-            # Sensitivity as a function of distance to the cell soma,
-            # precalculated during `build` and stored in
-            # `axon_segments[idx_ax, 2]`. The streak model rescales it by a
-            # per-electrode exponent below; taking the logarithm here turns
-            # that power into a multiply inside the electrode loop:
+            # Sensitivity vs. distance to the soma (precalculated in `build`).
+            # Its log turns the per-electrode streak exponent into a multiply:
             log_sens = c_log(axon_segments[idx_ax, 2])
             # Calculate the activation of each axon segment by adding up
             # the contribution of each electrode:
@@ -152,9 +141,8 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
                 # `SpatialModel._cutoff_r2`:
                 if r2 > cutoff_el[idx_el]:
                     continue
-                # Distance to the electrode and distance to the soma both
-                # enter as exponentials, so they are summed in the exponent
-                # and raised once:
+                # Both distances enter as exponentials, so sum the exponents
+                # and call `exp` once:
                 sgm_bright = (sgm_bright + bright_model_el[idx_el] *
                               c_exp(r2 * neg_inv_2rho2[idx_el] +
                                     log_sens * inv_streak[idx_el]))
@@ -238,17 +226,15 @@ cpdef fast_biphasic_scoreboard(const float32[::1] amp_el,
 
     bright = np.zeros((n_space), dtype=np.float32)  # Py overhead
 
-    # Everything that depends only on the electrode is worked out once here,
-    # rather than once for every (grid point, electrode) pair:
+    # Precompute per-electrode terms:
     size_np = np.asarray(size_model_el, dtype=np.float32)
     neg_inv_2rho2 = (-1.0 / (2.0 * rho * rho * size_np)).astype(np.float32)
     cutoff_el = (cutoff_r2 * size_np).astype(np.float32)
     active = (np.abs(np.asarray(amp_el, dtype=np.float32)) >
               0).astype(np.uint8)
 
-    # Parallel loop over all pixels to be rendered. `guided` rather than
-    # `static`: with the cutoff above, how many electrodes reach a given grid
-    # point varies, so equal-sized chunks are not equal-sized work.
+    # Parallel loop over pixels. `guided` schedule because the number of
+    # electrodes within the cutoff varies across grid points:
     for idx_space in prange(n_space, schedule='guided', nogil=True,
                             num_threads=n_threads):
         if c_isnan(xgrid[idx_space]) or c_isnan(ygrid[idx_space]):

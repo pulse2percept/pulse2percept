@@ -16,10 +16,10 @@ CANONICAL = ['play_stimulus_percept', 'plot_argus_phosphenes',
 
 @pytest.mark.parametrize('name', CANONICAL)
 def test_viz_reexports_plotting(name):
-    """The old name wraps the new implementation rather than copying it"""
+    """The old names wrap the plotting functions"""
     npt.assert_equal(getattr(p2p.viz, name).__wrapped__,
                      getattr(p2p.plotting, name))
-    # ... and is reachable through the old submodule as well:
+    # Also available from the old submodule:
     if name.startswith('plot_argus'):
         npt.assert_equal(getattr(p2p.viz.argus, name), getattr(p2p.viz, name))
 
@@ -27,10 +27,10 @@ def test_viz_reexports_plotting(name):
 def test_viz_warns_on_use():
     stim = ImageStimulus(np.random.rand(4, 6))
     percept = Percept(np.random.rand(3, 3, 1))
-    # Importing pulse2percept must stay quiet; only calling warns:
+    # Calling warns (importing does not):
     with pytest.warns(DeprecationWarning):
         axes = p2p.viz.plot_stimulus_percept(stim, percept)
     npt.assert_equal([ax.get_title() for ax in axes], ['Stimulus', 'Percept'])
-    # The generic statistical helpers go away with the module:
+    # The generic statistical helpers are deprecated too:
     with pytest.warns(DeprecationWarning):
         p2p.viz.scatter_correlation(np.arange(10), np.arange(10))

@@ -77,31 +77,20 @@ cpdef temporal_fast(const float32[:, ::1] stim,
     n_space = stim.shape[0]
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
-    # What the power nonlinearity returns once the half-wave rectifier below
-    # has zeroed its argument. That is the overwhelming majority of steps --
-    # more than 99% for a typical pulse train -- and the answer does not
-    # depend on the step or the location, so it is worked out once here.
-    # Note this is not simply zero: `pow(0, beta)` is 1 at `beta == 0` and
-    # infinite for negative `beta`, and both are reproduced by reusing it.
+    # Power nonlinearity of a rectified-to-zero argument (>99% of steps for a
+    # typical pulse train). Not simply zero: `pow(0, beta)` is 1 for
+    # `beta == 0` and inf for `beta < 0`:
     zero_pow = c_pow(<float32>0.0, beta)
-    # Each leaky integrator below steps by `dt * (drive - state) / tau`, and
-    # `dt / tau` is the same number on every step at every location. Written
-    # that way it is still a division per stage per step, because reassociating
-    # it is not a transformation a C compiler may make on its own: the two
-    # forms round differently, and neither `/fp:fast` nor `-ffast-math` is on.
-    # Five divisions, each ~14 cycles of latency, sit right on the dependency
-    # chain the loop cannot start the next step without. Dividing once here
-    # turns all five into multiplies:
+    # Precompute `dt / tau`: without fast-math the compiler cannot reassociate
+    # the per-step divisions, which sit on the loop's dependency chain:
     dt_tau1 = dt / tau1
     dt_tau2 = dt / tau2
     dt_tau3 = dt / tau3
 
     for idx_space in prange(n_space, schedule='static', nogil=True, num_threads=n_threads):
-        # Between pulses the integrators below decay down through the subnormal
-        # range, where the arithmetic costs ~100x what it does on normal
-        # floats. Flushing to zero there is what keeps this loop bound by its
-        # own arithmetic rather than by microcode; see `utils/_fpmode.pxd`. The
-        # mode is per-thread, hence set here rather than around the `prange`:
+        # Between pulses the integrators decay into subnormals, where arithmetic
+        # is ~100x slower; see `utils/_fpmode.pxd`. The FP mode is per-thread,
+        # so set it inside the `prange`:
         fpmode = c_denormals_off()
         # Because the stationary nonlinearity depends on `max_R3`, which is the
         # largest value of R3 over all time points, we have to process the
@@ -122,16 +111,14 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             # We use that frame until `t_sim` advances past it. In other words,
             # we use the `idx_stim`-th frame for all times
             # t_stim[idx_stim] <= t_sim < t_stim[idx_stim + 1].
-            # `while`, not `if`: more than one stimulus frame can fall inside a
-            # single simulation step -- an encoded pulse puts its edges on the
-            # DT=1e-3 ms grid, finer than `dt` -- and advancing only one of them
-            # per step leaves this reading a frame that is already in the past:
+            # `while`, not `if`: encoded pulse edges lie on the DT=1e-3 ms grid,
+            # finer than `dt`, so several frames can fall inside one step:
             while idx_stim + 1 < n_stim and t_sim >= t_stim[idx_stim + 1]:
                 idx_stim = idx_stim + 1
             amp = stim[idx_space, idx_stim]
             # Fast ganglion cell response. Note the negative sign before `amp`,
             # which is required to reproduce e.g. Fig.3 in the paper,
-            # indicating that the model was trained on what we know call
+            # indicating that the model was trained on what we now call
             # "anodic" current:
             r1 = r1 + dt_tau1 * (-amp - r1)  # += in threads is a reduction
             # Charge accumulation:
@@ -140,9 +127,8 @@ cpdef temporal_fast(const float32[:, ::1] stim,
             r2 = r2 + dt_tau2 * (ca - r2)
             # Half-rectification and power nonlinearity:
             # r3 = c_pow(c_fmax(r1 - eps * r2, 0), beta) # SLOW
-            # `powf` is the most expensive call in this loop, and the
-            # rectifier below zeroes its argument on almost every step. Where
-            # it does, the answer is the `zero_pow` computed before the loop:
+            # `powf` is the costliest call; reuse `zero_pow` when the
+            # argument is rectified to zero:
             r3_a = r1 - eps * r2
             if r3_a > 0.0:
                 r3 = c_pow(r3_a, beta)
@@ -160,7 +146,7 @@ cpdef temporal_fast(const float32[:, ::1] stim,
                 if c_abs(r4c) >= thresh_percept:
                     percept[idx_space, idx_frame] = r4c
                 idx_frame = idx_frame + 1
-        # Hand the thread back in the floating-point mode it arrived in:
+        # Restore the thread's floating-point mode:
         c_fpmode_restore(fpmode)
 
     return np.asarray(percept)  # Py overhead

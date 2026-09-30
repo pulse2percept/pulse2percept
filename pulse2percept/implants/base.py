@@ -46,15 +46,13 @@ def _ensemble_target(implants):
 class Implant(PrettyPrint):
     """Visual prosthesis
 
-    A visual prosthesis describes an electrode array together with the input
-    pipeline that turns what is presented to the device into the stimulation
-    its electrodes deliver (see
-    :py:meth:`~pulse2percept.implants.Implant.prepare_stim`). This is the base
-    class for implants such as
-    :py:class:`~pulse2percept.implants.retina.ArgusII` and
+    An electrode array plus the input pipeline that converts a source into
+    delivered stimulation (see
+    :py:meth:`~pulse2percept.implants.Implant.prepare_stim`). Base class for
+    implants such as :py:class:`~pulse2percept.implants.retina.ArgusII` and
     :py:class:`~pulse2percept.implants.cortex.Orion`.
 
-    The generic base carries no anatomical laterality. Use
+    The base class has no anatomical laterality. Use
     :py:class:`~pulse2percept.implants.retina.RetinalImplant` (``eye``) or
     :py:class:`~pulse2percept.implants.cortex.CorticalImplant`
     (``hemisphere``) for a device with a stimulation target.
@@ -71,8 +69,8 @@ class Implant(PrettyPrint):
 
     .. versionchanged:: 0.11.0
         An implant no longer stores a stimulus. ``implant.stim = source``
-        became ``delivered = implant.prepare_stim(source)``, and a model is
-        given the source rather than the implant (see
+        became ``delivered = implant.prepare_stim(source)``, and models take
+        the source as an argument (see
         :py:meth:`~pulse2percept.models.Model.predict_percept`).
 
     Parameters
@@ -101,26 +99,22 @@ class Implant(PrettyPrint):
             not only an electrical
             :py:class:`~pulse2percept.stimuli.PulseEncoder`.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
-        How the stimulator takes turns between electrodes that it cannot drive
-        at the same time. If None, every electrode may fire at once. Assigning
-        one binds it to this implant (see
-        :py:meth:`~pulse2percept.implants.Raster.bind`), and it is the raster
-        the ``encoder`` schedules against.
+        Schedule for electrodes that cannot be driven at the same time. If
+        None, all electrodes may fire at once. The raster is bound to this
+        implant (see :py:meth:`~pulse2percept.implants.Raster.bind`) and used
+        by the ``encoder`` for scheduling.
 
         .. versionadded:: 0.10.0
     max_current : float, optional
-        The total current (uA) the stimulator can source at any one instant,
-        summed over all electrodes. If given, preparing a stimulus that exceeds
-        it raises. If None, no such check is performed.
-
-        May be given as a plain number of microamps or as a unitful quantity
+        Maximum total instantaneous current (uA), summed over all electrodes.
+        If given, preparing a stimulus that exceeds it raises ValueError. If
+        None, no check is performed. Accepts a number (uA) or a quantity
         (e.g. ``0.1 * mA``); see :py:mod:`pulse2percept.units`.
 
         .. versionadded:: 0.10.0
     scene_input_frame : 'eye' or 'head', optional
-        How gaze registers a scene onto this system, overriding what the
-        device class does, e.g. ``'eye'`` for an Argus II run with eye
-        tracking. See
+        Frame used to register scene input, overriding the device class
+        default, e.g. ``'eye'`` for an Argus II with eye tracking. See
         :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`.
 
         .. versionadded:: 0.11.0
@@ -150,9 +144,8 @@ class Implant(PrettyPrint):
     #: Unit used by prepared stimuli. Defaults to electrical current.
     stimulus_unit = uA
 
-    #: Where the device sits relative to the tissue it stimulates, where the
-    #: literature is unambiguous about it; None where it is not, or where the
-    #: class describes a family rather than a device.
+    #: Device placement relative to the target tissue. None if the literature
+    #: is ambiguous or the class describes a device family.
     placement = None
 
     #: Stimulation technology, e.g. ``'photovoltaic'``.
@@ -163,9 +156,8 @@ class Implant(PrettyPrint):
     #: .. versionadded:: 0.11.0
     family = None
 
-    #: What :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`
-    #: falls back to for devices of this class. Subclasses describing a
-    #: head-fixed-camera system override it.
+    #: Default :py:attr:`~pulse2percept.implants.Implant.scene_input_frame`.
+    #: Head-fixed-camera subclasses override it.
     _default_scene_input_frame = 'eye'
 
     def __init__(self, electrode_array, preprocess=False,
@@ -207,8 +199,8 @@ class Implant(PrettyPrint):
         ``'eye'`` means gaze changes which scene content reaches the implant;
         ``'head'`` means scene input is fixed relative to the head.
 
-        Defaults to ``default_scene_input_frame``. Setting to ``None`` restores
-        that default.
+        Defaults to ``_default_scene_input_frame``. Setting to ``None``
+        restores the default.
 
         .. versionadded:: 0.11.0
 
@@ -228,15 +220,13 @@ class Implant(PrettyPrint):
     def encoder(self):
         """Stimulus encoder used for image or video input.
 
-        Must be an :py:class:`~pulse2percept.stimuli.ImplantEncoder`.
-        Encoders such as :py:class:`~pulse2percept.stimuli.TraceEncoder` are
-        called directly through ``encode`` rather than attached to an implant.
-        If ``None``, dimensionless image/video stimuli are not encoded
-        automatically.
+        Must be an :py:class:`~pulse2percept.stimuli.ImplantEncoder`. Other
+        encoders (e.g., :py:class:`~pulse2percept.stimuli.TraceEncoder`) are
+        called directly through ``encode``. If ``None``, dimensionless
+        image/video stimuli are not encoded automatically.
 
-        Assigning an unbound encoder (``encoder.implant is None``) binds it
-        to this implant. An encoder bound to a different implant is rejected
-        with a ValueError.
+        An unbound encoder (``encoder.implant is None``) is bound to this
+        implant. An encoder bound to a different implant raises ValueError.
         """
         return getattr(self, '_encoder', None)
 
@@ -249,8 +239,7 @@ class Implant(PrettyPrint):
                     f"'encoder' must be an ImplantEncoder object, not "
                     f"{type(encoder)}. Call the encoder's 'encode' "
                     f"directly instead.")
-            # Before the slot is written to, so that a rejected encoder leaves
-            # the implant as it was:
+            # Bind before assignment so a rejected encoder leaves self intact:
             encoder._bind(self)
         self._encoder = encoder
 
@@ -269,8 +258,7 @@ class Implant(PrettyPrint):
             if not isinstance(raster, Raster):
                 raise TypeError(f"'raster' must be a Raster object, not "
                                 f"{type(raster)}.")
-            # Before the slot is written to, so that a raster that cannot be
-            # laid out on this array leaves the implant as it was:
+            # Bind before assignment so an invalid raster leaves self intact:
             raster.bind(self)
         self._raster = raster
 
@@ -291,16 +279,15 @@ class Implant(PrettyPrint):
     def thresholds(self):
         """Perceptual threshold current (uA) for each electrode.
 
-        Assign a single current for the whole array, a per-electrode dict,
-        or None to clear the calibration. Threshold-relative pulse trains are
-        calibrated against whatever is in force at the moment
-        :py:meth:`~pulse2percept.implants.Implant.prepare_stim` runs.
+        Accepts a scalar for the whole array, a per-electrode dict, or None
+        to clear the calibration. Threshold-relative pulse trains use the
+        thresholds set when
+        :py:meth:`~pulse2percept.implants.Implant.prepare_stim` is called.
 
         .. versionadded:: 0.10.0
 
         .. versionchanged:: 0.11.0
-            Changing thresholds affects the next stimulus prepared, rather
-            than rewriting one the implant was holding.
+            Changing thresholds affects the next prepared stimulus only.
         """
         return dict(getattr(self, '_thresholds', None) or {})
 
@@ -321,8 +308,7 @@ class Implant(PrettyPrint):
             if name not in self.electrodes:
                 raise ValueError(f'Electrode "{name}" not found in implant.')
             threshold = _as_threshold_amp(threshold, f'thresholds[{name!r}]')
-            # Omitting an electrode already means "uncalibrated", so None is
-            # not stored as a second way of saying it:
+            # Missing key means uncalibrated, so None is not stored:
             if threshold is not None:
                 normalized[name] = threshold
         return normalized
@@ -357,8 +343,7 @@ class Implant(PrettyPrint):
                 f"the rest in uA. Give every driven electrode a threshold, or "
                 f"none of them.")
         if len(sources) == 1 and sources[0][1] is stim:
-            # The stimulus *is* the pulse train, and must stay that kind of
-            # object rather than become a collection of one:
+            # A bare pulse train stays a pulse train:
             return rebuilt[sources[0][0]]
         return Stimulus(rebuilt,
                         metadata=deepcopy(stim.metadata.get('user')))
@@ -401,18 +386,15 @@ class Implant(PrettyPrint):
     @classmethod
     def _require_charge_balanced(cls, stim):
         cls._require_current_stim(stim, 'safe_mode')
-        # `is False` rather than `not`: the property answers None when the
-        # question does not apply, which the guard above has already ruled out
-        # here but which must never be read as "unbalanced".
+        # is_charge_balanced may be None (not applicable), which is not
+        # "unbalanced":
         if stim.is_charge_balanced is False:
             raise ValueError("Safety check: Stimulus must be charge-balanced.")
 
     def _require_within_current_limit(self, stim):
-        # Before the empty-data fast path: an empty dimensionless stimulus is
-        # just as much the wrong kind of thing as a full one.
+        # Check units before the empty-data early return:
         self._require_current_stim(stim, 'max_current')
-        # What the stimulator has to source at an instant is the sum over every
-        # electrode active at that instant, whatever the sign of each:
+        # Instantaneous load is the sum of |current| over all electrodes:
         if stim.data.size == 0:
             return
         total = np.abs(stim.data).sum(axis=0)
@@ -430,24 +412,17 @@ class Implant(PrettyPrint):
     def check_stim(self, stim):
         """Quality-check the stimulus
 
-        This method is executed every time a stimulus is prepared (see
+        Called every time a stimulus is prepared (see
         :py:meth:`~pulse2percept.implants.Implant.prepare_stim`).
 
-        If ``safe_mode`` is set to True, this function will only allow stimuli
-        that are charge-balanced. If ``max_current`` is set, it will only allow
-        stimuli whose total instantaneous current stays within it.
+        If ``safe_mode`` is True, only charge-balanced stimuli are allowed. If
+        ``max_current`` is set, the total instantaneous current must stay
+        within it. Both checks require a stimulus in units of current and
+        raise :py:class:`~pulse2percept.units.DimensionMismatchError`
+        otherwise.
 
-        Both are questions about electricity, and neither can be answered about
-        a stimulus that is not a current, so each raises a
-        :py:class:`~pulse2percept.units.DimensionMismatchError` on one. In the
-        ordinary flow this cannot happen:
-        :py:meth:`~pulse2percept.implants.Implant.prepare_stim` has
-        already checked the stimulus against
-        :py:attr:`~pulse2percept.implants.Implant.stimulus_unit`.
-        ``check_stim`` is public, though, and may be handed anything.
-
-        The user can define their own checks in implants that inherit from
-        :py:class:`~pulse2percept.implants.Implant`.
+        Subclasses of :py:class:`~pulse2percept.implants.Implant` can define
+        their own checks.
 
         Parameters
         ----------
@@ -463,9 +438,8 @@ class Implant(PrettyPrint):
             in units of current.
 
         .. versionchanged:: 0.10.0
-            The electrical checks verify that the stimulus really is
-            electrical, instead of reading whatever numbers it holds as
-            microamps.
+            The electrical checks require a stimulus in units of current
+            instead of reading its values as uA.
 
         """
         if self.safe_mode:
@@ -474,7 +448,7 @@ class Implant(PrettyPrint):
             self._require_within_current_limit(stim)
 
     def _preprocess(self, stim):
-        """Run ``stim`` through whatever this implant's ``preprocess`` says"""
+        """Apply ``self.preprocess`` to ``stim``"""
         if callable(self.preprocess):
             return self.preprocess(stim)
         if self.preprocess:
@@ -484,12 +458,10 @@ class Implant(PrettyPrint):
     def preprocess_stim(self, stim):
         """Preprocess the stimulus
 
-        This method is executed every time a stimulus is prepared.
+        Called every time a stimulus is prepared.
 
-        No preprocessing is performed by default, but the user can define their
-        own method in implants that inherit from
-        return stim
-        :py:class:`~pulse2percept.implants.Implant`.
+        No preprocessing is performed by default. Subclasses of
+        :py:class:`~pulse2percept.implants.Implant` can define their own.
 
         A custom method must return a
         :py:class:`~pulse2percept.stimuli.Stimulus` object with the correct
@@ -524,8 +496,7 @@ class Implant(PrettyPrint):
             img_h, img_w = shape[:2]
             data = stim.data.reshape(shape)
             if colored and isinstance(stim, ImageStimulus) and shape[2] == 4:
-                # RGBA alpha blending is nonlinear; apply it before
-                # interpolation (avoids second full-size copy)
+                # Apply RGBA alpha before interpolation (nonlinear):
                 data = np.multiply(data[..., :3], data[..., 3:4])
                 np.clip(data, 0.0, 1.0, out=data)
 
@@ -574,17 +545,15 @@ class Implant(PrettyPrint):
             A Matplotlib axes object. If None, will either use the current axes
             (if exists) or create a new Axes object.
         stim : :py:class:`~pulse2percept.stimuli.Stimulus` source type, optional
-            What is presented to the device. Prepared through
-            :py:meth:`~pulse2percept.implants.Implant.prepare_stim`,
-            so the colors show what the electrodes actually deliver. Required
-            by ``stim_cmap``.
+            Source passed through
+            :py:meth:`~pulse2percept.implants.Implant.prepare_stim`, so colors
+            show delivered stimulation. Required by ``stim_cmap``.
 
             .. versionadded:: 0.11.0
         stim_cmap : bool, str, or matplotlib colormap, optional
-            If not false, the fill color of the plotted electrodes will vary based
-            on peak absolute stimulus amplitude on each electrode, so cathodic
-            stimulation is colored too. The chosen colormap
-            will be used if provided
+            If not False, electrodes are colored by peak absolute stimulus
+            amplitude (so cathodic stimulation is colored too), using the
+            given colormap if provided.
 
         Returns
         -------
@@ -633,11 +602,11 @@ class Implant(PrettyPrint):
     def prepare_stim(self, source):
         """Turn a source into stimulation the implant can deliver.
 
-        Preparation applies preprocessing, converts the source to a
-        :py:class:`~pulse2percept.stimuli.Stimulus`, encodes dimensionless visual
-        input when an encoder is present, reshapes it to the electrode array, removes
-        deactivated electrodes, applies threshold calibration, and runs safety checks.
-        The input is not modified and the result is not stored.
+        Applies preprocessing, converts the source to a
+        :py:class:`~pulse2percept.stimuli.Stimulus`, encodes dimensionless
+        visual input if an encoder is set, reshapes it to the electrode array,
+        removes deactivated electrodes, applies threshold calibration, and runs
+        safety checks. The input is not modified and the result is not stored.
 
         Prepared stimuli use the implant's
         :py:attr:`~pulse2percept.implants.Implant.stimulus_unit`
@@ -715,26 +684,23 @@ class Implant(PrettyPrint):
             # Use electrode names as stimulus coordinates:
             stim = Stimulus(data, electrodes=self.electrode_names)
 
-        # Encode dimensionless visual input after preprocessing. Preprocessing
-        # may already have converted the source to electrical stimulation.
-        # Encoded stimuli retain frame-level modulation via `_spatial_view`.
+        # Encode after preprocessing, which may already return current.
+        # Encoded stimuli keep frame-level modulation via `_spatial_view`:
         if (self.encoder is not None and
                 stim.unit.dimension.is_dimensionless and
                 stim.unit.dimension != self.stimulus_unit.dimension):
             stim = self.encoder.encode(stim)
 
-        # A picture is sampled onto the electrodes whatever its resolution:
+        # Sample images/videos onto the electrodes at any resolution:
         if isinstance(stim, (ImageStimulus, VideoStimulus)):
             stim = self.reshape_stim(stim)
         elif len(stim.electrodes) > self.n_electrodes:
-            # More values than electrodes: the only thing that can be reshaped
-            # onto the array is a picture, so let `reshape_stim` say so.
+            # `reshape_stim` raises ValueError for non-image input:
             stim = self.reshape_stim(stim)
 
         if (allow_dimensionless and stim.unit.dimension.is_dimensionless and
                 stim.unit.dimension != self.stimulus_unit.dimension):
-            # Relative drive rather than stimulation: there is no threshold to
-            # calibrate against, no charge to balance, and no current to limit.
+            # Dimensionless drive: skip calibration and electrical checks:
             return self._on_electrodes(stim)
 
         # Validate the physical quantity before inspecting stimulus values:
@@ -812,23 +778,20 @@ class Implant(PrettyPrint):
 class GridImplant(Implant):
     """A prosthesis system whose electrodes form a regular grid
 
-    Convenience composition of an
-    :py:class:`~pulse2percept.implants.ElectrodeGrid` and a
-    :py:class:`~pulse2percept.implants.Implant`, for the common case
-    where a custom implant is just a grid of electrodes:
+    Shorthand for an :py:class:`~pulse2percept.implants.Implant` built from
+    an :py:class:`~pulse2percept.implants.ElectrodeGrid`:
 
     .. code-block:: python
 
         implant = GridImplant(shape=(10, 10), spacing=500)
 
-    is the same thing as:
+    is equivalent to:
 
     .. code-block:: python
 
         implant = Implant(ElectrodeGrid(shape=(10, 10), spacing=500))
 
-    Anatomy-neutral, like :py:class:`~pulse2percept.implants.Implant`: for a
-    grid with a stimulation target, hand the
+    Anatomy-neutral. For a grid with a stimulation target, pass the
     :py:class:`~pulse2percept.implants.ElectrodeGrid` to
     :py:class:`~pulse2percept.implants.retina.RetinalImplant` or
     :py:class:`~pulse2percept.implants.cortex.CorticalImplant` instead.
@@ -860,11 +823,11 @@ class GridImplant(Implant):
     safe_mode : bool, optional
         Whether to enforce charge balance.
     encoder : :py:class:`~pulse2percept.stimuli.ImplantEncoder`, optional
-        How the device turns a picture into stimulation.
+        Converts image/video input into stimulation.
     raster : :py:class:`~pulse2percept.implants.Raster`, optional
-        How the stimulator takes turns between electrodes.
+        Schedule for electrodes that cannot fire at the same time.
     max_current : float, optional
-        The total current (uA) the stimulator can source at any one instant.
+        Maximum total instantaneous current (uA).
     **electrode_params :
         Keyword arguments passed to the ``electrode_type`` constructor, such
         as ``radius`` for
@@ -911,9 +874,8 @@ class GridImplant(Implant):
                          scene_input_frame=scene_input_frame)
 
 
-# ``ProsthesisSystem`` was renamed to ``Implant`` in 0.11.0. It resolves to the
-# class itself rather than to a subclass, so ``isinstance`` and ``issubclass``
-# checks written against the old name keep working during the deprecation.
+# ``ProsthesisSystem`` resolves to ``Implant`` itself so isinstance checks
+# against the old name still work:
 __getattr__ = _deprecated_names(__name__, {'ProsthesisSystem': Implant},
                                 deprecated_version='0.11.0',
                                 removed_version='0.12.0')

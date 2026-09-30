@@ -13,10 +13,8 @@ ctypedef cnp.int32_t int32
 ctypedef cnp.uint32_t uint32
 ctypedef Py_ssize_t index_t
 
-# How many spatial locations one thread integrates at a time. The running
-# brightness for a block this size stays in L1 next to the stimulus row it is
-# read against, and the block is wide enough to fill the vector registers the
-# inner loop compiles down to.
+# Spatial locations per thread block: the block's running brightness fits in
+# L1 and fills the vector registers.
 cdef index_t BLOCK = 64
 
 # How a percept time point summarizes the interval that led up to it.
@@ -93,8 +91,8 @@ cpdef fading_fast(const float32[:, ::1] stim,
     ``b_n = b_0 * q**n + drive * (1 - q**n)``.
 
     This is the closed form of the discrete recurrence, not of the
-    continuous-time ODE. Stimulus-frame selection therefore follows the same
-    simulation-step timing as before.
+    continuous-time ODE, so stimulus frames are selected on the simulation-step
+    grid.
 
     Because brightness is monotonic under constant drive, the peak within a
     run is at one of its endpoints.
@@ -121,14 +119,11 @@ cpdef fading_fast(const float32[:, ::1] stim,
         one: 0 reports the brightness at that instant, 1 reports the peak
         brightness reached over the interval.
 
-        Electrical stimulation is pulsatile, so brightness rises and falls
-        within one output interval. Reporting the instant the interval happens
-        to end on samples a signal whose energy lives in sub-millisecond
-        transients, and the sampling phase then walks through the pulse cycle:
-        neighbouring frames come out orders of magnitude apart for no reason a
-        viewer would recognize. Within a constant-drive run brightness is
-        monotonic, so checking the run endpoints gives the exact interval
-        peak without evaluating every simulation step.
+        Pulsatile stimulation makes brightness rise and fall within one output
+        interval, so instantaneous sampling aliases sub-millisecond transients
+        and neighboring frames can differ by orders of magnitude. Brightness
+        is monotonic within a constant-drive run, so run endpoints give the
+        exact interval peak.
 
     Returns
     -------
@@ -163,7 +158,7 @@ cpdef fading_fast(const float32[:, ::1] stim,
         n_threads = 1
 
     percept = np.zeros((n_space, n_percept), dtype=np.float32)  # Py overhead
-    # Match the float32 step used by the original recurrence.
+    # Compute in float32 to match the step-by-step recurrence:
     dt_tau = dt / tau
     # Make spatial reads contiguous within each run.
     stim_t = np.ascontiguousarray(np.asarray(stim).T)  # Py overhead
@@ -171,9 +166,8 @@ cpdef fading_fast(const float32[:, ::1] stim,
     # Running brightness, one row per thread. Rows are BLOCK floats apart, so
     # no two threads share a cache line.
     scratch = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
-    # Peak brightness since the last percept time point, laid out the same way.
-    # Allocated even when it is not used, so that the loop below can be written
-    # once:
+    # Peak brightness since the last percept time point, same layout. Always
+    # allocated so the loop below is written once:
     running = np.empty((n_threads, BLOCK), dtype=np.float32)  # Py overhead
 
     # Runs end at frame changes or output points:
@@ -198,10 +192,9 @@ cpdef fading_fast(const float32[:, ::1] stim,
 
     for idx_block in prange(n_blocks, schedule='static', nogil=True,
                             num_threads=n_threads):
-        # Brightness decays down through the subnormal range between pulses,
-        # where the arithmetic costs ~100x what it does on normal floats; see
-        # `utils/_fpmode.pxd`. The mode is per-thread, hence set here rather
-        # than around the `prange`:
+        # Brightness decays into subnormals between pulses, where arithmetic is
+        # ~100x slower; see `utils/_fpmode.pxd`. The FP mode is per-thread, so
+        # set it inside the `prange`:
         fpmode = c_denormals_off()
         tid = threadid()
         lo = idx_block * BLOCK
@@ -219,8 +212,7 @@ cpdef fading_fast(const float32[:, ::1] stim,
                 amp = stim_t[idx_stim, lo + idx_space]
                 bright = scratch[tid, idx_space]
                 # Half-wave rectify: only cathodic (negative) current drives
-                # brightness. Without this the model cannot see a
-                # charge-balanced pulse at all:
+                # brightness, else a charge-balanced pulse would cancel:
                 drive = -amp
                 if drive < 0.0:
                     drive = 0.0
@@ -233,10 +225,8 @@ cpdef fading_fast(const float32[:, ::1] stim,
                     running[tid, idx_space] = bright
             idx_frame = run_out[idx_run]
             if idx_frame >= 0:
-                # `idx_t_percept` stores the time points at which we need to
-                # output a percept. The pre-pass ended a run on each of them,
-                # so reaching one is a property of the run rather than a
-                # comparison to make here:
+                # `_build_runs` ends a run at each output time point in
+                # `idx_t_percept`:
                 for idx_space in range(hi - lo):
                     if reduce == REDUCE_PEAK:
                         bright = running[tid, idx_space]
@@ -244,12 +234,10 @@ cpdef fading_fast(const float32[:, ::1] stim,
                         bright = scratch[tid, idx_space]
                     if c_abs(bright) >= thresh_percept:
                         percept[lo + idx_space, idx_frame] = bright
-                    # Start the next interval's peak from where this one left
-                    # off, not from zero: brightness is continuous, so the
-                    # value carried across the boundary is a floor on what the
-                    # next interval reaches:
+                    # Brightness is continuous, so the boundary value is a
+                    # lower bound on the next interval's peak:
                     running[tid, idx_space] = scratch[tid, idx_space]
-        # Hand the thread back in the floating-point mode it arrived in:
+        # Restore the thread's floating-point mode:
         c_fpmode_restore(fpmode)
 
     return np.asarray(percept)  # Py overhead
@@ -460,7 +448,7 @@ cpdef alpha_fast(const float32[:, ::1] stim,
                 u0 = x0 - drive
                 xn = x0 * qn + drive * pn
                 yn = y0 * qn + x0 * cn + drive * rn
-                # # Guard against negative roundoff:
+                # Clip negative roundoff:
                 if yn < 0.0:
                     yn = 0.0
                 first[tid, idx_space] = xn
@@ -497,8 +485,8 @@ cpdef alpha_fast(const float32[:, ::1] stim,
                         yn = second[tid, idx_space]
                     if c_abs(yn) >= thresh_percept:
                         percept[lo + idx_space, idx_frame] = yn
-                    # Brightness is continuous, so the value carried across
-                    # the boundary is a floor on the next interval's peak:
+                    # Brightness is continuous, so the boundary value is a
+                    # lower bound on the next interval's peak:
                     running[tid, idx_space] = second[tid, idx_space]
         c_fpmode_restore(fpmode)
 

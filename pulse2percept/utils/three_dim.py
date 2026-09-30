@@ -73,8 +73,7 @@ def parse_3d_orient(orient, orient_mode='direction'):
         return angles
 
     if orient_mode == 'angle':
-        # Only 'angle' takes an angle; a direction vector and a rotation matrix
-        # are dimensionless. Normalized before the array conversion below, so
+        # Only 'angle' mode takes angle units. Convert before `np.array` so
         # that a list of quantities is handled elementwise:
         orient = as_value(orient, deg, 'orient')
     if isinstance(orient, list) or isinstance(orient, tuple):

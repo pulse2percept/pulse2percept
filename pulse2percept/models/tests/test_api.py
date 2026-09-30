@@ -12,11 +12,11 @@ import pytest
 
 import pulse2percept.models as models
 
-#: Names the root namespace still exports, and nothing else.
+#: The complete list of names exported by the root namespace.
 GENERIC = ['AlphaTemporal', 'BaseModel', 'FadingTemporal', 'Model',
            'SpatialModel', 'TemporalModel', 'cortex', 'retina']
 
-#: Flat retinal names the root no longer exports.
+#: Retinal names removed from the root namespace in v0.11.
 MOVED = ['AxonMapModel', 'AxonMapSpatial', 'BiphasicAxonMapModel',
          'BiphasicAxonMapSpatial', 'BiphasicScoreboardModel',
          'BiphasicScoreboardSpatial', 'Horsager2009Model',
@@ -100,8 +100,7 @@ def test_cortical_scoreboard_left_cortex_base(name):
 
 
 def test_scoreboard_kernels_are_shared_not_retinal():
-    """The Gaussian spread kernels are generic, so cortex does not reach into
-    a retinal module for them."""
+    """Gaussian spread kernels live in the generic `models._scoreboard`"""
     from pulse2percept.models import _scoreboard
     from pulse2percept.models.cortex import scoreboard
     from pulse2percept.models.retina import beyeler2019
@@ -113,7 +112,8 @@ def test_scoreboard_kernels_are_shared_not_retinal():
                      _scoreboard.fast_scoreboard, True)
     npt.assert_equal(beyeler2019.fast_scoreboard is
                      _scoreboard.fast_scoreboard, True)
-    # ... and the axon-map science stayed behind:
+    # Axon map kernels stay in the retinal module:
+
     for name in ('fast_axon_map', 'fast_jansonius', 'fast_find_closest_axon'):
         npt.assert_equal(hasattr(_beyeler2019, name), True, err_msg=name)
         npt.assert_equal(hasattr(_scoreboard, name), False, err_msg=name)

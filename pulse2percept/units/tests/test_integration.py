@@ -1,12 +1,12 @@
-"""Cross-cutting acceptance tests for the units boundary.
+"""Library-wide acceptance tests for unit handling
 
-The per-module test files check that each API normalizes its own arguments.
-These two check the properties that only make sense across the whole library:
+Per-module tests check that each API converts its own arguments. These tests
+check, across the library:
 
-*  every public object that claims to accept a quantity gives the same result
-   for every spelling of it, and stores ordinary numbers afterwards;
-*  every dimensional confusion the design is meant to catch is caught, in one
-   place, so the matrix has no accidental gaps.
+*  every public object that accepts a quantity gives the same result for
+   every equivalent spelling, and stores plain numbers;
+*  every dimension mismatch the unit system should catch is caught (one
+   matrix, in one place).
 """
 import numpy as np
 import numpy.testing as npt
@@ -32,20 +32,21 @@ from pulse2percept.units import (DimensionMismatchError, Quantity, Unit, cm,
                                  dimensionless, dva, mA, mm, ms, nA, s, uA, um,
                                  us)
 
-# The same physical quantity, spelled every awkward way the unit system
-# allows. Each row is (bare, [equivalent unitful spellings]).
+# The same physical quantity in different units. Each row is
+# (bare, [equivalent unitful spellings]).
 CURRENTS = (41.7, [0.0417 * mA, 41700 * nA])
 TIMES = (20, [0.02 * s, 20000 * us])
 LENGTHS = (575, [0.575 * mm, 0.0575 * cm])
 ANGLES = (2, [2 * dva])
 
-#: Attributes that hold a :py:class:`~pulse2percept.units.Unit` on purpose.
-#: Everything else in an object's state has to be plain numeric data.
+#: Attributes that are allowed to hold a
+#: :py:class:`~pulse2percept.units.Unit`. All other state must be plain
+#: numeric data.
 _UNIT_SLOTS = ('_unit', '_time_unit')
 
 
 def _state(obj):
-    """Every value an object stores, whether it uses __dict__ or __slots__"""
+    """Returns every value an object stores, from __dict__ and __slots__"""
     state = dict(getattr(obj, '__dict__', {}) or {})
     for klass in type(obj).__mro__:
         for name in getattr(klass, '__slots__', ()) or ():
@@ -58,14 +59,12 @@ def _state(obj):
 
 
 def assert_stores_plain_numbers(obj, label, _seen=None, _depth=0):
-    """No Quantity survives construction, anywhere in an object's state
+    """Asserts that no Quantity is stored anywhere in an object's state
 
-    This is the invariant the whole design rests on: units are stripped at the
-    Python boundary, so nothing downstream -- NumPy, Cython, pickle -- ever
-    meets one. A Unit is allowed where an object records what its numbers
-    mean (``Stimulus._unit`` and friends); a Quantity is not allowed anywhere,
-    and neither is an object-dtype array, which is what a Quantity that slipped
-    into an array would look like.
+    Units are stripped at the Python boundary, so NumPy, Cython, and pickle
+    never see a Quantity. A Unit is allowed where an object records what its
+    numbers mean (``Stimulus._unit`` etc.); a Quantity is not, and neither is
+    an object-dtype array (a Quantity inside an array).
     """
     if _seen is None:
         _seen = set()
@@ -98,11 +97,10 @@ def assert_stores_plain_numbers(obj, label, _seen=None, _depth=0):
 
 
 def _same(build, bare, spellings, extract, label, rtol=1e-12):
-    """Every spelling of a quantity builds the same object
+    """Asserts that every spelling of a quantity builds the same object
 
-    The extracted result has to contain something other than zero. Comparing
-    an all-zero percept against an all-zero percept passes for the wrong
-    reason, which is exactly the failure mode a test like this invites.
+    The extracted result must be nonzero, since comparing two all-zero percepts
+    would pass trivially.
     """
     reference = build(bare)
     assert_stores_plain_numbers(reference, f'{label}(bare)')
@@ -117,7 +115,8 @@ def _same(build, bare, spellings, extract, label, rtol=1e-12):
 
 
 def test_every_spelling_builds_the_same_object():
-    """One quantity, many spellings, one result -- and no Quantity left over"""
+    """Equivalent spellings of a quantity give the same result and store no
+    Quantity"""
     amp, amps = CURRENTS
     dur, durs = TIMES
     length, lengths = LENGTHS
@@ -166,8 +165,8 @@ def test_every_spelling_builds_the_same_object():
     _same(lambda sp: ElectrodeGrid((2, 3), sp), length, lengths,
           lambda g: np.array([[e.x, e.y] for e in g.electrode_objects]),
           'ElectrodeGrid.spacing')
-    # A central electrode and a grid wide enough to hold its phosphene, so
-    # that the comparisons below have something in them:
+    # A central electrode and a grid large enough to contain its phosphene, so
+    # the percepts are nonzero:
     implant = ArgusII()
     source = {'C5': BiphasicPulseTrain(20, 41.7, 0.45, stim_dur=100)}
     grid = dict(implant=implant, xrange=(-8, 8), yrange=(-8, 8), step=2)
@@ -196,7 +195,7 @@ def test_every_spelling_builds_the_same_object():
     _same(lambda a: Watson2014Map().dva_to_ret(a, a), angle, angles,
           lambda xy: np.asarray(xy, dtype=float), 'Watson2014Map.dva_to_ret')
 
-    # --- And a whole pipeline, spelled unitfully end to end ---------------
+    # --- A whole pipeline with unitful arguments --------------------------
     imp_bare = ArgusII(z=575)
     imp_unit = ArgusII(z=0.575 * mm)
     bare = Model(spatial=ScoreboardSpatial(imp_bare, rho=575,
@@ -223,10 +222,9 @@ def test_every_spelling_builds_the_same_object():
 
 
 def test_the_whole_rejection_matrix():
-    """Every dimensional confusion the design is meant to catch, in one place
+    """Every dimension mismatch the unit system should catch
 
-    Most of these are also tested where they live; this is the matrix, so that
-    a gap shows up as a gap rather than as a missing file.
+    Most are also tested in their own modules; this matrix makes gaps visible.
     """
     img = ImageStimulus(np.linspace(0, 1, 36).reshape((6, 6)))
     current = Stimulus({'A1': BiphasicPulseTrain(20, 50, 0.45, stim_dur=100)})
@@ -234,33 +232,31 @@ def test_the_whole_rejection_matrix():
                               yrange=(-2, 2), step=1).build()
 
     # dimensionless -> implant: an implant delivers current, so a picture is
-    # refused where it is prepared rather than where it is eventually read.
-    # (Argus II ships with an encoder, which would otherwise turn the picture
-    # into the current the implant does deliver.)
+    # rejected by prepare_stim. (Argus II has a default encoder, which would
+    # convert the picture to current.)
     with pytest.raises(DimensionMismatchError):
         ArgusII(preprocess=False, encoder=None).prepare_stim(img)
 
-    # dimensionless -> model: gray levels are not small currents. The implant
-    # above is the outer boundary; this is the one behind it, so it is reached
-    # through an implant that claims to deliver something else.
+    # dimensionless -> model: gray levels are not currents. Tested with an
+    # implant that delivers dimensionless stimuli, to get past prepare_stim.
     class Projector(ArgusII):
         stimulus_unit = dimensionless
 
     with pytest.raises(DimensionMismatchError):
         Nanduri2012Spatial(implant=Projector(preprocess=False), xrange=(-2, 2),
                            yrange=(-2, 2), step=1).build().predict_percept(img)
-    # The exception is a scale-free spatial model used without a temporal
-    # stage, which reads gray levels as relative electrode drive:
+    # Except for a scale-free spatial model without a temporal stage, which
+    # reads gray levels as relative electrode drive:
     npt.assert_equal(
         ScoreboardSpatial(implant=Projector(preprocess=False), xrange=(-2, 2),
                           yrange=(-2, 2), step=1).predict_percept(img) is None,
         False)
 
-    # current -> encoder: an encoder is what *makes* current out of pictures.
+    # current -> encoder: an encoder converts pictures to current.
     with pytest.raises(DimensionMismatchError):
         AmplitudeEncoder(ArgusII(), amp_range=(0, 50)).encode(current)
 
-    # visual angle -> physical coordinate: retinotopy is a map, not a factor.
+    # visual angle -> physical coordinate: requires a visual field map.
     with pytest.raises(DimensionMismatchError):
         DiskElectrode(2 * dva, 0, 0, 100)
     with pytest.raises(DimensionMismatchError):
@@ -268,14 +264,14 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         Watson2014Map().ret_to_dva(2 * dva, 2 * dva)
 
-    # length -> visual field: and the same map in the other direction.
+    # length -> visual field: same, in the other direction.
     with pytest.raises(DimensionMismatchError):
         Grid2D((-2 * mm, 2 * mm), (-2, 2))
     with pytest.raises(DimensionMismatchError):
         Watson2014Map().dva_to_ret(575 * um, 575 * um)
-    # A retinal model does resolve a physical `xrange` through its own map
-    # (see `SpatialModel._retinal_range_to_dva`), but that is shorthand for a
-    # visual field extent, not a conversion, and it is offered nowhere else:
+    # A retinal model converts a physical `xrange` through its own map (see
+    # `SpatialModel._retinal_range_to_dva`) as a shorthand for the visual field
+    # extent; no other parameter does:
     with pytest.raises(DimensionMismatchError):
         ScoreboardSpatial(implant=ArgusII(), step=100 * um)
     with pytest.raises(DimensionMismatchError):
@@ -292,7 +288,7 @@ def test_the_whole_rejection_matrix():
     with pytest.raises(DimensionMismatchError):
         Implant(ArgusII().electrode_array, max_current=5 * ms)
 
-    # dimensionless -> safety check: there is no charge in a picture.
+    # dimensionless -> safety check: a picture has no charge.
     with pytest.raises(DimensionMismatchError):
         Implant(ArgusII().electrode_array, safe_mode=True,
                 preprocess=False).prepare_stim(img)
@@ -300,8 +296,8 @@ def test_the_whole_rejection_matrix():
         Implant(ArgusII().electrode_array, max_current=20,
                 preprocess=False).prepare_stim(img)
 
-    # A bare number is never rejected, anywhere. That is the other half of the
-    # contract, and the reason none of the above needs a deprecation cycle:
+    # A bare number is always accepted, so none of the above needs a
+    # deprecation cycle:
     for build in (lambda: DiskElectrode(575, 0, 0, 100),
                   lambda: ArgusII(z=575),
                   lambda: Grid2D((-2, 2), (-2, 2)),
