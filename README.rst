@@ -39,6 +39,10 @@ these percepts. It provides spatiotemporal models of common
 .. _pulse2percept: https://github.com/pulse2percept/pulse2percept
 .. _retinal and cortical implants: https://en.wikipedia.org/wiki/Visual_prosthesis
 
+.. image:: https://raw.githubusercontent.com/pulse2percept/pulse2percept/master/doc/_static/p2p.gif
+   :align: center
+   :alt: Natural visual scene with simulated PRIMA prosthetic vision during changing gaze
+
 If you use p2p in a scholarly publication, please cite as:
 
 .. epigraph::

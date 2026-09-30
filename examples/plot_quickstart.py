@@ -22,6 +22,7 @@ brightness, and size from pulse amplitude (given as a multiple of perceptual
 threshold, ``xTh``), frequency (``Hz``), and pulse duration (``ms``):
 """
 # sphinx_gallery_thumbnail_number = 1
+# sphinx_gallery_capture_repr = ("_repr_html_",)
 
 import numpy as np
 
@@ -43,7 +44,7 @@ stim = {
 }
 
 percept = axon_map.predict_percept(stim)
-_ = p2p.plotting.plot_implant_percept(
+p2p.plotting.plot_implant_percept(
     axon_map,
     percept,
     annotate=True,
@@ -90,7 +91,7 @@ e = p2p.stimuli.psychophysics.tumbling_e(
 )
 
 percept = huang_model.predict_percept(e, t_percept=50 * ms)
-_ = p2p.plotting.plot_implant_percept(
+p2p.plotting.plot_implant_percept(
     huang_model,
     percept,
     percept_kwargs={'rings': True, 'meridians': True},
