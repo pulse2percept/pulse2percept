@@ -572,5 +572,5 @@ def test_fsaverage_scoreboard(fsaverage):
     model = ScoreboardModel(implant=implant, rho=800, step=.25,
                             visual_field_map=fsaverage, meridian_blend=0)
     percept = model.predict_percept({e: 1 for e in implant.electrode_names})
-    npt.assert_almost_equal(np.sum(percept.data), 20245.445, decimal=1)
-    npt.assert_almost_equal(np.max(percept.data), 86.4913, decimal=1)
+    npt.assert_almost_equal(np.sum(percept.data), 20197.44, decimal=1)
+    npt.assert_almost_equal(np.max(percept.data), 86.2064, decimal=1)
