@@ -204,6 +204,10 @@ Bug fixes
   matching the reference implementation's ``radius_to_sigma = 0.5``
   (:pull:`894`).
 
+* Fix Neuralink thread geometry: electrode dimensions are now interpreted
+  consistently as semiaxes, and electrodes are positioned correctly on the
+  thread surface for arbitrary orientations (:pull:`933`).
+
 * Cortical maps and models no longer place electrodes outside their mapped
   region. :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`
   ``to_dva`` returns NaN outside each region instead of wrapping into the
