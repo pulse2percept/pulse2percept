@@ -43,12 +43,12 @@ stim = {
 }
 
 percept = axon_map.predict_percept(stim)
-p2p.plotting.plot_implant_percept(
+_ = p2p.plotting.plot_implant_percept(
     axon_map,
     percept,
     annotate=True,
     percept_kwargs={'rings': True, 'meridians': True},
-);
+)
 
 ###############################################################################
 # The biphasic axon map model [Granley2021]_ is based on human behavioral data
@@ -91,11 +91,11 @@ e = p2p.stimuli.psychophysics.tumbling_e(
 )
 
 percept = huang_model.predict_percept(e, t_percept=50 * ms)
-p2p.plotting.plot_implant_percept(
+_ = p2p.plotting.plot_implant_percept(
     huang_model,
     percept,
     percept_kwargs={'rings': True, 'meridians': True},
-);
+)
 
 
 ###############################################################################

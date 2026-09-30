@@ -505,7 +505,7 @@ class Grid2D(PrettyPrint):
                     legends.append(ax.patches[-1])
                 elif style.lower() == 'scatter':
                     labelstr = label if surface is None else f'{label}: {surface}'
-                    ax.scatter(*points, alpha=0.4, ec=color, color=color, marker='+',
+                    ax.scatter(*points, alpha=0.4, color=color, marker='+',
                             zorder=zorder, label=labelstr)
         
         # This is needed in MPL 3.0.X to set the axis limit correctly:

@@ -341,9 +341,9 @@ def _electrode_drive(stim, times=None, causal=False):
     * ``causal=False`` (spatial-only model): the drive at each time. Columns
       are held until the next one (zero-order hold); a frame-level view
       (``stim._spatial_view()``) is off once the stimulus ends.
-    * ``causal=True``: the peak over ``(times[k - 1], times[k]]``, the
-      stimulation a model with time integrated into frame k; the first
-      interval starts at stimulus onset. A plain waveform is linear between
+    * ``causal=True``: the peak over ``(times[k - 1], times[k]]``, i.e., what
+      was delivered since the previous frame; the first interval starts at
+      stimulus onset. A plain waveform is linear between
       its samples.
     """
     view = stim._spatial_view()
@@ -624,17 +624,19 @@ def play_implant_percept(model, percept, fps=None, axes=None, figsize=None,
 
     Both panels run off a single clock, and the percept's time axis is
     authoritative: each percept frame at time t is shown with the stimulation
-    that produced it, taken from ``percept.metadata['stim']``:
+    associated with it, taken from ``percept.metadata['stim']``:
 
     *  A spatial-only model: the drive at t. Frame-level modulation (e.g.,
        from :py:class:`~pulse2percept.stimuli.TraceEncoder` or an image
        encoder) is held between its frames (zero-order hold).
     *  A model with time: the peak absolute drive since the previous percept
        frame, i.e., over ``(t_prev, t]``; for the first frame, since stimulus
-       onset. A frame-level modulation counts
-       every frame up in that interval; a plain waveform counts every pulse,
-       without resolving pulse phases. For automatic output times, this is
-       the interval the percept frame summarizes.
+       onset. A frame-level modulation counts every frame up in that
+       interval; a plain waveform counts every pulse, without resolving pulse
+       phases. For automatic output times, this is the interval the percept
+       frame summarizes. This shows what was delivered in the interval, not
+       what the percept contains: a stateful model's frame can still carry
+       decay from earlier stimulation while the implant is dark.
 
     ``fps`` resamples the percept frames, and the implant follows the percept
     frame on screen. All frames share one color scale, from 0 to the peak
