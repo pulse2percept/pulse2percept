@@ -1162,6 +1162,19 @@ def test_play_animates_a_video_scene_and_refuses_a_still_one():
         ramp_scene().play()
 
 
+@pytest.mark.parametrize('view', ('scene', 'eye'))
+def test_play_saves_a_gif_with_pillow(tmp_path, view):
+    Image = pytest.importorskip('PIL.Image')
+    frames = np.stack([np.full((6, 6), v) for v in (0.2, 0.8, 0.5)], axis=-1)
+    scene = Scene(VideoStimulus(frames, time=[0, 10, 30]), fov=(6, 6))
+    fname = str(tmp_path / 'scene.gif')
+    scene.play(view=view, gaze=[(0, 0), (1, 0), (2, 0)]).save(
+        fname, writer='pillow')
+    plt.close('all')
+    with Image.open(fname) as gif:
+        npt.assert_equal(gif.n_frames, 3)
+
+
 def test_the_fellow_eye_mirrors_an_asymmetric_scotoma():
     """fellow_eye() mirrors the scotoma in x; the scene is unchanged"""
     # Off both meridians, to tell a reflection from a rotation:
