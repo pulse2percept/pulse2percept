@@ -293,8 +293,8 @@ def play_stimulus_percept(stim, percept, fps=None, axes=None, figsize=None,
 def _electrode_stim(percept):
     """Returns the electrode stimulus stored in ``percept.metadata['stim']``
 
-    For a composite model, the stimulus is stored in the intermediate percept
-    stored there.
+    Also unwraps the nested ``Percept`` that composite models stored there
+    before v0.12.
     """
     stim = percept
     while isinstance(stim, Percept):

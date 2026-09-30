@@ -5,6 +5,7 @@
 import warnings
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
+from dataclasses import dataclass
 import numpy as np
 import multiprocessing
 from matplotlib.collections import Collection
@@ -17,6 +18,7 @@ from ..implants import Implant
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..percepts import Percept
+from ..percepts.base import _quantize_gray
 from ..topography import Grid2D
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
                      dva, ms, um, uA)
@@ -59,6 +61,39 @@ def _thread_params(n_threads, n_jobs):
     """Return non-None thread-count arguments."""
     return {**({} if n_threads is None else {'n_threads': n_threads}),
             **({} if n_jobs is None else {'n_jobs': n_jobs})}
+
+
+@dataclass
+class _ModelResponse:
+    """Numerical output passed between model stages.
+
+    ``data`` has shape ``(n_space, n_time)`` and is stored as given, without
+    copying or casting. ``shape`` is the public spatial shape, excluding time.
+    ``space`` is the Grid2D, or a Percept whose coordinates are reused.
+    """
+    data: object
+    time: object
+    time_unit: Unit
+    shape: tuple
+    space: object = None
+    metadata: dict = None
+
+    def times(self, unit):
+        """Return the time axis in ``unit``, or None."""
+        if self.time is None:
+            return None
+        return Quantity(self.time, self.time_unit).to_value(unit)
+
+
+def _to_percept(resp):
+    """Return the ``(*shape, T)`` Percept for a model response, or None."""
+    if resp is None:
+        return None
+    grid = resp.space if isinstance(resp.space, Grid2D) else None
+    percept = Percept(resp.data.reshape(tuple(resp.shape) + (-1,)),
+                      space=grid, time=resp.time, time_unit=resp.time_unit,
+                      metadata=resp.metadata)
+    return percept if grid is not None else percept._inherit_space(resp.space)
 
 
 #: Samples per video frame used when a temporal kernel cannot reduce an
@@ -132,7 +167,7 @@ def _frame_clock(stim, dt, unit=ms):
         user = meta.get('user')
         enc = user.get('encoder') if isinstance(user, dict) else None
     if not isinstance(enc, dict) and 'stim' in meta:
-        # A spatial-stage `Percept` stores its source stimulus and frame clock:
+        # A spatial-stage response or Percept stores its source stimulus:
         return _frame_clock(meta['stim'], dt, unit=unit)
     if not isinstance(enc, dict):
         return None
@@ -785,15 +820,16 @@ class BaseModel(Parametrized, metaclass=ABCMeta):
     def _stim_times(self, stim):
         """Return the time axis in ``time_unit``.
 
-        Applies to both stimuli and percepts.
+        Applies to stimuli, percepts, and model responses.
         """
-        if not isinstance(stim, (Stimulus, Percept)):
+        if not isinstance(stim, (Stimulus, Percept, _ModelResponse)):
             return stim.time
         return stim.times(self.time_unit)
 
     def _to_stim_time(self, t, stim):
         """Convert model-side times to the stimulus time unit."""
-        if t is None or not isinstance(stim, (Stimulus, Percept)) \
+        if t is None or \
+                not isinstance(stim, (Stimulus, Percept, _ModelResponse)) \
                 or stim.time_unit == self.time_unit:
             return t
         return Quantity(t, self.time_unit).to_value(stim.time_unit)
@@ -1244,14 +1280,24 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         if not self.is_built:
             self.build()
-        return self._predict_prepared(
+        return _to_percept(self._predict_response(
             self.implant._prepare_stim(
                 source,
                 allow_dimensionless=self._accepts_dimensionless_drive),
-            t_percept=t_percept)
+            t_percept=t_percept))
 
-    def _predict_prepared(self, stim, t_percept=None):
-        """Predict the spatial response to an already prepared stimulus.
+    def _spatial_response(self, resp, time, metadata):
+        """Return a flat grid response, quantized to ``n_gray`` levels if set.
+
+        Quantization precedes any temporal stage.
+        """
+        if self.n_gray is not None:
+            resp = _quantize_gray(resp, self.n_gray)
+        return _ModelResponse(resp, time, self.time_unit, self.grid.x.shape,
+                              space=self.grid, metadata=metadata)
+
+    def _predict_response(self, stim, t_percept=None):
+        """Return the flat spatial response to a prepared stimulus, or None.
 
         Composite models use this path to prepare stimulation once before running
         spatial and temporal stages.
@@ -1326,10 +1372,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 resp = self._predict_spatial(self.implant.electrode_array,
                                              stim)
         resp = self._postprocess_spatial(resp)
-        return Percept(resp.reshape(list(self.grid.x.shape) + [-1]),
-                       space=self.grid, time=t_percept,
-                       time_unit=self.time_unit,
-                       metadata={'stim': stim}, n_gray=self.n_gray)
+        return self._spatial_response(resp, t_percept, {'stim': stim})
 
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
              figsize=None, show_implant=False):
@@ -1461,8 +1504,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
         Parameters
         ----------
-        stim : Stimulus or Percept
-            Time-varying input.
+        stim : Stimulus, Percept, or spatial-stage response
+            Time-varying input. A spatial-stage response has flat
+            ``(n_space, n_time)`` data.
         t_percept : array-like
             Output times in milliseconds.
 
@@ -1515,21 +1559,41 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if not isinstance(stim, (Stimulus, Percept)):
             raise TypeError(f"'stim' must be a Stimulus or Percept object, "
                             f"not {type(stim)}.")
+        return _to_percept(self._predict_response(stim, t_percept=t_percept))
+
+    def _predict_response(self, stim, t_percept=None):
+        """Return the flat temporal response to ``stim``.
+
+        ``stim`` may also be a spatial-stage ``_ModelResponse``, whose data are
+        used without copying.
+        """
+        if not self.is_built:
+            self.build()
+        if not isinstance(stim, (Stimulus, Percept, _ModelResponse)):
+            raise TypeError(f"'stim' must be a Stimulus or Percept object, "
+                            f"not {type(stim)}.")
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         _require_stim_dimension(self, stim)
         if stim.time is None:
             raise ValueError("Cannot calculate temporal response, because "
                              "stimulus/percept does not have a time "
                              "component.")
-        # Make sure we don't change the user's Stimulus/Percept object:
-        _stim = deepcopy(stim)
-        if isinstance(stim, Stimulus):
-            # Make sure to operate on the compressed stim:
-            if not _stim.is_compressed:
-                _stim.compress()
-            _space = [len(stim.electrodes), 1]
-        elif isinstance(stim, Percept):
-            _space = [len(stim.ydva), len(stim.xdva)]
+        if isinstance(stim, _ModelResponse):
+            _stim, _space, space = stim, list(stim.shape), stim.space
+            source_stim = (stim.metadata or {}).get('stim')
+        else:
+            # Make sure we don't change the user's Stimulus/Percept object:
+            _stim, space, source_stim = deepcopy(stim), None, stim
+            if isinstance(stim, Stimulus):
+                # Make sure to operate on the compressed stim:
+                if not _stim.is_compressed:
+                    _stim.compress()
+                _space = [len(stim.electrodes), 1]
+            else:
+                _space = [len(stim.ydva), len(stim.xdva)]
+                # Temporal models do not move the percept:
+                space = stim
+        n_space = int(np.prod(_space))
         # `_frame_clock`, `dt` and `t_percept` all use `time_unit`:
         _time = self._stim_times(stim)
 
@@ -1568,7 +1632,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                              f"not multiples of dt={self.dt:.2e}.")
         if _stim.data.size == 0:
             # Stimulus was compressed to zero:
-            resp = np.zeros(_space + [t_percept.size], dtype=np.float32)
+            resp = np.zeros((n_space, t_percept.size), dtype=np.float32)
         elif self._reduces_intervals:
             # The integrator tracks the exact peak at any output rate:
             resp = self._predict_temporal(_stim, t_percept, reduce)
@@ -1577,20 +1641,18 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             # Calculate the Stimulus at requested time points:
             resp = self._predict_temporal(_stim, t_percept)
             self._warn_if_blank(_stim, resp)
-        resp = resp.reshape(_space + [t_percept.size])
+        resp = resp.reshape((n_space, t_percept.size))
         if sub_idx is not None:
             # Preserve pulse-driven peaks rather than averaging them over gaps.
             resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
             t_percept = t_out
-        metadata = {'stim': stim}
+        metadata = {'stim': source_stim}
         if source is not None:
             # Output frame k summarizes the source-video frame starting at
             # source_frame_time[k] (ms); percept.time marks its end.
             metadata['source_frame_time'] = source
-        # Temporal models do not move the percept, so reuse the input grid:
-        return Percept(resp, space=None, time=t_percept,
-                       time_unit=self.time_unit,
-                       metadata=metadata)._inherit_space(stim)
+        return _ModelResponse(resp, t_percept, self.time_unit, tuple(_space),
+                              space=space, metadata=metadata)
 
     def _warn_if_blank(self, stim, resp):
         """Warn when stimulus polarity explains an all-zero response.
@@ -1893,25 +1955,25 @@ class Model(Frozen, PrettyPrint):
             combine = getattr(self.spatial, '_combine_temporal', None)
             # Schedule-reading spatial stages need the structured stimulus;
             # the rest integrate the delivered waveform downstream.
-            resp = self.spatial._predict_prepared(
+            resp = self.spatial._predict_response(
                 stim if self.spatial._needs_structured_stim
                 else _delivered(stim),
                 t_percept=None)
             if has_time_axis:
                 if resp.time is None and combine is not None:
                     # Allow a spatial model to define custom temporal
-                    # combination for a timeless intermediate percept:
+                    # combination for a timeless spatial response:
                     resp = combine(resp, self.temporal, stim, t_percept)
                 else:
                     # Then pass that to the temporal model, which will output
                     # at all `t_percept` time steps:
-                    resp = self.temporal.predict_percept(resp,
-                                                         t_percept=t_percept)
+                    resp = self.temporal._predict_response(
+                        resp, t_percept=t_percept)
         elif self.has_space:
-            resp = self.spatial._predict_prepared(stim, t_percept=t_percept)
+            resp = self.spatial._predict_response(stim, t_percept=t_percept)
         else:
-            resp = self.temporal.predict_percept(stim, t_percept=t_percept)
-        return resp
+            resp = self.temporal._predict_response(stim, t_percept=t_percept)
+        return _to_percept(resp)
 
     @property
     def has_space(self):

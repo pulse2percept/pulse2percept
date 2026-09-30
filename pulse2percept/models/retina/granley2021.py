@@ -8,9 +8,9 @@ from copy import deepcopy
 
 from ...implants import ElectrodeArray
 from ...stimuli import BiphasicPulseTrain, Stimulus
-from ...percepts import Percept
 from ...units import as_value, um, xTh
-from ..base import BaseModel, Model, _require_stim_dimension
+from ..base import (BaseModel, Model, _ModelResponse,
+                    _require_stim_dimension)
 from .base import _warn_ignores_z
 from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
 from ._granley2021 import (fast_biphasic_axon_map,
@@ -391,12 +391,12 @@ class _BiphasicSpatialMixin:
                              f"greater than zero.")
         return factors
 
-    def _predict_prepared(self, stim, t_percept=None):
-        """Predict from an already prepared stimulus.
+    def _predict_response(self, stim, t_percept=None):
+        """Return the flat spatial response to a prepared stimulus, or None.
 
-        This model summarizes the full pulse train as one spatial percept. If
-        ``t_percept`` contains multiple times, the representative percept occupies
-        the first output frame and later frames are zero."""
+        This model summarizes the full pulse train as one spatial response. If
+        ``t_percept`` contains multiple times, the representative response
+        occupies the first output frame and later frames are zero."""
         if not self.is_built:
             self.build()
         if stim is None:
@@ -406,20 +406,17 @@ class _BiphasicSpatialMixin:
         t_percept = as_value(t_percept, self.time_unit, 't_percept')
         n_time = 1 if t_percept is None else np.array([t_percept]).size
         if not params:
-            resp = np.zeros(list(self.grid.x.shape) + [n_time],
-                            dtype=np.float32)
+            resp = np.zeros((self.grid.x.size, n_time), dtype=np.float32)
         else:
-            resp = np.zeros(list(self.grid.x.shape) + [n_time])
-            resp[:, :, 0] = self._predict_spatial(
-                self.implant.electrode_array, stim).reshape(self.grid.x.shape)
+            resp = np.zeros((self.grid.x.size, n_time))
+            resp[:, 0] = self._predict_spatial(
+                self.implant.electrode_array, stim).reshape(-1)
         # Apply the same spatial postprocessing as the generic path.
         resp = self._postprocess_spatial(resp)
-        return Percept(resp, space=self.grid, time=t_percept,
-                       time_unit=self.time_unit, metadata={'stim': stim},
-                       n_gray=self.n_gray)
+        return self._spatial_response(resp, t_percept, {'stim': stim})
 
-    def _combine_temporal(self, percept, temporal, stim, t_percept):
-        """Apply a normalized temporal response to the spatial percept."""
+    def _combine_temporal(self, resp, temporal, stim, t_percept):
+        """Apply a normalized temporal response to the spatial response."""
         dur = self._envelope_dur(stim)
         # Canonical unit drive, held for the stimulation duration.
         envelope = Stimulus(np.array([[float(temporal._drive_sign), 0.0]]),
@@ -429,11 +426,11 @@ class _BiphasicSpatialMixin:
         probe = deepcopy(temporal)
         probe.thresh_percept = 0
         peak = self._envelope_peak(probe, envelope)
-        resp = probe.predict_percept(envelope, t_percept=t_percept)
-        fade = resp.data.reshape(-1) / peak
-        return Percept(percept.data[..., 0][..., np.newaxis] * fade,
-                       space=self.grid, time=resp.time,
-                       time_unit=probe.time_unit, metadata={'stim': stim})
+        env = probe._predict_response(envelope, t_percept=t_percept)
+        fade = env.data.reshape(-1) / peak
+        return _ModelResponse(resp.data[:, :1] * fade, env.time,
+                              probe.time_unit, self.grid.x.shape,
+                              space=self.grid, metadata={'stim': stim})
 
     @staticmethod
     def _envelope_peak(temporal, envelope):
@@ -443,7 +440,7 @@ class _BiphasicSpatialMixin:
 
         for _ in range(_PEAK_SEARCH_DOUBLINGS):
             t = np.arange(int(round(episode / dt)) + 1) * dt
-            resp = temporal.predict_percept(envelope, t_percept=t).data
+            resp = temporal._predict_response(envelope, t_percept=t).data
             if np.argmax(resp) < resp.size - 1:
                 break
             episode *= 2

@@ -150,13 +150,13 @@ def test_temporal_stage_takes_the_spatial_percept():
 def test_spatial_stage_receives_the_schedule(monkeypatch):
     seen = []
     model = tiny_model()
-    original = Ho2018Spatial._predict_prepared
+    original = Ho2018Spatial._predict_response
 
     def spy(self, stim, t_percept=None):
         seen.append(stim)
         return original(self, stim, t_percept=t_percept)
 
-    monkeypatch.setattr(Ho2018Spatial, '_predict_prepared', spy)
+    monkeypatch.setattr(Ho2018Spatial, '_predict_response', spy)
     model.predict_percept(spot())
     npt.assert_equal(len(seen), 1)
     npt.assert_equal(isinstance(seen[0], _OpticalStimulus), True)

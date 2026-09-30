@@ -13,6 +13,12 @@ Highlights
 API changes and improvements
 ----------------------------
 
+* Composite models no longer pass an intermediate
+  :py:class:`~pulse2percept.percepts.Percept` from the spatial to the temporal
+  stage. ``percept.metadata['stim']`` now stores the prepared
+  :py:class:`~pulse2percept.stimuli.Stimulus` directly; plotting functions
+  still read the nested form of v0.11 percepts (:pull:`XXX`).
+
 Bug fixes
 ---------
 
