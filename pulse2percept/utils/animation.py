@@ -100,7 +100,7 @@ def frame_interval(time, fps=None, tol=1e-2):
         # A single frame has no time step:
         return SINGLE_FRAME_INTERVAL
     # Compare steps against each other instead of rounding each to `tol`: a
-    # 29.97 fps step (33.365 ms) sits on a rounding boundary of tol=1e-2, where
+    # 29.97 fps step (33.367 ms) sits on a rounding boundary of tol=1e-2, where
     # floating-point noise would split an even axis into two step sizes:
     spread = float(interval.max() - interval.min())
     if spread > tol:

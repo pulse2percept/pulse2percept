@@ -974,11 +974,11 @@ def test_merge_time_axes_merge_tolerance():
     npt.assert_equal(np.isclose(-1/3, unique_points, atol=0.1).any(), False)
 
 
-def test_merge_time_axes_float32_resolution():
-    # float32 time resolution is coarser than the absolute merge tolerance for
-    # t > ~10 ms, so two samples of the same instant can differ by a few ulps.
-    # They must merge into one column; otherwise columns end up closer than DT
-    # and interpolation creates values halfway up a pulse edge.
+def test_merge_time_axes_accumulated_drift():
+    # Pulse trains accumulate window durations, so the same instant in two
+    # trains can differ by a few ulps. These samples must merge into one
+    # column; otherwise columns end up closer than DT and interpolation creates
+    # values halfway up a pulse edge.
     freqs = (10, 11, 12, 13, 20, 30, 41)
     trains = {f'A{f}': BiphasicPulseTrain(f, 10, 0.45, stim_dur=1000)
               for f in freqs}
@@ -986,7 +986,7 @@ def test_merge_time_axes_float32_resolution():
         warnings.simplefilter('error')
         stim = Stimulus(trains)
     # Time points are at least one time step apart:
-    npt.assert_equal(np.diff(stim.time.astype(np.float64)) >= 0.95 * DT, True)
+    npt.assert_equal(np.diff(stim.time) >= 0.95 * DT, True)
     # No data values appear that are not in a source:
     src_amps = np.unique(np.concatenate([t.data.ravel()
                                          for t in trains.values()]))

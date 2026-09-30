@@ -38,7 +38,7 @@ def _ensemble_target(implants):
                if target is not None}
     if len(targets) > 1:
         raise TypeError("An EnsembleImplant cannot combine retinal and "
-                        "cortical implants since they stimulate different"
+                        "cortical implants since they stimulate different "
                         "tissue.")
     return targets.pop() if targets else None
 

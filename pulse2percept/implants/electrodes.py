@@ -128,7 +128,7 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
     def electric_potential(self, x, y, z, *args, **kwargs):
         raise NotImplementedError
 
-    def plot(self, autoscale=False, ax=None):
+    def plot(self, autoscale=False, ax=None, pad=100):
         """Plot
 
         Parameters
@@ -137,6 +137,9 @@ class Electrode(PrettyPrint, metaclass=ABCMeta):
             Whether to adjust the x,y limits of the plot
         ax : matplotlib.axes._subplots.AxesSubplot, optional
             A Matplotlib axes object. If None given, a new one will be created.
+        pad : float, optional
+            Half-width (um) of the view window centered on the electrode.
+            Only used if ``autoscale`` is True.
 
         Returns
         -------

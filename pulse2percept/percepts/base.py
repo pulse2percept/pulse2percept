@@ -689,8 +689,8 @@ class Percept(Data):
                       cmap=cmap, gridsize=gridsize, vmin=vmin, vmax=vmax,
                       **other_kwargs)
         else:
-            raise ValueError(f"Unknown plot option '%s'. Choose either 'pcolor'"
-                             f"or '{kind}'.")
+            raise ValueError(f"Unknown plot option '{kind}'. Choose either "
+                             f"'pcolor' or 'hex'.")
         return self._draw_grid(self._label_axes(ax), grid, grid_color)
 
     def _grid_geometry(self, rings, meridians):

@@ -269,8 +269,10 @@ def test_AsymmetricBiphasicPulse(amp1, amp2, interphase_dur, delay_dur,
     # Invalid calls:
     with pytest.raises(ValueError):
         AsymmetricBiphasicPulse(amp1, amp2, 0, phase_dur2)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="'phase_dur2'"):
         AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, 0)
+    with pytest.raises(ValueError, match="'phase_dur2'"):
+        AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, DT)
     with pytest.raises(ValueError):
         AsymmetricBiphasicPulse(amp1, amp2, phase_dur1, phase_dur2,
                                 interphase_dur=-1)

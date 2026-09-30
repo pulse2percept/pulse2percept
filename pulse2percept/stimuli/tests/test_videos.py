@@ -317,15 +317,15 @@ def test_VideoStimulus_crop(tmp_path):
     with pytest.raises(ValueError):
         stim.crop(front=5, back=6)
     # idx_space and left/right/top/bottom cannot be combined
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         stim.crop(idx_space=[5, 10, 25], left=10)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         stim.crop(idx_space=[5, 10, 25, 30], left=10)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         stim.crop(idx_space=[5, 10, 25, 30], right=8)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         stim.crop(idx_space=[5, 10, 25, 30], top=6)
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         stim.crop(idx_space=[5, 10, 25, 30], bottom=7)
     # Crop widths cannot be negative
     with pytest.raises(ValueError):

@@ -44,7 +44,7 @@ class ICVP(CorticalImplant):
     --------
     Create an ICVP array in its own coordinate frame:
 
-    >>> from pulse2percept.implants.cortex import Orion
+    >>> from pulse2percept.implants.cortex import ICVP
     >>> ICVP() # doctest: +NORMALIZE_WHITESPACE
     ICVP(electrode_array=ElectrodeGrid, preprocess=False, 
          safe_mode=False, shape=(5, 4))

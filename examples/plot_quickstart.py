@@ -63,10 +63,11 @@ _ = p2p.plotting.plot_implant_percept(
 # An image through a photovoltaic implant
 # ---------------------------------------
 #
-# PRIMA is a subretinal photovoltaic implant driven by pulsed near-infrared
-# light. :py:class:`~pulse2percept.implants.retina.PRIMAPivotal` includes a
-# :py:class:`~pulse2percept.stimuli.PRIMAEncoder` that converts image intensity
-# into the pulse durations delivered by the projector.
+# :py:class:`~pulse2percept.implants.retina.Huang2021Array` is a subretinal
+# photovoltaic array with 40 um pixels [Huang2021]_, driven by pulsed
+# near-infrared light (880 nm, 10 ms pulses at 2 Hz). Its default
+# :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` sets each pulse's ON
+# duration from image intensity.
 #
 # :py:class:`~pulse2percept.models.retina.Ho2018Model` models the transient
 # retinal network response reported by [Ho2018]_.
@@ -106,7 +107,10 @@ _ = p2p.plotting.plot_implant_percept(
 #
 # Here a video recorded on the UCSB campus spans 40 degrees of visual angle
 # (dva), with a central scotoma representing vision loss around the implanted
-# region.
+# region. The video drives
+# :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`, whose
+# :py:class:`~pulse2percept.stimuli.PRIMAEncoder` converts image intensity
+# into the pulse durations delivered by the projector.
 
 video = p2p.stimuli.samples.ucsb_pedestrians(resize=(173, 320))
 scotoma = p2p.vision.Scotoma.circle(5 * dva)

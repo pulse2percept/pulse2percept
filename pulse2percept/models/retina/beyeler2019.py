@@ -243,26 +243,26 @@ class ScoreboardModel(Model):
     model with a temporal model.
 
     The spatial response is modeled as a Gaussian centered on each electrode:
-    
-        .. math::
-    
-            I(x, y) =
-            \sum_{e \in E}
-            a_e
-            \exp\left(
-                -\frac{(x-x_e)^2 + (y-y_e)^2}{2\rho^2}
-            \right),
-    
-        where :math:`a_e` is the drive at site :math:`e`, and :math:`\rho`
-        controls the spatial spread of activation. Larger values of
-        :math:`\rho` produce broader phosphenes.
 
-        For current-driven implants, :math:`a_e` is current amplitude. For
-        photovoltaic implants,
-        :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` instead
-        provides normalized optical drive. Scoreboard visualizes the
-        stimulation pattern; it does not model photovoltaic conversion or the
-        retinal response.
+    .. math::
+
+        I(x, y) =
+        \sum_{e \in E}
+        a_e
+        \exp\left(
+            -\frac{(x-x_e)^2 + (y-y_e)^2}{2\rho^2}
+        \right),
+
+    where :math:`a_e` is the drive at site :math:`e`, and :math:`\rho`
+    controls the spatial spread of activation. Larger values of
+    :math:`\rho` produce broader phosphenes.
+
+    For current-driven implants, :math:`a_e` is current amplitude. For
+    photovoltaic implants,
+    :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder` instead
+    provides normalized optical drive. Scoreboard visualizes the
+    stimulation pattern; it does not model photovoltaic conversion or the
+    retinal response.
 
     .. note::
 

@@ -565,7 +565,7 @@ class ElectrodeGrid(ElectrodeArray):
                             "'hex'.")
         if not isinstance(orientation, str):
             raise TypeError("'orientation' must be a string, either "
-                            "'horizontal' or 'veritical'.")
+                            "'horizontal' or 'vertical'.")
         if grid_type not in ['rect', 'hex']:
             raise ValueError("'grid_type' must be either 'rect' or 'hex'.")
         if orientation not in ['horizontal', 'vertical']:
@@ -723,7 +723,7 @@ class ElectrodeGrid(ElectrodeArray):
             # Specify different height for every electrode in a list:
             z_arr = np.asarray(z).flatten()
             if z_arr.size != n_elecs:
-                raise ValueError(f"If `h` is a list, it must have {n_elecs} entries, "
+                raise ValueError(f"If `z` is a list, it must have {n_elecs} entries, "
                                  f"not {len(z)}.")
         else:
             # If `z` is a scalar, choose same height for all electrodes:

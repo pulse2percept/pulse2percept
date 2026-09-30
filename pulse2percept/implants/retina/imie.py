@@ -31,8 +31,9 @@ class IMIE(RetinalImplant):
     ----------
     z : float, list, or Quantity, optional
         Electrode height (um) above the array plane: a scalar for all
-        electrodes, or a list of 35 entries. Accepts quantities (e.g.,
-        ``z=100 * um``); see :py:mod:`pulse2percept.units`.
+        electrodes, or a list of 266 entries, one per position of the 14x19
+        grid (row-major, including the 10 removed corner positions). Accepts
+        quantities (e.g., ``z=100 * um``); see :py:mod:`pulse2percept.units`.
     eye : {'right', 'left'}, optional
         Eye in which array is implanted.
     preprocess : bool or callable, optional

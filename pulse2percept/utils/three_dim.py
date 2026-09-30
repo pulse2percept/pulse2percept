@@ -79,8 +79,8 @@ def parse_3d_orient(orient, orient_mode='direction'):
     if isinstance(orient, list) or isinstance(orient, tuple):
         orient = np.array(orient)
     if not isinstance(orient, np.ndarray) or orient.shape not in [(3,), (3, 3)]:
-        raise TypeError(f'Incorrect type for orient parameter {orient}, ', 
-                         'please pass an array with shape (3) or (3, 3)')
+        raise TypeError(f'Incorrect type for orient parameter {orient}, '
+                        'please pass an array with shape (3) or (3, 3)')
     if orient.ndim == 1:
         if orient_mode == 'direction':
             if not np.allclose(np.linalg.norm(orient), 1):

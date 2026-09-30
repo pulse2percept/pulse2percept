@@ -198,7 +198,7 @@ class LinearEdgeThread(NeuralinkThread):
         # Place electrodes on the thread edge, facing an arbitrary direction
         # (rotated x axis). Exact geometry is not specified in [Musk2019]:
         offset = (parse_3d_orient([1, 0, 0], 'direction')[0] @
-                  self.direction * (self.radius + 7 // 2))
+                  self.direction * (self.radius + 7 / 2))
         electrode_locs = [start + i*self.spacing*self.direction + offset for i in range(self.n_elecs)]
         for i, loc in enumerate(electrode_locs):
             electrodes[str(i)] = self.electrode(loc[0], loc[1], loc[2], orient=self.rot, orient_mode='rot')
