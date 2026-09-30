@@ -1,6 +1,7 @@
 """Tests for the [Ho2018]_ photovoltaic model"""
 import inspect
 import warnings
+from dataclasses import replace
 
 import numpy as np
 import numpy.testing as npt
@@ -160,6 +161,20 @@ def test_spatial_stage_receives_the_schedule(monkeypatch):
     model.predict_percept(spot())
     npt.assert_equal(len(seen), 1)
     npt.assert_equal(isinstance(seen[0], _OpticalStimulus), True)
+
+
+def test_pulse_clock_does_not_live_in_metadata(monkeypatch):
+    ref = tiny_model().predict_percept(spot())
+    original = Ho2018Spatial._predict_response
+
+    def strip(self, stim, t_percept=None):
+        return replace(original(self, stim, t_percept=t_percept),
+                       metadata=None)
+
+    monkeypatch.setattr(Ho2018Spatial, '_predict_response', strip)
+    got = tiny_model().predict_percept(spot())
+    npt.assert_array_equal(got.time, ref.time)
+    npt.assert_array_equal(got.data, ref.data)
 
 
 def test_does_not_render_the_waveform(monkeypatch):

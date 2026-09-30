@@ -7,7 +7,7 @@ import numpy as np
 from ...stimuli.encoders import _OpticalStimulus
 from ...topography.retina import Watson2014Map
 from ...units import as_value, dimensionless, mW, mm, ms
-from ..base import (Model, TemporalModel, _electrode_pitch,
+from ..base import (Model, TemporalModel, _FrameClock, _electrode_pitch,
                     _require_stim_dimension, _thread_params)
 from .beyeler2019 import ScoreboardSpatial
 
@@ -398,11 +398,14 @@ class Ho2018Spatial(ScoreboardSpatial):
             resp[:, (at < 0) | (time >= stim.duration)] = 0
         # Drive stays on the pulse clock. `_frame_clock` reports a video on
         # its source clock and a still image on the pulse clock.
+        clock = _FrameClock(t_pulse, 1e3 / stim.freq, stim._source_time,
+                            stim._source_dur)
         return self._spatial_response(
             resp, time, {'stim': stim,
                          'encoder': {'frame_time': t_pulse,
                                      'frame_dur': 1e3 / stim.freq,
-                                     **stim._source_clock()}})
+                                     **stim._source_clock()}},
+            frame_clock=clock)
 
 
 class Ho2018Model(Model):

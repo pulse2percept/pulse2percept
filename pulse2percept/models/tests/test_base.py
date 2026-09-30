@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import copy
+from dataclasses import replace
 import multiprocessing
 import warnings
 
@@ -1518,10 +1519,35 @@ def test_Model_temporal_stage_receives_no_percept(monkeypatch):
     model.predict_percept(composite_stim())
     seen = model.temporal.seen
     npt.assert_equal(isinstance(seen, Percept), False)
-    # The spatial response is passed on without a copy, flat space x time:
-    npt.assert_equal(seen is returned[0], True)
+    # Spatial data are passed on without a copy, flat space x time:
+    npt.assert_equal(seen.data is returned[0].data, True)
     npt.assert_equal(seen.data.shape, (spatial.grid.x.size,
                                        seen.time.size))
+
+
+def test_Model_ignores_response_metadata(monkeypatch):
+    # The encoder frame clock sets output times and 'peak' intervals, so it
+    # must not depend on metadata:
+    implant = ArgusI()
+    vid = VideoStimulus(np.random.default_rng(0).random((4, 4, 6)),
+                        metadata={'fps': 29.97})
+    stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20).encode(vid)
+    model = Model(ScoreboardSpatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                    step=1), FadingTemporal(tau=100)).build()
+    ref = model.predict_percept(stim)
+    original = ScoreboardSpatial._predict_response
+
+    def strip(self, stim, t_percept=None):
+        return replace(original(self, stim, t_percept=t_percept),
+                       metadata=None)
+
+    monkeypatch.setattr(ScoreboardSpatial, '_predict_response', strip)
+    got = model.predict_percept(stim)
+    npt.assert_equal(got.data.shape[-1], 6)
+    npt.assert_array_equal(got.data, ref.data)
+    npt.assert_array_equal(got.time, ref.time)
+    npt.assert_array_equal(got.metadata['source_frame_time'],
+                           ref.metadata['source_frame_time'])
 
 
 def test_Model_n_gray_precedes_temporal_stage():

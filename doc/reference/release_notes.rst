@@ -17,7 +17,9 @@ API changes and improvements
   :py:class:`~pulse2percept.percepts.Percept` from the spatial to the temporal
   stage. ``percept.metadata['stim']`` now stores the prepared
   :py:class:`~pulse2percept.stimuli.Stimulus` directly; plotting functions
-  still read the nested form of v0.11 percepts (:pull:`XXX`).
+  still read the nested form of v0.11 percepts. Temporal models take the
+  encoder frame clock from the encoded stimulus, not from
+  ``metadata['encoder']`` (:pull:`XXX`).
 
 Bug fixes
 ---------

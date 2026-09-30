@@ -420,8 +420,7 @@ class _BiphasicSpatialMixin:
         dur = self._envelope_dur(stim)
         # Canonical unit drive, held for the stimulation duration.
         envelope = Stimulus(np.array([[float(temporal._drive_sign), 0.0]]),
-                            electrodes=['envelope'], time=[0, dur],
-                            metadata=stim.metadata.get('user'))
+                            electrodes=['envelope'], time=[0, dur])
         # Do not modify the caller's temporal model.
         probe = deepcopy(temporal)
         probe.thresh_percept = 0

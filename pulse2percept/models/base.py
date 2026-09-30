@@ -5,7 +5,7 @@
 import warnings
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import numpy as np
 import multiprocessing
 from matplotlib.collections import Collection
@@ -17,6 +17,7 @@ from scipy.spatial import cKDTree
 from ..implants import Implant
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
+from ..stimuli.encoders import _EncodedStimulus, _OpticalStimulus
 from ..percepts import Percept
 from ..percepts.base import _quantize_gray
 from ..topography import Grid2D
@@ -63,19 +64,64 @@ def _thread_params(n_threads, n_jobs):
             **({} if n_jobs is None else {'n_jobs': n_jobs})}
 
 
+@dataclass(frozen=True)
+class _FrameClock:
+    """Encoder frame clock, in ms.
+
+    ``time``/``dur`` are the encoder frames (e.g., projector pulse periods);
+    ``source_time``/``source_dur`` are the source-video frames, or None.
+    """
+    time: object
+    dur: float
+    source_time: object = None
+    source_dur: float = None
+
+
+def _encoder_clock(stim):
+    """Return the frame clock of an encoded stimulus, or None."""
+    if not isinstance(stim, (_EncodedStimulus, _OpticalStimulus)):
+        return None
+    return _FrameClock(stim._frame_time, stim._frame_dur, stim._source_time,
+                       stim._source_dur)
+
+
+def _metadata_clock(obj):
+    """Return the frame clock recorded in metadata, or None.
+
+    Compatibility for public Percept input only, which stores the encoder
+    clock only in metadata (``'encoder'``, or nested under ``'stim'``).
+    """
+    clock = _encoder_clock(obj)
+    meta = getattr(obj, 'metadata', None)
+    if clock is not None or not isinstance(meta, dict):
+        return clock
+    enc = meta.get('encoder')
+    if not isinstance(enc, dict):
+        # `Stimulus` stores unrecognized metadata under 'user':
+        user = meta.get('user')
+        enc = user.get('encoder') if isinstance(user, dict) else None
+    if not isinstance(enc, dict):
+        return _metadata_clock(meta['stim']) if 'stim' in meta else None
+    return _FrameClock(enc.get('frame_time'), enc.get('frame_dur'),
+                       enc.get('source_frame_time'),
+                       enc.get('source_frame_dur'))
+
+
 @dataclass
 class _ModelResponse:
     """Numerical output passed between model stages.
 
     ``data`` has shape ``(n_space, n_time)`` and is stored as given, without
     copying or casting. ``shape`` is the public spatial shape, excluding time.
-    ``space`` is the Grid2D, or a Percept whose coordinates are reused.
     """
     data: object
     time: object
     time_unit: Unit
     shape: tuple
-    space: object = None
+    space: Grid2D = None
+    frame_clock: _FrameClock = None
+    # Provenance only. Model execution must not depend on this field;
+    # structural information belongs in explicit fields:
     metadata: dict = None
 
     def times(self, unit):
@@ -85,15 +131,20 @@ class _ModelResponse:
         return Quantity(self.time, self.time_unit).to_value(unit)
 
 
-def _to_percept(resp):
-    """Return the ``(*shape, T)`` Percept for a model response, or None."""
+def _to_percept(resp, inherit_space_from=None):
+    """Return the ``(*shape, T)`` Percept for a model response, or None.
+
+    Without a grid, reuses the coordinates of ``inherit_space_from`` if it is
+    a Percept of matching shape.
+    """
     if resp is None:
         return None
-    grid = resp.space if isinstance(resp.space, Grid2D) else None
     percept = Percept(resp.data.reshape(tuple(resp.shape) + (-1,)),
-                      space=grid, time=resp.time, time_unit=resp.time_unit,
-                      metadata=resp.metadata)
-    return percept if grid is not None else percept._inherit_space(resp.space)
+                      space=resp.space, time=resp.time,
+                      time_unit=resp.time_unit, metadata=resp.metadata)
+    if resp.space is None:
+        percept._inherit_space(inherit_space_from)
+    return percept
 
 
 #: Samples per video frame used when a temporal kernel cannot reduce an
@@ -137,12 +188,12 @@ def _subsample(t_out, dt, n_sub, start=None):
     return np.concatenate(parts) * dt, idx
 
 
-def _frame_clock(stim, dt, unit=ms):
-    """Return percept output times for an encoded stimulus.
+def _frame_clock(clock, dt, unit=ms):
+    """Return percept output times for a :py:class:`_FrameClock`.
 
-    Uses the source-video frame clock if the encoder recorded one, else the
-    encoder frame clock (e.g., projector pulse periods of a still image).
-    Output times are rounded to the model's ``dt`` grid.
+    Uses the source-video frames if present, else the encoder frames (e.g.,
+    projector pulse periods of a still image). Output times are rounded to
+    the model's ``dt`` grid.
 
     Returns
     -------
@@ -154,30 +205,22 @@ def _frame_clock(stim, dt, unit=ms):
         Source-video frame onsets (ms), one per entry of ``t``; None if the
         clock is not a source-video clock.
 
-    Returns None for stimuli without encoder frame metadata.
+    Returns None if ``clock`` is None or invalid.
 
     .. versionadded:: 0.10.0
     """
-    meta = getattr(stim, 'metadata', None)
-    if not isinstance(meta, dict):
+    if clock is None:
         return None
-    enc = meta.get('encoder')
-    if not isinstance(enc, dict):
-        # `Stimulus` stores unrecognized metadata under 'user':
-        user = meta.get('user')
-        enc = user.get('encoder') if isinstance(user, dict) else None
-    if not isinstance(enc, dict) and 'stim' in meta:
-        # A spatial-stage response or Percept stores its source stimulus:
-        return _frame_clock(meta['stim'], dt, unit=unit)
-    if not isinstance(enc, dict):
+    is_source = clock.source_time is not None
+    frame_time = clock.source_time if is_source else clock.time
+    if frame_time is None:
         return None
-    prefix = 'source_frame_' if 'source_frame_time' in enc else 'frame_'
     try:
-        frame_time = np.asarray(enc[prefix + 'time'], dtype=np.float64)
-        frame_dur = float(enc[prefix + 'dur'])
-    except (KeyError, TypeError, ValueError):
+        frame_time = np.asarray(frame_time, dtype=np.float64)
+        frame_dur = float(clock.source_dur if is_source else clock.dur)
+    except (TypeError, ValueError):
         return None
-    source = frame_time if prefix == 'source_frame_' else None
+    source = frame_time if is_source else None
     if frame_time.size == 0 or not np.isfinite(frame_dur) or frame_dur <= 0:
         return None
     # Encoder frame metadata is in ms; convert to the model's time unit:
@@ -1286,7 +1329,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 allow_dimensionless=self._accepts_dimensionless_drive),
             t_percept=t_percept))
 
-    def _spatial_response(self, resp, time, metadata):
+    def _spatial_response(self, resp, time, metadata, frame_clock=None):
         """Return a flat grid response, quantized to ``n_gray`` levels if set.
 
         Quantization precedes any temporal stage.
@@ -1294,7 +1337,8 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         if self.n_gray is not None:
             resp = _quantize_gray(resp, self.n_gray)
         return _ModelResponse(resp, time, self.time_unit, self.grid.x.shape,
-                              space=self.grid, metadata=metadata)
+                              space=self.grid, frame_clock=frame_clock,
+                              metadata=metadata)
 
     def _predict_response(self, stim, t_percept=None):
         """Return the flat spatial response to a prepared stimulus, or None.
@@ -1559,7 +1603,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if not isinstance(stim, (Stimulus, Percept)):
             raise TypeError(f"'stim' must be a Stimulus or Percept object, "
                             f"not {type(stim)}.")
-        return _to_percept(self._predict_response(stim, t_percept=t_percept))
+        return _to_percept(self._predict_response(stim, t_percept=t_percept),
+                           inherit_space_from=stim)
 
     def _predict_response(self, stim, t_percept=None):
         """Return the flat temporal response to ``stim``.
@@ -1580,6 +1625,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                              "component.")
         if isinstance(stim, _ModelResponse):
             _stim, _space, space = stim, list(stim.shape), stim.space
+            clock = stim.frame_clock
+            # Provenance only:
             source_stim = (stim.metadata or {}).get('stim')
         else:
             # Make sure we don't change the user's Stimulus/Percept object:
@@ -1589,10 +1636,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                 if not _stim.is_compressed:
                     _stim.compress()
                 _space = [len(stim.electrodes), 1]
+                clock = _encoder_clock(stim)
             else:
                 _space = [len(stim.ydva), len(stim.xdva)]
-                # Temporal models do not move the percept:
-                space = stim
+                clock = _metadata_clock(stim)
         n_space = int(np.prod(_space))
         # `_frame_clock`, `dt` and `t_percept` all use `time_unit`:
         _time = self._stim_times(stim)
@@ -1605,7 +1652,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                 raise ValueError(f"'reduce' must be 'peak' or 'last', not "
                                  f"{self.reduce!r}.")
             # Prefer encoder frame timing; otherwise report at 50 Hz.
-            frames = _frame_clock(stim, self.dt, unit=self.time_unit)
+            frames = _frame_clock(clock, self.dt, unit=self.time_unit)
             if frames is None:
                 # 20 ms frames. `nextafter` includes an exact frame boundary; the
                 # one-frame minimum keeps sub-frame stimuli from reporting only t=0:
@@ -1959,6 +2006,9 @@ class Model(Frozen, PrettyPrint):
                 stim if self.spatial._needs_structured_stim
                 else _delivered(stim),
                 t_percept=None)
+            if resp.frame_clock is None:
+                # `_delivered` drops encoder state; take the prepared clock:
+                resp = replace(resp, frame_clock=_encoder_clock(stim))
             if has_time_axis:
                 if resp.time is None and combine is not None:
                     # Allow a spatial model to define custom temporal
@@ -1973,7 +2023,8 @@ class Model(Frozen, PrettyPrint):
             resp = self.spatial._predict_response(stim, t_percept=t_percept)
         else:
             resp = self.temporal._predict_response(stim, t_percept=t_percept)
-        return _to_percept(resp)
+        # Only a temporal-only model has no grid; it reuses a Percept input's:
+        return _to_percept(resp, inherit_space_from=stim)
 
     @property
     def has_space(self):
