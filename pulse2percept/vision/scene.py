@@ -1543,6 +1543,10 @@ class Scene(PrettyPrint):
         Returns
         -------
         ani : :py:class:`~pulse2percept.utils.HTMLAnimation`
+            Save to file with ``ani.save(fname)``, e.g.
+            ``ani.save('scene.gif', writer='pillow')``. Saved files use a
+            single frame interval (the mean); only the HTML player keeps
+            irregular frame timing. Pass ``fps`` for uniform timing.
 
         """
         view = _resolve_view(view)

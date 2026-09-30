@@ -571,6 +571,19 @@ For example:
 Model brightness is in arbitrary units, so use a fixed ``vmax`` when
 comparing rendered prosthetic percepts across conditions.
 
+``scene.play()`` returns a Matplotlib animation, which can be saved directly:
+
+.. code-block:: python
+
+    scene.play(
+        percept=percept,
+        gaze=gaze,
+        vmax=percept.data.max(),
+    ).save('scene.gif', writer='pillow')
+
+Saved files use a single frame interval (the mean), so pass ``fps`` to
+``play()`` if the scene has irregular frame times.
+
 ``render`` uses the source's angular pixel pitch by default. Set ``step`` or
 ``shape`` to choose another output raster:
 
