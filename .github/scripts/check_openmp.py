@@ -5,15 +5,20 @@ torch bundles libomp. A second libomp in the same process aborts at the
 first parallel region ("OMP: Error #15"), so pulse2percept links torch's copy
 (see setup.py). Checks:
 
-1. The extensions link only system libraries and ``@rpath/libomp.dylib``
-   (the wheel repair ignores unresolved dependencies, so nothing else may
-   be missing), and were built with OpenMP.
-2. An OpenMP kernel runs after torch has used its own thread pool.
-3. Exactly one libomp is loaded, and it is torch's.
+1. Static: extensions reference libomp only as ``@rpath/libomp.dylib`` (no
+   Homebrew or ``/opt/llvm-openmp`` path), the OpenMP extensions reference
+   it, and nothing else non-system is linked (the wheel repair ignores
+   unresolved dependencies).
+2. Runtime: after torch has used its OpenMP runtime, a pulse2percept OpenMP
+   kernel runs, and exactly one libomp is loaded: torch's.
+
+Prints the parsed load commands and the loaded libomp as evidence. Runs the
+runtime check even if a static check failed.
 """
 
 import ctypes
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -27,32 +32,52 @@ from pulse2percept.stimuli import Stimulus
 
 OPENMP = "@rpath/libomp.dylib"
 SYSTEM = ("/usr/lib/", "/System/Library/")
+# Extensions with `prange` loops, which must link OpenMP:
+OPENMP_EXTS = ("_temporal.", "_scoreboard.")
+
+# As in PyTorch's tools/embed_libomp_macos.py:
+_LOAD_RE = re.compile(r"(?:name|path) (.+) \(offset \d+\)")
 
 
-def fail(msg):
-    sys.exit(f"check_openmp: {msg}")
+def _load_commands(path, cmd):
+    """Return the names or paths of ``cmd`` load commands, per ``otool -l``."""
+    out = subprocess.run(["otool", "-l", str(path)], capture_output=True,
+                         text=True, check=True).stdout.splitlines()
+    found = []
+    for i, line in enumerate(out):
+        if line.strip() == f"cmd {cmd}":
+            match = _LOAD_RE.match(out[i + 2].strip())
+            if match:
+                found.append(match.group(1))
+    return found
 
 
 def dependencies(path):
-    """Return the install names a Mach-O file links, per ``otool -L``."""
-    out = subprocess.run(["otool", "-L", str(path)], capture_output=True,
-                         text=True, check=True).stdout
-    return {line.strip().split(" (")[0] for line in out.splitlines()[1:]}
+    """Return LC_LOAD_DYLIB install names from a Mach-O binary."""
+    return set(_load_commands(path, "LC_LOAD_DYLIB"))
 
 
+problems = []
+
+# ---- Static linkage ----
 exts = sorted(Path(pulse2percept.__file__).parent.rglob("*.so"))
 if not exts:
-    fail("no compiled extensions found")
+    problems.append("no compiled extensions found")
 for path in exts:
-    extra = {d for d in dependencies(path)
-             if d != OPENMP and not d.startswith(SYSTEM)}
-    if extra:
-        fail(f"{path.name} links non-system libraries {sorted(extra)}")
-temporal = [p for p in exts if p.name.startswith("_temporal.")]
-if not temporal or OPENMP not in dependencies(temporal[0]):
-    fail(f"models/_temporal does not link {OPENMP}; was it built without "
-         f"OpenMP?")
+    deps = dependencies(path)
+    print(f"{path.name}: LC_LOAD_DYLIB {sorted(deps)}")
+    for dep in sorted(deps):
+        if "libomp" in dep and dep != OPENMP:
+            problems.append(f"{path.name} links {dep}, not {OPENMP}")
+        elif dep != OPENMP and not dep.startswith(SYSTEM):
+            problems.append(f"{path.name} links non-system library {dep}")
+    if path.name.startswith(OPENMP_EXTS):
+        print(f"{path.name}: LC_RPATH {_load_commands(path, 'LC_RPATH')}")
+        if OPENMP not in deps:
+            problems.append(f"{path.name} does not link {OPENMP}; built "
+                            f"without OpenMP?")
 
+# ---- Runtime ----
 # Initialize torch's OpenMP first, then enter a pulse2percept parallel region:
 torch.ones(512, 512) @ torch.ones(512, 512)
 stim = Stimulus(-np.ones((256, 3)), time=[0, 1, 2])
@@ -65,9 +90,15 @@ images = [libc._dyld_get_image_name(i).decode()
 # Count loaded images, not distinct files: one file loaded twice is still two
 # runtimes.
 omp = [p for p in images if os.path.basename(p).startswith("libomp")]
-torch_lib = os.path.realpath(os.path.join(os.path.dirname(torch.__file__),
-                                          "lib"))
-if (len(omp) != 1 or
-        os.path.dirname(os.path.realpath(omp[0])) != torch_lib):
-    fail(f"expected only torch's libomp in {torch_lib}, found {omp}")
+torch_omp = os.path.realpath(os.path.join(os.path.dirname(torch.__file__),
+                                          "lib", "libomp.dylib"))
+print(f"loaded libomp: {omp}")
+print(f"torch libomp:  {torch_omp}")
+if len(omp) != 1:
+    problems.append(f"expected exactly one loaded libomp, found {len(omp)}")
+elif os.path.realpath(omp[0]) != torch_omp:
+    problems.append(f"loaded libomp {omp[0]} is not torch's {torch_omp}")
+
+if problems:
+    sys.exit("check_openmp: FAILED\n  " + "\n  ".join(problems))
 print("check_openmp: one OpenMP runtime (torch's)")
