@@ -10,10 +10,11 @@ v0.12.0 Torch (unreleased)
 Highlights
 ----------
 
-* A ``Model`` combining retinal or cortical ``ScoreboardSpatial`` with
-  ``FadingTemporal`` supports differentiable Torch execution from electrode
-  waveforms. PyTorch (>= 2.7.0) is now a required dependency; Intel Macs are
-  no longer supported (:pull:`937`, :pull:`938`).
+* A ``Model`` combining retinal or cortical ``ScoreboardSpatial``, or
+  ``AxonMapSpatial``, with ``FadingTemporal`` supports differentiable Torch
+  execution from electrode waveforms. PyTorch (>= 2.7.0) is now a required
+  dependency; Intel Macs are no longer supported (:pull:`937`, :pull:`938`,
+  :pull:`939`).
 
 API changes and improvements
 ----------------------------
