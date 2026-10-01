@@ -6,6 +6,28 @@ from ..units import ms
 from ._temporal import alpha_fast, fading_fast
 
 
+def _fading_runs(t_stim, idx_percept, dt):
+    """Return the constant-frame runs of ``_build_runs`` in ``_temporal.pyx``.
+
+    Returns the stimulus frame, length in ``dt`` steps, and output column (or
+    -1) of each run.
+    """
+    idx_percept = np.asarray(idx_percept, dtype=np.int64)
+    n_sim = int(idx_percept[-1]) + 1
+    t_stim = np.asarray(t_stim, dtype=np.float32)
+    # float32 step times, as in the Cython kernel:
+    t_sim = np.arange(n_sim).astype(np.float32) * np.float32(dt)
+    # First step of each later frame; several frames may start at one step:
+    start = np.searchsorted(t_sim, t_stim[1:])
+    # A run ends before a frame change and at each output step:
+    end = np.union1d(start[(start > 0) & (start < n_sim)] - 1, idx_percept)
+    out = np.full(end.size, -1)
+    out[np.searchsorted(end, idx_percept)] = np.arange(idx_percept.size)
+    # Sample-and-hold: the latest frame with t_stim <= t_sim:
+    frame = np.searchsorted(t_stim[1:], t_sim[end], side='right')
+    return frame, np.diff(end, prepend=-1), out
+
+
 class FadingTemporal(TemporalModel):
     r"""Generic temporal model for phosphene fading.
 
@@ -112,19 +134,61 @@ class FadingTemporal(TemporalModel):
                 f'reaches its drive within one step, which makes the model a '
                 f'half-wave rectifier. Shorten "dt" to go faster than that.')
 
-    def _predict_temporal(self, stim, t_percept, reduce='last'):
-        """Predict the temporal response."""
-        time = self._stim_times(stim)
-        stim_data = self._stim_values(stim).reshape((-1, len(time)))
+    def _percept_steps(self, t_percept):
+        """Return output times as distinct ``dt`` step indices."""
         # Round before casting so floating-point noise cannot shift a sample.
         idx_percept = np.uint32(np.round(t_percept / self.dt))
         if np.unique(idx_percept).size < t_percept.size:
             raise ValueError(f"All times 't_percept' must be distinct multiples "
                              f"of `dt`={self.dt:.2e}")
+        return idx_percept
+
+    def _predict_temporal(self, stim, t_percept, reduce='last'):
+        """Predict the temporal response."""
+        time = self._stim_times(stim)
+        stim_data = self._stim_values(stim).reshape((-1, len(time)))
         return fading_fast(stim_data.astype(np.float32, copy=False),
                            time.astype(np.float32, copy=False),
-                           idx_percept, self.dt, self.tau, self.thresh_percept,
-                           self.n_threads, 1 if reduce == 'peak' else 0)
+                           self._percept_steps(t_percept), self.dt, self.tau,
+                           self.thresh_percept, self.n_threads,
+                           1 if reduce == 'peak' else 0)
+
+    def _predict_temporal_tensor(self, stim, t_percept, reduce='last'):
+        """Torch counterpart of ``_predict_temporal``.
+
+        Uses the run schedule and closed-form run update of ``fading_fast``:
+        ``b <- b * q**n + drive * (1 - q**n)`` with ``q = 1 - dt/tau``, the
+        exact composition of ``n`` explicit-Euler steps. Timing is fixed.
+        """
+        import torch
+        time = self._stim_times(stim)
+        data = stim.data.reshape((-1, len(time)))
+        frame, length, out = _fading_runs(time, self._percept_steps(t_percept),
+                                          self.dt)
+        # float32 `dt/tau`, double-precision powers, as in `fading_fast`:
+        dt_tau = np.float32(self.dt) / np.float32(self.tau)
+        n_log_q = length * np.log1p(-np.float64(dt_tau))
+        run_q = np.exp(n_log_q).tolist()
+        run_p = (-np.expm1(n_log_q)).tolist()
+        # Half-wave rectify: only cathodic current drives brightness:
+        frame = torch.as_tensor(frame, device=data.device)
+        drive = torch.clamp(-data[:, frame], min=0)
+        bright = peak = data.new_zeros(data.shape[0])
+        cols = [None] * t_percept.size
+        for k, col in enumerate(out):
+            bright = bright * run_q[k] + drive[:, k] * run_p[k]
+            if reduce == 'peak':
+                # Brightness is monotonic within a run, so its endpoint is
+                # the run's peak:
+                peak = torch.where(bright > peak, bright, peak)
+            if col >= 0:
+                val = peak if reduce == 'peak' else bright
+                cols[col] = torch.where(val.abs() >= self.thresh_percept, val,
+                                        0.0)
+                # Brightness is continuous, so the boundary value starts the
+                # next interval's peak:
+                peak = bright
+        return torch.stack(cols, dim=1)
 
 
 class AlphaTemporal(TemporalModel):

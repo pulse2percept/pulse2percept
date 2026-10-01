@@ -118,6 +118,14 @@ With `uv <https://docs.astral.sh/uv/>`_:
     uv venv
     uv pip install -e ".[dev]"
 
+On macOS, editable builds link the PyTorch installed in your environment, so
+install the build requirements and PyTorch first and build without isolation:
+
+.. code-block:: bash
+
+    python -m pip install "setuptools>=64" wheel "Cython>=3.1.3" "numpy>=2" torch
+    python -m pip install -e ".[dev]" --no-build-isolation
+
 Before starting new work, update your local ``master`` branch:
 
 .. code-block:: bash

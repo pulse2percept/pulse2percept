@@ -14,3 +14,7 @@ nibabel>=5.4.2
 pooch>=1.9.0
 neuropythy==0.13.0
 pickleshare
+# CPU-only torch (the +cpu local version wins); PyPI's Linux wheels pull in
+# CUDA:
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.7.0

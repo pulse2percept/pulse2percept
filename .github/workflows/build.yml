@@ -11,13 +11,23 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.os }} Py ${{ matrix.python-version }}
+    name: Build ${{ matrix.os }} Py ${{ matrix.python-version }}${{ matrix.torch && format(' torch{0}', matrix.torch) || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.14", "3.13", "3.12", "3.11"]
         os: [ubuntu-latest, windows-latest, macos-latest]
+        # Test the declared minimum torch (pyproject.toml) with NumPy 2; all
+        # other jobs use the latest release. macOS also checks that the
+        # extensions share that torch wheel's OpenMP runtime:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+            torch: "==2.7.0"
+          - os: macos-latest
+            python-version: "3.11"
+            torch: "==2.7.0"
 
     # Force bash on all OSes (avoids PowerShell var-expansion issues on Windows)
     defaults:
@@ -39,12 +49,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # ---- System deps ----
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install libomp
-          echo "OMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
-
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -64,12 +68,28 @@ jobs:
           python -m pip install flake8
           flake8 pulse2percept --ignore N802,N806,W504 --select W503,W605 --count --show-source --statistics
 
+      # Satisfy the torch dependency with CPU-only wheels; PyPI's Linux wheels
+      # pull in CUDA. Windows/macOS PyPI wheels are CPU-only already.
+      - name: Install PyTorch (Linux, CPU-only)
+        if: runner.os == 'Linux'
+        run: python -m pip install "torch${{ matrix.torch }}" --index-url https://download.pytorch.org/whl/cpu
+
+      # macOS extensions link torch's OpenMP runtime, so torch must be
+      # installed before the build (see setup.py):
+      - name: Install PyTorch (macOS)
+        if: runner.os == 'macOS'
+        run: python -m pip install "torch${{ matrix.torch }}"
+
       # ---- Install package (editable) with dev extras ----
       # Use --no-build-isolation so Cython uses the preinstalled NumPy headers.
       - name: Install package (editable + dev extras)
         run: |
           python -m pip install -e ".[dev]" --no-build-isolation
           python -c "import numpy, pulse2percept as p2p; print('Runtime NumPy', numpy.__version__); print('p2p version:', getattr(p2p, '__version__', 'unknown'))"
+
+      - name: Check OpenMP runtime (macOS)
+        if: runner.os == 'macOS'
+        run: python .github/scripts/check_openmp.py
 
       # ---- Log env ----
       - name: Log environment info

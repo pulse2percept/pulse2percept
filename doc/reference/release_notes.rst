@@ -10,6 +10,11 @@ v0.12.0 Torch (unreleased)
 Highlights
 ----------
 
+* ``ScoreboardModel`` supports differentiable Torch execution from electrode
+  waveforms through ``ScoreboardSpatial`` and ``FadingTemporal``. PyTorch
+  (>= 2.7.0) is now a required dependency; Intel Macs are no longer supported
+  (:pull:`937`).
+
 API changes and improvements
 ----------------------------
 
@@ -19,6 +24,9 @@ API changes and improvements
 
 Bug fixes
 ---------
+
+* Temporal models applied directly to a ``Stimulus`` no longer fail when an
+  electrode is silent; its row is kept and stays zero (:pull:`937`).
 
 
 v0.11.0 Foundations (2026-09-30)

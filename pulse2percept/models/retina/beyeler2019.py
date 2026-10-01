@@ -234,6 +234,35 @@ class ScoreboardSpatial(RetinalSpatial):
                                0, 0,  # no current boundaries
                                self.n_threads)
 
+    def _predict_tensor(self, waveform, time):
+        """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
+
+        Same Gaussian, cutoff and threshold as ``_predict_spatial``, computed
+        as a ``(P, E) @ (E, T)`` product. Geometry is fixed.
+        """
+        import torch
+        if self.n_gray is not None:
+            # Quantization is discrete and has no exact gradient:
+            raise NotImplementedError("Tensor prediction does not support "
+                                      "n_gray; set n_gray=None.")
+        electrode_array = self.implant.electrode_array
+        _warn_ignores_z(self, electrode_array)
+        x_el, y_el, _ = self._electrode_coords(
+            electrode_array, None, electrodes=self.implant.electrode_names)
+        # float32, as in `fast_scoreboard`:
+        dx = self.grid.ret.x.reshape((-1, 1)) - x_el
+        dy = self.grid.ret.y.reshape((-1, 1)) - y_el
+        r2 = dx * dx + dy * dy
+        rho = np.float32(self.rho)
+        weights = np.exp(-r2 / (np.float32(2) * rho * rho))
+        # Drops pairs beyond the cutoff and unmapped (NaN) grid points:
+        weights[~(r2 <= self._cutoff_r2(self.rho))] = 0
+        weights = torch.as_tensor(weights, dtype=waveform.dtype,
+                                  device=waveform.device)
+        resp = weights @ waveform
+        resp = torch.where(resp.abs() >= self.thresh_percept, resp, 0.0)
+        return self._spatial_response(resp, time, None)
+
 
 class ScoreboardModel(Model):
     r"""Scoreboard model of [Beyeler2019]_.
