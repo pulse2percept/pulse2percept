@@ -13,7 +13,7 @@ Highlights
 * A ``Model`` combining retinal or cortical ``ScoreboardSpatial`` with
   ``FadingTemporal`` supports differentiable Torch execution from electrode
   waveforms. PyTorch (>= 2.7.0) is now a required dependency; Intel Macs are
-  no longer supported (:pull:`937`, :pull:`XXX`).
+  no longer supported (:pull:`937`, :pull:`938`).
 
 API changes and improvements
 ----------------------------
