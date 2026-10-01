@@ -1,7 +1,7 @@
 """:py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`,
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import (Model, _blend_meridian, _thread_params,
+from ..base import (Model, _blend_meridian, _is_tensor, _thread_params,
                     _warn_rho_vs_pitch)
 from .._scoreboard import fast_scoreboard, fast_scoreboard_3d
 from .base import CortexSpatial
@@ -168,6 +168,10 @@ class ScoreboardSpatial(CortexSpatial):
         if blended is resp:
             return resp
         # Restore percept threshold after blending:
+        if _is_tensor(blended):
+            import torch
+            return torch.where(blended.abs() >= self.thresh_percept, blended,
+                               0.0)
         blended[np.abs(blended) < self.thresh_percept] = 0
         return blended
 
@@ -208,6 +212,53 @@ class ScoreboardSpatial(CortexSpatial):
             axis = 0)
         else:
             raise ValueError("Invalid dimensionality of visual field map")
+
+    def _predict_tensor(self, waveform, time):
+        """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
+
+        Same Gaussian, cutoff, hemisphere separation, per-region threshold and
+        meridian blending as ``predict_percept``, computed as one
+        ``(P, E) @ (E, T)`` product per region. Geometry is fixed.
+        """
+        import torch
+        if self.n_gray is not None:
+            # Quantization is discrete and has no exact gradient:
+            raise NotImplementedError("Tensor prediction does not support "
+                                      "n_gray; set n_gray=None.")
+        x_el, y_el, z_el = self._electrode_coords(
+            self.implant.electrode_array, None,
+            electrodes=self.implant.electrode_names)
+        rho = np.float32(self.rho)
+        cutoff_r2 = self._cutoff_r2(self.rho)
+        resp = 0
+        for region in self.regions:
+            x_grid = self.grid[region].x.reshape((-1, 1))
+            y_grid = self.grid[region].y.reshape((-1, 1))
+            # float32, as in `fast_scoreboard`:
+            dx = x_grid - x_el
+            dy = y_grid - y_el
+            r2 = dx * dx + dy * dy
+            if self.visual_field_map.ndim == 3:
+                # A 2D map ignores electrode z; a 3D one adds depth, as in
+                # `fast_scoreboard_3d`:
+                dz = self.grid[region].z.reshape((-1, 1)) - z_el
+                r2 = r2 + dz * dz
+            weights = np.exp(-r2 / (np.float32(2) * rho * rho))
+            # Drops pairs beyond the cutoff and unmapped (NaN) grid points:
+            drop = ~(r2 <= cutoff_r2)
+            if self.visual_field_map.split_map:
+                # No current spreads between hemispheres:
+                boundary = np.float32(self.visual_field_map.left_offset / 2)
+                drop |= (x_grid < boundary) != (x_el < boundary)
+            weights[drop] = 0
+            weights = torch.as_tensor(weights, dtype=waveform.dtype,
+                                      device=waveform.device)
+            region_resp = weights @ waveform
+            # Each region is thresholded before the sum, as in Cython:
+            resp = resp + torch.where(
+                region_resp.abs() >= self.thresh_percept, region_resp, 0.0)
+        resp = self._postprocess_spatial(resp)
+        return self._spatial_response(resp, time, None)
 
 
 class ScoreboardModel(Model):

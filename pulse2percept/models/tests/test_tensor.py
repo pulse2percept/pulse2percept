@@ -7,9 +7,11 @@ import torch
 from pulse2percept.implants import GridImplant
 from pulse2percept.implants.retina import ArgusI, PRIMAPivotal
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
-from pulse2percept.models.base import _ModelResponse
+from pulse2percept.models.base import _blend_meridian, _ModelResponse
 from pulse2percept.models.retina import ScoreboardSpatial, Thompson2003Spatial
 from pulse2percept.stimuli import Stimulus
+from pulse2percept.topography import Grid2D
+from pulse2percept.topography.retina import Curcio1990Map
 from pulse2percept.units import ms
 
 # float32 tolerances: accumulation order differs from the Cython loops. ATOL
@@ -82,6 +84,20 @@ def test_ScoreboardSpatial_tensor_parity_large_grid():
     # relative to the peak response:
     npt.assert_allclose(resp.data.numpy(), expected, rtol=RTOL,
                         atol=1e-6 * np.abs(expected).max())
+
+
+@pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
+@pytest.mark.parametrize('width', [0.1, 0.5, 3.0])
+def test_blend_meridian_tensor_parity(meridian, width):
+    grid = Grid2D((-4.1, 3.9), (-3, 3.4), step=0.2)
+    grid.build(Curcio1990Map())
+    resp = np.random.default_rng(1).normal(0, 10, (grid.x.size, 3))
+    for dtype, atol in ((np.float32, ATOL), (np.float64, 1e-12)):
+        expected = _blend_meridian(resp.astype(dtype), grid, meridian, width)
+        blended = _blend_meridian(torch.tensor(resp.astype(dtype)), grid,
+                                  meridian, width)
+        assert blended.dtype == torch.from_numpy(expected).dtype
+        npt.assert_allclose(blended.numpy(), expected, rtol=RTOL, atol=atol)
 
 
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
