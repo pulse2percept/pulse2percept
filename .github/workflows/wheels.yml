@@ -105,7 +105,9 @@ jobs:
           CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-*"
           CIBW_SKIP: "*-manylinux_i686 *-win32 *musllinux*"
 
-          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          # No Intel-Mac wheels: PyTorch, a runtime dependency, has none
+          # since 2.3.
+          CIBW_ARCHS_MACOS: "arm64"
 
       - name: Upload wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -2077,9 +2077,11 @@ class Model(Frozen, PrettyPrint):
         if not _is_tensor(waveform):
             raise TypeError(f"'waveform' must be a torch.Tensor, not "
                             f"{type(waveform)}.")
-        if not waveform.is_floating_point():
-            raise TypeError(f"'waveform' must have a floating-point dtype, "
-                            f"not {waveform.dtype}.")
+        import torch
+        # Parity with the float32 Cython kernels is tested for these only:
+        if waveform.dtype not in (torch.float32, torch.float64):
+            raise TypeError(f"'waveform' must be float32 or float64, not "
+                            f"{waveform.dtype}.")
         n_el = self.implant.n_electrodes
         if waveform.ndim != 2 or waveform.shape[0] != n_el:
             raise ValueError(f"'waveform' must have shape "
@@ -2090,8 +2092,9 @@ class Model(Frozen, PrettyPrint):
         if time.shape != (waveform.shape[1],):
             raise ValueError(f"'time' must have shape ({waveform.shape[1]},) "
                              f"to match 'waveform', not {time.shape}.")
-        if time.size == 0 or np.any(np.diff(time) <= 0):
-            raise ValueError("'time' must be nonempty and strictly "
+        if (time.size == 0 or not np.all(np.isfinite(time)) or
+                np.any(np.diff(time) <= 0)):
+            raise ValueError("'time' must be nonempty, finite, and strictly "
                              "increasing.")
         resp = self.spatial._predict_tensor(waveform, time)
         return self.temporal._predict_response(resp, t_percept=t_percept)

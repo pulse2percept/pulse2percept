@@ -48,7 +48,7 @@ dependencies = [
     "matplotlib>=3.9",
     "imageio-ffmpeg>=0.4",
     "pandas>=2.2.2",
-    "torch>=2.3",
+    "torch>=2.4.1",
 ]
 
 [project.optional-dependencies]

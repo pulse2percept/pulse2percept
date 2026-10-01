@@ -103,7 +103,8 @@ Compatibility
 +---------------------------+------+------+------+------+------+-----+-----+-----+
 
 Prebuilt wheels are available for 64-bit Linux, macOS 11 and later
-(Apple silicon and Intel), and 64-bit Windows. On other platforms, ``pip`` may
+(Apple silicon), and 64-bit Windows. Intel Macs are not supported, because
+PyTorch provides no Intel-Mac wheels. On other platforms, ``pip`` may
 build pulse2percept from source, which requires a C compiler. NumPy, Cython,
 and other build dependencies are installed automatically.
 

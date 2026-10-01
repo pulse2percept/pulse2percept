@@ -4,7 +4,7 @@ import numpy.testing as npt
 import pytest
 import torch
 
-from pulse2percept.implants.retina import ArgusI
+from pulse2percept.implants.retina import AlphaAMS, ArgusI
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
 from pulse2percept.models.base import _ModelResponse
 from pulse2percept.models.retina import ScoreboardSpatial, Thompson2003Spatial
@@ -62,6 +62,25 @@ def test_ScoreboardSpatial_tensor_parity(params):
     npt.assert_allclose(resp.data.numpy(),
                         expected.data.reshape(resp.data.shape),
                         rtol=RTOL, atol=ATOL)
+
+
+def test_ScoreboardSpatial_tensor_parity_AlphaAMS():
+    # ~100 of 1600 electrodes contribute to each grid point:
+    spatial = ScoreboardSpatial(AlphaAMS(), rho=65, xrange=(-5, 5),
+                                yrange=(-5, 5), step=0.25,
+                                thresh_percept=5).build()
+    wf = _waveform(spatial.implant.n_electrodes)
+    expected = spatial.predict_percept(
+        Stimulus(wf, electrodes=spatial.implant.electrode_names, time=TIME))
+    resp = spatial._predict_tensor(torch.tensor(wf, dtype=torch.float32),
+                                   TIME)
+    expected = expected.data.reshape(resp.data.shape)
+    # The threshold must zero some, but not all, of the response:
+    assert 0 < np.mean(expected == 0) < 1
+    # float32 rounding grows with the summed magnitude, so bound the error
+    # relative to the peak response:
+    npt.assert_allclose(resp.data.numpy(), expected, rtol=RTOL,
+                        atol=1e-6 * np.abs(expected).max())
 
 
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
@@ -148,8 +167,9 @@ def test_Model_tensor_errors():
     waveform = torch.zeros((n_el, TIME.size))
     with pytest.raises(TypeError, match='torch.Tensor'):
         model._predict_tensor(waveform.numpy(), TIME)
-    with pytest.raises(TypeError, match='floating-point'):
-        model._predict_tensor(waveform.int(), TIME)
+    for dtype in (torch.int32, torch.float16, torch.bfloat16):
+        with pytest.raises(TypeError, match='float32 or float64'):
+            model._predict_tensor(waveform.to(dtype), TIME)
     with pytest.raises(ValueError, match='shape'):
         model._predict_tensor(waveform[0], TIME)
     with pytest.raises(ValueError, match='shape'):
@@ -158,6 +178,11 @@ def test_Model_tensor_errors():
         model._predict_tensor(waveform, TIME[1:])
     with pytest.raises(ValueError, match='strictly increasing'):
         model._predict_tensor(waveform, TIME[::-1])
+    for bad in (np.nan, np.inf):
+        time = TIME.copy()
+        time[5] = bad
+        with pytest.raises(ValueError, match='finite'):
+            model._predict_tensor(waveform, time)
     model.spatial.n_gray = 8
     with pytest.raises(NotImplementedError, match='n_gray'):
         model._predict_tensor(waveform, TIME)

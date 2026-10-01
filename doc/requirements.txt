@@ -17,4 +17,4 @@ pickleshare
 # CPU-only torch (the +cpu local version wins); PyPI's Linux wheels pull in
 # CUDA:
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.3
+torch>=2.4.1
