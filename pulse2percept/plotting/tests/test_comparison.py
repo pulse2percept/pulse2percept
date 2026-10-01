@@ -325,19 +325,29 @@ def test_plot_implant_percept_errors():
         plot_implant_percept(model, Percept(np.zeros((3, 3, 1))))
 
 
-def test_electrode_stim_nested():
+def test_electrode_stim_composite():
     implant = line_model().implant
     model = Model(spatial=ScoreboardSpatial(implant, xrange=(-1, 3),
                                             yrange=(-1, 1), step=0.5),
                   temporal=FadingTemporal()).build()
     pt = BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)
     percept = model.predict_percept({'A': pt})
-    npt.assert_equal(isinstance(percept.metadata['stim'], Percept), True)
+    npt.assert_equal(isinstance(percept.metadata['stim'], Stimulus), True)
     stim = _electrode_stim(percept)
-    npt.assert_equal(isinstance(stim, Stimulus), True)
+    npt.assert_equal(stim is percept.metadata['stim'], True)
     npt.assert_equal(stim.electrodes, ['A'])
     ani = play_implant_percept(model, percept)
     npt.assert_equal(len(ani._layers), 2)
+
+
+def test_electrode_stim_legacy_nested():
+    # v0.11 composite percepts stored Percept -> Percept -> Stimulus:
+    stim = Stimulus({'A': BiphasicPulseTrain(20, 10, 0.45, stim_dur=100)})
+    inner = Percept(np.zeros((3, 3, 2)), time=[0, 20],
+                    metadata={'stim': stim})
+    outer = Percept(np.zeros((3, 3, 2)), time=[0, 20],
+                    metadata={'stim': inner})
+    npt.assert_equal(_electrode_stim(outer) is stim, True)
 
 
 def test_electrode_drive_zero_order_hold():

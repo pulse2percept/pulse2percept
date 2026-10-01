@@ -7,9 +7,11 @@ import pytest
 from pulse2percept.models import AlphaTemporal, FadingTemporal
 from pulse2percept.models.retina import Nanduri2012Temporal
 from pulse2percept.models._temporal import alpha_fast, fading_fast
+from pulse2percept.models.base import _FrameClock, _ModelResponse
 from pulse2percept.stimuli import (Stimulus, MonophasicPulse, BiphasicPulse,
                                    BiphasicPulseTrain)
 from pulse2percept.percepts import Percept
+from pulse2percept.units import ms
 from pulse2percept.utils import FreezeError
 
 
@@ -461,25 +463,28 @@ def test_FadingTemporal_tau_limits():
                         rtol=0.05)
 
 
+def clocked(stim):
+    """Return ``stim`` as a response on ten 50 ms encoder frames"""
+    return _ModelResponse(stim.data, stim.time, ms, (len(stim.electrodes), 1),
+                          frame_clock=_FrameClock(np.arange(10) * 50.0, 50.0))
+
+
 def test_FadingTemporal_reduce_limits():
     """`reduce` only matters when brightness rises and falls"""
     # Constant cathodic current: brightness rises monotonically, so the peak
     # of every interval is at its end:
-    rising = Stimulus(np.full((4, 2), -20.0), time=[0.0, 500.0])
-    rising.metadata['encoder'] = {'frame_time': np.arange(10) * 50.0,
-                                  'frame_dur': 50.0}
-    peak = FadingTemporal(tau=100).build().predict_percept(rising)
-    last = FadingTemporal(tau=100, reduce='last').build().predict_percept(
+    rising = clocked(Stimulus(np.full((4, 2), -20.0), time=[0.0, 500.0]))
+    peak = FadingTemporal(tau=100).build()._predict_response(rising)
+    last = FadingTemporal(tau=100, reduce='last').build()._predict_response(
         rising)
+    npt.assert_equal(peak.time.size, 10)
     npt.assert_array_equal(peak.data, last.data)
     npt.assert_array_less(-1e-9, np.diff(peak.data, axis=-1))
 
     # A pulse train rises and falls, so 'peak' and 'last' differ:
-    train = BiphasicPulseTrain(20, -50, 0.46, stim_dur=500)
-    train.metadata['encoder'] = {'frame_time': np.arange(10) * 50.0,
-                                 'frame_dur': 50.0}
-    peak = FadingTemporal(tau=100).build().predict_percept(train)
-    last = FadingTemporal(tau=100, reduce='last').build().predict_percept(
+    train = clocked(BiphasicPulseTrain(20, -50, 0.46, stim_dur=500))
+    peak = FadingTemporal(tau=100).build()._predict_response(train)
+    last = FadingTemporal(tau=100, reduce='last').build()._predict_response(
         train)
     npt.assert_equal(np.any(peak.data != last.data), True)
     npt.assert_array_less(last.data - 1e-9, peak.data)

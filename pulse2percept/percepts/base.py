@@ -178,6 +178,19 @@ def _reject_rgb(name, extra=''):
                       f"no unambiguous meaning for an RGB percept.{extra}")
 
 
+def _quantize_gray(data, n_gray):
+    """Return float32 ``data`` reduced to ``n_gray`` k-means levels.
+
+    Cluster initialization uses NumPy's global RNG.
+    """
+    n_gray = int(n_gray)
+    if n_gray <= 1:
+        raise ValueError(f'"n_gray" must be greater than 1, not {n_gray}.')
+    data = np.asarray(data, dtype=np.float32)
+    centroids, labels = kmeans2(data.ravel(), n_gray, minit='points')
+    return centroids[labels].reshape(data.shape)
+
+
 def _pixel_extent(xdva, ydva):
     """Return (left, right, bottom, top) edges of a pixel-center grid"""
     def edges(centers):
@@ -259,6 +272,10 @@ class Percept(Data):
 
     """
 
+    #: Encoder frame clock of a model-generated percept, read by temporal
+    #: models instead of metadata. None for other percepts.
+    _frame_clock = None
+
     def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
                  time_unit=ms):
         # import at runtime to avoid circular import
@@ -289,13 +306,7 @@ class Percept(Data):
                 raise _reject_rgb('n_gray', ' Quantize the color channels '
                                             'yourself if that is what you '
                                             'want.')
-            n_gray = int(n_gray)
-            if n_gray <= 1:
-                raise ValueError(f'"n_gray" must be greater than 1, not '
-                                 f'{n_gray}.')
-            data = np.asarray(data, dtype=np.float32)
-            centroids, labels = kmeans2(data.ravel(), n_gray, minit='points')
-            data = centroids[labels].reshape(data.shape)
+            data = _quantize_gray(data, n_gray)
         time = as_value(time, self._time_unit, 'time')
         if time is not None:
             time = np.array([time]).flatten()

@@ -7,8 +7,7 @@ import numpy as np
 from ...stimuli.encoders import _OpticalStimulus
 from ...topography.retina import Watson2014Map
 from ...units import as_value, dimensionless, mW, mm, ms
-from ...percepts import Percept
-from ..base import (Model, TemporalModel, _electrode_pitch,
+from ..base import (Model, TemporalModel, _FrameClock, _electrode_pitch,
                     _require_stim_dimension, _thread_params)
 from .beyeler2019 import ScoreboardSpatial
 
@@ -365,8 +364,8 @@ class Ho2018Spatial(ScoreboardSpatial):
             return _radiant_exposure(stim)
         return super()._stim_values(stim)
 
-    def _predict_prepared(self, stim, t_percept=None):
-        """Predict one drive map per pulse period.
+    def _predict_response(self, stim, t_percept=None):
+        """Return one flat drive map per pulse period.
 
         Output times are the schedule's pulse onsets. Explicit ``t_percept``
         values are served by zero-order hold within the schedule, drive being
@@ -389,23 +388,24 @@ class Ho2018Spatial(ScoreboardSpatial):
         t_pulse = stim.pulse_time
         resp = self._predict_spatial(self.implant.electrode_array, stim)
         resp = self._postprocess_spatial(resp)
-        resp = resp.reshape(list(self.grid.x.shape) + [-1])
         time = t_pulse
         if t_percept is not None:
             time = np.sort(np.array([t_percept], dtype=np.float64).ravel())
             at = np.searchsorted(t_pulse, time, side='right') - 1
-            resp = resp[..., np.clip(at, 0, t_pulse.size - 1)]
+            resp = resp[:, np.clip(at, 0, t_pulse.size - 1)]
             # No light is delivered before the first pulse or after the
             # stimulus ends:
-            resp[..., (at < 0) | (time >= stim.duration)] = 0
+            resp[:, (at < 0) | (time >= stim.duration)] = 0
         # Drive stays on the pulse clock. `_frame_clock` reports a video on
         # its source clock and a still image on the pulse clock.
-        return Percept(resp, space=self.grid, time=time,
-                       time_unit=self.time_unit, n_gray=self.n_gray,
-                       metadata={'stim': stim,
-                                 'encoder': {'frame_time': t_pulse,
-                                             'frame_dur': 1e3 / stim.freq,
-                                             **stim._source_clock()}})
+        clock = _FrameClock(t_pulse, 1e3 / stim.freq, stim._source_time,
+                            stim._source_dur)
+        return self._spatial_response(
+            resp, time, {'stim': stim,
+                         'encoder': {'frame_time': t_pulse,
+                                     'frame_dur': 1e3 / stim.freq,
+                                     **stim._source_clock()}},
+            frame_clock=clock)
 
 
 class Ho2018Model(Model):

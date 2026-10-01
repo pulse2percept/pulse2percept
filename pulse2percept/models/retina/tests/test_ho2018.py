@@ -1,6 +1,7 @@
 """Tests for the [Ho2018]_ photovoltaic model"""
 import inspect
 import warnings
+from dataclasses import replace
 
 import numpy as np
 import numpy.testing as npt
@@ -145,21 +146,54 @@ def test_temporal_stage_takes_the_spatial_percept():
     npt.assert_equal(np.any(percept.data > 0), True)
 
 
+@pytest.mark.parametrize('metadata', [
+    None,
+    {'encoder': {'frame_time': np.zeros(1), 'frame_dur': 500.0}},
+])
+def test_temporal_stage_ignores_percept_metadata(metadata):
+    implant = tiny_implant()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', UserWarning)
+        spatial = Ho2018Spatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                step=0.25, verbose=False)
+    drive = spatial.predict_percept(spot())
+    temporal = Ho2018Temporal(verbose=False)
+    ref = temporal.predict_percept(drive)
+    drive._internal['metadata'] = metadata
+    got = temporal.predict_percept(drive)
+    npt.assert_array_equal(got.time, ref.time)
+    npt.assert_array_equal(got.data, ref.data)
+
+
 # -- Structured stimulus routing --------------------------------------------
 
 def test_spatial_stage_receives_the_schedule(monkeypatch):
     seen = []
     model = tiny_model()
-    original = Ho2018Spatial._predict_prepared
+    original = Ho2018Spatial._predict_response
 
     def spy(self, stim, t_percept=None):
         seen.append(stim)
         return original(self, stim, t_percept=t_percept)
 
-    monkeypatch.setattr(Ho2018Spatial, '_predict_prepared', spy)
+    monkeypatch.setattr(Ho2018Spatial, '_predict_response', spy)
     model.predict_percept(spot())
     npt.assert_equal(len(seen), 1)
     npt.assert_equal(isinstance(seen[0], _OpticalStimulus), True)
+
+
+def test_pulse_clock_does_not_live_in_metadata(monkeypatch):
+    ref = tiny_model().predict_percept(spot())
+    original = Ho2018Spatial._predict_response
+
+    def strip(self, stim, t_percept=None):
+        return replace(original(self, stim, t_percept=t_percept),
+                       metadata=None)
+
+    monkeypatch.setattr(Ho2018Spatial, '_predict_response', strip)
+    got = tiny_model().predict_percept(spot())
+    npt.assert_array_equal(got.time, ref.time)
+    npt.assert_array_equal(got.data, ref.data)
 
 
 def test_does_not_render_the_waveform(monkeypatch):

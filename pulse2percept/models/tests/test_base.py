@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import copy
+from dataclasses import replace
 import multiprocessing
 import warnings
 
@@ -904,9 +905,9 @@ def test_Model_predict_percept():
     model = Model(spatial=ValidSpatialModel(ArgusI()),
                   temporal=ValidTemporalModel())
     model.build()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='multiples of dt'):
         # Cannot request t_percepts that are not multiples of dt:
-        model.predict_percept({'A1': np.ones(16)}, t_percept=[0.1, 0.11])
+        model.predict_percept({'A1': np.ones(16)}, t_percept=[0.1, 0.1013])
     with pytest.raises(ValueError):
         # Has temporal model but stim.time is None:
         ValidTemporalModel().predict_percept(Stimulus(3))
@@ -936,7 +937,7 @@ def test_Model_predict_percept_frame_clock(fps):
     # Approximately the source frame interval:
     npt.assert_almost_equal(frame_interval(percept.time), 1000.0 / fps,
                             decimal=1)
-    # Frame times also pass through the spatial Percept. Requires real models
+    # Frame times also pass through the spatial stage. Requires real models
     # (`ValidTemporalModel` returns one row per electrode, not per grid point):
     both = Model(spatial=ScoreboardSpatial(implant, xrange=(-2, 2),
                                            yrange=(-2, 2), step=1),
@@ -1469,6 +1470,125 @@ def test_percept_time_crosses_model_boundary():
         model.predict_percept(ramp, t_percept=[0, .005 * s,
                                                .010 * s]).time,
         [0, 5, 10], rtol=1e-12)
+
+
+class InputTemporal(FadingTemporal):
+    """FadingTemporal that records the object passed to its kernel"""
+
+    def get_default_params(self):
+        return {**super().get_default_params(), 'seen': None}
+
+    def _predict_temporal(self, stim, t_percept, reduce='last'):
+        self.seen = stim
+        return super()._predict_temporal(stim, t_percept, reduce)
+
+
+def composite_stim():
+    return Stimulus({'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=100),
+                     'B2': BiphasicPulseTrain(40, 20, 0.45, stim_dur=100)})
+
+
+def test_Model_matches_explicit_stage_composition():
+    grid = {'xrange': (-3, 3), 'yrange': (-2, 2), 'step': 0.5}
+    model = Model(ScoreboardSpatial(ArgusI(), **grid),
+                  FadingTemporal()).build()
+    percept = model.predict_percept(composite_stim())
+    explicit = model.temporal.predict_percept(
+        model.spatial.predict_percept(composite_stim()))
+    npt.assert_array_equal(percept.data, explicit.data)
+    npt.assert_array_equal(percept.time, explicit.time)
+    npt.assert_equal(percept.time_unit, explicit.time_unit)
+    npt.assert_array_equal(percept.xdva, explicit.xdva)
+    npt.assert_array_equal(percept.ydva, explicit.ydva)
+    # Composite metadata stores the prepared stimulus directly:
+    npt.assert_equal(isinstance(percept.metadata['stim'], Stimulus), True)
+
+
+def test_Model_temporal_stage_receives_no_percept(monkeypatch):
+    spatial = ScoreboardSpatial(ArgusI(), xrange=(-3, 3), yrange=(-2, 2),
+                                step=0.5)
+    returned = []
+    original = ScoreboardSpatial._predict_response
+
+    def spy(self, stim, t_percept=None):
+        returned.append(original(self, stim, t_percept=t_percept))
+        return returned[-1]
+
+    monkeypatch.setattr(ScoreboardSpatial, '_predict_response', spy)
+    model = Model(spatial, InputTemporal()).build()
+    model.predict_percept(composite_stim())
+    seen = model.temporal.seen
+    npt.assert_equal(isinstance(seen, Percept), False)
+    # Spatial data are passed on without a copy, flat space x time:
+    npt.assert_equal(seen.data is returned[0].data, True)
+    npt.assert_equal(seen.data.shape, (spatial.grid.x.size,
+                                       seen.time.size))
+
+
+def test_Model_ignores_response_metadata(monkeypatch):
+    # The encoder frame clock sets output times and 'peak' intervals, so it
+    # must not depend on metadata:
+    implant = ArgusI()
+    vid = VideoStimulus(np.random.default_rng(0).random((4, 4, 6)),
+                        metadata={'fps': 29.97})
+    stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20).encode(vid)
+    model = Model(ScoreboardSpatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                    step=1), FadingTemporal(tau=100)).build()
+    ref = model.predict_percept(stim)
+    original = ScoreboardSpatial._predict_response
+
+    def strip(self, stim, t_percept=None):
+        return replace(original(self, stim, t_percept=t_percept),
+                       metadata=None)
+
+    monkeypatch.setattr(ScoreboardSpatial, '_predict_response', strip)
+    got = model.predict_percept(stim)
+    npt.assert_equal(got.data.shape[-1], 6)
+    npt.assert_array_equal(got.data, ref.data)
+    npt.assert_array_equal(got.time, ref.time)
+    npt.assert_array_equal(got.metadata['source_frame_time'],
+                           ref.metadata['source_frame_time'])
+
+
+@pytest.mark.parametrize('metadata', [
+    None,
+    {},
+    # Metadata that would imply another clock:
+    {'encoder': {'frame_time': np.zeros(1), 'frame_dur': 500.0},
+     'stim': None, 'source_frame_time': np.zeros(1)},
+])
+def test_TemporalModel_ignores_percept_metadata(metadata):
+    implant = ArgusI()
+    vid = VideoStimulus(np.random.default_rng(0).random((4, 4, 6)),
+                        metadata={'fps': 29.97})
+    stim = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20).encode(vid)
+    spatial = ScoreboardSpatial(implant, xrange=(-2, 2), yrange=(-2, 2),
+                                step=1)
+    temporal = FadingTemporal(tau=100)
+    percept = spatial.predict_percept(stim)
+    ref = temporal.predict_percept(percept)
+    # One frame per video frame, not the 20 ms default:
+    npt.assert_equal(ref.data.shape[-1], 6)
+    percept._internal['metadata'] = metadata
+    got = temporal.predict_percept(percept)
+    npt.assert_array_equal(got.data, ref.data)
+    npt.assert_array_equal(got.time, ref.time)
+    npt.assert_array_equal(got.metadata['source_frame_time'],
+                           ref.metadata['source_frame_time'])
+
+
+def test_Model_n_gray_precedes_temporal_stage():
+    grid = {'xrange': (-3, 3), 'yrange': (-2, 2), 'step': 0.5}
+    plain = Model(ScoreboardSpatial(ArgusI(), **grid),
+                  InputTemporal()).build()
+    plain.predict_percept(composite_stim())
+    npt.assert_equal(np.unique(plain.temporal.seen.data).size > 2, True)
+    gray = Model(ScoreboardSpatial(ArgusI(), n_gray=2, **grid),
+                 InputTemporal()).build()
+    # k-means initialization draws from NumPy's global RNG:
+    np.random.seed(42)
+    gray.predict_percept(composite_stim())
+    npt.assert_equal(np.unique(gray.temporal.seen.data).size <= 2, True)
 
 
 def test_Model_units_follow_their_component():

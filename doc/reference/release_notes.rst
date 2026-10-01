@@ -13,6 +13,10 @@ Highlights
 API changes and improvements
 ----------------------------
 
+* ``percept.metadata['stim']`` of composite models now stores the prepared
+  stimulus directly, and metadata no longer affects model timing
+  (:pull:`936`).
+
 Bug fixes
 ---------
 
