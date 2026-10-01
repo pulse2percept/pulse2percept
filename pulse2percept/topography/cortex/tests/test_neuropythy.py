@@ -574,3 +574,9 @@ def test_fsaverage_scoreboard(fsaverage):
     percept = model.predict_percept({e: 1 for e in implant.electrode_names})
     npt.assert_almost_equal(np.sum(percept.data), 20197.44, decimal=1)
     npt.assert_almost_equal(np.max(percept.data), 86.2064, decimal=1)
+    # Torch execution matches Cython on the real 3D map:
+    import torch
+    resp = model.spatial._predict_tensor(
+        torch.ones((implant.n_electrodes, 1)), np.zeros(1))
+    npt.assert_allclose(resp.data.numpy(), percept.data.reshape((-1, 1)),
+                        rtol=1e-6, atol=1e-6 * np.max(percept.data))

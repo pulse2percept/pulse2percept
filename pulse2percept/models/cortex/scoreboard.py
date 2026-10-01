@@ -225,10 +225,7 @@ class ScoreboardSpatial(CortexSpatial):
             # Quantization is discrete and has no exact gradient:
             raise NotImplementedError("Tensor prediction does not support "
                                       "n_gray; set n_gray=None.")
-        if self.visual_field_map.ndim != 2:
-            raise NotImplementedError("Tensor prediction requires a 2D "
-                                      "visual_field_map.")
-        x_el, y_el, _ = self._electrode_coords(
+        x_el, y_el, z_el = self._electrode_coords(
             self.implant.electrode_array, None,
             electrodes=self.implant.electrode_names)
         rho = np.float32(self.rho)
@@ -241,6 +238,11 @@ class ScoreboardSpatial(CortexSpatial):
             dx = x_grid - x_el
             dy = y_grid - y_el
             r2 = dx * dx + dy * dy
+            if self.visual_field_map.ndim == 3:
+                # A 2D map ignores electrode z; a 3D one adds depth, as in
+                # `fast_scoreboard_3d`:
+                dz = self.grid[region].z.reshape((-1, 1)) - z_el
+                r2 = r2 + dz * dz
             weights = np.exp(-r2 / (np.float32(2) * rho * rho))
             # Drops pairs beyond the cutoff and unmapped (NaN) grid points:
             drop = ~(r2 <= cutoff_r2)
