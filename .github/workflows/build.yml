@@ -24,10 +24,10 @@ jobs:
         include:
           - os: ubuntu-latest
             python-version: "3.11"
-            torch: "==2.4.1"
+            torch: "==2.7.0"
           - os: macos-latest
             python-version: "3.11"
-            torch: "==2.4.1"
+            torch: "==2.7.0"
 
     # Force bash on all OSes (avoids PowerShell var-expansion issues on Windows)
     defaults:

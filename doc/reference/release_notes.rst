@@ -12,7 +12,7 @@ Highlights
 
 * ``ScoreboardModel`` supports differentiable Torch execution from electrode
   waveforms through ``ScoreboardSpatial`` and ``FadingTemporal``. PyTorch
-  (>= 2.4.1) is now a required dependency; Intel Macs are no longer supported
+  (>= 2.7.0) is now a required dependency; Intel Macs are no longer supported
   (:pull:`937`).
 
 API changes and improvements
