@@ -382,6 +382,26 @@ def test_TemporalModel_reduce_fallback():
     npt.assert_equal(FadingTemporal().reduce, 'peak')
 
 
+@pytest.mark.parametrize('model_cls', (FadingTemporal, AlphaTemporal,
+                                       Nanduri2012Temporal))
+def test_TemporalModel_keeps_silent_rows(model_cls):
+    # Compression drops all-zero rows internally; the output keeps them:
+    data = np.zeros((4, 4))
+    data[1] = [-20, 20, 0, 0]
+    data[3] = [0, -40, 40, 0]
+    time = [0, 1, 2, 5]
+    t_percept = [1, 2, 3, 5]
+    model = model_cls().build()
+    percept = model.predict_percept(Stimulus(data, time=time),
+                                    t_percept=t_percept)
+    npt.assert_equal(percept.data.shape, (4, 1, 4))
+    npt.assert_equal(percept.data[[0, 2]], 0)
+    active = model.predict_percept(Stimulus(data[[1, 3]], time=time),
+                                   t_percept=t_percept)
+    npt.assert_equal(np.all(np.any(active.data != 0, axis=-1)), True)
+    npt.assert_array_equal(percept.data[[1, 3]], active.data)
+
+
 def test_TemporalModel_blank_percept_warning():
     # FadingTemporal is driven by cathodic (negative) current, so an
     # all-positive stimulus (e.g., an unencoded grayscale image) gives zero:

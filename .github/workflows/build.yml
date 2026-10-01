@@ -64,17 +64,18 @@ jobs:
           python -m pip install flake8
           flake8 pulse2percept --ignore N802,N806,W504 --select W503,W605 --count --show-source --statistics
 
+      # Satisfy the torch dependency with CPU-only wheels; PyPI's Linux wheels
+      # pull in CUDA. Windows/macOS PyPI wheels are CPU-only already.
+      - name: Install PyTorch (Linux, CPU-only)
+        if: runner.os == 'Linux'
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
       # ---- Install package (editable) with dev extras ----
       # Use --no-build-isolation so Cython uses the preinstalled NumPy headers.
       - name: Install package (editable + dev extras)
         run: |
           python -m pip install -e ".[dev]" --no-build-isolation
           python -c "import numpy, pulse2percept as p2p; print('Runtime NumPy', numpy.__version__); print('p2p version:', getattr(p2p, '__version__', 'unknown'))"
-
-      # Torch is optional; Linux runs its tests with CPU-only wheels:
-      - name: Install PyTorch (Linux)
-        if: runner.os == 'Linux'
-        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       # ---- Log env ----
       - name: Log environment info

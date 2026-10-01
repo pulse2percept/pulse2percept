@@ -1632,6 +1632,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             raise ValueError("Cannot calculate temporal response, because "
                              "stimulus/percept does not have a time "
                              "component.")
+        active = None
         if isinstance(stim, _ModelResponse):
             _stim, _space, space = stim, list(stim.shape), stim.space
             clock = stim.frame_clock
@@ -1645,6 +1646,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                 if not _stim.is_compressed:
                     _stim.compress()
                 _space = [len(stim.electrodes), 1]
+                # Compression drops all-zero rows; mark the kept ones so the
+                # output keeps every input row:
+                kept = set(_stim.electrodes)
+                active = np.array([e in kept for e in stim.electrodes])
                 clock = _encoder_clock(stim)
             else:
                 _space = [len(stim.ydva), len(stim.xdva)]
@@ -1691,14 +1696,19 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         elif _stim.data.size == 0:
             # Stimulus was compressed to zero:
             resp = np.zeros((n_space, t_percept.size), dtype=np.float32)
-        elif self._reduces_intervals:
-            # The integrator tracks the exact peak at any output rate:
-            resp = self._predict_temporal(_stim, t_percept, reduce)
-            self._warn_if_blank(_stim, resp)
         else:
-            # Calculate the Stimulus at requested time points:
-            resp = self._predict_temporal(_stim, t_percept)
+            if self._reduces_intervals:
+                # The integrator tracks the exact peak at any output rate:
+                resp = self._predict_temporal(_stim, t_percept, reduce)
+            else:
+                # Calculate the Stimulus at requested time points:
+                resp = self._predict_temporal(_stim, t_percept)
             self._warn_if_blank(_stim, resp)
+            if active is not None and not active.all():
+                # Silent rows produce zero brightness:
+                full = np.zeros((n_space, t_percept.size), dtype=resp.dtype)
+                full[active] = resp.reshape((-1, t_percept.size))
+                resp = full
         resp = resp.reshape((n_space, t_percept.size))
         if sub_idx is not None:
             # Preserve pulse-driven peaks rather than averaging them over gaps.
@@ -2066,8 +2076,7 @@ class Model(Frozen, PrettyPrint):
                                       "spatial and a temporal model.")
         if not _is_tensor(waveform):
             raise TypeError(f"'waveform' must be a torch.Tensor, not "
-                            f"{type(waveform)}. Install PyTorch with "
-                            f"`pip install pulse2percept[torch]`.")
+                            f"{type(waveform)}.")
         if not waveform.is_floating_point():
             raise TypeError(f"'waveform' must have a floating-point dtype, "
                             f"not {waveform.dtype}.")

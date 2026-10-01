@@ -2,6 +2,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+import torch
 
 from pulse2percept.implants.retina import ArgusI
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
@@ -9,8 +10,6 @@ from pulse2percept.models.base import _ModelResponse
 from pulse2percept.models.retina import ScoreboardSpatial, Thompson2003Spatial
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.units import ms
-
-torch = pytest.importorskip('torch')
 
 # float32 tolerances: accumulation order differs from the Cython loops. ATOL
 # covers cancellation in mixed-polarity sums of ~30 uA terms.
@@ -22,16 +21,12 @@ TIME = np.array([0, 0.3, 0.301, 0.302, 0.75, 1.2, 1.2013, 2.0, 9.0, 23.0,
                  31.0, 47.5, 52.0])
 
 
-def _waveform(n_el, silent=True, seed=42):
-    """Return mixed-polarity amplitudes (uA) with zero samples.
-
-    ``silent`` also zeroes every fourth electrode.
-    """
+def _waveform(n_el, seed=42):
+    """Return mixed-polarity amplitudes (uA) with silent electrodes/samples."""
     rng = np.random.default_rng(seed)
     wf = rng.normal(0, 30, (n_el, TIME.size))
     wf[:, [2, 7, -1]] = 0
-    if silent:
-        wf[::4] = 0
+    wf[::4] = 0
     return wf
 
 
@@ -73,8 +68,7 @@ def test_ScoreboardSpatial_tensor_parity(params):
 @pytest.mark.parametrize('t_percept', [None, [0.3, 0.305, 1.0, 2.0, 50.0]])
 def test_FadingTemporal_tensor_parity(reduce, t_percept):
     temporal = FadingTemporal(tau=2, reduce=reduce, thresh_percept=0.1)
-    # Temporal-only prediction on a Stimulus requires no all-zero rows:
-    wf = _waveform(8, silent=False)
+    wf = _waveform(8)
     expected = temporal.predict_percept(Stimulus(wf, time=TIME),
                                         t_percept=t_percept)
     resp = temporal._predict_response(
@@ -83,6 +77,7 @@ def test_FadingTemporal_tensor_parity(reduce, t_percept):
     assert isinstance(resp.data, torch.Tensor)
     npt.assert_allclose(resp.time, expected.time)
     assert np.any(expected.data > 0)
+    assert torch.all(resp.data[::4] == 0)
     npt.assert_allclose(resp.data.numpy(),
                         expected.data.reshape(resp.data.shape),
                         rtol=RTOL, atol=ATOL)

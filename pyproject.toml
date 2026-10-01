@@ -48,6 +48,7 @@ dependencies = [
     "matplotlib>=3.9",
     "imageio-ffmpeg>=0.4",
     "pandas>=2.2.2",
+    "torch>=2.2",
 ]
 
 [project.optional-dependencies]
@@ -64,11 +65,6 @@ dev = [
 benchmark = [
     "pytest-benchmark>=4",
 ]
-# Differentiable (Torch tensor) model execution:
-torch = [
-    "torch>=2.0",
-]
-
 [tool.coverage.run]
 # Measure coverage of the library, not of the test suite itself: test modules
 # that are skipped (e.g. because an optional dataset isn't available) would

@@ -10,6 +10,12 @@ v0.12.0 Torch (unreleased)
 Highlights
 ----------
 
+* First tensor-native model execution path for differentiable prosthesis
+  simulation: gradients propagate from the percept back to a Torch electrode
+  waveform through retinal ``ScoreboardSpatial`` and ``FadingTemporal``.
+  Other models are not yet supported. PyTorch (>= 2.2) is now a required dependency
+  (:pull:`XXX`).
+
 API changes and improvements
 ----------------------------
 
@@ -19,6 +25,9 @@ API changes and improvements
 
 Bug fixes
 ---------
+
+* Temporal models applied directly to a ``Stimulus`` no longer fail when an
+  electrode is silent; its row is kept and stays zero (:pull:`XXX`).
 
 
 v0.11.0 Foundations (2026-09-30)
