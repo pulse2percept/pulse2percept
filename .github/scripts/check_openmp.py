@@ -62,10 +62,12 @@ libc = ctypes.CDLL(None)
 libc._dyld_get_image_name.restype = ctypes.c_char_p
 images = [libc._dyld_get_image_name(i).decode()
           for i in range(libc._dyld_image_count())]
-omp = {os.path.realpath(p) for p in images
-       if os.path.basename(p).startswith("libomp")}
+# Count loaded images, not distinct files: one file loaded twice is still two
+# runtimes.
+omp = [p for p in images if os.path.basename(p).startswith("libomp")]
 torch_lib = os.path.realpath(os.path.join(os.path.dirname(torch.__file__),
                                           "lib"))
-if len(omp) != 1 or os.path.dirname(omp.pop()) != torch_lib:
-    fail(f"expected only torch's libomp in {torch_lib}, found {sorted(omp)}")
+if (len(omp) != 1 or
+        os.path.dirname(os.path.realpath(omp[0])) != torch_lib):
+    fail(f"expected only torch's libomp in {torch_lib}, found {omp}")
 print("check_openmp: one OpenMP runtime (torch's)")
