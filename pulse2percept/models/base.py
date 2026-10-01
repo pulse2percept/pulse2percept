@@ -2053,13 +2053,15 @@ class Model(Frozen, PrettyPrint):
 
         Bypasses stimulus preparation: ``waveform`` is the realized drive.
         Gradients flow to ``waveform``; ``time`` and ``t_percept`` are fixed.
+        Requires a current-driven implant.
 
         Parameters
         ----------
         waveform : torch.Tensor
-            Floating-point amplitudes in ``stimulus_unit``, shape
-            ``(n_electrodes, T)``, rows in ``implant.electrode_names`` order.
-            Each sample holds until the next, as in ``Stimulus``.
+            float32 or float64 current amplitudes in uA (negative is
+            cathodic), shape ``(n_electrodes, T)``, rows in
+            ``implant.electrode_names`` order. Each sample holds until the
+            next, as in ``Stimulus``.
         time : array-like
             Strictly increasing sample times in ``time_unit``, shape ``(T,)``.
         t_percept : float or array-like, optional
@@ -2074,6 +2076,13 @@ class Model(Frozen, PrettyPrint):
         if not (self.has_space and self.has_time):
             raise NotImplementedError("Tensor prediction requires both a "
                                       "spatial and a temporal model.")
+        unit = self.implant.stimulus_unit
+        if unit.dimension != uA.dimension:
+            # Optical drive has no cathodic/anodic polarity to rectify:
+            raise NotImplementedError(
+                f"Tensor prediction requires an implant driven by electrical "
+                f"current, but {type(self.implant).__name__} is driven by "
+                f"{_describe_unit(unit)}.")
         if not _is_tensor(waveform):
             raise TypeError(f"'waveform' must be a torch.Tensor, not "
                             f"{type(waveform)}.")

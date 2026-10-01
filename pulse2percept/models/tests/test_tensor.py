@@ -4,7 +4,8 @@ import numpy.testing as npt
 import pytest
 import torch
 
-from pulse2percept.implants.retina import AlphaAMS, ArgusI
+from pulse2percept.implants import GridImplant
+from pulse2percept.implants.retina import ArgusI, PRIMAPivotal
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
 from pulse2percept.models.base import _ModelResponse
 from pulse2percept.models.retina import ScoreboardSpatial, Thompson2003Spatial
@@ -64,10 +65,10 @@ def test_ScoreboardSpatial_tensor_parity(params):
                         rtol=RTOL, atol=ATOL)
 
 
-def test_ScoreboardSpatial_tensor_parity_AlphaAMS():
+def test_ScoreboardSpatial_tensor_parity_large_grid():
     # ~100 of 1600 electrodes contribute to each grid point:
-    spatial = ScoreboardSpatial(AlphaAMS(), rho=65, xrange=(-5, 5),
-                                yrange=(-5, 5), step=0.25,
+    spatial = ScoreboardSpatial(GridImplant((40, 40), 70), rho=65,
+                                xrange=(-5, 5), yrange=(-5, 5), step=0.25,
                                 thresh_percept=5).build()
     wf = _waveform(spatial.implant.n_electrodes)
     expected = spatial.predict_percept(
@@ -197,4 +198,13 @@ def test_Model_tensor_errors():
 def test_Model_tensor_unsupported(model):
     waveform = torch.zeros((16, TIME.size))
     with pytest.raises(NotImplementedError):
+        model._predict_tensor(waveform, TIME)
+
+
+def test_Model_tensor_requires_electrical_implant():
+    # A photovoltaic implant is driven by irradiance, not cathodic current:
+    implant = PRIMAPivotal()
+    model = Model(ScoreboardSpatial(implant, rho=50), FadingTemporal())
+    waveform = torch.zeros((implant.n_electrodes, TIME.size))
+    with pytest.raises(NotImplementedError, match='electrical current'):
         model._predict_tensor(waveform, TIME)

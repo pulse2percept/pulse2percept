@@ -33,65 +33,22 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@1828c10ab37f080699c7b81cea34097c684a7074 # v4.2.0
         env:
-          # macOS: use conda-forge libomp rather than Homebrew so the
-          # deployment target does not depend on the GitHub runner image.
-          CIBW_BEFORE_ALL_MACOS: |
-            set -eux
-            MICROMAMBA_VERSION=2.9.0
-            curl --fail --location --silent --show-error \
-              --retry 5 --retry-all-errors \
-              -o micromamba.tar.bz2 \
-              "https://micro.mamba.pm/api/micromamba/osx-arm64/${MICROMAMBA_VERSION}"
-            tar -xvjf micromamba.tar.bz2 bin/micromamba
-            rm micromamba.tar.bz2
+          # macOS: the extensions link torch's bundled libomp, which the
+          # isolated build installs from pyproject.toml (see setup.py).
+          CIBW_BEFORE_BUILD_MACOS: "python -m pip install --upgrade pip delocate"
 
-            for arch in osx-arm64 osx-64; do
-              ./bin/micromamba create -y -p "/tmp/omp-${arch}" \
-                --platform "${arch}" -c conda-forge llvm-openmp
-            done
+          # macOS 11 is the minimum for Apple silicon.
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=11.0"
 
-            mkdir -p /tmp/omp/lib /tmp/omp/include
-            cp -R /tmp/omp-osx-arm64/include/. /tmp/omp/include/
-            lipo -create /tmp/omp-osx-arm64/lib/libomp.dylib \
-                         /tmp/omp-osx-64/lib/libomp.dylib \
-                 -output /tmp/omp/lib/libomp.dylib
-
-            # delocate needs a resolvable install name before vendoring.
-            install_name_tool -id /tmp/omp/lib/libomp.dylib \
-              /tmp/omp/lib/libomp.dylib
-            lipo -info /tmp/omp/lib/libomp.dylib
-            otool -D /tmp/omp/lib/libomp.dylib
-
-          CIBW_BEFORE_BUILD_MACOS: |
-            set -eux
-            : "${OMP_PREFIX:?not set - check CIBW_ENVIRONMENT_MACOS}"
-            : "${MACOSX_DEPLOYMENT_TARGET:?not set - check CIBW_ENVIRONMENT_MACOS}"
-
-            ls -l "${OMP_PREFIX}/include/omp.h"
-
-            MINOS=$(otool -l "${OMP_PREFIX}/lib/libomp.dylib" \
-                    | awk '/LC_BUILD_VERSION/{f=1} f && /minos/{print $2; exit}')
-            echo "libomp minos='${MINOS}' deployment target=${MACOSX_DEPLOYMENT_TARGET}"
-
-            if [ -z "${MINOS}" ]; then
-              echo "note: no LC_BUILD_VERSION found, skipping minimum-OS check"
-            elif [ "${MINOS%%.*}" -gt "${MACOSX_DEPLOYMENT_TARGET%%.*}" ]; then
-              echo "ERROR: libomp needs macOS ${MINOS}, wheels target ${MACOSX_DEPLOYMENT_TARGET}."
-              exit 1
-            fi
-
-            python -m pip install --upgrade \
-              pip setuptools wheel cython delocate "numpy>=2.0"
-
-          # Keep this as a folded scalar: cibuildwheel otherwise retains only
-          # the first assignment. macOS 11 is the minimum for Apple silicon.
-          CIBW_ENVIRONMENT_MACOS: >-
-            OMP_PREFIX=/tmp/omp
-            MACOSX_DEPLOYMENT_TARGET=11.0
-
+          # Do not vendor libomp: at runtime it must resolve to torch's copy,
+          # or two OpenMP runtimes abort the process.
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
             delocate-listdeps --all --depending {wheel} &&
-            delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}
+            delocate-wheel --require-archs {delocate_archs} --exclude libomp
+            -w {dest_dir} -v {wheel}
+
+          # The installed wheel must share torch's OpenMP runtime:
+          CIBW_TEST_COMMAND_MACOS: "python {project}/.github/scripts/check_openmp.py"
 
           # Linux
           CIBW_ENVIRONMENT_LINUX: "CFLAGS='-fopenmp'"

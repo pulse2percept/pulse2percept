@@ -130,8 +130,10 @@ required.
 On Windows, install `Build Tools for Visual Studio`_ and select
 ``Desktop development with C++``.
 
-On macOS, source builds may require OpenMP support. If the build fails while
-linking OpenMP, you can build without OpenMP acceleration:
+On macOS, the Cython extensions use PyTorch's bundled OpenMP runtime, because
+a second OpenMP runtime in the same process aborts it. The build installs
+PyTorch automatically; with ``--no-build-isolation``, install PyTorch first.
+To build without OpenMP acceleration instead:
 
 .. code-block:: bash
 

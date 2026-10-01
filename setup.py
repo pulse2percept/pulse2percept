@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import sys
 import platform
@@ -76,6 +77,19 @@ def _find_pyx_modules(base_dir, exclude_dirs=None):
     return extensions
 
 
+def _torch_openmp():
+    """Return the include and lib directories of torch's bundled OpenMP."""
+    # Locate without importing: importing torch is slow and not needed.
+    spec = importlib.util.find_spec("torch")
+    if spec is None or not spec.submodule_search_locations:
+        raise RuntimeError("torch is not installed")
+    torch_dir = spec.submodule_search_locations[0]
+    inc, lib = (os.path.join(torch_dir, d) for d in ("include", "lib"))
+    if not os.path.isfile(os.path.join(lib, "libomp.dylib")):
+        raise RuntimeError(f"no libomp.dylib in {lib}")
+    return inc, lib
+
+
 class OpenMPBuildExt(build_ext):
     """Enable OpenMP when available; degrade gracefully otherwise."""
 
@@ -100,19 +114,21 @@ class OpenMPBuildExt(build_ext):
 
             try:
                 if sys.platform == "darwin":
-                    omp_prefix = os.environ.get("OMP_PREFIX")
-                    if omp_prefix:
-                        omp_inc = os.path.join(omp_prefix, "include")
-                        omp_lib = os.path.join(omp_prefix, "lib")
-                        if omp_inc and os.path.isdir(omp_inc):
-                            ext.include_dirs.append(omp_inc)
-                        ext.extra_compile_args += ["-Xpreprocessor", "-fopenmp"]
-                        if omp_lib and os.path.isdir(omp_lib):
-                            ext.extra_link_args += [f"-L{omp_lib}"]
-                        ext.extra_link_args += ["-lomp"]
-                    else:
-                        ext.extra_compile_args += ["-Xpreprocessor", "-fopenmp"]
-                        ext.extra_link_args += ["-lomp"]
+                    # torch bundles libomp, and a second libomp in the same
+                    # process aborts at the first parallel region (OMP Error
+                    # #15). Link torch's copy instead of shipping one:
+                    omp_inc, omp_lib = _torch_openmp()
+                    # `@rpath/libomp.dylib` resolves to <site-packages>/torch/
+                    # lib when installed, else to the build-time torch
+                    # (editable installs with --no-build-isolation):
+                    up = "../" * ext.name.count(".")
+                    ext.include_dirs.append(omp_inc)
+                    ext.extra_compile_args += ["-Xpreprocessor", "-fopenmp"]
+                    ext.extra_link_args += [
+                        f"-L{omp_lib}", "-lomp",
+                        f"-Wl,-rpath,@loader_path/{up}torch/lib",
+                        f"-Wl,-rpath,{omp_lib}",
+                    ]
 
                 elif os.name == "posix":  # Linux
                     ext.extra_compile_args += ["-fopenmp"]

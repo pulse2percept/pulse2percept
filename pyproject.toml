@@ -13,6 +13,8 @@ requires = [
   # anyone who had NumPy 2 installed, now the default nearly everywhere.
   # oldest-supported-numpy is deprecated and documents this as the migration.
   "numpy>=2.0",
+  # macOS extensions link torch's bundled OpenMP runtime (see setup.py).
+  "torch>=2.4.1; sys_platform == 'darwin'",
 ]
 build-backend = "setuptools.build_meta"
 

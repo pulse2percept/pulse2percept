@@ -10,11 +10,10 @@ v0.12.0 Torch (unreleased)
 Highlights
 ----------
 
-* First tensor-native model execution path for differentiable prosthesis
-  simulation: gradients propagate from the percept back to a Torch electrode
-  waveform through retinal ``ScoreboardSpatial`` and ``FadingTemporal``.
-  Other models are not yet supported. PyTorch (>= 2.4.1) is now a required
-  dependency, so Intel Macs are no longer supported (:pull:`937`).
+* ``ScoreboardModel`` supports differentiable Torch execution from electrode
+  waveforms through ``ScoreboardSpatial`` and ``FadingTemporal``. PyTorch
+  (>= 2.4.1) is now a required dependency; Intel Macs are no longer supported
+  (:pull:`937`).
 
 API changes and improvements
 ----------------------------
