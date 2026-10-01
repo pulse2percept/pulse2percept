@@ -5,7 +5,9 @@ torch bundles libomp. A second libomp in the same process aborts at the
 first parallel region ("OMP: Error #15"), so pulse2percept links torch's copy
 (see setup.py). Checks:
 
-1. The extensions were built with OpenMP, i.e. link ``@rpath/libomp.dylib``.
+1. The extensions link only system libraries and ``@rpath/libomp.dylib``
+   (the wheel repair ignores unresolved dependencies, so nothing else may
+   be missing), and were built with OpenMP.
 2. An OpenMP kernel runs after torch has used its own thread pool.
 3. Exactly one libomp is loaded, and it is torch's.
 """
@@ -14,24 +16,42 @@ import ctypes
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import numpy as np
 import torch
 
-import pulse2percept.models._temporal as ext
+import pulse2percept
 from pulse2percept.models import FadingTemporal
 from pulse2percept.stimuli import Stimulus
+
+OPENMP = "@rpath/libomp.dylib"
+SYSTEM = ("/usr/lib/", "/System/Library/")
 
 
 def fail(msg):
     sys.exit(f"check_openmp: {msg}")
 
 
-deps = subprocess.run(["otool", "-L", ext.__file__], capture_output=True,
-                      text=True, check=True).stdout
-if "@rpath/libomp.dylib" not in deps:
-    fail(f"{ext.__file__} does not link @rpath/libomp.dylib; was it built "
-         f"without OpenMP?\n{deps}")
+def dependencies(path):
+    """Return the install names a Mach-O file links, per ``otool -L``."""
+    out = subprocess.run(["otool", "-L", str(path)], capture_output=True,
+                         text=True, check=True).stdout
+    return {line.strip().split(" (")[0] for line in out.splitlines()[1:]}
+
+
+exts = sorted(Path(pulse2percept.__file__).parent.rglob("*.so"))
+if not exts:
+    fail("no compiled extensions found")
+for path in exts:
+    extra = {d for d in dependencies(path)
+             if d != OPENMP and not d.startswith(SYSTEM)}
+    if extra:
+        fail(f"{path.name} links non-system libraries {sorted(extra)}")
+temporal = [p for p in exts if p.name.startswith("_temporal.")]
+if not temporal or OPENMP not in dependencies(temporal[0]):
+    fail(f"models/_temporal does not link {OPENMP}; was it built without "
+         f"OpenMP?")
 
 # Initialize torch's OpenMP first, then enter a pulse2percept parallel region:
 torch.ones(512, 512) @ torch.ones(512, 512)

@@ -41,11 +41,13 @@ jobs:
           CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=11.0"
 
           # Do not vendor libomp: at runtime it must resolve to torch's copy,
-          # or two OpenMP runtimes abort the process.
+          # or two OpenMP runtimes abort the process. The build-time torch is
+          # gone by now, so libomp cannot be resolved here; the test below
+          # checks it is the only non-system dependency.
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
             delocate-listdeps --all --depending {wheel} &&
             delocate-wheel --require-archs {delocate_archs} --exclude libomp
-            -w {dest_dir} -v {wheel}
+            --ignore-missing-dependencies -w {dest_dir} -v {wheel}
 
           # The installed wheel must share torch's OpenMP runtime:
           CIBW_TEST_COMMAND_MACOS: "python {project}/.github/scripts/check_openmp.py"
