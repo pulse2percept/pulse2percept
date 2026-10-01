@@ -2,6 +2,7 @@
    :py:class:`~pulse2percept.models.Model`,
    :py:class:`~pulse2percept.models.SpatialModel`,
    :py:class:`~pulse2percept.models.TemporalModel`"""
+import sys
 import warnings
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
@@ -268,6 +269,12 @@ def _delivered(stim):
     if stim is None or not stim._has_spatial_view:
         return stim
     return Stimulus(stim)
+
+
+def _is_tensor(data):
+    """Return whether ``data`` is a Torch tensor, without importing Torch."""
+    torch = sys.modules.get('torch')
+    return torch is not None and isinstance(data, torch.Tensor)
 
 
 def _check_implant(implant):
@@ -1400,6 +1407,17 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         return self._spatial_response(resp, t_percept, {'stim': stim},
                                       frame_clock=clock)
 
+    def _predict_tensor(self, waveform, time):
+        """Return the flat spatial response to a Torch waveform.
+
+        ``waveform`` has shape ``(n_electrodes, T)`` in
+        ``implant.electrode_names`` order; ``time`` is in ``time_unit``. The
+        returned ``_ModelResponse.data`` is a Torch tensor that keeps the
+        autograd graph.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support Torch tensor input.")
+
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
              figsize=None, show_implant=False):
         """Plot the model
@@ -1548,6 +1566,15 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
+    def _predict_temporal_tensor(self, stim, t_percept, reduce='last'):
+        """Compute the temporal response to a tensor-backed spatial response.
+
+        Same contract as ``_predict_temporal``, but ``stim.data`` and the
+        returned response are Torch tensors that keep the autograd graph.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support Torch tensor input.")
+
     def predict_percept(self, stim, t_percept=None):
         """Predict the temporal response.
 
@@ -1659,7 +1686,9 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         if not np.all(within_atol):
             raise ValueError(f"t={t_percept[np.logical_not(within_atol)]} are "
                              f"not multiples of dt={self.dt:.2e}.")
-        if _stim.data.size == 0:
+        if _is_tensor(_stim.data):
+            resp = self._predict_temporal_tensor(_stim, t_percept, reduce)
+        elif _stim.data.size == 0:
             # Stimulus was compressed to zero:
             resp = np.zeros((n_space, t_percept.size), dtype=np.float32)
         elif self._reduces_intervals:
@@ -2008,6 +2037,55 @@ class Model(Frozen, PrettyPrint):
             resp = self.temporal._predict_response(stim, t_percept=t_percept)
         # Only a temporal-only model has no grid; it reuses a Percept input's:
         return _to_percept(resp, inherit_space_from=stim)
+
+    def _predict_tensor(self, waveform, time, t_percept=None):
+        """Return the flat response to a Torch electrical waveform.
+
+        Bypasses stimulus preparation: ``waveform`` is the realized drive.
+        Gradients flow to ``waveform``; ``time`` and ``t_percept`` are fixed.
+
+        Parameters
+        ----------
+        waveform : torch.Tensor
+            Floating-point amplitudes in ``stimulus_unit``, shape
+            ``(n_electrodes, T)``, rows in ``implant.electrode_names`` order.
+            Each sample holds until the next, as in ``Stimulus``.
+        time : array-like
+            Strictly increasing sample times in ``time_unit``, shape ``(T,)``.
+        t_percept : float or array-like, optional
+            Output times, as in ``predict_percept``.
+
+        Returns
+        -------
+        _ModelResponse
+            ``data`` is a Torch tensor of shape ``(n_grid_points, n_out)``.
+        """
+        self._build_stale()
+        if not (self.has_space and self.has_time):
+            raise NotImplementedError("Tensor prediction requires both a "
+                                      "spatial and a temporal model.")
+        if not _is_tensor(waveform):
+            raise TypeError(f"'waveform' must be a torch.Tensor, not "
+                            f"{type(waveform)}. Install PyTorch with "
+                            f"`pip install pulse2percept[torch]`.")
+        if not waveform.is_floating_point():
+            raise TypeError(f"'waveform' must have a floating-point dtype, "
+                            f"not {waveform.dtype}.")
+        n_el = self.implant.n_electrodes
+        if waveform.ndim != 2 or waveform.shape[0] != n_el:
+            raise ValueError(f"'waveform' must have shape "
+                             f"(n_electrodes={n_el}, T), not "
+                             f"{tuple(waveform.shape)}.")
+        time = np.asarray(as_value(time, self.spatial.time_unit, 'time'),
+                          dtype=np.float64)
+        if time.shape != (waveform.shape[1],):
+            raise ValueError(f"'time' must have shape ({waveform.shape[1]},) "
+                             f"to match 'waveform', not {time.shape}.")
+        if time.size == 0 or np.any(np.diff(time) <= 0):
+            raise ValueError("'time' must be nonempty and strictly "
+                             "increasing.")
+        resp = self.spatial._predict_tensor(waveform, time)
+        return self.temporal._predict_response(resp, t_percept=t_percept)
 
     @property
     def has_space(self):
