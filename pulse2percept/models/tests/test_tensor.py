@@ -102,6 +102,17 @@ def test_blend_meridian_tensor_parity(meridian, width):
         npt.assert_allclose(blended.numpy(), expected, rtol=RTOL, atol=atol)
 
 
+@pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])
+def test_blend_meridian_tensor_gradcheck(meridian):
+    grid = Grid2D((-1.1, 0.9), (-0.8, 1.2), step=0.2)
+    grid.build(Curcio1990Map())
+    resp = np.random.default_rng(2).normal(0, 1, (grid.x.size, 2))
+    resp = torch.tensor(resp, dtype=torch.float64, requires_grad=True)
+    # Radius 20 > 11 samples, exercises a kernel wider than the axis:
+    assert torch.autograd.gradcheck(
+        lambda r: _blend_meridian(r, grid, meridian, 1.0), (resp,))
+
+
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
 @pytest.mark.parametrize('t_percept', [None, [0.3, 0.305, 1.0, 2.0, 50.0]])
 def test_FadingTemporal_tensor_parity(reduce, t_percept):

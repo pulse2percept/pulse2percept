@@ -423,27 +423,21 @@ def _blend_meridian(resp, grid, meridian, width):
 def _blend_meridian_tensor(resp, dist, axis, width, spacing):
     """Torch counterpart of the ``_blend_meridian`` filter and taper."""
     import torch
-    sigma = width / spacing
-    # SciPy's default support (truncate=4); its taps are the filtered
-    # impulse, symmetric:
-    radius = int(4.0 * sigma + 0.5)
-    impulse = np.zeros(2 * radius + 1)
-    impulse[radius] = 1
-    kernel = gaussian_filter1d(impulse, sigma, mode='constant')
-    kernel = torch.as_tensor(kernel, dtype=resp.dtype,
-                             device=resp.device).reshape((1, 1, -1))
+    work = resp.reshape(dist.shape + (-1,))
+    # Dense (n, n) operator: column j is SciPy's filtered impulse at j, so
+    # truncation and 'nearest' edges match `gaussian_filter1d` exactly.
+    # Replaces #938's conv1d on purpose: O(n^2) per row, but at the axis
+    # lengths profiled (121-601 samples) it was faster and used less memory
+    # on CPU than conv1d's workspace or sliced accumulation's backward.
+    n = work.shape[axis]
+    blur = gaussian_filter1d(np.eye(n), width / spacing, axis=0,
+                             mode='nearest')
+    blur = torch.as_tensor(blur, dtype=resp.dtype, device=resp.device)
+    subscripts = 'ij,jxt->ixt' if axis == 0 else 'ij,yjt->yit'
+    blurred = torch.einsum(subscripts, blur, work)
     weight = torch.as_tensor(np.exp(-dist ** 2 / (2.0 * width ** 2)),
                              dtype=resp.dtype, device=resp.device)[..., None]
-    work = resp.reshape(dist.shape + (-1,))
-    # Filtered axis last, as the conv1d length:
-    rows = torch.movedim(work, axis, -1)
-    n = rows.shape[-1]
-    # 'nearest' edges by index clamping, valid for radius > n:
-    pad = torch.arange(-radius, n + radius, device=resp.device).clamp(0, n - 1)
-    blurred = torch.nn.functional.conv1d(
-        rows.reshape((-1, 1, n))[..., pad], kernel).reshape(rows.shape)
-    blurred = torch.movedim(blurred, -1, axis)
-    return (work + weight * (blurred - work)).reshape(resp.shape)
+    return torch.lerp(work, blurred, weight).reshape(resp.shape)
 
 
 def _tissue_map_ndim(model):
