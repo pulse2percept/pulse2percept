@@ -5,8 +5,11 @@ from functools import partial
 from inspect import signature
 import pytest
 import numpy.testing as npt
+import torch
+from scipy.interpolate import RegularGridInterpolator
 from pulse2percept import implants
 from pulse2percept.implants import cortex, retina
+from pulse2percept.implants.base import _bilinear_tensor
 from pulse2percept.units import (DimensionMismatchError, Quantity, deg,
                                  dimensionless, dva, mA, mm, ms, nA, rad, uA,
                                  um, xTh)
@@ -200,6 +203,65 @@ def test_Implant_reshape_stim(rot, gtype, n_frames):
     # Smoke test a large hex grid (old code results in MemoryError):
     implant = PhotovoltaicArray(r=2, spacing=40, rot=rot)
     implant.reshape_stim(samples.logo_bvl())
+
+
+@pytest.mark.parametrize('rot', (0, 30))
+def test_Implant__sample_image_tensor(rot):
+    # A rotated hex grid puts electrodes between pixel centers:
+    implant = Implant(ElectrodeGrid((5, 7), 300, rot=rot, grid_type='hex'))
+    # Out-of-range gray levels are clipped later, by the encoder:
+    img = np.random.default_rng(3).uniform(-0.5, 1.5, (9, 13))
+    expected = implant.reshape_stim(ImageStimulus(img))
+    sampled = implant._sample_image_tensor(
+        torch.tensor(img, dtype=torch.float32))
+    assert sampled.dtype == torch.float32
+    assert sampled.shape == (implant.n_electrodes,)
+    npt.assert_allclose(sampled.numpy(), expected.data.ravel(), atol=1e-6)
+
+
+def test_Implant__sample_image_tensor_orientation():
+    # Row 0 lies at the smallest y (no image flip), column 0 at the smallest x.
+    # E sits 3/4 of the way along x and 1/4 of the way along y:
+    pos = [(-600, -600), (600, -600), (-600, 600), (600, 600), (300, -300)]
+    implant = Implant(ElectrodeArray({n: DiskElectrode(x, y, 0, 100)
+                                      for n, (x, y) in zip('ABCDE', pos)}))
+    img = np.array([[1.0, 2.0], [3.0, 4.0]])
+    sampled = implant._sample_image_tensor(torch.tensor(img))
+    npt.assert_allclose(sampled.numpy(), [1, 2, 3, 4, 2.25])
+    npt.assert_allclose(sampled.numpy(),
+                        implant.reshape_stim(ImageStimulus(img)).data.ravel())
+    with pytest.raises(TypeError, match='torch.Tensor'):
+        implant._sample_image_tensor(img)
+    with pytest.raises(TypeError, match='float32 or float64'):
+        implant._sample_image_tensor(torch.ones((2, 2), dtype=torch.int64))
+    with pytest.raises(ValueError, match='gray image'):
+        implant._sample_image_tensor(torch.ones((2, 2, 3)))
+
+
+def test__bilinear_tensor():
+    img_y, img_x = np.arange(4.0), 10 * np.arange(5.0)
+    img = np.arange(1.0, 21.0).reshape((4, 5))
+    image = torch.tensor(img, requires_grad=True)
+    # One point between rows 1-2 and columns 2-3 depends on those four pixels
+    # only, with the bilinear weights as gradient:
+    out = _bilinear_tensor(image, img_y, img_x, np.array([1.25]),
+                           np.array([26.0]))
+    out.sum().backward()
+    weights = np.zeros_like(img)
+    weights[1:3, 2:4] = [[0.75 * 0.4, 0.75 * 0.6], [0.25 * 0.4, 0.25 * 0.6]]
+    npt.assert_allclose(image.grad.numpy(), weights)
+    npt.assert_allclose(out.item(), np.sum(weights * img))
+    # Grid edges are inside; anything beyond them is 0:
+    y = np.array([0, 3, 1.5, -0.1, 3.1, 1, 1])
+    x = np.array([0, 40, 13, 10, 10, -1, 40.5])
+    out = _bilinear_tensor(image, img_y, img_x, y, x)
+    expected = RegularGridInterpolator((img_y, img_x), img,
+                                       bounds_error=False, fill_value=0)
+    npt.assert_allclose(out.detach().numpy(), expected(np.vstack((y, x)).T))
+    npt.assert_equal(out.detach().numpy()[[0, 1, 3, 4, 5, 6]],
+                     [1, 20, 0, 0, 0, 0])
+    with pytest.raises(ValueError, match='strictly ascending'):
+        _bilinear_tensor(image, np.zeros(4), img_x, y, x)
 
 
 def test_Implant_deactivate():

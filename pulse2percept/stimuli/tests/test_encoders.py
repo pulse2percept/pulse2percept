@@ -4,9 +4,11 @@ from copy import copy, deepcopy
 import numpy as np
 import numpy.testing as npt
 import pytest
+import torch
 from scipy.integrate import trapezoid
 
-from pulse2percept.implants import (CustomRaster, DiskElectrode, GridImplant,
+from pulse2percept.implants import (CustomRaster, DiskElectrode,
+                                    ElectrodeArray, GridImplant, Implant,
                                     SequentialRaster)
 from pulse2percept.implants.retina import ArgusII, PRIMAPivotal
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
@@ -395,6 +397,75 @@ def test_AmplitudeEncoder_big_stim_warning(monkeypatch):
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         AmplitudeEncoder(ArgusII(raster=None), freq=1000).encode(vid)
+
+
+@pytest.mark.parametrize('cathodic_first', (True, False))
+def test_AmplitudeEncoder__encode_tensor_amplitudes(cathodic_first):
+    # Electrodes on the corners of the image sample one pixel each:
+    pos = [(-600, -600), (600, -600), (-600, 600), (600, 600)]
+    implant = Implant(ElectrodeArray({n: DiskElectrode(x, y, 0, 100)
+                                      for n, (x, y) in zip('ABCD', pos)}))
+    encoder = AmplitudeEncoder(implant, amp_range=(10, 50), freq=20,
+                               cathodic_first=cathodic_first)
+    # Black is 10 uA, not silent:
+    waveform, _ = encoder._encode_tensor(torch.tensor([[0, 0.25], [0.5, 1]]))
+    npt.assert_allclose(waveform.abs().amax(dim=1).numpy(), [10, 20, 30, 50])
+    # The pulse template, not `amp_range`, sets the sign:
+    lead = [row[row != 0][0].item() for row in waveform]
+    npt.assert_equal(np.sign(lead), -1 if cathodic_first else 1)
+    # Gray levels are clipped after sampling; clipped pixels get no gradient:
+    image = torch.tensor([[-1.0, 0.25], [0.5, 2.0]], requires_grad=True)
+    waveform, _ = encoder._encode_tensor(image)
+    npt.assert_allclose(waveform.detach().abs().amax(dim=1).numpy(),
+                        [10, 20, 30, 50])
+    waveform.abs().sum().backward()
+    npt.assert_equal(image.grad.numpy() != 0, [[False, True], [True, False]])
+
+
+@pytest.mark.parametrize('make_implant,params,off', [
+    # Sequential raster on a 0.1 ms clock, anodic first, interphase gap:
+    (ArgusII, {'amp_range': (10, 50), 'freq': 60, 'phase_dur': 0.3,
+               'interphase_dur': 0.1, 'cathodic_first': False, 'clock': 0.1,
+               'frame_dur': 100}, ['A1', 'F10']),
+    # Custom pulse, no raster; black electrodes get 0 uA and no pulses:
+    (lambda: GridImplant((3, 4), 400),
+     {'amp_range': (0, 30), 'freq': 130, 'frame_dur': 50,
+      'pulse': BiphasicPulse(1, 0.2, interphase_dur=0.05)}, []),
+])
+def test_AmplitudeEncoder__encode_tensor_parity(make_implant, params, off):
+    implant = make_implant()
+    if off:
+        implant.deactivate(off)
+    img = np.random.default_rng(5).uniform(-0.3, 1.3, (7, 11))
+    encoder = AmplitudeEncoder(implant, **params)
+    expected = implant.prepare_stim(encoder.encode(ImageStimulus(img)))
+    waveform, time = encoder._encode_tensor(
+        torch.tensor(img, dtype=torch.float32))
+    assert waveform.dtype == torch.float32
+    assert waveform.shape == (implant.n_electrodes, time.size)
+    npt.assert_equal(time, expected.time)
+    # Deactivated electrodes keep a zero row:
+    on = np.isin(implant.electrode_names, expected.electrodes)
+    npt.assert_equal(np.count_nonzero(~on), len(off))
+    assert torch.all(waveform[~on] == 0)
+    npt.assert_allclose(waveform[on].numpy(), expected.data, rtol=1e-6,
+                        atol=1e-5)
+    # Several pulses per electrode, some electrodes silent or not:
+    starts = np.diff((waveform.numpy() != 0).astype(int), axis=1) == 1
+    assert starts.sum(axis=1).max() >= 5
+    assert np.any(expected.data != 0, axis=1).sum() > 1
+
+
+def test_AmplitudeEncoder__encode_tensor_errors():
+    img = torch.ones((3, 4))
+    with pytest.raises(NotImplementedError, match='bound to an implant'):
+        AmplitudeEncoder()._encode_tensor(img)
+    with pytest.raises(NotImplementedError, match='in uA'):
+        AmplitudeEncoder(ArgusII(), amp_range=(0 * xTh, 2 * xTh)
+                         )._encode_tensor(img)
+    for params in ({'n_levels': 4}, {'stretch': True}):
+        with pytest.raises(NotImplementedError, match='n_levels'):
+            AmplitudeEncoder(ArgusII(), **params)._encode_tensor(img)
 
 
 def whole_pulses(freq, frame_dur, pulse_dur=0.92):

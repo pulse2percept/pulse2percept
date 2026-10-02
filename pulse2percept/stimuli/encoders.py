@@ -212,10 +212,12 @@ class _EncodedStimulus(Stimulus):
             self._time = self._own(time, np.float64)
         return self._time
 
-    def _render(self):
-        """Expand the schedule into pulse trains."""
-        data = np.zeros((len(self.electrodes), self._ticks.size),
-                        dtype=np.float32)
+    def _waves(self):
+        """Yield ``(rows, frame, wave)`` for every schedule that pulses.
+
+        ``rows`` are the electrodes on the schedule, ``frame`` is the source
+        frame at each time point, and ``wave`` is the unit pulse train.
+        """
         for s, (onset, frame) in enumerate(zip(self._onsets, self._frames)):
             rows = np.flatnonzero(self._sched == s)
             if rows.size == 0 or onset.size == 0:
@@ -225,10 +227,33 @@ class _EncodedStimulus(Stimulus):
             # Which pulse each time point belongs to:
             at = np.searchsorted(onset, self._ticks, side='right') - 1
             np.clip(at, 0, onset.size - 1, out=at)
-            data[rows] = self._amp[rows][:, frame[at]] * wave
+            yield rows, frame[at], wave
+
+    def _render(self):
+        """Expand the schedule into pulse trains."""
+        data = np.zeros((len(self.electrodes), self._ticks.size),
+                        dtype=np.float32)
+        for rows, frame, wave in self._waves():
+            data[rows] = self._amp[rows][:, frame] * wave
         # ``data`` is newly allocated and can be adopted without copying.
         return {'data': _adoptable(data), 'electrodes': self.electrodes,
                 'time': self.time}
+
+    def _render_tensor(self, amp):
+        """Return the ``_render`` waveform with Torch amplitudes ``amp``.
+
+        ``amp`` has the shape of ``self._amp`` and is used only for pulse
+        heights; onsets and time points stay those of this schedule.
+        """
+        import torch
+        data = torch.zeros((len(self.electrodes), self._ticks.size),
+                           dtype=amp.dtype, device=amp.device)
+        for rows, frame, wave in self._waves():
+            rows = torch.as_tensor(rows, device=amp.device)
+            frame = torch.as_tensor(frame, device=amp.device)
+            data[rows] = amp[rows][:, frame] * torch.as_tensor(
+                wave, dtype=amp.dtype, device=amp.device)
+        return data
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
@@ -1056,6 +1081,60 @@ class AmplitudeEncoder(PulseEncoder):
         """Gray level in [0, 1] -> amplitude in ``amp_range``"""
         amp_lo, amp_hi = self.amp_range
         return amp_lo + gray * (amp_hi - amp_lo), self.freq
+
+    def _encode_tensor(self, image):
+        """Return the pulse trains for a 2D Torch gray image, and their time.
+
+        Matches ``implant.prepare_stim(encode(ImageStimulus(image)))``, except
+        that deactivated electrodes keep a zero row. Gradients flow to the
+        pixels through sampling and amplitude; pulse timing has none. With
+        ``amp_range[0] == 0``, an electrode at gray 0 has no pulses and
+        therefore zero gradient.
+
+        Requires a bound implant and ``amp_range`` in uA.
+
+        Parameters
+        ----------
+        image : torch.Tensor
+            float32 or float64 gray levels, shape ``(H, W)``, sampled as by
+            ``implant.reshape_stim``.
+
+        Returns
+        -------
+        waveform : torch.Tensor
+            Current (uA, negative is cathodic), shape ``(n_electrodes, T)``,
+            rows in ``implant.electrode_names`` order.
+        time : ``(T,)`` np.ndarray
+            Sample times (ms).
+        """
+        import torch
+        if self.implant is None:
+            raise NotImplementedError("Tensor encoding requires an encoder "
+                                      "bound to an implant.")
+        if self.amp_unit != uA:
+            raise NotImplementedError(f"Tensor encoding requires 'amp_range' "
+                                      f"in uA, not {self.amp_unit}.")
+        if self.n_levels is not None or self.stretch:
+            # Both depend discretely or globally on the gray levels:
+            raise NotImplementedError("Tensor encoding does not support "
+                                      "'n_levels' or 'stretch'.")
+        gray = self.implant._sample_image_tensor(image)
+        # Clip after sampling, as in `_sampled_frames`:
+        amp, freq = self._modulate(gray.clamp(0, 1)[:, None])
+        frame_dur = (_DEFAULT_FRAME_DUR if self.frame_dur is None
+                     else self.frame_dur)
+        # Timing (which electrodes pulse, and when) uses a detached copy;
+        # pulse heights use `amp`:
+        sched = self._assemble(amp.detach().cpu().numpy(), freq,
+                               self.implant.electrode_names,
+                               np.zeros(1, dtype=np.float64), frame_dur)
+        # Deactivated electrodes keep their row and, as in `prepare_stim`,
+        # their pulse times:
+        on = torch.tensor([e.activated
+                           for e in self.implant.electrode_objects],
+                          device=amp.device)
+        amp = torch.where(on[:, None], amp, 0)
+        return sched._render_tensor(amp), sched.time.copy()
 
 
 class FrequencyEncoder(PulseEncoder):
