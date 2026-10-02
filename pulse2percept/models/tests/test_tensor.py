@@ -228,12 +228,12 @@ def test_Model_tensor_requires_electrical_implant():
         model._predict_tensor(waveform, TIME)
 
 
-def _axon_spatial(**params):
+def _axon_spatial(implant=None, **params):
     # Grid straddles the horizontal meridian, so `meridian_blend` applies:
     params = {'xrange': (-6, 6), 'yrange': (-4, 4), 'step': 0.5,
               'n_axons': 200, 'n_ax_segments': 200, 'thresh_percept': 0.5,
-              **params}
-    return AxonMapSpatial(ArgusII(), **params)
+              'ignore_pickle': True, **params}
+    return AxonMapSpatial(ArgusII() if implant is None else implant, **params)
 
 
 def _axon_parity(spatial, wf):
@@ -265,10 +265,26 @@ def test_AxonMapSpatial_tensor_parity(params):
     assert expected.min() < 0 < expected.max()
 
 
+def test_axon_blocks():
+    # 4 electrodes, 10 time points, float64: 208 bytes per segment plus 80
+    # per padded slot, so pixel 4 (40 segments) exceeds the budget alone:
+    counts = np.array([3, 0, 5, 1, 40, 2, 0, 2])
+    blocks = beyeler2019._axon_blocks(counts, 4, 10, 8, 3000)
+    assert blocks == [(0, 3), (3, 4), (4, 5), (5, 8)]
+    assert beyeler2019._axon_blocks(counts, 4, 10, 8, 10 ** 9) == [(0, 8)]
+    # Longer waveforms give smaller blocks:
+    assert len(beyeler2019._axon_blocks(counts, 4, 1000, 8, 3000)) == 8
+
+
 def test_AxonMapSpatial_tensor_blocks(monkeypatch):
-    # 20 segments per block: most blocks hold a single axon above budget:
-    monkeypatch.setattr(beyeler2019, '_AXON_BLOCK_BYTES', 4 * 60 * 20)
+    # Mix of multi-pixel blocks and single axons above budget:
+    monkeypatch.setattr(beyeler2019, '_AXON_BLOCK_BYTES', 20000)
     spatial = _axon_spatial().build()
+    blocks = beyeler2019._axon_blocks(
+        spatial.axon_idx_end - spatial.axon_idx_start, 60, TIME.size, 4,
+        20000)
+    sizes = {p1 - p0 for p0, p1 in blocks}
+    assert 1 in sizes and max(sizes) > 1
     _axon_parity(spatial, _waveform(spatial.implant.n_electrodes))
 
 
@@ -314,6 +330,20 @@ def test_AxonMapModel_tensor_autograd():
     assert waveform.grad.abs().sum() > 0
     # Silent electrodes still receive gradient through the Gaussian spread:
     assert waveform.grad[::4].abs().sum() > 0
+
+
+def test_AxonMapModel_tensor_gradcheck(monkeypatch):
+    # Several blocks, so gradients pass each block's index_put and gather:
+    monkeypatch.setattr(beyeler2019, '_AXON_BLOCK_BYTES', 50000)
+    model = Model(_axon_spatial(ArgusI(), xrange=(-3, 3), yrange=(-2, 2),
+                                step=1, thresh_percept=0),
+                  FadingTemporal(tau=0.5, reduce='peak'))
+    # No silent samples: an all-zero response ties every segment:
+    wf = np.random.default_rng(7).normal(0, 30, (16, TIME.size))
+    waveform = torch.tensor(wf, dtype=torch.float64, requires_grad=True)
+    torch.autograd.gradcheck(
+        lambda w: model._predict_tensor(w, TIME, t_percept=[1.0, 25.0]).data,
+        (waveform,))
 
 
 def test_AxonMapModel_tensor_float64():
