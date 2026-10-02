@@ -423,40 +423,21 @@ def _blend_meridian(resp, grid, meridian, width):
 def _blend_meridian_tensor(resp, dist, axis, width, spacing):
     """Torch counterpart of the ``_blend_meridian`` filter and taper."""
     import torch
-    sigma = width / spacing
-    # SciPy's default support (truncate=4); its taps are the filtered
-    # impulse, symmetric:
-    radius = int(4.0 * sigma + 0.5)
-    impulse = np.zeros(2 * radius + 1)
-    impulse[radius] = 1
-    kernel = gaussian_filter1d(impulse, sigma, mode='constant')
+    work = resp.reshape(dist.shape + (-1,))
+    # Dense (n, n) operator: column j is SciPy's filtered impulse at j, so
+    # truncation and 'nearest' edges match `gaussian_filter1d` exactly.
+    # Replaces #938's conv1d on purpose: O(n^2) per row, but at the axis
+    # lengths profiled (121-601 samples) it was faster and used less memory
+    # on CPU than conv1d's workspace or sliced accumulation's backward.
+    n = work.shape[axis]
+    blur = gaussian_filter1d(np.eye(n), width / spacing, axis=0,
+                             mode='nearest')
+    blur = torch.as_tensor(blur, dtype=resp.dtype, device=resp.device)
+    subscripts = 'ij,jxt->ixt' if axis == 0 else 'ij,yjt->yit'
+    blurred = torch.einsum(subscripts, blur, work)
     weight = torch.as_tensor(np.exp(-dist ** 2 / (2.0 * width ** 2)),
                              dtype=resp.dtype, device=resp.device)[..., None]
-    work = resp.reshape(dist.shape + (-1,))
-    n = work.shape[axis]
-    first, last = work.narrow(axis, 0, 1), work.narrow(axis, n - 1, 1)
-    # Accumulate shifted slices in place, pairing the +/-d taps; 'nearest'
-    # edges repeat the first/last sample:
-    blurred = torch.zeros_like(work)
-    blurred.add_(work, alpha=float(kernel[radius]))
-    for d in range(1, radius + 1):
-        coef = float(kernel[radius + d])
-        if d >= n - 1:
-            # Shift spans the axis, every sample is an edge value:
-            blurred.add_(first, alpha=coef)
-            blurred.add_(last, alpha=coef)
-            continue
-        blurred.narrow(axis, 0, n - d).add_(work.narrow(axis, d, n - d),
-                                            alpha=coef)
-        blurred.narrow(axis, n - d, d).add_(last, alpha=coef)
-        blurred.narrow(axis, d, n - d).add_(work.narrow(axis, 0, n - d),
-                                            alpha=coef)
-        blurred.narrow(axis, 0, d).add_(first, alpha=coef)
-    # In-place `work + weight * (blurred - work)`:
-    blurred.sub_(work)
-    blurred.mul_(weight)
-    blurred.add_(work)
-    return blurred.reshape(resp.shape)
+    return torch.lerp(work, blurred, weight).reshape(resp.shape)
 
 
 def _tissue_map_ndim(model):
