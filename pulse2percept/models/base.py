@@ -430,20 +430,33 @@ def _blend_meridian_tensor(resp, dist, axis, width, spacing):
     impulse = np.zeros(2 * radius + 1)
     impulse[radius] = 1
     kernel = gaussian_filter1d(impulse, sigma, mode='constant')
-    kernel = torch.as_tensor(kernel, dtype=resp.dtype,
-                             device=resp.device).reshape((1, 1, -1))
     weight = torch.as_tensor(np.exp(-dist ** 2 / (2.0 * width ** 2)),
                              dtype=resp.dtype, device=resp.device)[..., None]
     work = resp.reshape(dist.shape + (-1,))
-    # Filtered axis last, as the conv1d length:
-    rows = torch.movedim(work, axis, -1)
-    n = rows.shape[-1]
-    # 'nearest' edges by index clamping, valid for radius > n:
-    pad = torch.arange(-radius, n + radius, device=resp.device).clamp(0, n - 1)
-    blurred = torch.nn.functional.conv1d(
-        rows.reshape((-1, 1, n))[..., pad], kernel).reshape(rows.shape)
-    blurred = torch.movedim(blurred, -1, axis)
-    return (work + weight * (blurred - work)).reshape(resp.shape)
+    n = work.shape[axis]
+    first, last = work.narrow(axis, 0, 1), work.narrow(axis, n - 1, 1)
+    # Accumulate shifted slices in place, pairing the +/-d taps; 'nearest'
+    # edges repeat the first/last sample:
+    blurred = torch.zeros_like(work)
+    blurred.add_(work, alpha=float(kernel[radius]))
+    for d in range(1, radius + 1):
+        coef = float(kernel[radius + d])
+        if d >= n - 1:
+            # Shift spans the axis, every sample is an edge value:
+            blurred.add_(first, alpha=coef)
+            blurred.add_(last, alpha=coef)
+            continue
+        blurred.narrow(axis, 0, n - d).add_(work.narrow(axis, d, n - d),
+                                            alpha=coef)
+        blurred.narrow(axis, n - d, d).add_(last, alpha=coef)
+        blurred.narrow(axis, d, n - d).add_(work.narrow(axis, 0, n - d),
+                                            alpha=coef)
+        blurred.narrow(axis, 0, d).add_(first, alpha=coef)
+    # In-place `work + weight * (blurred - work)`:
+    blurred.sub_(work)
+    blurred.mul_(weight)
+    blurred.add_(work)
+    return blurred.reshape(resp.shape)
 
 
 def _tissue_map_ndim(model):
