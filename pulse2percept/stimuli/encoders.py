@@ -246,8 +246,9 @@ class _EncodedStimulus(Stimulus):
         heights; onsets and time points stay those of this schedule.
         """
         import torch
+        # The zero-valued term keeps a waveform without pulses in the graph:
         data = torch.zeros((len(self.electrodes), self._ticks.size),
-                           dtype=amp.dtype, device=amp.device)
+                           dtype=amp.dtype, device=amp.device) + 0 * amp.sum()
         for rows, frame, wave in self._waves():
             rows = torch.as_tensor(rows, device=amp.device)
             frame = torch.as_tensor(frame, device=amp.device)
@@ -1091,7 +1092,8 @@ class AmplitudeEncoder(PulseEncoder):
         ``amp_range[0] == 0``, an electrode at gray 0 has no pulses and
         therefore zero gradient.
 
-        Requires a bound implant and ``amp_range`` in uA.
+        Requires a bound, current-driven implant without ``preprocess``,
+        ``safe_mode`` or ``max_current``, and ``amp_range`` in uA.
 
         Parameters
         ----------
@@ -1111,6 +1113,21 @@ class AmplitudeEncoder(PulseEncoder):
         if self.implant is None:
             raise NotImplementedError("Tensor encoding requires an encoder "
                                       "bound to an implant.")
+        implant = self.implant
+        if implant.stimulus_unit.dimension != uA.dimension:
+            raise NotImplementedError(
+                f"Tensor encoding requires an implant driven by electrical "
+                f"current, not {implant.stimulus_unit}.")
+        # `prepare_stim` steps without a tensor implementation:
+        unsupported = [name for name, on in (
+            ('preprocess', implant.preprocess),
+            ('safe_mode', implant.safe_mode),
+            ('max_current', implant.max_current is not None)) if on]
+        if unsupported:
+            raise NotImplementedError(
+                f"Tensor encoding does not support an implant with "
+                f"{', '.join(unsupported)} set. Construct it with "
+                f"preprocess=False, safe_mode=False, max_current=None.")
         if self.amp_unit != uA:
             raise NotImplementedError(f"Tensor encoding requires 'amp_range' "
                                       f"in uA, not {self.amp_unit}.")

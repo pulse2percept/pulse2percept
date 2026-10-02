@@ -239,13 +239,13 @@ def test_Model_tensor_requires_electrical_implant():
         model._predict_tensor(waveform, TIME)
 
 
-def _image_model(implant=None, reduce='peak', **params):
+def _image_model(implant=None, reduce='peak', amp_range=(10, 50), **params):
     """Scoreboard + Fading model whose implant encodes images."""
-    implant = ArgusII() if implant is None else implant
+    implant = ArgusII(preprocess=False) if implant is None else implant
     names = implant.electrode_names
     implant.deactivate([names[0], names[-1]])
     implant.encoder = AmplitudeEncoder(
-        amp_range=(10, 50), freq=60, phase_dur=0.3, interphase_dur=0.1,
+        amp_range=amp_range, freq=60, phase_dur=0.3, interphase_dur=0.1,
         cathodic_first=False, clock=0.1, frame_dur=100)
     params = {'xrange': (-6, 6), 'yrange': (-5, 5), 'step': 0.5,
               'thresh_percept': 0, **params}
@@ -285,10 +285,25 @@ def test_Model_tensor_image_autograd():
     assert image.grad.abs().sum() > 0
 
 
+def test_Model_tensor_image_black_autograd():
+    # With amp_range[0] == 0, black gives no pulses and zero gradient, but the
+    # response stays in the graph:
+    model = _image_model(amp_range=(0, 50))
+    image = torch.zeros((13, 17), requires_grad=True)
+    waveform, time = model.implant.encoder._encode_tensor(image)
+    assert time.size == 2 and torch.all(waveform == 0)
+    resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
+    assert waveform.requires_grad and resp.data.requires_grad
+    resp.data.square().mean().backward()
+    assert image.grad is not None
+    assert torch.all(torch.isfinite(image.grad))
+    assert torch.all(image.grad == 0)
+
+
 def test_Model_tensor_image_gradcheck():
     # Exact gradient of image -> percept; gray levels stay inside (0, 1) so
     # clipping is smooth, and amp_lo > 0 keeps every pulse in the schedule:
-    model = _image_model(ArgusI(), reduce='last', step=1)
+    model = _image_model(ArgusI(preprocess=False), reduce='last', step=1)
     img = np.random.default_rng(8).uniform(0.1, 0.9, (3, 4))
 
     def percept(image):
