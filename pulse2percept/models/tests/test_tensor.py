@@ -241,7 +241,7 @@ def test_Model_tensor_requires_electrical_implant():
 
 def _image_model(implant=None, reduce='peak', amp_range=(10, 50), **params):
     """Scoreboard + Fading model whose implant encodes images."""
-    implant = ArgusII(preprocess=False) if implant is None else implant
+    implant = ArgusII() if implant is None else implant
     names = implant.electrode_names
     implant.deactivate([names[0], names[-1]])
     implant.encoder = AmplitudeEncoder(
@@ -303,7 +303,7 @@ def test_Model_tensor_image_black_autograd():
 def test_Model_tensor_image_gradcheck():
     # Exact gradient of image -> percept; gray levels stay inside (0, 1) so
     # clipping is smooth, and amp_lo > 0 keeps every pulse in the schedule:
-    model = _image_model(ArgusI(preprocess=False), reduce='last', step=1)
+    model = _image_model(ArgusI(), reduce='last', step=1)
     img = np.random.default_rng(8).uniform(0.1, 0.9, (3, 4))
 
     def percept(image):

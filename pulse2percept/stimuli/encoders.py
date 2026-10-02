@@ -1092,8 +1092,9 @@ class AmplitudeEncoder(PulseEncoder):
         ``amp_range[0] == 0``, an electrode at gray 0 has no pulses and
         therefore zero gradient.
 
-        Requires a bound, current-driven implant without ``preprocess``,
-        ``safe_mode`` or ``max_current``, and ``amp_range`` in uA.
+        Requires a bound, current-driven implant without custom
+        preprocessing, ``safe_mode`` or ``max_current``, and ``amp_range`` in
+        uA.
 
         Parameters
         ----------
@@ -1118,16 +1119,22 @@ class AmplitudeEncoder(PulseEncoder):
             raise NotImplementedError(
                 f"Tensor encoding requires an implant driven by electrical "
                 f"current, not {implant.stimulus_unit}.")
+        # Imported here because `implants` imports this module:
+        from ..implants.base import Implant
+        # `preprocess=True` with the inherited `preprocess_stim` is a no-op:
+        preprocesses = callable(implant.preprocess) or bool(
+            implant.preprocess and
+            type(implant).preprocess_stim is not Implant.preprocess_stim)
         # `prepare_stim` steps without a tensor implementation:
         unsupported = [name for name, on in (
-            ('preprocess', implant.preprocess),
+            ('preprocess', preprocesses),
             ('safe_mode', implant.safe_mode),
             ('max_current', implant.max_current is not None)) if on]
         if unsupported:
             raise NotImplementedError(
                 f"Tensor encoding does not support an implant with "
-                f"{', '.join(unsupported)} set. Construct it with "
-                f"preprocess=False, safe_mode=False, max_current=None.")
+                f"{', '.join(unsupported)}. Use an implant without custom "
+                f"preprocessing, with safe_mode=False and max_current=None.")
         if self.amp_unit != uA:
             raise NotImplementedError(f"Tensor encoding requires 'amp_range' "
                                       f"in uA, not {self.amp_unit}.")

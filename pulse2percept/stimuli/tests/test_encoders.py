@@ -424,10 +424,9 @@ def test_AmplitudeEncoder__encode_tensor_amplitudes(cathodic_first):
 
 @pytest.mark.parametrize('make_implant,params,off', [
     # Sequential raster on a 0.1 ms clock, anodic first, interphase gap:
-    (lambda: ArgusII(preprocess=False),
-     {'amp_range': (10, 50), 'freq': 60, 'phase_dur': 0.3,
-      'interphase_dur': 0.1, 'cathodic_first': False, 'clock': 0.1,
-      'frame_dur': 100}, ['A1', 'F10']),
+    (ArgusII, {'amp_range': (10, 50), 'freq': 60, 'phase_dur': 0.3,
+               'interphase_dur': 0.1, 'cathodic_first': False, 'clock': 0.1,
+               'frame_dur': 100}, ['A1', 'F10']),
     # Custom pulse, no raster; black electrodes get 0 uA and no pulses:
     (lambda: GridImplant((3, 4), 400),
      {'amp_range': (0, 30), 'freq': 130, 'frame_dur': 50,
@@ -464,19 +463,26 @@ def test_AmplitudeEncoder__encode_tensor_errors():
     with pytest.raises(NotImplementedError, match='electrical current'):
         AmplitudeEncoder(PRIMAPivotal())._encode_tensor(img)
     # `prepare_stim` steps that have no tensor implementation:
-    for what, value in (('preprocess', True), ('preprocess', lambda s: s),
-                        ('safe_mode', True), ('max_current', 100)):
-        implant = ArgusII(preprocess=False)
+    for what, value in (('preprocess', lambda s: s), ('safe_mode', True),
+                        ('max_current', 100)):
+        implant = ArgusII()
         setattr(implant, what, value)
         with pytest.raises(NotImplementedError, match=what):
             AmplitudeEncoder(implant)._encode_tensor(img)
+
+    class PreprocessingArgusII(ArgusII):
+        def preprocess_stim(self, stim):
+            return stim
+
+    # Only the inherited `preprocess_stim` is a known no-op:
+    with pytest.raises(NotImplementedError, match='preprocess'):
+        AmplitudeEncoder(PreprocessingArgusII())._encode_tensor(img)
     with pytest.raises(NotImplementedError, match='in uA'):
-        AmplitudeEncoder(ArgusII(preprocess=False),
-                         amp_range=(0 * xTh, 2 * xTh))._encode_tensor(img)
+        AmplitudeEncoder(ArgusII(), amp_range=(0 * xTh, 2 * xTh)
+                         )._encode_tensor(img)
     for params in ({'n_levels': 4}, {'stretch': True}):
         with pytest.raises(NotImplementedError, match='n_levels'):
-            AmplitudeEncoder(ArgusII(preprocess=False),
-                             **params)._encode_tensor(img)
+            AmplitudeEncoder(ArgusII(), **params)._encode_tensor(img)
 
 
 def whole_pulses(freq, frame_dur, pulse_dur=0.92):
