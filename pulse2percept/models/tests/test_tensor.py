@@ -108,7 +108,7 @@ def test_blend_meridian_tensor_gradcheck(meridian):
     grid.build(Curcio1990Map())
     resp = np.random.default_rng(2).normal(0, 1, (grid.x.size, 2))
     resp = torch.tensor(resp, dtype=torch.float64, requires_grad=True)
-    # Radius 20 > 11 samples, exercises both shift branches:
+    # Radius 20 > 11 samples, exercises a kernel wider than the axis:
     assert torch.autograd.gradcheck(
         lambda r: _blend_meridian(r, grid, meridian, 1.0), (resp,))
 
