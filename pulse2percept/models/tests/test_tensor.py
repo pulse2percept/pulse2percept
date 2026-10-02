@@ -1,14 +1,16 @@
-"""Torch execution of ScoreboardSpatial -> FadingTemporal."""
+"""Torch execution of {Scoreboard,AxonMap}Spatial -> FadingTemporal."""
 import numpy as np
 import numpy.testing as npt
 import pytest
 import torch
 
 from pulse2percept.implants import GridImplant
-from pulse2percept.implants.retina import ArgusI, PRIMAPivotal
+from pulse2percept.implants.retina import ArgusI, ArgusII, PRIMAPivotal
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
 from pulse2percept.models.base import _blend_meridian, _ModelResponse
-from pulse2percept.models.retina import ScoreboardSpatial, Thompson2003Spatial
+from pulse2percept.models.retina import (AxonMapSpatial, ScoreboardSpatial,
+                                         Thompson2003Spatial)
+from pulse2percept.models.retina import beyeler2019
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.topography import Grid2D
 from pulse2percept.topography.retina import Curcio1990Map
@@ -224,3 +226,136 @@ def test_Model_tensor_requires_electrical_implant():
     waveform = torch.zeros((implant.n_electrodes, TIME.size))
     with pytest.raises(NotImplementedError, match='electrical current'):
         model._predict_tensor(waveform, TIME)
+
+
+def _axon_spatial(implant=None, **params):
+    # Grid straddles the horizontal meridian, so `meridian_blend` applies:
+    params = {'xrange': (-6, 6), 'yrange': (-4, 4), 'step': 0.5,
+              'n_axons': 200, 'n_ax_segments': 200, 'thresh_percept': 0.5,
+              'ignore_pickle': True, **params}
+    return AxonMapSpatial(ArgusII() if implant is None else implant, **params)
+
+
+def _axon_parity(spatial, wf):
+    """Return the Cython response after checking tensor parity."""
+    expected = spatial.predict_percept(
+        Stimulus(wf, electrodes=spatial.implant.electrode_names, time=TIME))
+    resp = spatial._predict_tensor(torch.tensor(wf, dtype=torch.float32),
+                                   TIME)
+    expected = expected.data.reshape(resp.data.shape)
+    assert resp.shape == spatial.grid.x.shape
+    # float32 rounding grows with the summed magnitude:
+    npt.assert_allclose(resp.data.numpy(), expected, rtol=RTOL,
+                        atol=1e-6 * np.abs(expected).max())
+    return expected
+
+
+@pytest.mark.parametrize('params', [
+    {},
+    {'meridian_blend': 0},
+    {'min_current_spread': 0.05, 'thresh_percept': 5},
+    {'implant_position': (300, -200), 'implant_rotation': 20},
+    {'location_noise': 0.5},
+])
+def test_AxonMapSpatial_tensor_parity(params):
+    spatial = _axon_spatial(**params).build()
+    expected = _axon_parity(spatial, _waveform(spatial.implant.n_electrodes))
+    # Thresholding zeros some, but not all, of a signed response:
+    assert 0 < np.mean(expected == 0) < 1
+    assert expected.min() < 0 < expected.max()
+
+
+def test_axon_blocks():
+    # 4 electrodes, 10 time points, float64: 208 bytes per segment plus 80
+    # per padded slot, so pixel 4 (40 segments) exceeds the budget alone:
+    counts = np.array([3, 0, 5, 1, 40, 2, 0, 2])
+    blocks = beyeler2019._axon_blocks(counts, 4, 10, 8, 3000)
+    assert blocks == [(0, 3), (3, 4), (4, 5), (5, 8)]
+    assert beyeler2019._axon_blocks(counts, 4, 10, 8, 10 ** 9) == [(0, 8)]
+    # Longer waveforms give smaller blocks:
+    assert len(beyeler2019._axon_blocks(counts, 4, 1000, 8, 3000)) == 8
+
+
+def test_AxonMapSpatial_tensor_blocks(monkeypatch):
+    # Mix of multi-pixel blocks and single axons above budget:
+    monkeypatch.setattr(beyeler2019, '_AXON_BLOCK_BYTES', 20000)
+    spatial = _axon_spatial().build()
+    blocks = beyeler2019._axon_blocks(
+        spatial.axon_idx_end - spatial.axon_idx_start, 60, TIME.size, 4,
+        20000)
+    sizes = {p1 - p0 for p0, p1 in blocks}
+    assert 1 in sizes and max(sizes) > 1
+    _axon_parity(spatial, _waveform(spatial.implant.n_electrodes))
+
+
+def test_AxonMapSpatial_tensor_cathodic():
+    # Selects the segment with largest |response|, not the largest value:
+    spatial = _axon_spatial(meridian_blend=0).build()
+    expected = _axon_parity(spatial,
+                            -np.abs(_waveform(spatial.implant.n_electrodes)))
+    assert expected.max() == 0 and expected.min() < 0
+
+
+def test_AxonMapSpatial_tensor_thresh_inclusive():
+    spatial = _axon_spatial(meridian_blend=0, thresh_percept=0).build()
+    waveform = torch.tensor(_waveform(spatial.implant.n_electrodes),
+                            dtype=torch.float32)
+    resp = spatial._predict_tensor(waveform, TIME).data
+    thresh = resp.abs().max() / 2
+    spatial.thresh_percept = float(resp.abs()[resp.abs() >= thresh].min())
+    thresholded = spatial._predict_tensor(waveform, TIME).data
+    keep = resp.abs() >= spatial.thresh_percept
+    npt.assert_equal(thresholded.numpy(), torch.where(keep, resp, 0).numpy())
+
+
+def test_AxonMapSpatial_tensor_meridian_blend():
+    wf = _waveform(60)
+    unblended = _axon_parity(_axon_spatial(meridian_blend=0,
+                                           thresh_percept=5).build(), wf)
+    blended = _axon_parity(_axon_spatial(meridian_blend=2,
+                                         thresh_percept=5).build(), wf)
+    assert not np.allclose(blended, unblended)
+    # Threshold reapplied after blending:
+    assert np.all((blended == 0) | (np.abs(blended) >= 5))
+
+
+def test_AxonMapModel_tensor_autograd():
+    model = Model(_axon_spatial(), FadingTemporal(tau=2, reduce='peak'))
+    waveform = torch.tensor(_waveform(model.implant.n_electrodes),
+                            dtype=torch.float32, requires_grad=True)
+    resp = model._predict_tensor(waveform, TIME,
+                                 t_percept=[0.5, 1.0, 2.0, 25.0, 60.0])
+    resp.data.square().mean().backward()
+    assert torch.all(torch.isfinite(waveform.grad))
+    assert waveform.grad.abs().sum() > 0
+    # Silent electrodes still receive gradient through the Gaussian spread:
+    assert waveform.grad[::4].abs().sum() > 0
+
+
+def test_AxonMapModel_tensor_gradcheck(monkeypatch):
+    # Several blocks, so gradients pass each block's index_put and gather:
+    monkeypatch.setattr(beyeler2019, '_AXON_BLOCK_BYTES', 50000)
+    model = Model(_axon_spatial(ArgusI(), xrange=(-3, 3), yrange=(-2, 2),
+                                step=1, thresh_percept=0),
+                  FadingTemporal(tau=0.5, reduce='peak'))
+    # No silent samples: an all-zero response ties every segment:
+    wf = np.random.default_rng(7).normal(0, 30, (16, TIME.size))
+    waveform = torch.tensor(wf, dtype=torch.float64, requires_grad=True)
+    torch.autograd.gradcheck(
+        lambda w: model._predict_tensor(w, TIME, t_percept=[1.0, 25.0]).data,
+        (waveform,))
+
+
+def test_AxonMapModel_tensor_float64():
+    model = Model(_axon_spatial(), FadingTemporal(tau=2, reduce='peak'))
+    wf = _waveform(model.implant.n_electrodes)
+    resp = model._predict_tensor(torch.tensor(wf), TIME)
+    assert resp.data.dtype == torch.float64
+    expected = model.predict_percept(
+        Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME))
+    npt.assert_allclose(resp.data.numpy(),
+                        expected.data.reshape(resp.data.shape),
+                        rtol=RTOL, atol=1e-4)
+    model.spatial.n_gray = 8
+    with pytest.raises(NotImplementedError, match='n_gray'):
+        model._predict_tensor(torch.tensor(wf), TIME)

@@ -15,7 +15,7 @@ from ...topography.retina import Watson2014Map
 from ...implants import ElectrodeArray
 from ...stimuli import Stimulus
 from ..base import (Model, _blend_meridian, _draw_placed_implant,
-                    _thread_params, _warn_rho_vs_pitch)
+                    _is_tensor, _thread_params, _warn_rho_vs_pitch)
 from .._scoreboard import fast_scoreboard
 from .base import RetinalSpatial, _warn_ignores_z
 from ._beyeler2019 import (fast_axon_map, fast_jansonius,
@@ -27,6 +27,10 @@ import warnings
 #: Version of the serialized ``axon_pickle`` payload. Increment when its
 #: layout or parameter semantics change.
 _AXON_CACHE_VERSION = 3
+
+#: Approximate working-memory target (bytes) per pixel block in
+#: ``AxonMapSpatial._predict_tensor``; see ``_axon_blocks``.
+_AXON_BLOCK_BYTES = 16 * 2 ** 20
 
 
 def _is_axon_cache(payload):
@@ -66,6 +70,30 @@ def _flatten_bundles(bundles):
         raise ValueError("Every bundle must have at least one segment.")
     flat = np.ascontiguousarray(np.concatenate(distinct))
     return flat, np.concatenate(([0], np.cumsum(lens))), bundle_id
+
+
+def _axon_blocks(counts, n_el, n_time, itemsize, budget):
+    """Return ``(p0, p1)`` pixel ranges whose tensor work fits in ``budget``.
+
+    ``counts`` holds the retained segments per pixel. Counts the float32
+    Gaussian and its cast to ``itemsize`` (segments x electrodes), the
+    segment response and its ``abs`` (segments x T), and the padded ``abs``
+    (pixels x longest axon x T). A range holds at least one pixel, so a single
+    long axon may exceed ``budget``.
+    """
+    per_seg = n_el * (4 + itemsize) + 2 * n_time * itemsize
+    per_slot = n_time * itemsize
+    blocks = []
+    p0, n_seg, longest = 0, 0, 1
+    for p, count in enumerate(counts.tolist()):
+        grown, longer = n_seg + count, max(longest, count)
+        if (p > p0 and grown * per_seg + (p - p0 + 1) * longer * per_slot >
+                budget):
+            blocks.append((p0, p))
+            p0, grown, longer = p, count, max(1, count)
+        n_seg, longest = grown, longer
+    blocks.append((p0, len(counts)))
+    return blocks
 
 
 class ScoreboardSpatial(RetinalSpatial):
@@ -1076,6 +1104,79 @@ class AxonMapSpatial(RetinalSpatial):
                              self._cutoff_r2(self.rho),
                              self.n_threads)
 
+    def _predict_tensor(self, waveform, time):
+        """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
+
+        Same Gaussian, cutoff, signed brightest-segment selection, thresholds
+        and meridian blending as ``predict_percept``. Whole axons are processed
+        in blocks of about ``_AXON_BLOCK_BYTES``. Geometry is fixed.
+
+        Until backward, autograd keeps each block's Gaussian (segments x
+        electrodes x ``itemsize`` bytes in total) and one int64 index per
+        output value.
+        """
+        import torch
+        if self.n_gray is not None:
+            # Quantization is discrete and has no exact gradient:
+            raise NotImplementedError("Tensor prediction does not support "
+                                      "n_gray; set n_gray=None.")
+        electrode_array = self.implant.electrode_array
+        _warn_ignores_z(self, electrode_array)
+        x_el, y_el, _ = self._electrode_coords(
+            electrode_array, None, electrodes=self.implant.electrode_names)
+        # Electrodes sorted by x, as in `fast_axon_map`:
+        order = np.argsort(x_el, kind='stable')
+        x_el, y_el = x_el[order], y_el[order]
+        waveform = waveform[torch.as_tensor(order, device=waveform.device)]
+        rho = np.float32(self.rho)
+        cutoff_r2 = self._cutoff_r2(self.rho)
+        start, end = self.axon_idx_start, self.axon_idx_end
+        n_el, n_time = x_el.size, waveform.shape[1]
+        device = waveform.device
+        t_idx = torch.arange(n_time, device=device)
+        blocks = []
+        for p0, p1 in _axon_blocks(end - start, n_el, n_time,
+                                   waveform.element_size(),
+                                   _AXON_BLOCK_BYTES):
+            lo, hi = start[p0], end[p1 - 1]
+            seg = self.axon_contrib[lo:hi]
+            # float32, as in `fast_axon_map`. The trailing zero row is the
+            # response of an axon without segments:
+            gauss = np.zeros((hi - lo + 1, n_el), dtype=np.float32)
+            dx = seg[:, :1] - x_el
+            dy = seg[:, 1:2] - y_el
+            r2 = dx * dx + dy * dy
+            gauss[:-1] = seg[:, 2:] * np.exp(-r2 / (np.float32(2) * rho * rho))
+            # Drops pairs beyond the cutoff and segments without a location:
+            gauss[:-1][~(r2 <= cutoff_r2)] = 0
+            seg_resp = torch.as_tensor(gauss, dtype=waveform.dtype,
+                                       device=device) @ waveform
+            counts = end[p0:p1] - start[p0:p1]
+            first = start[p0:p1] - lo
+            with torch.no_grad():
+                # |response| as (pixels, longest axon, T) in axon order;
+                # padding is 0:
+                pix = np.repeat(np.arange(p1 - p0), counts)
+                pos = np.arange(hi - lo) - np.repeat(first, counts)
+                packed = seg_resp.new_zeros((p1 - p0, max(counts.max(), 1),
+                                             n_time))
+                idx = (torch.as_tensor(pix, device=device),
+                       torch.as_tensor(pos, device=device))
+                packed[idx] = seg_resp[:-1].abs()
+                # First largest |response|, matching the strict `>` update in
+                # Cython:
+                best = packed.argmax(dim=1)
+            rows = torch.as_tensor(first, device=device)[:, None] + best
+            empty = torch.as_tensor(counts == 0, device=device)[:, None]
+            rows = rows.masked_fill(empty, int(hi - lo))
+            # Indexing keeps only `rows` for backward, not the segment
+            # response (gather would keep it):
+            block = seg_resp[rows, t_idx]
+            blocks.append(torch.where(block.abs() >= self.thresh_percept,
+                                      block, 0.0))
+        resp = self._postprocess_spatial(torch.cat(blocks))
+        return self._spatial_response(resp, time, None)
+
     def _postprocess_spatial(self, resp):
         """Blend the response across the horizontal meridian."""
         blended = _blend_meridian(resp, self.grid, 'horizontal',
@@ -1084,6 +1185,10 @@ class AxonMapSpatial(RetinalSpatial):
             # Preserve the unblended response bit-for-bit.
             return resp
         # Reapply the percept threshold after blending:
+        if _is_tensor(blended):
+            import torch
+            return torch.where(blended.abs() >= self.thresh_percept, blended,
+                               0.0)
         blended[np.abs(blended) < self.thresh_percept] = 0
         return blended
 
