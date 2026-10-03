@@ -795,7 +795,7 @@ class PulseEncoder(ImplantEncoder):
         return np.interp(ticks, t, v[keep])
 
     def _assemble(self, amp, freq, electrodes, frame_time, frame_dur,
-                  timed=False):
+                  timed=False, schedule_mask=None):
         """Build the pulse trains for every electrode and frame
 
         Electrodes that pulse at the same times share a waveform, scaled by
@@ -825,9 +825,15 @@ class PulseEncoder(ImplantEncoder):
                              f"fit into a stimulus of {total:.3f} ms. Shorten "
                              f"'phase_dur' or lengthen the source.")
         firing, period = self._periods(freq, pulse_len)
-        # Zero-amplitude electrodes keep their clock running ("firing") to stay
-        # in phase, but add no pulses or time points:
-        active = firing & (amp != 0)
+        # Keep the NumPy schedule sparse by default. Tensor callers can provide
+        # an amplitude-independent mask so zero-valued amplitudes retain a
+        # useful Jacobian and a stable pulse clock.
+        if schedule_mask is None:
+            schedule_mask = amp != 0
+        else:
+            schedule_mask = np.broadcast_to(
+                np.asarray(schedule_mask, dtype=bool), shape)
+        active = firing & schedule_mask
         # The implant defines the electrode schedule:
         raster = getattr(self.implant, 'raster', None)
         offset, cycle = self._raster_grid(electrodes, period, firing, pulse_len,
@@ -1087,13 +1093,12 @@ class AmplitudeEncoder(PulseEncoder):
         """Return the pulse trains for a 2D Torch gray image, and their time.
 
         Matches ``implant.prepare_stim(encode(ImageStimulus(image)))``, except
-        that deactivated electrodes keep a zero row. Gradients flow to the
-        pixels through sampling and amplitude; pulse timing has none. With
-        ``amp_range[0] == 0``, an electrode at gray 0 has no pulses and
-        therefore zero gradient.
+        that deactivated electrodes keep a zero row and zero-amplitude
+        electrodes retain their pulse schedule. Gradients flow to the pixels
+        through sampling and amplitude; pulse timing has none.
 
-        Requires a bound, current-driven implant without custom
-        preprocessing, ``safe_mode`` or ``max_current``, and ``amp_range`` in
+        Requires a bound, current-driven implant without custom preprocessing,
+        safety checks, ``safe_mode`` or ``max_current``, and ``amp_range`` in
         uA.
 
         Parameters
@@ -1128,13 +1133,15 @@ class AmplitudeEncoder(PulseEncoder):
         # `prepare_stim` steps without a tensor implementation:
         unsupported = [name for name, on in (
             ('preprocess', preprocesses),
+            ('check_stim', type(implant).check_stim is not Implant.check_stim),
             ('safe_mode', implant.safe_mode),
             ('max_current', implant.max_current is not None)) if on]
         if unsupported:
             raise NotImplementedError(
                 f"Tensor encoding does not support an implant with "
                 f"{', '.join(unsupported)}. Use an implant without custom "
-                f"preprocessing, with safe_mode=False and max_current=None.")
+                f"preprocessing or safety checks, with safe_mode=False and "
+                f"max_current=None.")
         if self.amp_unit != uA:
             raise NotImplementedError(f"Tensor encoding requires 'amp_range' "
                                       f"in uA, not {self.amp_unit}.")
@@ -1143,15 +1150,17 @@ class AmplitudeEncoder(PulseEncoder):
             raise NotImplementedError("Tensor encoding does not support "
                                       "'n_levels' or 'stretch'.")
         gray = self.implant._sample_image_tensor(image)
-        # Clip after sampling, as in `_sampled_frames`:
-        amp, freq = self._modulate(gray.clamp(0, 1)[:, None])
+        # Keep the one-sided derivative at the valid gray-level endpoints:
+        gray = torch.where(gray < 0, 0, torch.where(gray > 1, 1, gray))
+        amp, freq = self._modulate(gray[:, None])
         frame_dur = (_DEFAULT_FRAME_DUR if self.frame_dur is None
                      else self.frame_dur)
-        # Timing (which electrodes pulse, and when) uses a detached copy;
-        # pulse heights use `amp`:
-        sched = self._assemble(amp.detach().cpu().numpy(), freq,
-                               self.implant.electrode_names,
-                               np.zeros(1, dtype=np.float64), frame_dur)
+        # Pulse timing depends on frequency, not amplitude. Keep every firing
+        # electrode in the schedule; differentiable amplitudes scale pulses.
+        sched = self._assemble(
+            np.zeros((gray.shape[0], 1), dtype=np.float32), freq,
+            self.implant.electrode_names, np.zeros(1, dtype=np.float64),
+            frame_dur, schedule_mask=freq > 0)
         # Deactivated electrodes keep their row and, as in `prepare_stim`,
         # their pulse times:
         on = torch.tensor([e.activated

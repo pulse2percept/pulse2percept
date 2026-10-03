@@ -286,12 +286,12 @@ def test_Model_tensor_image_autograd():
 
 
 def test_Model_tensor_image_black_autograd():
-    # With amp_range[0] == 0, black gives no pulses and zero gradient, but the
-    # response stays in the graph:
+    # With amp_range[0] == 0, black keeps the pulse schedule but has zero
+    # amplitude. The squared response loss still has zero gradient at zero.
     model = _image_model(amp_range=(0, 50))
     image = torch.zeros((13, 17), requires_grad=True)
     waveform, time = model.implant.encoder._encode_tensor(image)
-    assert time.size == 2 and torch.all(waveform == 0)
+    assert time.size > 2 and torch.all(waveform == 0)
     resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
     assert waveform.requires_grad and resp.data.requires_grad
     resp.data.square().mean().backward()

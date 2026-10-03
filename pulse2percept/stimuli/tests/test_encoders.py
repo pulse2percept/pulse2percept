@@ -422,6 +422,24 @@ def test_AmplitudeEncoder__encode_tensor_amplitudes(cathodic_first):
     npt.assert_equal(image.grad.numpy() != 0, [[False, True], [True, False]])
 
 
+def test_AmplitudeEncoder__encode_tensor_zero_amplitude_jacobian():
+    implant = ArgusII()
+    encoder = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
+                               phase_dur=0.3, clock=0.1, frame_dur=100)
+    image = torch.zeros((13, 17), requires_grad=True)
+    waveform, time = encoder._encode_tensor(image)
+    template, template_time = encoder._encode_tensor(torch.ones_like(image))
+    npt.assert_equal(time, template_time)
+    assert torch.all(waveform == 0)
+
+    # A directional derivative avoids the zero derivative of a squared loss
+    # at the zero waveform.
+    (waveform * template.detach()).sum().backward()
+    assert image.grad is not None
+    assert torch.all(torch.isfinite(image.grad))
+    assert image.grad.abs().sum() > 0
+
+
 @pytest.mark.parametrize('make_implant,params,off', [
     # Sequential raster on a 0.1 ms clock, anodic first, interphase gap:
     (ArgusII, {'amp_range': (10, 50), 'freq': 60, 'phase_dur': 0.3,
@@ -443,13 +461,14 @@ def test_AmplitudeEncoder__encode_tensor_parity(make_implant, params, off):
         torch.tensor(img, dtype=torch.float32))
     assert waveform.dtype == torch.float32
     assert waveform.shape == (implant.n_electrodes, time.size)
-    npt.assert_equal(time, expected.time)
+    npt.assert_equal(time[[0, -1]], expected.time[[0, -1]])
     # Deactivated electrodes keep a zero row:
     on = np.isin(implant.electrode_names, expected.electrodes)
     npt.assert_equal(np.count_nonzero(~on), len(off))
     assert torch.all(waveform[~on] == 0)
-    npt.assert_allclose(waveform[on].numpy(), expected.data, rtol=1e-6,
-                        atol=1e-5)
+    sampled = np.vstack([np.interp(expected.time, time, row)
+                         for row in waveform[on].numpy()])
+    npt.assert_allclose(sampled, expected.data, rtol=1e-6, atol=1e-5)
     # Several pulses per electrode, some electrodes silent or not:
     starts = np.diff((waveform.numpy() != 0).astype(int), axis=1) == 1
     assert starts.sum(axis=1).max() >= 5
@@ -469,6 +488,13 @@ def test_AmplitudeEncoder__encode_tensor_errors():
         setattr(implant, what, value)
         with pytest.raises(NotImplementedError, match=what):
             AmplitudeEncoder(implant)._encode_tensor(img)
+
+    class CustomSafetyArgusII(ArgusII):
+        def check_stim(self, stim):
+            return None
+
+    with pytest.raises(NotImplementedError, match='check_stim'):
+        AmplitudeEncoder(CustomSafetyArgusII())._encode_tensor(img)
 
     class PreprocessingArgusII(ArgusII):
         def preprocess_stim(self, stim):
