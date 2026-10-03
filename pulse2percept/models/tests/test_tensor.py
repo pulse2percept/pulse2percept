@@ -11,7 +11,7 @@ from pulse2percept.models.base import _blend_meridian, _ModelResponse
 from pulse2percept.models.retina import (AxonMapSpatial, ScoreboardSpatial,
                                          Thompson2003Spatial)
 from pulse2percept.models.retina import beyeler2019
-from pulse2percept.stimuli import Stimulus
+from pulse2percept.stimuli import AmplitudeEncoder, ImageStimulus, Stimulus
 from pulse2percept.topography import Grid2D
 from pulse2percept.topography.retina import Curcio1990Map
 from pulse2percept.units import ms
@@ -237,6 +237,80 @@ def test_Model_tensor_requires_electrical_implant():
     waveform = torch.zeros((implant.n_electrodes, TIME.size))
     with pytest.raises(NotImplementedError, match='electrical current'):
         model._predict_tensor(waveform, TIME)
+
+
+def _image_model(implant=None, reduce='peak', amp_range=(10, 50), **params):
+    """Scoreboard + Fading model whose implant encodes images."""
+    implant = ArgusII() if implant is None else implant
+    names = implant.electrode_names
+    implant.deactivate([names[0], names[-1]])
+    implant.encoder = AmplitudeEncoder(
+        amp_range=amp_range, freq=60, phase_dur=0.3, interphase_dur=0.1,
+        cathodic_first=False, clock=0.1, frame_dur=100)
+    params = {'xrange': (-6, 6), 'yrange': (-5, 5), 'step': 0.5,
+              'thresh_percept': 0, **params}
+    return Model(ScoreboardSpatial(implant, **params),
+                 FadingTemporal(tau=2, reduce=reduce)).build()
+
+
+# An encoded image has no frame clock in `_predict_tensor`, so pass t_percept:
+IMAGE_T = [5.0, 20.0, 50.0, 99.0]
+
+
+@pytest.mark.parametrize('reduce', ['last', 'peak'])
+def test_Model_tensor_image_parity(reduce):
+    model = _image_model(reduce=reduce)
+    img = np.random.default_rng(7).uniform(-0.2, 1.2, (13, 17))
+    expected = model.predict_percept(ImageStimulus(img), t_percept=IMAGE_T)
+    waveform, time = model.implant.encoder._encode_tensor(
+        torch.tensor(img, dtype=torch.float32))
+    resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
+    npt.assert_allclose(resp.time, expected.time)
+    expected = expected.data.reshape(resp.data.shape)
+    assert np.abs(expected).max() > 1
+    npt.assert_allclose(resp.data.numpy(), expected, rtol=RTOL, atol=ATOL)
+
+
+def test_Model_tensor_image_autograd():
+    model = _image_model()
+    img = np.random.default_rng(7).uniform(0, 1, (13, 17))
+    image = torch.tensor(img, dtype=torch.float32, requires_grad=True)
+    waveform, time = model.implant.encoder._encode_tensor(image)
+    resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
+    # A NumPy round trip would drop the graph:
+    assert waveform.requires_grad and resp.data.requires_grad
+    resp.data.square().mean().backward()
+    assert image.grad is not None
+    assert torch.all(torch.isfinite(image.grad))
+    assert image.grad.abs().sum() > 0
+
+
+def test_Model_tensor_image_black_autograd():
+    # With amp_range[0] == 0, black keeps the pulse schedule but has zero
+    # amplitude. The squared response loss still has zero gradient at zero.
+    model = _image_model(amp_range=(0, 50))
+    image = torch.zeros((13, 17), requires_grad=True)
+    waveform, time = model.implant.encoder._encode_tensor(image)
+    assert time.size > 2 and torch.all(waveform == 0)
+    resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
+    assert waveform.requires_grad and resp.data.requires_grad
+    resp.data.square().mean().backward()
+    assert image.grad is not None
+    assert torch.all(torch.isfinite(image.grad))
+    assert torch.all(image.grad == 0)
+
+
+def test_Model_tensor_image_gradcheck():
+    # Exact gradient of image -> percept; gray levels stay inside (0, 1) so
+    # clipping is smooth, and amp_lo > 0 keeps every pulse in the schedule:
+    model = _image_model(ArgusI(), reduce='last', step=1)
+    img = np.random.default_rng(8).uniform(0.1, 0.9, (3, 4))
+
+    def percept(image):
+        waveform, time = model.implant.encoder._encode_tensor(image)
+        return model._predict_tensor(waveform, time, t_percept=[20.0]).data
+
+    torch.autograd.gradcheck(percept, (torch.tensor(img, requires_grad=True),))
 
 
 def _axon_spatial(implant=None, **params):

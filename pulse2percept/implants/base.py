@@ -32,6 +32,42 @@ def _implant_target(implant):
     return None
 
 
+def _grid_interval(grid, q):
+    """Return lower index, fractional offset, and in-range mask of ``q``.
+
+    Linear interpolation on an ascending ``grid``, as in
+    ``RegularGridInterpolator``; a 1-point grid contains only that point.
+    """
+    if np.any(np.diff(grid) <= 0):
+        raise ValueError("Image axis points must be strictly ascending.")
+    inside = (q >= grid[0]) & (q <= grid[-1])
+    if grid.size == 1:
+        return np.zeros(q.shape, dtype=np.int64), np.zeros(q.shape), inside
+    i = np.clip(np.searchsorted(grid, q, side='right') - 1, 0, grid.size - 2)
+    return i, (q - grid[i]) / (grid[i + 1] - grid[i]), inside
+
+
+def _bilinear_tensor(image, img_y, img_x, y, x):
+    """Return a Torch ``image`` sampled bilinearly at points ``(y, x)``.
+
+    Row ``r`` of ``image`` lies at ``img_y[r]`` and column ``c`` at
+    ``img_x[c]``. Points outside the grid are 0. Gradients flow to the
+    (at most four) pixels around each point.
+    """
+    import torch
+    iy, wy, in_y = _grid_interval(img_y, y)
+    ix, wx, in_x = _grid_interval(img_x, x)
+    iy1 = np.minimum(iy + 1, img_y.size - 1)
+    ix1 = np.minimum(ix + 1, img_x.size - 1)
+    rows = np.stack([iy, iy, iy1, iy1], axis=1)
+    cols = np.stack([ix, ix1, ix, ix1], axis=1)
+    weights = np.stack([(1 - wy) * (1 - wx), (1 - wy) * wx, wy * (1 - wx),
+                        wy * wx], axis=1) * (in_y & in_x)[:, np.newaxis]
+    rows, cols, weights = (torch.as_tensor(a, device=image.device)
+                           for a in (rows, cols, weights))
+    return (image[rows, cols] * weights.to(image.dtype)).sum(dim=1)
+
+
 def _ensemble_target(implants):
     """Return the target shared by ``implants``, ignoring neutral ones"""
     targets = {target for target in map(_implant_target, implants)
@@ -528,6 +564,31 @@ class Implant(PrettyPrint):
                 f"Number of electrodes in the stimulus ({len(stim.electrodes)}) "
                 f"does not match the number of electrodes in the implant ({self.n_electrodes})."
             )
+
+    def _sample_image_tensor(self, image):
+        """Return a 2D Torch gray image sampled at every electrode.
+
+        Same mapping as ``reshape_stim`` for a gray ``ImageStimulus``: the
+        image spans the electrode bounding box in device coordinates, row 0 at
+        the smallest y, bilinear interpolation. Returns shape
+        ``(n_electrodes,)`` in ``electrode_names`` order; gradients flow to
+        the pixels.
+        """
+        import torch
+        if not isinstance(image, torch.Tensor):
+            raise TypeError(f"'image' must be a torch.Tensor, not "
+                            f"{type(image)}.")
+        if image.dtype not in (torch.float32, torch.float64):
+            raise TypeError(f"'image' must be float32 or float64, not "
+                            f"{image.dtype}.")
+        if image.ndim != 2:
+            raise ValueError(f"'image' must be a gray image of shape (H, W), "
+                             f"not {tuple(image.shape)}.")
+        x, y = self.electrode_array.coordinates(um)[:, :2].T
+        img_h, img_w = image.shape
+        img_x = np.linspace(np.min(x), np.max(x), img_w)
+        img_y = np.linspace(np.min(y), np.max(y), img_h)
+        return _bilinear_tensor(image, img_y, img_x, y, x)
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):
