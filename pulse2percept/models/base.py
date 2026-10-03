@@ -265,6 +265,39 @@ def _is_tensor(data):
     return torch is not None and isinstance(data, torch.Tensor)
 
 
+def _implements_tensor(model, tensor, *legacy):
+    """Return whether ``model``'s ``tensor`` method implements ``legacy``.
+
+    A subclass that overrides only a legacy method changes the model, so the
+    tensor method it inherits no longer matches it.
+    """
+    mro = type(model).__mro__
+
+    def owner(name):
+        return next(cls for cls in mro if name in vars(cls))
+
+    return all(issubclass(owner(tensor), owner(name)) for name in legacy)
+
+
+def _tensor_waveform(spatial, stim):
+    """Return a prepared stimulus as a float32 Torch waveform and its times.
+
+    Rows follow ``implant.electrode_names``; electrodes missing from ``stim``
+    (silent or deactivated) are zero. Times are in ``spatial.time_unit``.
+    """
+    import torch
+    array = spatial.implant.electrode_array
+    # Resolve names and positions as the electrode array does, without
+    # string coercion:
+    row = {id(e): i for i, e in enumerate(array.electrode_objects)}
+    rows = [row[id(array[e])] for e in stim.electrodes]
+    time = spatial._stim_times(stim)
+    # float32, as in the Cython kernels:
+    waveform = np.zeros((len(row), time.size), dtype=np.float32)
+    waveform[rows] = spatial._stim_values(stim).reshape((-1, time.size))
+    return torch.from_numpy(waveform), time
+
+
 def _check_implant(implant):
     """Raise TypeError if ``implant`` is not an Implant"""
     if not isinstance(implant, Implant):
@@ -1066,6 +1099,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     #: irradiance, durations) instead of the delivered waveform.
     _needs_structured_stim = False
 
+    #: Whether ``Model.predict_percept`` runs ``_predict_tensor``, if
+    #: implemented, instead of ``_predict_spatial``.
+    _composite_tensor = True
+
     def __init__(self, implant, **params):
         self._validate_implant(implant)
         self._implant = implant
@@ -1703,6 +1740,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
                              f"not multiples of dt={self.dt:.2e}.")
         if _is_tensor(_stim.data):
             resp = self._predict_temporal_tensor(_stim, t_percept, reduce)
+            self._warn_if_blank(_stim, resp)
         elif _stim.data.size == 0:
             # Stimulus was compressed to zero:
             resp = np.zeros((n_space, t_percept.size), dtype=np.float32)
@@ -1736,10 +1774,15 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     def _warn_if_blank(self, stim, resp):
         """Warn when stimulus polarity explains an all-zero response.
         """
-        if np.any(resp) or not np.any(stim.data):
+        # Torch reductions keep tensors (and their graph) out of NumPy:
+        if _is_tensor(resp):
+            import torch as xp
+        else:
+            xp = np
+        if xp.any(resp) or not xp.any(stim.data):
             return
         # Only if *nothing* in the stimulus has the sign the model responds to:
-        if np.any(np.sign(stim.data) == self._drive_sign):
+        if xp.any(xp.sign(stim.data) == self._drive_sign):
             return
         polarity = 'cathodic (negative)' if self._drive_sign < 0 else \
             'anodic (positive)'
@@ -2030,7 +2073,9 @@ class Model(Frozen, PrettyPrint):
                              f"t_percept={t_percept}, because stimulus/percept does not "
                              f"have a time component.")
 
-        if self.has_space and self.has_time:
+        if self._uses_tensor_core(stim):
+            resp = self._predict_tensor_core(stim, t_percept)
+        elif self.has_space and self.has_time:
             combine = getattr(self.spatial, '_combine_temporal', None)
             # Schedule-reading spatial stages need the structured stimulus;
             # the rest integrate the delivered waveform downstream.
@@ -2057,6 +2102,37 @@ class Model(Frozen, PrettyPrint):
             resp = self.temporal._predict_response(stim, t_percept=t_percept)
         # Only a temporal-only model has no grid; it reuses a Percept input's:
         return _to_percept(resp, inherit_space_from=stim)
+
+    def _uses_tensor_core(self, stim):
+        """Return whether a prepared stimulus runs on ``_predict_tensor``."""
+        if not (self.has_space and self.has_time and _has_time_axis(stim)):
+            return False
+        spatial = self.spatial
+        return (spatial._composite_tensor and
+                not spatial._needs_structured_stim and
+                spatial.n_gray is None and
+                self.implant.stimulus_unit.dimension == uA.dimension and
+                _implements_tensor(spatial, '_predict_tensor',
+                                   '_predict_spatial',
+                                   '_postprocess_spatial') and
+                _implements_tensor(self.temporal, '_predict_temporal_tensor',
+                                   '_predict_temporal'))
+
+    def _predict_tensor_core(self, stim, t_percept):
+        """Return the NumPy-backed Torch response to a prepared stimulus."""
+        import torch
+        # The compressed copy `SpatialModel._predict_response` reads and
+        # stores as provenance:
+        delivered = deepcopy(_delivered(stim))
+        if not delivered.is_compressed:
+            delivered.compress()
+        waveform, time = _tensor_waveform(self.spatial, delivered)
+        # Public prediction returns NumPy, so no autograd graph is needed:
+        with torch.inference_mode():
+            resp = self._predict_tensor(waveform, time, t_percept=t_percept,
+                                        frame_clock=_encoder_clock(stim))
+        resp.metadata['stim'] = delivered
+        return replace(resp, data=resp.data.numpy())
 
     def _predict_tensor(self, waveform, time, t_percept=None,
                         frame_clock=None):

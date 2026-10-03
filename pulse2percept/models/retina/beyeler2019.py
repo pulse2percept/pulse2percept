@@ -577,6 +577,10 @@ class AxonMapSpatial(RetinalSpatial):
     #: relative electrode drive, so an encoder is optional.
     _accepts_dimensionless_drive = True
 
+    #: The Torch core is 3-7x slower than Cython on CPU (dense segment
+    #: Gaussians, padded argmax), so public prediction stays on Cython:
+    _composite_tensor = False
+
     def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,

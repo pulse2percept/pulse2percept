@@ -7,7 +7,8 @@ import torch
 from pulse2percept.implants.cortex import LinearEdgeThread, Neuralink, Orion
 from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.models.cortex import ScoreboardSpatial
-from pulse2percept.models.tests.test_tensor import ATOL, RTOL, TIME, _waveform
+from pulse2percept.models.tests.test_tensor import (ATOL, RTOL, TIME,
+                                                    _cython_percept, _waveform)
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.units import mm
@@ -251,7 +252,8 @@ def _model(reduce='peak', **params):
 def test_Model_tensor_parity(reduce, t_percept):
     model = _model(reduce=reduce)
     wf = _waveform(model.implant.n_electrodes)
-    expected = model.predict_percept(
+    expected = _cython_percept(
+        model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME),
         t_percept=t_percept)
     resp = model._predict_tensor(torch.tensor(wf, dtype=torch.float32), TIME,
@@ -296,7 +298,8 @@ def test_Model_tensor_3d(reduce):
     model = Model(_spatial_3d(), FadingTemporal(tau=2, reduce=reduce))
     wf = _waveform(model.implant.n_electrodes)
     t_percept = [0.5, 1.0, 2.0, 25.0, 60.0]
-    expected = model.predict_percept(
+    expected = _cython_percept(
+        model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME),
         t_percept=t_percept)
     waveform = torch.tensor(wf, dtype=torch.float32, requires_grad=True)

@@ -1495,7 +1495,8 @@ def test_Model_matches_explicit_stage_composition():
     percept = model.predict_percept(composite_stim())
     explicit = model.temporal.predict_percept(
         model.spatial.predict_percept(composite_stim()))
-    npt.assert_array_equal(percept.data, explicit.data)
+    # The composite runs on Torch, the separate stages on Cython:
+    npt.assert_allclose(percept.data, explicit.data, rtol=1e-6, atol=1e-5)
     npt.assert_array_equal(percept.time, explicit.time)
     npt.assert_equal(percept.time_unit, explicit.time_unit)
     npt.assert_array_equal(percept.xdva, explicit.xdva)
