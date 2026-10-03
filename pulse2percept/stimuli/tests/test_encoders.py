@@ -408,14 +408,15 @@ def test_AmplitudeEncoder__encode_tensor_amplitudes(cathodic_first):
     encoder = AmplitudeEncoder(implant, amp_range=(10, 50), freq=20,
                                cathodic_first=cathodic_first)
     # Black is 10 uA, not silent:
-    waveform, _ = encoder._encode_tensor(torch.tensor([[0, 0.25], [0.5, 1]]))
+    waveform, _, _ = encoder._encode_tensor(
+        torch.tensor([[0, 0.25], [0.5, 1]]))
     npt.assert_allclose(waveform.abs().amax(dim=1).numpy(), [10, 20, 30, 50])
     # The pulse template, not `amp_range`, sets the sign:
     lead = [row[row != 0][0].item() for row in waveform]
     npt.assert_equal(np.sign(lead), -1 if cathodic_first else 1)
     # Gray levels are clipped after sampling; clipped pixels get no gradient:
     image = torch.tensor([[-1.0, 0.25], [0.5, 2.0]], requires_grad=True)
-    waveform, _ = encoder._encode_tensor(image)
+    waveform, _, _ = encoder._encode_tensor(image)
     npt.assert_allclose(waveform.detach().abs().amax(dim=1).numpy(),
                         [10, 20, 30, 50])
     waveform.abs().sum().backward()
@@ -427,8 +428,9 @@ def test_AmplitudeEncoder__encode_tensor_zero_amplitude_jacobian():
     encoder = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20,
                                phase_dur=0.3, clock=0.1, frame_dur=100)
     image = torch.zeros((13, 17), requires_grad=True)
-    waveform, time = encoder._encode_tensor(image)
-    template, template_time = encoder._encode_tensor(torch.ones_like(image))
+    waveform, time, _ = encoder._encode_tensor(image)
+    template, template_time, _ = encoder._encode_tensor(
+        torch.ones_like(image))
     npt.assert_equal(time, template_time)
     assert torch.all(waveform == 0)
 
@@ -457,7 +459,7 @@ def test_AmplitudeEncoder__encode_tensor_parity(make_implant, params, off):
     img = np.random.default_rng(5).uniform(-0.3, 1.3, (7, 11))
     encoder = AmplitudeEncoder(implant, **params)
     expected = implant.prepare_stim(encoder.encode(ImageStimulus(img)))
-    waveform, time = encoder._encode_tensor(
+    waveform, time, _ = encoder._encode_tensor(
         torch.tensor(img, dtype=torch.float32))
     assert waveform.dtype == torch.float32
     assert waveform.shape == (implant.n_electrodes, time.size)
@@ -511,6 +513,165 @@ def test_AmplitudeEncoder__encode_tensor_errors():
     for params in ({'n_levels': 4}, {'stretch': True}):
         with pytest.raises(NotImplementedError, match='n_levels'):
             AmplitudeEncoder(ArgusII(), **params)._encode_tensor(img)
+
+
+def _assert_clock(clock, encoded):
+    """Assert a tensor frame clock equals the NumPy encoder's"""
+    npt.assert_equal(clock.time, encoded._frame_time)
+    assert clock.dur == encoded._frame_dur
+    npt.assert_equal(clock.source_time, encoded._source_time)
+    assert clock.source_dur == encoded._source_dur
+
+
+@pytest.mark.parametrize('frame_dur', (None, 40))
+@pytest.mark.parametrize('make_implant,params,off', [
+    # Sequential raster on a 0.1 ms clock, anodic first, interphase gap:
+    (ArgusII, {'amp_range': (10, 50), 'freq': 60, 'phase_dur': 0.3,
+               'interphase_dur': 0.1, 'cathodic_first': False,
+               'clock': 0.1}, ['A1', 'F10']),
+    # Custom pulse, no raster; black electrodes get 0 uA and no pulses:
+    (lambda: GridImplant((3, 4), 400),
+     {'amp_range': (0, 30), 'freq': 130,
+      'pulse': BiphasicPulse(1, 0.2, interphase_dur=0.05)}, []),
+])
+def test_AmplitudeEncoder__encode_tensor_video_parity(make_implant, params,
+                                                      off, frame_dur):
+    implant = make_implant()
+    if off:
+        implant.deactivate(off)
+    vid = np.random.default_rng(6).uniform(-0.3, 1.3, (7, 11, 5))
+    encoder = AmplitudeEncoder(implant, frame_dur=frame_dur, **params)
+    encoded = encoder.encode(VideoStimulus(vid, metadata={'fps': 29.97}))
+    expected = implant.prepare_stim(encoded)
+    waveform, time, clock = encoder._encode_tensor(
+        torch.tensor(vid, dtype=torch.float32), fps=29.97)
+    assert waveform.shape == (implant.n_electrodes, time.size)
+    npt.assert_equal(time[[0, -1]], expected.time[[0, -1]])
+    # Explicit `frame_dur` drops the source clock, as in NumPy:
+    _assert_clock(clock, encoded)
+    assert (clock.source_time is None) == (frame_dur is not None)
+    on = np.isin(implant.electrode_names, expected.electrodes)
+    assert torch.all(waveform[~on] == 0)
+    # Extra schedule points refine, not change, the legacy waveform:
+    expected_full = np.vstack([np.interp(time, expected.time, row)
+                               for row in expected.data])
+    npt.assert_allclose(waveform[on].numpy(), expected_full, rtol=1e-6,
+                        atol=1e-5)
+
+
+def test_AmplitudeEncoder__encode_tensor_video_time():
+    # Explicit frame onsets, with `fps` setting only the frame duration, as
+    # in `VideoStimulus`:
+    implant = GridImplant((3, 4), 400)
+    encoder = AmplitudeEncoder(implant, freq=50)
+    vid = np.random.default_rng(9).uniform(0, 1, (5, 6, 3))
+    t = [10.0, 30.0, 50.0]
+    for time, fps, kwargs in ((t, None, {'time': t}),
+                              (t, 40, {'time': t, 'fps': 40}),
+                              (None, 40, {'fps': 0.04 * kHz}),
+                              (t, None, {'time': [0.01, 0.03, 0.05] * sec})):
+        meta = {} if fps is None else {'fps': fps}
+        encoded = encoder.encode(VideoStimulus(vid, time=time,
+                                               metadata=meta))
+        _, wf_time, clock = encoder._encode_tensor(torch.tensor(vid),
+                                                   **kwargs)
+        _assert_clock(clock, encoded)
+        npt.assert_equal(wf_time[[0, -1]], encoded.time[[0, -1]])
+    # Default 1 ms frames, as in `VideoStimulus(vid)`:
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        encoded = encoder.encode(VideoStimulus(vid))
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        _, _, clock = encoder._encode_tensor(torch.tensor(vid))
+    _assert_clock(clock, encoded)
+    # One frame is still a video, with video timing:
+    encoded = encoder.encode(VideoStimulus(vid[..., :1]))
+    _, _, clock = encoder._encode_tensor(torch.tensor(vid[..., :1]))
+    _assert_clock(clock, encoded)
+    assert clock.source_time is not None
+
+
+def _pulses(row, time):
+    """Return onset (ms) and peak |amplitude| of each pulse in one row"""
+    row = np.abs(np.asarray(row))
+    idx = np.flatnonzero(row)
+    # Pulses last ~1 ms and are spaced much further apart:
+    pulses = np.split(idx, np.flatnonzero(np.diff(time[idx]) > 2) + 1)
+    return (np.array([time[p[0] - 1] for p in pulses]),
+            np.array([row[p].max() for p in pulses]))
+
+
+def _corner_implant():
+    """Implant whose electrodes sample the four corners of an image"""
+    pos = [(-600, -600), (600, -600), (-600, 600), (600, 600)]
+    return Implant(ElectrodeArray({n: DiskElectrode(x, y, 0, 100)
+                                   for n, (x, y) in zip('ABCD', pos)}))
+
+
+def test_AmplitudeEncoder__encode_tensor_frame_boundaries():
+    # 100 ms frames, 25 ms pulse period: pulses at 75 and 175 ms end a frame,
+    # pulses at 100 and 200 ms start one exactly on its boundary:
+    encoder = AmplitudeEncoder(_corner_implant(), amp_range=(0, 100), freq=40)
+    vid = np.ones((2, 2, 3)) * [0.1, 0.9, 0.2]
+    waveform, time, _ = encoder._encode_tensor(torch.tensor(vid), fps=10)
+    onset, peak = _pulses(waveform[0].numpy(), time)
+    expected = encoder.encode(VideoStimulus(vid, metadata={'fps': 10}))
+    npt.assert_allclose((onset, peak),
+                        _pulses(expected.data[0], expected.time), atol=1e-4)
+    at = np.searchsorted(onset, [75, 100, 175, 200])
+    npt.assert_allclose(onset[at], [75, 100, 175, 200])
+    # A pulse on a boundary belongs to the frame that starts there:
+    npt.assert_allclose(peak[at], [10, 90, 90, 20], rtol=1e-6)
+
+
+def test_AmplitudeEncoder__encode_tensor_pulse_clock():
+    # The 20 Hz pulse clock runs through 29.97 fps frame boundaries, with
+    # the same onsets at any frame rate:
+    encoder = AmplitudeEncoder(_corner_implant(), amp_range=(10, 50),
+                               freq=20)
+    onsets = []
+    for fps, n_frames in ((29.97, 10), (10, 3), (60, 18)):
+        vid = np.random.default_rng(n_frames).uniform(0, 1, (2, 2, n_frames))
+        with warnings.catch_warnings():
+            # Frames shorter than the pulse period warn:
+            warnings.simplefilter('ignore', UserWarning)
+            waveform, time, _ = encoder._encode_tensor(torch.tensor(vid),
+                                                       fps=fps)
+        onset, peak = _pulses(waveform[0].numpy(), time)
+        npt.assert_allclose(onset, 50 * np.arange(onset.size), atol=DT)
+        # Each pulse carries the gray level of the frame it starts in:
+        frame = np.floor(onset * fps / 1000 + 1e-6).astype(int)
+        npt.assert_allclose(peak, 10 + 40 * vid[0, 0, frame], rtol=1e-6)
+        onsets.append(onset)
+    # About 300 ms of video each (333.7 ms at 29.97 fps):
+    npt.assert_equal([o.size for o in onsets], [7, 6, 6])
+    npt.assert_allclose(onsets[1], onsets[0][:6])
+    npt.assert_allclose(onsets[2], onsets[1])
+
+
+def test_AmplitudeEncoder__encode_tensor_video_errors():
+    encoder = AmplitudeEncoder(ArgusII())
+    vid = torch.ones((3, 4, 5))
+    with pytest.raises(ValueError, match='gray image'):
+        encoder._encode_tensor(torch.ones((3, 4, 3, 5)))
+    with pytest.raises(ValueError, match='gray image'):
+        encoder._encode_tensor(torch.ones(4))
+    with pytest.raises(TypeError, match='float32 or float64'):
+        encoder._encode_tensor(vid.to(torch.int64))
+    with pytest.raises(ValueError, match='require a video'):
+        encoder._encode_tensor(vid[..., 0], fps=30)
+    with pytest.raises(ValueError, match=r"shape \(5,\)"):
+        encoder._encode_tensor(vid, time=np.arange(4.0))
+    for time in ([0, 1, np.nan, 3, 4], [0, 1, 1, 3, 4], [4, 3, 2, 1, 0]):
+        with pytest.raises(ValueError, match='finite and strictly'):
+            encoder._encode_tensor(vid, time=time)
+    for fps in (0, -30, np.nan, np.inf):
+        with pytest.raises(ValueError, match='fps'):
+            encoder._encode_tensor(vid, fps=fps)
+    with pytest.raises(DimensionMismatchError):
+        encoder._encode_tensor(vid, fps=30 * ms)
+    # As in NumPy, uneven frames need `fps` for a frame duration:
+    with pytest.raises(NotImplementedError, match='non-homogeneous'):
+        encoder._encode_tensor(vid, time=[0, 1, 3, 4, 5])
 
 
 def whole_pulses(freq, frame_dur, pulse_dur=0.92):

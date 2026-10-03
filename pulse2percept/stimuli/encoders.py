@@ -7,6 +7,7 @@
    :py:class:`~pulse2percept.stimuli.PhotovoltaicEncoder`,
    :py:class:`~pulse2percept.stimuli.PRIMAEncoder`"""
 from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
 import math
 import numpy as np
 from copy import deepcopy
@@ -56,6 +57,19 @@ def _fps(metadata):
         return metadata['fps']
     user = metadata.get('user')
     return user.get('fps') if isinstance(user, dict) else None
+
+
+@dataclass(frozen=True)
+class _FrameClock:
+    """Encoder frame clock, in ms.
+
+    ``time``/``dur`` are the encoder frames (e.g., projector pulse periods);
+    ``source_time``/``source_dur`` are the source-video frames, or None.
+    """
+    time: object
+    dur: float
+    source_time: object = None
+    source_dur: float = None
 
 
 class _EncodedStimulus(Stimulus):
@@ -325,6 +339,32 @@ def _sampled_frames(source, implant=None, frame_dur=None):
         # Explicit frame_dur replaces source frame timing.
         frame_time = np.arange(gray.shape[1], dtype=np.float64) * frame_dur
     return gray, stim.electrodes, frame_time, frame_dur
+
+
+def _video_frames(n_frames, time=None, fps=None, frame_dur=None):
+    """Return frame onsets and duration (ms) of a video without a Stimulus.
+
+    Resolves ``time``/``fps`` as ``VideoStimulus`` does, then retimes the
+    frames as ``_sampled_frames`` does.
+    """
+    fps = as_value(fps, Hz, 'fps')
+    if fps is not None:
+        _finite('fps', fps)
+        if fps <= 0:
+            raise ValueError(f"'fps' must be greater than zero, not {fps}.")
+    if time is None:
+        time = np.arange(n_frames)
+        if fps is not None:
+            time = time * MS_PER_S / fps
+    time = np.asarray(as_value(time, ms, 'time'), dtype=np.float64)
+    if time.shape != (n_frames,):
+        raise ValueError(f"'time' must have shape ({n_frames},) to match the "
+                         f"frames, not {time.shape}.")
+    if not np.all(np.isfinite(time)) or np.any(np.diff(time) <= 0):
+        raise ValueError("'time' must be finite and strictly increasing.")
+    if frame_dur is None:
+        return time, frame_interval(time, fps=fps)
+    return np.arange(n_frames, dtype=np.float64) * frame_dur, frame_dur
 
 
 class Encoder(PrettyPrint, metaclass=ABCMeta):
@@ -1089,13 +1129,14 @@ class AmplitudeEncoder(PulseEncoder):
         amp_lo, amp_hi = self.amp_range
         return amp_lo + gray * (amp_hi - amp_lo), self.freq
 
-    def _encode_tensor(self, image):
-        """Return the pulse trains for a 2D Torch gray image, and their time.
+    def _encode_tensor(self, source, time=None, fps=None):
+        """Return the pulse trains for a Torch gray image or video.
 
-        Matches ``implant.prepare_stim(encode(ImageStimulus(image)))``, except
-        that deactivated electrodes keep a zero row and zero-amplitude
-        electrodes retain their pulse schedule. Gradients flow to the pixels
-        through sampling and amplitude; pulse timing has none.
+        Matches ``implant.prepare_stim(encode(ImageStimulus(source)))``, or
+        ``VideoStimulus(source, time=time, metadata={'fps': fps})`` for a
+        video, except that deactivated electrodes keep a zero row and
+        zero-amplitude electrodes retain their pulse schedule. Gradients flow
+        to the pixels through sampling and amplitude; pulse timing has none.
 
         Requires a bound, current-driven implant without custom preprocessing,
         safety checks, ``safe_mode`` or ``max_current``, and ``amp_range`` in
@@ -1103,9 +1144,16 @@ class AmplitudeEncoder(PulseEncoder):
 
         Parameters
         ----------
-        image : torch.Tensor
-            float32 or float64 gray levels, shape ``(H, W)``, sampled as by
+        source : torch.Tensor
+            float32 or float64 gray levels, shape ``(H, W)`` (image) or
+            ``(H, W, n_frames)`` (video), sampled as by
             ``implant.reshape_stim``.
+        time : array-like, optional
+            Video frame onsets (ms). Defaults to ``fps`` spacing, else 1 ms
+            spacing, as in ``VideoStimulus``.
+        fps : float, optional
+            Video frame rate (Hz). Sets the frame duration; ``freq``, not
+            ``fps``, sets the pulse clock.
 
         Returns
         -------
@@ -1114,6 +1162,9 @@ class AmplitudeEncoder(PulseEncoder):
             rows in ``implant.electrode_names`` order.
         time : ``(T,)`` np.ndarray
             Sample times (ms).
+        frame_clock : _FrameClock
+            Encoder frames, plus the source-video frames unless ``frame_dur``
+            retimes the video.
         """
         import torch
         if self.implant is None:
@@ -1149,25 +1200,37 @@ class AmplitudeEncoder(PulseEncoder):
             # Both depend discretely or globally on the gray levels:
             raise NotImplementedError("Tensor encoding does not support "
                                       "'n_levels' or 'stretch'.")
-        gray = self.implant._sample_image_tensor(image)
+        gray = self.implant._sample_image_tensor(source)
         # Keep the one-sided derivative at the valid gray-level endpoints:
         gray = torch.where(gray < 0, 0, torch.where(gray > 1, 1, gray))
-        amp, freq = self._modulate(gray[:, None])
-        frame_dur = (_DEFAULT_FRAME_DUR if self.frame_dur is None
-                     else self.frame_dur)
+        timed = gray.ndim == 2 and self.frame_dur is None
+        if gray.ndim == 1:
+            if time is not None or fps is not None:
+                raise ValueError("'time' and 'fps' require a video of shape "
+                                 "(H, W, n_frames).")
+            gray = gray[:, None]
+            frame_time = np.zeros(1, dtype=np.float64)
+            frame_dur = (_DEFAULT_FRAME_DUR if self.frame_dur is None
+                         else self.frame_dur)
+        else:
+            frame_time, frame_dur = _video_frames(gray.shape[1], time, fps,
+                                                  self.frame_dur)
+        amp, freq = self._modulate(gray)
         # Pulse timing depends on frequency, not amplitude. Keep every firing
         # electrode in the schedule; differentiable amplitudes scale pulses.
         sched = self._assemble(
-            np.zeros((gray.shape[0], 1), dtype=np.float32), freq,
-            self.implant.electrode_names, np.zeros(1, dtype=np.float64),
-            frame_dur, schedule_mask=freq > 0)
+            np.zeros(gray.shape, dtype=np.float32), freq,
+            self.implant.electrode_names, frame_time, frame_dur, timed=timed,
+            schedule_mask=freq > 0)
         # Deactivated electrodes keep their row and, as in `prepare_stim`,
         # their pulse times:
         on = torch.tensor([e.activated
                            for e in self.implant.electrode_objects],
                           device=amp.device)
         amp = torch.where(on[:, None], amp, 0)
-        return sched._render_tensor(amp), sched.time.copy()
+        clock = _FrameClock(sched._frame_time, sched._frame_dur,
+                            sched._source_time, sched._source_dur)
+        return sched._render_tensor(amp), sched.time.copy(), clock
 
 
 class FrequencyEncoder(PulseEncoder):
