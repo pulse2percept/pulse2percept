@@ -1495,7 +1495,8 @@ def test_Model_matches_explicit_stage_composition():
     percept = model.predict_percept(composite_stim())
     explicit = model.temporal.predict_percept(
         model.spatial.predict_percept(composite_stim()))
-    npt.assert_array_equal(percept.data, explicit.data)
+    # The composite runs on Torch, the separate stages on Cython:
+    npt.assert_allclose(percept.data, explicit.data, rtol=1e-6, atol=1e-5)
     npt.assert_array_equal(percept.time, explicit.time)
     npt.assert_equal(percept.time_unit, explicit.time_unit)
     npt.assert_array_equal(percept.xdva, explicit.xdva)
@@ -1525,7 +1526,14 @@ def test_Model_temporal_stage_receives_no_percept(monkeypatch):
                                        seen.time.size))
 
 
-def test_Model_ignores_response_metadata(monkeypatch):
+@pytest.mark.parametrize('metadata', [
+    None,
+    {},
+    # Metadata that would imply another clock:
+    {'encoder': {'frame_time': np.zeros(1), 'frame_dur': 500.0},
+     'stim': None, 'source_frame_time': np.zeros(1)},
+])
+def test_Model_ignores_response_metadata(metadata, monkeypatch):
     # The encoder frame clock sets output times and 'peak' intervals, so it
     # must not depend on metadata:
     implant = ArgusI()
@@ -1535,14 +1543,17 @@ def test_Model_ignores_response_metadata(monkeypatch):
     model = Model(ScoreboardSpatial(implant, xrange=(-2, 2), yrange=(-2, 2),
                                     step=1), FadingTemporal(tau=100)).build()
     ref = model.predict_percept(stim)
-    original = ScoreboardSpatial._predict_response
+    # The composite runs on the Torch core:
+    original = ScoreboardSpatial._predict_tensor
+    calls = []
 
-    def strip(self, stim, t_percept=None):
-        return replace(original(self, stim, t_percept=t_percept),
-                       metadata=None)
+    def mutate(self, waveform, time):
+        calls.append(1)
+        return replace(original(self, waveform, time), metadata=metadata)
 
-    monkeypatch.setattr(ScoreboardSpatial, '_predict_response', strip)
+    monkeypatch.setattr(ScoreboardSpatial, '_predict_tensor', mutate)
     got = model.predict_percept(stim)
+    npt.assert_equal(len(calls), 1)
     npt.assert_equal(got.data.shape[-1], 6)
     npt.assert_array_equal(got.data, ref.data)
     npt.assert_array_equal(got.time, ref.time)

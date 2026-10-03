@@ -1164,8 +1164,8 @@ class AxonMapSpatial(RetinalSpatial):
                        torch.as_tensor(pos, device=device))
                 packed[idx] = seg_resp[:-1].abs()
                 # First largest |response|, matching the strict `>` update in
-                # Cython:
-                best = packed.argmax(dim=1)
+                # Cython. `max` over a middle dim is ~10x faster than `argmax`:
+                best = packed.max(dim=1).indices
             rows = torch.as_tensor(first, device=device)[:, None] + best
             empty = torch.as_tensor(counts == 0, device=device)[:, None]
             rows = rows.masked_fill(empty, int(hi - lo))
