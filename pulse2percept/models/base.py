@@ -265,20 +265,6 @@ def _is_tensor(data):
     return torch is not None and isinstance(data, torch.Tensor)
 
 
-def _implements_tensor(model, tensor, *legacy):
-    """Return whether ``model``'s ``tensor`` method implements ``legacy``.
-
-    A subclass that overrides only a legacy method changes the model, so the
-    tensor method it inherits no longer matches it.
-    """
-    mro = type(model).__mro__
-
-    def owner(name):
-        return next(cls for cls in mro if name in vars(cls))
-
-    return all(issubclass(owner(tensor), owner(name)) for name in legacy)
-
-
 def _tensor_waveform(spatial, stim):
     """Return a prepared stimulus as a float32 Torch waveform and its times.
 
@@ -2104,14 +2090,13 @@ class Model(Frozen, PrettyPrint):
         if not (self.has_space and self.has_time and _has_time_axis(stim)):
             return False
         spatial = self.spatial
+        # Only classes that define their own tensor method: a subclass can
+        # change legacy semantics in ways an inherited one would ignore.
         return (not spatial._needs_structured_stim and
                 spatial.n_gray is None and
                 self.implant.stimulus_unit.dimension == uA.dimension and
-                _implements_tensor(spatial, '_predict_tensor',
-                                   '_predict_spatial',
-                                   '_postprocess_spatial') and
-                _implements_tensor(self.temporal, '_predict_temporal_tensor',
-                                   '_predict_temporal'))
+                '_predict_tensor' in vars(type(spatial)) and
+                '_predict_temporal_tensor' in vars(type(self.temporal)))
 
     def _predict_tensor_core(self, stim, t_percept):
         """Return the NumPy-backed Torch response to a prepared stimulus."""

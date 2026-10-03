@@ -674,20 +674,37 @@ def test_Model_predict_percept_skips_cython(kind, monkeypatch):
     assert np.abs(model.predict_percept(source).data).max() > 0
 
 
-class _DoubledScoreboard(ScoreboardSpatial):
-    """Overrides only the Cython path; the inherited tensor core is stale."""
+# Subclasses that inherit a tensor core keep the legacy path, whichever
+# legacy hook they override:
 
+class _DoubledScoreboard(ScoreboardSpatial):
     def _predict_spatial(self, electrode_array, stim):
         return 2 * super()._predict_spatial(electrode_array, stim)
+
+
+class _DoubledResponse(ScoreboardSpatial):
+    def _predict_response(self, stim, t_percept=None):
+        resp = super()._predict_response(stim, t_percept=t_percept)
+        return replace(resp, data=2 * resp.data)
+
+
+class _HalvedFading(FadingTemporal):
+    def _stim_values(self, stim):
+        return 0.5 * super()._stim_values(stim)
+
+
+def _subclassed(spatial=ScoreboardSpatial, temporal=FadingTemporal):
+    return Model(spatial(ArgusI(), xrange=(-6, 6), yrange=(-5, 5), step=0.5),
+                 temporal(tau=2))
 
 
 @pytest.mark.parametrize('model, reference', [
     (lambda: Model(_spatial(n_gray=8), FadingTemporal(tau=2)),
      _cython_percept),
     (lambda: Model(_spatial(), AlphaTemporal(tau=2)), _cython_percept),
-    (lambda: Model(_DoubledScoreboard(ArgusI(), xrange=(-6, 6),
-                                      yrange=(-5, 5), step=0.5),
-                   FadingTemporal(tau=2)), _cython_percept),
+    (lambda: _subclassed(spatial=_DoubledScoreboard), _cython_percept),
+    (lambda: _subclassed(spatial=_DoubledResponse), _cython_percept),
+    (lambda: _subclassed(temporal=_HalvedFading), _cython_percept),
     (lambda: Model(_spatial()),
      lambda model, source: model.spatial.predict_percept(source)),
     (lambda: Model(temporal=FadingTemporal(tau=2)),

@@ -95,6 +95,16 @@ def as_current(implant, picture, amp_max=GRAY_LEVEL_UA):
                                 time=stim.time)
 
 
+def axonmap_fading(implant, verbose, n_threads, **axon_cache):
+    """Return an AxonMap + Fading composite; cache keywords go to AxonMap."""
+    return p2p.models.Model(
+        spatial=p2p.models.retina.AxonMapSpatial(
+            implant, xrange=(-12, 12), yrange=(-8, 8), verbose=verbose,
+            n_threads=n_threads, **axon_cache),
+        temporal=p2p.models.FadingTemporal(verbose=verbose,
+                                           n_threads=n_threads))
+
+
 @dataclass(frozen=True)
 class Scenario:
     """One stimulus/implant/model pipeline.
@@ -217,6 +227,15 @@ SCENARIOS = [
             spatial=p2p.models.retina.ScoreboardSpatial(
                 implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
             temporal=p2p.models.FadingTemporal(**kwargs)),
+    ),
+    # AxonMap + Fading: the spatial-only AxonMap scenarios never reach the
+    # composite's Torch AxonMap core:
+    Scenario(
+        id='argus2_axonmap_fading_ptrain',
+        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
+        implant=p2p.implants.retina.ArgusII,
+        model=axonmap_fading,
+        caches_axons=True,
     ),
     # 94-frame video: the spatial model runs once per frame, so one
     # predict_percept takes ~1 min (images: well under 1 s):
