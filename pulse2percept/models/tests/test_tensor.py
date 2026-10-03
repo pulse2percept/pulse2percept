@@ -11,7 +11,8 @@ from pulse2percept.models.base import _blend_meridian, _ModelResponse
 from pulse2percept.models.retina import (AxonMapSpatial, ScoreboardSpatial,
                                          Thompson2003Spatial)
 from pulse2percept.models.retina import beyeler2019
-from pulse2percept.stimuli import AmplitudeEncoder, ImageStimulus, Stimulus
+from pulse2percept.stimuli import (AmplitudeEncoder, ImageStimulus, Stimulus,
+                                   VideoStimulus)
 from pulse2percept.topography import Grid2D
 from pulse2percept.topography.retina import Curcio1990Map
 from pulse2percept.units import ms
@@ -253,7 +254,7 @@ def _image_model(implant=None, reduce='peak', amp_range=(10, 50), **params):
                  FadingTemporal(tau=2, reduce=reduce)).build()
 
 
-# An encoded image has no frame clock in `_predict_tensor`, so pass t_percept:
+# Output times within the 100 ms image frame:
 IMAGE_T = [5.0, 20.0, 50.0, 99.0]
 
 
@@ -262,7 +263,7 @@ def test_Model_tensor_image_parity(reduce):
     model = _image_model(reduce=reduce)
     img = np.random.default_rng(7).uniform(-0.2, 1.2, (13, 17))
     expected = model.predict_percept(ImageStimulus(img), t_percept=IMAGE_T)
-    waveform, time = model.implant.encoder._encode_tensor(
+    waveform, time, _ = model.implant.encoder._encode_tensor(
         torch.tensor(img, dtype=torch.float32))
     resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
     npt.assert_allclose(resp.time, expected.time)
@@ -275,7 +276,7 @@ def test_Model_tensor_image_autograd():
     model = _image_model()
     img = np.random.default_rng(7).uniform(0, 1, (13, 17))
     image = torch.tensor(img, dtype=torch.float32, requires_grad=True)
-    waveform, time = model.implant.encoder._encode_tensor(image)
+    waveform, time, _ = model.implant.encoder._encode_tensor(image)
     resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
     # A NumPy round trip would drop the graph:
     assert waveform.requires_grad and resp.data.requires_grad
@@ -290,7 +291,7 @@ def test_Model_tensor_image_black_autograd():
     # amplitude. The squared response loss still has zero gradient at zero.
     model = _image_model(amp_range=(0, 50))
     image = torch.zeros((13, 17), requires_grad=True)
-    waveform, time = model.implant.encoder._encode_tensor(image)
+    waveform, time, _ = model.implant.encoder._encode_tensor(image)
     assert time.size > 2 and torch.all(waveform == 0)
     resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
     assert waveform.requires_grad and resp.data.requires_grad
@@ -307,10 +308,80 @@ def test_Model_tensor_image_gradcheck():
     img = np.random.default_rng(8).uniform(0.1, 0.9, (3, 4))
 
     def percept(image):
-        waveform, time = model.implant.encoder._encode_tensor(image)
+        waveform, time, _ = model.implant.encoder._encode_tensor(image)
         return model._predict_tensor(waveform, time, t_percept=[20.0]).data
 
     torch.autograd.gradcheck(percept, (torch.tensor(img, requires_grad=True),))
+
+
+@pytest.mark.parametrize('reduce', ['last', 'peak'])
+def test_Model_tensor_image_frame_clock(reduce):
+    # With the encoder's frame clock, automatic output times match the
+    # public image path:
+    model = _image_model(reduce=reduce)
+    img = np.random.default_rng(7).uniform(0, 1, (13, 17))
+    expected = model.predict_percept(ImageStimulus(img))
+    waveform, time, clock = model.implant.encoder._encode_tensor(
+        torch.tensor(img, dtype=torch.float32))
+    resp = model._predict_tensor(waveform, time, frame_clock=clock)
+    npt.assert_equal(resp.time, expected.time)
+    npt.assert_allclose(resp.data.numpy(),
+                        expected.data.reshape(resp.data.shape),
+                        rtol=RTOL, atol=ATOL)
+
+
+@pytest.mark.parametrize('frame_dur', [None, 40])
+@pytest.mark.parametrize('reduce', ['last', 'peak'])
+def test_Model_tensor_video_parity(reduce, frame_dur):
+    # Non-round 29.97 fps; explicit `frame_dur` retimes the output frames:
+    model = _image_model(reduce=reduce)
+    model.implant.encoder.frame_dur = frame_dur
+    vid = np.random.default_rng(10).uniform(-0.2, 1.2, (13, 17, 6))
+    expected = model.predict_percept(
+        VideoStimulus(vid, metadata={'fps': 29.97}))
+    waveform, time, clock = model.implant.encoder._encode_tensor(
+        torch.tensor(vid, dtype=torch.float32), fps=29.97)
+    resp = model._predict_tensor(waveform, time, frame_clock=clock)
+    npt.assert_equal(resp.time, expected.time)
+    assert resp.time.size == 6
+    npt.assert_equal(resp.frame_clock.source_time,
+                     expected._frame_clock.source_time)
+    expected = expected.data.reshape(resp.data.shape)
+    assert np.abs(expected).max() > 0.1
+    npt.assert_allclose(resp.data.numpy(), expected, rtol=RTOL, atol=ATOL)
+
+
+def test_Model_tensor_video_autograd():
+    # Without a raster, every electrode pulses at 0 and 100 ms, in frames 0
+    # and 3 of six 33.3 ms frames:
+    model = _image_model(ArgusII(raster=None))
+    encoder = model.implant.encoder
+    encoder.freq, encoder.frame_dur = 10, None
+    vid = np.random.default_rng(11).uniform(0, 1, (13, 17, 6))
+    video = torch.tensor(vid, dtype=torch.float32, requires_grad=True)
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        waveform, time, clock = encoder._encode_tensor(video, fps=30)
+    resp = model._predict_tensor(waveform, time, frame_clock=clock)
+    assert waveform.requires_grad and resp.data.requires_grad
+    resp.data.square().mean().backward()
+    assert torch.all(torch.isfinite(video.grad))
+    driven = video.grad.abs().sum(dim=(0, 1)) > 0
+    npt.assert_equal(driven.numpy(), [True, False, False, True, False, False])
+
+
+def test_Model_tensor_video_gradcheck():
+    # Exact gradient of video -> percept through the frame indexing; gray
+    # levels stay inside (0, 1) so clipping is smooth:
+    model = _image_model(ArgusI(), reduce='last', step=1)
+    model.implant.encoder.frame_dur = None
+    vid = np.random.default_rng(12).uniform(0.1, 0.9, (3, 4, 2))
+
+    def percept(video):
+        waveform, time, clock = model.implant.encoder._encode_tensor(
+            video, fps=20)
+        return model._predict_tensor(waveform, time, frame_clock=clock).data
+
+    torch.autograd.gradcheck(percept, (torch.tensor(vid, requires_grad=True),))
 
 
 def _axon_spatial(implant=None, **params):

@@ -51,8 +51,9 @@ def _bilinear_tensor(image, img_y, img_x, y, x):
     """Return a Torch ``image`` sampled bilinearly at points ``(y, x)``.
 
     Row ``r`` of ``image`` lies at ``img_y[r]`` and column ``c`` at
-    ``img_x[c]``. Points outside the grid are 0. Gradients flow to the
-    (at most four) pixels around each point.
+    ``img_x[c]``. Points outside the grid are 0. Trailing axes (e.g., video
+    frames) are sampled independently. Gradients flow to the (at most four)
+    pixels around each point.
     """
     import torch
     iy, wy, in_y = _grid_interval(img_y, y)
@@ -65,7 +66,9 @@ def _bilinear_tensor(image, img_y, img_x, y, x):
                         wy * wx], axis=1) * (in_y & in_x)[:, np.newaxis]
     rows, cols, weights = (torch.as_tensor(a, device=image.device)
                            for a in (rows, cols, weights))
-    return (image[rows, cols] * weights.to(image.dtype)).sum(dim=1)
+    weights = weights.to(image.dtype).reshape(
+        weights.shape + (1,) * (image.ndim - 2))
+    return (image[rows, cols] * weights).sum(dim=1)
 
 
 def _ensemble_target(implants):
@@ -566,13 +569,14 @@ class Implant(PrettyPrint):
             )
 
     def _sample_image_tensor(self, image):
-        """Return a 2D Torch gray image sampled at every electrode.
+        """Return a Torch gray image or video sampled at every electrode.
 
-        Same mapping as ``reshape_stim`` for a gray ``ImageStimulus``: the
-        image spans the electrode bounding box in device coordinates, row 0 at
-        the smallest y, bilinear interpolation. Returns shape
-        ``(n_electrodes,)`` in ``electrode_names`` order; gradients flow to
-        the pixels.
+        Same mapping as ``reshape_stim`` for a gray ``ImageStimulus`` or
+        ``VideoStimulus``: the image spans the electrode bounding box in
+        device coordinates, row 0 at the smallest y, bilinear interpolation
+        within each frame. ``(H, W)`` returns ``(n_electrodes,)`` and
+        ``(H, W, n_frames)`` returns ``(n_electrodes, n_frames)``, rows in
+        ``electrode_names`` order; gradients flow to the pixels.
         """
         import torch
         if not isinstance(image, torch.Tensor):
@@ -581,11 +585,11 @@ class Implant(PrettyPrint):
         if image.dtype not in (torch.float32, torch.float64):
             raise TypeError(f"'image' must be float32 or float64, not "
                             f"{image.dtype}.")
-        if image.ndim != 2:
-            raise ValueError(f"'image' must be a gray image of shape (H, W), "
-                             f"not {tuple(image.shape)}.")
+        if image.ndim not in (2, 3):
+            raise ValueError(f"'image' must be a gray image (H, W) or video "
+                             f"(H, W, n_frames), not {tuple(image.shape)}.")
         x, y = self.electrode_array.coordinates(um)[:, :2].T
-        img_h, img_w = image.shape
+        img_h, img_w = image.shape[:2]
         img_x = np.linspace(np.min(x), np.max(x), img_w)
         img_y = np.linspace(np.min(y), np.max(y), img_h)
         return _bilinear_tensor(image, img_y, img_x, y, x)

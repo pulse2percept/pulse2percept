@@ -219,6 +219,27 @@ def test_Implant__sample_image_tensor(rot):
     npt.assert_allclose(sampled.numpy(), expected.data.ravel(), atol=1e-6)
 
 
+@pytest.mark.parametrize('rot', (0, 30))
+def test_Implant__sample_image_tensor_video(rot):
+    implant = Implant(ElectrodeGrid((5, 7), 300, rot=rot, grid_type='hex'))
+    # Frames on the last axis, each with different content; H, W, F all
+    # differ so an (F, H, W) reading would fail:
+    vid = np.random.default_rng(4).uniform(-0.5, 1.5, (9, 13, 4))
+    vid[..., 1] = vid[..., 1][::-1]
+    vid[..., 2] = 0
+    expected = implant.reshape_stim(VideoStimulus(vid))
+    sampled = implant._sample_image_tensor(
+        torch.tensor(vid, dtype=torch.float32))
+    assert sampled.shape == (implant.n_electrodes, 4)
+    npt.assert_allclose(sampled.numpy(), expected.data, atol=1e-6)
+    # Frames are sampled independently, never across time:
+    for f in range(4):
+        npt.assert_allclose(sampled[:, f].numpy(),
+                            implant._sample_image_tensor(
+                                torch.tensor(vid[..., f])).numpy(),
+                            atol=1e-6)
+
+
 def test_Implant__sample_image_tensor_orientation():
     # Row 0 lies at the smallest y (no image flip), column 0 at the smallest x.
     # E sits 3/4 of the way along x and 1/4 of the way along y:
@@ -234,8 +255,10 @@ def test_Implant__sample_image_tensor_orientation():
         implant._sample_image_tensor(img)
     with pytest.raises(TypeError, match='float32 or float64'):
         implant._sample_image_tensor(torch.ones((2, 2), dtype=torch.int64))
-    with pytest.raises(ValueError, match='gray image'):
-        implant._sample_image_tensor(torch.ones((2, 2, 3)))
+    # RGB images and videos are unsupported:
+    for shape in ((4,), (2, 2, 3, 5)):
+        with pytest.raises(ValueError, match='gray image'):
+            implant._sample_image_tensor(torch.ones(shape))
 
 
 def test__bilinear_tensor():

@@ -18,7 +18,8 @@ from scipy.spatial import cKDTree
 from ..implants import Implant
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
-from ..stimuli.encoders import _EncodedStimulus, _OpticalStimulus
+from ..stimuli.encoders import (_EncodedStimulus, _FrameClock,
+                                _OpticalStimulus)
 from ..percepts import Percept
 from ..percepts.base import _quantize_gray
 from ..topography import Grid2D
@@ -63,19 +64,6 @@ def _thread_params(n_threads, n_jobs):
     """Return non-None thread-count arguments."""
     return {**({} if n_threads is None else {'n_threads': n_threads}),
             **({} if n_jobs is None else {'n_jobs': n_jobs})}
-
-
-@dataclass(frozen=True)
-class _FrameClock:
-    """Encoder frame clock, in ms.
-
-    ``time``/``dur`` are the encoder frames (e.g., projector pulse periods);
-    ``source_time``/``source_dur`` are the source-video frames, or None.
-    """
-    time: object
-    dur: float
-    source_time: object = None
-    source_dur: float = None
 
 
 def _encoder_clock(stim):
@@ -2070,12 +2058,13 @@ class Model(Frozen, PrettyPrint):
         # Only a temporal-only model has no grid; it reuses a Percept input's:
         return _to_percept(resp, inherit_space_from=stim)
 
-    def _predict_tensor(self, waveform, time, t_percept=None):
+    def _predict_tensor(self, waveform, time, t_percept=None,
+                        frame_clock=None):
         """Return the flat response to a Torch electrical waveform.
 
         Bypasses stimulus preparation: ``waveform`` is the realized drive.
-        Gradients flow to ``waveform``; ``time`` and ``t_percept`` are fixed.
-        Requires a current-driven implant.
+        Gradients flow to ``waveform``; ``time``, ``t_percept`` and
+        ``frame_clock`` are fixed. Requires a current-driven implant.
 
         Parameters
         ----------
@@ -2088,6 +2077,10 @@ class Model(Frozen, PrettyPrint):
             Strictly increasing sample times in ``time_unit``, shape ``(T,)``.
         t_percept : float or array-like, optional
             Output times, as in ``predict_percept``.
+        frame_clock : _FrameClock, optional
+            Frame clock from ``AmplitudeEncoder._encode_tensor``. With
+            ``t_percept=None``, output times follow it as in
+            ``predict_percept``; without it, they are every 20 ms.
 
         Returns
         -------
@@ -2128,6 +2121,9 @@ class Model(Frozen, PrettyPrint):
             raise ValueError("'time' must be nonempty, finite, and strictly "
                              "increasing.")
         resp = self.spatial._predict_tensor(waveform, time)
+        if frame_clock is not None:
+            # Pipeline state for the temporal stage, not a spatial input:
+            resp = replace(resp, frame_clock=frame_clock)
         return self.temporal._predict_response(resp, t_percept=t_percept)
 
     @property
