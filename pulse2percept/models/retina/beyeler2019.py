@@ -96,6 +96,34 @@ def _axon_blocks(counts, n_el, n_time, itemsize, budget):
     return blocks
 
 
+def _segment_gauss(seg, x_el, y_el, rho, cutoff_r2):
+    """Return the float32 ``(len(seg) + 1, n_electrodes)`` segment Gaussian.
+
+    Same values as ``fast_axon_map``: zero beyond ``cutoff_r2`` and for
+    segments without a location. ``exp`` is evaluated only within the cutoff.
+    The trailing zero row is the response of an axon without segments.
+    ``x_el`` is sorted.
+    """
+    gauss = np.zeros((len(seg) + 1, x_el.size), dtype=np.float32)
+    rows = slice(0, len(seg))
+    if np.isfinite(cutoff_r2):
+        # No electrode is closer than the electrodes' bounding box. Rounding
+        # is monotonic, so this float32 bound never exceeds a pair's `r2`:
+        x, y = seg[:, 0], seg[:, 1]
+        bx = np.maximum(np.maximum(x_el[0] - x, x - x_el[-1]), 0)
+        by = np.maximum(np.maximum(y_el.min() - y, y - y_el.max()), 0)
+        rows = np.flatnonzero(bx * bx + by * by <= cutoff_r2)
+    dx = seg[rows, :1] - x_el
+    dy = seg[rows, 1:2] - y_el
+    r2 = dx * dx + dy * dy
+    # Also drops segments without a location (NaN):
+    near = r2 <= cutoff_r2
+    block = np.exp(-r2 / (np.float32(2) * rho * rho), out=np.zeros_like(r2),
+                   where=near)
+    gauss[rows] = np.multiply(seg[rows, 2:], block, out=block, where=near)
+    return gauss
+
+
 class ScoreboardSpatial(RetinalSpatial):
     r"""Scoreboard model of [Beyeler2019]_ (spatial module only).
 
@@ -1139,16 +1167,8 @@ class AxonMapSpatial(RetinalSpatial):
                                    waveform.element_size(),
                                    _AXON_BLOCK_BYTES):
             lo, hi = start[p0], end[p1 - 1]
-            seg = self.axon_contrib[lo:hi]
-            # float32, as in `fast_axon_map`. The trailing zero row is the
-            # response of an axon without segments:
-            gauss = np.zeros((hi - lo + 1, n_el), dtype=np.float32)
-            dx = seg[:, :1] - x_el
-            dy = seg[:, 1:2] - y_el
-            r2 = dx * dx + dy * dy
-            gauss[:-1] = seg[:, 2:] * np.exp(-r2 / (np.float32(2) * rho * rho))
-            # Drops pairs beyond the cutoff and segments without a location:
-            gauss[:-1][~(r2 <= cutoff_r2)] = 0
+            gauss = _segment_gauss(self.axon_contrib[lo:hi], x_el, y_el, rho,
+                                   cutoff_r2)
             seg_resp = torch.as_tensor(gauss, dtype=waveform.dtype,
                                        device=device) @ waveform
             counts = end[p0:p1] - start[p0:p1]
