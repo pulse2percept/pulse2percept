@@ -466,9 +466,11 @@ def test_AmplitudeEncoder__encode_tensor_parity(make_implant, params, off):
     on = np.isin(implant.electrode_names, expected.electrodes)
     npt.assert_equal(np.count_nonzero(~on), len(off))
     assert torch.all(waveform[~on] == 0)
-    sampled = np.vstack([np.interp(expected.time, time, row)
-                         for row in waveform[on].numpy()])
-    npt.assert_allclose(sampled, expected.data, rtol=1e-6, atol=1e-5)
+    # Extra schedule points refine, not change, the legacy waveform:
+    expected_full = np.vstack([np.interp(time, expected.time, row)
+                               for row in expected.data])
+    npt.assert_allclose(waveform[on].numpy(), expected_full, rtol=1e-6,
+                        atol=1e-5)
     # Several pulses per electrode, some electrodes silent or not:
     starts = np.diff((waveform.numpy() != 0).astype(int), axis=1) == 1
     assert starts.sum(axis=1).max() >= 5
