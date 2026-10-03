@@ -577,10 +577,6 @@ class AxonMapSpatial(RetinalSpatial):
     #: relative electrode drive, so an encoder is optional.
     _accepts_dimensionless_drive = True
 
-    #: The Torch core is 3-7x slower than Cython on CPU (dense segment
-    #: Gaussians, padded argmax), so public prediction stays on Cython:
-    _composite_tensor = False
-
     def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0, min_current_spread=1e-8,
@@ -1168,8 +1164,8 @@ class AxonMapSpatial(RetinalSpatial):
                        torch.as_tensor(pos, device=device))
                 packed[idx] = seg_resp[:-1].abs()
                 # First largest |response|, matching the strict `>` update in
-                # Cython:
-                best = packed.argmax(dim=1)
+                # Cython. `max` over a middle dim is ~10x faster than `argmax`:
+                best = packed.max(dim=1).indices
             rows = torch.as_tensor(first, device=device)[:, None] + best
             empty = torch.as_tensor(counts == 0, device=device)[:, None]
             rows = rows.masked_fill(empty, int(hi - lo))

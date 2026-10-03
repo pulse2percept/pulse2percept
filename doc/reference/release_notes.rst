@@ -13,7 +13,7 @@ Highlights
 * A ``Model`` combining retinal or cortical ``ScoreboardSpatial``, or
   ``AxonMapSpatial``, with ``FadingTemporal`` supports differentiable Torch
   execution from electrode waveforms, or from grayscale image or video pixels
-  through ``AmplitudeEncoder``. ``predict_percept`` runs the Scoreboard
+  through ``AmplitudeEncoder``. ``predict_percept`` runs these
   composites on Torch internally. PyTorch (>= 2.7.0) is now a required
   dependency; Intel Macs are no longer supported (:pull:`937`, :pull:`938`,
   :pull:`939`, :pull:`941`, :pull:`942`, :pull:`943`).

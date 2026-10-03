@@ -472,6 +472,27 @@ def test_AxonMapSpatial_tensor_cathodic():
     assert expected.max() == 0 and expected.min() < 0
 
 
+@pytest.mark.parametrize('sign', [1, -1])
+def test_AxonMapSpatial_tensor_first_tie(sign):
+    # Two segments of one axon at the electrode with opposite sensitivity:
+    # exactly tied |response|, so the first segment's sign wins, as in Cython.
+    spatial = _axon_spatial(meridian_blend=0, thresh_percept=0).build()
+    n_px = spatial.grid.x.size
+    x_el, y_el, _ = spatial._electrode_coords(
+        spatial.implant.electrode_array, None, electrodes=['C3'])
+    spatial.axon_contrib = np.array([[x_el[0], y_el[0], sign],
+                                     [x_el[0], y_el[0], -sign]],
+                                    dtype=np.float32)
+    spatial.axon_idx_start = np.array([0] + [2] * (n_px - 1))
+    spatial.axon_idx_end = np.full(n_px, 2)
+    amp = np.random.default_rng(5).normal(0, 30, TIME.size)
+    wf = np.zeros((spatial.implant.n_electrodes, TIME.size))
+    wf[list(spatial.implant.electrode_names).index('C3')] = amp
+    expected = _axon_parity(spatial, wf)
+    npt.assert_equal(expected[0], sign * amp.astype(np.float32))
+    assert np.all(expected[1:] == 0)
+
+
 def test_AxonMapSpatial_tensor_thresh_inclusive():
     spatial = _axon_spatial(meridian_blend=0, thresh_percept=0).build()
     waveform = torch.tensor(_waveform(spatial.implant.n_electrodes),
@@ -541,7 +562,7 @@ def test_AxonMapModel_tensor_float64():
 # Public `Model.predict_percept` runs supported composites on the Torch core;
 # `_cython_percept` is the reference:
 
-COMPOSITES = ['retina', 'cortex']
+COMPOSITES = ['retina', 'cortex', 'axonmap']
 
 
 def _composite(kind, reduce='peak'):
@@ -549,11 +570,13 @@ def _composite(kind, reduce='peak'):
     temporal = FadingTemporal(tau=2, reduce=reduce)
     if kind == 'retina':
         return Model(_spatial(), temporal).build()
-    # Reaches V1-V3 near the vertical meridian:
-    return Model(cortex.ScoreboardSpatial(
-        Orion(), implant_position=(10000, 10000), xrange=(-4.1, 3.9),
-        yrange=(-3, 3), step=0.2, rho=1000, thresh_percept=0.5),
-        temporal).build()
+    if kind == 'cortex':
+        # Reaches V1-V3 near the vertical meridian:
+        return Model(cortex.ScoreboardSpatial(
+            Orion(), implant_position=(10000, 10000), xrange=(-4.1, 3.9),
+            yrange=(-3, 3), step=0.2, rho=1000, thresh_percept=0.5),
+            temporal).build()
+    return Model(_axon_spatial(), temporal).build()
 
 
 def _assert_same_percept(percept, expected):
@@ -662,8 +685,6 @@ class _DoubledScoreboard(ScoreboardSpatial):
     (lambda: Model(_spatial(n_gray=8), FadingTemporal(tau=2)),
      _cython_percept),
     (lambda: Model(_spatial(), AlphaTemporal(tau=2)), _cython_percept),
-    # Opted out until its Torch core is competitive on CPU:
-    (lambda: Model(_axon_spatial(), FadingTemporal(tau=2)), _cython_percept),
     (lambda: Model(_DoubledScoreboard(ArgusI(), xrange=(-6, 6),
                                       yrange=(-5, 5), step=0.5),
                    FadingTemporal(tau=2)), _cython_percept),
@@ -686,6 +707,43 @@ def test_Model_predict_percept_cython_fallback(model, reference, monkeypatch):
     percept = model.predict_percept(source)
     np.random.seed(0)
     npt.assert_array_equal(percept.data, reference(model, source).data)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'torch'])
+@pytest.mark.parametrize('reduce', ['last', 'peak'])
+@pytest.mark.parametrize('t_percept', [None, [5.0, 40.0, 150.0]])
+def test_TemporalModel_ignores_response_metadata(backend, reduce, t_percept):
+    # Metadata is provenance only; timing comes from `frame_clock`:
+    model = _image_model()
+    vid = np.random.default_rng(13).uniform(0, 1, (13, 17, 6))
+    waveform, time, clock = model.implant.encoder._encode_tensor(
+        torch.tensor(vid, dtype=torch.float32), fps=29.97)
+    data = waveform if backend == 'torch' else waveform.numpy()
+    # Wildly different provenance, including keys that imply another clock:
+    stim_a = model.implant.prepare_stim(VideoStimulus(
+        np.random.default_rng(14).uniform(0, 1, (5, 5, 40)),
+        metadata={'fps': 10}))
+    stim_b = Stimulus({'A1': BiphasicPulseTrain(1000, -500, 0.1,
+                                                stim_dur=5000)})
+    resp_a = _ModelResponse(data, time, ms, (data.shape[0],),
+                            frame_clock=clock,
+                            metadata={'stim': stim_a, 'garbage': 123})
+    resp_b = replace(resp_a, metadata={
+        'stim': stim_b, 'garbage': 'completely different',
+        'source_frame_time': np.zeros(1),
+        'encoder': {'frame_time': np.zeros(1), 'frame_dur': 500.0}})
+    temporal = FadingTemporal(tau=2, reduce=reduce)
+    out_a = temporal._predict_response(resp_a, t_percept=t_percept)
+    out_b = temporal._predict_response(resp_b, t_percept=t_percept)
+    data_a, data_b = (np.asarray(out.data) for out in (out_a, out_b))
+    assert np.abs(data_a).max() > 0
+    npt.assert_array_equal(data_a, data_b)
+    npt.assert_array_equal(out_a.time, out_b.time)
+    npt.assert_equal(out_a.metadata.get('source_frame_time'),
+                     out_b.metadata.get('source_frame_time'))
+    # Provenance is passed through, not interpreted:
+    assert out_a.metadata['stim'] is stim_a
+    assert out_b.metadata['stim'] is stim_b
 
 
 def test_Model_predict_percept_torch_polarity_warning():

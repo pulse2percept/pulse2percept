@@ -1099,10 +1099,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     #: irradiance, durations) instead of the delivered waveform.
     _needs_structured_stim = False
 
-    #: Whether ``Model.predict_percept`` runs ``_predict_tensor``, if
-    #: implemented, instead of ``_predict_spatial``.
-    _composite_tensor = True
-
     def __init__(self, implant, **params):
         self._validate_implant(implant)
         self._implant = implant
@@ -2108,8 +2104,7 @@ class Model(Frozen, PrettyPrint):
         if not (self.has_space and self.has_time and _has_time_axis(stim)):
             return False
         spatial = self.spatial
-        return (spatial._composite_tensor and
-                not spatial._needs_structured_stim and
+        return (not spatial._needs_structured_stim and
                 spatial.n_gray is None and
                 self.implant.stimulus_unit.dimension == uA.dimension and
                 _implements_tensor(spatial, '_predict_tensor',
