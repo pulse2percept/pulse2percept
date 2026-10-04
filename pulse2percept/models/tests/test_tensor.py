@@ -430,6 +430,7 @@ def _axon_parity(spatial, wf):
     {},
     {'meridian_blend': 0},
     {'min_current_spread': 0.05, 'thresh_percept': 5},
+    {'min_current_spread': 0},
     {'implant_position': (300, -200), 'implant_rotation': 20},
     {'location_noise': 0.5},
 ])
@@ -524,8 +525,8 @@ def test_AxonMapSpatial_tensor_first_tie_outside_cutoff():
 
 @pytest.mark.parametrize('below', [False, True])
 def test_AxonMapSpatial_tensor_cutoff_inclusive(below, monkeypatch):
-    # One segment 100 um beyond the electrode bounding box, level with an
-    # edge electrode: r2 == cutoff_r2 exactly, which is retained.
+    # One segment 100 um right of the rightmost electrode, level with it:
+    # r2 == cutoff_r2 exactly, which is retained, as in `fast_axon_map`.
     cutoff_r2 = np.float32(100 * 100)
     if below:
         cutoff_r2 = np.nextafter(cutoff_r2, np.float32(0))
@@ -545,14 +546,6 @@ def test_AxonMapSpatial_tensor_cutoff_inclusive(below, monkeypatch):
         gauss = np.exp(np.float32(-1e4) / (np.float32(2) *
                                            np.float32(spatial.rho) ** 2))
         npt.assert_allclose(expected[0], gauss * amp, rtol=1e-6)
-
-
-def test_AxonMapSpatial_tensor_no_cutoff():
-    # min_current_spread=0 disables the cutoff; every pair contributes:
-    spatial = _axon_spatial(min_current_spread=0, thresh_percept=5).build()
-    assert np.isinf(spatial._cutoff_r2(spatial.rho))
-    expected = _axon_parity(spatial, _waveform(spatial.implant.n_electrodes))
-    assert 0 < np.mean(expected == 0) < 1
 
 
 def test_AxonMapSpatial_tensor_thresh_inclusive():
