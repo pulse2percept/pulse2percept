@@ -71,8 +71,8 @@ cpdef fast_biphasic_axon_map(const float32[::1] amp_el,
     cutoff_r2 : float32
         Squared distance (microns^2) at which an electrode of unscaled size
         stops contributing; scaled per electrode by its ``F_size``. Pass
-        ``inf`` to sum over every electrode. See ``min_current_spread`` on the
-        model for how this is derived.
+        ``inf`` to sum over every electrode. See ``SpatialModel._cutoff_r2`` for
+        how this is derived.
     n_threads: uint32
         Number of CPU threads to use during parallelization using OpenMP.
 
@@ -202,8 +202,8 @@ cpdef fast_biphasic_scoreboard(const float32[::1] amp_el,
     cutoff_r2 : float32
         Squared distance (microns^2) at which an electrode of unscaled size
         stops contributing; scaled per electrode by its ``F_size``. Pass
-        ``inf`` to sum over every electrode. See ``min_current_spread`` on the
-        model for how this is derived.
+        ``inf`` to sum over every electrode. See ``SpatialModel._cutoff_r2`` for
+        how this is derived.
     n_threads : uint32
         Number of CPU threads to use during parallelization using OpenMP.
 

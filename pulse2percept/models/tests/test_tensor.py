@@ -66,7 +66,7 @@ def _model(reduce='peak', **params):
 
 @pytest.mark.parametrize('params', [
     {},
-    {'min_current_spread': 0.05, 'thresh_percept': 2},
+    {'thresh_percept': 2},
     {'implant_position': (300, -200), 'implant_rotation': 20},
     {'location_noise': 0.5},
 ])
@@ -171,7 +171,9 @@ def test_Model_tensor_parity(reduce, t_percept):
 
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
 def test_Model_tensor_autograd(reduce):
-    model = _model(reduce=reduce)
+    # rho=200 puts bright points within the cutoff (about 5.3 rho) of the
+    # silent electrodes, 800 um from their neighbors:
+    model = _model(reduce=reduce, rho=200)
     waveform = torch.tensor(_waveform(model.implant.n_electrodes),
                             dtype=torch.float32, requires_grad=True)
     resp = model._predict_tensor(waveform, TIME,
@@ -433,8 +435,7 @@ def _axon_paths(spatial, wf):
 @pytest.mark.parametrize('params', [
     {},
     {'meridian_blend': 0},
-    {'min_current_spread': 0.05, 'thresh_percept': 5},
-    {'min_current_spread': 0},
+    {'thresh_percept': 5},
     {'implant_position': (300, -200), 'implant_rotation': 20},
     {'location_noise': 0.5},
 ])

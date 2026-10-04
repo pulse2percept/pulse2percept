@@ -40,11 +40,6 @@ class ScoreboardSpatial(CortexSpatial):
 
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
-    min_current_spread : float, optional
-        Fraction of peak Gaussian current spread below which an electrode is
-        skipped at a grid point. The default 1e-8 (about 6.1 ``rho``) bounds
-        the error at a point by ``min_current_spread`` times the summed
-        amplitude across electrodes.
     regions : list of str, optional
         The regions to simulate. Options are 'v1', 'v2', or 'v3'. Default:
         ['v1']
@@ -119,7 +114,7 @@ class ScoreboardSpatial(CortexSpatial):
     def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
                  grid_type='rect', thresh_percept=0,
-                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 visual_field_map=None, n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
@@ -128,7 +123,6 @@ class ScoreboardSpatial(CortexSpatial):
             implant, rho=rho, regions=regions,
             meridian_blend=meridian_blend, xrange=xrange, yrange=yrange,
             step=step, grid_type=grid_type, thresh_percept=thresh_percept,
-            min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
             n_gray=n_gray,
             implant_position=implant_position,
@@ -297,11 +291,6 @@ class ScoreboardModel(Model):
 
     rho : double, optional
         Exponential decay constant describing phosphene size (microns).
-    min_current_spread : float, optional
-        Fraction of peak Gaussian current spread below which an electrode is
-        skipped at a grid point. The default 1e-8 (about 6.1 ``rho``) bounds
-        the error at a point by ``min_current_spread`` times the summed
-        amplitude across electrodes.
     regions : list of str, optional
         The regions to simulate. Options are 'v1', 'v2', or 'v3'. Default:
         ['v1']
@@ -372,7 +361,7 @@ class ScoreboardModel(Model):
     def __init__(self, implant, *, rho=200, regions=None, meridian_blend=0.1,
                  xrange=(-5, 5), yrange=(-5, 5), step=0.1,
                  grid_type='rect', thresh_percept=0,
-                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 visual_field_map=None, n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
@@ -383,7 +372,6 @@ class ScoreboardModel(Model):
                 meridian_blend=meridian_blend, xrange=xrange, yrange=yrange,
                 step=step, grid_type=grid_type,
                 thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray,
                 implant_position=implant_position,

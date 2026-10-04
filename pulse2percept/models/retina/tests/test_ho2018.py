@@ -315,7 +315,8 @@ def test_spatial_profile_is_a_gaussian_of_rho():
     xret, _ = Watson2014Map().dva_to_ret(model.grid.x[0, :],
                                          model.grid.y[0, :])
     expected = profile[0] * np.exp(-xret ** 2 / (2 * rho ** 2))
-    npt.assert_allclose(profile, expected, rtol=1e-4)
+    # Zero beyond the cutoff (about 5.3 rho), where expected < 1e-6 of peak:
+    npt.assert_allclose(profile, expected, rtol=1e-4, atol=1e-6 * profile[0])
 
 
 def test_spatial_drive_is_zero_outside_the_schedule():

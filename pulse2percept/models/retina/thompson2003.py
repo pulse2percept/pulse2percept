@@ -79,9 +79,6 @@ class Thompson2003Spatial(RetinalSpatial):
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
-    min_current_spread : float, optional
-        Inherited Gaussian current-spread cutoff. This parameter is not used
-        by ``Thompson2003Spatial``.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.retina.Curcio1990Map`.
@@ -125,7 +122,7 @@ class Thompson2003Spatial(RetinalSpatial):
     def __init__(self, implant, *, radius=None, dropout=None,
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rect', thresh_percept=0,
-                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 visual_field_map=None, n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
@@ -134,7 +131,6 @@ class Thompson2003Spatial(RetinalSpatial):
             implant, radius=radius, dropout=dropout, xrange=xrange,
             yrange=yrange, step=step, grid_type=grid_type,
             thresh_percept=thresh_percept,
-            min_current_spread=min_current_spread,
             visual_field_map=(Curcio1990Map() if visual_field_map is None else
                               visual_field_map),
             n_gray=n_gray,
@@ -215,9 +211,6 @@ class Thompson2003Model(Model):
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
-    min_current_spread : float, optional
-        Inherited Gaussian current-spread cutoff. Not used by the Thompson
-        spatial model.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.retina.Curcio1990Map`.
@@ -261,7 +254,7 @@ class Thompson2003Model(Model):
     def __init__(self, implant, *, radius=None, dropout=None,
                  xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rect', thresh_percept=0,
-                 min_current_spread=1e-8, visual_field_map=None, n_gray=None,
+                 visual_field_map=None, n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
@@ -271,7 +264,6 @@ class Thompson2003Model(Model):
                 implant, radius=radius, dropout=dropout, xrange=xrange,
                 yrange=yrange, step=step, grid_type=grid_type,
                 thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray,
                 implant_position=implant_position,

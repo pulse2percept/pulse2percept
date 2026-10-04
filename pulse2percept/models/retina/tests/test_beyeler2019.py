@@ -17,6 +17,7 @@ from pulse2percept.stimuli import (ImageStimulus, Stimulus, samples,
                                    VideoStimulus)
 from pulse2percept.models.retina import (AxonMapSpatial, AxonMapModel,
                                          ScoreboardSpatial, ScoreboardModel)
+from pulse2percept.models.base import _MIN_CURRENT_SPREAD, SpatialModel
 from pulse2percept.models.retina.beyeler2019 import _AXON_CACHE_VERSION
 from pulse2percept.topography.retina import (Montesano2020Map,
                                              Watson2014Map)
@@ -524,30 +525,6 @@ def test_AxonMapModel_find_closest_axon():
     npt.assert_equal(closest_idx, 0)
 
 
-@pytest.mark.parametrize('n_threads', (1, 3))
-def test_AxonMapModel_find_closest_axon_respects_n_threads(monkeypatch,
-                                                           n_threads):
-    """The KD-tree query uses ``n_threads`` workers"""
-    from pulse2percept.models.retina import beyeler2019
-
-    seen = []
-
-    class RecordingKDTree(beyeler2019.cKDTree):
-        def query(self, *args, **kwargs):
-            seen.append(kwargs.get('workers'))
-            return super().query(*args, **kwargs)
-
-    monkeypatch.setattr(beyeler2019, 'cKDTree', RecordingKDTree)
-    model = AxonMapSpatial(implant=ArgusII(), n_threads=n_threads)
-    bundles = [np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32),
-               np.array([[10.0, 10.0], [11.0, 11.0]], dtype=np.float32)]
-    closest, idx = model.find_closest_axon(bundles, xret=[0.5, 10.5],
-                                           yret=[0.5, 10.5],
-                                           return_index=True)
-    npt.assert_equal(idx, [0, 1])
-    npt.assert_equal(seen, [n_threads])
-
-
 def test_AxonMapModel_calc_axon_sensitivity():
     model = AxonMapModel(implant=ArgusII(), step=2, n_axons=10,
                          xrange=(-20, 20), yrange=(-15, 15),
@@ -672,57 +649,25 @@ def test_AxonMapModel_predict_percept():
 
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
-def test_min_current_spread(ModelClass):
-    """The default current-spread cutoff barely changes a sparse percept
-
-    ``min_current_spread`` drops an electrode's contribution once its
-    Gaussian falls below that fraction of its peak. Here: a few electrodes at
-    unit amplitude. See ``test_min_current_spread_error_bound``.
-    """
-    stim = np.zeros(60)
-    stim[[10, 33, 47]] = [1.0, -0.5, 0.75]
-    kwargs = {'implant': ArgusII(), 'step': 0.75, 'xrange': (-12, 12),
-              'yrange': (-8, 8), 'rho': 200}
-
-    exact = ModelClass(min_current_spread=0,
-                       **kwargs).build().predict_percept(stim).data
-    default = ModelClass(**kwargs).build().predict_percept(stim).data
-    npt.assert_allclose(default, exact, rtol=1e-5,
-                        atol=1e-6 * np.abs(exact).max())
-
-    # A coarse cutoff changes the result:
-    coarse = ModelClass(min_current_spread=0.5,
-                        **kwargs).build().predict_percept(stim).data
-    assert np.abs(coarse - exact).max() > 1e-3
-
-    # A cutoff of 1 or more would drop every electrode:
-    model = ModelClass(min_current_spread=1, **kwargs).build()
-    with pytest.raises(ValueError):
-        model.predict_percept(stim)
-
-
-@pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
 @pytest.mark.parametrize('amp', (1.0, 1000.0))
-def test_min_current_spread_error_bound(ModelClass, amp):
-    """The cutoff error stays within its documented bound
+def test_cutoff_error_bound(ModelClass, amp, monkeypatch):
+    """The fixed cutoff error stays within its documented bound
 
     The cutoff is applied to the Gaussian *before* scaling by amplitude and
     summing, so the error at a point is ``sum_i gauss_i * amp_i``. All 60
     electrodes are driven (worst case for a per-electrode cutoff), and the
     amplitude is varied because the bound scales with it.
     """
-    min_spread = 1e-8
     stim = np.full(60, amp)
-    kwargs = {'implant': ArgusII(), 'step': 0.75, 'xrange': (-14, 14),
-              'yrange': (-10, 10), 'rho': 200}
-
-    exact = ModelClass(min_current_spread=0,
-                       **kwargs).build().predict_percept(stim).data
-    default = ModelClass(min_current_spread=min_spread,
-                         **kwargs).build().predict_percept(stim).data
-    # Documented bound: `min_current_spread` times the summed amplitude, plus
+    model = ModelClass(implant=ArgusII(), step=0.75, xrange=(-14, 14),
+                       yrange=(-10, 10), rho=200).build()
+    default = model.predict_percept(stim).data
+    monkeypatch.setattr(SpatialModel, '_cutoff_r2',
+                        lambda self, rho: np.float32(np.inf))
+    exact = model.predict_percept(stim).data
+    # Documented bound: the cutoff fraction times the summed amplitude, plus
     # float32 accumulation error:
-    dropped = min_spread * np.abs(stim).sum()
+    dropped = _MIN_CURRENT_SPREAD * np.abs(stim).sum()
     assert np.abs(default - exact).max() <= dropped + 1e-6 * np.abs(exact).max()
 
     # Points far from all electrodes become exactly zero (100% relative
@@ -811,20 +756,27 @@ def test_AxonMapSpatial_cutoff_band_boundaries(monkeypatch):
     npt.assert_allclose(bright(x_el), want, rtol=1e-6)
 
 
-@pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
-def test_predict_percept_thread_count_invariant(ModelClass):
+def test_predict_percept_thread_count_invariant():
     """The percept does not depend on the number of threads"""
     stim = np.zeros(60)
     stim[[5, 22, 51]] = [1.0, 0.6, -0.3]
     kwargs = {'implant': ArgusII(), 'step': 1, 'xrange': (-10, 10),
               'yrange': (-8, 8), 'rho': 200}
 
-    serial = ModelClass(n_threads=1,
-                        **kwargs).build().predict_percept(stim).data
+    serial = ScoreboardModel(n_threads=1,
+                             **kwargs).build().predict_percept(stim).data
     for n_threads in (2, 3, 8):
-        parallel = ModelClass(
+        parallel = ScoreboardModel(
             n_threads=n_threads, **kwargs).build().predict_percept(stim)
         npt.assert_array_equal(parallel.data, serial)
+
+
+@pytest.mark.parametrize('cls', (AxonMapSpatial, AxonMapModel))
+def test_AxonMap_has_no_thread_or_cutoff_params(cls):
+    # Removed in 0.12: prediction runs on Torch, and the cutoff is fixed:
+    for param in ('n_threads', 'n_jobs', 'min_current_spread'):
+        with pytest.raises(TypeError):
+            cls(ArgusII(), **{param: 2})
 
 
 def test_AxonMapModel_find_closest_axon_return_segment():

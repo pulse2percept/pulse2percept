@@ -40,11 +40,6 @@ class CortexSpatial(SpatialModel):
         Default: ['v1']. 
     rho : double, optional
         Exponential decay constant describing current spread size (microns).
-    min_current_spread : float, optional
-        Fraction of peak Gaussian current spread below which an electrode is
-        skipped at a grid point. The default 1e-8 (about 6.1 ``rho``) bounds
-        the error at a point by ``min_current_spread`` times the summed
-        amplitude across electrodes.
     xrange : (x_min, x_max), optional
         A tuple indicating the range of x values to simulate (in degrees of
         visual angle). Negative x values lie left of fixation, positive x

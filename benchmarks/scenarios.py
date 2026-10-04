@@ -95,12 +95,18 @@ def as_current(implant, picture, amp_max=GRAY_LEVEL_UA):
                                 time=stim.time)
 
 
+def axonmap(n_threads, **kwargs):
+    """Return an AxonMap model; ``n_threads`` is unused (Torch threads)."""
+    return p2p.models.retina.AxonMapModel(xrange=(-12, 12), yrange=(-8, 8),
+                                          **kwargs)
+
+
 def axonmap_fading(implant, verbose, n_threads, **axon_cache):
     """Return an AxonMap + Fading composite; cache keywords go to AxonMap."""
     return p2p.models.Model(
         spatial=p2p.models.retina.AxonMapSpatial(
             implant, xrange=(-12, 12), yrange=(-8, 8), verbose=verbose,
-            n_threads=n_threads, **axon_cache),
+            **axon_cache),
         temporal=p2p.models.FadingTemporal(verbose=verbose,
                                            n_threads=n_threads))
 
@@ -163,9 +169,7 @@ SCENARIOS = [
         stimulus=lambda: p2p.stimuli.samples.logo_bvl(),
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda **kwargs: p2p.models.retina.AxonMapModel(xrange=(-12, 12),
-                                                              yrange=(-8, 8),
-                                                              **kwargs),
+        model=axonmap,
         caches_axons=True,
     ),
     Scenario(
@@ -244,9 +248,7 @@ SCENARIOS = [
         stimulus=drifting_grating,
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda **kwargs: p2p.models.retina.AxonMapModel(xrange=(-12, 12),
-                                                              yrange=(-8, 8),
-                                                              **kwargs),
+        model=axonmap,
         caches_axons=True,
         slow=True,
     ),

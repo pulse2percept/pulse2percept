@@ -271,9 +271,6 @@ class Ho2018Spatial(ScoreboardSpatial):
         :py:class:`~pulse2percept.models.retina.Ho2018Model` leaves this at 0
         and thresholds the percept instead, since subthreshold drive still
         sums over pulses.
-    min_current_spread : float, optional
-        Fraction of peak Gaussian spread below which a pixel may be skipped at
-        a grid point. Set to 0 to disable the cutoff.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates.
     n_gray : int or None, optional
@@ -315,7 +312,7 @@ class Ho2018Spatial(ScoreboardSpatial):
 
     def __init__(self, implant, *, rho=None, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
-                 thresh_percept=0, min_current_spread=1e-8,
+                 thresh_percept=0,
                  visual_field_map=None,
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
@@ -325,7 +322,6 @@ class Ho2018Spatial(ScoreboardSpatial):
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
             grid_type=grid_type, thresh_percept=thresh_percept,
-            min_current_spread=min_current_spread,
             visual_field_map=visual_field_map, n_gray=n_gray,
             implant_position=implant_position,
             implant_rotation=implant_rotation, implant_depth=implant_depth,
@@ -458,9 +454,6 @@ class Ho2018Model(Model):
         Grid spacing in degrees of visual angle.
     grid_type : {'rect', 'hex'}, optional
         Sampling lattice used for the visual-field grid.
-    min_current_spread : float, optional
-        Fraction of peak Gaussian spread below which a pixel may be skipped at
-        a grid point.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates.
     implant_position : (x, y) or Quantity, optional
@@ -499,7 +492,7 @@ class Ho2018Model(Model):
 
     def __init__(self, implant, *, rho=None, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
-                 min_current_spread=1e-8, visual_field_map=None,
+                 visual_field_map=None,
                  implant_position=(0, 0), implant_rotation=0, implant_depth=0,
                  location_noise=None, ndim=None,
                  n=6, tau1=51.3, tau2=137.1, p1=1.0, p2=0.3743, dt=0.005,
@@ -511,7 +504,6 @@ class Ho2018Model(Model):
             spatial=Ho2018Spatial(
                 implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
                 grid_type=grid_type, thresh_percept=0,
-                min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map, n_gray=None,
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,

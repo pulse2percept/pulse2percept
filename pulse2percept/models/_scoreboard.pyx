@@ -72,8 +72,7 @@ cpdef fast_scoreboard(const float32[:, ::1] stim,
     cutoff_r2 : float32
         Squared distance (microns^2) beyond which an electrode is treated as
         contributing nothing to a grid point. Pass ``inf`` to sum over every
-        electrode. See ``min_current_spread`` on the model for how this is
-        derived.
+        electrode. See ``SpatialModel._cutoff_r2`` for how this is derived.
     separate: uint32 :
         If nonzero, then points on different side of x=offset than the electrode
         will not contribute to the percept (used for cortical models)
@@ -161,8 +160,7 @@ cpdef fast_scoreboard_3d(const float32[:, ::1] stim,
     cutoff_r2 : float32
         Squared distance (microns^2) beyond which an electrode is treated as
         contributing nothing to a grid point. Pass ``inf`` to sum over every
-        electrode. See ``min_current_spread`` on the model for how this is
-        derived.
+        electrode. See ``SpatialModel._cutoff_r2`` for how this is derived.
     separate: uint32 :
         If nonzero, then points on different side of x=offset than the electrode
         will not contribute to the percept (used for cortical models)

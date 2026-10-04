@@ -26,8 +26,9 @@ API changes and improvements
   (:pull:`936`).
 
 * ``AxonMapSpatial`` now runs on Torch everywhere, replacing its Cython
-  extension; existing ``axon_pickle`` caches are regenerated once
-  (:pull:`947`).
+  extension, and no longer takes ``n_threads``/``n_jobs``. Spatial models no
+  longer take ``min_current_spread``; the Gaussian cutoff is fixed at 1e-6 of
+  peak. Existing ``axon_pickle`` caches are regenerated once (:pull:`947`).
 
 Bug fixes
 ---------

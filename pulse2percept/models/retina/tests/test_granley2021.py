@@ -14,6 +14,7 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    ImageStimulus, MonophasicPulse, samples,
                                    Stimulus, VideoStimulus)
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
+from pulse2percept.models.base import _MIN_CURRENT_SPREAD, SpatialModel
 from pulse2percept.models.retina import (AxonMapSpatial, BiphasicAxonMapModel,
                                          BiphasicAxonMapSpatial,
                                          BiphasicScoreboardModel,
@@ -436,45 +437,24 @@ def test_pulse_train_amp_sign_does_not_change_percept():
                                   model.predict_percept(neg).data)
 
 
-def test_BiphasicAxonMapModel_min_current_spread():
-    stim = {e: BiphasicPulseTrain(20, 30 * xTh, 0.45)
-            for e in ('A2', 'C5', 'F8')}
-    source = stim
-    kwargs = {'xrange': (-8, 8), 'yrange': (-8, 8), 'step': 0.5,
-              'rho': 200, 'verbose': False}
-
-    exact = BiphasicAxonMapModel(implant=ArgusII(), 
-        min_current_spread=0, **kwargs).build().predict_percept(source).data
-    default = BiphasicAxonMapModel(implant=ArgusII(), 
-        **kwargs).build().predict_percept(source).data
-    npt.assert_allclose(default, exact, rtol=1e-5,
-                        atol=1e-6 * np.abs(exact).max())
-
-    # A coarse cutoff does change the result:
-    coarse = BiphasicAxonMapModel(implant=ArgusII(), 
-        min_current_spread=0.5, **kwargs).build().predict_percept(source).data
-    assert np.abs(coarse - exact).max() > 1e-3
-
-
 @pytest.mark.parametrize('amp', (2.0, 50.0))
-def test_BiphasicAxonMapModel_min_current_spread_error_bound(amp):
-    min_spread = 1e-8
+def test_BiphasicAxonMapModel_cutoff_error_bound(amp, monkeypatch):
     freq, pdur = 20, 0.45
     source = {e: BiphasicPulseTrain(freq, amp * xTh, pdur)
                             for e in ArgusII().electrode_names}
     kwargs = {'xrange': (-14, 14), 'yrange': (-10, 10), 'step': 0.75,
               'rho': 200, 'lam': 800, 'verbose': False}
 
-    model = BiphasicAxonMapModel(implant=ArgusII(), min_current_spread=0, **kwargs).build()
+    model = BiphasicAxonMapModel(implant=ArgusII(), **kwargs).build()
+    default = model.predict_percept(source).data
+    monkeypatch.setattr(SpatialModel, '_cutoff_r2',
+                        lambda self, rho: np.float32(np.inf))
     exact = model.predict_percept(source).data
-    default = BiphasicAxonMapModel(implant=ArgusII(), 
-        min_current_spread=min_spread,
-        **kwargs).build().predict_percept(source).data
 
     n_el = model.implant.n_electrodes
     f_bright = np.asarray(model.spatial.bright_model(
         np.full(n_el, freq), np.full(n_el, amp), np.full(n_el, pdur)))
-    dropped = min_spread * np.abs(f_bright).sum()
+    dropped = _MIN_CURRENT_SPREAD * np.abs(f_bright).sum()
     assert np.abs(default - exact).max() <= dropped + 1e-6 * np.abs(exact).max()
 
 
@@ -1105,10 +1085,12 @@ def test_BiphasicScoreboard_frequency_brightens_only(model_cls):
                             decimal=4)
 
 
-def test_BiphasicScoreboard_is_the_analytical_gaussian():
+def test_BiphasicScoreboard_is_the_analytical_gaussian(monkeypatch):
     freq, amp, pdur, rho = 20, 1.5, 0.45, 200
     # No cutoff, so the Gaussian is not truncated:
-    model = _scoreboard(rho=rho, min_current_spread=0)
+    monkeypatch.setattr(SpatialModel, '_cutoff_r2',
+                        lambda self, rho: np.float32(np.inf))
+    model = _scoreboard(rho=rho)
     got = _frame(model.predict_percept(_train(freq, amp, pdur)))
 
     spatial = model.spatial
@@ -1122,7 +1104,7 @@ def test_BiphasicScoreboard_is_the_analytical_gaussian():
     npt.assert_allclose(got, want, rtol=1e-5, atol=1e-6 * want.max())
 
 
-def test_BiphasicScoreboard_pairs_pulses_with_their_own_electrode():
+def test_BiphasicScoreboard_pairs_pulses_with_their_own_electrode(monkeypatch):
     # Two electrodes with different amp/pdur, in reverse implant order:
     # `_elec_params` and `_electrode_coords` must use the same order.
     rho, freq = 200, 20
@@ -1130,8 +1112,9 @@ def test_BiphasicScoreboard_pairs_pulses_with_their_own_electrode():
     names = list(ArgusII().electrode_names)
     npt.assert_array_less(names.index(conditions[1][0]),
                           names.index(conditions[0][0]))
-    model = _scoreboard(rho=rho, min_current_spread=0, xrange=(-8, 8),
-                        yrange=(-6, 6), step=0.5)
+    monkeypatch.setattr(SpatialModel, '_cutoff_r2',
+                        lambda self, rho: np.float32(np.inf))
+    model = _scoreboard(rho=rho, xrange=(-8, 8), yrange=(-6, 6), step=0.5)
     source = {name: BiphasicPulseTrain(freq, amp * xTh, pdur)
               for name, amp, pdur in conditions}
     got = _frame(model.predict_percept(source))
