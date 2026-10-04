@@ -18,19 +18,63 @@ from ..base import (Model, _blend_meridian, _draw_placed_implant,
                     _is_tensor, _thread_params, _warn_rho_vs_pitch)
 from .._scoreboard import fast_scoreboard
 from .base import RetinalSpatial, _warn_ignores_z
-from ._beyeler2019 import (fast_axon_map, fast_jansonius,
-                           fast_find_closest_axon)
 
 import warnings
 
 
 #: Version of the serialized ``axon_pickle`` payload. Increment when its
-#: layout or parameter semantics change.
-_AXON_CACHE_VERSION = 3
+#: layout or parameter semantics change, or when bundle generation changes
+#: numerically (v4: Torch Jansonius kernel).
+_AXON_CACHE_VERSION = 4
 
 #: Approximate working-memory target (bytes) per pixel block in
-#: ``AxonMapSpatial._predict_tensor``; see ``_axon_blocks``.
+#: ``AxonMapSpatial._predict_axon_map_tensor``; see ``_axon_blocks``.
 _AXON_BLOCK_BYTES = 16 * 2 ** 20
+
+
+def _jansonius_tensor(rho, phi0, beta_sup, beta_inf):
+    """Return Jansonius ``(x', y')`` for every ``(phi0, rho)`` pair.
+
+    ``rho`` holds the radial samples and ``phi0`` the initial bundle angles
+    (deg). Returns two float32 arrays of shape ``(len(phi0), len(rho))``, in
+    dva relative to the optic disc of a right eye. Computed in float32.
+    """
+    import torch
+    rho = torch.as_tensor(np.asarray(rho, dtype=np.float32))
+    phi0 = torch.as_tensor(np.asarray(phi0, dtype=np.float32))[:, None]
+    is_superior = phi0 > 0
+    # Eqs. 3-6 in [Jansonius2009]_; superior `b`, `c` for phi0 > 0:
+    b = torch.where(
+        is_superior,
+        torch.exp(beta_sup + 3.9 * torch.tanh(-(phi0 - 121.0) / 14.0)),
+        -torch.exp(beta_inf + 1.5 * torch.tanh(-(-phi0 - 90.0) / 25.0)))
+    c = torch.where(is_superior,
+                    1.9 + 1.4 * torch.tanh((phi0 - 121.0) / 14.0),
+                    1.0 + 0.5 * torch.tanh((-phi0 - 90.0) / 25.0))
+    phi = phi0 + b * torch.pow(rho - rho.min(), c)
+    phi = np.float32(np.pi / 180) * phi
+    return (rho * torch.cos(phi)).numpy(), (rho * torch.sin(phi)).numpy()
+
+
+def _axon_gauss(seg, xs, ys, two_rho2, cutoff_r2):
+    """Return the ``(n_seg + 1, n_el)`` float32 electrode weight per segment.
+
+    ``seg`` holds ``(x, y, sensitivity)`` rows. The trailing zero row is the
+    response of an axon without segments. Pairs with ``r2 > cutoff_r2`` and
+    segments without a location (NaN) are 0.
+    """
+    import torch
+    # In place: fresh allocations of this size cost as much as the math.
+    r2 = (seg[:, :1] - xs).square_()
+    r2 += (seg[:, 1:2] - ys).square_()
+    dropped = (r2 <= cutoff_r2).logical_not_()
+    gauss = seg.new_empty((seg.shape[0] + 1, xs.shape[0]))
+    gauss[-1] = 0
+    # Clamping pairs beyond the cutoff, zeroed below, keeps `exp` out of its
+    # slow underflow path (~40x slower on CPU):
+    weight = torch.clamp(r2, max=float(cutoff_r2), out=gauss[:-1])
+    weight.div_(-two_rho2).exp_().mul_(seg[:, 2:]).masked_fill_(dropped, 0)
+    return gauss
 
 
 def _is_axon_cache(payload):
@@ -687,6 +731,12 @@ class AxonMapSpatial(RetinalSpatial):
         -----
         [Jansonius2009]_ did not include bundles with ``phi0`` in [-60, 60]
         degrees."""
+        return self._jansonius_bundles([phi0], beta_sup=beta_sup,
+                                       beta_inf=beta_inf, eye=eye)[0]
+
+    def _jansonius_bundles(self, phi0, beta_sup=-1.9, beta_inf=0.5,
+                           eye='right'):
+        """Return one :py:meth:`_jansonius2009` bundle per ``phi0`` angle."""
         loc_od = self.loc_od
         if eye.lower() not in ['left', 'right']:
             e_s = f"Unknown eye string '{eye}': Choose from 'left', 'right'."
@@ -694,7 +744,7 @@ class AxonMapSpatial(RetinalSpatial):
         if eye.lower() == 'left':
             # Jansonius is parameterized for a right eye; mirror left eyes.
             loc_od = (-loc_od[0], loc_od[1])
-        if np.abs(phi0) > 180.0:
+        if np.any(np.abs(phi0) > 180.0):
             raise ValueError('phi0 must be within [-180, 180].')
         if self.n_ax_segments < 1:
             raise ValueError('Number of radial sampling points must be >= 1.')
@@ -703,32 +753,35 @@ class AxonMapSpatial(RetinalSpatial):
         if self.ax_segments_range[0] > self.ax_segments_range[1]:
             raise ValueError('Lower bound on rho cannot be larger than the '
                              ' upper bound.')
-        is_superior = phi0 > 0
         rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments,
                           dtype=np.float32)
-        xprime, yprime = fast_jansonius(rho, phi0, beta_sup, beta_inf)
-        # Truncate at the first horizontal-meridian crossing:
-        if is_superior:
-            idx = np.where(yprime < 0)[0]
-        else:
-            idx = np.where(yprime > 0)[0]
-        if idx.size:
-            xprime = xprime[:idx[0]]
-            yprime = yprime[:idx[0]]
-        # Shift the origin from optic disc to fovea:
-        xmodel = xprime + loc_od[0]
-        ymodel = yprime
-        if loc_od[0] > 0:
-            # Use Appendix A for a positive optic-disc x coordinate:
-            idx = xprime > -loc_od[0]
-        else:
-            # Mirror the correction for a negative x coordinate:
-            idx = xprime < -loc_od[0]
-        ymodel[idx] = yprime[idx] + loc_od[1] * (xmodel[idx] / loc_od[0]) ** 2
-        # Mirror back to the left eye:
-        if eye.lower() == 'left':
-            xmodel *= -1
-        return np.vstack((xmodel, ymodel)).astype(np.float32).T
+        xprimes, yprimes = _jansonius_tensor(rho, phi0, beta_sup, beta_inf)
+        bundles = []
+        for p, xprime, yprime in zip(phi0, xprimes, yprimes):
+            # Truncate at the first horizontal-meridian crossing:
+            if p > 0:
+                idx = np.where(yprime < 0)[0]
+            else:
+                idx = np.where(yprime > 0)[0]
+            if idx.size:
+                xprime = xprime[:idx[0]]
+                yprime = yprime[:idx[0]]
+            # Shift the origin from optic disc to fovea:
+            xmodel = xprime + loc_od[0]
+            ymodel = yprime
+            if loc_od[0] > 0:
+                # Use Appendix A for a positive optic-disc x coordinate:
+                idx = xprime > -loc_od[0]
+            else:
+                # Mirror the correction for a negative x coordinate:
+                idx = xprime < -loc_od[0]
+            ymodel[idx] = (yprime[idx] +
+                           loc_od[1] * (xmodel[idx] / loc_od[0]) ** 2)
+            # Mirror back to the left eye:
+            if eye.lower() == 'left':
+                xmodel *= -1
+            bundles.append(np.vstack((xmodel, ymodel)).astype(np.float32).T)
+        return bundles
 
     def grow_axon_bundles(self, n_bundles=None, prune=True):
         """Generate nerve fiber bundles from the [Jansonius2009]_ model.
@@ -749,7 +802,7 @@ class AxonMapSpatial(RetinalSpatial):
             n_bundles = self.n_axons
         # Sample initial bundle angles uniformly:
         phi = np.linspace(*self.axons_range, num=n_bundles)
-        bundles = [self._jansonius2009(p, eye=self.eye) for p in phi]
+        bundles = self._jansonius_bundles(phi, eye=self.eye)
         bundles = list(filter(lambda x: len(x) > 0, bundles))
         if prune:
             # Prune to the simulated visual field:
@@ -1072,7 +1125,7 @@ class AxonMapSpatial(RetinalSpatial):
             bundle_id = np.ravel(bundle_id).astype(np.intp)
         else:
             _, bundles, bundle_id, idx_segment = cached
-        # The Cython kernel consumes concatenated axons plus slice offsets:
+        # The kernel consumes concatenated axons plus slice offsets:
         flat, boff, _ = _flatten_bundles(bundles)
         axon_contrib, starts = self._calc_axon_sensitivity_flat(
             flat, boff, bundle_id, seg=boff[bundle_id] + idx_segment)
@@ -1092,30 +1145,21 @@ class AxonMapSpatial(RetinalSpatial):
                         open(self.axon_pickle, 'wb'))
 
     def _predict_spatial(self, electrode_array, stim):
-        """Predict brightness over the spatial grid."""
+        """Predict float32 brightness over the spatial grid."""
+        import torch
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
-        return fast_axon_map(self._stim_values(stim), x_el, y_el,
-                             self.axon_contrib,
-                             self.axon_idx_start.astype(np.uint32),
-                             self.axon_idx_end.astype(np.uint32),
-                             self.rho,
-                             self.thresh_percept,
-                             self._cutoff_r2(self.rho),
-                             self.n_threads)
+        waveform = torch.tensor(self._stim_values(stim), dtype=torch.float32)
+        with torch.inference_mode():
+            return self._predict_axon_map_tensor(waveform, x_el,
+                                                 y_el).numpy()
 
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
 
-        Same Gaussian, cutoff, signed brightest-segment selection, thresholds
-        and meridian blending as ``predict_percept``. Whole axons are processed
-        in blocks of about ``_AXON_BLOCK_BYTES``. Geometry is fixed.
-
-        Until backward, autograd keeps each block's Gaussian (segments x
-        electrodes x ``itemsize`` bytes in total) and one int64 index per
-        output value.
+        Runs the ``predict_percept`` kernel on every implant electrode, so
+        silent electrodes still receive gradients. Geometry is fixed.
         """
-        import torch
         if self.n_gray is not None:
             # Quantization is discrete and has no exact gradient:
             raise NotImplementedError("Tensor prediction does not support "
@@ -1124,33 +1168,45 @@ class AxonMapSpatial(RetinalSpatial):
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(
             electrode_array, None, electrodes=self.implant.electrode_names)
-        # Electrodes sorted by x, as in `fast_axon_map`:
+        resp = self._postprocess_spatial(
+            self._predict_axon_map_tensor(waveform, x_el, y_el))
+        return self._spatial_response(resp, time, None)
+
+    def _predict_axon_map_tensor(self, waveform, x_el, y_el):
+        """Return the flat ``(P, T)`` response before meridian blending.
+
+        ``waveform`` rows follow the float32 electrode coordinates ``x_el``,
+        ``y_el`` (microns). Geometry is float32; the response has the dtype
+        and device of ``waveform``. Each pixel takes the signed response of
+        its axon segment with the largest ``|response|`` (first on ties), then
+        ``thresh_percept`` is applied. Whole axons are processed in blocks of
+        about ``_AXON_BLOCK_BYTES``.
+
+        Until backward, autograd keeps each block's Gaussian (segments x
+        electrodes x ``itemsize`` bytes in total) and one int64 index per
+        output value.
+        """
+        import torch
+        device = waveform.device
+        # Sums electrodes in stable x order, as the v0.11 Cython kernel did:
         order = np.argsort(x_el, kind='stable')
-        x_el, y_el = x_el[order], y_el[order]
-        waveform = waveform[torch.as_tensor(order, device=waveform.device)]
+        xs = torch.as_tensor(x_el[order], device=device)
+        ys = torch.as_tensor(y_el[order], device=device)
+        waveform = waveform[torch.as_tensor(order, device=device)]
         rho = np.float32(self.rho)
+        two_rho2 = np.float32(2) * rho * rho
         cutoff_r2 = self._cutoff_r2(self.rho)
+        contrib = torch.as_tensor(self.axon_contrib, device=device)
         start, end = self.axon_idx_start, self.axon_idx_end
         n_el, n_time = x_el.size, waveform.shape[1]
-        device = waveform.device
         t_idx = torch.arange(n_time, device=device)
         blocks = []
         for p0, p1 in _axon_blocks(end - start, n_el, n_time,
                                    waveform.element_size(),
                                    _AXON_BLOCK_BYTES):
             lo, hi = start[p0], end[p1 - 1]
-            seg = self.axon_contrib[lo:hi]
-            # float32, as in `fast_axon_map`. The trailing zero row is the
-            # response of an axon without segments:
-            gauss = np.zeros((hi - lo + 1, n_el), dtype=np.float32)
-            dx = seg[:, :1] - x_el
-            dy = seg[:, 1:2] - y_el
-            r2 = dx * dx + dy * dy
-            gauss[:-1] = seg[:, 2:] * np.exp(-r2 / (np.float32(2) * rho * rho))
-            # Drops pairs beyond the cutoff and segments without a location:
-            gauss[:-1][~(r2 <= cutoff_r2)] = 0
-            seg_resp = torch.as_tensor(gauss, dtype=waveform.dtype,
-                                       device=device) @ waveform
+            gauss = _axon_gauss(contrib[lo:hi], xs, ys, two_rho2, cutoff_r2)
+            seg_resp = gauss.to(waveform.dtype) @ waveform
             counts = end[p0:p1] - start[p0:p1]
             first = start[p0:p1] - lo
             with torch.no_grad():
@@ -1163,8 +1219,9 @@ class AxonMapSpatial(RetinalSpatial):
                 idx = (torch.as_tensor(pix, device=device),
                        torch.as_tensor(pos, device=device))
                 packed[idx] = seg_resp[:-1].abs()
-                # First largest |response|, matching the strict `>` update in
-                # Cython. `max` over a middle dim is ~10x faster than `argmax`:
+                # First largest |response|; zero-response ties included, so
+                # no segment may be skipped. `max` over a middle dim is ~10x
+                # faster than `argmax`:
                 best = packed.max(dim=1).indices
             rows = torch.as_tensor(first, device=device)[:, None] + best
             empty = torch.as_tensor(counts == 0, device=device)[:, None]
@@ -1174,8 +1231,7 @@ class AxonMapSpatial(RetinalSpatial):
             block = seg_resp[rows, t_idx]
             blocks.append(torch.where(block.abs() >= self.thresh_percept,
                                       block, 0.0))
-        resp = self._postprocess_spatial(torch.cat(blocks))
-        return self._spatial_response(resp, time, None)
+        return torch.cat(blocks)
 
     def _postprocess_spatial(self, resp):
         """Blend the response across the horizontal meridian."""

@@ -20,9 +20,9 @@ The PRIMA scenario runs its optical encoder directly. Electrical image
 scenarios use :func:`as_current` to keep their historical benchmark workload.
 
 Together the scenarios reach every compiled kernel used in percept prediction:
-``_beyeler2019``, ``_granley2021``, ``_nanduri2012``, ``_horsager2009``,
-``_thompson2003`` and the shared ``_temporal`` loop. A new scenario should reach
-a kernel no existing scenario reaches.
+``_granley2021``, ``_nanduri2012``, ``_horsager2009``, ``_thompson2003`` and
+the shared ``_temporal`` loop. A new scenario should reach a kernel no existing
+scenario reaches.
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -228,8 +228,8 @@ SCENARIOS = [
                 implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
             temporal=p2p.models.FadingTemporal(**kwargs)),
     ),
-    # AxonMap + Fading: the spatial-only AxonMap scenarios never reach the
-    # composite's Torch AxonMap core:
+    # AxonMap + Fading: the composite runs the Torch AxonMap core on every
+    # electrode, the spatial-only scenarios on the compressed stimulus:
     Scenario(
         id='argus2_axonmap_fading_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),

@@ -18,7 +18,6 @@ from pulse2percept.stimuli import (ImageStimulus, Stimulus, samples,
 from pulse2percept.models.retina import (AxonMapSpatial, AxonMapModel,
                                          ScoreboardSpatial, ScoreboardModel)
 from pulse2percept.models.retina.beyeler2019 import _AXON_CACHE_VERSION
-from pulse2percept.models.retina._beyeler2019 import fast_axon_map
 from pulse2percept.topography.retina import (Montesano2020Map,
                                              Watson2014Map)
 from pulse2percept.units import (DimensionMismatchError, deg,
@@ -453,6 +452,38 @@ def test_AxonMapModel__jansonius2009(eye, loc_od, sign):
         npt.assert_almost_equal(single_fiber[0], loc_od)
 
 
+#: Right-eye bundles (dva) from the float32 Cython kernel of v0.11, default
+#: geometry: phi0 -> (length, {segment: (x, y)}). Left eyes mirror x.
+JANSONIUS_FROZEN = {
+    -135.0: (247, {1: (15.429131, 1.415479), 10: (14.786551, 0.661526),
+                   100: (7.107345, -5.158602), 246: (-9.149109, -0.096284)}),
+    -90.0: (500, {1: (15.499711, 1.399744), 10: (15.471113, 0.492827),
+                  100: (12.650759, -8.607186), 499: (-34.064930, -6.581625)}),
+    0.0: (500, {1: (15.600118, 1.515367), 10: (16.493704, 1.569789),
+                100: (24.697498, -0.167505), 499: (46.087349, -26.291218)}),
+    66.0: (500, {1: (15.537006, 1.600287), 10: (15.786694, 2.516116),
+                 100: (15.608869, 11.540594), 499: (-8.213854, 44.018780)}),
+    128.0: (202, {1: (15.438311, 1.567043), 10: (14.882763, 2.172236),
+                  100: (8.203381, 7.287514), 201: (-4.640015, 0.103467)}),
+}
+
+
+@pytest.mark.parametrize('eye', ('right', 'left'))
+def test_AxonMapSpatial_jansonius_frozen(eye):
+    spatial = AxonMapSpatial(ArgusII(eye=eye))
+    spatial._correct_loc_od()
+    sign = 1 if eye == 'right' else -1
+    bundles = spatial._jansonius_bundles(list(JANSONIUS_FROZEN), eye=eye)
+    for bundle, (n_seg, segments) in zip(bundles, JANSONIUS_FROZEN.values()):
+        npt.assert_equal(len(bundle), n_seg)
+        npt.assert_equal(bundle[0], (sign * 15.5, 1.5))
+        for idx, (x, y) in segments.items():
+            # A few float32 ulps of the largest coordinate:
+            npt.assert_allclose(bundle[idx], (sign * x, y), rtol=0, atol=2e-5)
+    # The scalar entry point matches the vectorized one:
+    npt.assert_equal(spatial._jansonius2009(66.0, eye=eye), bundles[3])
+
+
 def test_AxonMapModel_grow_axon_bundles():
     for n_axons in [1, 2, 3, 5, 10]:
         model = AxonMapModel(implant=ArgusII(), step=2, n_axons=n_axons,
@@ -736,26 +767,36 @@ def test_predict_percept_all_zero_stim(ModelClass):
     npt.assert_equal(np.all(percept.data == 0), True)
 
 
-def test_fast_axon_map_cutoff_band_boundaries():
+def test_AxonMapSpatial_cutoff_band_boundaries(monkeypatch):
     """An electrode exactly on either edge of the cutoff still contributes
 
-    ``fast_axon_map`` binary-searches the x band ``[ax_x - r, ax_x + r]``.
+    Candidate electrodes form the sorted x band ``[ax_x - r, ax_x + r]``.
     ``cutoff_r2`` is an exact float32 square, so ``sqrt`` rounding does not
     affect the band edges.
     """
-    rho = np.float32(200.0)
-    cutoff_r2 = np.float32(360000.0)  # r = 600 um, exactly
-    # One pixel whose axon is a single segment at the origin, sensitivity 1:
-    segments = np.array([[0.0, 0.0, 1.0]], dtype=np.float32)
-    start = np.array([0], dtype=np.uint32)
-    end = np.array([1], dtype=np.uint32)
+    monkeypatch.setattr(AxonMapSpatial, '_cutoff_r2',
+                        lambda self, rho: np.float32(360000.0))  # r = 600 um
+    spatial = AxonMapSpatial(ArgusII(), rho=200, step=1, xrange=(-2, 2),
+                             yrange=(-2, 2), n_axons=50, n_ax_segments=50,
+                             meridian_blend=0).build()
+    names = list(spatial.implant.electrode_names)
+    # Pixel 0 gets one segment at the origin, sensitivity 1; no other axons:
+    n_px = spatial.grid.x.size
+    spatial.axon_contrib = np.array([[0.0, 0.0, 1.0]], dtype=np.float32)
+    spatial.axon_idx_start = np.array([0] + [1] * (n_px - 1))
+    spatial.axon_idx_end = np.ones(n_px, dtype=int)
 
     def bright(x_el):
-        x_el = np.ascontiguousarray(x_el, dtype=np.float32)
-        stim = np.full((len(x_el), 1), -1.0, dtype=np.float32)
-        return fast_axon_map(stim, x_el, np.zeros_like(x_el), segments,
-                             start, end, rho, np.float32(0.0), cutoff_r2,
-                             1).ravel()[0]
+        # Place the first electrodes at `x_el` on the x axis:
+        x_el = np.asarray(x_el, dtype=np.float32)
+        coords = (x_el, np.zeros_like(x_el), np.zeros_like(x_el))
+        with monkeypatch.context() as m:
+            m.setattr(AxonMapSpatial, '_electrode_coords',
+                      lambda *args, **kwargs: coords)
+            stim = Stimulus(-np.ones(len(x_el)),
+                            electrodes=names[:len(x_el)])
+            percept = spatial.predict_percept(stim)
+        return percept.data.ravel()[0]
 
     for x in (-600.0, 600.0):
         npt.assert_array_less(0.0, abs(bright([x])))
@@ -765,21 +806,14 @@ def test_fast_axon_map_cutoff_band_boundaries():
     # Electrodes outside the band are dropped:
     x_el = np.array([-900., -600.5, -600., -300., 0., 300., 600., 600.5,
                      900.], dtype=np.float32)
-    # Sum in increasing x (the kernel's order):
-    want = np.float32(0.0)
-    two_rho2 = 2.0 * rho * rho
-    for x in x_el[np.abs(x_el) <= 600.0]:
-        want = np.float32(want - np.float32(np.exp(-x * x / two_rho2)))
+    two_rho2 = np.float32(2 * 200 ** 2)
+    want = -np.sum(np.exp(-x_el[np.abs(x_el) <= 600] ** 2 / two_rho2))
     npt.assert_allclose(bright(x_el), want, rtol=1e-6)
 
 
 @pytest.mark.parametrize('ModelClass', (ScoreboardModel, AxonMapModel))
 def test_predict_percept_thread_count_invariant(ModelClass):
-    """The percept does not depend on the number of threads
-
-    ``fast_axon_map`` gives each thread its own row of a padded scratch
-    buffer; a single-frame stimulus tests that padding.
-    """
+    """The percept does not depend on the number of threads"""
     stim = np.zeros(60)
     stim[[5, 22, 51]] = [1.0, 0.6, -0.3]
     kwargs = {'implant': ArgusII(), 'step': 1, 'xrange': (-10, 10),
@@ -864,6 +898,15 @@ def test_AxonMapModel_build_cache_roundtrip(tmp_path):
     with open(pickle_file, 'rb') as f:
         _, payload = pickle.load(f)
     npt.assert_equal(payload[0], _AXON_CACHE_VERSION)
+
+    # v3 bundles came from the Cython Jansonius kernel and are regrown, even
+    # though the layout is unchanged. Shifted bundles expose a reuse:
+    npt.assert_equal(_AXON_CACHE_VERSION, 4)
+    _, bundles, bundle_id, idx_segment = payload
+    with open(pickle_file, 'wb') as f:
+        pickle.dump((params, (3, [b + 1 for b in bundles], bundle_id,
+                              idx_segment)), f)
+    npt.assert_array_equal(build(False).axon_contrib, cold.axon_contrib)
 
 
 def test_AxonMapModel_build_rejects_pre_step_cache(tmp_path):

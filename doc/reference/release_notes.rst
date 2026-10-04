@@ -25,6 +25,10 @@ API changes and improvements
   stimulus directly, and metadata no longer affects model timing
   (:pull:`936`).
 
+* ``AxonMapSpatial`` now runs on Torch everywhere, replacing its Cython
+  extension; existing ``axon_pickle`` caches are regenerated once
+  (:pull:`947`).
+
 Bug fixes
 ---------
 
