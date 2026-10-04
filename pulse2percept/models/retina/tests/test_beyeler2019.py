@@ -17,7 +17,7 @@ from pulse2percept.stimuli import (ImageStimulus, Stimulus, samples,
                                    VideoStimulus)
 from pulse2percept.models.retina import (AxonMapSpatial, AxonMapModel,
                                          ScoreboardSpatial, ScoreboardModel)
-from pulse2percept.models.base import _MIN_CURRENT_SPREAD, SpatialModel
+from pulse2percept.models.base import _GAUSSIAN_CUTOFF, SpatialModel
 from pulse2percept.models.retina.beyeler2019 import _AXON_CACHE_VERSION
 from pulse2percept.topography.retina import (Montesano2020Map,
                                              Watson2014Map)
@@ -667,7 +667,7 @@ def test_cutoff_error_bound(ModelClass, amp, monkeypatch):
     exact = model.predict_percept(stim).data
     # Documented bound: the cutoff fraction times the summed amplitude, plus
     # float32 accumulation error:
-    dropped = _MIN_CURRENT_SPREAD * np.abs(stim).sum()
+    dropped = _GAUSSIAN_CUTOFF * np.abs(stim).sum()
     assert np.abs(default - exact).max() <= dropped + 1e-6 * np.abs(exact).max()
 
     # Points far from all electrodes become exactly zero (100% relative

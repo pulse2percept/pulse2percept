@@ -241,8 +241,6 @@ SCENARIOS = [
         model=axonmap_fading,
         caches_axons=True,
     ),
-    # 94-frame video: the spatial model runs once per frame, so one
-    # predict_percept takes ~1 min (images: well under 1 s):
     Scenario(
         id='argus2_axonmap_video',
         stimulus=drifting_grating,
@@ -250,6 +248,5 @@ SCENARIOS = [
         source=as_current,
         model=axonmap,
         caches_axons=True,
-        slow=True,
     ),
 ]

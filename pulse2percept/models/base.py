@@ -120,9 +120,9 @@ def _to_percept(resp, inherit_space_from=None):
 #: interval internally. This fallback is approximate for sub-frame transients.
 _FRAME_SUBSAMPLES = 8
 
-#: Fraction of peak Gaussian current spread below which an electrode is
-#: dropped at a point (about 5.3 ``rho``); see ``SpatialModel._cutoff_r2``.
-_MIN_CURRENT_SPREAD = 1e-6
+#: Fraction of its peak below which a Gaussian current spread is dropped;
+#: see ``SpatialModel._cutoff_r2``.
+_GAUSSIAN_CUTOFF = 1e-6
 
 
 def _subsample(t_out, dt, n_sub, start=None):
@@ -1072,11 +1072,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     supplies no default ``visual_field_map`` and reads no physical length as a
     visual-field extent.
 
-    Gaussian current-spread models drop an electrode at a point once its
-    spread falls below 1e-6 of its peak (about 5.3 ``rho``). The error at a
-    point is at most 1e-6 times the summed absolute amplitude across
-    electrodes.
-
     .. versionadded:: 0.6
 
     .. versionchanged:: 0.11.0
@@ -1188,8 +1183,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Return the squared distance where Gaussian spread is negligible.
 
         For a spread ``exp(-r**2 / (2 * rho**2))``, converts
-        ``_MIN_CURRENT_SPREAD`` (1e-6) to a squared-distance cutoff of about
-        (5.3 ``rho``)**2. Pairs with ``r**2 <= cutoff`` are kept.
+        ``_GAUSSIAN_CUTOFF`` (1e-6 of peak) to a squared-distance cutoff, so
+        the spatial support is about 5.3 ``rho``. Pairs with
+        ``r**2 <= cutoff`` are kept. For a plain amplitude-weighted sum, the
+        error at a point is at most 1e-6 times the summed absolute amplitude.
 
         Parameters
         ----------
@@ -1201,7 +1198,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         np.float32
             Squared distance in microns squared.
         """
-        return np.float32(-2.0 * rho ** 2 * np.log(_MIN_CURRENT_SPREAD))
+        return np.float32(-2.0 * rho ** 2 * np.log(_GAUSSIAN_CUTOFF))
 
     def build(self, **build_params):
         """Build the spatial model.

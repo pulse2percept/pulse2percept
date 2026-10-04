@@ -841,7 +841,7 @@ class AxonMapSpatial(RetinalSpatial):
         flat_bundles = np.concatenate(bundles)
         kdtree = cKDTree(flat_bundles, leafsize=60)
         query = np.stack((xret.ravel(), yret.ravel()), axis=1)
-        _, closest_seg = kdtree.query(query)
+        _, closest_seg = kdtree.query(query, workers=-1)
 
         closest_idx = (np.searchsorted(boff, closest_seg, side='right') -
                        1).astype(np.uint32)

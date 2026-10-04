@@ -14,7 +14,7 @@ from pulse2percept.stimuli import (AmplitudeEncoder,
                                    ImageStimulus, MonophasicPulse, samples,
                                    Stimulus, VideoStimulus)
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
-from pulse2percept.models.base import _MIN_CURRENT_SPREAD, SpatialModel
+from pulse2percept.models.base import _GAUSSIAN_CUTOFF, SpatialModel
 from pulse2percept.models.retina import (AxonMapSpatial, BiphasicAxonMapModel,
                                          BiphasicAxonMapSpatial,
                                          BiphasicScoreboardModel,
@@ -454,7 +454,7 @@ def test_BiphasicAxonMapModel_cutoff_error_bound(amp, monkeypatch):
     n_el = model.implant.n_electrodes
     f_bright = np.asarray(model.spatial.bright_model(
         np.full(n_el, freq), np.full(n_el, amp), np.full(n_el, pdur)))
-    dropped = _MIN_CURRENT_SPREAD * np.abs(f_bright).sum()
+    dropped = _GAUSSIAN_CUTOFF * np.abs(f_bright).sum()
     assert np.abs(default - exact).max() <= dropped + 1e-6 * np.abs(exact).max()
 
 
