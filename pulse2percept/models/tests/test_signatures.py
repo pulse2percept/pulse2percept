@@ -185,5 +185,6 @@ def test_defaults_match_declared_defaults(cls, _):
                                     {'n_threads': 3, 'n_jobs': 2}])
 def test_n_jobs_is_an_alias_for_n_threads(kwargs):
     # `n_jobs` writes through to `n_threads`, and wins when both are given.
-    npt.assert_equal(AxonMapModel(ArgusII(), **kwargs).spatial.n_threads, 2)
+    npt.assert_equal(
+        BiphasicAxonMapModel(ArgusII(), **kwargs).spatial.n_threads, 2)
     npt.assert_equal(FadingTemporal(**kwargs).n_threads, 2)

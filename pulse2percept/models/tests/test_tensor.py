@@ -66,7 +66,7 @@ def _model(reduce='peak', **params):
 
 @pytest.mark.parametrize('params', [
     {},
-    {'min_current_spread': 0.05, 'thresh_percept': 2},
+    {'thresh_percept': 2},
     {'implant_position': (300, -200), 'implant_rotation': 20},
     {'location_noise': 0.5},
 ])
@@ -171,7 +171,9 @@ def test_Model_tensor_parity(reduce, t_percept):
 
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
 def test_Model_tensor_autograd(reduce):
-    model = _model(reduce=reduce)
+    # rho=200 puts bright points within the cutoff (about 5.3 rho) of the
+    # silent electrodes, 800 um from their neighbors:
+    model = _model(reduce=reduce, rho=200)
     waveform = torch.tensor(_waveform(model.implant.n_electrodes),
                             dtype=torch.float32, requires_grad=True)
     resp = model._predict_tensor(waveform, TIME,
@@ -412,8 +414,12 @@ def _axon_spatial(implant=None, **params):
     return AxonMapSpatial(ArgusII() if implant is None else implant, **params)
 
 
-def _axon_parity(spatial, wf):
-    """Return the Cython response after checking tensor parity."""
+def _axon_paths(spatial, wf):
+    """Return the ``predict_percept`` response after checking the tensor path.
+
+    Both paths share one Torch kernel, so this checks API-path consistency
+    (compressed stimulus vs. all electrodes), not the model itself.
+    """
     expected = spatial.predict_percept(
         Stimulus(wf, electrodes=spatial.implant.electrode_names, time=TIME))
     resp = spatial._predict_tensor(torch.tensor(wf, dtype=torch.float32),
@@ -429,14 +435,13 @@ def _axon_parity(spatial, wf):
 @pytest.mark.parametrize('params', [
     {},
     {'meridian_blend': 0},
-    {'min_current_spread': 0.05, 'thresh_percept': 5},
-    {'min_current_spread': 0},
+    {'thresh_percept': 5},
     {'implant_position': (300, -200), 'implant_rotation': 20},
     {'location_noise': 0.5},
 ])
-def test_AxonMapSpatial_tensor_parity(params):
+def test_AxonMapSpatial_tensor_matches_predict_percept(params):
     spatial = _axon_spatial(**params).build()
-    expected = _axon_parity(spatial, _waveform(spatial.implant.n_electrodes))
+    expected = _axon_paths(spatial, _waveform(spatial.implant.n_electrodes))
     # Thresholding zeros some, but not all, of a signed response:
     assert 0 < np.mean(expected == 0) < 1
     assert expected.min() < 0 < expected.max()
@@ -462,13 +467,13 @@ def test_AxonMapSpatial_tensor_blocks(monkeypatch):
         20000)
     sizes = {p1 - p0 for p0, p1 in blocks}
     assert 1 in sizes and max(sizes) > 1
-    _axon_parity(spatial, _waveform(spatial.implant.n_electrodes))
+    _axon_paths(spatial, _waveform(spatial.implant.n_electrodes))
 
 
 def test_AxonMapSpatial_tensor_cathodic():
     # Selects the segment with largest |response|, not the largest value:
     spatial = _axon_spatial(meridian_blend=0).build()
-    expected = _axon_parity(spatial,
+    expected = _axon_paths(spatial,
                             -np.abs(_waveform(spatial.implant.n_electrodes)))
     assert expected.max() == 0 and expected.min() < 0
 
@@ -491,13 +496,13 @@ def _drive(spatial, name, amp):
 @pytest.mark.parametrize('sign', [1, -1])
 def test_AxonMapSpatial_tensor_first_tie(sign):
     # Two segments of one axon at the electrode with opposite sensitivity:
-    # exactly tied |response|, so the first segment's sign wins, as in Cython.
+    # exactly tied |response|, so the first segment's sign wins.
     spatial = _axon_spatial(meridian_blend=0, thresh_percept=0).build()
     x_el, y_el, _ = spatial._electrode_coords(
         spatial.implant.electrode_array, None, electrodes=['C3'])
     _one_axon(spatial, [[x_el[0], y_el[0], sign], [x_el[0], y_el[0], -sign]])
     amp = np.random.default_rng(5).normal(0, 30, TIME.size)
-    expected = _axon_parity(spatial, _drive(spatial, 'C3', amp))
+    expected = _axon_paths(spatial, _drive(spatial, 'C3', amp))
     npt.assert_equal(expected[0], sign * amp.astype(np.float32))
     assert np.all(expected[1:] == 0)
 
@@ -514,7 +519,7 @@ def test_AxonMapSpatial_tensor_first_tie_outside_cutoff():
     silent = [2, 7, 12]
     amp[silent] = 0
     wf = _drive(spatial, 'C3', amp)
-    expected = _axon_parity(spatial, wf)
+    expected = _axon_paths(spatial, wf)
     npt.assert_equal(expected[0], amp.astype(np.float32))
     waveform = torch.tensor(wf, dtype=torch.float64, requires_grad=True)
     spatial._predict_tensor(waveform, TIME).data[0].sum().backward()
@@ -526,7 +531,7 @@ def test_AxonMapSpatial_tensor_first_tie_outside_cutoff():
 @pytest.mark.parametrize('below', [False, True])
 def test_AxonMapSpatial_tensor_cutoff_inclusive(below, monkeypatch):
     # One segment 100 um right of the rightmost electrode, level with it:
-    # r2 == cutoff_r2 exactly, which is retained, as in `fast_axon_map`.
+    # r2 == cutoff_r2 exactly, which is retained.
     cutoff_r2 = np.float32(100 * 100)
     if below:
         cutoff_r2 = np.nextafter(cutoff_r2, np.float32(0))
@@ -539,7 +544,7 @@ def test_AxonMapSpatial_tensor_cutoff_inclusive(below, monkeypatch):
     edge = int(np.argmax(x_el))
     _one_axon(spatial, [[x_el[edge] + 100, y_el[edge], 1]])
     amp = np.random.default_rng(7).normal(0, 30, TIME.size)
-    expected = _axon_parity(spatial, _drive(spatial, names[edge], amp))
+    expected = _axon_paths(spatial, _drive(spatial, names[edge], amp))
     if below:
         assert np.all(expected == 0)
     else:
@@ -562,9 +567,9 @@ def test_AxonMapSpatial_tensor_thresh_inclusive():
 
 def test_AxonMapSpatial_tensor_meridian_blend():
     wf = _waveform(60)
-    unblended = _axon_parity(_axon_spatial(meridian_blend=0,
+    unblended = _axon_paths(_axon_spatial(meridian_blend=0,
                                            thresh_percept=5).build(), wf)
-    blended = _axon_parity(_axon_spatial(meridian_blend=2,
+    blended = _axon_paths(_axon_spatial(meridian_blend=2,
                                          thresh_percept=5).build(), wf)
     assert not np.allclose(blended, unblended)
     # Threshold reapplied after blending:

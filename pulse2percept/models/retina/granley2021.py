@@ -3,6 +3,7 @@
    :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`,
    :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial`
    [Granley2021]_"""
+import multiprocessing
 import numpy as np
 from copy import deepcopy
 
@@ -10,7 +11,7 @@ from ...implants import ElectrodeArray
 from ...stimuli import BiphasicPulseTrain, Stimulus
 from ...units import as_value, um, xTh
 from ..base import (BaseModel, Model, _ModelResponse, _encoder_clock,
-                    _require_stim_dimension)
+                    _require_stim_dimension, _thread_params)
 from .base import _warn_ignores_z
 from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
 from ._granley2021 import (fast_biphasic_axon_map,
@@ -575,10 +576,6 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
-    min_current_spread : float, optional
-        Fraction of peak current spread below which an electrode may be
-        skipped at an axon segment. The cutoff is scaled by ``F_size``.
-        Set to 0 to disable.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
@@ -651,7 +648,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  streak_model=None, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
-                 thresh_percept=0, min_current_spread=1e-8,
+                 thresh_percept=0,
                  visual_field_map=None,
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
@@ -666,7 +663,6 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
         super().__init__(
             implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange,
             step=step, grid_type=grid_type, thresh_percept=thresh_percept,
-            min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
             n_gray=n_gray,
             implant_position=implant_position,
@@ -677,8 +673,8 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
             ax_segments_range=ax_segments_range,
             min_ax_sensitivity=min_ax_sensitivity,
             meridian_blend=meridian_blend, axon_pickle=axon_pickle,
-            ignore_pickle=ignore_pickle, verbose=verbose, ndim=ndim,
-            n_threads=n_threads, n_jobs=n_jobs)
+            ignore_pickle=ignore_pickle, verbose=verbose, ndim=ndim)
+        self.set_params(**_thread_params(n_threads, n_jobs))
         self.bright_model = (DefaultBrightModel() if bright_model is None
                              else bright_model)
         self.size_model = (DefaultSizeModel(self.rho) if size_model is None
@@ -695,6 +691,10 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
             'bright_model': None,
             'size_model': None,
             'streak_model': None,
+            # Unlike AxonMapSpatial, the Cython kernel uses OpenMP threads.
+            # `n_jobs` writes through to `n_threads`, so it must come last:
+            'n_threads': multiprocessing.cpu_count(),
+            'n_jobs': None,
         }
         return {**base_params, **params}
 
@@ -830,10 +830,6 @@ class BiphasicAxonMapModel(Model):
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
-    min_current_spread : float, optional
-        Fraction of peak current spread below which an electrode may be
-        skipped at an axon segment. The cutoff is scaled by ``F_size``.
-        Set to 0 to disable.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
@@ -927,7 +923,7 @@ class BiphasicAxonMapModel(Model):
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  streak_model=None, rho=300, lam=500, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
-                 thresh_percept=0, min_current_spread=1e-8,
+                 thresh_percept=0,
                  visual_field_map=None,
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
@@ -944,7 +940,6 @@ class BiphasicAxonMapModel(Model):
                 streak_model=streak_model, rho=rho, lam=lam, xrange=xrange,
                 yrange=yrange, step=step, grid_type=grid_type,
                 thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray,
                 implant_position=implant_position,
@@ -1004,10 +999,6 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
-    min_current_spread : float, optional
-        Fraction of peak Gaussian current spread below which an electrode may
-        be skipped at a grid point. The cutoff is scaled by ``F_size``.
-        Set to 0 to disable.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
@@ -1038,7 +1029,7 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  rho=100, xrange=(-15, 15), yrange=(-15, 15), step=0.25,
-                 grid_type='rect', thresh_percept=0, min_current_spread=1e-8,
+                 grid_type='rect', thresh_percept=0,
                  visual_field_map=None,
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
@@ -1049,7 +1040,6 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
             grid_type=grid_type, thresh_percept=thresh_percept,
-            min_current_spread=min_current_spread,
             visual_field_map=visual_field_map,
             n_gray=n_gray,
             implant_position=implant_position,
@@ -1180,10 +1170,6 @@ class BiphasicScoreboardModel(Model):
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
-    min_current_spread : float, optional
-        Fraction of peak Gaussian current spread below which an electrode may
-        be skipped at a grid point. The cutoff is scaled by ``F_size``.
-        Set to 0 to disable.
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         Retinotopic map between visual-field and retinal coordinates. Defaults
         to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
@@ -1235,7 +1221,7 @@ class BiphasicScoreboardModel(Model):
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  rho=100, xrange=(-15, 15), yrange=(-15, 15), step=0.25,
-                 grid_type='rect', thresh_percept=0, min_current_spread=1e-8,
+                 grid_type='rect', thresh_percept=0,
                  visual_field_map=None,
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
@@ -1247,7 +1233,6 @@ class BiphasicScoreboardModel(Model):
                 implant, bright_model=bright_model, size_model=size_model,
                 rho=rho, xrange=xrange, yrange=yrange, step=step,
                 grid_type=grid_type, thresh_percept=thresh_percept,
-                min_current_spread=min_current_spread,
                 visual_field_map=visual_field_map,
                 n_gray=n_gray,
                 implant_position=implant_position,

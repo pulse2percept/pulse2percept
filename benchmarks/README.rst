@@ -221,7 +221,7 @@ scenario takes more than a few seconds per ``predict_percept`` call, set
 .. code-block:: python
 
     Scenario(
-        id='argus2_axonmap_video',
+        id='my_slow_scenario',
         ...
         slow=True,
     )

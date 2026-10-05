@@ -120,6 +120,10 @@ def _to_percept(resp, inherit_space_from=None):
 #: interval internally. This fallback is approximate for sub-frame transients.
 _FRAME_SUBSAMPLES = 8
 
+#: Fraction of its peak below which a Gaussian current spread is dropped;
+#: see ``SpatialModel._cutoff_r2``.
+_GAUSSIAN_CUTOFF = 1e-6
+
 
 def _subsample(t_out, dt, n_sub, start=None):
     """Sample each output interval at up to ``n_sub`` points.
@@ -1035,9 +1039,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Sampling lattice used for the visual-field grid.
     thresh_percept : float, optional
         Brightness values below this threshold are set to zero.
-    min_current_spread : float, optional
-        Fraction of peak Gaussian current spread below which an electrode may
-        be skipped at a grid point. Set to 0 to disable the cutoff.
     visual_field_map : VisualFieldMap, optional
         Map between visual-field and tissue coordinates. ``None`` until an
         anatomy-specific subclass such as
@@ -1153,7 +1154,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'step': 0.25,  # dva
             'grid_type': 'rect',
             'thresh_percept': 0,
-            'min_current_spread': 1e-8,
             'visual_field_map': None,
             'n_gray': None,
             'location_noise': None,  # dva
@@ -1183,8 +1183,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Return the squared distance where Gaussian spread is negligible.
 
         For a spread ``exp(-r**2 / (2 * rho**2))``, converts
-        ``min_current_spread`` to a squared-distance cutoff. The default 1e-8 is
-        about 6.1 ``rho``; 0 disables the cutoff.
+        ``_GAUSSIAN_CUTOFF`` (1e-6 of peak) to a squared-distance cutoff, so
+        the spatial support is about 5.3 ``rho``. Pairs with
+        ``r**2 <= cutoff`` are kept. For a plain amplitude-weighted sum, the
+        error at a point is at most 1e-6 times the summed absolute amplitude.
 
         Parameters
         ----------
@@ -1194,15 +1196,9 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Returns
         -------
         np.float32
-            Squared distance in microns squared, or ``inf`` if disabled.
+            Squared distance in microns squared.
         """
-        min_spread = self.min_current_spread
-        if min_spread is None or min_spread <= 0:
-            return np.float32(np.inf)
-        if min_spread >= 1:
-            raise ValueError(f"min_current_spread must be smaller than 1 (or "
-                             f"0 to disable the cutoff), not {min_spread}.")
-        return np.float32(-2.0 * rho ** 2 * np.log(min_spread))
+        return np.float32(-2.0 * rho ** 2 * np.log(_GAUSSIAN_CUTOFF))
 
     def build(self, **build_params):
         """Build the spatial model.

@@ -20,9 +20,9 @@ The PRIMA scenario runs its optical encoder directly. Electrical image
 scenarios use :func:`as_current` to keep their historical benchmark workload.
 
 Together the scenarios reach every compiled kernel used in percept prediction:
-``_beyeler2019``, ``_granley2021``, ``_nanduri2012``, ``_horsager2009``,
-``_thompson2003`` and the shared ``_temporal`` loop. A new scenario should reach
-a kernel no existing scenario reaches.
+``_granley2021``, ``_nanduri2012``, ``_horsager2009``, ``_thompson2003`` and
+the shared ``_temporal`` loop. A new scenario should reach a kernel no existing
+scenario reaches.
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -95,12 +95,18 @@ def as_current(implant, picture, amp_max=GRAY_LEVEL_UA):
                                 time=stim.time)
 
 
+def axonmap(n_threads, **kwargs):
+    """Return an AxonMap model; ``n_threads`` is unused (Torch threads)."""
+    return p2p.models.retina.AxonMapModel(xrange=(-12, 12), yrange=(-8, 8),
+                                          **kwargs)
+
+
 def axonmap_fading(implant, verbose, n_threads, **axon_cache):
     """Return an AxonMap + Fading composite; cache keywords go to AxonMap."""
     return p2p.models.Model(
         spatial=p2p.models.retina.AxonMapSpatial(
             implant, xrange=(-12, 12), yrange=(-8, 8), verbose=verbose,
-            n_threads=n_threads, **axon_cache),
+            **axon_cache),
         temporal=p2p.models.FadingTemporal(verbose=verbose,
                                            n_threads=n_threads))
 
@@ -163,9 +169,7 @@ SCENARIOS = [
         stimulus=lambda: p2p.stimuli.samples.logo_bvl(),
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda **kwargs: p2p.models.retina.AxonMapModel(xrange=(-12, 12),
-                                                              yrange=(-8, 8),
-                                                              **kwargs),
+        model=axonmap,
         caches_axons=True,
     ),
     Scenario(
@@ -228,8 +232,8 @@ SCENARIOS = [
                 implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
             temporal=p2p.models.FadingTemporal(**kwargs)),
     ),
-    # AxonMap + Fading: the spatial-only AxonMap scenarios never reach the
-    # composite's Torch AxonMap core:
+    # AxonMap + Fading: the composite runs the Torch AxonMap core on every
+    # electrode, the spatial-only scenarios on the compressed stimulus:
     Scenario(
         id='argus2_axonmap_fading_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
@@ -237,17 +241,12 @@ SCENARIOS = [
         model=axonmap_fading,
         caches_axons=True,
     ),
-    # 94-frame video: the spatial model runs once per frame, so one
-    # predict_percept takes ~1 min (images: well under 1 s):
     Scenario(
         id='argus2_axonmap_video',
         stimulus=drifting_grating,
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda **kwargs: p2p.models.retina.AxonMapModel(xrange=(-12, 12),
-                                                              yrange=(-8, 8),
-                                                              **kwargs),
+        model=axonmap,
         caches_axons=True,
-        slow=True,
     ),
 ]

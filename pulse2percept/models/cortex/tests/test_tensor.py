@@ -40,8 +40,7 @@ def _tensor(spatial, wf, dtype=torch.float32):
     {'meridian_blend': 0},
     {'meridian_blend': 0.5, 'thresh_percept': 2},
     {'regions': ['v1', 'v2', 'v3']},
-    {'min_current_spread': 0.05, 'thresh_percept': 2},
-    {'min_current_spread': 0},
+    {'thresh_percept': 2},
     {'implant_position': (12, -4) * mm, 'implant_rotation': 30},
     {'location_noise': 0.5, 'implant_position': (20, 0) * mm},
 ])
@@ -188,8 +187,7 @@ def _assert_peak_close(actual, expected):
 @pytest.mark.parametrize('params', [
     {},
     {'meridian_blend': 0},
-    {'min_current_spread': 0.05, 'thresh_percept': 2},
-    {'min_current_spread': 0},
+    {'thresh_percept': 2},
 ])
 def test_ScoreboardSpatial_tensor_3d_parity(params):
     spatial = _spatial_3d(**params).build()
