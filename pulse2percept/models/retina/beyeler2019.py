@@ -305,10 +305,9 @@ class ScoreboardSpatial(RetinalSpatial):
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
 
-        Same Gaussian, cutoff and threshold as ``_predict_spatial``, computed
-        as a ``(P, E) @ (E, T)`` product. Geometry is fixed.
+        Runs the ``predict_percept`` kernel on every implant electrode, so
+        silent electrodes still receive gradients. Geometry is fixed.
         """
-        import torch
         if self.n_gray is not None:
             # Quantization is discrete and has no exact gradient:
             raise NotImplementedError("Tensor prediction does not support "
@@ -317,6 +316,17 @@ class ScoreboardSpatial(RetinalSpatial):
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(
             electrode_array, None, electrodes=self.implant.electrode_names)
+        resp = self._predict_scoreboard_tensor(waveform, x_el, y_el)
+        return self._spatial_response(resp, time, None)
+
+    def _predict_scoreboard_tensor(self, waveform, x_el, y_el):
+        """Return the flat thresholded ``(P, T)`` response.
+
+        ``waveform`` rows follow the float32 electrode coordinates ``x_el``,
+        ``y_el`` (microns). Geometry and Gaussian weights are float32; the
+        response has the dtype and device of ``waveform``.
+        """
+        import torch
         # float32, as in `fast_scoreboard`:
         dx = self.grid.ret.x.reshape((-1, 1)) - x_el
         dy = self.grid.ret.y.reshape((-1, 1)) - y_el
@@ -328,8 +338,9 @@ class ScoreboardSpatial(RetinalSpatial):
         weights = torch.as_tensor(weights, dtype=waveform.dtype,
                                   device=waveform.device)
         resp = weights @ waveform
-        resp = torch.where(resp.abs() >= self.thresh_percept, resp, 0.0)
-        return self._spatial_response(resp, time, None)
+        # `+ 0.0` turns -0.0 into 0.0; whether a sum of zero terms is signed
+        # depends on the BLAS:
+        return torch.where(resp.abs() >= self.thresh_percept, resp, 0.0) + 0.0
 
 
 class ScoreboardModel(Model):

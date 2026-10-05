@@ -210,11 +210,9 @@ class ScoreboardSpatial(CortexSpatial):
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
 
-        Same Gaussian, cutoff, hemisphere separation, per-region threshold and
-        meridian blending as ``predict_percept``, computed as one
-        ``(P, E) @ (E, T)`` product per region. Geometry is fixed.
+        Runs the ``predict_percept`` kernel on every implant electrode, so
+        silent electrodes still receive gradients. Geometry is fixed.
         """
-        import torch
         if self.n_gray is not None:
             # Quantization is discrete and has no exact gradient:
             raise NotImplementedError("Tensor prediction does not support "
@@ -222,6 +220,19 @@ class ScoreboardSpatial(CortexSpatial):
         x_el, y_el, z_el = self._electrode_coords(
             self.implant.electrode_array, None,
             electrodes=self.implant.electrode_names)
+        resp = self._postprocess_spatial(
+            self._predict_scoreboard_tensor(waveform, x_el, y_el, z_el))
+        return self._spatial_response(resp, time, None)
+
+    def _predict_scoreboard_tensor(self, waveform, x_el, y_el, z_el):
+        """Return the flat ``(P, T)`` response before meridian blending.
+
+        ``waveform`` rows follow the float32 electrode coordinates (microns).
+        Each region is one ``(P, E) @ (E, T)`` product, thresholded before
+        the regions are summed. Geometry and Gaussian weights are float32; the
+        response has the dtype and device of ``waveform``.
+        """
+        import torch
         rho = np.float32(self.rho)
         cutoff_r2 = self._cutoff_r2(self.rho)
         resp = 0
@@ -251,8 +262,7 @@ class ScoreboardSpatial(CortexSpatial):
             # Each region is thresholded before the sum, as in Cython:
             resp = resp + torch.where(
                 region_resp.abs() >= self.thresh_percept, region_resp, 0.0)
-        resp = self._postprocess_spatial(resp)
-        return self._spatial_response(resp, time, None)
+        return resp
 
 
 class ScoreboardModel(Model):
