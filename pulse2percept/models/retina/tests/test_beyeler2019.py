@@ -7,6 +7,7 @@ import os
 import pickle
 import warnings
 
+import torch
 from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
@@ -754,6 +755,40 @@ def test_AxonMapSpatial_cutoff_band_boundaries(monkeypatch):
     two_rho2 = np.float32(2 * 200 ** 2)
     want = -np.sum(np.exp(-x_el[np.abs(x_el) <= 600] ** 2 / two_rho2))
     npt.assert_allclose(bright(x_el), want, rtol=1e-6)
+
+
+def test_AxonMapSpatial_matches_frozen_cython():
+    """The Torch core reproduces the v0.11 Cython ``fast_axon_map``
+
+    Expected values were recorded from ``fast_axon_map`` (``bf72e31``) with
+    the same ``rho``, threshold and cutoff. The winning segment changes over
+    time, negative responses win, one segment lies beyond the cutoff, and
+    pixel 2 has an empty axon.
+    """
+    spatial = AxonMapSpatial(ArgusII(), rho=100, thresh_percept=0)
+    # Electrodes deliberately out of x order:
+    x_el = np.array([300, -200, 50, 450], dtype=np.float32)
+    y_el = np.array([0, 100, -150, 50], dtype=np.float32)
+    stim = torch.tensor([[1.0, -0.5, 0.0],
+                         [-0.8, 0.3, 1.2],
+                         [0.6, 0.9, -0.4],
+                         [0.0, -1.1, 0.7]])
+    # (x, y, sensitivity) per segment:
+    spatial.axon_contrib = np.array([
+        [-150, 80, 0.9], [0, 0, 0.6], [200, -50, 1.0], [380, 30, 0.4],
+        [100, -100, 0.5], [-100, 50, 0.8], [900, 0, 1.0],
+        [420, 60, 0.7], [250, -20, 0.3]], dtype=np.float32)
+    spatial.axon_idx_start = np.array([0, 4, 7, 7])
+    spatial.axon_idx_end = np.array([4, 7, 7, 9])
+    want = np.array([[0.6533213, -0.47610235, 0.9307646],
+                     [-0.32124075, 0.32977402, 0.49979118],
+                     [0, 0, 0],
+                     [0.28464806, -0.8746721, 0.46606955]], dtype=np.float32)
+    with torch.inference_mode():
+        got = spatial._predict_axon_map_tensor(stim, x_el, y_el).numpy()
+    npt.assert_allclose(got, want, rtol=1e-6)
+    # Empty axon is +0.0, as in Cython:
+    npt.assert_equal(got[2], np.zeros(3, dtype=np.float32))
 
 
 def test_predict_percept_thread_count_invariant():

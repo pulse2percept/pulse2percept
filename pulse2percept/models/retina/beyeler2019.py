@@ -1213,8 +1213,10 @@ class AxonMapSpatial(RetinalSpatial):
             # Indexing keeps only `rows` for backward, not the segment
             # response (gather would keep it):
             block = seg_resp[rows, t_idx]
+            # `+ 0.0` turns -0.0 into 0.0; whether a sum of zero terms is
+            # signed depends on the BLAS (e.g. Accelerate vs. MKL):
             blocks.append(torch.where(block.abs() >= self.thresh_percept,
-                                      block, 0.0))
+                                      block, 0.0) + 0.0)
         return torch.cat(blocks)
 
     def _postprocess_spatial(self, resp):
