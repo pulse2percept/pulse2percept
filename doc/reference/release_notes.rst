@@ -33,7 +33,7 @@ API changes and improvements
 * Retinal and cortical ``ScoreboardSpatial`` now run on Torch everywhere,
   replacing the shared Scoreboard Cython extension. They, ``CortexSpatial``
   and the Ho2018 models no longer take ``n_threads``/``n_jobs``
-  (:pull:`N`).
+  (:pull:`950`).
 
 Bug fixes
 ---------

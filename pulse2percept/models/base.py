@@ -178,9 +178,9 @@ def _scoreboard_response(waveform, grid, el, rho, cutoff_r2, thresh,
         weights = r2.div_(-two_rho2).clamp_(min=min_arg).exp_()
         weights.masked_fill_(~keep, 0.0)
         resp = weights.to(waveform.dtype) @ waveform
-        # `+ 0.0` turns -0.0 into 0.0; whether a sum of zero terms is signed
-        # depends on the BLAS:
-        blocks.append(torch.where(resp.abs() >= thresh, resp, 0.0) + 0.0)
+        # Zeroes only `|resp| < thresh`, so NaN propagates. `+ 0.0` turns -0.0
+        # into 0.0; whether a sum of zero terms is signed depends on the BLAS:
+        blocks.append(torch.where(resp.abs() < thresh, 0.0, resp) + 0.0)
     return torch.cat(blocks)
 
 

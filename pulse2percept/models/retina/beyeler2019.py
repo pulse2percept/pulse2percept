@@ -292,7 +292,7 @@ class ScoreboardSpatial(RetinalSpatial):
         values = self._stim_values(stim)
         # Silent electrodes add nothing here. `_predict_tensor` keeps them,
         # so they still receive gradients:
-        active = np.any(values != 0, axis=1)
+        active = np.any(np.abs(values) > 0, axis=1)
         waveform = torch.tensor(values[active], dtype=torch.float32)
         with torch.inference_mode():
             return self._predict_scoreboard_tensor(
@@ -1202,10 +1202,11 @@ class AxonMapSpatial(RetinalSpatial):
             # Indexing keeps only `rows` for backward, not the segment
             # response (gather would keep it):
             block = seg_resp[rows, t_idx]
-            # `+ 0.0` turns -0.0 into 0.0; whether a sum of zero terms is
-            # signed depends on the BLAS (e.g. Accelerate vs. MKL):
-            blocks.append(torch.where(block.abs() >= self.thresh_percept,
-                                      block, 0.0) + 0.0)
+            # Zeroes only `|block| < thresh`, so NaN propagates. `+ 0.0`
+            # turns -0.0 into 0.0; whether a sum of zero terms is signed
+            # depends on the BLAS (e.g. Accelerate vs. MKL):
+            blocks.append(torch.where(block.abs() < self.thresh_percept,
+                                      0.0, block) + 0.0)
         return torch.cat(blocks)
 
     def _postprocess_spatial(self, resp):
@@ -1218,8 +1219,8 @@ class AxonMapSpatial(RetinalSpatial):
         # Reapply the percept threshold after blending:
         if _is_tensor(blended):
             import torch
-            return torch.where(blended.abs() >= self.thresh_percept, blended,
-                               0.0)
+            return torch.where(blended.abs() < self.thresh_percept, 0.0,
+                               blended)
         blended[np.abs(blended) < self.thresh_percept] = 0
         return blended
 
