@@ -818,14 +818,14 @@ def test_Model_predict_percept_torch_video(reduce):
 
 
 @pytest.mark.parametrize('kind', COMPOSITES)
-def test_Model_predict_percept_skips_cython(kind, monkeypatch):
+def test_Model_predict_percept_skips_staged_path(kind, monkeypatch):
     model = _composite(kind)
 
-    def cython(*args, **kwargs):
-        raise AssertionError("Cython kernel called")
+    def staged(*args, **kwargs):
+        raise AssertionError("Staged path called")
 
-    monkeypatch.setattr(type(model.spatial), '_predict_spatial', cython)
-    monkeypatch.setattr(FadingTemporal, '_predict_temporal', cython)
+    monkeypatch.setattr(type(model.spatial), '_predict_spatial', staged)
+    monkeypatch.setattr(FadingTemporal, '_predict_temporal', staged)
     source = Stimulus(_waveform(model.implant.n_electrodes),
                       electrodes=model.implant.electrode_names, time=TIME)
     assert np.abs(model.predict_percept(source).data).max() > 0
@@ -867,7 +867,7 @@ def _subclassed(spatial=ScoreboardSpatial, temporal=FadingTemporal):
     (lambda: Model(temporal=FadingTemporal(tau=2)),
      lambda model, source: model.temporal.predict_percept(source)),
 ])
-def test_Model_predict_percept_cython_fallback(model, reference, monkeypatch):
+def test_Model_predict_percept_staged_fallback(model, reference, monkeypatch):
     model = model().build()
 
     def torch_core(*args, **kwargs):
