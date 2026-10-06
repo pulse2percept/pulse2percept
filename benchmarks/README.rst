@@ -5,8 +5,9 @@ Performance Benchmarks
 ======================
 
 A small suite that measures percept prediction from a stimulus, an implant and
-a phosphene model. It tracks **execution time** and **peak memory** for the
-reference pipelines in ``scenarios.py``, broken down by pipeline stage.
+a phosphene model. It tracks **execution time** and **peak tracemalloc-tracked
+memory** for the reference pipelines in ``scenarios.py``, broken down by
+pipeline stage.
 
 ``compare.py`` compares two runs. The ``Benchmarks`` workflow runs the base
 branch and the pull request on the same runner minutes apart, and fails the job
@@ -155,11 +156,12 @@ against a baseline taken at a different thread count.
 several-fold, so each benchmark runs its payload one extra time under
 ``tracemalloc`` and records ``peak_mem_mb`` in ``extra_info``.
 
-**Memory numbers are a floor, not a total.** ``tracemalloc`` tracks NumPy data
-buffers, which hold nearly all memory in these workloads, but not raw ``malloc``
-inside the Cython/OpenMP kernels. It was chosen over RSS sampling because it is
-deterministic, needs no extra dependency, and works on Windows (which rules out
-``pytest-memray``).
+**Memory numbers are a floor, not a total.** ``tracemalloc`` tracks Python and
+NumPy allocations, but not Torch tensors or raw ``malloc`` inside the
+Cython/OpenMP kernels. The Torch paths (AxonMap, Scoreboard, and Torch
+composites) therefore report much less than their actual peak. It was chosen
+over RSS sampling because it is deterministic, needs no extra dependency, and
+works on Windows (which rules out ``pytest-memray``).
 
 **Run on a quiet machine.** Absolute timings from a shared CI runner are
 unreliable. The pull request check measures both sides on the same runner and

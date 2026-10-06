@@ -574,3 +574,15 @@ def test_spatial_only_reports_on_the_pulse_clock():
     percept = spatial.predict_percept(spot())
     npt.assert_allclose(percept.time,
                         implant.prepare_stim(spot()).pulse_time)
+
+
+@pytest.mark.parametrize('make', [
+    Ho2018Temporal,
+    lambda **kwargs: Ho2018Spatial(PRIMAPivotal(), **kwargs),
+    lambda **kwargs: Ho2018Model(PRIMAPivotal(), **kwargs),
+])
+def test_has_no_thread_params(make):
+    # Removed in 0.12: Torch spatial stage, NumPy temporal kernel:
+    for param in ('n_threads', 'n_jobs'):
+        with pytest.raises(TypeError):
+            make(**{param: 2})

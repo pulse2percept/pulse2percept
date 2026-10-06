@@ -31,8 +31,9 @@ API changes and improvements
   peak. Existing ``axon_pickle`` caches are regenerated once (:pull:`947`).
 
 * Retinal and cortical ``ScoreboardSpatial`` now run on Torch everywhere,
-  replacing the shared Scoreboard Cython extension. They, and
-  ``Ho2018Spatial``, no longer take ``n_threads``/``n_jobs`` (:pull:`N`).
+  replacing the shared Scoreboard Cython extension. They, ``CortexSpatial``
+  and the Ho2018 models no longer take ``n_threads``/``n_jobs``
+  (:pull:`N`).
 
 Bug fixes
 ---------

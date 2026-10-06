@@ -28,7 +28,7 @@ from pulse2percept.units import mA, ms
 RTOL, ATOL = 1e-6, 1e-5
 
 
-def _cython_percept(model, source, t_percept=None):
+def _staged_percept(model, source, t_percept=None):
     """Return the percept of the staged route: the spatial response, then
     the temporal model's Cython kernel.
 
@@ -253,7 +253,7 @@ def test_FadingTemporal_tensor_parity(reduce, t_percept):
 def test_Model_tensor_parity(reduce, t_percept):
     model = _model(reduce=reduce)
     wf = _waveform(model.implant.n_electrodes)
-    expected = _cython_percept(
+    expected = _staged_percept(
         model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME),
         t_percept=t_percept)
@@ -303,7 +303,7 @@ def test_Model_tensor_float64():
     wf = _waveform(model.implant.n_electrodes)
     resp = model._predict_tensor(torch.tensor(wf), TIME)
     assert resp.data.dtype == torch.float64
-    expected = _cython_percept(
+    expected = _staged_percept(
         model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME))
     npt.assert_allclose(resp.data.numpy(),
@@ -381,7 +381,7 @@ IMAGE_T = [5.0, 20.0, 50.0, 99.0]
 def test_Model_tensor_image_parity(reduce):
     model = _image_model(reduce=reduce)
     img = np.random.default_rng(7).uniform(-0.2, 1.2, (13, 17))
-    expected = _cython_percept(model, ImageStimulus(img), t_percept=IMAGE_T)
+    expected = _staged_percept(model, ImageStimulus(img), t_percept=IMAGE_T)
     waveform, time, _ = model.implant.encoder._encode_tensor(
         torch.tensor(img, dtype=torch.float32))
     resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
@@ -439,7 +439,7 @@ def test_Model_tensor_image_frame_clock(reduce):
     # public image path:
     model = _image_model(reduce=reduce)
     img = np.random.default_rng(7).uniform(0, 1, (13, 17))
-    expected = _cython_percept(model, ImageStimulus(img))
+    expected = _staged_percept(model, ImageStimulus(img))
     waveform, time, clock = model.implant.encoder._encode_tensor(
         torch.tensor(img, dtype=torch.float32))
     resp = model._predict_tensor(waveform, time, frame_clock=clock)
@@ -456,7 +456,7 @@ def test_Model_tensor_video_parity(reduce, frame_dur):
     model = _image_model(reduce=reduce)
     model.implant.encoder.frame_dur = frame_dur
     vid = np.random.default_rng(10).uniform(-0.2, 1.2, (13, 17, 6))
-    expected = _cython_percept(
+    expected = _staged_percept(
         model, VideoStimulus(vid, metadata={'fps': 29.97}))
     waveform, time, clock = model.implant.encoder._encode_tensor(
         torch.tensor(vid, dtype=torch.float32), fps=29.97)
@@ -705,7 +705,7 @@ def test_AxonMapModel_tensor_float64():
     wf = _waveform(model.implant.n_electrodes)
     resp = model._predict_tensor(torch.tensor(wf), TIME)
     assert resp.data.dtype == torch.float64
-    expected = _cython_percept(
+    expected = _staged_percept(
         model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME))
     npt.assert_allclose(resp.data.numpy(),
@@ -717,7 +717,7 @@ def test_AxonMapModel_tensor_float64():
 
 
 # Public `Model.predict_percept` runs supported composites on the Torch core;
-# `_cython_percept` is the reference:
+# `_staged_percept` is the reference:
 
 COMPOSITES = ['retina', 'cortex', 'axonmap']
 
@@ -766,7 +766,7 @@ def test_Model_predict_percept_torch_parity(kind, reduce, t_percept):
     source = Stimulus(_waveform(model.implant.n_electrodes),
                       electrodes=model.implant.electrode_names, time=TIME)
     _assert_same_percept(model.predict_percept(source, t_percept=t_percept),
-                         _cython_percept(model, source, t_percept=t_percept))
+                         _staged_percept(model, source, t_percept=t_percept))
 
 
 @pytest.mark.parametrize('kind', COMPOSITES)
@@ -779,7 +779,7 @@ def test_Model_predict_percept_torch_sparse(kind):
     amp = np.random.default_rng(3).normal(0, 0.03, (3, TIME.size))
     source = Stimulus(amp * mA, electrodes=picked, time=TIME)
     percept = model.predict_percept(source)
-    _assert_same_percept(percept, _cython_percept(model, source))
+    _assert_same_percept(percept, _staged_percept(model, source))
     npt.assert_equal(list(percept.metadata['stim'].electrodes),
                      [names[9], names[1]])
 
@@ -789,7 +789,7 @@ def test_Model_predict_percept_torch_pulse_train():
     source = {'C3': BiphasicPulseTrain(20, 30, 0.45, stim_dur=200),
               'A1': BiphasicPulseTrain(35, 20, 0.2, stim_dur=150)}
     _assert_same_percept(model.predict_percept(source),
-                         _cython_percept(model, source))
+                         _staged_percept(model, source))
 
 
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
@@ -798,7 +798,7 @@ def test_Model_predict_percept_torch_image(reduce, t_percept):
     model = _image_model(reduce=reduce)
     source = ImageStimulus(np.random.default_rng(7).uniform(0, 1, (13, 17)))
     _assert_same_percept(model.predict_percept(source, t_percept=t_percept),
-                         _cython_percept(model, source, t_percept=t_percept))
+                         _staged_percept(model, source, t_percept=t_percept))
 
 
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
@@ -809,7 +809,7 @@ def test_Model_predict_percept_torch_video(reduce):
     vid = np.random.default_rng(10).uniform(0, 1, (13, 17, 6))
     source = VideoStimulus(vid, metadata={'fps': 29.97})
     percept = model.predict_percept(source)
-    expected = _cython_percept(model, source)
+    expected = _staged_percept(model, source)
     _assert_same_percept(percept, expected)
     assert percept.time.size == 6
     assert 'source_frame_time' in percept.metadata
@@ -857,11 +857,11 @@ def _subclassed(spatial=ScoreboardSpatial, temporal=FadingTemporal):
 
 @pytest.mark.parametrize('model, reference', [
     (lambda: Model(_spatial(n_gray=8), FadingTemporal(tau=2)),
-     _cython_percept),
-    (lambda: Model(_spatial(), AlphaTemporal(tau=2)), _cython_percept),
-    (lambda: _subclassed(spatial=_DoubledScoreboard), _cython_percept),
-    (lambda: _subclassed(spatial=_DoubledResponse), _cython_percept),
-    (lambda: _subclassed(temporal=_HalvedFading), _cython_percept),
+     _staged_percept),
+    (lambda: Model(_spatial(), AlphaTemporal(tau=2)), _staged_percept),
+    (lambda: _subclassed(spatial=_DoubledScoreboard), _staged_percept),
+    (lambda: _subclassed(spatial=_DoubledResponse), _staged_percept),
+    (lambda: _subclassed(temporal=_HalvedFading), _staged_percept),
     (lambda: Model(_spatial()),
      lambda model, source: model.spatial.predict_percept(source)),
     (lambda: Model(temporal=FadingTemporal(tau=2)),
@@ -926,7 +926,7 @@ def test_Model_predict_percept_torch_polarity_warning():
     source = Stimulus(np.abs(_waveform(model.implant.n_electrodes)),
                       electrodes=model.implant.electrode_names, time=TIME)
     with pytest.warns(UserWarning, match='all-zero percept'):
-        _cython_percept(model, source)
+        _staged_percept(model, source)
     with pytest.warns(UserWarning, match='all-zero percept'):
         percept = model.predict_percept(source)
     assert not np.any(percept.data)

@@ -9,7 +9,7 @@ from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.models.cortex import ScoreboardSpatial
 from pulse2percept.models.tests.test_tensor import (
     ATOL, RTOL, TIME, _assert_matches_reference, _assert_peak_close,
-    _cython_percept, _scoreboard_reference, _waveform)
+    _staged_percept, _scoreboard_reference, _waveform)
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.units import mm
@@ -226,7 +226,7 @@ def _model(reduce='peak', **params):
 def test_Model_tensor_parity(reduce, t_percept):
     model = _model(reduce=reduce)
     wf = _waveform(model.implant.n_electrodes)
-    expected = _cython_percept(
+    expected = _staged_percept(
         model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME),
         t_percept=t_percept)
@@ -272,7 +272,7 @@ def test_Model_tensor_3d(reduce):
     model = Model(_spatial_3d(), FadingTemporal(tau=2, reduce=reduce))
     wf = _waveform(model.implant.n_electrodes)
     t_percept = [0.5, 1.0, 2.0, 25.0, 60.0]
-    expected = _cython_percept(
+    expected = _staged_percept(
         model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME),
         t_percept=t_percept)

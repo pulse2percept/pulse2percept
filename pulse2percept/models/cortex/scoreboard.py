@@ -127,8 +127,6 @@ class ScoreboardSpatial(CortexSpatial):
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
-        # Prediction runs on Torch's own thread pool:
-        del base_params['n_threads'], base_params['n_jobs']
         params = {
                     # radial current spread
                     'rho': 200,  
