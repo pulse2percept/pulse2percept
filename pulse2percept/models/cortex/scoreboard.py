@@ -1,8 +1,8 @@
 """:py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`,
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import (Model, _blend_meridian, _is_tensor, _thread_params,
-                    _warn_rho_vs_pitch)
+from ..base import (Model, _blend_meridian, _is_tensor, _scoreboard_response,
+                    _thread_params, _warn_rho_vs_pitch)
 from .base import CortexSpatial
 from ...units import dva, um
 import numpy as np
@@ -176,9 +176,14 @@ class ScoreboardSpatial(CortexSpatial):
         # One tissue location per electrode (displaced through its own region
         # by `location_noise`), spread over every simulated region's grid:
         xyz = self._electrode_coords(electrode_array, stim)
-        waveform = torch.tensor(self._stim_values(stim), dtype=torch.float32)
+        values = self._stim_values(stim)
+        # Silent electrodes add nothing here. `_predict_tensor` keeps them,
+        # so they still receive gradients:
+        active = np.any(values != 0, axis=1)
+        waveform = torch.tensor(values[active], dtype=torch.float32)
         with torch.inference_mode():
-            return self._predict_scoreboard_tensor(waveform, *xyz).numpy()
+            return self._predict_scoreboard_tensor(
+                waveform, *(c[active] for c in xyz)).numpy()
 
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
@@ -201,40 +206,27 @@ class ScoreboardSpatial(CortexSpatial):
         """Return the flat ``(P, T)`` response before meridian blending.
 
         ``waveform`` rows follow the float32 electrode coordinates (microns).
-        Each region is one ``(P, E) @ (E, T)`` product, thresholded before
-        the regions are summed. Geometry and Gaussian weights are float32; the
-        response has the dtype and device of ``waveform``.
+        Each region is thresholded before the regions are summed. Geometry
+        and Gaussian weights are float32; the response has the dtype and
+        device of ``waveform``.
         """
-        import torch
-        rho = np.float32(self.rho)
         cutoff_r2 = self._cutoff_r2(self.rho)
+        boundary = None
+        if self.visual_field_map.split_map:
+            # No current spreads between hemispheres:
+            boundary = self.visual_field_map.left_offset / 2
         resp = 0
         for region in self.regions:
-            x_grid = self.grid[region].x.reshape((-1, 1))
-            y_grid = self.grid[region].y.reshape((-1, 1))
-            # float32, as in `fast_scoreboard`:
-            dx = x_grid - x_el
-            dy = y_grid - y_el
-            r2 = dx * dx + dy * dy
+            grid = self.grid[region]
+            # A 2D map ignores electrode z; a 3D one adds depth:
             if self.visual_field_map.ndim == 3:
-                # A 2D map ignores electrode z; a 3D one adds depth, as in
-                # `fast_scoreboard_3d`:
-                dz = self.grid[region].z.reshape((-1, 1)) - z_el
-                r2 = r2 + dz * dz
-            weights = np.exp(-r2 / (np.float32(2) * rho * rho))
-            # Drops pairs beyond the cutoff and unmapped (NaN) grid points:
-            drop = ~(r2 <= cutoff_r2)
-            if self.visual_field_map.split_map:
-                # No current spreads between hemispheres:
-                boundary = np.float32(self.visual_field_map.left_offset / 2)
-                drop |= (x_grid < boundary) != (x_el < boundary)
-            weights[drop] = 0
-            weights = torch.as_tensor(weights, dtype=waveform.dtype,
-                                      device=waveform.device)
-            region_resp = weights @ waveform
-            # Each region is thresholded before the sum, as in Cython:
-            resp = resp + torch.where(
-                region_resp.abs() >= self.thresh_percept, region_resp, 0.0)
+                coords = (grid.x, grid.y, grid.z), (x_el, y_el, z_el)
+            else:
+                coords = (grid.x, grid.y), (x_el, y_el)
+            # Each region is thresholded before the sum:
+            resp = resp + _scoreboard_response(
+                waveform, *coords, self.rho, cutoff_r2, self.thresh_percept,
+                boundary)
         return resp
 
 

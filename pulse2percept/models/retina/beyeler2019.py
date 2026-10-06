@@ -15,7 +15,8 @@ from ...topography.retina import Watson2014Map
 from ...implants import ElectrodeArray
 from ...stimuli import Stimulus
 from ..base import (Model, _blend_meridian, _draw_placed_implant,
-                    _is_tensor, _thread_params, _warn_rho_vs_pitch)
+                    _is_tensor, _scoreboard_response, _thread_params,
+                    _warn_rho_vs_pitch)
 from .base import RetinalSpatial, _warn_ignores_z
 
 import warnings
@@ -293,10 +294,14 @@ class ScoreboardSpatial(RetinalSpatial):
         import torch
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
-        waveform = torch.tensor(self._stim_values(stim), dtype=torch.float32)
+        values = self._stim_values(stim)
+        # Silent electrodes add nothing here. `_predict_tensor` keeps them,
+        # so they still receive gradients:
+        active = np.any(values != 0, axis=1)
+        waveform = torch.tensor(values[active], dtype=torch.float32)
         with torch.inference_mode():
-            return self._predict_scoreboard_tensor(waveform, x_el,
-                                                   y_el).numpy()
+            return self._predict_scoreboard_tensor(
+                waveform, x_el[active], y_el[active]).numpy()
 
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
@@ -322,21 +327,9 @@ class ScoreboardSpatial(RetinalSpatial):
         ``y_el`` (microns). Geometry and Gaussian weights are float32; the
         response has the dtype and device of ``waveform``.
         """
-        import torch
-        # float32, as in `fast_scoreboard`:
-        dx = self.grid.ret.x.reshape((-1, 1)) - x_el
-        dy = self.grid.ret.y.reshape((-1, 1)) - y_el
-        r2 = dx * dx + dy * dy
-        rho = np.float32(self.rho)
-        weights = np.exp(-r2 / (np.float32(2) * rho * rho))
-        # Drops pairs beyond the cutoff and unmapped (NaN) grid points:
-        weights[~(r2 <= self._cutoff_r2(self.rho))] = 0
-        weights = torch.as_tensor(weights, dtype=waveform.dtype,
-                                  device=waveform.device)
-        resp = weights @ waveform
-        # `+ 0.0` turns -0.0 into 0.0; whether a sum of zero terms is signed
-        # depends on the BLAS:
-        return torch.where(resp.abs() >= self.thresh_percept, resp, 0.0) + 0.0
+        return _scoreboard_response(
+            waveform, (self.grid.ret.x, self.grid.ret.y), (x_el, y_el),
+            self.rho, self._cutoff_r2(self.rho), self.thresh_percept)
 
 
 class ScoreboardModel(Model):

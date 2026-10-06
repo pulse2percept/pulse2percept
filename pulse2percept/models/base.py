@@ -124,6 +124,65 @@ _FRAME_SUBSAMPLES = 8
 #: see ``SpatialModel._cutoff_r2``.
 _GAUSSIAN_CUTOFF = 1e-6
 
+#: Approximate working-memory target (bytes) per pixel block in
+#: ``_scoreboard_response``.
+_SCOREBOARD_BLOCK_BYTES = 16 * 2 ** 20
+
+
+def _scoreboard_response(waveform, grid, el, rho, cutoff_r2, thresh,
+                         boundary=None):
+    """Return the thresholded Gaussian current-spread response, ``(P, T)``.
+
+    ``grid`` and ``el`` hold matching x, y[, z] coordinates (microns) of the
+    ``P`` grid points and of the ``E`` electrodes in ``waveform`` rows.
+    Geometry and Gaussian weights are float32, cast to the dtype and device
+    of ``waveform``. Pairs with ``r2 > cutoff_r2`` or a NaN coordinate
+    contribute zero. If ``boundary`` is given, no current crosses
+    ``x = boundary``. Pixels are processed in blocks of about
+    ``_SCOREBOARD_BLOCK_BYTES``.
+    """
+    import torch
+    device = waveform.device
+    grid = [torch.as_tensor(np.ravel(c), dtype=torch.float32, device=device)
+            for c in grid]
+    el = [torch.as_tensor(c, dtype=torch.float32, device=device) for c in el]
+    rho = np.float32(rho)
+    two_rho2 = np.float32(2) * rho * rho
+    cutoff_r2 = np.float32(cutoff_r2)
+    # Exponents below this only occur beyond the cutoff, so clamping them
+    # changes no kept weight. Torch CPU `exp` is ~40x slower on large
+    # negative arguments:
+    min_arg = float(np.float32(2) * (-cutoff_r2 / two_rho2))
+    # Scalars are passed to Torch as Python floats holding float32 values, so
+    # Torch compares and divides in float32 without rounding them again:
+    two_rho2, cutoff_r2 = float(two_rho2), float(cutoff_r2)
+    if boundary is not None:
+        boundary = float(np.float32(boundary))
+        el_left = el[0] < boundary
+    n_el, n_time = waveform.shape
+    itemsize = waveform.element_size()
+    # About four float32 (block, E) temporaries, the cast weights, and the
+    # response before and after thresholding:
+    per_pixel = n_el * (16 + itemsize) + 2 * n_time * itemsize
+    step = max(1, _SCOREBOARD_BLOCK_BYTES // per_pixel)
+    blocks = []
+    for p0 in range(0, grid[0].numel(), step):
+        r2 = None
+        for g, e in zip(grid, el):
+            d = g[p0:p0 + step, None] - e
+            d.mul_(d)
+            r2 = d if r2 is None else r2.add_(d)
+        keep = r2 <= cutoff_r2
+        if boundary is not None:
+            keep &= (grid[0][p0:p0 + step, None] < boundary) == el_left
+        weights = r2.div_(-two_rho2).clamp_(min=min_arg).exp_()
+        weights.masked_fill_(~keep, 0.0)
+        resp = weights.to(waveform.dtype) @ waveform
+        # `+ 0.0` turns -0.0 into 0.0; whether a sum of zero terms is signed
+        # depends on the BLAS:
+        blocks.append(torch.where(resp.abs() >= thresh, resp, 0.0) + 0.0)
+    return torch.cat(blocks)
+
 
 def _subsample(t_out, dt, n_sub, start=None):
     """Sample each output interval at up to ``n_sub`` points.
