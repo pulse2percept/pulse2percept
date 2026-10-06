@@ -13,7 +13,7 @@ from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
 from pulse2percept.models import cortex
 from pulse2percept.models.base import (_blend_meridian, _delivered,
                                        _encoder_clock, _ModelResponse,
-                                       _to_percept)
+                                       _scoreboard_response, _to_percept)
 from pulse2percept.models.retina import (AxonMapSpatial, ScoreboardSpatial,
                                          Thompson2003Spatial)
 from pulse2percept.models.retina import beyeler2019
@@ -29,9 +29,10 @@ RTOL, ATOL = 1e-6, 1e-5
 
 
 def _cython_percept(model, source, t_percept=None):
-    """Return the percept of the Cython composite route.
+    """Return the percept of the staged route: the spatial response, then
+    the temporal model's Cython kernel.
 
-    Reference for the Torch core, which ``Model.predict_percept`` uses.
+    Reference for the Torch composite, which ``Model.predict_percept`` uses.
     """
     stim = model.implant._prepare_stim(source)
     resp = model.spatial._predict_response(_delivered(stim))
@@ -64,17 +65,52 @@ def _model(reduce='peak', **params):
     return Model(_spatial(**params), FadingTemporal(tau=2, reduce=reduce))
 
 
-@pytest.mark.parametrize('params', [
-    {},
-    {'thresh_percept': 2},
-    {'implant_position': (300, -200), 'implant_rotation': 20},
-    {'location_noise': 0.5},
-])
-def test_ScoreboardSpatial_tensor_parity(params):
-    spatial = _spatial(**params).build()
-    wf = _waveform(spatial.implant.n_electrodes)
+def _scoreboard_reference(spatial, wf):
+    """Return the flat Scoreboard response from its definition, in float64.
+
+    Each region sums ``exp(-r**2 / (2 rho**2))``-weighted amplitudes over the
+    electrodes within the cutoff (and, on a split map, in the same
+    hemisphere), then is thresholded. Regions are summed, then blended across
+    the meridian.
+    """
+    el = spatial._electrode_coords(spatial.implant.electrode_array, None,
+                                   electrodes=spatial.implant.electrode_names)
+    el = [np.asarray(c, dtype=float) for c in el]
+    vfm = spatial.visual_field_map
+    if isinstance(spatial, cortex.ScoreboardSpatial):
+        grids = [spatial.grid[region] for region in spatial.regions]
+    else:
+        grids = [spatial.grid.ret]
+    resp = 0
+    for grid in grids:
+        coords = [np.ravel(getattr(grid, axis)).astype(float)[:, None]
+                  for axis in 'xyz'[:vfm.ndim]]
+        r2 = sum((g - e) ** 2 for g, e in zip(coords, el))
+        with np.errstate(invalid='ignore'):
+            # NaN (unmapped) grid points fail the comparison:
+            w = np.where(r2 <= spatial._cutoff_r2(spatial.rho),
+                         np.exp(-r2 / (2 * spatial.rho ** 2)), 0)
+        if getattr(vfm, 'split_map', False):
+            boundary = vfm.left_offset / 2
+            w[(coords[0] < boundary) != (el[0] < boundary)] = 0
+        region = w @ wf
+        resp = resp + np.where(np.abs(region) >= spatial.thresh_percept,
+                               region, 0)
+    return spatial._postprocess_spatial(resp)
+
+
+def _assert_peak_close(actual, expected):
+    """Assert parity; float32 rounding grows with the summed magnitude, so
+    bound the error relative to the peak response."""
+    npt.assert_allclose(actual, expected, rtol=RTOL,
+                        atol=1e-6 * np.abs(expected).max())
+
+
+def _assert_matches_reference(spatial, wf):
+    """Assert that both prediction paths match ``_scoreboard_reference``."""
+    expected = _scoreboard_reference(spatial, wf)
     # Every column differs, so compression keeps all time points:
-    expected = spatial.predict_percept(
+    percept = spatial.predict_percept(
         Stimulus(wf, electrodes=spatial.implant.electrode_names, time=TIME))
     resp = spatial._predict_tensor(torch.tensor(wf, dtype=torch.float32),
                                    TIME)
@@ -83,28 +119,89 @@ def test_ScoreboardSpatial_tensor_parity(params):
     assert resp.shape == spatial.grid.x.shape
     assert resp.space is spatial.grid
     assert resp.frame_clock is None
-    npt.assert_allclose(resp.data.numpy(),
-                        expected.data.reshape(resp.data.shape),
-                        rtol=RTOL, atol=ATOL)
+    npt.assert_allclose(resp.time, TIME)
+    # The threshold must zero some, but not all, of the response:
+    assert 0 < np.mean(expected == 0) < 1
+    for actual in (resp.data.numpy(), percept.data.reshape(expected.shape)):
+        npt.assert_array_equal(actual == 0, expected == 0)
+        _assert_peak_close(actual, expected)
+    return expected
 
 
-def test_ScoreboardSpatial_tensor_parity_large_grid():
+@pytest.mark.parametrize('params', [
+    {},
+    {'thresh_percept': 2},
+    {'implant_position': (300, -200), 'implant_rotation': 20},
+    {'location_noise': 0.5},
+])
+def test_ScoreboardSpatial_matches_reference(params):
+    _assert_matches_reference(_spatial(**params).build(),
+                              _waveform(ArgusI().n_electrodes))
+
+
+def test_ScoreboardSpatial_matches_reference_large_grid():
     # ~100 of 1600 electrodes contribute to each grid point:
     spatial = ScoreboardSpatial(GridImplant((40, 40), 70), rho=65,
                                 xrange=(-5, 5), yrange=(-5, 5), step=0.25,
                                 thresh_percept=5).build()
-    wf = _waveform(spatial.implant.n_electrodes)
-    expected = spatial.predict_percept(
-        Stimulus(wf, electrodes=spatial.implant.electrode_names, time=TIME))
-    resp = spatial._predict_tensor(torch.tensor(wf, dtype=torch.float32),
-                                   TIME)
-    expected = expected.data.reshape(resp.data.shape)
-    # The threshold must zero some, but not all, of the response:
-    assert 0 < np.mean(expected == 0) < 1
-    # float32 rounding grows with the summed magnitude, so bound the error
-    # relative to the peak response:
-    npt.assert_allclose(resp.data.numpy(), expected, rtol=RTOL,
-                        atol=1e-6 * np.abs(expected).max())
+    _assert_matches_reference(spatial,
+                              _waveform(spatial.implant.n_electrodes))
+
+
+@pytest.mark.parametrize('dtype', [torch.float32, torch.float64])
+def test_scoreboard_response_cutoff_boundary(dtype):
+    # Electrodes at r2 = 0, just inside, exactly at, just beyond, and far
+    # beyond the cutoff (100 um^2), where `exp` would see -1.25e5 unclamped.
+    # The second grid point is unmapped (NaN):
+    x_el = np.array([0, np.nextafter(np.float32(10), 0), 10,
+                     np.nextafter(np.float32(10), 11), 1000],
+                    dtype=np.float32)
+    grid = (np.array([0, np.nan], dtype=np.float32),
+            np.zeros(2, dtype=np.float32))
+    # The identity waveform returns the weights themselves:
+    weights = _scoreboard_response(torch.eye(x_el.size, dtype=dtype), grid,
+                                   (x_el, np.zeros_like(x_el)), rho=2,
+                                   cutoff_r2=100, thresh=0)
+    assert weights.dtype == dtype
+    r2 = torch.tensor(x_el) ** 2
+    assert r2[1] < 100 and r2[2] == 100 and r2[3] > 100
+    # Kept weights are the unclamped float32 Gaussian; the rest are zero:
+    expected = torch.where(r2 <= 100, torch.exp(-r2 / 8), 0.0).to(dtype)
+    assert torch.equal(weights[0], expected)
+    assert torch.all(weights[0, :3] > 0)
+    assert torch.equal(weights[1], torch.zeros(x_el.size, dtype=dtype))
+
+
+def test_ScoreboardSpatial_prunes_silent_electrodes_only_in_predict_percept(
+        monkeypatch):
+    spatial = _spatial(rho=200).build()
+    n_el = spatial.implant.n_electrodes
+    wf = _waveform(n_el)
+    seen = []
+    core = ScoreboardSpatial._predict_scoreboard_tensor
+
+    def spy(self, waveform, *coords):
+        seen.append(waveform.shape[0])
+        return core(self, waveform, *coords)
+
+    monkeypatch.setattr(ScoreboardSpatial, '_predict_scoreboard_tensor', spy)
+    names = spatial.implant.electrode_names
+    # `predict_percept` skips electrodes that are zero throughout:
+    percept = spatial.predict_percept(Stimulus(wf, electrodes=names,
+                                               time=TIME))
+    assert seen == [n_el - wf[::4].shape[0]]
+    assert np.any(percept.data != 0)
+    silent = spatial._predict_spatial(
+        spatial.implant.electrode_array,
+        Stimulus(np.zeros_like(wf), electrodes=names, time=TIME))
+    assert seen[-1] == 0
+    assert silent.shape == (spatial.grid.x.size, TIME.size)
+    assert np.all(silent == 0)
+    # `_predict_tensor` keeps them, so they receive gradient:
+    waveform = torch.tensor(wf, dtype=torch.float32, requires_grad=True)
+    spatial._predict_tensor(waveform, TIME).data.square().sum().backward()
+    assert seen[-1] == n_el
+    assert waveform.grad[::4].abs().sum() > 0
 
 
 @pytest.mark.parametrize('meridian', ['vertical', 'horizontal'])

@@ -339,3 +339,11 @@ def test_a_three_dimensional_map_counts_depth_as_spacing():
     npt.assert_equal(
         _user_warnings(ScoreboardModel(implant=thread, rho=200,
                                        **_cortex_grid(2)).build), [])
+
+
+@pytest.mark.parametrize('cls', (ScoreboardSpatial, ScoreboardModel))
+def test_Scoreboard_has_no_thread_params(cls):
+    # Removed in 0.12: prediction runs on Torch:
+    for param in ('n_threads', 'n_jobs'):
+        with pytest.raises(TypeError):
+            cls(Orion(), **{param: 2})

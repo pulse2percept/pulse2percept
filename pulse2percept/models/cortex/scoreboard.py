@@ -2,7 +2,7 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
 from ..base import (Model, _blend_meridian, _is_tensor, _scoreboard_response,
-                    _thread_params, _warn_rho_vs_pitch)
+                    _warn_rho_vs_pitch)
 from .base import CortexSpatial
 from ...units import dva, um
 import numpy as np
@@ -93,12 +93,6 @@ class ScoreboardSpatial(CortexSpatial):
 
         .. versionadded:: 0.11.0
 
-    n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
-    n_jobs : int, optional
-        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
-
     .. important ::
     
         Changing a model parameter outside the constructor (e.g., by directly
@@ -117,7 +111,7 @@ class ScoreboardSpatial(CortexSpatial):
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
-                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+                 verbose=True, ndim=None):
         super().__init__(
             implant, rho=rho, regions=regions,
             meridian_blend=meridian_blend, xrange=xrange, yrange=yrange,
@@ -128,12 +122,13 @@ class ScoreboardSpatial(CortexSpatial):
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
-            ndim=[2, 3] if ndim is None else ndim,
-            **_thread_params(n_threads, n_jobs))
+            ndim=[2, 3] if ndim is None else ndim)
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(ScoreboardSpatial, self).get_default_params()
+        # Prediction runs on Torch's own thread pool:
+        del base_params['n_threads'], base_params['n_jobs']
         params = {
                     # radial current spread
                     'rho': 200,  
@@ -320,12 +315,6 @@ class ScoreboardModel(Model):
         
         .. versionadded:: 0.11.0
 
-    n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
-    n_jobs : int, optional
-        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
-
     .. important ::
         Changing a model parameter outside the constructor (e.g., by directly
         setting ``model.xrange = (-10, 10)``) invalidates the build, and the next
@@ -340,7 +329,7 @@ class ScoreboardModel(Model):
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
-                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+                 verbose=True, ndim=None):
         super().__init__(
             spatial=ScoreboardSpatial(
                 implant, rho=rho, regions=regions,
@@ -352,6 +341,5 @@ class ScoreboardModel(Model):
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
-                location_noise=location_noise, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                location_noise=location_noise, verbose=verbose, ndim=ndim),
             temporal=None)

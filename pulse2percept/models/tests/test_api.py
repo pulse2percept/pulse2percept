@@ -99,19 +99,6 @@ def test_cortical_scoreboard_left_cortex_base(name):
     npt.assert_equal(hasattr(base, name), False)
 
 
-def test_scoreboard_kernels_are_shared_not_retinal():
-    """Gaussian spread kernels live in the generic `models._scoreboard`"""
-    from pulse2percept.models import _scoreboard
-    from pulse2percept.models.cortex import scoreboard
-    from pulse2percept.models.retina import beyeler2019
-    for name in ('fast_scoreboard', 'fast_scoreboard_3d'):
-        npt.assert_equal(hasattr(_scoreboard, name), True, err_msg=name)
-    npt.assert_equal(scoreboard.fast_scoreboard is
-                     _scoreboard.fast_scoreboard, True)
-    npt.assert_equal(beyeler2019.fast_scoreboard is
-                     _scoreboard.fast_scoreboard, True)
-
-
 def test_axon_map_cython_extension_is_gone():
     """AxonMap runs on Torch; its Cython extension was removed in 0.12"""
     with pytest.raises(ImportError):

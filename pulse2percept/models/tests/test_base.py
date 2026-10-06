@@ -987,15 +987,13 @@ def test_Model_predict_percept_frame_peak():
 
 
 def test_Model_predict_percept_thread_count_invariant():
-    # Thread count must not change the result of the Cython spatial and
-    # temporal loops:
+    # Thread count must not change the result of the Cython temporal loop:
     stim = BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)
     percepts = []
     for n_threads in (1, 2):
         model = Model(
-            spatial=ScoreboardSpatial(ArgusI(), n_threads=n_threads),
+            spatial=ScoreboardSpatial(ArgusI()),
             temporal=FadingTemporal(n_threads=n_threads)).build()
-        npt.assert_equal(model.spatial.n_threads, n_threads)
         npt.assert_equal(model.temporal.n_threads, n_threads)
         percepts.append(model.predict_percept({'A1': stim, 'D4': stim}))
     npt.assert_equal(percepts[0].data.max() > 0, True)

@@ -177,7 +177,8 @@ SCENARIOS = [
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.samples.logo_bvl().invert(),
         implant=p2p.implants.retina.PRIMAPivotal,
-        model=lambda **kwargs: p2p.models.retina.ScoreboardModel(
+        # Scoreboard runs on Torch's thread pool, so `n_threads` is unused:
+        model=lambda n_threads, **kwargs: p2p.models.retina.ScoreboardModel(
             xrange=(-4, 4), yrange=(-4, 4), rho=50, step=0.1, **kwargs),
     ),
     # Granley 2021 reads amplitude, frequency and pulse duration from each
@@ -226,11 +227,13 @@ SCENARIOS = [
         id='argus2_scoreboard_fading_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
         implant=p2p.implants.retina.ArgusII,
-        # `Model` takes components, so `verbose`/`n_threads` go to each one:
-        model=lambda implant, **kwargs: p2p.models.Model(
+        # `Model` takes components; only FadingTemporal takes `n_threads`:
+        model=lambda implant, verbose, n_threads: p2p.models.Model(
             spatial=p2p.models.retina.ScoreboardSpatial(
-                implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
-            temporal=p2p.models.FadingTemporal(**kwargs)),
+                implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5,
+                verbose=verbose),
+            temporal=p2p.models.FadingTemporal(verbose=verbose,
+                                               n_threads=n_threads)),
     ),
     # AxonMap + Fading: the composite runs the Torch AxonMap core on every
     # electrode, the spatial-only scenarios on the compressed stimulus:

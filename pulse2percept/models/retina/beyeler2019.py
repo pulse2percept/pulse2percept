@@ -15,8 +15,7 @@ from ...topography.retina import Watson2014Map
 from ...implants import ElectrodeArray
 from ...stimuli import Stimulus
 from ..base import (Model, _blend_meridian, _draw_placed_implant,
-                    _is_tensor, _scoreboard_response, _thread_params,
-                    _warn_rho_vs_pitch)
+                    _is_tensor, _scoreboard_response, _warn_rho_vs_pitch)
 from .base import RetinalSpatial, _warn_ignores_z
 
 import warnings
@@ -240,11 +239,7 @@ class ScoreboardSpatial(RetinalSpatial):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
+        Dimensionalities of ``visual_field_map`` accepted by the model."""
 
     #: Also accepts encoded normalized optical drive from a
     #: PhotovoltaicEncoder.
@@ -261,8 +256,7 @@ class ScoreboardSpatial(RetinalSpatial):
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
-                 location_noise=None, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 location_noise=None, verbose=True, ndim=None):
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
             grid_type=grid_type, thresh_percept=thresh_percept,
@@ -273,12 +267,13 @@ class ScoreboardSpatial(RetinalSpatial):
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
-            ndim=[2] if ndim is None else ndim,
-            **_thread_params(n_threads, n_jobs))
+            ndim=[2] if ndim is None else ndim)
 
     def get_default_params(self):
         """Return all settable scoreboard parameters."""
         base_params = super(ScoreboardSpatial, self).get_default_params()
+        # Prediction runs on Torch's own thread pool:
+        del base_params['n_threads'], base_params['n_jobs']
         params = {'rho': 100, 'visual_field_map': Watson2014Map()}
         return {**base_params, **params}
 
@@ -441,11 +436,7 @@ class ScoreboardModel(Model):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
+        Dimensionalities of ``visual_field_map`` accepted by the model."""
 
     def __init__(self, implant, *, rho=100, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
@@ -454,8 +445,7 @@ class ScoreboardModel(Model):
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
-                 location_noise=None, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 location_noise=None, verbose=True, ndim=None):
         super().__init__(
             spatial=ScoreboardSpatial(
                 implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
@@ -465,8 +455,7 @@ class ScoreboardModel(Model):
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
-                location_noise=location_noise, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                location_noise=location_noise, verbose=verbose, ndim=ndim),
             temporal=None)
 
 

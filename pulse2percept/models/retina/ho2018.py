@@ -290,10 +290,6 @@ class Ho2018Spatial(ScoreboardSpatial):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
     #: An optical schedule, not injected current.
@@ -317,16 +313,14 @@ class Ho2018Spatial(ScoreboardSpatial):
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
-                 location_noise=None, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 location_noise=None, verbose=True, ndim=None):
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
             grid_type=grid_type, thresh_percept=thresh_percept,
             visual_field_map=visual_field_map, n_gray=n_gray,
             implant_position=implant_position,
             implant_rotation=implant_rotation, implant_depth=implant_depth,
-            location_noise=location_noise, verbose=verbose, ndim=ndim,
-            n_threads=n_threads, n_jobs=n_jobs)
+            location_noise=location_noise, verbose=verbose, ndim=ndim)
 
     def get_default_params(self):
         """Return all settable parameters of the spatial response."""
@@ -508,8 +502,7 @@ class Ho2018Model(Model):
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
-                location_noise=location_noise, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                location_noise=location_noise, verbose=verbose, ndim=ndim),
             temporal=Ho2018Temporal(
                 n=n, tau1=tau1, tau2=tau2, p1=p1, p2=p2, dt=dt,
                 reduce=reduce, thresh_percept=thresh_percept, verbose=verbose,

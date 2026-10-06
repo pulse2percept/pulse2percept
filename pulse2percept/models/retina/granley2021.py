@@ -1045,8 +1045,8 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
             implant_position=implant_position,
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
-            location_noise=location_noise, verbose=verbose, ndim=ndim,
-            n_threads=n_threads, n_jobs=n_jobs)
+            location_noise=location_noise, verbose=verbose, ndim=ndim)
+        self.set_params(**_thread_params(n_threads, n_jobs))
         self.bright_model = (DefaultBrightModel() if bright_model is None
                              else bright_model)
         self.size_model = (DefaultSizeModel(self.rho) if size_model is None
@@ -1057,7 +1057,10 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
     def get_default_params(self):
         base_params = super(BiphasicScoreboardSpatial,
                             self).get_default_params()
-        return {**base_params, 'bright_model': None, 'size_model': None}
+        # Unlike ScoreboardSpatial, the Cython kernel uses OpenMP threads.
+        # `n_jobs` writes through to `n_threads`, so it must come last:
+        return {**base_params, 'bright_model': None, 'size_model': None,
+                'n_threads': multiprocessing.cpu_count(), 'n_jobs': None}
 
     def _build(self):
         if not callable(self.bright_model):
