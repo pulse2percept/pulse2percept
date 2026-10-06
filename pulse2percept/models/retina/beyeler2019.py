@@ -1202,11 +1202,10 @@ class AxonMapSpatial(RetinalSpatial):
             # Indexing keeps only `rows` for backward, not the segment
             # response (gather would keep it):
             block = seg_resp[rows, t_idx]
-            # Zeroes only `|block| < thresh`, so NaN propagates. `+ 0.0`
-            # turns -0.0 into 0.0; whether a sum of zero terms is signed
-            # depends on the BLAS (e.g. Accelerate vs. MKL):
-            blocks.append(torch.where(block.abs() < self.thresh_percept,
-                                      0.0, block) + 0.0)
+            # `+ 0.0` turns -0.0 into 0.0; whether a sum of zero terms is
+            # signed depends on the BLAS (e.g. Accelerate vs. MKL):
+            blocks.append(torch.where(block.abs() >= self.thresh_percept,
+                                      block, 0.0) + 0.0)
         return torch.cat(blocks)
 
     def _postprocess_spatial(self, resp):
@@ -1219,8 +1218,8 @@ class AxonMapSpatial(RetinalSpatial):
         # Reapply the percept threshold after blending:
         if _is_tensor(blended):
             import torch
-            return torch.where(blended.abs() < self.thresh_percept, 0.0,
-                               blended)
+            return torch.where(blended.abs() >= self.thresh_percept, blended,
+                               0.0)
         blended[np.abs(blended) < self.thresh_percept] = 0
         return blended
 

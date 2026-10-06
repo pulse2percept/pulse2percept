@@ -328,6 +328,17 @@ def _is_tensor(data):
     return torch is not None and isinstance(data, torch.Tensor)
 
 
+def _require_finite(values, name):
+    """Raise ValueError if NumPy or Torch ``values`` contain NaN or Inf."""
+    if _is_tensor(values):
+        import torch
+        finite = bool(torch.isfinite(values).all())
+    else:
+        finite = bool(np.all(np.isfinite(values)))
+    if not finite:
+        raise ValueError(f"{name} must be finite, but contains NaN or Inf.")
+
+
 def _tensor_waveform(spatial, stim):
     """Return a prepared stimulus as a float32 Torch waveform and its times.
 
@@ -1428,6 +1439,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         _require_stim_dimension(
             self, source,
             allow_dimensionless=self._accepts_dimensionless_drive)
+        _require_finite(source.data, 'Stimulus values')
         if source.time is None and t_percept is not None:
             # Static modulation has no time axis even if its encoded pulse
             # train does:
@@ -2159,6 +2171,8 @@ class Model(Frozen, PrettyPrint):
         # The compressed copy `SpatialModel._predict_response` reads and
         # stores as provenance:
         delivered = deepcopy(_delivered(stim))
+        # Before compression, which can drop an Inf sample:
+        _require_finite(delivered.data, 'Stimulus values')
         if not delivered.is_compressed:
             delivered.compress()
         waveform, time = _tensor_waveform(self.spatial, delivered)
@@ -2222,6 +2236,7 @@ class Model(Frozen, PrettyPrint):
             raise ValueError(f"'waveform' must have shape "
                              f"(n_electrodes={n_el}, T), not "
                              f"{tuple(waveform.shape)}.")
+        _require_finite(waveform, "'waveform'")
         time = np.asarray(as_value(time, self.spatial.time_unit, 'time'),
                           dtype=np.float64)
         if time.shape != (waveform.shape[1],):

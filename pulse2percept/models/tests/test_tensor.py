@@ -172,15 +172,6 @@ def test_scoreboard_response_cutoff_boundary(dtype):
     assert torch.equal(weights[1], torch.zeros(x_el.size, dtype=dtype))
 
 
-def test_scoreboard_response_keeps_nan():
-    # Thresholding zeroes only |resp| < thresh, so NaN drive stays NaN:
-    zero = np.zeros(1, dtype=np.float32)
-    resp = _scoreboard_response(torch.tensor([[np.nan, 5.0]]), (zero, zero),
-                                (zero, zero), rho=2, cutoff_r2=100,
-                                thresh=1)
-    assert torch.isnan(resp[0, 0]) and resp[0, 1] == 5
-
-
 def test_ScoreboardSpatial_prunes_silent_electrodes_only_in_predict_percept(
         monkeypatch):
     spatial = _spatial(rho=200).build()
@@ -671,18 +662,6 @@ def test_AxonMapSpatial_tensor_thresh_inclusive():
     npt.assert_equal(thresholded.numpy(), torch.where(keep, resp, 0).numpy())
 
 
-@pytest.mark.parametrize('meridian_blend', [0, 1])
-def test_AxonMapSpatial_keeps_nan(meridian_blend):
-    # Thresholding zeroes only |resp| < thresh, so NaN drive stays NaN:
-    spatial = _axon_spatial(meridian_blend=meridian_blend).build()
-    wf = _waveform(spatial.implant.n_electrodes)
-    wf[1, 0] = np.nan
-    percept = spatial.predict_percept(
-        Stimulus(wf, electrodes=spatial.implant.electrode_names, time=TIME))
-    assert np.any(np.isnan(percept.data[..., 0]))
-    assert not np.any(np.isnan(percept.data[..., 1:]))
-
-
 def test_AxonMapSpatial_tensor_meridian_blend():
     wf = _waveform(60)
     unblended = _axon_paths(_axon_spatial(meridian_blend=0,
@@ -755,6 +734,23 @@ def _composite(kind, reduce='peak'):
             yrange=(-3, 3), step=0.2, rho=1000, thresh_percept=0.5),
             temporal).build()
     return Model(_axon_spatial(), temporal).build()
+
+
+@pytest.mark.parametrize('bad', [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize('kind', COMPOSITES)
+def test_predict_rejects_nonfinite_stimulus(kind, bad):
+    model = _composite(kind)
+    wf = _waveform(model.implant.n_electrodes)
+    wf[1, 4] = bad
+    source = Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME)
+    # Torch composite, spatial-only model, and spatial stage:
+    for predict in (model.predict_percept,
+                    Model(model.spatial).predict_percept,
+                    model.spatial.predict_percept):
+        with pytest.raises(ValueError, match='must be finite'):
+            predict(source)
+    with pytest.raises(ValueError, match='must be finite'):
+        model._predict_tensor(torch.tensor(wf, dtype=torch.float32), TIME)
 
 
 def _assert_same_percept(percept, expected):
