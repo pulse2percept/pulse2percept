@@ -3,7 +3,6 @@
 
 from ..base import (Model, _blend_meridian, _is_tensor, _thread_params,
                     _warn_rho_vs_pitch)
-from .._scoreboard import fast_scoreboard, fast_scoreboard_3d
 from .base import CortexSpatial
 from ...units import dva, um
 import numpy as np
@@ -170,42 +169,16 @@ class ScoreboardSpatial(CortexSpatial):
         return blended
 
     def _predict_spatial(self, electrode_array, stim):
-        """Predicts the brightness at spatial locations"""
-        amp = self._stim_values(stim)
-
-        # whether to allow current to spread between hemispheres
-        separate = 0
-        boundary = 0
-        if self.visual_field_map.split_map:
-            separate = 1
-            boundary = self.visual_field_map.left_offset/2
-        cutoff_r2 = self._cutoff_r2(self.rho)
+        """Predict float32 brightness before meridian blending."""
+        import torch
+        if self.visual_field_map.ndim not in (2, 3):
+            raise ValueError("Invalid dimensionality of visual field map")
         # One tissue location per electrode (displaced through its own region
         # by `location_noise`), spread over every simulated region's grid:
         xyz = self._electrode_coords(electrode_array, stim)
-        coords = {region: xyz for region in self.regions}
-        if self.visual_field_map.ndim == 3:
-            return np.sum([
-                fast_scoreboard_3d(amp, *coords[region],
-                                self.grid[region].x.ravel(),
-                                self.grid[region].y.ravel(),
-                                self.grid[region].z.ravel(),
-                                self.rho, self.thresh_percept, cutoff_r2,
-                                separate, boundary,
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
-        elif self.visual_field_map.ndim == 2:
-            return np.sum([
-                fast_scoreboard(amp, *coords[region][:2],
-                                self.grid[region].x.ravel(), self.grid[region].y.ravel(),
-                                self.rho, self.thresh_percept, cutoff_r2,
-                                separate, boundary,
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
-        else:
-            raise ValueError("Invalid dimensionality of visual field map")
+        waveform = torch.tensor(self._stim_values(stim), dtype=torch.float32)
+        with torch.inference_mode():
+            return self._predict_scoreboard_tensor(waveform, *xyz).numpy()
 
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.

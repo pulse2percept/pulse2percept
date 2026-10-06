@@ -16,7 +16,6 @@ from ...implants import ElectrodeArray
 from ...stimuli import Stimulus
 from ..base import (Model, _blend_meridian, _draw_placed_implant,
                     _is_tensor, _thread_params, _warn_rho_vs_pitch)
-from .._scoreboard import fast_scoreboard
 from .base import RetinalSpatial, _warn_ignores_z
 
 import warnings
@@ -290,17 +289,14 @@ class ScoreboardSpatial(RetinalSpatial):
         _warn_rho_vs_pitch(self)
 
     def _predict_spatial(self, electrode_array, stim):
-        """Predict brightness over the spatial grid."""
+        """Predict float32 brightness over the spatial grid."""
+        import torch
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
-        return fast_scoreboard(self._stim_values(stim), x_el, y_el,
-                               self.grid.ret.x.ravel(),
-                               self.grid.ret.y.ravel(),
-                               self.rho,
-                               self.thresh_percept,
-                               self._cutoff_r2(self.rho),
-                               0, 0,  # no current boundaries
-                               self.n_threads)
+        waveform = torch.tensor(self._stim_values(stim), dtype=torch.float32)
+        with torch.inference_mode():
+            return self._predict_scoreboard_tensor(waveform, x_el,
+                                                   y_el).numpy()
 
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
