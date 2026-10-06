@@ -788,3 +788,11 @@ def test_AlphaTemporal_block_boundaries(n_space):
         parallel = AlphaTemporal(dt=0.05, tau=30, n_threads=n_threads).build(
         ).predict_percept(stim, t_percept=t).data
         npt.assert_array_equal(parallel, percept.data)
+
+
+@pytest.mark.parametrize('bad', [np.nan, np.inf])
+@pytest.mark.parametrize('model', [FadingTemporal, AlphaTemporal])
+def test_TemporalModel_rejects_nonfinite_input(model, bad):
+    stim = Stimulus([[1, bad, 1]], time=[0, 1, 2])
+    with pytest.raises(ValueError, match='must be finite'):
+        model().predict_percept(stim)

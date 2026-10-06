@@ -35,14 +35,16 @@ API changes and improvements
   and the Ho2018 models no longer take ``n_threads``/``n_jobs``
   (:pull:`950`).
 
-* Spatial and composite model prediction rejects NaN or Inf stimulus values
-  (:pull:`950`).
+* Model prediction rejects NaN or Inf stimulus values (:pull:`950`).
 
 Bug fixes
 ---------
 
 * Temporal models applied directly to a ``Stimulus`` no longer fail when an
   electrode is silent; its row is kept and stays zero (:pull:`937`).
+
+* ``Stimulus.compress`` no longer drops Inf samples or electrodes driven only
+  at Inf (:pull:`950`).
 
 
 v0.11.0 Foundations (2026-09-30)

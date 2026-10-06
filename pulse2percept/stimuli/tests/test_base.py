@@ -250,6 +250,22 @@ def test_Stimulus_compress():
         stim.is_compressed = True
 
 
+@pytest.mark.parametrize('row, data, time', [
+    # Nonfinite samples are transitions; a silent second row is dropped:
+    ([1, np.inf, 1], [1, np.inf, 1], [0, 1, 2]),
+    ([0, -np.inf, 0], [0, -np.inf, 0], [0, 1, 2]),
+    ([1, np.nan, 1], [1, np.nan, 1], [0, 1, 2]),
+    ([0, -np.inf, np.inf], [0, -np.inf, np.inf], [0, 1, 2]),
+    # Equal infinities are no transition:
+    ([np.inf, np.inf, np.inf], [np.inf, np.inf], [0, 2]),
+])
+def test_Stimulus_compress_nonfinite(row, data, time):
+    stim = Stimulus([row, [0, 0, 0]], time=[0, 1, 2])
+    stim.compress()
+    npt.assert_equal(stim.data, [data])
+    npt.assert_equal(stim.time, time)
+
+
 def test_Stimulus_append():
     # Basic usage:
     stim = Stimulus([[0, 1, 0]], time=[0, 1, 2])

@@ -1728,6 +1728,8 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             raise ValueError("Cannot calculate temporal response, because "
                              "stimulus/percept does not have a time "
                              "component.")
+        # Before compression, which can drop an Inf sample:
+        _require_finite(stim.data, 'Input values')
         active = None
         if isinstance(stim, _ModelResponse):
             _stim, _space, space = stim, list(stim.shape), stim.space

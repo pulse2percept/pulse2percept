@@ -2,7 +2,8 @@
 
 from pulse2percept.utils._fast_math cimport float32, int32, index_t
 from cython import cdivision  # modulo, division by zero
-from libc.math cimport fabsf as c_abs, expf as c_exp, powf as c_pow, HUGE_VALF
+from libc.math cimport (fabsf as c_abs, expf as c_exp, powf as c_pow,
+                        isinf as c_isinf, HUGE_VALF)
 cimport numpy as cnp
 cnp.import_array()
 
@@ -17,6 +18,13 @@ cdef inline float32 c_fmin(float32 a, float32 b) noexcept nogil:
 
 cdef inline bint c_isclose(float32 a, float32 b, float32 rel_tol=1e-09,
                            float32 abs_tol=0.0) noexcept nogil:
+    # As `math.isclose`: equal infinities are close, an infinity is not close
+    # to anything else (the tolerance below would be infinite), and NaN is
+    # close to nothing:
+    if a == b:
+        return True
+    if c_isinf(a) or c_isinf(b):
+        return False
     return c_abs(a-b) <= c_fmax(rel_tol * c_fmax(c_abs(a), c_abs(b)), abs_tol)
 
 

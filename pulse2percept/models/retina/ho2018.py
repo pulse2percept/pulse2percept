@@ -8,7 +8,7 @@ from ...stimuli.encoders import _OpticalStimulus
 from ...topography.retina import Watson2014Map
 from ...units import as_value, dimensionless, mW, mm, ms
 from ..base import (Model, TemporalModel, _FrameClock, _electrode_pitch,
-                    _require_stim_dimension)
+                    _require_finite, _require_stim_dimension)
 from .beyeler2019 import ScoreboardSpatial
 
 #: Peak irradiance (mW/mm^2) of the [Ho2018]_ white-noise condition, which the
@@ -348,7 +348,9 @@ class Ho2018Spatial(ScoreboardSpatial):
     def _stim_values(self, stim):
         """Return radiant-exposure drive for an optical schedule."""
         if isinstance(stim, _OpticalStimulus):
-            return _radiant_exposure(stim)
+            drive = _radiant_exposure(stim)
+            _require_finite(drive, 'Radiant exposure')
+            return drive
         return super()._stim_values(stim)
 
     def _predict_response(self, stim, t_percept=None):

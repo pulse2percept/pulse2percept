@@ -11,7 +11,8 @@ from ...implants import ElectrodeArray
 from ...stimuli import BiphasicPulseTrain, Stimulus
 from ...units import as_value, um, xTh
 from ..base import (BaseModel, Model, _ModelResponse, _encoder_clock,
-                    _require_stim_dimension, _thread_params)
+                    _require_finite, _require_stim_dimension,
+                    _thread_params)
 from .base import _warn_ignores_z
 from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
 from ._granley2021 import (fast_biphasic_axon_map,
@@ -355,9 +356,10 @@ class _BiphasicSpatialMixin:
     def _elec_params(self, stim):
         """Return active electrode names and their ``(freq, amp, pdur)``."""
         params = _pulse_train_params(stim, self.implant.thresholds)
-        return ([p[0] for p in params],
-                np.array([p[1:4] for p in params],
-                         dtype=np.float32).reshape((-1, 3)))
+        elec_params = np.array([p[1:4] for p in params],
+                               dtype=np.float32).reshape((-1, 3))
+        _require_finite(elec_params, 'Pulse-train parameters')
+        return [p[0] for p in params], elec_params
 
     def _effect_factors(self, name, elec_params, positive=False):
         """Return one factor per active electrode from effect model ``name``.
