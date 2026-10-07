@@ -1235,7 +1235,11 @@ def test_retina_temporal_tensor_parity(temporal, params, dtype, t_percept):
     if params:
         assert np.any(expected[1:4] == 0)
     assert torch.all(resp.data[::4] == 0)
-    _assert_peak_close(resp.data.numpy(), expected)
+    # float64 differs from the float32 public route by float32 rounding,
+    # which Horsager's power nonlinearity amplifies by about beta:
+    npt.assert_allclose(resp.data.numpy(), expected,
+                        rtol=RTOL if dtype == torch.float32 else 1e-5,
+                        atol=1e-6 * np.abs(expected).max())
 
 
 @pytest.mark.parametrize('temporal, sign', [(Horsager2009Temporal, -1),
