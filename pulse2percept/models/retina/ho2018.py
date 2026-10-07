@@ -8,7 +8,7 @@ from ...stimuli.encoders import _OpticalStimulus
 from ...topography.retina import Watson2014Map
 from ...units import as_value, dimensionless, mW, mm, ms
 from ..base import (Model, TemporalModel, _FrameClock, _electrode_pitch,
-                    _require_stim_dimension, _thread_params)
+                    _require_finite, _require_stim_dimension)
 from .beyeler2019 import ScoreboardSpatial
 
 #: Peak irradiance (mW/mm^2) of the [Ho2018]_ white-noise condition, which the
@@ -126,10 +126,6 @@ class Ho2018Temporal(TemporalModel):
         to ``tau1`` it can underestimate the true peak by tens of percent.
     verbose : bool, optional
         Whether to print status messages.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
     #: Normalized network drive, not injected current.
@@ -139,18 +135,19 @@ class Ho2018Temporal(TemporalModel):
     _drive_sign = 1
 
     def __init__(self, *, n=6, tau1=51.3, tau2=137.1, p1=1.0, p2=0.3743,
-                 dt=0.005, thresh_percept=0, reduce='last', verbose=True,
-                 n_threads=None, n_jobs=None):
+                 dt=0.005, thresh_percept=0, reduce='last', verbose=True):
         super().__init__(n=n, tau1=tau1, tau2=tau2, p1=p1, p2=p2, dt=dt,
                          thresh_percept=thresh_percept, reduce=reduce,
-                         verbose=verbose,
-                         **_thread_params(n_threads, n_jobs))
+                         verbose=verbose)
         # Peak normalization; `_build` sets it from the coefficients.
         self._gain = 1.0
 
     def get_default_params(self):
         """Return all settable parameters of the temporal response."""
-        return {**super().get_default_params(),
+        base_params = super().get_default_params()
+        # The closed-form kernel is a NumPy product; no OpenMP threads:
+        del base_params['n_threads'], base_params['n_jobs']
+        return {**base_params,
                 'n': 6, 'tau1': 51.3, 'tau2': 137.1, 'p1': 1.0, 'p2': 0.3743}
 
     def get_param_units(self):
@@ -290,10 +287,6 @@ class Ho2018Spatial(ScoreboardSpatial):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
     #: An optical schedule, not injected current.
@@ -317,16 +310,14 @@ class Ho2018Spatial(ScoreboardSpatial):
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
-                 location_noise=None, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 location_noise=None, verbose=True, ndim=None):
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
             grid_type=grid_type, thresh_percept=thresh_percept,
             visual_field_map=visual_field_map, n_gray=n_gray,
             implant_position=implant_position,
             implant_rotation=implant_rotation, implant_depth=implant_depth,
-            location_noise=location_noise, verbose=verbose, ndim=ndim,
-            n_threads=n_threads, n_jobs=n_jobs)
+            location_noise=location_noise, verbose=verbose, ndim=ndim)
 
     def get_default_params(self):
         """Return all settable parameters of the spatial response."""
@@ -357,7 +348,9 @@ class Ho2018Spatial(ScoreboardSpatial):
     def _stim_values(self, stim):
         """Return radiant-exposure drive for an optical schedule."""
         if isinstance(stim, _OpticalStimulus):
-            return _radiant_exposure(stim)
+            drive = _radiant_exposure(stim)
+            _require_finite(drive, 'Radiant exposure')
+            return drive
         return super()._stim_values(stim)
 
     def _predict_response(self, stim, t_percept=None):
@@ -484,10 +477,6 @@ class Ho2018Model(Model):
         unthresholded.
     verbose : bool, optional
         Whether to print status messages.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
     """
 
     def __init__(self, implant, *, rho=None, xrange=(-15, 15),
@@ -496,8 +485,7 @@ class Ho2018Model(Model):
                  implant_position=(0, 0), implant_rotation=0, implant_depth=0,
                  location_noise=None, ndim=None,
                  n=6, tau1=51.3, tau2=137.1, p1=1.0, p2=0.3743, dt=0.005,
-                 reduce='last', thresh_percept=0, verbose=True,
-                 n_threads=None, n_jobs=None):
+                 reduce='last', thresh_percept=0, verbose=True):
         # The spatial stage passes on drive, not brightness: quantizing or
         # thresholding it there would change what the filter integrates.
         super().__init__(
@@ -508,9 +496,8 @@ class Ho2018Model(Model):
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
-                location_noise=location_noise, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                location_noise=location_noise, verbose=verbose, ndim=ndim),
             temporal=Ho2018Temporal(
                 n=n, tau1=tau1, tau2=tau2, p1=p1, p2=p2, dt=dt,
-                reduce=reduce, thresh_percept=thresh_percept, verbose=verbose,
-                n_threads=n_threads, n_jobs=n_jobs))
+                reduce=reduce, thresh_percept=thresh_percept,
+                verbose=verbose))

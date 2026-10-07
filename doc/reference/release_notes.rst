@@ -30,11 +30,21 @@ API changes and improvements
   longer take ``min_current_spread``; the Gaussian cutoff is fixed at 1e-6 of
   peak. Existing ``axon_pickle`` caches are regenerated once (:pull:`947`).
 
+* Retinal and cortical ``ScoreboardSpatial`` now run on Torch everywhere,
+  replacing the shared Scoreboard Cython extension. They, ``CortexSpatial``
+  and the Ho2018 models no longer take ``n_threads``/``n_jobs``
+  (:pull:`950`).
+
+* Model prediction rejects NaN or Inf stimulus values (:pull:`950`).
+
 Bug fixes
 ---------
 
 * Temporal models applied directly to a ``Stimulus`` no longer fail when an
   electrode is silent; its row is kept and stays zero (:pull:`937`).
+
+* ``Stimulus.compress`` no longer drops Inf samples or electrodes driven only
+  at Inf (:pull:`950`).
 
 
 v0.11.0 Foundations (2026-09-30)

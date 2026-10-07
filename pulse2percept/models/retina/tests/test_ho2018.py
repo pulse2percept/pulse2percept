@@ -574,3 +574,24 @@ def test_spatial_only_reports_on_the_pulse_clock():
     percept = spatial.predict_percept(spot())
     npt.assert_allclose(percept.time,
                         implant.prepare_stim(spot()).pulse_time)
+
+
+@pytest.mark.parametrize('make', [
+    Ho2018Temporal,
+    lambda **kwargs: Ho2018Spatial(PRIMAPivotal(), **kwargs),
+    lambda **kwargs: Ho2018Model(PRIMAPivotal(), **kwargs),
+])
+def test_has_no_thread_params(make):
+    # Removed in 0.12: Torch spatial stage, NumPy temporal kernel:
+    for param in ('n_threads', 'n_jobs'):
+        with pytest.raises(TypeError):
+            make(**{param: 2})
+
+
+@pytest.mark.parametrize('model', [Ho2018Spatial, Ho2018Model])
+def test_rejects_nonfinite_radiant_exposure(model):
+    img = np.full((10, 10), 0.5)
+    img[3, 3] = np.nan
+    with pytest.raises(ValueError, match='Radiant exposure must be finite'):
+        model(PRIMAPivotal(), xrange=(-2, 2), yrange=(-2, 2),
+              step=0.5).predict_percept(ImageStimulus(img))

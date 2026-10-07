@@ -86,12 +86,6 @@ class CortexSpatial(SpatialModel):
 
         .. versionadded:: 0.11.0
 
-    n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
-    n_jobs : int, optional
-        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
-
     .. important::
 
         Changing a model parameter outside the constructor (e.g., by directly
@@ -139,6 +133,8 @@ class CortexSpatial(SpatialModel):
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(CortexSpatial, self).get_default_params()
+        # No cortical model uses OpenMP; Torch manages its own threads:
+        del base_params['n_threads'], base_params['n_jobs']
         params = {
                     'xrange' : (-5, 5),
                     'yrange' : (-5, 5),

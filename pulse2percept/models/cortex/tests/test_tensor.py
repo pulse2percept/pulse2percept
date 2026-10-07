@@ -7,8 +7,9 @@ import torch
 from pulse2percept.implants.cortex import LinearEdgeThread, Neuralink, Orion
 from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.models.cortex import ScoreboardSpatial
-from pulse2percept.models.tests.test_tensor import (ATOL, RTOL, TIME,
-                                                    _cython_percept, _waveform)
+from pulse2percept.models.tests.test_tensor import (
+    ATOL, RTOL, TIME, _assert_matches_reference, _assert_peak_close,
+    _staged_percept, _scoreboard_reference, _waveform)
 from pulse2percept.stimuli import Stimulus
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.units import mm
@@ -21,14 +22,6 @@ def _spatial(implant=None, **params):
               'thresh_percept': 0.5, **params}
     return ScoreboardSpatial(Orion() if implant is None else implant,
                              **params)
-
-
-def _cython(spatial, wf):
-    """Return the flat Cython response, shape (n_grid_points, T)."""
-    # Every column differs, so compression keeps all time points:
-    percept = spatial.predict_percept(
-        Stimulus(wf, electrodes=spatial.implant.electrode_names, time=TIME))
-    return percept.data.reshape((-1, TIME.size))
 
 
 def _tensor(spatial, wf, dtype=torch.float32):
@@ -44,29 +37,19 @@ def _tensor(spatial, wf, dtype=torch.float32):
     {'implant_position': (12, -4) * mm, 'implant_rotation': 30},
     {'location_noise': 0.5, 'implant_position': (20, 0) * mm},
 ])
-def test_ScoreboardSpatial_tensor_parity(params):
+def test_ScoreboardSpatial_matches_reference(params):
     spatial = _spatial(**params).build()
-    wf = _waveform(spatial.implant.n_electrodes)
-    expected = _cython(spatial, wf)
-    resp = _tensor(spatial, wf)
-    assert isinstance(resp.data, torch.Tensor)
-    assert resp.data.dtype == torch.float32
-    assert resp.data.shape == (spatial.grid.x.size, TIME.size)
-    assert resp.shape == spatial.grid.x.shape
-    assert resp.space is spatial.grid
-    assert resp.frame_clock is None
-    npt.assert_allclose(resp.time, TIME)
-    assert 0 < np.mean(expected == 0) < 1
-    npt.assert_allclose(resp.data.numpy(), expected, rtol=RTOL, atol=ATOL)
+    _assert_matches_reference(spatial,
+                              _waveform(spatial.implant.n_electrodes))
 
 
 def test_ScoreboardSpatial_tensor_meridian_blend():
     # The default blend changes the response near the vertical meridian:
     wf = _waveform(Orion().n_electrodes)
-    plain = _cython(_spatial(meridian_blend=0).build(), wf)
+    plain = _scoreboard_reference(_spatial(meridian_blend=0).build(), wf)
     spatial = _spatial().build()
     assert spatial.meridian_blend == 0.1
-    expected = _cython(spatial, wf)
+    expected = _scoreboard_reference(spatial, wf)
     assert np.abs(expected - plain).max() > 1
     npt.assert_allclose(_tensor(spatial, wf).data.numpy(), expected,
                         rtol=RTOL, atol=ATOL)
@@ -79,8 +62,8 @@ def test_ScoreboardSpatial_tensor_regions():
     wf = _waveform(spatial.implant.n_electrodes)
     for region in spatial.regions:
         alone = _spatial(regions=[region], meridian_blend=0).build()
-        assert np.any(_cython(alone, wf) != 0)
-    expected = _cython(spatial, wf)
+        assert np.any(_scoreboard_reference(alone, wf) != 0)
+    expected = _scoreboard_reference(spatial, wf)
     resp = _tensor(spatial, wf).data
     npt.assert_allclose(resp.numpy(), expected, rtol=RTOL, atol=ATOL)
     summed = _tensor(spatial.build(thresh_percept=0), wf).data
@@ -99,18 +82,20 @@ def test_ScoreboardSpatial_tensor_hemispheres():
     assert 0 < left.sum() < left.size
     wf = _waveform(spatial.implant.n_electrodes)
     npt.assert_allclose(_tensor(spatial, wf).data.numpy(),
-                        _cython(spatial, wf), rtol=RTOL, atol=ATOL)
+                        _scoreboard_reference(spatial, wf), rtol=RTOL,
+                        atol=ATOL)
     # The left hemisphere alone lights only the right visual field:
     wf[~left] = 0
     resp = _tensor(spatial, wf).data.numpy()
     x = spatial.grid.x.ravel()
     assert np.all(resp[x < 0] == 0)
     assert np.any(resp[x > 0] != 0)
-    npt.assert_allclose(resp, _cython(spatial, wf), rtol=RTOL, atol=ATOL)
+    npt.assert_allclose(resp, _scoreboard_reference(spatial, wf),
+                        rtol=RTOL, atol=ATOL)
 
 
 def test_ScoreboardSpatial_tensor_ignores_z():
-    # On a 2D map, electrode z of a 3D implant has no effect, as in Cython:
+    # On a 2D map, electrode z of a 3D implant has no effect:
     implant = LinearEdgeThread(x=20000)
     wf = _waveform(implant.n_electrodes)
     resps = []
@@ -122,7 +107,8 @@ def test_ScoreboardSpatial_tensor_ignores_z():
             electrodes=implant.electrode_names)[2]
         assert np.ptp(z_el) > 0
         resp = _tensor(spatial, wf).data.numpy()
-        npt.assert_allclose(resp, _cython(spatial, wf), rtol=RTOL, atol=ATOL)
+        npt.assert_allclose(resp, _scoreboard_reference(spatial, wf),
+                            rtol=RTOL, atol=ATOL)
         resps.append(resp)
     assert np.any(resps[0] != 0)
     npt.assert_array_equal(resps[0], resps[1])
@@ -133,7 +119,8 @@ def test_ScoreboardSpatial_tensor_float64():
     wf = _waveform(spatial.implant.n_electrodes)
     resp = _tensor(spatial, wf, dtype=torch.float64)
     assert resp.data.dtype == torch.float64
-    npt.assert_allclose(resp.data.numpy(), _cython(spatial, wf), rtol=RTOL,
+    npt.assert_allclose(resp.data.numpy(),
+                        _scoreboard_reference(spatial, wf), rtol=RTOL,
                         atol=1e-4)
 
 
@@ -177,31 +164,20 @@ def _spatial_3d(**params):
                              visual_field_map=visual_field_map, **params)
 
 
-def _assert_peak_close(actual, expected):
-    """Assert parity; float32 rounding grows with the summed magnitude, so
-    bound the error relative to the peak response."""
-    npt.assert_allclose(actual, expected, rtol=RTOL,
-                        atol=1e-6 * np.abs(expected).max())
-
-
 @pytest.mark.parametrize('params', [
     {},
     {'meridian_blend': 0},
     {'thresh_percept': 2},
 ])
-def test_ScoreboardSpatial_tensor_3d_parity(params):
+def test_ScoreboardSpatial_3d_matches_reference(params):
     spatial = _spatial_3d(**params).build()
     z_grid = spatial.grid.v1.z
     z_el = spatial._electrode_coords(
         spatial.implant.electrode_array, None,
         electrodes=spatial.implant.electrode_names)[2]
     assert np.ptp(z_grid) > 0 and np.ptp(z_el) > 0
-    wf = _waveform(spatial.implant.n_electrodes)
-    expected = _cython(spatial, wf)
-    resp = _tensor(spatial, wf)
-    assert resp.data.shape == (spatial.grid.x.size, TIME.size)
-    assert 0 < np.mean(expected == 0) < 1
-    _assert_peak_close(resp.data.numpy(), expected)
+    _assert_matches_reference(spatial,
+                              _waveform(spatial.implant.n_electrodes))
 
 
 def test_ScoreboardSpatial_tensor_3d_hemispheres():
@@ -218,7 +194,7 @@ def test_ScoreboardSpatial_tensor_3d_hemispheres():
     x = spatial.grid.x.ravel()
     assert np.all(resp[x < 0] == 0)
     assert np.any(resp[x > 0] != 0)
-    _assert_peak_close(resp, _cython(spatial, wf))
+    _assert_peak_close(resp, _scoreboard_reference(spatial, wf))
 
 
 def test_ScoreboardSpatial_tensor_neuropythy():
@@ -234,7 +210,7 @@ def test_ScoreboardSpatial_tensor_neuropythy():
     unmapped = np.isnan(spatial.grid.v1.x.ravel())
     assert np.any(unmapped)
     wf = _waveform(implant.n_electrodes)
-    expected = _cython(spatial, wf)
+    expected = _scoreboard_reference(spatial, wf)
     resp = _tensor(spatial, wf).data.numpy()
     assert np.all(np.isfinite(resp))
     assert np.all(resp[unmapped] == 0)
@@ -250,7 +226,7 @@ def _model(reduce='peak', **params):
 def test_Model_tensor_parity(reduce, t_percept):
     model = _model(reduce=reduce)
     wf = _waveform(model.implant.n_electrodes)
-    expected = _cython_percept(
+    expected = _staged_percept(
         model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME),
         t_percept=t_percept)
@@ -296,7 +272,7 @@ def test_Model_tensor_3d(reduce):
     model = Model(_spatial_3d(), FadingTemporal(tau=2, reduce=reduce))
     wf = _waveform(model.implant.n_electrodes)
     t_percept = [0.5, 1.0, 2.0, 25.0, 60.0]
-    expected = _cython_percept(
+    expected = _staged_percept(
         model,
         Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME),
         t_percept=t_percept)

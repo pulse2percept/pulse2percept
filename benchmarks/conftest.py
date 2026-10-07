@@ -135,13 +135,14 @@ def percept(built_model, source):
 
 @pytest.fixture
 def peak_memory():
-    """Return a helper that measures peak memory of a single call, in MB.
+    """Return a helper that measures peak tracemalloc-tracked memory of a
+    single call, in MB.
 
     Uses ``tracemalloc`` instead of RSS sampling: deterministic, no extra
     dependency, and works on Windows (which rules out ``pytest-memray``). It
-    tracks NumPy data buffers, which hold nearly all memory in these workloads,
-    but not raw ``malloc`` inside the Cython/OpenMP kernels, so the numbers are
-    a floor for those code paths.
+    tracks Python and NumPy allocations, but not Torch tensors or raw
+    ``malloc`` inside the Cython/OpenMP kernels, so the numbers are a floor,
+    far below the true peak on Torch paths.
 
     Call outside the timed section: tracing inflates run time several-fold.
     """

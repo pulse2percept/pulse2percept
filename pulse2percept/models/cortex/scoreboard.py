@@ -1,9 +1,8 @@
 """:py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`,
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
-from ..base import (Model, _blend_meridian, _is_tensor, _thread_params,
+from ..base import (Model, _blend_meridian, _is_tensor, _scoreboard_response,
                     _warn_rho_vs_pitch)
-from .._scoreboard import fast_scoreboard, fast_scoreboard_3d
 from .base import CortexSpatial
 from ...units import dva, um
 import numpy as np
@@ -94,12 +93,6 @@ class ScoreboardSpatial(CortexSpatial):
 
         .. versionadded:: 0.11.0
 
-    n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
-    n_jobs : int, optional
-        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
-
     .. important ::
     
         Changing a model parameter outside the constructor (e.g., by directly
@@ -118,7 +111,7 @@ class ScoreboardSpatial(CortexSpatial):
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
-                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+                 verbose=True, ndim=None):
         super().__init__(
             implant, rho=rho, regions=regions,
             meridian_blend=meridian_blend, xrange=xrange, yrange=yrange,
@@ -129,8 +122,7 @@ class ScoreboardSpatial(CortexSpatial):
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
-            ndim=[2, 3] if ndim is None else ndim,
-            **_thread_params(n_threads, n_jobs))
+            ndim=[2, 3] if ndim is None else ndim)
 
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
@@ -164,57 +156,34 @@ class ScoreboardSpatial(CortexSpatial):
         # Restore percept threshold after blending:
         if _is_tensor(blended):
             import torch
-            return torch.where(blended.abs() >= self.thresh_percept, blended,
-                               0.0)
+            return torch.where(blended.abs() < self.thresh_percept, 0.0,
+                               blended)
         blended[np.abs(blended) < self.thresh_percept] = 0
         return blended
 
     def _predict_spatial(self, electrode_array, stim):
-        """Predicts the brightness at spatial locations"""
-        amp = self._stim_values(stim)
-
-        # whether to allow current to spread between hemispheres
-        separate = 0
-        boundary = 0
-        if self.visual_field_map.split_map:
-            separate = 1
-            boundary = self.visual_field_map.left_offset/2
-        cutoff_r2 = self._cutoff_r2(self.rho)
+        """Predict float32 brightness before meridian blending."""
+        import torch
+        if self.visual_field_map.ndim not in (2, 3):
+            raise ValueError("Invalid dimensionality of visual field map")
         # One tissue location per electrode (displaced through its own region
         # by `location_noise`), spread over every simulated region's grid:
         xyz = self._electrode_coords(electrode_array, stim)
-        coords = {region: xyz for region in self.regions}
-        if self.visual_field_map.ndim == 3:
-            return np.sum([
-                fast_scoreboard_3d(amp, *coords[region],
-                                self.grid[region].x.ravel(),
-                                self.grid[region].y.ravel(),
-                                self.grid[region].z.ravel(),
-                                self.rho, self.thresh_percept, cutoff_r2,
-                                separate, boundary,
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
-        elif self.visual_field_map.ndim == 2:
-            return np.sum([
-                fast_scoreboard(amp, *coords[region][:2],
-                                self.grid[region].x.ravel(), self.grid[region].y.ravel(),
-                                self.rho, self.thresh_percept, cutoff_r2,
-                                separate, boundary,
-                                self.n_threads)
-                for region in self.regions ],
-            axis = 0)
-        else:
-            raise ValueError("Invalid dimensionality of visual field map")
+        values = self._stim_values(stim)
+        # Silent electrodes add nothing here. `_predict_tensor` keeps them,
+        # so they still receive gradients:
+        active = np.any(np.abs(values) > 0, axis=1)
+        waveform = torch.tensor(values[active], dtype=torch.float32)
+        with torch.inference_mode():
+            return self._predict_scoreboard_tensor(
+                waveform, *(c[active] for c in xyz)).numpy()
 
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
 
-        Same Gaussian, cutoff, hemisphere separation, per-region threshold and
-        meridian blending as ``predict_percept``, computed as one
-        ``(P, E) @ (E, T)`` product per region. Geometry is fixed.
+        Runs the ``predict_percept`` kernel on every implant electrode, so
+        silent electrodes still receive gradients. Geometry is fixed.
         """
-        import torch
         if self.n_gray is not None:
             # Quantization is discrete and has no exact gradient:
             raise NotImplementedError("Tensor prediction does not support "
@@ -222,37 +191,36 @@ class ScoreboardSpatial(CortexSpatial):
         x_el, y_el, z_el = self._electrode_coords(
             self.implant.electrode_array, None,
             electrodes=self.implant.electrode_names)
-        rho = np.float32(self.rho)
+        resp = self._postprocess_spatial(
+            self._predict_scoreboard_tensor(waveform, x_el, y_el, z_el))
+        return self._spatial_response(resp, time, None)
+
+    def _predict_scoreboard_tensor(self, waveform, x_el, y_el, z_el):
+        """Return the flat ``(P, T)`` response before meridian blending.
+
+        ``waveform`` rows follow the float32 electrode coordinates (microns).
+        Each region is thresholded before the regions are summed. Geometry
+        and Gaussian weights are float32; the response has the dtype and
+        device of ``waveform``.
+        """
         cutoff_r2 = self._cutoff_r2(self.rho)
+        boundary = None
+        if self.visual_field_map.split_map:
+            # No current spreads between hemispheres:
+            boundary = self.visual_field_map.left_offset / 2
         resp = 0
         for region in self.regions:
-            x_grid = self.grid[region].x.reshape((-1, 1))
-            y_grid = self.grid[region].y.reshape((-1, 1))
-            # float32, as in `fast_scoreboard`:
-            dx = x_grid - x_el
-            dy = y_grid - y_el
-            r2 = dx * dx + dy * dy
+            grid = self.grid[region]
+            # A 2D map ignores electrode z; a 3D one adds depth:
             if self.visual_field_map.ndim == 3:
-                # A 2D map ignores electrode z; a 3D one adds depth, as in
-                # `fast_scoreboard_3d`:
-                dz = self.grid[region].z.reshape((-1, 1)) - z_el
-                r2 = r2 + dz * dz
-            weights = np.exp(-r2 / (np.float32(2) * rho * rho))
-            # Drops pairs beyond the cutoff and unmapped (NaN) grid points:
-            drop = ~(r2 <= cutoff_r2)
-            if self.visual_field_map.split_map:
-                # No current spreads between hemispheres:
-                boundary = np.float32(self.visual_field_map.left_offset / 2)
-                drop |= (x_grid < boundary) != (x_el < boundary)
-            weights[drop] = 0
-            weights = torch.as_tensor(weights, dtype=waveform.dtype,
-                                      device=waveform.device)
-            region_resp = weights @ waveform
-            # Each region is thresholded before the sum, as in Cython:
-            resp = resp + torch.where(
-                region_resp.abs() >= self.thresh_percept, region_resp, 0.0)
-        resp = self._postprocess_spatial(resp)
-        return self._spatial_response(resp, time, None)
+                coords = (grid.x, grid.y, grid.z), (x_el, y_el, z_el)
+            else:
+                coords = (grid.x, grid.y), (x_el, y_el)
+            # Each region is thresholded before the sum:
+            resp = resp + _scoreboard_response(
+                waveform, *coords, self.rho, cutoff_r2, self.thresh_percept,
+                boundary)
+        return resp
 
 
 class ScoreboardModel(Model):
@@ -345,12 +313,6 @@ class ScoreboardModel(Model):
         
         .. versionadded:: 0.11.0
 
-    n_threads : int, optional
-        Number of CPU threads to use during parallelization using OpenMP.
-        Defaults to max number of user CPU cores.
-    n_jobs : int, optional
-        Alias for ``n_threads``; ``None`` or ``-1`` uses every core.
-
     .. important ::
         Changing a model parameter outside the constructor (e.g., by directly
         setting ``model.xrange = (-10, 10)``) invalidates the build, and the next
@@ -365,7 +327,7 @@ class ScoreboardModel(Model):
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
-                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+                 verbose=True, ndim=None):
         super().__init__(
             spatial=ScoreboardSpatial(
                 implant, rho=rho, regions=regions,
@@ -377,6 +339,5 @@ class ScoreboardModel(Model):
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
-                location_noise=location_noise, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                location_noise=location_noise, verbose=verbose, ndim=ndim),
             temporal=None)

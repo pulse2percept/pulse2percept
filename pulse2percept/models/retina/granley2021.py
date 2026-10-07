@@ -11,7 +11,8 @@ from ...implants import ElectrodeArray
 from ...stimuli import BiphasicPulseTrain, Stimulus
 from ...units import as_value, um, xTh
 from ..base import (BaseModel, Model, _ModelResponse, _encoder_clock,
-                    _require_stim_dimension, _thread_params)
+                    _require_finite, _require_stim_dimension,
+                    _thread_params)
 from .base import _warn_ignores_z
 from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
 from ._granley2021 import (fast_biphasic_axon_map,
@@ -355,9 +356,10 @@ class _BiphasicSpatialMixin:
     def _elec_params(self, stim):
         """Return active electrode names and their ``(freq, amp, pdur)``."""
         params = _pulse_train_params(stim, self.implant.thresholds)
-        return ([p[0] for p in params],
-                np.array([p[1:4] for p in params],
-                         dtype=np.float32).reshape((-1, 3)))
+        elec_params = np.array([p[1:4] for p in params],
+                               dtype=np.float32).reshape((-1, 3))
+        _require_finite(elec_params, 'Pulse-train parameters')
+        return [p[0] for p in params], elec_params
 
     def _effect_factors(self, name, elec_params, positive=False):
         """Return one factor per active electrode from effect model ``name``.
@@ -1045,8 +1047,8 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
             implant_position=implant_position,
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
-            location_noise=location_noise, verbose=verbose, ndim=ndim,
-            n_threads=n_threads, n_jobs=n_jobs)
+            location_noise=location_noise, verbose=verbose, ndim=ndim)
+        self.set_params(**_thread_params(n_threads, n_jobs))
         self.bright_model = (DefaultBrightModel() if bright_model is None
                              else bright_model)
         self.size_model = (DefaultSizeModel(self.rho) if size_model is None
@@ -1057,7 +1059,10 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
     def get_default_params(self):
         base_params = super(BiphasicScoreboardSpatial,
                             self).get_default_params()
-        return {**base_params, 'bright_model': None, 'size_model': None}
+        # Unlike ScoreboardSpatial, the Cython kernel uses OpenMP threads.
+        # `n_jobs` writes through to `n_threads`, so it must come last:
+        return {**base_params, 'bright_model': None, 'size_model': None,
+                'n_threads': multiprocessing.cpu_count(), 'n_jobs': None}
 
     def _build(self):
         if not callable(self.bright_model):

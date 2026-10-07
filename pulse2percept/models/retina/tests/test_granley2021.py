@@ -1055,6 +1055,17 @@ def _train(freq=20, amp=1, pdur=0.45):
     return {'C5': BiphasicPulseTrain(freq, amp * xTh, pdur)}
 
 
+@pytest.mark.parametrize('bad', [np.nan, np.inf])
+@pytest.mark.parametrize('model', [
+    _scoreboard,
+    lambda: BiphasicAxonMapModel(ArgusII(), n_axons=50, n_ax_segments=50,
+                                 ignore_pickle=True, **_SB_GRID),
+])
+def test_Biphasic_rejects_nonfinite_pulse_amplitude(model, bad):
+    with pytest.raises(ValueError, match='Pulse-train parameters must be'):
+        model().predict_percept(_train(amp=bad))
+
+
 def _frame(percept):
     """Return the single frame this model predicts"""
     return percept.data[..., 0]

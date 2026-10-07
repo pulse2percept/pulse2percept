@@ -791,23 +791,9 @@ def test_AxonMapSpatial_matches_frozen_cython():
     npt.assert_equal(got[2], np.zeros(3, dtype=np.float32))
 
 
-def test_predict_percept_thread_count_invariant():
-    """The percept does not depend on the number of threads"""
-    stim = np.zeros(60)
-    stim[[5, 22, 51]] = [1.0, 0.6, -0.3]
-    kwargs = {'implant': ArgusII(), 'step': 1, 'xrange': (-10, 10),
-              'yrange': (-8, 8), 'rho': 200}
-
-    serial = ScoreboardModel(n_threads=1,
-                             **kwargs).build().predict_percept(stim).data
-    for n_threads in (2, 3, 8):
-        parallel = ScoreboardModel(
-            n_threads=n_threads, **kwargs).build().predict_percept(stim)
-        npt.assert_array_equal(parallel.data, serial)
-
-
-@pytest.mark.parametrize('cls', (AxonMapSpatial, AxonMapModel))
-def test_AxonMap_has_no_thread_or_cutoff_params(cls):
+@pytest.mark.parametrize('cls', (AxonMapSpatial, AxonMapModel,
+                                 ScoreboardSpatial, ScoreboardModel))
+def test_torch_models_have_no_thread_or_cutoff_params(cls):
     # Removed in 0.12: prediction runs on Torch, and the cutoff is fixed:
     for param in ('n_threads', 'n_jobs', 'min_current_spread'):
         with pytest.raises(TypeError):

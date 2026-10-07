@@ -33,7 +33,7 @@ from pulse2percept.stimuli import Stimulus
 OPENMP = "@rpath/libomp.dylib"
 SYSTEM = ("/usr/lib/", "/System/Library/")
 # Extensions with `prange` loops, which must link OpenMP:
-OPENMP_EXTS = ("_temporal.", "_scoreboard.")
+OPENMP_EXTS = ("_temporal.",)
 
 # As in PyTorch's tools/embed_libomp_macos.py:
 _LOAD_RE = re.compile(r"(?:name|path) (.+) \(offset \d+\)")

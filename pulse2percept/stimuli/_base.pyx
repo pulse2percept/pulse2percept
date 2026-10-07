@@ -45,8 +45,7 @@ cpdef bool[::1] fast_compress_time(const float32[:, ::1] data):
     # edge.
     # The caller applies the returned mask to the time axis.
     # `c_isclose`'s rel_tol (1e-9) is below float32 eps (~1.2e-7), so this is
-    # exact equality for finite float32 values. c_isclose(inf, inf) is False,
-    # so a constant infinite signal has an edge at every column.
+    # exact equality for finite float32 values. NaN is an edge.
     cdef:
         index_t e, n_elec, t, n_time
         bool[::1] idx_time

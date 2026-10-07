@@ -15,8 +15,7 @@ from ...topography.retina import Watson2014Map
 from ...implants import ElectrodeArray
 from ...stimuli import Stimulus
 from ..base import (Model, _blend_meridian, _draw_placed_implant,
-                    _is_tensor, _thread_params, _warn_rho_vs_pitch)
-from .._scoreboard import fast_scoreboard
+                    _is_tensor, _scoreboard_response, _warn_rho_vs_pitch)
 from .base import RetinalSpatial, _warn_ignores_z
 
 import warnings
@@ -240,11 +239,7 @@ class ScoreboardSpatial(RetinalSpatial):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
+        Dimensionalities of ``visual_field_map`` accepted by the model."""
 
     #: Also accepts encoded normalized optical drive from a
     #: PhotovoltaicEncoder.
@@ -261,8 +256,7 @@ class ScoreboardSpatial(RetinalSpatial):
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
-                 location_noise=None, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 location_noise=None, verbose=True, ndim=None):
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
             grid_type=grid_type, thresh_percept=thresh_percept,
@@ -273,12 +267,13 @@ class ScoreboardSpatial(RetinalSpatial):
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
-            ndim=[2] if ndim is None else ndim,
-            **_thread_params(n_threads, n_jobs))
+            ndim=[2] if ndim is None else ndim)
 
     def get_default_params(self):
         """Return all settable scoreboard parameters."""
         base_params = super(ScoreboardSpatial, self).get_default_params()
+        # Prediction runs on Torch's own thread pool:
+        del base_params['n_threads'], base_params['n_jobs']
         params = {'rho': 100, 'visual_field_map': Watson2014Map()}
         return {**base_params, **params}
 
@@ -290,25 +285,25 @@ class ScoreboardSpatial(RetinalSpatial):
         _warn_rho_vs_pitch(self)
 
     def _predict_spatial(self, electrode_array, stim):
-        """Predict brightness over the spatial grid."""
+        """Predict float32 brightness over the spatial grid."""
+        import torch
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
-        return fast_scoreboard(self._stim_values(stim), x_el, y_el,
-                               self.grid.ret.x.ravel(),
-                               self.grid.ret.y.ravel(),
-                               self.rho,
-                               self.thresh_percept,
-                               self._cutoff_r2(self.rho),
-                               0, 0,  # no current boundaries
-                               self.n_threads)
+        values = self._stim_values(stim)
+        # Silent electrodes add nothing here. `_predict_tensor` keeps them,
+        # so they still receive gradients:
+        active = np.any(np.abs(values) > 0, axis=1)
+        waveform = torch.tensor(values[active], dtype=torch.float32)
+        with torch.inference_mode():
+            return self._predict_scoreboard_tensor(
+                waveform, x_el[active], y_el[active]).numpy()
 
     def _predict_tensor(self, waveform, time):
         """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
 
-        Same Gaussian, cutoff and threshold as ``_predict_spatial``, computed
-        as a ``(P, E) @ (E, T)`` product. Geometry is fixed.
+        Runs the ``predict_percept`` kernel on every implant electrode, so
+        silent electrodes still receive gradients. Geometry is fixed.
         """
-        import torch
         if self.n_gray is not None:
             # Quantization is discrete and has no exact gradient:
             raise NotImplementedError("Tensor prediction does not support "
@@ -317,19 +312,19 @@ class ScoreboardSpatial(RetinalSpatial):
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(
             electrode_array, None, electrodes=self.implant.electrode_names)
-        # float32, as in `fast_scoreboard`:
-        dx = self.grid.ret.x.reshape((-1, 1)) - x_el
-        dy = self.grid.ret.y.reshape((-1, 1)) - y_el
-        r2 = dx * dx + dy * dy
-        rho = np.float32(self.rho)
-        weights = np.exp(-r2 / (np.float32(2) * rho * rho))
-        # Drops pairs beyond the cutoff and unmapped (NaN) grid points:
-        weights[~(r2 <= self._cutoff_r2(self.rho))] = 0
-        weights = torch.as_tensor(weights, dtype=waveform.dtype,
-                                  device=waveform.device)
-        resp = weights @ waveform
-        resp = torch.where(resp.abs() >= self.thresh_percept, resp, 0.0)
+        resp = self._predict_scoreboard_tensor(waveform, x_el, y_el)
         return self._spatial_response(resp, time, None)
+
+    def _predict_scoreboard_tensor(self, waveform, x_el, y_el):
+        """Return the flat thresholded ``(P, T)`` response.
+
+        ``waveform`` rows follow the float32 electrode coordinates ``x_el``,
+        ``y_el`` (microns). Geometry and Gaussian weights are float32; the
+        response has the dtype and device of ``waveform``.
+        """
+        return _scoreboard_response(
+            waveform, (self.grid.ret.x, self.grid.ret.y), (x_el, y_el),
+            self.rho, self._cutoff_r2(self.rho), self.thresh_percept)
 
 
 class ScoreboardModel(Model):
@@ -441,11 +436,7 @@ class ScoreboardModel(Model):
     verbose : bool, optional
         Whether to print status messages.
     ndim : list of int, optional
-        Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores."""
+        Dimensionalities of ``visual_field_map`` accepted by the model."""
 
     def __init__(self, implant, *, rho=100, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
@@ -454,8 +445,7 @@ class ScoreboardModel(Model):
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
-                 location_noise=None, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 location_noise=None, verbose=True, ndim=None):
         super().__init__(
             spatial=ScoreboardSpatial(
                 implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
@@ -465,8 +455,7 @@ class ScoreboardModel(Model):
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
-                location_noise=location_noise, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                location_noise=location_noise, verbose=verbose, ndim=ndim),
             temporal=None)
 
 
