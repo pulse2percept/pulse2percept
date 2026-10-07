@@ -6,7 +6,6 @@ import pytest
 
 from pulse2percept.models import AlphaTemporal, FadingTemporal
 from pulse2percept.models.retina import Nanduri2012Temporal
-from pulse2percept.models._temporal import alpha_fast, fading_fast
 from pulse2percept.models.base import _FrameClock, _ModelResponse
 from pulse2percept.stimuli import (Stimulus, MonophasicPulse, BiphasicPulse,
                                    BiphasicPulseTrain)
@@ -36,8 +35,7 @@ def test_FadingTemporal():
     npt.assert_equal(percept.shape, (1, 1, 3))
     npt.assert_almost_equal(percept.data, 0)
 
-    # Can't request the same time twice (the Cython loop increments
-    # `idx_frame` after each write):
+    # Can't request the same time twice:
     with pytest.raises(ValueError):
         stim = Stimulus(np.ones((1, 100)))
         model.predict_percept(stim, t_percept=[0.2, 0.2])
@@ -96,10 +94,42 @@ def test_deepcopy_generic_temporal(model_cls):
     npt.assert_equal(copied is not None, True)
 
 
+def _predict(model, data, t_stim, t_percept, reduce='last'):
+    """Return the float32 response of ``model`` at output times
+    ``t_percept`` (ms), each summarizing its interval as ``reduce``."""
+    data = np.asarray(data, dtype=np.float32)
+    resp = _ModelResponse(data, np.asarray(t_stim, dtype=float), ms,
+                          (data.shape[0],))
+    out = model.build()._predict_temporal(resp, np.asarray(t_percept, float),
+                                          reduce)
+    npt.assert_equal(out.dtype, np.float32)
+    return out
+
+
+def _interval_max(dense, idx):
+    """Return the max of ``dense`` over each output interval, which runs
+    from the previous output step up to and including step ``idx``."""
+    lo = np.r_[0, idx[:-1]]
+    return np.stack([dense[:, a:b + 1].max(axis=1) for a, b in zip(lo, idx)],
+                    axis=1)
+
+
+def _fading_reference(data, t_stim, n_sim, dt, tau):
+    """Return the explicit-Euler brightness at every step, in float64."""
+    a = float(np.float32(np.float32(dt) / np.float32(tau)))
+    t_sim = np.arange(n_sim).astype(np.float32) * np.float32(dt)
+    frame = np.searchsorted(np.float32(t_stim), t_sim, side='right') - 1
+    out = np.zeros((data.shape[0], n_sim))
+    bright = np.zeros(data.shape[0])
+    for i, f in enumerate(frame):
+        bright = bright + a * (np.maximum(-data[:, f], 0.0) - bright)
+        out[:, i] = bright
+    return out
+
+
 def test_FadingTemporal_matches_reference_integrator():
     """The leaky integrator matches a plain Python reference
 
-    ``fading_fast`` loops over time outside and space inside (to vectorize).
     The reference steps one location at a time. The stimulus straddles zero,
     so anodic samples must contribute nothing (half-wave rectification).
     """
@@ -133,9 +163,8 @@ def test_FadingTemporal_matches_reference_integrator():
             if bright < 0:
                 bright = np.float32(0.0)
             if i == idx_p[frame]:
-                # Not exact: compilers may fuse `bright + dt_tau * x` into one
-                # FMA (Clang on Apple Silicon does, MSVC on x86-64 does not),
-                # while NumPy never does:
+                # Not exact: the model composes each constant-drive run of
+                # steps into one update:
                 npt.assert_allclose(got[s, frame], bright, rtol=1e-6)
                 frame += 1
 
@@ -178,39 +207,6 @@ def test_FadingTemporal_rectifies_the_drive():
                             decimal=3)
 
 
-@pytest.mark.parametrize('n_space', (1, 63, 64, 65, 130))
-def test_FadingTemporal_block_boundaries(n_space):
-    """Locations are integrated in fixed-size blocks, the last one partial
-
-    Sizes on either side of the block width test the partial last block.
-    """
-    model = FadingTemporal(dt=0.05, tau=30).build()
-    rng = np.random.default_rng(n_space)
-    data = (rng.random((n_space, 4)) - 0.7).astype(np.float32)
-    stim = Stimulus(data, time=np.arange(4, dtype=float) * 5)
-    percept = model.predict_percept(stim, t_percept=[0, 5, 10, 15])
-    npt.assert_equal(percept.data.shape, (n_space, 1, 4))
-    # Every location is integrated, including the partial block:
-    single = np.stack([
-        model.predict_percept(Stimulus(data[i:i + 1], time=stim.time),
-                              t_percept=[0, 5, 10, 15]).data.ravel()
-        for i in range(n_space)])
-    npt.assert_array_equal(percept.data.reshape(n_space, -1), single)
-
-
-def test_FadingTemporal_thread_count_invariant():
-    """The result does not depend on the number of threads"""
-    rng = np.random.default_rng(7)
-    data = (rng.random((200, 6)) - 0.6).astype(np.float32)
-    stim = Stimulus(data, time=np.arange(6, dtype=float) * 3)
-    serial = FadingTemporal(dt=0.05, tau=40, n_threads=1).build(
-        ).predict_percept(stim, t_percept=[0, 5, 10, 15]).data
-    for n_threads in (2, 3, 8):
-        parallel = FadingTemporal(dt=0.05, tau=40, n_threads=n_threads).build(
-            ).predict_percept(stim, t_percept=[0, 5, 10, 15]).data
-        npt.assert_array_equal(parallel, serial)
-
-
 def test_FadingTemporal_long_run_matches_closed_form():
     """A long constant drive matches the closed-form recurrence
 
@@ -244,40 +240,50 @@ def test_FadingTemporal_long_run_matches_closed_form():
 
 
 def test_FadingTemporal_peak_is_exact():
-    """The in-kernel peak equals the max over every simulation step
+    """The sparse peak equals the max of a dense stepwise reference
 
-    Not bit-exact: `fading_fast` composes runs of steps that share a stimulus
-    frame into one affine map, so dense and sparse output have different
-    rounding. See `test_FadingTemporal_long_run_matches_closed_form`.
+    Not bit-exact: the model composes runs of steps that share a stimulus
+    frame into one update.
     """
     rng = np.random.default_rng(3)
     data = (rng.random((5, 12)) - 0.5).astype(np.float32) * 40
-    t_stim = (np.arange(12) * 4.0).astype(np.float32)
+    t_stim = np.arange(12) * 4.0
     dt, tau = 0.05, 20.0
-    # Brightness at every simulation step:
-    n_sim = int(round(44 / dt)) + 1
-    dense = fading_fast(data, t_stim, np.arange(n_sim, dtype=np.uint32), dt,
-                        tau, 0.0, 1, 0)
-    out = np.array([37, 210, 400, 601, 880], dtype=np.uint32)
-    peak = fading_fast(data, t_stim, out, dt, tau, 0.0, 1, 1)
-    last = fading_fast(data, t_stim, out, dt, tau, 0.0, 1, 0)
-    # Each interval runs from the previous output point up to and including
-    # this one:
-    lo = np.r_[0, out[:-1]]
-    brute = np.stack([dense[:, a:b + 1].max(axis=1)
-                      for a, b in zip(lo, out)], axis=1)
-    npt.assert_allclose(peak, brute, rtol=1e-5)
+    dense = _fading_reference(data, t_stim, int(round(44 / dt)) + 1, dt, tau)
+    out = np.array([37, 210, 400, 601, 880])
+    model = FadingTemporal(dt=dt, tau=tau)
+    peak = _predict(model, data, t_stim, out * dt, 'peak')
+    last = _predict(model, data, t_stim, out * dt, 'last')
+    npt.assert_allclose(peak, _interval_max(dense, out), rtol=1e-5)
     # `reduce='last'` returns the value at the interval end:
     npt.assert_allclose(last, dense[:, out], rtol=1e-5)
     # The interval includes its end point, so peak >= last exactly:
     npt.assert_equal(np.all(peak >= last), True)
     npt.assert_equal(np.any(peak > last), True)
-    # The peak does not depend on the number of threads:
-    for n_threads in (2, 4, 8):
-        npt.assert_array_equal(
-            fading_fast(np.tile(data, (40, 1)), t_stim, out, dt, tau, 0.0,
-                        n_threads, 1),
-            np.tile(peak, (40, 1)))
+
+
+@pytest.mark.parametrize('model_cls', (FadingTemporal, AlphaTemporal))
+def test_generic_temporal_automatic_peak_is_exact(model_cls):
+    """Automatic output with `reduce='peak'` reports each interval's max
+
+    Output times follow ten 50 ms encoder frames, each summarizing the
+    pulses before it.
+    """
+    stim = BiphasicPulseTrain(20, -50, 0.46, stim_dur=500)
+    model = model_cls(tau=10, dt=0.01).build()
+    peak = model._predict_response(clocked(stim))
+    idx = np.round(peak.time / model.dt).astype(int)
+    # float32 frame times, as the model selects frames:
+    t_stim = np.asarray(stim.time, dtype=np.float32)
+    if model_cls is FadingTemporal:
+        dense = _fading_reference(stim.data, t_stim, idx[-1] + 1, model.dt,
+                                  model.tau)
+    else:
+        dense = _alpha_reference(stim.data, t_stim, np.arange(idx[-1] + 1),
+                                 model.dt, model.tau)
+    npt.assert_allclose(peak.data, _interval_max(dense, idx), rtol=1e-5)
+    # The pulses ripple, so the peak is not the interval end:
+    npt.assert_equal(np.any(peak.data > dense[:, idx] * (1 + 1e-3)), True)
 
 
 def test_FadingTemporal_reduce():
@@ -318,7 +324,8 @@ def test_FadingTemporal_frames_closer_together_than_dt():
     data = np.array([[0.0, -100.0, 0.0, 0.0, 0.0]], dtype=np.float32)
     dt = 0.5
     idx = np.arange(0, 21, dtype=np.uint32)
-    got = fading_fast(data, t_stim, idx, dt, 100.0, 0.0, 1, 0).ravel()
+    got = _predict(FadingTemporal(dt=dt, tau=100.0), data, t_stim,
+                   idx * dt).ravel()
     npt.assert_array_equal(got, np.zeros_like(got))
 
     # In general, the frame at each step is given by `searchsorted`:
@@ -330,7 +337,7 @@ def test_FadingTemporal_frames_closer_together_than_dt():
     data = ((rng.random((3, n_stim)) - 0.5) * 60).astype(np.float32)
     tau = 25.0
     idx = np.arange(0, int(t_stim[-1] / dt) + 1, dtype=np.uint32)
-    got = fading_fast(data, t_stim, idx, dt, tau, 0.0, 1, 0)
+    got = _predict(FadingTemporal(dt=dt, tau=tau), data, t_stim, idx * dt)
 
     frame = np.searchsorted(t_stim, (idx * dt).astype(np.float32),
                             side='right') - 1
@@ -553,8 +560,8 @@ def _alpha_reference(data, t_stim, idx_percept, dt, tau, reduce_peak=False):
     """Return the two-state explicit Euler recurrence per location, in float64
 
     Stage 2 reads stage 1 from the *start* of the step (this gives the rise
-    delay). float64 because `alpha_fast` composes constant-drive runs into
-    one update and cannot match a float32 step-by-step replay.
+    delay). float64 because the model composes constant-drive runs into one
+    update and cannot match a float32 step-by-step replay.
     """
     a = float(np.float32(np.float32(dt) / np.float32(tau)))
     n_stim = len(t_stim)
@@ -598,15 +605,13 @@ def test_AlphaTemporal_matches_reference_recurrence():
 
     idx_p = np.uint32(np.round(t_percept / model.dt))
     want = _alpha_reference(data, t_stim, idx_p, model.dt, model.tau)
-    # Not exact: the kernel composes each constant-drive run into one float32
+    # Not exact: the model composes each constant-drive run into one float32
     # update (within a few parts in 1e6 of float64):
     npt.assert_allclose(got, want, rtol=1e-5)
 
     # Stage 2 must use the previous stage-1 value:
     dt, tau = 0.01, 50.0
-    step = alpha_fast(np.array([[-1.0]], dtype=np.float32),
-                      np.array([0.0], dtype=np.float32),
-                      np.arange(3, dtype=np.uint32), dt, tau, 0.0, 1, 0)
+    step = _predict(model, [[-1.0]], [0.0], np.arange(3) * dt)
     npt.assert_array_equal(step[0, 0], 0)
     npt.assert_allclose(step[0, 1], (dt / tau) ** 2, rtol=1e-6)
 
@@ -684,48 +689,42 @@ _ALPHA_RUNS = {
 def test_AlphaTemporal_run_composition_matches_recurrence(case):
     """A composed constant-drive run matches the float64 recurrence
 
-    `alpha_fast` advances both stages across a whole constant-drive run at
-    once.
+    The model advances both stages across a whole constant-drive run at once.
     """
     data, t_stim, tau, t_percept = _ALPHA_RUNS[case]
     dt = 0.05
     data = np.array(data, dtype=np.float32)
     t_stim = np.array(t_stim, dtype=np.float32)
     idx = np.uint32(np.round(np.array(t_percept) / dt))
+    model = AlphaTemporal(dt=dt, tau=tau)
     got = {}
-    for reduce_peak in (0, 1):
-        got[reduce_peak] = np.asarray(
-            alpha_fast(data, t_stim, idx, dt, tau, 0.0, 1, reduce_peak))
+    for reduce in ('last', 'peak'):
+        got[reduce] = _predict(model, data, t_stim, t_percept, reduce)
         npt.assert_allclose(
-            got[reduce_peak],
-            _alpha_reference(data, t_stim, idx, dt, tau, bool(reduce_peak)),
+            got[reduce],
+            _alpha_reference(data, t_stim, idx, dt, tau, reduce == 'peak'),
             rtol=1e-5, atol=1e-6)
     # The interval includes its end point, so peak >= last exactly:
-    npt.assert_equal(np.all(got[1] >= got[0]), True)
+    npt.assert_equal(np.all(got['peak'] >= got['last']), True)
 
 
 def test_AlphaTemporal_peak_is_exact():
-    """The in-kernel peak equals the max over every simulation step
+    """The sparse peak equals the max of a dense stepwise reference
 
-    Not bit-exact: `alpha_fast` composes steps between output points into one
-    update, so dense and sparse output have different rounding.
+    Not bit-exact: the model composes steps between output points into one
+    update.
     """
     rng = np.random.default_rng(3)
     data = (rng.random((5, 12)) - 0.5).astype(np.float32) * 40
     t_stim = (np.arange(12) * 4.0).astype(np.float32)
     dt, tau = 0.05, 20.0
-    n_sim = int(round(44 / dt)) + 1
-    dense = alpha_fast(data, t_stim, np.arange(n_sim, dtype=np.uint32), dt,
-                       tau, 0.0, 1, 0)
-    out = np.array([37, 210, 400, 601, 880], dtype=np.uint32)
-    peak = alpha_fast(data, t_stim, out, dt, tau, 0.0, 1, 1)
-    last = alpha_fast(data, t_stim, out, dt, tau, 0.0, 1, 0)
-    # Each interval runs from the previous output point up to and including
-    # this one:
-    lo = np.r_[0, out[:-1]]
-    brute = np.stack([dense[:, a:b + 1].max(axis=1)
-                      for a, b in zip(lo, out)], axis=1)
-    npt.assert_allclose(peak, brute, rtol=1e-5)
+    dense = _alpha_reference(data, t_stim, np.arange(int(round(44 / dt)) + 1),
+                             dt, tau)
+    out = np.array([37, 210, 400, 601, 880])
+    model = AlphaTemporal(dt=dt, tau=tau)
+    peak = _predict(model, data, t_stim, out * dt, 'peak')
+    last = _predict(model, data, t_stim, out * dt, 'last')
+    npt.assert_allclose(peak, _interval_max(dense, out), rtol=1e-5)
     npt.assert_allclose(last, dense[:, out], rtol=1e-5)
     npt.assert_equal(np.all(peak >= last), True)
     npt.assert_equal(np.any(peak > last), True)
@@ -733,16 +732,14 @@ def test_AlphaTemporal_peak_is_exact():
     # An interval whose max is at neither end (tests the turning-point search):
     single = np.array([[-60.0, 0.0]], dtype=np.float32)
     edges = np.array([0.0, 2.0], dtype=np.float32)
-    fine = np.asarray(alpha_fast(single, edges,
-                                 np.arange(1201, dtype=np.uint32), dt, 8.0,
-                                 0.0, 1, 0)).ravel()
+    fine = _alpha_reference(single, edges, np.arange(1201), dt, 8.0)
     npt.assert_equal(0 < int(fine.argmax()) < 1200, True)
-    span = np.array([40, 400, 1200], dtype=np.uint32)
-    got = np.asarray(alpha_fast(single, edges, span, dt, 8.0, 0.0, 1,
-                                1)).ravel()
-    lo = np.r_[0, span[:-1]]
-    npt.assert_allclose(
-        got, [fine[a:b + 1].max() for a, b in zip(lo, span)], rtol=1e-5)
+    span = np.array([40, 400, 1200])
+    got = _predict(AlphaTemporal(dt=dt, tau=8.0), single, edges, span * dt,
+                   'peak')
+    npt.assert_allclose(got, _interval_max(fine, span), rtol=1e-5)
+    # The interior maximum is above both ends of its interval:
+    npt.assert_array_less(fine[0, [40, 400]], got[0, 1])
 
 
 def test_AlphaTemporal_reduce():
@@ -764,30 +761,20 @@ def test_AlphaTemporal_reduce():
     npt.assert_equal(np.any(peaked.data > got.data), True)
 
 
-@pytest.mark.parametrize('n_space', (1, 64, 65))
-def test_AlphaTemporal_block_boundaries(n_space):
-    """Locations are integrated in fixed-size blocks, the last one partial
-
-    `alpha_fast` has its own block handling (two states per location).
-    """
-    model = AlphaTemporal(dt=0.05, tau=30).build()
-    rng = np.random.default_rng(n_space)
-    data = (rng.random((n_space, 4)) - 0.7).astype(np.float32)
-    stim = Stimulus(data, time=np.arange(4, dtype=float) * 5)
-    t = [0, 5, 10, 15]
-    percept = model.predict_percept(stim, t_percept=t)
-    npt.assert_equal(percept.data.shape, (n_space, 1, 4))
-    single = np.stack([
-        model.predict_percept(Stimulus(data[i:i + 1], time=stim.time),
-                              t_percept=t).data.ravel()
-        for i in range(n_space)])
-    npt.assert_array_equal(percept.data.reshape(n_space, -1), single)
-    # The result does not depend on the number of threads:
-
-    for n_threads in (2, 3, 8):
-        parallel = AlphaTemporal(dt=0.05, tau=30, n_threads=n_threads).build(
-        ).predict_percept(stim, t_percept=t).data
-        npt.assert_array_equal(parallel, percept.data)
+@pytest.mark.parametrize('model_cls', (FadingTemporal, AlphaTemporal))
+def test_generic_temporal_thresh_percept_is_inclusive(model_cls):
+    """Values with ``|value| == thresh_percept`` are kept"""
+    data = [[-40.0, 0.0]]
+    t = [1.0, 2.0, 3.0, 6.0]
+    plain = _predict(model_cls(tau=2, dt=0.05), data, [0.0, 2.0], t)
+    npt.assert_equal(np.unique(plain).size, len(t))
+    # The second-smallest value:
+    thresh = float(np.sort(plain.ravel())[1])
+    got = _predict(model_cls(tau=2, dt=0.05, thresh_percept=thresh), data,
+                   [0.0, 2.0], t)
+    npt.assert_array_equal(got, np.where(np.abs(plain) >= thresh, plain, 0))
+    npt.assert_equal(np.sum(got == thresh), 1)
+    npt.assert_equal(np.sum(got == 0), 1)
 
 
 @pytest.mark.parametrize('bad', [np.nan, np.inf])

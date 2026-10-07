@@ -11,10 +11,10 @@ Highlights
 ----------
 
 * A ``Model`` combining retinal or cortical ``ScoreboardSpatial``, or
-  ``AxonMapSpatial``, with ``FadingTemporal`` supports differentiable Torch
-  execution from electrode waveforms, or from grayscale image or video pixels
-  through ``AmplitudeEncoder``. ``predict_percept`` runs these
-  composites on Torch internally. PyTorch (>= 2.7.0) is now a required
+  ``AxonMapSpatial``, with ``FadingTemporal`` or ``AlphaTemporal`` supports
+  differentiable Torch execution from electrode waveforms, or from grayscale
+  image or video pixels through ``AmplitudeEncoder``. ``predict_percept`` runs
+  these composites on Torch internally. PyTorch (>= 2.7.0) is now a required
   dependency; Intel Macs are no longer supported (:pull:`937`, :pull:`938`,
   :pull:`939`, :pull:`941`, :pull:`942`, :pull:`943`).
 
@@ -41,6 +41,10 @@ API changes and improvements
   enter Torch before electrode sampling, sharing one implementation with the
   differentiable path; ``Stimulus`` and ``Percept`` stay NumPy-based
   (:pull:`951`).
+
+* ``FadingTemporal`` and ``AlphaTemporal`` now run on Torch everywhere,
+  replacing the generic temporal Cython extension, and no longer take
+  ``n_threads``/``n_jobs`` (:pull:`952`).
 
 Bug fixes
 ---------

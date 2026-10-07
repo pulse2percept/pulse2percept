@@ -20,9 +20,8 @@ The PRIMA scenario runs its optical encoder directly. Electrical image
 scenarios use :func:`as_current` to keep their historical benchmark workload.
 
 Together the scenarios reach every compiled kernel used in percept prediction:
-``_granley2021``, ``_nanduri2012``, ``_horsager2009``, ``_thompson2003`` and
-the shared ``_temporal`` loop. A new scenario should reach a kernel no existing
-scenario reaches.
+``_granley2021``, ``_nanduri2012``, ``_horsager2009`` and ``_thompson2003``.
+A new scenario should reach a kernel no existing scenario reaches.
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -107,8 +106,7 @@ def axonmap_fading(implant, verbose, n_threads, **axon_cache):
         spatial=p2p.models.retina.AxonMapSpatial(
             implant, xrange=(-12, 12), yrange=(-8, 8), verbose=verbose,
             **axon_cache),
-        temporal=p2p.models.FadingTemporal(verbose=verbose,
-                                           n_threads=n_threads))
+        temporal=p2p.models.FadingTemporal(verbose=verbose))
 
 
 @dataclass(frozen=True)
@@ -221,19 +219,17 @@ SCENARIOS = [
         model=lambda **kwargs: p2p.models.retina.Thompson2003Model(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
     ),
-    # Composed Model (separate spatial + temporal). Reaches the generic
-    # _temporal kernel shared by FadingTemporal and others:
+    # Composed Model (separate spatial + temporal) on the Torch core. Both
+    # components use Torch threads, so `n_threads` is unused:
     Scenario(
         id='argus2_scoreboard_fading_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
         implant=p2p.implants.retina.ArgusII,
-        # `Model` takes components; only FadingTemporal takes `n_threads`:
         model=lambda implant, verbose, n_threads: p2p.models.Model(
             spatial=p2p.models.retina.ScoreboardSpatial(
                 implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5,
                 verbose=verbose),
-            temporal=p2p.models.FadingTemporal(verbose=verbose,
-                                               n_threads=n_threads)),
+            temporal=p2p.models.FadingTemporal(verbose=verbose)),
     ),
     # AxonMap + Fading: the composite runs the Torch AxonMap core on every
     # electrode, the spatial-only scenarios on the compressed stimulus:
