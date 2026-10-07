@@ -111,7 +111,8 @@ def test_Encoder_implant_is_constructor_state(build, make_implant):
     unbound = build(None)
     npt.assert_equal(unbound.implant, None)
     direct = unbound.encode(implant.reshape_stim(img))
-    npt.assert_array_equal(first.data, direct.data)
+    # Torch and SciPy sampling round differently in float32:
+    npt.assert_allclose(first.data, direct.data, rtol=1e-6, atol=1e-5)
     npt.assert_array_equal(first.time, direct.time)
     # Without an implant, every pixel is a stimulation site:
     npt.assert_equal(unbound.encode(img).shape[0], img.data.shape[0])
@@ -143,9 +144,10 @@ def test_Encoder_binding_cannot_migrate():
     npt.assert_equal(implant_b.encoder, None)
     # Encoding still samples at implant A's electrodes:
     img = ImageStimulus(np.random.default_rng(0).random((12, 12)))
-    npt.assert_array_equal(
+    npt.assert_allclose(
         implant_a.prepare_stim(img).data,
-        implant_a.prepare_stim(implant_a.reshape_stim(img)).data)
+        implant_a.prepare_stim(implant_a.reshape_stim(img)).data,
+        rtol=1e-6, atol=1e-5)
 
 
 def test_Encoder_rejects_non_implant():
@@ -531,8 +533,9 @@ def _assert_same_encoding(stim, expected):
     assert type(stim) is type(expected) and stim.unit == expected.unit
     npt.assert_equal(list(stim.electrodes), list(expected.electrodes))
     npt.assert_equal(stim.time, expected.time)
-    npt.assert_equal(stim.data, expected.data)
-    npt.assert_equal(stim._amp, expected._amp)
+    # Torch and SciPy sampling round differently in float32:
+    npt.assert_allclose(stim.data, expected.data, rtol=1e-6, atol=1e-5)
+    npt.assert_allclose(stim._amp, expected._amp, rtol=1e-6, atol=1e-5)
     npt.assert_equal(stim._freq, expected._freq)
     # The same pulse schedules, not just the same waveform:
     npt.assert_equal(stim._sched, expected._sched)

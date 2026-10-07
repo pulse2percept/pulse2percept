@@ -9,6 +9,7 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 import math
+import warnings
 import numpy as np
 from copy import deepcopy
 from scipy.ndimage import distance_transform_edt
@@ -1257,11 +1258,15 @@ class AmplitudeEncoder(PulseEncoder):
     def _encode_pixels(self, source, pixels):
         """Return Torch amplitudes and ``encode(source)`` of a gray stimulus.
 
-        ``pixels`` come from ``_gray_pixels(source)``. Gray levels are sampled
-        in float64 and modulated in float32, as in ``_sampled_frames``.
+        ``pixels`` come from ``_gray_pixels(source)``. Gray levels are
+        modulated in float32, as in ``_sampled_frames``.
         """
         import torch
-        gray = self._tensor_gray(torch.tensor(pixels), dtype=torch.float32)
+        with warnings.catch_warnings():
+            # Stimulus data is read-only, and sampling does not write to it:
+            warnings.filterwarnings('ignore', message='.*not writable')
+            pixels = torch.as_tensor(pixels)
+        gray = self._tensor_gray(pixels, dtype=torch.float32)
         time = source.time
         frame_time, frame_dur = _frame_timing(
             time, 1 if gray.ndim == 1 else gray.shape[1],

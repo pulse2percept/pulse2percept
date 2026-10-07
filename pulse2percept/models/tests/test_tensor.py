@@ -793,7 +793,8 @@ def _assert_same_percept(percept, expected):
                      expected.metadata.get('source_frame_time'))
     stim, ref = percept.metadata['stim'], expected.metadata['stim']
     assert type(stim) is type(ref) and stim.unit == ref.unit
-    npt.assert_equal(stim.data, ref.data)
+    # Torch and SciPy sampling round differently in float32:
+    npt.assert_allclose(stim.data, ref.data, rtol=RTOL, atol=ATOL)
     npt.assert_equal(stim.electrodes, ref.electrodes)
     npt.assert_equal(stim.time, ref.time)
 

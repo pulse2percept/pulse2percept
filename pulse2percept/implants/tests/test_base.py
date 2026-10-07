@@ -216,8 +216,7 @@ def test_Implant__sample_image_tensor(rot):
         torch.tensor(img, dtype=torch.float32))
     assert sampled.dtype == torch.float32
     assert sampled.shape == (implant.n_electrodes,)
-    # float64 accumulation, as in SciPy:
-    npt.assert_equal(sampled.numpy(), expected.data.ravel())
+    npt.assert_allclose(sampled.numpy(), expected.data.ravel(), atol=1e-6)
 
 
 @pytest.mark.parametrize('rot', (0, 30))
@@ -232,7 +231,7 @@ def test_Implant__sample_image_tensor_video(rot):
     sampled = implant._sample_image_tensor(
         torch.tensor(vid, dtype=torch.float32))
     assert sampled.shape == (implant.n_electrodes, 4)
-    npt.assert_equal(sampled.numpy(), expected.data)
+    npt.assert_allclose(sampled.numpy(), expected.data, atol=1e-6)
     # Frames are sampled independently, never across time:
     for f in range(4):
         npt.assert_allclose(sampled[:, f].numpy(),
