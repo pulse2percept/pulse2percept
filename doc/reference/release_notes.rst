@@ -60,6 +60,10 @@ Bug fixes
 * ``Stimulus.compress`` no longer drops Inf samples or electrodes driven only
   at Inf (:pull:`950`).
 
+* ``Nanduri2012Spatial`` no longer returns NaN beneath an electrode with
+  negative ``z``; current spread now depends on ``|z|`` as documented
+  (:pull:`953`).
+
 
 v0.11.0 Foundations (2026-09-30)
 ================================

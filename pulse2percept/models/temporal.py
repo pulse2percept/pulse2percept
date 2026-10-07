@@ -172,7 +172,7 @@ def _flush_denormals():
     is ~20x slower."""
     import torch
     # Torch has no getter; probe whether flushing is already on:
-    was_on = (torch.tensor(1e-39) * 1.0).item() == 0
+    was_on = (torch.tensor(1e-39, dtype=torch.float32) * 1.0).item() == 0
     torch.set_flush_denormal(True)
     try:
         yield
@@ -232,8 +232,10 @@ def _charge_chunks(model, data, time, t_percept, drive_sign, merge=True,
     # `unbind` keeps the backward pass linear in the number of chunks:
     drive = (drive_sign * data).unbind(0)
     dq = (torch.clamp(data, min=0) * float(dt)).unbind(0)
-    # The bound in `_quiet_after` requires nonnegative eps and poles:
-    skip_quiet = skip_quiet and eps >= 0 and a1 <= 1 and a2 <= 1
+    # The bound in `_quiet_after` requires finite, nonnegative eps and
+    # decaying, nonnegative poles; otherwise every step is computed:
+    skip_quiet = (skip_quiet and np.isfinite(eps) and eps >= 0 and
+                  0 < a1 <= 1 and 0 < a2 <= 1)
     zero = (data == 0).all(dim=1).tolist()
     r1 = r2 = charge = data.new_zeros(data.shape[1])
     fast, slow, carry = {}, {}, {}

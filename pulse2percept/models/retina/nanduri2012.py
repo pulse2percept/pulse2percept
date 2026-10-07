@@ -226,22 +226,14 @@ class Nanduri2012Spatial(RetinalSpatial):
         # Python floats holding float32 values keep Torch in float32:
         atten_a = float(np.float32(self.atten_a))
         atten_n = float(np.float32(self.atten_n))
-        d2c = (x - x_el) ** 2 + (y - y_el) ** 2
-        d2e = (d2c.sqrt() - r_el) ** 2 + z_el ** 2
-        # Beneath the disk, the legacy kernel uses z**atten_n, not
-        # |z|**atten_n, which is NaN for z < 0 and non-integer atten_n:
-        dist_n = torch.where(d2c < r_el ** 2, z_el ** atten_n,
-                             d2e.sqrt() ** atten_n)
-        weights = atten_a / (atten_a + dist_n)
+        # Distance to the nearest point of the disk; depends on |z| only:
+        edge = torch.clamp(((x - x_el) ** 2 + (y - y_el) ** 2).sqrt() - r_el,
+                           min=0)
+        dist = (edge ** 2 + z_el ** 2).sqrt()
+        weights = atten_a / (atten_a + dist ** atten_n)
         # Unmapped grid points are zero:
         weights = torch.where(x.isnan() | y.isnan(), 0.0, weights)
-        nan = weights.isnan()
-        resp = torch.where(nan, 0.0, weights).to(waveform.dtype) @ waveform
-        if nan.any():
-            # The legacy kernel skips zero amplitudes, so a NaN weight only
-            # reaches nonzero drive:
-            hit = nan.to(waveform.dtype) @ (waveform != 0).to(waveform.dtype)
-            resp = torch.where(hit > 0, torch.nan, resp)
+        resp = weights.to(waveform.dtype) @ waveform
         thresh = float(np.float32(self.thresh_percept))
         # Zeroes only `|resp| < thresh`, so NaN propagates. `+ 0.0` turns -0.0
         # into 0.0:

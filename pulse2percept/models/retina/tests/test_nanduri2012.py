@@ -462,12 +462,11 @@ def test_Nanduri2012Spatial_nan_grid_point_is_zero():
         npt.assert_equal(np.all(got[[0, 2, 3, 4]] > 0), True)
 
 
-def test_Nanduri2012Spatial_negative_z_beneath_disk():
-    # Legacy: beneath the disk the kernel uses z**atten_n, not |z|**atten_n,
-    # which is NaN for z < 0. Only electrodes with nonzero current add NaN:
-    model = _disk_spatial([DiskElectrode(0, 0, -20, 200),
-                           DiskElectrode(560, 0, 0, 100)])
-    for amps, nan in (([20, 5], True), ([0, 5], False)):
-        for got in _spatial_paths(model, amps):
-            npt.assert_equal(np.isnan(got[:2]).all(), nan)
-            npt.assert_equal(np.isnan(got[2:]).any(), False)
+def test_Nanduri2012Spatial_sign_of_z():
+    # Current spread depends on distance, so z = +20 and -20 agree, also
+    # beneath the disk:
+    above, below = (_spatial_paths(_disk_spatial(DiskElectrode(0, 0, z, 200)),
+                                   [20]) for z in (20, -20))
+    for got, want in zip(below, above):
+        npt.assert_equal(np.isfinite(got).all(), True)
+        npt.assert_array_equal(got, want)
