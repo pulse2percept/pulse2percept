@@ -185,7 +185,18 @@ def test_defaults_match_declared_defaults(cls, _):
                                     {'n_threads': 3, 'n_jobs': 2}])
 def test_n_jobs_is_an_alias_for_n_threads(kwargs):
     # `n_jobs` writes through to `n_threads`, and wins when both are given.
-    # Granley's Cython kernels keep OpenMP threads:
+    # Granley's, Nanduri's and Horsager's Cython kernels keep OpenMP threads:
     for cls in (BiphasicAxonMapModel, BiphasicScoreboardModel):
         npt.assert_equal(cls(ArgusII(), **kwargs).spatial.n_threads, 2)
-    npt.assert_equal(FadingTemporal(**kwargs).n_threads, 2)
+    for cls in (Nanduri2012Temporal, Horsager2009Temporal):
+        npt.assert_equal(cls(**kwargs).n_threads, 2)
+
+
+@pytest.mark.parametrize('cls', (FadingTemporal, AlphaTemporal))
+def test_generic_temporal_has_no_thread_params(cls):
+    # Removed in 0.12: prediction runs on Torch:
+    for param in ('n_threads', 'n_jobs'):
+        npt.assert_equal(param in inspect.signature(cls).parameters, False)
+        npt.assert_equal(param in cls().get_default_params(), False)
+        with pytest.raises(TypeError):
+            cls(**{param: 2})

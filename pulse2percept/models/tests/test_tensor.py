@@ -1,4 +1,4 @@
-"""Torch execution of {Scoreboard,AxonMap}Spatial -> FadingTemporal."""
+"""Torch execution of {Scoreboard,AxonMap}Spatial -> {Fading,Alpha}Temporal."""
 from dataclasses import replace
 
 import numpy as np
@@ -33,7 +33,7 @@ RTOL, ATOL = 1e-6, 1e-5
 
 def _staged_percept(model, source, t_percept=None):
     """Return the percept of the staged route: NumPy encoding, the spatial
-    response, then the temporal model's Cython kernel.
+    response, then the temporal model's NumPy route.
 
     Reference for the Torch composite, which ``Model.predict_percept`` uses.
     """
@@ -68,8 +68,8 @@ def _spatial(**params):
     return ScoreboardSpatial(ArgusI(), **params)
 
 
-def _model(reduce='peak', **params):
-    return Model(_spatial(**params), FadingTemporal(tau=2, reduce=reduce))
+def _model(reduce='peak', temporal=FadingTemporal, **params):
+    return Model(_spatial(**params), temporal(tau=2, reduce=reduce))
 
 
 def _scoreboard_reference(spatial, wf):
@@ -236,29 +236,74 @@ def test_blend_meridian_tensor_gradcheck(meridian):
         lambda r: _blend_meridian(r, grid, meridian, 1.0), (resp,))
 
 
+@pytest.mark.parametrize('temporal', [FadingTemporal, AlphaTemporal])
+@pytest.mark.parametrize('dtype', [torch.float32, torch.float64])
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
 @pytest.mark.parametrize('t_percept', [None, [0.3, 0.305, 1.0, 2.0, 50.0]])
-def test_FadingTemporal_tensor_parity(reduce, t_percept):
-    temporal = FadingTemporal(tau=2, reduce=reduce, thresh_percept=0.1)
+def test_generic_temporal_tensor_parity(temporal, dtype, reduce, t_percept):
+    temporal = temporal(tau=2, reduce=reduce, thresh_percept=0.1)
     wf = _waveform(8)
     expected = temporal.predict_percept(Stimulus(wf, time=TIME),
                                         t_percept=t_percept)
     resp = temporal._predict_response(
-        _ModelResponse(torch.tensor(wf, dtype=torch.float32), TIME, ms,
+        _ModelResponse(torch.tensor(wf, dtype=dtype), TIME, ms,
                        (wf.shape[0],)), t_percept=t_percept)
     assert isinstance(resp.data, torch.Tensor)
+    assert resp.data.dtype == dtype
+    assert expected.data.dtype == np.float32
     npt.assert_allclose(resp.time, expected.time)
     assert np.any(expected.data > 0)
     assert torch.all(resp.data[::4] == 0)
+    # float64 differs from the float32 public route by float32 rounding:
     npt.assert_allclose(resp.data.numpy(),
                         expected.data.reshape(resp.data.shape),
-                        rtol=RTOL, atol=ATOL)
+                        rtol=RTOL if dtype == torch.float32 else 1e-5,
+                        atol=ATOL)
 
 
+def _temporal_gradcheck(temporal, data, time, t_percept, reduce):
+    """Gradcheck the temporal response to float64 ``data`` at fixed timing."""
+    temporal.build()
+    t_percept = np.asarray(t_percept, dtype=float)
+
+    def predict(d):
+        resp = _ModelResponse(d, np.asarray(time, dtype=float), ms,
+                              (d.shape[0],))
+        return temporal._predict_temporal_tensor(resp, t_percept, reduce)
+
+    assert torch.autograd.gradcheck(
+        predict, (torch.tensor(data, dtype=torch.float64,
+                               requires_grad=True),))
+
+
+@pytest.mark.parametrize('temporal', [FadingTemporal, AlphaTemporal])
+def test_generic_temporal_gradcheck_last(temporal):
+    # Cathodic throughout, so rectification is smooth:
+    data = -np.random.default_rng(4).uniform(1, 5, (3, 6))
+    _temporal_gradcheck(temporal(tau=1, dt=0.05), data,
+                        [0, 0.5, 1.1, 2, 3.3, 4], [0.5, 1.5, 2.5, 5.0],
+                        'last')
+
+
+@pytest.mark.parametrize('temporal, data, time, t_percept', [
+    # Alternating cathodic and anodic frames; each interval's peak is a
+    # unique run end:
+    (FadingTemporal(tau=1, dt=0.05), [[-3, 2, -5, 2, -4, 2],
+                                      [-1, 1, -2, 3, -6, 1]],
+     [0, 1, 2, 3, 4, 5], [2.5, 5.5]),
+    # Stage 2 peaks inside the (2, 20] ms interval:
+    (AlphaTemporal(tau=8, dt=0.05), [[-60, 2], [-40, 3]], [0, 2],
+     [2, 20, 60]),
+])
+def test_generic_temporal_gradcheck_peak(temporal, data, time, t_percept):
+    _temporal_gradcheck(temporal, data, time, t_percept, 'peak')
+
+
+@pytest.mark.parametrize('temporal', [FadingTemporal, AlphaTemporal])
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
 @pytest.mark.parametrize('t_percept', [None, [0.5, 1.0, 2.0, 25.0, 60.0]])
-def test_Model_tensor_parity(reduce, t_percept):
-    model = _model(reduce=reduce)
+def test_Model_tensor_parity(reduce, t_percept, temporal):
+    model = _model(reduce=reduce, temporal=temporal)
     wf = _waveform(model.implant.n_electrodes)
     expected = _staged_percept(
         model,
@@ -273,11 +318,12 @@ def test_Model_tensor_parity(reduce, t_percept):
                         rtol=RTOL, atol=ATOL)
 
 
+@pytest.mark.parametrize('temporal', [FadingTemporal, AlphaTemporal])
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
-def test_Model_tensor_autograd(reduce):
+def test_Model_tensor_autograd(reduce, temporal):
     # rho=200 puts bright points within the cutoff (about 5.3 rho) of the
     # silent electrodes, 800 um from their neighbors:
-    model = _model(reduce=reduce, rho=200)
+    model = _model(reduce=reduce, temporal=temporal, rho=200)
     waveform = torch.tensor(_waveform(model.implant.n_electrodes),
                             dtype=torch.float32, requires_grad=True)
     resp = model._predict_tensor(waveform, TIME,
@@ -347,7 +393,6 @@ def test_Model_tensor_errors():
 
 @pytest.mark.parametrize('model', [
     Model(Thompson2003Spatial(ArgusI()), FadingTemporal()),
-    Model(_spatial(), AlphaTemporal()),
     Model(_spatial()),
     Model(temporal=FadingTemporal()),
 ])
@@ -377,13 +422,14 @@ def _encoding_implant(implant=None, amp_range=(10, 50)):
     return implant
 
 
-def _image_model(implant=None, reduce='peak', amp_range=(10, 50), **params):
-    """Scoreboard + Fading model whose implant encodes images."""
+def _image_model(implant=None, reduce='peak', amp_range=(10, 50),
+                 temporal=FadingTemporal, **params):
+    """Scoreboard + generic temporal model whose implant encodes images."""
     implant = _encoding_implant(implant, amp_range)
     params = {'xrange': (-6, 6), 'yrange': (-5, 5), 'step': 0.5,
               'thresh_percept': 0, **params}
     return Model(ScoreboardSpatial(implant, **params),
-                 FadingTemporal(tau=2, reduce=reduce)).build()
+                 temporal(tau=2, reduce=reduce)).build()
 
 
 # Output times within the 100 ms image frame:
@@ -742,9 +788,9 @@ def test_AxonMapModel_tensor_float64():
 COMPOSITES = ['retina', 'cortex', 'axonmap']
 
 
-def _composite(kind, reduce='peak'):
+def _composite(kind, reduce='peak', temporal=FadingTemporal):
     """Return a built composite that predicts on the Torch core."""
-    temporal = FadingTemporal(tau=2, reduce=reduce)
+    temporal = temporal(tau=2, reduce=reduce)
     if kind == 'retina':
         return Model(_spatial(), temporal).build()
     if kind == 'cortex':
@@ -799,11 +845,13 @@ def _assert_same_percept(percept, expected):
     npt.assert_equal(stim.time, ref.time)
 
 
+@pytest.mark.parametrize('temporal', [FadingTemporal, AlphaTemporal])
 @pytest.mark.parametrize('kind', COMPOSITES)
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
 @pytest.mark.parametrize('t_percept', [None, [0.5, 1.0, 2.0, 25.0, 60.0]])
-def test_Model_predict_percept_torch_parity(kind, reduce, t_percept):
-    model = _composite(kind, reduce=reduce)
+def test_Model_predict_percept_torch_parity(kind, reduce, t_percept,
+                                            temporal):
+    model = _composite(kind, reduce=reduce, temporal=temporal)
     source = Stimulus(_waveform(model.implant.n_electrodes),
                       electrodes=model.implant.electrode_names, time=TIME)
     _assert_same_percept(model.predict_percept(source, t_percept=t_percept),
@@ -862,6 +910,20 @@ def test_Model_predict_percept_torch_image_axonmap():
     source = ImageStimulus(_black_left((13, 17)))
     _assert_same_percept(model.predict_percept(source),
                          _staged_percept(model, source))
+
+
+@pytest.mark.parametrize('video', [False, True])
+def test_Model_predict_percept_torch_visual_alpha(video, monkeypatch):
+    model = _image_model(amp_range=(0, 50), temporal=AlphaTemporal)
+    source = (VideoStimulus(_black_left((13, 17, 6)), metadata={'fps': 29.97})
+              if video else ImageStimulus(_black_left((13, 17))))
+    expected = _staged_percept(model, source)
+
+    def staged(*args, **kwargs):
+        raise AssertionError("Staged path called")
+
+    monkeypatch.setattr(AlphaTemporal, '_predict_temporal', staged)
+    _assert_same_percept(model.predict_percept(source), expected)
 
 
 @pytest.mark.parametrize('frame_dur', [None, 40])
@@ -958,7 +1020,7 @@ def _unsupported(model, case):
                                            yrange=(-5, 5), step=0.5,
                                            thresh_percept=0)
     elif case == 'temporal':
-        model.temporal = AlphaTemporal(tau=2)
+        model.temporal = _HalvedFading(tau=2)
     return ImageStimulus(pixels)
 
 
@@ -979,15 +1041,16 @@ def test_Model_predict_percept_visual_fallback(case, monkeypatch):
     _assert_same_percept(model.predict_percept(source), expected)
 
 
+@pytest.mark.parametrize('temporal', [FadingTemporal, AlphaTemporal])
 @pytest.mark.parametrize('kind', COMPOSITES)
-def test_Model_predict_percept_skips_staged_path(kind, monkeypatch):
-    model = _composite(kind)
+def test_Model_predict_percept_skips_staged_path(kind, temporal, monkeypatch):
+    model = _composite(kind, temporal=temporal)
 
     def staged(*args, **kwargs):
         raise AssertionError("Staged path called")
 
     monkeypatch.setattr(type(model.spatial), '_predict_spatial', staged)
-    monkeypatch.setattr(FadingTemporal, '_predict_temporal', staged)
+    monkeypatch.setattr(temporal, '_predict_temporal', staged)
     source = Stimulus(_waveform(model.implant.n_electrodes),
                       electrodes=model.implant.electrode_names, time=TIME)
     assert np.abs(model.predict_percept(source).data).max() > 0
@@ -1020,7 +1083,6 @@ def _subclassed(spatial=ScoreboardSpatial, temporal=FadingTemporal):
 @pytest.mark.parametrize('model, reference', [
     (lambda: Model(_spatial(n_gray=8), FadingTemporal(tau=2)),
      _staged_percept),
-    (lambda: Model(_spatial(), AlphaTemporal(tau=2)), _staged_percept),
     (lambda: _subclassed(spatial=_DoubledScoreboard), _staged_percept),
     (lambda: _subclassed(spatial=_DoubledResponse), _staged_percept),
     (lambda: _subclassed(temporal=_HalvedFading), _staged_percept),
