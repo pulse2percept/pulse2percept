@@ -2,11 +2,10 @@
    :py:class:`~pulse2percept.models.retina.Nanduri2012Spatial`, 
    :py:class:`~pulse2percept.models.retina.Nanduri2012Temporal` [Nanduri2012]_"""
 import numpy as np
-from ..base import Model, TemporalModel, _thread_params
-from ._nanduri2012 import spatial_fast, temporal_fast
+from ..base import Model, TemporalModel
+from ..temporal import _charge_chunks, _flush_denormals, _on_torch
 from .base import RetinalSpatial
-from ...implants import ElectrodeArray, DiskElectrode
-from ...stimuli import Stimulus
+from ...implants import DiskElectrode
 from ...topography.retina import Curcio1990Map
 from ...units import ms
 
@@ -16,6 +15,12 @@ def _require_disk_electrodes(electrodes):
     if not all(isinstance(e, DiskElectrode) for e in electrodes):
         raise TypeError("The Nanduri2012 spatial model only supports "
                         "DiskElectrode arrays.")
+
+
+def _radii(electrode_array, names):
+    """Return the float32 radii (microns) of the named electrodes."""
+    return np.array([electrode_array[e].radius for e in names],
+                    dtype=np.float32)
 
 
 class Nanduri2012Spatial(RetinalSpatial):
@@ -132,10 +137,10 @@ class Nanduri2012Spatial(RetinalSpatial):
             Whether to print status messages.
         ndim : list of int, optional
             Dimensionalities of ``visual_field_map`` accepted by the model.
-        n_threads : int, optional
-            Number of OpenMP threads.
-        n_jobs : int or None, optional
-            Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+        .. versionchanged:: 0.12.0
+
+            Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
         """
 
     def __init__(self, implant, *, atten_a=14000, atten_n=1.69,
@@ -145,7 +150,7 @@ class Nanduri2012Spatial(RetinalSpatial):
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
-                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+                 verbose=True, ndim=None):
         super().__init__(
             implant, atten_a=atten_a, atten_n=atten_n, xrange=xrange,
             yrange=yrange, step=step, grid_type=grid_type,
@@ -157,32 +162,82 @@ class Nanduri2012Spatial(RetinalSpatial):
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
-            ndim=[2] if ndim is None else ndim,
-            **_thread_params(n_threads, n_jobs))
+            ndim=[2] if ndim is None else ndim)
 
     def get_default_params(self):
         """Return default model parameters."""
         base_params = super(Nanduri2012Spatial, self).get_default_params()
+        # Prediction runs on Torch's own thread pool:
+        del base_params['n_threads'], base_params['n_jobs']
         params = {'atten_a': 14000, 'atten_n': 1.69}
         return {**base_params, **params}
 
     def _predict_spatial(self, electrode_array, stim):
-        """Predict the spatial response."""
+        """Predict float32 brightness over the spatial grid."""
+        import torch
         # The bound implant may have changed since the last build.
         _require_disk_electrodes(electrode_array.electrode_objects)
         x_el, y_el, z_el = self._electrode_coords(electrode_array, stim)
-        # Radius is not part of the coordinate array.
-        r_el = np.ascontiguousarray([electrode_array[e].radius
-                                     for e in stim.electrodes],
-                                    dtype=np.float32)
-        return spatial_fast(self._stim_values(stim), x_el, y_el, z_el,
-                            r_el,
-                            self.grid.ret.x.ravel(),
-                            self.grid.ret.y.ravel(),
-                            self.atten_a,
-                            self.atten_n,
-                            self.thresh_percept,
-                            self.n_threads)
+        r_el = _radii(electrode_array, stim.electrodes)
+        values = self._stim_values(stim)
+        # Silent electrodes add nothing here. `_predict_tensor` keeps them,
+        # so they still receive gradients:
+        active = np.any(np.abs(values) > 0, axis=1)
+        waveform = torch.tensor(values[active], dtype=torch.float32)
+        with torch.inference_mode():
+            return self._predict_nanduri_tensor(
+                waveform, x_el[active], y_el[active], z_el[active],
+                r_el[active]).numpy()
+
+    def _predict_tensor(self, waveform, time):
+        """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
+
+        Runs the ``predict_percept`` kernel on every implant electrode, so
+        silent electrodes still receive gradients. Geometry is fixed.
+        """
+        if self.n_gray is not None:
+            # Quantization is discrete and has no exact gradient:
+            raise NotImplementedError("Tensor prediction does not support "
+                                      "n_gray; set n_gray=None.")
+        electrode_array = self.implant.electrode_array
+        _require_disk_electrodes(electrode_array.electrode_objects)
+        names = self.implant.electrode_names
+        x_el, y_el, z_el = self._electrode_coords(electrode_array, None,
+                                                  electrodes=names)
+        resp = self._predict_nanduri_tensor(waveform, x_el, y_el, z_el,
+                                            _radii(electrode_array, names))
+        return self._spatial_response(resp, time, None)
+
+    def _predict_nanduri_tensor(self, waveform, x_el, y_el, z_el, r_el):
+        """Return the flat thresholded ``(P, T)`` response.
+
+        ``waveform`` rows follow the float32 electrode coordinates and radii
+        (microns). Geometry and weights are float32; the response has the
+        dtype and device of ``waveform``.
+        """
+        import torch
+        device = waveform.device
+        x, y = (torch.as_tensor(np.ravel(c), dtype=torch.float32,
+                                device=device)[:, None]
+                for c in (self.grid.ret.x, self.grid.ret.y))
+        x_el, y_el, z_el, r_el = (torch.as_tensor(c, dtype=torch.float32,
+                                                  device=device)
+                                  for c in (x_el, y_el, z_el, r_el))
+        # Python floats holding float32 values keep Torch in float32:
+        atten_a = float(np.float32(self.atten_a))
+        atten_n = float(np.float32(self.atten_n))
+        # Distance to the nearest point of the disk; depends on |z| only:
+        edge = torch.clamp(((x - x_el) ** 2 + (y - y_el) ** 2).sqrt() - r_el,
+                           min=0)
+        dist = (edge ** 2 + z_el ** 2).sqrt()
+        weights = atten_a / (atten_a + dist ** atten_n)
+        # Unmapped grid points are zero:
+        weights = torch.where(x.isnan() | y.isnan(), 0.0, weights)
+        resp = weights.to(waveform.dtype) @ waveform
+        thresh = float(np.float32(self.thresh_percept))
+        # Zeroes only `|resp| < thresh`, so NaN propagates. `+ 0.0` turns -0.0
+        # into 0.0:
+        return torch.where(resp.abs() < thresh, 0.0, resp) + 0.0
 
     def _build(self):
         _require_disk_electrodes(self.implant.electrode_objects)
@@ -289,10 +344,10 @@ class Nanduri2012Temporal(TemporalModel):
             ``'last'``.
         verbose : bool, optional
             Whether to print status messages. Default: True.
-        n_threads : int, optional
-            Number of OpenMP threads. Defaults to all available CPU cores.
-        n_jobs : int or None, optional
-            Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+        .. versionchanged:: 0.12.0
+
+            Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
         """
 
     # Positive current drives the Nanduri temporal cascade.
@@ -300,13 +355,12 @@ class Nanduri2012Temporal(TemporalModel):
 
     def __init__(self, *, dt=0.005, tau1=0.42, tau2=45.25, tau3=26.25,
                  eps=8.73, asymptote=14.0, slope=3.0, shift=16.0,
-                 scale_out=1.0, thresh_percept=0, reduce='last', verbose=True,
-                 n_threads=None, n_jobs=None):
+                 scale_out=1.0, thresh_percept=0, reduce='last', verbose=True):
         super().__init__(
             dt=dt, tau1=tau1, tau2=tau2, tau3=tau3, eps=eps,
             asymptote=asymptote, slope=slope, shift=shift,
             scale_out=scale_out, thresh_percept=thresh_percept, reduce=reduce,
-            verbose=verbose, **_thread_params(n_threads, n_jobs))
+            verbose=verbose)
 
     def get_default_params(self):
         base_params = super(Nanduri2012Temporal, self).get_default_params()
@@ -320,6 +374,8 @@ class Nanduri2012Temporal(TemporalModel):
             'shift': 16.0,
             'scale_out': 1.0
         }
+        # Torch runs on its own thread pool:
+        del base_params['n_threads'], base_params['n_jobs']
         return {**base_params, **params}
 
     def get_param_units(self):
@@ -328,20 +384,62 @@ class Nanduri2012Temporal(TemporalModel):
                 'tau3': ms}
 
     def _predict_temporal(self, stim, t_percept):
-        """Predict the temporal response."""
-        time = self._stim_times(stim)
-        stim_data = self._stim_values(stim).reshape((-1, len(time)))
-        # Round before casting so floating-point noise cannot shift a sample.
-        idx_percept = np.uint32(np.round(t_percept / self.dt))
-        if np.unique(idx_percept).size < t_percept.size:
-            raise ValueError(f"All times 't_percept' must be distinct multiples "
-                             f"of `dt`={self.dt:.2e}")
-        return temporal_fast(stim_data.astype(np.float32),
-                             time.astype(np.float32),
-                             idx_percept,
-                             self.dt, self.tau1, self.tau2, self.tau3,
-                             self.asymptote, self.shift, self.slope, self.eps,
-                             self.scale_out, self.thresh_percept, self.n_threads)
+        """Predict the float32 NumPy temporal response."""
+        return _on_torch(self._predict_nanduri, self._stim_values(stim),
+                         self._stim_times(stim), t_percept)
+
+    def _predict_temporal_tensor(self, stim, t_percept, reduce='last'):
+        """Predict the temporal response to tensor data, keeping its dtype
+        and autograd graph. ``reduce`` is applied by the caller."""
+        return self._predict_nanduri(stim.data, self._stim_times(stim),
+                                     t_percept)
+
+    @_flush_denormals()
+    def _predict_nanduri(self, data, time, t_percept):
+        """Return the Torch response to ``data`` sampled at ``time``.
+
+        The logistic gain depends on the peak of ``R_3`` over the whole
+        simulation, so the slow cascade runs in a second pass. The cascade is
+        linear, so each chunk's input is projected once and scaled later.
+        Timing is fixed.
+        """
+        import torch
+        f32 = np.float32
+        thresh = float(f32(self.thresh_percept))
+        # Legacy: an output below threshold also resets the state, so each
+        # output must end a chunk:
+        merge = not thresh > 0
+        n_space = data.reshape((-1, len(time))).shape[0]
+        # Lower bound of `max_r3`, as in the legacy kernel:
+        peak = data.new_full((n_space,), 1e-37)
+        chunks = []
+        # Time-major, as in `_charge_chunks`:
+        for x, carry, weights, offs in _charge_chunks(self, data, time,
+                                                      t_percept, 1, merge):
+            if x is None:
+                chunks.append((carry, None, len(offs)))
+                continue
+            r3 = torch.clamp(x, min=0)
+            peak = torch.maximum(peak, r3.amax(dim=0))
+            chunks.append((carry, weights @ r3, len(offs)))
+        gain = (float(f32(self.asymptote)) *
+                torch.sigmoid((peak - float(f32(self.shift))) /
+                              float(f32(self.slope))) / peak)
+        state = data.new_zeros((3, n_space))
+        rows = []
+        for carry, proj, m in chunks:
+            resp = carry @ state
+            if proj is not None:
+                resp = torch.addcmul(resp, proj, gain)
+            state = resp[m:]
+            if m and not merge:
+                last = torch.where(state[2:].abs() < thresh, 0.0, state[2:])
+                state = torch.cat((state[:2], last))
+                rows.append(last)
+            else:
+                rows.append(resp[:m])
+        resp = torch.cat(rows).T.contiguous()
+        return resp * float(f32(self.scale_out))
 
 
 class Nanduri2012Model(Model):
@@ -443,10 +541,10 @@ class Nanduri2012Model(Model):
         ndim : list of int, optional
             Dimensionalities of ``visual_field_map`` accepted by the spatial
             model.
-        n_threads : int, optional
-            Number of OpenMP threads.
-        n_jobs : int or None, optional
-            Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+        .. versionchanged:: 0.12.0
+
+            Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
         """
 
     def __init__(self, implant, *, atten_a=14000, atten_n=1.69,
@@ -459,9 +557,9 @@ class Nanduri2012Model(Model):
                  location_noise=None, ndim=None, dt=0.005, tau1=0.42,
                  tau2=45.25, tau3=26.25, eps=8.73, asymptote=14.0, slope=3.0,
                  shift=16.0, scale_out=1.0, reduce='last', thresh_percept=0,
-                 verbose=True, n_threads=None, n_jobs=None):
-        # `thresh_percept`, `verbose` and the thread count are declared by both
-        # components and are applied to both.
+                 verbose=True):
+        # `thresh_percept` and `verbose` are declared by both components and
+        # are applied to both.
         super().__init__(
             spatial=Nanduri2012Spatial(
                 implant, atten_a=atten_a, atten_n=atten_n, xrange=xrange,
@@ -472,11 +570,9 @@ class Nanduri2012Model(Model):
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
                 location_noise=location_noise, ndim=ndim,
-                thresh_percept=thresh_percept, verbose=verbose,
-                n_threads=n_threads, n_jobs=n_jobs),
+                thresh_percept=thresh_percept, verbose=verbose),
             temporal=Nanduri2012Temporal(
                 dt=dt, tau1=tau1, tau2=tau2, tau3=tau3, eps=eps,
                 asymptote=asymptote, slope=slope, shift=shift,
                 scale_out=scale_out, reduce=reduce,
-                thresh_percept=thresh_percept, verbose=verbose,
-                n_threads=n_threads, n_jobs=n_jobs))
+                thresh_percept=thresh_percept, verbose=verbose))

@@ -20,8 +20,8 @@ The PRIMA scenario runs its optical encoder directly. Electrical image
 scenarios use :func:`as_current` to keep their historical benchmark workload.
 
 Together the scenarios reach every compiled kernel used in percept prediction:
-``_granley2021``, ``_nanduri2012``, ``_horsager2009`` and ``_thompson2003``.
-A new scenario should reach a kernel no existing scenario reaches.
+``_granley2021`` and ``_thompson2003``. A new scenario should reach a kernel
+no existing scenario reaches.
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -190,22 +190,23 @@ SCENARIOS = [
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
         caches_axons=True,
     ),
-    # Nanduri 2012: multi-frame output. Reaches both halves of _nanduri2012
-    # (spatial_fast, temporal_fast) and the spatial -> temporal step in Model:
+    # Nanduri 2012: multi-frame output through the Torch composite. Torch
+    # uses its own thread pool, so `n_threads` is unused:
     Scenario(
         id='argus2_nanduri2012_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
         implant=p2p.implants.retina.ArgusII,
-        model=lambda **kwargs: p2p.models.retina.Nanduri2012Model(
+        model=lambda n_threads, **kwargs: p2p.models.retina.Nanduri2012Model(
             xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
     ),
     # Horsager 2009: temporal-only, one trace per electrode, no spatial grid.
-    # Only scenario that reaches _horsager2009:
+    # Runs on Torch, so `n_threads` is unused:
     Scenario(
         id='argus2_horsager2009_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
         implant=p2p.implants.retina.ArgusII,
-        model=lambda **kwargs: p2p.models.retina.Horsager2009Model(**kwargs),
+        model=lambda n_threads, **kwargs: p2p.models.retina.Horsager2009Model(
+            **kwargs),
         binds_implant=False,
         plottable=False,
     ),

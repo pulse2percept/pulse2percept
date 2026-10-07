@@ -6,7 +6,7 @@ import copy
 from pulse2percept.implants import (DiskElectrode, PointSource,
                                     ElectrodeArray, Implant)
 from pulse2percept.implants.retina import ArgusI
-from pulse2percept.stimuli import BiphasicPulseTrain
+from pulse2percept.stimuli import BiphasicPulseTrain, Stimulus
 from pulse2percept.percepts import Percept
 from pulse2percept.models.retina import (Nanduri2012Model, Nanduri2012Spatial,
                                          Nanduri2012Temporal)
@@ -311,3 +311,162 @@ def test_Nanduri2012Model_predict_percept():
         brightest_frame = percept.data[..., idx_frame]
         frames_freq.append(brightest_frame)
     npt.assert_equal([np.sum(f > bright_th) for f in frames_freq], [21, 49])
+
+
+def _nanduri_temporal_reference(data, t_stim, t_percept, model):
+    """Return the Nanduri cascade, computed per location and time step"""
+    f = np.float32
+    dt, tau1, tau2, tau3 = (f(getattr(model, p))
+                            for p in ('dt', 'tau1', 'tau2', 'tau3'))
+    # `eps` was fit with a microsecond time step:
+    eps = f(f(model.eps) / f(1000.0))
+    asymptote, shift, slope, scale_out, thresh = (
+        f(getattr(model, p)) for p in ('asymptote', 'shift', 'slope',
+                                       'scale_out', 'thresh_percept'))
+    idx_p = np.round(np.asarray(t_percept) / model.dt).astype(int)
+    n_sim = idx_p[-1] + 1
+    out = np.zeros((data.shape[0], len(idx_p)), dtype=np.float32)
+    for s in range(data.shape[0]):
+        # Pass 1: rectified fast response and its peak:
+        ca = r1 = r2 = f(0.0)
+        r3 = np.zeros(n_sim, dtype=np.float32)
+        max_r3 = f(1e-37)
+        idx_stim = 0
+        for i in range(n_sim):
+            # Several frames may start within one step:
+            while (idx_stim + 1 < len(t_stim) and
+                   f(i) * dt >= t_stim[idx_stim + 1]):
+                idx_stim += 1
+            amp = f(data[s, idx_stim])
+            r1 = f(r1 + dt * (amp - r1) / tau1)
+            ca = f(ca + dt * max(amp, f(0.0)))
+            r2 = f(r2 + dt * (ca - r2) / tau2)
+            r3[i] = max(f(r1 - eps * r2), f(0.0))
+            max_r3 = max(max_r3, r3[i])
+        # Logistic gain on the peak:
+        scale = f(asymptote / (1 + np.exp(-(max_r3 - shift) / slope)) /
+                  max_r3)
+        # Pass 2: slow cascade:
+        r4a = r4b = r4c = f(0.0)
+        frame = 0
+        for i in range(n_sim):
+            r4a = f(r4a + dt * (r3[i] * scale - r4a) / tau3)
+            r4b = f(r4b + dt * (r4a - r4b) / tau3)
+            r4c = f(r4c + dt * (r4b - r4c) / tau3)
+            if i == idx_p[frame]:
+                # Legacy: thresholding resets the state, too:
+                if abs(r4c) < thresh:
+                    r4c = f(0.0)
+                out[s, frame] = r4c * scale_out
+                frame += 1
+    return out
+
+
+@pytest.mark.parametrize('thresh_percept, scale_out', [(0, 1), (0.01, 2)])
+def test_Nanduri2012Temporal_matches_reference(thresh_percept, scale_out):
+    rng = np.random.default_rng(0)
+    data = ((rng.random((3, 6)) - 0.5) * 100).astype(np.float32)
+    # 1-us edges put two frames within one dt=10 us step:
+    t_stim = np.array([0, 4, 4.001, 8, 12, 16], dtype=np.float32)
+    t_percept = np.arange(0, 20, 2.0)
+    model = Nanduri2012Temporal(dt=0.01, thresh_percept=thresh_percept,
+                                scale_out=scale_out).build()
+    got = model.predict_percept(Stimulus(data, time=t_stim),
+                                t_percept=t_percept).data.reshape(3, -1)
+    want = _nanduri_temporal_reference(data, t_stim, t_percept, model)
+    # The threshold must zero some, but not all, outputs:
+    assert (0 < np.mean(want == 0) < 1) == (thresh_percept > 0)
+    npt.assert_array_equal(got == 0, want == 0)
+    npt.assert_allclose(got, want, rtol=1e-4, atol=1e-6 * np.abs(want).max())
+
+
+def test_Nanduri2012Temporal_threshold_resets_state():
+    # Legacy: an output below `thresh_percept` also zeroes the slow state,
+    # so requesting an earlier output lowers later ones:
+    stim = Stimulus(np.array([[0, 30, 0]], dtype=np.float32),
+                    time=[0, 1, 1.5])
+    model = Nanduri2012Temporal(dt=0.01, thresh_percept=0.05).build()
+    alone = model.predict_percept(stim, t_percept=[40]).data.ravel()
+    t_percept = [5, 10, 15, 40]
+    after = model.predict_percept(stim, t_percept=t_percept).data.ravel()
+    npt.assert_equal(after[:3], 0)
+    npt.assert_array_less(after[3], 0.9 * alone[0])
+    npt.assert_allclose(after, _nanduri_temporal_reference(
+        stim.data, stim.time, t_percept, model).ravel(), rtol=1e-4)
+
+
+def _disk_spatial(electrodes, **params):
+    """Return a built Nanduri2012Spatial with a row of grid points on the
+    x axis, 0-560 um from the origin."""
+    return Nanduri2012Spatial(
+        Implant(ElectrodeArray(electrodes)), xrange=(0, 2), yrange=(0, 0),
+        step=0.5, **params).build()
+
+
+def _disk_weight(model, x_el, y_el, z_el, r_el):
+    """Return Eq. 2 of [Nanduri2012]_ at the grid points, in float64."""
+    s = np.hypot(model.grid.ret.x.ravel() - x_el,
+                 model.grid.ret.y.ravel() - y_el)
+    d = np.hypot(np.maximum(s - r_el, 0), z_el)
+    return model.atten_a / (model.atten_a + d ** model.atten_n)
+
+
+def _spatial_paths(model, amps):
+    """Return the public and tensor responses to static amplitudes."""
+    import torch
+    names = model.implant.electrode_names
+    public = model.predict_percept(
+        Stimulus(np.array(amps, dtype=float)[:, None], electrodes=names))
+    tensor = model._predict_tensor(
+        torch.tensor(amps, dtype=torch.float32)[:, None], None)
+    return public.data.ravel(), tensor.data.numpy().ravel()
+
+
+@pytest.mark.parametrize('z_el', [0, 50])
+@pytest.mark.parametrize('amp', [20, -20])
+def test_Nanduri2012Spatial_current_spread(z_el, amp):
+    # Points 0 and 140 um are beneath the 200-um disk; 280-560 um lie outside:
+    model = _disk_spatial(DiskElectrode(0, 0, z_el, 200))
+    want = amp * _disk_weight(model, 0, 0, z_el, 200)
+    if z_el == 0:
+        # Uniform beneath the disk:
+        npt.assert_equal(want[:2], amp)
+    for got in _spatial_paths(model, [amp]):
+        npt.assert_allclose(got, want, rtol=1e-6)
+
+
+def test_Nanduri2012Spatial_sums_electrodes():
+    model = _disk_spatial([DiskElectrode(0, 0, 0, 100),
+                           DiskElectrode(400, 0, 30, 150)])
+    want = (10 * _disk_weight(model, 0, 0, 0, 100) -
+            25 * _disk_weight(model, 400, 0, 30, 150))
+    for got in _spatial_paths(model, [10, -25]):
+        npt.assert_allclose(got, want, rtol=1e-6)
+
+
+def test_Nanduri2012Spatial_threshold():
+    model = _disk_spatial(DiskElectrode(0, 0, 0, 200))
+    full = _spatial_paths(model, [20])[0]
+    # Values equal to the threshold are kept; smaller ones are zeroed:
+    model.thresh_percept = full[3]
+    for got in _spatial_paths(model, [20]):
+        npt.assert_equal(got[:4], full[:4])
+        npt.assert_equal(got[4:], 0)
+
+
+def test_Nanduri2012Spatial_nan_grid_point_is_zero():
+    model = _disk_spatial(DiskElectrode(0, 0, 0, 200))
+    model.grid.ret.x[0, 1] = np.nan
+    for got in _spatial_paths(model, [20]):
+        npt.assert_equal(got[1], 0)
+        npt.assert_equal(np.all(got[[0, 2, 3, 4]] > 0), True)
+
+
+def test_Nanduri2012Spatial_sign_of_z():
+    # Current spread depends on distance, so z = +20 and -20 agree, also
+    # beneath the disk:
+    above, below = (_spatial_paths(_disk_spatial(DiskElectrode(0, 0, z, 200)),
+                                   [20]) for z in (20, -20))
+    for got, want in zip(below, above):
+        npt.assert_equal(np.isfinite(got).all(), True)
+        npt.assert_array_equal(got, want)

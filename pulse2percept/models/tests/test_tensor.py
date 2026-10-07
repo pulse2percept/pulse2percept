@@ -1,4 +1,5 @@
-"""Torch execution of {Scoreboard,AxonMap}Spatial -> {Fading,Alpha}Temporal."""
+"""Torch execution of {Scoreboard,AxonMap,Nanduri2012}Spatial ->
+{Fading,Alpha,Nanduri2012,Horsager2009}Temporal."""
 from dataclasses import replace
 
 import numpy as np
@@ -14,7 +15,10 @@ from pulse2percept.models import cortex
 from pulse2percept.models.base import (_blend_meridian, _delivered,
                                        _encoder_clock, _ModelResponse,
                                        _scoreboard_response, _to_percept)
-from pulse2percept.models.retina import (AxonMapSpatial, ScoreboardSpatial,
+from pulse2percept.models.retina import (AxonMapSpatial, Horsager2009Temporal,
+                                         Nanduri2012Model, Nanduri2012Spatial,
+                                         Nanduri2012Temporal,
+                                         ScoreboardSpatial,
                                          Thompson2003Spatial)
 from pulse2percept.models.retina import beyeler2019
 from pulse2percept.percepts import Percept
@@ -1164,3 +1168,131 @@ def test_Model_tensor_polarity_warning():
         resp = model._predict_tensor(waveform, TIME)
     # The warning does not detach the response:
     assert resp.data.requires_grad and resp.data.grad_fn is not None
+
+
+# Nanduri 2012 and Horsager 2009 on Torch:
+
+def _nanduri_spatial(**params):
+    params = {'xrange': (-6, 6), 'yrange': (-5, 5), 'step': 0.5,
+              'thresh_percept': 0.5, **params}
+    return Nanduri2012Spatial(ArgusI(), **params).build()
+
+
+def _nanduri_model(reduce='last', **params):
+    return Nanduri2012Model(ArgusI(), xrange=(-6, 6), yrange=(-5, 5),
+                            step=0.5, reduce=reduce, **params).build()
+
+
+@pytest.mark.parametrize('dtype', [torch.float32, torch.float64])
+def test_Nanduri2012Spatial_tensor_parity(dtype):
+    spatial = _nanduri_spatial()
+    wf = _waveform(spatial.implant.n_electrodes)
+    percept = spatial.predict_percept(
+        Stimulus(wf, electrodes=spatial.implant.electrode_names, time=TIME))
+    resp = spatial._predict_tensor(torch.tensor(wf, dtype=dtype), TIME)
+    assert resp.data.dtype == dtype
+    assert resp.space is spatial.grid
+    expected = percept.data.reshape(resp.data.shape)
+    # The threshold must zero some, but not all, of the response:
+    assert 0 < np.mean(expected == 0) < 1
+    npt.assert_array_equal(resp.data.numpy() == 0, expected == 0)
+    _assert_peak_close(resp.data.numpy(), expected)
+
+
+def test_Nanduri2012Spatial_tensor_gradcheck():
+    spatial = _nanduri_spatial(xrange=(-3, 3), yrange=(-2, 2), step=1,
+                               thresh_percept=0)
+    waveform = torch.tensor(_waveform(spatial.implant.n_electrodes),
+                            dtype=torch.float64, requires_grad=True)
+    assert torch.autograd.gradcheck(
+        lambda w: spatial._predict_tensor(w, TIME).data, (waveform,))
+
+
+@pytest.mark.parametrize('temporal, params', [
+    (Horsager2009Temporal, {}),
+    (Horsager2009Temporal, {'thresh_percept': 1}),
+    (Nanduri2012Temporal, {}),
+    # Thresholding also resets the state:
+    (Nanduri2012Temporal, {'thresh_percept': 0.01}),
+])
+@pytest.mark.parametrize('dtype', [torch.float32, torch.float64])
+@pytest.mark.parametrize('t_percept', [None, [0.3, 0.305, 1.0, 2.0, 50.0]])
+def test_retina_temporal_tensor_parity(temporal, params, dtype, t_percept):
+    # `reduce='peak'` subsamples automatic output intervals:
+    temporal = temporal(reduce='peak', **params)
+    wf = _waveform(8)
+    expected = temporal.predict_percept(Stimulus(wf, time=TIME),
+                                        t_percept=t_percept)
+    resp = temporal._predict_response(
+        _ModelResponse(torch.tensor(wf, dtype=dtype), TIME, ms,
+                       (wf.shape[0],)), t_percept=t_percept)
+    assert isinstance(resp.data, torch.Tensor)
+    assert resp.data.dtype == dtype
+    assert expected.data.dtype == np.float32
+    npt.assert_allclose(resp.time, expected.time)
+    expected = expected.data.reshape(resp.data.shape)
+    assert np.any(expected > 0)
+    if params:
+        assert np.any(expected[1:4] == 0)
+    assert torch.all(resp.data[::4] == 0)
+    # float64 differs from the float32 public route by float32 rounding,
+    # which Horsager's power nonlinearity amplifies by about beta:
+    npt.assert_allclose(resp.data.numpy(), expected,
+                        rtol=RTOL if dtype == torch.float32 else 1e-5,
+                        atol=1e-6 * np.abs(expected).max())
+
+
+@pytest.mark.parametrize('temporal, sign', [(Horsager2009Temporal, -1),
+                                            (Nanduri2012Temporal, 1)])
+def test_retina_temporal_gradcheck(temporal, sign):
+    # Mostly driving polarity, away from rectifier kinks, plus one opposite
+    # frame. Both polarities make anodic charge, so the final zero frame
+    # decays into steps that are skipped as rectified:
+    data = sign * np.random.default_rng(4).uniform(5, 20, (2, 4))
+    data[:, 2] = -sign * 3
+    data[:, -1] = 0
+    _temporal_gradcheck(temporal(dt=0.05), data, [0, 0.5, 1.0, 3.0],
+                        [0.5, 1.5, 4.0, 10.0, 60.0], 'last')
+
+
+@pytest.mark.parametrize('reduce', ['last', 'peak'])
+@pytest.mark.parametrize('t_percept', [None, [0.5, 1.0, 2.0, 25.0, 60.0]])
+def test_Nanduri2012Model_torch_parity(reduce, t_percept):
+    model = _nanduri_model(reduce=reduce)
+    wf = _waveform(model.implant.n_electrodes)
+    source = Stimulus(wf, electrodes=model.implant.electrode_names, time=TIME)
+    expected = _staged_percept(model, source, t_percept=t_percept)
+    _assert_same_percept(model.predict_percept(source, t_percept=t_percept),
+                         expected)
+    resp = model._predict_tensor(torch.tensor(wf, dtype=torch.float32), TIME,
+                                 t_percept=t_percept)
+    npt.assert_allclose(resp.time, expected.time)
+    _assert_peak_close(resp.data.numpy(),
+                       expected.data.reshape(resp.data.shape))
+
+
+@pytest.mark.parametrize('reduce', ['last', 'peak'])
+def test_Nanduri2012Model_tensor_autograd(reduce):
+    model = _nanduri_model(reduce=reduce)
+    waveform = torch.tensor(_waveform(model.implant.n_electrodes),
+                            dtype=torch.float32, requires_grad=True)
+    # Automatic output times, which `reduce` summarizes:
+    resp = model._predict_tensor(waveform, TIME)
+    assert resp.data.requires_grad and resp.data.grad_fn is not None
+    resp.data.square().mean().backward()
+    assert torch.all(torch.isfinite(waveform.grad))
+    # Current spread reaches every grid point, even from silent electrodes:
+    assert waveform.grad[::4].abs().sum() > 0
+
+
+def test_Nanduri2012Model_predict_percept_skips_staged_path(monkeypatch):
+    model = _nanduri_model()
+
+    def staged(*args, **kwargs):
+        raise AssertionError("Staged path called")
+
+    monkeypatch.setattr(Nanduri2012Spatial, '_predict_spatial', staged)
+    monkeypatch.setattr(Nanduri2012Temporal, '_predict_temporal', staged)
+    source = Stimulus(_waveform(model.implant.n_electrodes),
+                      electrodes=model.implant.electrode_names, time=TIME)
+    assert np.abs(model.predict_percept(source).data).max() > 0

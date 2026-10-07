@@ -26,7 +26,6 @@ from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
                                          BiphasicAxonMapModel,
                                          BiphasicScoreboardModel,
                                          Horsager2009Model, Nanduri2012Model,
-                                         Nanduri2012Temporal,
                                          ScoreboardModel, ScoreboardSpatial,
                                          Thompson2003Model)
 from pulse2percept.models.base import (_blend_meridian, _displaced_coords,
@@ -985,20 +984,6 @@ def test_Model_predict_percept_frame_peak():
     # `reduce='last'` returns the frame-end value:
     last = Model(temporal=FadingTemporal(tau=100, reduce='last')).build()
     npt.assert_array_equal(last.predict_percept(stim).data, at_end.data)
-
-
-def test_Model_predict_percept_thread_count_invariant():
-    # Thread count must not change the result of the Cython temporal loop:
-    stim = BiphasicPulseTrain(20, 10, 0.45, stim_dur=200)
-    percepts = []
-    for n_threads in (1, 2):
-        model = Model(
-            spatial=ScoreboardSpatial(ArgusI()),
-            temporal=Nanduri2012Temporal(n_threads=n_threads)).build()
-        npt.assert_equal(model.temporal.n_threads, n_threads)
-        percepts.append(model.predict_percept({'A1': stim, 'D4': stim}))
-    npt.assert_equal(percepts[0].data.max() > 0, True)
-    npt.assert_array_equal(percepts[0].data, percepts[1].data)
 
 
 def test_Model_deepcopy_memo():
