@@ -1,8 +1,10 @@
 """:py:class:`~pulse2percept.models.FadingTemporal`,
 :py:class:`~pulse2percept.models.AlphaTemporal`"""
 import math
+from contextlib import contextmanager
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 from .base import TemporalModel
 from ..units import ms
 
@@ -42,9 +44,10 @@ def _temporal_runs(t_stim, idx_percept, dt):
 def _run_powers(n, dt_tau):
     """Return float64 ``q**n`` and ``1 - q**n``, with ``q = 1 - dt_tau``."""
     n = np.asarray(n, dtype=np.float64)
-    if dt_tau == 1:
-        # tau == dt: q = 0, so q**0 = 1 and q**n = 0 otherwise:
-        return (n == 0).astype(np.float64), (n != 0).astype(np.float64)
+    if dt_tau >= 1:
+        # tau <= dt: q <= 0 has no logarithm (0**0 = 1):
+        qn = np.power(1 - np.float64(dt_tau), n)
+        return qn, 1 - qn
     n_log_q = n * np.log1p(-np.float64(dt_tau))
     return np.exp(n_log_q), -np.expm1(n_log_q)
 
@@ -64,6 +67,211 @@ def _thresholded(cols, thresh):
     import torch
     resp = torch.stack(cols, dim=1)
     return torch.where(resp.abs() >= thresh, resp, 0.0)
+
+
+#: Approximate working-memory target (bytes) per chunk in ``_charge_chunks``.
+_CASCADE_BLOCK_BYTES = 32 * 2 ** 20
+
+#: Longest chunk, in ``dt`` steps.
+_CASCADE_MAX_STEPS = 2 ** 16
+
+#: Largest ``(m + 3, n)`` slow-cascade map of a chunk, in entries.
+_CASCADE_MAX_ENTRIES = 2 ** 20
+
+
+def _cascade_chunks(time, t_percept, dt, n_space, itemsize, merge=True):
+    """Split the simulation into chunks of constant stimulus.
+
+    Returns the stimulus frame, length in ``dt`` steps, and 1-based output
+    steps of each chunk. Consecutive ``_temporal_runs`` of one frame share a
+    chunk while it fits; with ``merge=False``, each output ends a chunk.
+    """
+    frame, length, out = _temporal_runs(time, _percept_steps(t_percept, dt),
+                                        dt)
+    # About eight (n, n_space) temporaries per chunk:
+    max_steps = int(np.clip(_CASCADE_BLOCK_BYTES // (8 * n_space * itemsize),
+                            1, _CASCADE_MAX_STEPS))
+    chunks, cur = [], None
+    for f, n, col in zip(frame, length.tolist(), out):
+        if cur is not None and (
+                not merge or cur[0] != f or cur[1] + n > max_steps or
+                (cur[1] + n) * (len(cur[2]) + 4) > _CASCADE_MAX_ENTRIES):
+            chunks.append(cur)
+            cur = None
+        while n > max_steps:
+            chunks.append([f, max_steps, []])
+            n -= max_steps
+        if cur is None:
+            cur = [f, 0, []]
+        cur[1] += n
+        if col >= 0:
+            cur[2].append(cur[1])
+    chunks.append(cur)
+    return [(f, n, tuple(offs)) for f, n, offs in chunks]
+
+
+def _rising(x, d):
+    """Return ``C(x + d - 1, d)`` for ``d`` in {0, 1, 2}, else 0."""
+    return np.select([d == 0, d == 1, d == 2],
+                     [np.ones_like(x), x, x * (x + 1) / 2], 0)
+
+
+def _fast_coeffs(n, a1, a2, eps):
+    """Return the float64 ``(n + 2, 5)`` map from ``(r1, drive, r2, charge,
+    dq)`` to ``r1 - eps r2`` after each of ``n`` steps, then to ``r1`` and
+    ``r2`` after the last.
+
+    ``r1`` relaxes to the drive at rate ``a1``; ``r2`` relaxes at rate ``a2``
+    to the charge, which grows by ``dq`` per step and is updated first.
+    """
+    k = np.arange(1, n + 1, dtype=np.float64)
+    q1, p1 = _run_powers(k, a1)
+    q2, p2 = _run_powers(k, a2)
+    # Weight of dq in r2: a2 * sum_i i q2**(k - i):
+    c2 = k - (1 - a2) / a2 * p2
+    coeffs = np.zeros((n + 2, 5))
+    coeffs[:n] = np.stack((q1, p1, -eps * q2, -eps * p2, -eps * c2), axis=1)
+    coeffs[n, :2] = q1[-1], p1[-1]
+    coeffs[n + 1, 2:] = q2[-1], p2[-1], c2[-1]
+    return coeffs
+
+
+def _slow_coeffs(n, offsets, a, inputs=True):
+    """Return float64 maps of ``n`` steps of three identical explicit-Euler
+    stages at rate ``a``, each reading the updated stage before it.
+
+    The ``(m + 3, 3)`` map takes the stage states, and the ``(m + 3, n)`` map
+    the inputs, to stage 3 after each of the ``m`` 1-based ``offsets``, then
+    to stages 1-3 after step ``n``. The input map is None if not ``inputs``.
+    """
+    k = np.array(list(offsets) + [n] * 3)
+    stage = np.array([3] * len(offsets) + [1, 2, 3])
+    # State j reaches stage i after k steps as C(k + d - 1, d) a**d q**k,
+    # d = i - j:
+    d = stage[:, None] - np.arange(1, 4)
+    carry = (a ** d * _rising(k[:, None].astype(np.float64), d) *
+             _run_powers(k, a)[0][:, None])
+    if not inputs:
+        return carry, None
+    # An input reaches stage i after lag steps as C(lag + i - 1, i - 1)
+    # a**i q**lag:
+    lag = np.arange(n, dtype=np.float64)
+    kernel = (a ** np.arange(1, 4)[:, None] *
+              _rising(lag + 1, np.arange(3)[:, None]) * _run_powers(lag, a)[0])
+    # Input j (1-based) reaches stage i at step k with kernel[i, k - j], which
+    # is `padded[i, n - k + j - 1]`, or 0 for j > k:
+    padded = np.concatenate((kernel[:, ::-1], np.zeros((3, n))), axis=1)
+    weights = sliding_window_view(padded, n, axis=1)[stage - 1, n - k]
+    return carry, weights
+
+
+@contextmanager
+def _flush_denormals():
+    """Flush subnormal floats to zero on this thread, as the deleted Cython
+    kernels did. Decaying integrators produce them, and arithmetic on them
+    is ~20x slower."""
+    import torch
+    # Torch has no getter; probe whether flushing is already on:
+    was_on = (torch.tensor(1e-39) * 1.0).item() == 0
+    torch.set_flush_denormal(True)
+    try:
+        yield
+    finally:
+        torch.set_flush_denormal(was_on)
+
+
+def _quiet_after(r1, r2, charge, eps, a1):
+    """Return the steps after which ``r1 - eps r2`` stays negative at every
+    location under zero drive, or None if that cannot be shown.
+
+    Under zero drive, ``r1`` decays as ``r1 q1**k``, and ``r2`` stays between
+    its value and the charge, both nonnegative. ``r1 q1**k <= eps min(r2,
+    charge) / 2`` thus bounds ``r1 - eps r2`` below zero, with margin for
+    rounding.
+    """
+    import torch
+    with torch.no_grad():
+        r1 = r1.double().cpu().numpy()
+        floor = (eps * torch.minimum(r2, charge)).double().cpu().numpy()
+    pos = r1 > 0
+    if not pos.any():
+        # A sum of nonpositive terms rounds to a nonpositive value:
+        return 0
+    if not np.all(floor[pos] > 0):
+        return None
+    k = np.log(floor[pos] / (2 * r1[pos])) / np.log1p(-a1)
+    return max(0, int(np.ceil(k.max())))
+
+
+def _charge_chunks(model, data, time, t_percept, drive_sign, merge=True,
+                   skip_quiet=True):
+    """Yield the Horsager/Nanduri rectifier input of each chunk.
+
+    For each constant-stimulus chunk of ``n`` steps (``_cascade_chunks``),
+    yields ``r1 - eps/1000 r2``, shape ``(n, n_space)``, then the
+    ``_slow_coeffs`` maps of the chunk and its output offsets. ``r1`` is
+    driven by ``drive_sign`` times the stimulus; charge accumulates its
+    anodic part. Coefficients are float32-rounded, as in the deleted Cython
+    kernels; maps have the dtype and device of ``data``.
+
+    With ``skip_quiet``, steps of zero drive at which ``r1 - eps/1000 r2`` is
+    provably negative everywhere, and so rectifies to zero, are yielded as
+    one chunk whose input and input map are None.
+    """
+    import torch
+    f32 = np.float32
+    dt = f32(model.dt)
+    a1, a2, a3 = (float(dt / f32(tau))
+                  for tau in (model.tau1, model.tau2, model.tau3))
+    # `eps` was fit with a microsecond time step:
+    eps = float(f32(model.eps) / f32(1000))
+    # Time-major: Torch is several times faster reducing and multiplying
+    # along the leading axis here:
+    data = data.reshape((-1, len(time))).T.contiguous()
+    kw = {'dtype': data.dtype, 'device': data.device}
+    # `unbind` keeps the backward pass linear in the number of chunks:
+    drive = (drive_sign * data).unbind(0)
+    dq = (torch.clamp(data, min=0) * float(dt)).unbind(0)
+    # The bound in `_quiet_after` requires nonnegative eps and poles:
+    skip_quiet = skip_quiet and eps >= 0 and a1 <= 1 and a2 <= 1
+    zero = (data == 0).all(dim=1).tolist()
+    r1 = r2 = charge = data.new_zeros(data.shape[1])
+    fast, slow, carry = {}, {}, {}
+    for f, n, offs in _cascade_chunks(time, t_percept, model.dt,
+                                      data.shape[1], data.element_size(),
+                                      merge):
+        quiet = (_quiet_after(r1, r2, charge, eps, a1)
+                 if skip_quiet and zero[f] else None)
+        if quiet is not None:
+            # Coarse steps let periodic stimuli reuse coefficients:
+            quiet = -(-quiet // 256) * 256
+        if quiet is None or quiet >= n:
+            quiet = n
+        if quiet:
+            # Steps that need the rectifier input:
+            head = tuple(k for k in offs if k <= quiet)
+            if quiet not in fast:
+                fast[quiet] = torch.as_tensor(
+                    _fast_coeffs(quiet, a1, a2, eps), **kw)
+            if (quiet, head) not in slow:
+                slow[quiet, head] = tuple(
+                    torch.as_tensor(c, **kw)
+                    for c in _slow_coeffs(quiet, head, a3))
+            y = fast[quiet] @ torch.stack((r1, drive[f], r2, charge, dq[f]))
+            r1, r2 = y[quiet], y[quiet + 1]
+            charge = charge + quiet * dq[f]
+            yield (y[:quiet], *slow[quiet, head], head)
+        if quiet < n:
+            m = n - quiet
+            tail = tuple(k - quiet for k in offs if k > quiet)
+            if (m, tail) not in carry:
+                carry[m, tail] = torch.as_tensor(
+                    _slow_coeffs(m, tail, a3, inputs=False)[0], **kw)
+            # Zero drive: r1 decays and r2 relaxes to the constant charge:
+            q1 = float(_run_powers(m, a1)[0])
+            q2, p2 = (float(c) for c in _run_powers(m, a2))
+            r1, r2 = r1 * q1, r2 * q2 + charge * p2
+            yield None, carry[m, tail], None, tail
 
 
 def _alpha_interior_peak(x0, y0, drive, n, dt_tau, peak):

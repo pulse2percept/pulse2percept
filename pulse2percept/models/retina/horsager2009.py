@@ -1,9 +1,9 @@
 """:py:class:`~pulse2percept.models.retina.Horsager2009Model`,
    :py:class:`~pulse2percept.models.retina.Horsager2009Temporal` [Horsager2009]_"""
 import numpy as np
-from ..base import Model, TemporalModel, _thread_params
+from ..base import Model, TemporalModel
+from ..temporal import _charge_chunks, _flush_denormals, _on_torch
 from ...units import ms
-from ._horsager2009 import temporal_fast
 
 
 class Horsager2009Temporal(TemporalModel):
@@ -85,19 +85,18 @@ class Horsager2009Temporal(TemporalModel):
         ``'last'``.
     verbose : bool, optional
         Whether to print status messages. Default: True.
-    n_threads : int, optional
-        Number of OpenMP threads. Defaults to all available CPU cores.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+    .. versionchanged:: 0.12.0
+
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
     """
 
     def __init__(self, *, dt=0.005, tau1=0.42, tau2=45.25, tau3=26.25,
                  eps=2.25, beta=3.43, thresh_percept=0, reduce='last',
-                 verbose=True, n_threads=None, n_jobs=None):
+                 verbose=True):
         super().__init__(dt=dt, tau1=tau1, tau2=tau2, tau3=tau3, eps=eps,
                          beta=beta, thresh_percept=thresh_percept,
-                         reduce=reduce, verbose=verbose,
-                         **_thread_params(n_threads, n_jobs))
+                         reduce=reduce, verbose=verbose)
 
     def get_default_params(self):
         base_params = super(Horsager2009Temporal, self).get_default_params()
@@ -109,6 +108,8 @@ class Horsager2009Temporal(TemporalModel):
             'beta': 3.43
         }
         base_params.update(params)
+        # Torch runs on its own thread pool:
+        del base_params['n_threads'], base_params['n_jobs']
         return base_params
 
     def get_param_units(self):
@@ -117,19 +118,76 @@ class Horsager2009Temporal(TemporalModel):
                 'tau3': ms}
 
     def _predict_temporal(self, stim, t_percept):
-        """Predict the temporal response."""
-        time = self._stim_times(stim)
-        stim_data = self._stim_values(stim).reshape((-1, len(time)))
-        # Round before casting so floating-point noise cannot shift a sample.
-        idx_percept = np.uint32(np.round(t_percept / self.dt))
-        if np.unique(idx_percept).size < t_percept.size:
-            raise ValueError(f"All times 't_percept' must be distinct multiples "
-                             f"of `dt`={self.dt:.2e}")
-        return temporal_fast(stim_data.astype(np.float32),
-                             time.astype(np.float32),
-                             idx_percept,
-                             self.dt, self.tau1, self.tau2, self.tau3,
-                             self.eps, self.beta, self.thresh_percept, self.n_threads)
+        """Predict the float32 NumPy temporal response."""
+        return _on_torch(self._predict_horsager, self._stim_values(stim),
+                         self._stim_times(stim), t_percept)
+
+    def _predict_temporal_tensor(self, stim, t_percept, reduce='last'):
+        """Predict the temporal response to tensor data, keeping its dtype
+        and autograd graph. ``reduce`` is applied by the caller."""
+        return self._predict_horsager(stim.data, self._stim_times(stim),
+                                      t_percept)
+
+    @_flush_denormals()
+    def _predict_horsager(self, data, time, t_percept):
+        """Return the Torch response to ``data`` sampled at ``time``.
+
+        Each constant-stimulus chunk is one closed-form step of the fast
+        stage and one matrix product of the slow cascade. Timing is fixed.
+        """
+        import torch
+        beta = float(np.float32(self.beta))
+        # Not simply zero: 0**beta is 1 for beta == 0 and inf for beta < 0:
+        with np.errstate(divide='ignore'):
+            zero_pow = float(np.float32(0) ** np.float32(beta))
+        # Time-major, as in `_charge_chunks`:
+        state = data.new_zeros((3, data.reshape((-1, len(time))).shape[0]))
+        rows = []
+        # Rectified steps can be skipped only if they contribute nothing:
+        for x, carry, weights, offs in _charge_chunks(
+                self, data, time, t_percept, -1, skip_quiet=zero_pow == 0):
+            if x is None:
+                state = carry @ state
+                rows.append(state[:len(offs)])
+                state = state[len(offs):]
+                continue
+            pos = x > 0
+            # The inner `where` keeps NaN out of the gradient of rectified
+            # steps:
+            r3 = torch.where(pos, torch.where(pos, x, 1.0) ** beta, zero_pow)
+            if beta < 0:
+                resp = _inf_steps(state, r3, carry, weights, offs)
+            else:
+                resp = torch.addmm(carry @ state, weights, r3)
+            state = resp[len(offs):]
+            rows.append(resp[:len(offs)])
+        resp = torch.cat(rows).T.contiguous()
+        # Thresholds the output only, not the state:
+        thresh = float(np.float32(self.thresh_percept))
+        return torch.where(resp.abs() >= thresh, resp, 0.0)
+
+
+def _inf_steps(state, r3, carry, weights, offs):
+    """Return the time-major slow cascade of ``r3``, which may hold inf.
+
+    Explicit-Euler steps make every stage inf at the first inf input and NaN
+    (inf - inf) from the next step on; a non-finite state is NaN after one
+    step.
+    """
+    import torch
+    inf = torch.isinf(r3)
+    n = r3.shape[0]
+    # 1-based step of the first inf input, n + 1 if none:
+    first = torch.where(inf.any(dim=0), inf.to(r3.dtype).argmax(dim=0) + 1,
+                        n + 1)
+    finite = torch.isfinite(state)
+    first = torch.where(finite.all(dim=0), first, 0)
+    # inf * 0 is NaN, so the matrix product sees zeros instead:
+    resp = torch.addmm(carry @ torch.where(finite, state, 0.0), weights,
+                       torch.where(inf, 0.0, r3))
+    step = torch.tensor(list(offs) + [n] * 3, device=r3.device)[:, None]
+    return torch.where(step > first, torch.nan,
+                       torch.where(step == first, torch.inf, resp))
 
 
 class Horsager2009Model(Model):
@@ -166,18 +224,18 @@ class Horsager2009Model(Model):
         interval. Default: ``'last'``.
     verbose : bool, optional
         Whether to print status messages. Default: True.
-    n_threads : int, optional
-        Number of OpenMP threads. Defaults to all available CPU cores.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+    .. versionchanged:: 0.12.0
+
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
     """
 
     def __init__(self, *, dt=0.005, tau1=0.42, tau2=45.25, tau3=26.25,
                  eps=2.25, beta=3.43, thresh_percept=0, reduce='last',
-                 verbose=True, n_threads=None, n_jobs=None):
+                 verbose=True):
         super().__init__(
             spatial=None,
             temporal=Horsager2009Temporal(
                 dt=dt, tau1=tau1, tau2=tau2, tau3=tau3, eps=eps, beta=beta,
-                thresh_percept=thresh_percept, reduce=reduce, verbose=verbose,
-                n_threads=n_threads, n_jobs=n_jobs))
+                thresh_percept=thresh_percept, reduce=reduce,
+                verbose=verbose))

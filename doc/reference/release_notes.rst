@@ -46,6 +46,11 @@ API changes and improvements
   replacing the generic temporal Cython extension, and no longer take
   ``n_threads``/``n_jobs`` (:pull:`952`).
 
+* The Nanduri2012 and Horsager2009 models now run on Torch everywhere,
+  replacing their Cython extensions, and no longer take
+  ``n_threads``/``n_jobs``. ``Nanduri2012Model`` runs on the Torch composite
+  core (:pull:`953`).
+
 Bug fixes
 ---------
 

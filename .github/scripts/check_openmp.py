@@ -27,13 +27,13 @@ import numpy as np
 import torch
 
 import pulse2percept
-from pulse2percept.models.retina import Nanduri2012Temporal
-from pulse2percept.stimuli import Stimulus
+from pulse2percept.implants.retina import ArgusI
+from pulse2percept.models.retina import Thompson2003Spatial
 
 OPENMP = "@rpath/libomp.dylib"
 SYSTEM = ("/usr/lib/", "/System/Library/")
 # Extensions with `prange` loops, which must link OpenMP:
-OPENMP_EXTS = ("_nanduri2012.",)
+OPENMP_EXTS = ("_thompson2003.",)
 
 # As in PyTorch's tools/embed_libomp_macos.py:
 _LOAD_RE = re.compile(r"(?:name|path) (.+) \(offset \d+\)")
@@ -80,8 +80,7 @@ for path in exts:
 # ---- Runtime ----
 # Initialize torch's OpenMP first, then enter a pulse2percept parallel region:
 torch.ones(512, 512) @ torch.ones(512, 512)
-stim = Stimulus(np.ones((256, 3)), time=[0, 1, 2])
-Nanduri2012Temporal(n_threads=4).predict_percept(stim, t_percept=[1, 2])
+Thompson2003Spatial(ArgusI(), step=0.5).predict_percept(np.ones(16))
 
 libc = ctypes.CDLL(None)
 libc._dyld_get_image_name.restype = ctypes.c_char_p

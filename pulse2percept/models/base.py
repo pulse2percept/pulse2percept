@@ -1811,7 +1811,14 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         resp = resp.reshape((n_space, t_percept.size))
         if sub_idx is not None:
             # Preserve pulse-driven peaks rather than averaging them over gaps.
-            resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
+            if _is_tensor(resp):
+                import torch
+                resp = torch.stack([
+                    part.amax(dim=-1)
+                    for part in resp.tensor_split(sub_idx[1:].tolist(), dim=-1)
+                ], dim=-1)
+            else:
+                resp = np.maximum.reduceat(resp, sub_idx, axis=-1)
             t_percept = t_out
         metadata = {'stim': source_stim}
         if source is not None:
