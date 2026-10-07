@@ -44,7 +44,7 @@ API changes and improvements
 
 * ``FadingTemporal`` and ``AlphaTemporal`` now run on Torch everywhere,
   replacing the generic temporal Cython extension, and no longer take
-  ``n_threads``/``n_jobs`` (:pull:`N`).
+  ``n_threads``/``n_jobs`` (:pull:`952`).
 
 Bug fixes
 ---------
