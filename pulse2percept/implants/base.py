@@ -53,7 +53,8 @@ def _bilinear_tensor(image, img_y, img_x, y, x):
     Row ``r`` of ``image`` lies at ``img_y[r]`` and column ``c`` at
     ``img_x[c]``. Points outside the grid are 0. Trailing axes (e.g., video
     frames) are sampled independently. Gradients flow to the (at most four)
-    pixels around each point.
+    pixels around each point. Accumulates in float64, then rounds to
+    ``image.dtype``, which reproduces ``RegularGridInterpolator`` bitwise.
     """
     import torch
     iy, wy, in_y = _grid_interval(img_y, y)
@@ -66,9 +67,10 @@ def _bilinear_tensor(image, img_y, img_x, y, x):
                         wy * wx], axis=1) * (in_y & in_x)[:, np.newaxis]
     rows, cols, weights = (torch.as_tensor(a, device=image.device)
                            for a in (rows, cols, weights))
-    weights = weights.to(image.dtype).reshape(
+    weights = weights.to(torch.float64).reshape(
         weights.shape + (1,) * (image.ndim - 2))
-    return (image[rows, cols] * weights).sum(dim=1)
+    corners = image[rows, cols].to(torch.float64)
+    return (corners * weights).sum(dim=1).to(image.dtype)
 
 
 def _ensemble_target(implants):

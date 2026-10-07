@@ -6,7 +6,7 @@ import numpy.testing as npt
 import pytest
 import torch
 
-from pulse2percept.implants import GridImplant
+from pulse2percept.implants import GridImplant, Implant
 from pulse2percept.implants.cortex import Orion
 from pulse2percept.implants.retina import ArgusI, ArgusII, PRIMAPivotal
 from pulse2percept.models import AlphaTemporal, FadingTemporal, Model
@@ -17,11 +17,14 @@ from pulse2percept.models.base import (_blend_meridian, _delivered,
 from pulse2percept.models.retina import (AxonMapSpatial, ScoreboardSpatial,
                                          Thompson2003Spatial)
 from pulse2percept.models.retina import beyeler2019
+from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulseTrain,
-                                   ImageStimulus, Stimulus, VideoStimulus)
+                                   ImageStimulus, PulseEncoder, Stimulus,
+                                   VideoStimulus)
+from pulse2percept.stimuli import encoders
 from pulse2percept.topography import Grid2D
 from pulse2percept.topography.retina import Curcio1990Map
-from pulse2percept.units import mA, ms
+from pulse2percept.units import mA, ms, xTh
 
 # float32 tolerances: accumulation order differs from the Cython loops. ATOL
 # covers cancellation in mixed-polarity sums of ~30 uA terms.
@@ -29,12 +32,16 @@ RTOL, ATOL = 1e-6, 1e-5
 
 
 def _staged_percept(model, source, t_percept=None):
-    """Return the percept of the staged route: the spatial response, then
-    the temporal model's Cython kernel.
+    """Return the percept of the staged route: NumPy encoding, the spatial
+    response, then the temporal model's Cython kernel.
 
     Reference for the Torch composite, which ``Model.predict_percept`` uses.
     """
-    stim = model.implant._prepare_stim(source)
+    with pytest.MonkeyPatch.context() as mp:
+        # The NumPy encoder that `AmplitudeEncoder.encode` replaces for gray
+        # images and videos:
+        mp.setattr(AmplitudeEncoder, 'encode', PulseEncoder.encode)
+        stim = model.implant._prepare_stim(source)
     resp = model.spatial._predict_response(_delivered(stim))
     resp = replace(resp, frame_clock=_encoder_clock(stim))
     return _to_percept(model.temporal._predict_response(resp,
@@ -359,14 +366,20 @@ def test_Model_tensor_requires_electrical_implant():
         model._predict_tensor(waveform, TIME)
 
 
-def _image_model(implant=None, reduce='peak', amp_range=(10, 50), **params):
-    """Scoreboard + Fading model whose implant encodes images."""
+def _encoding_implant(implant=None, amp_range=(10, 50)):
+    """Return an image-encoding implant with two deactivated electrodes."""
     implant = ArgusII() if implant is None else implant
     names = implant.electrode_names
     implant.deactivate([names[0], names[-1]])
     implant.encoder = AmplitudeEncoder(
         amp_range=amp_range, freq=60, phase_dur=0.3, interphase_dur=0.1,
         cathodic_first=False, clock=0.1, frame_dur=100)
+    return implant
+
+
+def _image_model(implant=None, reduce='peak', amp_range=(10, 50), **params):
+    """Scoreboard + Fading model whose implant encodes images."""
+    implant = _encoding_implant(implant, amp_range)
     params = {'xrange': (-6, 6), 'yrange': (-5, 5), 'step': 0.5,
               'thresh_percept': 0, **params}
     return Model(ScoreboardSpatial(implant, **params),
@@ -382,27 +395,31 @@ def test_Model_tensor_image_parity(reduce):
     model = _image_model(reduce=reduce)
     img = np.random.default_rng(7).uniform(-0.2, 1.2, (13, 17))
     expected = _staged_percept(model, ImageStimulus(img), t_percept=IMAGE_T)
-    waveform, time, _ = model.implant.encoder._encode_tensor(
-        torch.tensor(img, dtype=torch.float32))
-    resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
+    resp = model._predict_visual_tensor(
+        torch.tensor(img, dtype=torch.float32), t_percept=IMAGE_T)
     npt.assert_allclose(resp.time, expected.time)
     expected = expected.data.reshape(resp.data.shape)
     assert np.abs(expected).max() > 1
     npt.assert_allclose(resp.data.numpy(), expected, rtol=RTOL, atol=ATOL)
 
 
+def _assert_pixel_grad(source, resp):
+    """Backpropagate a squared response loss and check the pixel gradient."""
+    # A NumPy round trip would drop the graph:
+    assert isinstance(resp.data, torch.Tensor)
+    assert resp.data.requires_grad and resp.data.grad_fn is not None
+    resp.data.square().mean().backward()
+    assert source.grad is not None
+    assert torch.all(torch.isfinite(source.grad))
+    return source.grad
+
+
 def test_Model_tensor_image_autograd():
     model = _image_model()
     img = np.random.default_rng(7).uniform(0, 1, (13, 17))
     image = torch.tensor(img, dtype=torch.float32, requires_grad=True)
-    waveform, time, _ = model.implant.encoder._encode_tensor(image)
-    resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
-    # A NumPy round trip would drop the graph:
-    assert waveform.requires_grad and resp.data.requires_grad
-    resp.data.square().mean().backward()
-    assert image.grad is not None
-    assert torch.all(torch.isfinite(image.grad))
-    assert image.grad.abs().sum() > 0
+    resp = model._predict_visual_tensor(image, t_percept=IMAGE_T)
+    assert _assert_pixel_grad(image, resp).abs().sum() > 0
 
 
 def test_Model_tensor_image_black_autograd():
@@ -410,14 +427,9 @@ def test_Model_tensor_image_black_autograd():
     # amplitude. The squared response loss still has zero gradient at zero.
     model = _image_model(amp_range=(0, 50))
     image = torch.zeros((13, 17), requires_grad=True)
-    waveform, time, _ = model.implant.encoder._encode_tensor(image)
-    assert time.size > 2 and torch.all(waveform == 0)
-    resp = model._predict_tensor(waveform, time, t_percept=IMAGE_T)
-    assert waveform.requires_grad and resp.data.requires_grad
-    resp.data.square().mean().backward()
-    assert image.grad is not None
-    assert torch.all(torch.isfinite(image.grad))
-    assert torch.all(image.grad == 0)
+    resp = model._predict_visual_tensor(image, t_percept=IMAGE_T)
+    assert torch.all(resp.data == 0)
+    assert torch.all(_assert_pixel_grad(image, resp) == 0)
 
 
 def test_Model_tensor_image_gradcheck():
@@ -425,12 +437,10 @@ def test_Model_tensor_image_gradcheck():
     # clipping is smooth, and amp_lo > 0 keeps every pulse in the schedule:
     model = _image_model(ArgusI(), reduce='last', step=1)
     img = np.random.default_rng(8).uniform(0.1, 0.9, (3, 4))
-
-    def percept(image):
-        waveform, time, _ = model.implant.encoder._encode_tensor(image)
-        return model._predict_tensor(waveform, time, t_percept=[20.0]).data
-
-    torch.autograd.gradcheck(percept, (torch.tensor(img, requires_grad=True),))
+    torch.autograd.gradcheck(
+        lambda image: model._predict_visual_tensor(image,
+                                                   t_percept=[20.0]).data,
+        (torch.tensor(img, requires_grad=True),))
 
 
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
@@ -440,9 +450,8 @@ def test_Model_tensor_image_frame_clock(reduce):
     model = _image_model(reduce=reduce)
     img = np.random.default_rng(7).uniform(0, 1, (13, 17))
     expected = _staged_percept(model, ImageStimulus(img))
-    waveform, time, clock = model.implant.encoder._encode_tensor(
+    resp = model._predict_visual_tensor(
         torch.tensor(img, dtype=torch.float32))
-    resp = model._predict_tensor(waveform, time, frame_clock=clock)
     npt.assert_equal(resp.time, expected.time)
     npt.assert_allclose(resp.data.numpy(),
                         expected.data.reshape(resp.data.shape),
@@ -458,9 +467,8 @@ def test_Model_tensor_video_parity(reduce, frame_dur):
     vid = np.random.default_rng(10).uniform(-0.2, 1.2, (13, 17, 6))
     expected = _staged_percept(
         model, VideoStimulus(vid, metadata={'fps': 29.97}))
-    waveform, time, clock = model.implant.encoder._encode_tensor(
+    resp = model._predict_visual_tensor(
         torch.tensor(vid, dtype=torch.float32), fps=29.97)
-    resp = model._predict_tensor(waveform, time, frame_clock=clock)
     npt.assert_equal(resp.time, expected.time)
     assert resp.time.size == 6
     npt.assert_equal(resp.frame_clock.source_time,
@@ -479,12 +487,8 @@ def test_Model_tensor_video_autograd():
     vid = np.random.default_rng(11).uniform(0, 1, (13, 17, 6))
     video = torch.tensor(vid, dtype=torch.float32, requires_grad=True)
     with pytest.warns(UserWarning, match='deliver no pulse'):
-        waveform, time, clock = encoder._encode_tensor(video, fps=30)
-    resp = model._predict_tensor(waveform, time, frame_clock=clock)
-    assert waveform.requires_grad and resp.data.requires_grad
-    resp.data.square().mean().backward()
-    assert torch.all(torch.isfinite(video.grad))
-    driven = video.grad.abs().sum(dim=(0, 1)) > 0
+        resp = model._predict_visual_tensor(video, fps=30)
+    driven = _assert_pixel_grad(video, resp).abs().sum(dim=(0, 1)) > 0
     npt.assert_equal(driven.numpy(), [True, False, False, True, False, False])
 
 
@@ -494,13 +498,19 @@ def test_Model_tensor_video_gradcheck():
     model = _image_model(ArgusI(), reduce='last', step=1)
     model.implant.encoder.frame_dur = None
     vid = np.random.default_rng(12).uniform(0.1, 0.9, (3, 4, 2))
+    torch.autograd.gradcheck(
+        lambda video: model._predict_visual_tensor(video, fps=20).data,
+        (torch.tensor(vid, requires_grad=True),))
 
-    def percept(video):
-        waveform, time, clock = model.implant.encoder._encode_tensor(
-            video, fps=20)
-        return model._predict_tensor(waveform, time, frame_clock=clock).data
 
-    torch.autograd.gradcheck(percept, (torch.tensor(vid, requires_grad=True),))
+def test_Model_tensor_visual_requires_amplitude_encoder():
+    model = _image_model()
+    model.implant.encoder = None
+    with pytest.raises(NotImplementedError, match='AmplitudeEncoder'):
+        model._predict_visual_tensor(torch.ones((13, 17)))
+    with pytest.raises(NotImplementedError, match='AmplitudeEncoder'):
+        Model(temporal=FadingTemporal())._predict_visual_tensor(
+            torch.ones((13, 17)))
 
 
 def _axon_spatial(implant=None, **params):
@@ -686,6 +696,16 @@ def test_AxonMapModel_tensor_autograd():
     assert waveform.grad[::4].abs().sum() > 0
 
 
+def test_AxonMapModel_tensor_image_autograd():
+    model = Model(_axon_spatial(_encoding_implant()),
+                  FadingTemporal(tau=2, reduce='peak')).build()
+    img = np.random.default_rng(7).uniform(0, 1, (13, 17))
+    image = torch.tensor(img, dtype=torch.float32, requires_grad=True)
+    resp = model._predict_visual_tensor(image, t_percept=IMAGE_T)
+    assert resp.data.abs().max() > 0
+    assert _assert_pixel_grad(image, resp).abs().sum() > 0
+
+
 def test_AxonMapModel_tensor_gradcheck(monkeypatch):
     # Several blocks, so gradients pass each block's index_put and gather:
     monkeypatch.setattr(beyeler2019, '_AXON_BLOCK_BYTES', 50000)
@@ -754,7 +774,10 @@ def test_predict_rejects_nonfinite_stimulus(kind, bad):
 
 
 def _assert_same_percept(percept, expected):
+    # No tensor leaks through the public API:
+    assert isinstance(percept, Percept)
     assert isinstance(percept.data, np.ndarray)
+    assert isinstance(percept.metadata['stim'], Stimulus)
     assert percept.data.dtype == expected.data.dtype
     assert percept.data.shape == expected.data.shape
     assert np.abs(expected.data).max() > 0
@@ -809,29 +832,150 @@ def test_Model_predict_percept_torch_pulse_train():
                          _staged_percept(model, source))
 
 
+def _black_left(shape, seed=7):
+    """Return gray levels, black in the left half, so amp_range=(0, x)
+    leaves some electrodes without pulses."""
+    pixels = np.random.default_rng(seed).uniform(-0.2, 1.2, shape)
+    pixels[:, :shape[1] // 2] = 0
+    return pixels
+
+
+@pytest.mark.parametrize('amp_range', [(10, 50), (0, 50)])
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
 @pytest.mark.parametrize('t_percept', [None, IMAGE_T])
-def test_Model_predict_percept_torch_image(reduce, t_percept):
-    model = _image_model(reduce=reduce)
-    source = ImageStimulus(np.random.default_rng(7).uniform(0, 1, (13, 17)))
-    _assert_same_percept(model.predict_percept(source, t_percept=t_percept),
+def test_Model_predict_percept_torch_image(reduce, t_percept, amp_range):
+    model = _image_model(reduce=reduce, amp_range=amp_range)
+    source = ImageStimulus(_black_left((13, 17)))
+    percept = model.predict_percept(source, t_percept=t_percept)
+    _assert_same_percept(percept,
                          _staged_percept(model, source, t_percept=t_percept))
+    # Deactivated electrodes are absent from the prepared stimulus:
+    names = model.implant.electrode_names
+    delivered = percept.metadata['stim'].electrodes
+    assert {names[0], names[-1]}.isdisjoint(delivered)
 
 
+def test_Model_predict_percept_torch_image_axonmap():
+    model = Model(_axon_spatial(_encoding_implant(amp_range=(0, 50))),
+                  FadingTemporal(tau=2)).build()
+    source = ImageStimulus(_black_left((13, 17)))
+    _assert_same_percept(model.predict_percept(source),
+                         _staged_percept(model, source))
+
+
+@pytest.mark.parametrize('frame_dur', [None, 40])
 @pytest.mark.parametrize('reduce', ['last', 'peak'])
-def test_Model_predict_percept_torch_video(reduce):
-    # Output frames follow the 29.97 fps source clock:
-    model = _image_model(reduce=reduce)
-    model.implant.encoder.frame_dur = None
-    vid = np.random.default_rng(10).uniform(0, 1, (13, 17, 6))
-    source = VideoStimulus(vid, metadata={'fps': 29.97})
+def test_Model_predict_percept_torch_video(reduce, frame_dur):
+    # Output frames follow the 29.97 fps source clock unless `frame_dur`
+    # retimes them:
+    model = _image_model(reduce=reduce, amp_range=(0, 50))
+    model.implant.encoder.frame_dur = frame_dur
+    source = VideoStimulus(_black_left((13, 17, 6)), metadata={'fps': 29.97})
     percept = model.predict_percept(source)
     expected = _staged_percept(model, source)
     _assert_same_percept(percept, expected)
     assert percept.time.size == 6
-    assert 'source_frame_time' in percept.metadata
-    npt.assert_equal(percept._frame_clock.source_time,
-                     expected._frame_clock.source_time)
+    assert ('source_frame_time' in percept.metadata) == (frame_dur is None)
+    for field in ('time', 'dur', 'source_time', 'source_dur'):
+        npt.assert_equal(getattr(percept._frame_clock, field),
+                         getattr(expected._frame_clock, field))
+
+
+@pytest.mark.parametrize('video', [False, True])
+def test_Model_predict_percept_visual_skips_numpy_encoder(video,
+                                                          monkeypatch):
+    model = _image_model(amp_range=(0, 50))
+    model.implant.encoder.frame_dur = None
+    shape = (13, 17, 6) if video else (13, 17)
+    source = (VideoStimulus(_black_left(shape), metadata={'fps': 29.97})
+              if video else ImageStimulus(_black_left(shape)))
+    expected = _staged_percept(model, source)
+
+    def numpy_route(*args, **kwargs):
+        raise AssertionError("NumPy preparation or encoding called")
+
+    for owner, name in ((Implant, '_prepare_stim'),
+                        (Implant, 'reshape_stim'),
+                        (PulseEncoder, 'encode'),
+                        (encoders, '_sampled_frames'),
+                        (Model, '_predict_tensor_core')):
+        monkeypatch.setattr(owner, name, numpy_route)
+    sampled, predicted = [], []
+    sample, predict = Implant._sample_image_tensor, Model._predict_tensor
+
+    def sample_spy(self, image):
+        sampled.append(image.dtype)
+        return sample(self, image)
+
+    def predict_spy(self, *args, **kwargs):
+        predicted.append(torch.is_inference_mode_enabled())
+        return predict(self, *args, **kwargs)
+
+    monkeypatch.setattr(Implant, '_sample_image_tensor', sample_spy)
+    monkeypatch.setattr(Model, '_predict_tensor', predict_spy)
+    percept = model.predict_percept(source)
+    # Torch from electrode sampling onward, once, under inference mode:
+    assert sampled == [torch.float32] and predicted == [True]
+    _assert_same_percept(percept, expected)
+
+
+class _CheckedArgusII(ArgusII):
+    def check_stim(self, stim):
+        return super().check_stim(stim)
+
+
+class _SubclassedEncoder(AmplitudeEncoder):
+    pass
+
+
+def _unsupported(model, case):
+    """Make ``case`` unsupported by Torch encoding; return the source."""
+    implant, encoder = model.implant, model.implant.encoder
+    pixels = np.random.default_rng(7).uniform(0, 1, (13, 17))
+    timing = {'freq': 60, 'phase_dur': 0.3, 'clock': 0.1, 'frame_dur': 100}
+    if case in ('rgb', 'rgba'):
+        return ImageStimulus(np.random.default_rng(7).uniform(
+            0, 1, (13, 17, len(case))))
+    if case == 'n_levels':
+        encoder.n_levels = 4
+    elif case == 'stretch':
+        encoder.stretch = True
+    elif case == 'preprocess':
+        implant.preprocess = lambda stim: stim
+    elif case == 'safe_mode':
+        implant.safe_mode = True
+    elif case == 'max_current':
+        implant.max_current = 1e5
+    elif case == 'xTh':
+        implant.encoder = AmplitudeEncoder(amp_range=(0.5 * xTh, 2 * xTh),
+                                           **timing)
+        implant.thresholds = {name: 20 for name in implant.electrode_names}
+    elif case == 'encoder_subclass':
+        implant.encoder = _SubclassedEncoder(amp_range=(10, 50), **timing)
+    elif case == 'spatial':
+        model.spatial = _DoubledScoreboard(implant, xrange=(-6, 6),
+                                           yrange=(-5, 5), step=0.5,
+                                           thresh_percept=0)
+    elif case == 'temporal':
+        model.temporal = AlphaTemporal(tau=2)
+    return ImageStimulus(pixels)
+
+
+@pytest.mark.parametrize('case', [
+    'rgb', 'rgba', 'n_levels', 'stretch', 'preprocess', 'check_stim',
+    'safe_mode', 'max_current', 'xTh', 'encoder_subclass', 'spatial',
+    'temporal'])
+def test_Model_predict_percept_visual_fallback(case, monkeypatch):
+    model = _image_model(_CheckedArgusII() if case == 'check_stim' else None)
+    source = _unsupported(model, case)
+    expected = _staged_percept(model, source)
+
+    def visual(*args, **kwargs):
+        raise AssertionError("Torch encoding route called")
+
+    monkeypatch.setattr(Model, '_predict_visual_percept', visual)
+    # The prepared route still runs, with the same result as before:
+    _assert_same_percept(model.predict_percept(source), expected)
 
 
 @pytest.mark.parametrize('kind', COMPOSITES)

@@ -326,19 +326,48 @@ def _sampled_frames(source, implant=None, frame_dur=None):
     gray = np.clip(np.asarray(stim.values(dimensionless),
                               dtype=np.float32), 0, 1)
     if stim.time is None:
-        # Static images use the default presentation duration.
         gray = gray.reshape((-1, 1))
-        frame_dur = (_DEFAULT_FRAME_DUR if frame_dur is None
-                     else frame_dur)
-        frame_time = np.zeros(1, dtype=np.float64)
-    elif frame_dur is None:
-        # Preserve the source frame interval.
-        frame_dur = frame_interval(np.asarray(stim.time), fps=fps)
-        frame_time = np.asarray(stim.time, dtype=np.float64)
-    else:
-        # Explicit frame_dur replaces source frame timing.
-        frame_time = np.arange(gray.shape[1], dtype=np.float64) * frame_dur
+    frame_time, frame_dur = _frame_timing(stim.time, gray.shape[1], fps,
+                                          frame_dur)
     return gray, stim.electrodes, frame_time, frame_dur
+
+
+def _frame_timing(time, n_frames, fps=None, frame_dur=None):
+    """Return frame onsets and duration (ms) of a source.
+
+    ``time=None`` is a still image. An explicit ``frame_dur`` replaces the
+    source frame timing.
+    """
+    if time is None:
+        # Static images use the default presentation duration.
+        return (np.zeros(1, dtype=np.float64),
+                _DEFAULT_FRAME_DUR if frame_dur is None else frame_dur)
+    if frame_dur is None:
+        # Preserve the source frame interval.
+        return (np.asarray(time, dtype=np.float64),
+                frame_interval(np.asarray(time), fps=fps))
+    return np.arange(n_frames, dtype=np.float64) * frame_dur, frame_dur
+
+
+def _gray_pixels(source):
+    """Return the ``(H, W[, n_frames])`` pixels of a gray image or video.
+
+    Returns None for other sources, color, and anything whose NumPy encoding
+    the Torch encoder does not reproduce exactly (e.g., non-finite pixels or
+    a video compressed in space).
+    """
+    if isinstance(source, ImageStimulus):
+        shape, ndim = source.img_shape, 2
+    elif isinstance(source, VideoStimulus):
+        shape, ndim = source.vid_shape, 3
+    else:
+        return None
+    if (len(shape) != ndim or source.data.size != np.prod(shape) or
+            not source.unit.dimension.is_dimensionless or
+            source.data.dtype not in (np.float32, np.float64)):
+        return None
+    pixels = source.data.reshape(shape)
+    return pixels if np.all(np.isfinite(pixels)) else None
 
 
 def _video_frames(n_frames, time=None, fps=None, frame_dur=None):
@@ -362,9 +391,7 @@ def _video_frames(n_frames, time=None, fps=None, frame_dur=None):
                          f"frames, not {time.shape}.")
     if not np.all(np.isfinite(time)) or np.any(np.diff(time) <= 0):
         raise ValueError("'time' must be finite and strictly increasing.")
-    if frame_dur is None:
-        return time, frame_interval(time, fps=fps)
-    return np.arange(n_frames, dtype=np.float64) * frame_dur, frame_dur
+    return _frame_timing(time, n_frames, fps, frame_dur)
 
 
 class Encoder(PrettyPrint, metaclass=ABCMeta):
@@ -1129,6 +1156,120 @@ class AmplitudeEncoder(PulseEncoder):
         amp_lo, amp_hi = self.amp_range
         return amp_lo + gray * (amp_hi - amp_lo), self.freq
 
+    def encode(self, source):
+        # Gray images and videos use the Torch encoder core; it reproduces
+        # the NumPy encoding exactly:
+        exact = type(self) is AmplitudeEncoder and self._tensor_gap(
+            prepared=False) is None
+        pixels = _gray_pixels(source) if exact else None
+        if pixels is None:
+            return super().encode(source)
+        return self._encode_pixels(source, pixels)[1]
+
+    def _tensor_gap(self, prepared=True):
+        """Return why Torch encoding would differ from NumPy, or None.
+
+        ``prepared`` also requires the ``implant.prepare_stim`` steps to be
+        reproducible.
+        """
+        implant = self.implant
+        if implant is None:
+            return "Tensor encoding requires an encoder bound to an implant."
+        # Imported here because `implants` imports this module:
+        from ..implants.base import Implant
+        if prepared:
+            if implant.stimulus_unit.dimension != uA.dimension:
+                return (f"Tensor encoding requires an implant driven by "
+                        f"electrical current, not {implant.stimulus_unit}.")
+            # `preprocess=True` with the inherited `preprocess_stim` is a
+            # no-op:
+            preprocesses = callable(implant.preprocess) or bool(
+                implant.preprocess and
+                type(implant).preprocess_stim is not Implant.preprocess_stim)
+            # `prepare_stim` steps without a tensor implementation:
+            unsupported = [name for name, on in (
+                ('preprocess', preprocesses),
+                ('_prepare_stim',
+                 type(implant)._prepare_stim is not Implant._prepare_stim),
+                ('check_stim',
+                 type(implant).check_stim is not Implant.check_stim),
+                ('safe_mode', implant.safe_mode),
+                ('max_current', implant.max_current is not None)) if on]
+            if unsupported:
+                return (f"Tensor encoding does not support an implant with "
+                        f"{', '.join(unsupported)}. Use an implant without "
+                        f"custom preprocessing or safety checks, with "
+                        f"safe_mode=False and max_current=None.")
+            if self.amp_unit != uA:
+                return (f"Tensor encoding requires 'amp_range' in uA, not "
+                        f"{self.amp_unit}.")
+        if type(implant).reshape_stim is not Implant.reshape_stim:
+            return "Tensor encoding does not support a custom 'reshape_stim'."
+        if self.n_levels is not None or self.stretch:
+            # Both depend discretely or globally on the gray levels:
+            return "Tensor encoding does not support 'n_levels' or 'stretch'."
+        return None
+
+    def _tensor_gray(self, pixels, dtype=None):
+        """Return Torch gray levels in [0, 1] at every electrode.
+
+        ``(H, W)`` gives ``(n_electrodes,)`` and ``(H, W, n_frames)`` gives
+        ``(n_electrodes, n_frames)``. ``dtype`` casts after sampling.
+        """
+        import torch
+        gray = self.implant._sample_image_tensor(pixels)
+        if dtype is not None:
+            gray = gray.to(dtype)
+        # Keep the one-sided derivative at the valid gray-level endpoints:
+        return torch.where(gray < 0, 0, torch.where(gray > 1, 1, gray))
+
+    def _tensor_schedule(self, gray, frame_time, frame_dur, timed,
+                         sparse=False):
+        """Return Torch amplitudes and the pulse schedule they scale.
+
+        ``amp`` is ``(n_electrodes, n_frames)``; the schedule is an
+        ``encode`` result holding a detached copy. ``sparse`` schedules only
+        nonzero amplitudes, as ``encode`` does; otherwise every firing
+        electrode keeps its pulses, so zero amplitudes retain a gradient.
+        """
+        amp, freq = self._modulate(gray.reshape(gray.shape[0], -1))
+        sched = self._assemble(
+            amp.detach().cpu().numpy(), freq, self.implant.electrode_names,
+            frame_time, frame_dur, timed=timed,
+            schedule_mask=None if sparse else freq > 0)
+        return amp, sched
+
+    def _tensor_waveform(self, amp, sched):
+        """Return the delivered Torch waveform, its times, and frame clock.
+
+        Deactivated electrodes keep a zero row and, as in ``prepare_stim``,
+        their pulse times.
+        """
+        import torch
+        on = torch.tensor([e.activated
+                           for e in self.implant.electrode_objects],
+                          device=amp.device)
+        amp = torch.where(on[:, None], amp, 0)
+        clock = _FrameClock(sched._frame_time, sched._frame_dur,
+                            sched._source_time, sched._source_dur)
+        return sched._render_tensor(amp), sched.time.copy(), clock
+
+    def _encode_pixels(self, source, pixels):
+        """Return Torch amplitudes and ``encode(source)`` of a gray stimulus.
+
+        ``pixels`` come from ``_gray_pixels(source)``. Gray levels are sampled
+        in float64 and modulated in float32, as in ``_sampled_frames``.
+        """
+        import torch
+        gray = self._tensor_gray(torch.tensor(pixels), dtype=torch.float32)
+        time = source.time
+        frame_time, frame_dur = _frame_timing(
+            time, 1 if gray.ndim == 1 else gray.shape[1],
+            _fps(source.metadata), self.frame_dur)
+        return self._tensor_schedule(
+            gray, frame_time, frame_dur,
+            timed=time is not None and self.frame_dur is None, sparse=True)
+
     def _encode_tensor(self, source, time=None, fps=None):
         """Return the pulse trains for a Torch gray image or video.
 
@@ -1139,8 +1280,8 @@ class AmplitudeEncoder(PulseEncoder):
         to the pixels through sampling and amplitude; pulse timing has none.
 
         Requires a bound, current-driven implant without custom preprocessing,
-        safety checks, ``safe_mode`` or ``max_current``, and ``amp_range`` in
-        uA.
+        sampling, safety checks, ``safe_mode`` or ``max_current``, and
+        ``amp_range`` in uA (see ``_tensor_gap``).
 
         Parameters
         ----------
@@ -1166,71 +1307,25 @@ class AmplitudeEncoder(PulseEncoder):
             Encoder frames, plus the source-video frames unless ``frame_dur``
             retimes the video.
         """
-        import torch
-        if self.implant is None:
-            raise NotImplementedError("Tensor encoding requires an encoder "
-                                      "bound to an implant.")
-        implant = self.implant
-        if implant.stimulus_unit.dimension != uA.dimension:
-            raise NotImplementedError(
-                f"Tensor encoding requires an implant driven by electrical "
-                f"current, not {implant.stimulus_unit}.")
-        # Imported here because `implants` imports this module:
-        from ..implants.base import Implant
-        # `preprocess=True` with the inherited `preprocess_stim` is a no-op:
-        preprocesses = callable(implant.preprocess) or bool(
-            implant.preprocess and
-            type(implant).preprocess_stim is not Implant.preprocess_stim)
-        # `prepare_stim` steps without a tensor implementation:
-        unsupported = [name for name, on in (
-            ('preprocess', preprocesses),
-            ('check_stim', type(implant).check_stim is not Implant.check_stim),
-            ('safe_mode', implant.safe_mode),
-            ('max_current', implant.max_current is not None)) if on]
-        if unsupported:
-            raise NotImplementedError(
-                f"Tensor encoding does not support an implant with "
-                f"{', '.join(unsupported)}. Use an implant without custom "
-                f"preprocessing or safety checks, with safe_mode=False and "
-                f"max_current=None.")
-        if self.amp_unit != uA:
-            raise NotImplementedError(f"Tensor encoding requires 'amp_range' "
-                                      f"in uA, not {self.amp_unit}.")
-        if self.n_levels is not None or self.stretch:
-            # Both depend discretely or globally on the gray levels:
-            raise NotImplementedError("Tensor encoding does not support "
-                                      "'n_levels' or 'stretch'.")
-        gray = self.implant._sample_image_tensor(source)
-        # Keep the one-sided derivative at the valid gray-level endpoints:
-        gray = torch.where(gray < 0, 0, torch.where(gray > 1, 1, gray))
-        timed = gray.ndim == 2 and self.frame_dur is None
+        gap = self._tensor_gap()
+        if gap is not None:
+            raise NotImplementedError(gap)
+        gray = self._tensor_gray(source)
         if gray.ndim == 1:
             if time is not None or fps is not None:
                 raise ValueError("'time' and 'fps' require a video of shape "
                                  "(H, W, n_frames).")
-            gray = gray[:, None]
-            frame_time = np.zeros(1, dtype=np.float64)
-            frame_dur = (_DEFAULT_FRAME_DUR if self.frame_dur is None
-                         else self.frame_dur)
+            frame_time, frame_dur = _frame_timing(None, 1,
+                                                  frame_dur=self.frame_dur)
         else:
             frame_time, frame_dur = _video_frames(gray.shape[1], time, fps,
                                                   self.frame_dur)
-        amp, freq = self._modulate(gray)
         # Pulse timing depends on frequency, not amplitude. Keep every firing
         # electrode in the schedule; differentiable amplitudes scale pulses.
-        sched = self._assemble(
-            np.zeros(gray.shape, dtype=np.float32), freq,
-            self.implant.electrode_names, frame_time, frame_dur, timed=timed,
-            schedule_mask=freq > 0)
-        # Deactivated electrodes keep their row and, as in `prepare_stim`,
-        # their pulse times:
-        on = torch.tensor([e.activated
-                           for e in self.implant.electrode_objects],
-                          device=amp.device)
-        amp = torch.where(on[:, None], amp, 0)
-        clock = _FrameClock(sched._frame_time, sched._frame_dur,
-                            sched._source_time, sched._source_dur)
-        return sched._render_tensor(amp), sched.time.copy(), clock
+        amp, sched = self._tensor_schedule(
+            gray, frame_time, frame_dur,
+            timed=gray.ndim == 2 and self.frame_dur is None)
+        return self._tensor_waveform(amp, sched)
 
 
 class FrequencyEncoder(PulseEncoder):

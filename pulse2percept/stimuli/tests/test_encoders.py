@@ -514,6 +514,99 @@ def test_AmplitudeEncoder__encode_tensor_errors():
         with pytest.raises(NotImplementedError, match='n_levels'):
             AmplitudeEncoder(ArgusII(), **params)._encode_tensor(img)
 
+    class ResamplingArgusII(ArgusII):
+        def reshape_stim(self, stim):
+            return super().reshape_stim(stim)
+
+    with pytest.raises(NotImplementedError, match='reshape_stim'):
+        AmplitudeEncoder(ResamplingArgusII())._encode_tensor(img)
+
+
+def _numpy_encode(encoder, source):
+    """Return the NumPy encoding that ``AmplitudeEncoder.encode`` replaces"""
+    return PulseEncoder.encode(encoder, source)
+
+
+def _assert_same_encoding(stim, expected):
+    assert type(stim) is type(expected) and stim.unit == expected.unit
+    npt.assert_equal(list(stim.electrodes), list(expected.electrodes))
+    npt.assert_equal(stim.time, expected.time)
+    npt.assert_equal(stim.data, expected.data)
+    npt.assert_equal(stim._amp, expected._amp)
+    npt.assert_equal(stim._freq, expected._freq)
+    # The same pulse schedules, not just the same waveform:
+    npt.assert_equal(stim._sched, expected._sched)
+    npt.assert_equal(stim._onsets, expected._onsets)
+    assert list(stim.metadata) == list(expected.metadata)
+    for key, value in expected.metadata['encoder'].items():
+        npt.assert_equal(stim.metadata['encoder'][key], value)
+
+
+@pytest.mark.parametrize('video,frame_dur', [(False, None), (True, None),
+                                             (True, 40)])
+@pytest.mark.parametrize('make_implant,params,off', [
+    # Sequential raster on a 0.1 ms clock; deactivated electrodes are still
+    # encoded:
+    (ArgusII, {'amp_range': (10, 50), 'freq': 60, 'phase_dur': 0.3,
+               'clock': 0.1}, ['A1', 'F10']),
+    # Black electrodes get 0 uA and no pulses:
+    (lambda: GridImplant((3, 4), 400), {'amp_range': (0, 30), 'freq': 130},
+     []),
+])
+def test_AmplitudeEncoder_encode_torch(make_implant, params, off, video,
+                                       frame_dur, monkeypatch):
+    implant = make_implant()
+    implant.deactivate(off)
+    pixels = np.random.default_rng(5).uniform(-0.3, 1.3,
+                                              (7, 11, 5) if video else (7, 11))
+    pixels[:, :4] = 0
+    source = (VideoStimulus(pixels, metadata={'fps': 29.97}) if video
+              else ImageStimulus(pixels))
+    encoder = AmplitudeEncoder(implant, frame_dur=frame_dur, **params)
+    expected = _numpy_encode(encoder, source)
+
+    def numpy_route(*args, **kwargs):
+        raise AssertionError("NumPy sampling called")
+
+    monkeypatch.setattr(encoders, '_sampled_frames', numpy_route)
+    monkeypatch.setattr(Implant, 'reshape_stim', numpy_route)
+    stim = encoder.encode(source)
+    # Exactly the NumPy result, deactivated electrodes included:
+    _assert_same_encoding(stim, expected)
+    npt.assert_equal(stim.electrodes, implant.electrode_names)
+    assert np.any(stim._amp == 0) == (params['amp_range'][0] == 0)
+
+
+class _SubclassedEncoder(AmplitudeEncoder):
+    pass
+
+
+@pytest.mark.parametrize('encoder,source', [
+    # No implant: every pixel is an electrode:
+    (lambda: AmplitudeEncoder(), ImageStimulus(np.ones((3, 4)) * 0.5)),
+    (lambda: AmplitudeEncoder(ArgusII()),
+     ImageStimulus(np.full((5, 6, 3), 0.5))),
+    (lambda: AmplitudeEncoder(ArgusII(), n_levels=4),
+     ImageStimulus(np.full((5, 6), 0.4))),
+    (lambda: AmplitudeEncoder(ArgusII(), stretch=True),
+     VideoStimulus(np.full((5, 6, 2), 0.4))),
+    (lambda: _SubclassedEncoder(ArgusII()),
+     ImageStimulus(np.full((5, 6), 0.4))),
+    # Gray levels already sampled at the electrodes:
+    (lambda: AmplitudeEncoder(ArgusII()),
+     ArgusII().reshape_stim(ImageStimulus(np.full((5, 6), 0.4)))),
+])
+def test_AmplitudeEncoder_encode_numpy_fallback(encoder, source,
+                                                monkeypatch):
+    encoder = encoder()
+    expected = _numpy_encode(encoder, source)
+
+    def torch_route(*args, **kwargs):
+        raise AssertionError("Torch encoding called")
+
+    monkeypatch.setattr(AmplitudeEncoder, '_encode_pixels', torch_route)
+    _assert_same_encoding(encoder.encode(source), expected)
+
 
 def _assert_clock(clock, encoded):
     """Assert a tensor frame clock equals the NumPy encoder's"""

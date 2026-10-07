@@ -37,6 +37,11 @@ API changes and improvements
 
 * Model prediction rejects NaN or Inf stimulus values (:pull:`950`).
 
+* Grayscale image and video predictions through ``AmplitudeEncoder`` now
+  enter Torch before electrode sampling, sharing one implementation with the
+  differentiable path; ``Stimulus`` and ``Percept`` stay NumPy-based
+  (:pull:`N`).
+
 Bug fixes
 ---------
 
