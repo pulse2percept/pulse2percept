@@ -18,8 +18,8 @@ from scipy.spatial import cKDTree
 from ..implants import Implant
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
-from ..stimuli.encoders import (_EncodedStimulus, _FrameClock,
-                                _OpticalStimulus)
+from ..stimuli.encoders import (AmplitudeEncoder, _EncodedStimulus,
+                                _FrameClock, _OpticalStimulus, _gray_pixels)
 from ..percepts import Percept
 from ..percepts.base import _quantize_gray
 from ..topography import Grid2D
@@ -2079,6 +2079,9 @@ class Model(Frozen, PrettyPrint):
                     "'gaze' says where an implanted eye is looking in a "
                     "scene, and this prediction is not about one. Pass a "
                     "Scene to place one.")
+            pixels = self._visual_pixels(source)
+            if pixels is not None:
+                return self._predict_visual_percept(source, pixels, t_percept)
             return self._predict_percept(self._prepared(source), t_percept)
         return self._predict_percept(_scene_stim(self, source, gaze),
                                      t_percept)
@@ -2156,7 +2159,12 @@ class Model(Frozen, PrettyPrint):
 
     def _uses_tensor_core(self, stim):
         """Return whether a prepared stimulus runs on ``_predict_tensor``."""
-        if not (self.has_space and self.has_time and _has_time_axis(stim)):
+        return _has_time_axis(stim) and self._has_tensor_core
+
+    @property
+    def _has_tensor_core(self):
+        """Whether ``_predict_tensor`` reproduces the staged composite."""
+        if not (self.has_space and self.has_time):
             return False
         spatial = self.spatial
         # Only classes that define their own tensor method: a subclass can
@@ -2184,6 +2192,79 @@ class Model(Frozen, PrettyPrint):
                                         frame_clock=_encoder_clock(stim))
         resp.metadata['stim'] = delivered
         return replace(resp, data=resp.data.numpy())
+
+    def _visual_pixels(self, source):
+        """Return the pixels of a gray image or video, if Torch encoding
+        reproduces the prepared route exactly; else None.
+
+        Requires the implant's encoder to be an ``AmplitudeEncoder`` (not a
+        subclass) that ``_tensor_gap`` accepts.
+        """
+        if not self._has_tensor_core:
+            return None
+        encoder = self.implant.encoder
+        if (type(encoder) is not AmplitudeEncoder or
+                encoder._tensor_gap() is not None):
+            return None
+        return _gray_pixels(source)
+
+    def _predict_visual_percept(self, source, pixels, t_percept):
+        """Return the NumPy percept of a gray image or video, via Torch.
+
+        Encodes once: Torch amplitudes drive the model, and their detached
+        schedule becomes the prepared stimulus in ``metadata['stim']``.
+        Unlike ``_predict_visual_tensor``, schedules only nonzero amplitudes
+        and resolves frame timing from ``source``, both as ``encode`` does.
+        """
+        import torch
+        t_percept = as_value(t_percept, self.time_unit, 't_percept')
+        encoder = self.implant.encoder
+        # Public prediction returns NumPy, so no autograd graph is needed:
+        with torch.inference_mode():
+            amp, sched = encoder._encode_pixels(source, pixels)
+            waveform, time, clock = encoder._tensor_waveform(amp, sched)
+            resp = self._predict_tensor(waveform, time, t_percept=t_percept,
+                                        frame_clock=clock)
+        # Prepared stimuli omit deactivated electrodes:
+        delivered = _delivered(self.implant._on_electrodes(sched))
+        delivered.compress()
+        resp.metadata['stim'] = delivered
+        return _to_percept(replace(resp, data=resp.data.numpy()))
+
+    def _predict_visual_tensor(self, source, time=None, fps=None,
+                               t_percept=None):
+        """Return the flat response to a Torch gray image or video.
+
+        Encodes with the implant's ``AmplitudeEncoder._encode_tensor``, then
+        runs ``_predict_tensor`` on the encoder frame clock. Gradients flow to
+        the pixels; pulse timing has none.
+
+        Parameters
+        ----------
+        source : torch.Tensor
+            float32 or float64 gray levels, shape ``(H, W)`` (image) or
+            ``(H, W, n_frames)`` (video).
+        time : array-like, optional
+            Video frame onsets (ms), as in ``_encode_tensor``.
+        fps : float, optional
+            Video frame rate (Hz), as in ``_encode_tensor``.
+        t_percept : float or array-like, optional
+            Output times, as in ``predict_percept``.
+
+        Returns
+        -------
+        _ModelResponse
+            ``data`` is a Torch tensor of shape ``(n_grid_points, n_out)``.
+        """
+        encoder = self.implant.encoder if self.has_space else None
+        if not isinstance(encoder, AmplitudeEncoder):
+            raise NotImplementedError(
+                "Visual tensor prediction requires an implant whose encoder "
+                "is an AmplitudeEncoder.")
+        waveform, time, clock = encoder._encode_tensor(source, time=time,
+                                                       fps=fps)
+        return self._predict_tensor(waveform, time, t_percept=t_percept,
+                                    frame_clock=clock)
 
     def _predict_tensor(self, waveform, time, t_percept=None,
                         frame_clock=None):
