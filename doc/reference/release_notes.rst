@@ -40,7 +40,7 @@ API changes and improvements
 * Grayscale image and video predictions through ``AmplitudeEncoder`` now
   enter Torch before electrode sampling, sharing one implementation with the
   differentiable path; ``Stimulus`` and ``Percept`` stay NumPy-based
-  (:pull:`N`).
+  (:pull:`951`).
 
 Bug fixes
 ---------
