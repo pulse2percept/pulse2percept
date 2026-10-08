@@ -41,8 +41,7 @@ def test_implant(benchmark, scenario, implant, peak_memory):
 
 
 @pytest.mark.benchmark(group='build')
-def test_build(benchmark, scenario, implant, make_model, peak_memory,
-               n_threads):
+def test_build(benchmark, scenario, implant, make_model, peak_memory):
     """Build the model with any on-disk cache already warm.
 
     This is every run after the first. For axon-map models it is dominated by
@@ -60,12 +59,10 @@ def test_build(benchmark, scenario, implant, make_model, peak_memory,
                        iterations=1, warmup_rounds=1)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(
         lambda: make_model(implant, ignore_pickle=False).build())
-    benchmark.extra_info['n_threads'] = n_threads
 
 
 @pytest.mark.benchmark(group='build')
-def test_build_cold(benchmark, scenario, implant, make_model, peak_memory,
-                    n_threads):
+def test_build_cold(benchmark, scenario, implant, make_model, peak_memory):
     """Build the model from scratch, ignoring the on-disk cache.
 
     Measures the Jansonius axon-map computation instead of unpickling.
@@ -81,12 +78,10 @@ def test_build_cold(benchmark, scenario, implant, make_model, peak_memory,
                        iterations=1, warmup_rounds=1)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(
         lambda: make_model(implant, ignore_pickle=True).build())
-    benchmark.extra_info['n_threads'] = n_threads
 
 
 @pytest.mark.benchmark(group='predict_percept')
-def test_predict_percept(benchmark, built_model, source, peak_memory,
-                         n_threads):
+def test_predict_percept(benchmark, built_model, source, peak_memory):
     """Predict the percept (headline number).
 
     Includes the implant's preparation of the source, also timed separately in
@@ -95,12 +90,11 @@ def test_predict_percept(benchmark, built_model, source, peak_memory,
     percept = benchmark(built_model.predict_percept, source)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(
         built_model.predict_percept, source)
-    benchmark.extra_info['n_threads'] = n_threads
     benchmark.extra_info['percept_shape'] = str(percept.shape)
 
 
 @pytest.mark.benchmark(group='end_to_end')
-def test_end_to_end(benchmark, scenario, make_model, peak_memory, n_threads):
+def test_end_to_end(benchmark, scenario, make_model, peak_memory):
     """Run the whole pipeline, as in the one-liners in :mod:`scenarios`.
 
     The model is built through ``make_model``, which writes the axon cache to
@@ -113,7 +107,6 @@ def test_end_to_end(benchmark, scenario, make_model, peak_memory, n_threads):
 
     percept = benchmark(run)
     benchmark.extra_info['peak_mem_mb'] = peak_memory(run)
-    benchmark.extra_info['n_threads'] = n_threads
     benchmark.extra_info['percept_shape'] = str(percept.shape)
 
 

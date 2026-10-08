@@ -8,7 +8,6 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy, copy
 from dataclasses import dataclass, replace
 import numpy as np
-import multiprocessing
 from matplotlib.collections import Collection
 from matplotlib.patches import Patch
 from matplotlib.transforms import Affine2D
@@ -31,39 +30,6 @@ from ..vision.gaze import _gaze_points
 from ..utils import PrettyPrint, Frozen, Parametrized
 from ..utils.base import _is_constructing
 from ..utils.constants import ZORDER
-
-
-def _n_jobs_alias():
-    """Build ``n_jobs`` as an alias for ``n_threads``.
-
-    ``None`` and ``-1`` select all available CPU cores.
-    """
-    def getter(self):
-        return self.n_threads
-
-    def setter(self, val):
-        if val is None:
-            val = multiprocessing.cpu_count()
-        if isinstance(val, bool) or not isinstance(val, (int, np.integer)):
-            raise ValueError(f"n_jobs must be an integer, None, or -1 (all "
-                             f"cores), not {val!r}.")
-        if val == -1:
-            val = multiprocessing.cpu_count()
-        if val < 1:
-            raise ValueError(f"n_jobs must be >= 1, or -1 for all cores, "
-                             f"not {val}.")
-        self.n_threads = int(val)
-
-    return property(getter, setter,
-                    doc="Number of CPU threads to use during "
-                        "parallelization. An alias for ``n_threads``: both "
-                        "names read and write the same value.")
-
-
-def _thread_params(n_threads, n_jobs):
-    """Return non-None thread-count arguments."""
-    return {**({} if n_threads is None else {'n_threads': n_threads}),
-            **({} if n_jobs is None else {'n_jobs': n_jobs})}
 
 
 def _encoder_clock(stim):
@@ -1137,10 +1103,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of CPU threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
 
     Notes
     -----
@@ -1154,10 +1116,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     .. versionchanged:: 0.11.0
         Retinal defaults and the physical-extent shorthand moved to
         :py:class:`~pulse2percept.models.retina.RetinalSpatial`.
-    """
 
-    #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
-    n_jobs = _n_jobs_alias()
+    .. versionchanged:: 0.12.0
+        Removed ``n_threads`` and ``n_jobs``.
+    """
 
     #: Whether this model reads an encoded stimulus' schedule (pulse timing,
     #: irradiance, durations) instead of the delivered waveform.
@@ -1240,9 +1202,6 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
             'location_noise': None,  # dva
             'verbose': True,
             'ndim' : [2],
-            # `n_jobs` writes through to `n_threads`, so it must come last.
-            'n_threads': multiprocessing.cpu_count(),
-            'n_jobs': None,
         }
         return params
 
@@ -1604,10 +1563,6 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
         ``t_percept`` values always request those exact instants.
     verbose : bool, optional
         Whether to print status messages.
-    n_threads : int, optional
-        Number of CPU threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
 
     Notes
     -----
@@ -1619,10 +1574,10 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
 
     .. versionchanged:: 0.10.0
         Added ``reduce``.
-    """
 
-    #: ``n_jobs`` is an alias for ``n_threads``; see ``_n_jobs_alias``.
-    n_jobs = _n_jobs_alias()
+    .. versionchanged:: 0.12.0
+        Removed ``n_threads`` and ``n_jobs``.
+    """
 
     #: Polarity that drives brightness: -1 for cathodic, +1 for anodic.
     #: Used when checking stimulus polarity and constructing canonical drives.
@@ -1639,8 +1594,6 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
             'thresh_percept': 0,
             'reduce': 'last',
             'verbose': True,
-            'n_threads': multiprocessing.cpu_count(),
-            'n_jobs': None,  # Alias for n_threads; must be applied last
         }
         return params
 

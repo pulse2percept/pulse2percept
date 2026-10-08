@@ -61,6 +61,9 @@ API changes and improvements
   pulse2percept no longer builds with OpenMP, and ``P2P_DISABLE_OPENMP`` was
   removed (:pull:`955`).
 
+* ``SpatialModel`` and ``TemporalModel`` no longer take ``n_threads``/``n_jobs``;
+  every bundled model runs on Torch's own thread pool (:pull:`955`).
+
 Bug fixes
 ---------
 

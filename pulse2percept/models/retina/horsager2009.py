@@ -108,8 +108,6 @@ class Horsager2009Temporal(TemporalModel):
             'beta': 3.43
         }
         base_params.update(params)
-        # Torch runs on its own thread pool:
-        del base_params['n_threads'], base_params['n_jobs']
         return base_params
 
     def get_param_units(self):

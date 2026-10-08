@@ -137,8 +137,6 @@ class Thompson2003Spatial(RetinalSpatial):
     def get_default_params(self):
         """Return default model parameters."""
         base_params = super(Thompson2003Spatial, self).get_default_params()
-        # Prediction runs on Torch's own thread pool:
-        del base_params['n_threads'], base_params['n_jobs']
         params = {'radius': None, 'dropout': None,
                   'visual_field_map': Curcio1990Map()}
         return {**base_params, **params}

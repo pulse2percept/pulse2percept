@@ -47,8 +47,7 @@ jobs:
         shell: bash
 
     env:
-      # The benchmark suite already pins the models to one thread. This pins
-      # everything underneath them
+      # Pins Torch and BLAS to one thread, so timings are comparable:
       OMP_NUM_THREADS: 1
 
     steps:

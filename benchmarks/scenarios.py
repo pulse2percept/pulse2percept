@@ -92,13 +92,13 @@ def as_current(implant, picture, amp_max=GRAY_LEVEL_UA):
                                 time=stim.time)
 
 
-def axonmap(n_threads, **kwargs):
-    """Return an AxonMap model; ``n_threads`` is unused (Torch threads)."""
+def axonmap(**kwargs):
+    """Return an AxonMap model."""
     return p2p.models.retina.AxonMapModel(xrange=(-12, 12), yrange=(-8, 8),
                                           **kwargs)
 
 
-def axonmap_fading(implant, verbose, n_threads, **axon_cache):
+def axonmap_fading(implant, verbose, **axon_cache):
     """Return an AxonMap + Fading composite; cache keywords go to AxonMap."""
     return p2p.models.Model(
         spatial=p2p.models.retina.AxonMapSpatial(
@@ -125,7 +125,7 @@ class Scenario:
         :func:`as_current`.
     model : callable
         Takes keyword arguments, returns an *unbuilt* model. Always receives
-        ``verbose`` and ``n_threads``; also receives ``implant`` unless
+        ``verbose``; also receives ``implant`` unless
         ``binds_implant`` is False, and ``axon_pickle``/``ignore_pickle``
         when ``caches_axons`` is True.
     binds_implant : bool
@@ -173,60 +173,54 @@ SCENARIOS = [
         id='prima_scoreboard_logobvl',
         stimulus=lambda: p2p.stimuli.samples.logo_bvl().invert(),
         implant=p2p.implants.retina.PRIMAPivotal,
-        # Scoreboard runs on Torch's thread pool, so `n_threads` is unused:
-        model=lambda n_threads, **kwargs: p2p.models.retina.ScoreboardModel(
+        model=lambda **kwargs: p2p.models.retina.ScoreboardModel(
             xrange=(-4, 4), yrange=(-4, 4), rho=50, step=0.1, **kwargs),
     ),
     # Granley 2021 reads amplitude, frequency and pulse duration from each
-    # electrode's BiphasicPulseTrain and rejects images. Amplitude is in xTh.
-    # Runs on Torch, so `n_threads` is unused:
+    # electrode's BiphasicPulseTrain and rejects images. Amplitude is in xTh:
     Scenario(
         id='argus2_biphasic_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII,
                                       amp=20 * p2p.units.xTh),
         implant=p2p.implants.retina.ArgusII,
-        model=lambda n_threads, **kwargs: (
+        model=lambda **kwargs: (
             p2p.models.retina.BiphasicAxonMapModel(
                 xrange=(-12, 12), yrange=(-8, 8), **kwargs)),
         caches_axons=True,
     ),
-    # Nanduri 2012: multi-frame output through the Torch composite. Torch
-    # uses its own thread pool, so `n_threads` is unused:
+    # Nanduri 2012: multi-frame output through the Torch composite:
     Scenario(
         id='argus2_nanduri2012_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
         implant=p2p.implants.retina.ArgusII,
-        model=lambda n_threads, **kwargs: p2p.models.retina.Nanduri2012Model(
+        model=lambda **kwargs: p2p.models.retina.Nanduri2012Model(
             xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
     ),
-    # Horsager 2009: temporal-only, one trace per electrode, no spatial grid.
-    # Runs on Torch, so `n_threads` is unused:
+    # Horsager 2009: temporal-only, one trace per electrode, no spatial grid:
     Scenario(
         id='argus2_horsager2009_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
         implant=p2p.implants.retina.ArgusII,
-        model=lambda n_threads, **kwargs: p2p.models.retina.Horsager2009Model(
+        model=lambda **kwargs: p2p.models.retina.Horsager2009Model(
             **kwargs),
         binds_implant=False,
         plottable=False,
     ),
-    # Thompson 2003: spatial-only, image input. Runs on Torch, so
-    # `n_threads` is unused:
+    # Thompson 2003: spatial-only, image input:
     Scenario(
         id='argus2_thompson2003_logobvl',
         stimulus=lambda: p2p.stimuli.samples.logo_bvl(),
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda n_threads, **kwargs: p2p.models.retina.Thompson2003Model(
+        model=lambda **kwargs: p2p.models.retina.Thompson2003Model(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
     ),
-    # Composed Model (separate spatial + temporal) on the Torch core. Both
-    # components use Torch threads, so `n_threads` is unused:
+    # Composed Model (separate spatial + temporal) on the Torch core:
     Scenario(
         id='argus2_scoreboard_fading_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
         implant=p2p.implants.retina.ArgusII,
-        model=lambda implant, verbose, n_threads: p2p.models.Model(
+        model=lambda implant, verbose: p2p.models.Model(
             spatial=p2p.models.retina.ScoreboardSpatial(
                 implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5,
                 verbose=verbose),

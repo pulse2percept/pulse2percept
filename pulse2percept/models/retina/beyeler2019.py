@@ -281,8 +281,6 @@ class ScoreboardSpatial(RetinalSpatial):
     def get_default_params(self):
         """Return all settable scoreboard parameters."""
         base_params = super(ScoreboardSpatial, self).get_default_params()
-        # Prediction runs on Torch's own thread pool:
-        del base_params['n_threads'], base_params['n_jobs']
         params = {'rho': 100, 'visual_field_map': Watson2014Map()}
         return {**base_params, **params}
 
@@ -667,8 +665,6 @@ class AxonMapSpatial(RetinalSpatial):
 
     def get_default_params(self):
         base_params = super(AxonMapSpatial, self).get_default_params()
-        # Prediction runs on Torch's own thread pool:
-        del base_params['n_threads'], base_params['n_jobs']
         params = {
             'rho': 300,
             'lam': 500,

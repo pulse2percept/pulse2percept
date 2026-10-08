@@ -24,16 +24,6 @@ from scenarios import SCENARIOS
 HERE = Path(__file__).parent
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        '--n-threads', action='store', type=int, default=1,
-        help='Number of CPU threads the models may use (default: 1). '
-             'Timings are only comparable across machines when this is '
-             'pinned, which is why it does not default to the library default '
-             'of one thread per CPU.'
-    )
-
-
 def pytest_configure(config):
     # Register the marker when pytest-benchmark is disabled (``-p no:benchmark``)
     # to avoid PytestUnknownMarkWarning:
@@ -57,12 +47,6 @@ def pytest_collection_modifyitems(config, items):
             continue
         if 'benchmark' in getattr(item, 'fixturenames', ()):
             item.add_marker(skip)
-
-
-@pytest.fixture(scope='session')
-def n_threads(pytestconfig):
-    """Number of CPU threads to give the models."""
-    return pytestconfig.getoption('n_threads')
 
 
 @pytest.fixture(scope='session')
@@ -90,14 +74,14 @@ def scenario(request):
 
 
 @pytest.fixture(scope='module')
-def make_model(scenario, n_threads, axon_pickle):
+def make_model(scenario, axon_pickle):
     """Return a factory for fresh, *unbuilt* models.
 
     ``build`` benchmarks need a new model per round, created outside the timed
     section.
     """
     def _make(implant, ignore_pickle=False):
-        kwargs = {'verbose': False, 'n_threads': n_threads}
+        kwargs = {'verbose': False}
         if scenario.binds_implant:
             kwargs['implant'] = implant
         if scenario.caches_axons:

@@ -1,7 +1,6 @@
 from contextlib import contextmanager
 import copy
 from dataclasses import replace
-import multiprocessing
 import warnings
 
 import numpy as np
@@ -593,50 +592,15 @@ def test_deepcopy_TemporalModel():
 @pytest.mark.parametrize('cls, ImplantType',
                          [(ValidSpatialModel, ArgusI),
                           (ValidTemporalModel, None)])
-def test_n_jobs_aliases_n_threads(cls, ImplantType):
-    # Only the spatial model takes an implant (required):
+def test_base_models_have_no_thread_params(cls, ImplantType):
+    # Removed in 0.12: prediction runs on Torch's own thread pool:
     extra = {} if ImplantType is None else {'implant': ImplantType()}
-    # `n_jobs` and `n_threads` are aliases for the thread count:
     model = cls(**extra)
-    npt.assert_equal(model.n_jobs, model.n_threads)
-    # Setting either one sets both, in the constructor:
-    model = cls(n_jobs=3, **extra)
-    npt.assert_equal(model.n_threads, 3)
-    npt.assert_equal(model.n_jobs, 3)
-    # Or afterwards, by attribute or `set_params`:
-    model.n_jobs = 5
-    npt.assert_equal(model.n_threads, 5)
-    model.n_threads = 7
-    npt.assert_equal(model.n_jobs, 7)
-    model.set_params(n_jobs=2)
-    npt.assert_equal(model.n_threads, 2)
-    # Default is all cores:
-    npt.assert_equal(cls(**extra).n_threads, multiprocessing.cpu_count())
-    # None and -1 both mean all cores (as in scikit-learn):
-    npt.assert_equal(cls(n_jobs=None, **extra).n_threads,
-                     multiprocessing.cpu_count())
-    npt.assert_equal(cls(n_jobs=-1, **extra).n_threads,
-                     multiprocessing.cpu_count())
-    # Invalid values raise ValueError:
-    for bad in (0, -2, 2.5, 'many'):
-        with pytest.raises(ValueError):
-            cls(n_jobs=bad, **extra)
-    # No DeprecationWarning (it is an alias):
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        cls(n_jobs=4, **extra)
-
-
-def test_Model_n_jobs_aliases_n_threads():
-    # Each component has its own thread count:
-    model = Model(spatial=ValidSpatialModel(ArgusI(), n_jobs=3),
-                  temporal=ValidTemporalModel(n_jobs=3))
-    npt.assert_equal(model.spatial.n_threads, 3)
-    npt.assert_equal(model.temporal.n_threads, 3)
-    model.spatial.n_jobs = 6
-    model.temporal.n_jobs = 6
-    npt.assert_equal(model.spatial.n_threads, 6)
-    npt.assert_equal(model.temporal.n_threads, 6)
+    for param in ('n_threads', 'n_jobs'):
+        npt.assert_equal(param in model.get_default_params(), False)
+        npt.assert_equal(hasattr(model, param), False)
+        with pytest.raises(AttributeError, match='not a valid parameter'):
+            cls(**{param: 2}, **extra)
 
 
 def test_Model():
