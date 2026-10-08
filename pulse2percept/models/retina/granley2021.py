@@ -510,8 +510,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
 
     .. math::
 
-        I(r, \theta) =
-        \max_{p \in R(\theta)}
+        I_p =
         \sum_{e \in E}
         F_{\mathrm{bright}}
         \exp\left(
@@ -519,10 +518,17 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
             -\frac{d_{\mathrm{soma}}^2}
                 {2 \lambda^2 F_{\mathrm{streak}}}
         \right),
+        \qquad
+        I(r, \theta) = I_{p^*},
+        \quad
+        p^* = \arg\max_{p \in R(\theta)} |I_p|,
 
-    where :math:`d_e` is the distance from an axon segment to electrode
-    :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from that
-    segment to the ganglion cell body. Thus the effective spatial scales are
+    where :math:`d_e` is the distance from axon segment :math:`p` to
+    electrode :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from
+    that segment to the ganglion cell body. The pixel keeps the sign of
+    :math:`I_{p^*}`, which matters when ``bright_model`` returns negative
+    factors; the first segment wins a tie. Thus the effective spatial scales
+    are
 
     .. math::
 
@@ -757,8 +763,7 @@ class BiphasicAxonMapModel(Model):
 
     .. math::
 
-        I(r, \theta) =
-        \max_{p \in R(\theta)}
+        I_p =
         \sum_{e \in E}
         F_{\mathrm{bright}}
         \exp\left(
@@ -766,10 +771,17 @@ class BiphasicAxonMapModel(Model):
             -\frac{d_{\mathrm{soma}}^2}
                 {2 \lambda^2 F_{\mathrm{streak}}}
         \right),
+        \qquad
+        I(r, \theta) = I_{p^*},
+        \quad
+        p^* = \arg\max_{p \in R(\theta)} |I_p|,
 
-    where :math:`d_e` is the distance from an axon segment to electrode
-    :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from that
-    segment to the ganglion cell body. Thus the effective spatial scales are
+    where :math:`d_e` is the distance from axon segment :math:`p` to
+    electrode :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from
+    that segment to the ganglion cell body. The pixel keeps the sign of
+    :math:`I_{p^*}`, which matters when ``bright_model`` returns negative
+    factors; the first segment wins a tie. Thus the effective spatial scales
+    are
 
     .. math::
 

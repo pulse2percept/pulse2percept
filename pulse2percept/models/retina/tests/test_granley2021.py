@@ -594,6 +594,35 @@ def test_BiphasicAxonMap_first_segment_wins_a_tie():
     npt.assert_equal(_frame(model.predict_percept(source)), -got)
 
 
+def test_BiphasicAxonMap_effects_follow_their_electrode():
+    # The kernel sums electrodes in x order; here the active order is the
+    # reverse, and F_size/F_streak differ per electrode:
+    rho = 200
+    source = {'A10': BiphasicPulseTrain(20, 2 * xTh, 0.45),
+              'B1': BiphasicPulseTrain(20, 3 * xTh, 0.45)}
+    f_size, f_streak = np.array([0.5, 3.0]), np.array([2.0, 0.3])
+    model, el = _one_axon_model(
+        source, size=lambda f, a, p: np.where(a > 2.5, *f_size[::-1]),
+        streak=lambda f, a, p: np.where(a > 2.5, *f_streak[::-1]), rho=rho)
+    npt.assert_array_less(el[1, 0], el[0, 0])
+    segments = np.array([(*(el[0] + [150, 0]), 0.9),
+                         (*(el[1] + [50, 0]), 0.5)])
+    _give_every_pixel(model, segments)
+
+    def oracle(size, streak):
+        r2 = ((segments[:, None, :2] - el) ** 2).sum(axis=-1)
+        resp = np.exp(-r2 / (2 * rho ** 2 * size) +
+                      np.log(segments[:, 2:]) / streak).sum(axis=1)
+        return resp[np.argmax(np.abs(resp))]
+
+    want = oracle(f_size, f_streak)
+    npt.assert_allclose(_frame(model.predict_percept(source)), want,
+                        rtol=1e-5)
+    # Swapped factors give a different percept:
+    npt.assert_array_less(0.1, abs(oracle(f_size[::-1], f_streak[::-1]) -
+                                   want))
+
+
 @pytest.mark.parametrize('kernel', ('scoreboard', 'axon'))
 def test_Biphasic_cutoff_scales_with_F_size(kernel):
     # Kept iff r2 <= cutoff_r2 * F_size, inclusive: 100 * 4 = 400 um^2.
