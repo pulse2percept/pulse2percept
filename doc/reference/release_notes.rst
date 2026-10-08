@@ -64,6 +64,11 @@ API changes and improvements
 * ``SpatialModel`` and ``TemporalModel`` no longer take ``n_threads``/``n_jobs``;
   every bundled model runs on Torch's own thread pool (:pull:`955`).
 
+* ``ImageStimulus`` and ``VideoStimulus`` ``resize`` accepts a scale factor
+  (e.g., ``resize=0.5``). ``threshold()`` defaults to Otsu's method
+  (``'auto'``), and ``VideoStimulus.threshold`` thresholds each frame
+  (:pull:`N`).
+
 Bug fixes
 ---------
 
