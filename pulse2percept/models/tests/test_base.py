@@ -596,7 +596,7 @@ def test_deepcopy_TemporalModel():
 def test_n_jobs_aliases_n_threads(cls, ImplantType):
     # Only the spatial model takes an implant (required):
     extra = {} if ImplantType is None else {'implant': ImplantType()}
-    # `n_jobs` and `n_threads` are aliases for the OpenMP thread count:
+    # `n_jobs` and `n_threads` are aliases for the thread count:
     model = cls(**extra)
     npt.assert_equal(model.n_jobs, model.n_threads)
     # Setting either one sets both, in the constructor:

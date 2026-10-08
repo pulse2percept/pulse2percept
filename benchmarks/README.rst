@@ -158,7 +158,7 @@ several-fold, so each benchmark runs its payload one extra time under
 
 **Memory numbers are a floor, not a total.** ``tracemalloc`` tracks Python and
 NumPy allocations, but not Torch tensors or raw ``malloc`` inside the
-Cython/OpenMP kernels. The Torch paths (AxonMap, Scoreboard, and Torch
+Cython kernels. The Torch paths (AxonMap, Scoreboard, and Torch
 composites) therefore report much less than their actual peak. It was chosen
 over RSS sampling because it is deterministic, needs no extra dependency, and
 works on Windows (which rules out ``pytest-memray``).
@@ -240,7 +240,7 @@ and nothing is stored, so the suite detects "this branch is slower than master"
 but not "the library got slower over six months". That requires a per-commit
 series, e.g. with `asv <https://asv.readthedocs.io/>`_. asv was not used because
 it builds an isolated environment per commit, which is heavy for a
-Cython/OpenMP project and awkward on Windows.
+Cython project and awkward on Windows.
 
 The pull request check posts no comment. Commenting requires a token with write
 access, which the ``pull_request`` event does not give to forks. The report goes

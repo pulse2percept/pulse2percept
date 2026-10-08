@@ -55,7 +55,7 @@ def _n_jobs_alias():
         self.n_threads = int(val)
 
     return property(getter, setter,
-                    doc="Number of OpenMP threads to use during "
+                    doc="Number of CPU threads to use during "
                         "parallelization. An alias for ``n_threads``: both "
                         "names read and write the same value.")
 
@@ -1138,7 +1138,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
     n_threads : int, optional
-        Number of OpenMP threads.
+        Number of CPU threads.
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
 
@@ -1605,7 +1605,7 @@ class TemporalModel(BaseModel, metaclass=ABCMeta):
     verbose : bool, optional
         Whether to print status messages.
     n_threads : int, optional
-        Number of OpenMP threads.
+        Number of CPU threads.
     n_jobs : int or None, optional
         Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
 

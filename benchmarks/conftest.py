@@ -27,7 +27,7 @@ HERE = Path(__file__).parent
 def pytest_addoption(parser):
     parser.addoption(
         '--n-threads', action='store', type=int, default=1,
-        help='Number of OpenMP threads the models may use (default: 1). '
+        help='Number of CPU threads the models may use (default: 1). '
              'Timings are only comparable across machines when this is '
              'pinned, which is why it does not default to the library default '
              'of one thread per CPU.'
@@ -61,7 +61,7 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(scope='session')
 def n_threads(pytestconfig):
-    """Number of OpenMP threads to give the models."""
+    """Number of CPU threads to give the models."""
     return pytestconfig.getoption('n_threads')
 
 
@@ -141,7 +141,7 @@ def peak_memory():
     Uses ``tracemalloc`` instead of RSS sampling: deterministic, no extra
     dependency, and works on Windows (which rules out ``pytest-memray``). It
     tracks Python and NumPy allocations, but not Torch tensors or raw
-    ``malloc`` inside the Cython/OpenMP kernels, so the numbers are a floor,
+    ``malloc`` inside the Cython kernels, so the numbers are a floor,
     far below the true peak on Torch paths.
 
     Call outside the timed section: tracing inflates run time several-fold.
