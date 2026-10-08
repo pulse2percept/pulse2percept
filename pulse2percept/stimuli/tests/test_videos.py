@@ -153,16 +153,15 @@ def test_VideoStimulus_threshold():
         VideoStimulus(np.random.rand(6, 8, 3, 4)).threshold()
 
 
-def test_VideoStimulus_threshold_resize():
+def test_VideoStimulus_filter_resize_threshold():
     square = np.zeros((32, 32), dtype=np.float32)
     square[8:24, 8:24] = 1
     vid = np.stack([square, np.roll(square, 4, axis=1)], axis=-1)
     stim = VideoStimulus(vid, time=[0, 50])
-    out = stim.filter('sobel').threshold().resize(0.5, order=0,
-                                                  anti_aliasing=False)
+    out = stim.filter('sobel').resize(0.5).threshold()
     npt.assert_equal(out.vid_shape, (16, 16, 2))
     npt.assert_almost_equal(out.time, [0, 50])
-    npt.assert_equal(np.isin(out.data, [0, 1]).all(), True)
+    npt.assert_equal(np.unique(out.data), [0, 1])
     frames = out.data.reshape(out.vid_shape)
     npt.assert_equal(frames[8, 8], 0)
     npt.assert_equal(np.all(frames.mean(axis=(0, 1)) > 0), True)

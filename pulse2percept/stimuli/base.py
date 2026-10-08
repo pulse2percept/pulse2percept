@@ -1505,8 +1505,10 @@ def _resized_shape(shape, resize):
 def _threshold_image(img, thresh, **kwargs):
     """Return ``img > t`` for a gray level or a named method ``t``"""
     if isinstance(thresh, str):
+        # 'mean' has always ignored kwargs:
         methods = {'auto': threshold_otsu, 'otsu': threshold_otsu,
-                   'mean': threshold_mean, 'minimum': threshold_minimum,
+                   'mean': lambda img, **_: threshold_mean(img),
+                   'minimum': threshold_minimum,
                    'local': threshold_local, 'isodata': threshold_isodata}
         try:
             method = methods[thresh.lower()]
@@ -1973,12 +1975,15 @@ class ImageStimulus(Stimulus):
 
         Examples
         --------
-        Edge-filter an image, keep its strongest edges, then halve its size
-        (``order=0`` keeps the result binary):
+        Edge-filter an image, halve its size, then keep its strongest edges.
+        Thresholding last keeps the result binary:
 
+        >>> import numpy as np
         >>> from pulse2percept.stimuli import samples
         >>> stim = samples.logo_bvl(as_gray=True)
-        >>> edges = stim.filter('sobel').threshold().resize(0.5, order=0)
+        >>> edges = stim.filter('sobel').resize(0.5).threshold()
+        >>> np.unique(edges.data)
+        array([0., 1.], dtype=float32)
 
         """
         if len(self.img_shape) > 2:

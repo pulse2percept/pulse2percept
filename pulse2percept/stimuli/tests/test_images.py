@@ -339,6 +339,9 @@ def test_ImageStimulus_threshold_auto():
     npt.assert_equal(edges.data.reshape(32, 32)[8, 16], 1)
     with pytest.raises(ValueError):
         stim.threshold('not-a-method')
+    # 'mean' still ignores kwargs:
+    npt.assert_equal(stim.threshold('mean', block_size=3).data,
+                     stim.threshold('mean').data)
 
 
 @pytest.mark.parametrize('value', [0.0, 0.4, 1.0])
@@ -350,19 +353,18 @@ def test_ImageStimulus_threshold_constant(value):
     npt.assert_equal(th.data, 0)
 
 
-def test_ImageStimulus_filter_threshold_resize():
-    square = np.zeros((32, 32), dtype=np.float32)
-    square[8:24, 8:24] = 1
+def test_ImageStimulus_filter_resize_threshold():
+    square = np.zeros((64, 64), dtype=np.float32)
+    square[16:48, 16:48] = 1
     stim = ImageStimulus(square)
-    edges = stim.filter('sobel').threshold()
-    # order=0 keeps the thresholded image binary:
-    out = edges.resize(0.5, order=0, anti_aliasing=False)
-    npt.assert_equal(out.img_shape, (16, 16))
-    npt.assert_equal(np.isin(out.data, [0, 1]).all(), True)
-    npt.assert_equal(out.data.reshape(16, 16)[8, 8], 0)
+    resized = stim.filter('sobel').resize(0.5)
+    # Resizing blends gray levels; thresholding last makes them binary:
+    npt.assert_equal(np.isin(resized.data, [0, 1]).all(), False)
+    out = resized.threshold()
+    npt.assert_equal(out.img_shape, (32, 32))
+    npt.assert_equal(np.unique(out.data), [0, 1])
+    npt.assert_equal(out.data.reshape(32, 32)[16, 16], 0)
     npt.assert_equal(0 < out.data.mean() < 0.25, True)
-    # Default interpolation blends gray levels:
-    npt.assert_equal(np.isin(edges.resize(0.5).data, [0, 1]).all(), False)
 
 
 def test_ImageStimulus_rotate():
