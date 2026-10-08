@@ -515,7 +515,7 @@ def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
 
 
 def _one_axon_model(source, bright=1.0, size=1.0, streak=1.0, rho=200):
-    """Return a built model, its stimulus, and electrode ``(x, y)`` (um).
+    """Return a built model and active-electrode ``(x, y)`` coordinates.
 
     Effect models return the given factors (scalar or callable)."""
     model = BiphasicAxonMapModel(ArgusII(), xrange=(-2, 2), yrange=(-2, 2),
