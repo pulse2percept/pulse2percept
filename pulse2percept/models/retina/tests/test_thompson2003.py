@@ -296,16 +296,33 @@ def test_Thompson2003Spatial_dropout_matches_sampled_mask(monkeypatch):
         npt.assert_allclose(percept.data[..., t], want, rtol=1e-6)
 
 
-def test_Thompson2003Spatial_dropout_has_no_tensor_core():
+@pytest.mark.parametrize('dropout, tensor', [
+    (None, True), (0, True), (0.0, True), (2, False), (0.25, False),
+])
+def test_Thompson2003Spatial_tensor_core_requires_no_dropout(dropout, tensor):
     import torch
-    model = Model(Thompson2003Spatial(ArgusI(), dropout=2, step=1),
+    model = Model(Thompson2003Spatial(ArgusI(), dropout=dropout, step=1),
                   FadingTemporal()).build()
-    npt.assert_equal(model._has_tensor_core, False)
-    with pytest.raises(NotImplementedError, match='dropout'):
-        model.spatial._predict_tensor(torch.zeros((16, 2)), [0, 1])
-    # The staged composite still applies dropout:
+    npt.assert_equal(model._has_tensor_core, tensor)
+    waveform = torch.zeros((16, 2))
+    if tensor:
+        model.spatial._predict_tensor(waveform, [0, 1])
+    else:
+        with pytest.raises(NotImplementedError, match='dropout'):
+            model.spatial._predict_tensor(waveform, [0, 1])
+
+
+def test_Thompson2003_composite_with_dropout_applies_it(monkeypatch):
+    # Drops every electrode, so the staged route must return zero:
+    monkeypatch.setattr(thompson2003, 'sample',
+                        lambda electrodes, k: electrodes)
+    model = Model(Thompson2003Spatial(ArgusI(), radius=400, step=1,
+                                      dropout=16),
+                  FadingTemporal()).build()
+    stim = {'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=50)}
+    npt.assert_equal(model.predict_percept(stim).data, 0)
     model.spatial.dropout = None
-    npt.assert_equal(model._has_tensor_core, True)
+    npt.assert_equal(model.predict_percept(stim).data.max() > 0, True)
 
 
 def test_Thompson2003Spatial_tensor_matches_predict_percept():

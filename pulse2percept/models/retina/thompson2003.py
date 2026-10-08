@@ -147,6 +147,11 @@ class Thompson2003Spatial(RetinalSpatial):
         """Return units used to store model parameters."""
         return {**super().get_param_units(), 'radius': um}
 
+    @property
+    def _tensor_exact(self):
+        # Dropout is sampled per prepared stimulus frame in `_predict_spatial`:
+        return not self.dropout
+
     def _radius(self, electrode_array):
         """Return the phosphene radius (microns)."""
         if self.radius is not None:
@@ -182,8 +187,7 @@ class Thompson2003Spatial(RetinalSpatial):
             # Quantization is discrete and has no exact gradient:
             raise NotImplementedError("Tensor prediction does not support "
                                       "n_gray; set n_gray=None.")
-        if self.dropout is not None:
-            # Sampled per prepared stimulus frame in `_predict_spatial`:
+        if not self._tensor_exact:
             raise NotImplementedError("Tensor prediction does not support "
                                       "dropout; set dropout=None.")
         electrode_array = self.implant.electrode_array

@@ -395,6 +395,20 @@ def test_Model_tensor_errors():
         model._predict_tensor(waveform, TIME)
 
 
+def test_Model_tensor_core_ignores_unrelated_dropout():
+    # Only Thompson ties tensor execution to `dropout`:
+    class DropoutScoreboard(ScoreboardSpatial):
+        def get_default_params(self):
+            return {**super().get_default_params(), 'dropout': 0.5}
+
+        def _predict_tensor(self, waveform, time):
+            return super()._predict_tensor(waveform, time)
+
+    model = Model(DropoutScoreboard(ArgusI()), FadingTemporal()).build()
+    npt.assert_equal(model.spatial.dropout, 0.5)
+    npt.assert_equal(model._has_tensor_core, True)
+
+
 @pytest.mark.parametrize('model', [
     Model(Thompson2003Spatial(ArgusI(), dropout=2), FadingTemporal()),
     Model(_spatial()),

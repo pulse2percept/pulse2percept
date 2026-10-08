@@ -1163,6 +1163,10 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
     #: irradiance, durations) instead of the delivered waveform.
     _needs_structured_stim = False
 
+    #: Whether ``_predict_tensor`` reproduces ``_predict_spatial`` with the
+    #: current parameters.
+    _tensor_exact = True
+
     def __init__(self, implant, **params):
         self._validate_implant(implant)
         self._implant = implant
@@ -2185,8 +2189,7 @@ class Model(Frozen, PrettyPrint):
         # change legacy semantics in ways an inherited one would ignore.
         return (not spatial._needs_structured_stim and
                 spatial.n_gray is None and
-                # Thompson samples dropout per prepared stimulus frame:
-                getattr(spatial, 'dropout', None) is None and
+                spatial._tensor_exact and
                 self.implant.stimulus_unit.dimension == uA.dimension and
                 '_predict_tensor' in vars(type(spatial)) and
                 '_predict_temporal_tensor' in vars(type(self.temporal)))
