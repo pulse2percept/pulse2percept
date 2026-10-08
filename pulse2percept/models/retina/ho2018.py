@@ -145,8 +145,6 @@ class Ho2018Temporal(TemporalModel):
     def get_default_params(self):
         """Return all settable parameters of the temporal response."""
         base_params = super().get_default_params()
-        # The closed-form kernel is a NumPy product; no OpenMP threads:
-        del base_params['n_threads'], base_params['n_jobs']
         return {**base_params,
                 'n': 6, 'tau1': 51.3, 'tau2': 137.1, 'p1': 1.0, 'p2': 0.3743}
 

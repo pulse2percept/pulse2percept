@@ -167,8 +167,6 @@ class Nanduri2012Spatial(RetinalSpatial):
     def get_default_params(self):
         """Return default model parameters."""
         base_params = super(Nanduri2012Spatial, self).get_default_params()
-        # Prediction runs on Torch's own thread pool:
-        del base_params['n_threads'], base_params['n_jobs']
         params = {'atten_a': 14000, 'atten_n': 1.69}
         return {**base_params, **params}
 
@@ -374,8 +372,6 @@ class Nanduri2012Temporal(TemporalModel):
             'shift': 16.0,
             'scale_out': 1.0
         }
-        # Torch runs on its own thread pool:
-        del base_params['n_threads'], base_params['n_jobs']
         return {**base_params, **params}
 
     def get_param_units(self):

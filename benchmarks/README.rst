@@ -45,9 +45,6 @@ Useful invocations:
     # include the scenarios that are too slow for the default run
     pytest benchmarks/ --benchmark-only --runslow
 
-    # see how the models scale with threads (see the caveat below)
-    pytest benchmarks/ --benchmark-only --n-threads=8
-
     # save a run, then compare a later one against it
     pytest benchmarks/ --benchmark-only --benchmark-save=baseline
     pytest benchmarks/ --benchmark-only --benchmark-compare=0001
@@ -147,10 +144,10 @@ Reading the numbers
 minimum is the most stable estimate. ``stddev`` indicates machine load, not a
 property of the code.
 
-**Threads are pinned to 1 by default.** The library defaults ``n_threads`` to
-one per CPU, which makes results incomparable between machines and between runs
-on a loaded machine. Use ``--n-threads`` deliberately, and never compare a run
-against a baseline taken at a different thread count.
+**Pin threads for comparable timings.** Torch defaults to one thread per
+core, which makes results incomparable between machines and between runs on a
+loaded machine. Set ``OMP_NUM_THREADS=1``, as the pull request check does, and
+never compare a run against a baseline taken at a different thread count.
 
 **Memory is measured separately from time.** ``tracemalloc`` inflates run time
 several-fold, so each benchmark runs its payload one extra time under
@@ -158,7 +155,7 @@ several-fold, so each benchmark runs its payload one extra time under
 
 **Memory numbers are a floor, not a total.** ``tracemalloc`` tracks Python and
 NumPy allocations, but not Torch tensors or raw ``malloc`` inside the
-Cython/OpenMP kernels. The Torch paths (AxonMap, Scoreboard, and Torch
+Cython kernels. The Torch paths (AxonMap, Scoreboard, and Torch
 composites) therefore report much less than their actual peak. It was chosen
 over RSS sampling because it is deterministic, needs no extra dependency, and
 works on Windows (which rules out ``pytest-memray``).
@@ -240,7 +237,7 @@ and nothing is stored, so the suite detects "this branch is slower than master"
 but not "the library got slower over six months". That requires a per-commit
 series, e.g. with `asv <https://asv.readthedocs.io/>`_. asv was not used because
 it builds an isolated environment per commit, which is heavy for a
-Cython/OpenMP project and awkward on Windows.
+Cython project and awkward on Windows.
 
 The pull request check posts no comment. Commenting requires a token with write
 access, which the ``pull_request`` event does not give to forks. The report goes

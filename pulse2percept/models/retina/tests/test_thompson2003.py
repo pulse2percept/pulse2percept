@@ -8,9 +8,13 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 
+from pulse2percept.implants import ElectrodeArray, Implant, PointSource
 from pulse2percept.implants.retina import ArgusI, ArgusII
 from pulse2percept.percepts import Percept
+from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.models.retina import Thompson2003Spatial, Thompson2003Model
+from pulse2percept.models.retina import thompson2003
+from pulse2percept.stimuli import BiphasicPulseTrain, Stimulus
 from pulse2percept.topography.retina import (Curcio1990Map,
                                              Montesano2020Map)
 from pulse2percept.utils.testing import assert_warns_msg
@@ -190,3 +194,175 @@ def test_deepcopy_Thompson2003Model():
     # Assert "destroying" the original doesn't affect the copied
     original = None
     npt.assert_equal(copied is not None, True)
+
+
+def _row_spatial(x_el, radius, **params):
+    """Return a built Thompson2003Spatial with point electrodes at ``x_el``
+    and grid points at x = 0, 140, 280, 420, 560 um."""
+    electrodes = [PointSource(x, 0, 0) for x in x_el]
+    return Thompson2003Spatial(
+        Implant(ElectrodeArray(electrodes)), radius=radius, xrange=(0, 2),
+        yrange=(0, 0), step=0.5, **params).build()
+
+
+def _spatial_paths(model, amps):
+    """Return the public and tensor responses to static amplitudes."""
+    import torch
+    names = model.implant.electrode_names
+    public = model.predict_percept(
+        Stimulus(np.array(amps, dtype=float), electrodes=names))
+    tensor = model._predict_tensor(
+        torch.tensor(amps, dtype=torch.float32)[:, None], None)
+    return public.data.ravel(), tensor.data.numpy().ravel()
+
+
+def test_Thompson2003Spatial_disk_is_open():
+    # 0 and 140 um are inside; 280 um is exactly on the radius and excluded:
+    model = _row_spatial([0], 280)
+    npt.assert_equal(model.grid.ret.x.ravel(), [0, 140, 280, 420, 560])
+    for got in _spatial_paths(model, [3]):
+        npt.assert_equal(got, [3, 3, 0, 0, 0])
+
+
+@pytest.mark.parametrize('amps, want', [
+    ([10, 5], [10, 15, 15, 5, 0]),
+    ([10, -25], [10, -15, -15, -25, 0]),
+])
+def test_Thompson2003Spatial_sums_signed_amplitudes(amps, want):
+    # The disks around 140 and 280 um overlap at 140 and 280 um:
+    model = _row_spatial([140, 280], 200)
+    for got in _spatial_paths(model, amps):
+        npt.assert_equal(got, want)
+
+
+@pytest.mark.parametrize('thresh, want', [
+    (2, [10, -2, -2, -12, 0]),
+    (2.5, [10, 0, 0, -12, 0]),
+])
+def test_Thompson2003Spatial_threshold(thresh, want):
+    # |-2| == 2 is kept; |-2| < 2.5 is zeroed:
+    model = _row_spatial([140, 280], 200, thresh_percept=thresh)
+    for got in _spatial_paths(model, [10, -12]):
+        npt.assert_equal(got, want)
+
+
+def test_Thompson2003Spatial_nan_grid_point_is_zero():
+    model = _row_spatial([0], 300)
+    model.grid.ret.x[0, 1] = np.nan
+    for got in _spatial_paths(model, [3]):
+        npt.assert_equal(got, [3, 0, 3, 0, 0])
+
+
+def test_Thompson2003Spatial_dropout(monkeypatch):
+    # Drops electrode 0 in frame 0 and electrode 1 in frame 1:
+    calls = []
+
+    def sample(electrodes, k):
+        calls.append((electrodes.copy(), k))
+        return [len(calls) - 1]
+
+    monkeypatch.setattr(thompson2003, 'sample', sample)
+    model = _row_spatial([140, 280], 200, dropout=1)
+    percept = model.predict_percept(
+        Stimulus([[10, 20], [5, 7]], electrodes=[0, 1], time=[0, 1]))
+    npt.assert_equal(percept.data[0, :, 0], [0, 5, 5, 5, 0])
+    npt.assert_equal(percept.data[0, :, 1], [20, 20, 20, 0, 0])
+    # One draw per frame, over all stimulated electrodes:
+    npt.assert_equal(len(calls), 2)
+    for electrodes, k in calls:
+        npt.assert_equal(electrodes, [0, 1])
+        npt.assert_equal(k, 1)
+
+
+def test_Thompson2003Spatial_dropout_matches_sampled_mask(monkeypatch):
+    # Real sampling: the response omits exactly the sampled electrodes.
+    drawn = []
+
+    def sample(*args, **kwargs):
+        drawn.append(thompson2003_sample(*args, **kwargs))
+        return drawn[-1]
+
+    thompson2003_sample = thompson2003.sample
+    monkeypatch.setattr(thompson2003, 'sample', sample)
+    model = Thompson2003Spatial(ArgusI(), radius=500, dropout=0.25, step=1)
+    amps = np.random.default_rng(1).uniform(1, 2, (16, 3))
+    percept = model.predict_percept(Stimulus(amps, time=[0, 1, 2]))
+    npt.assert_equal(len(drawn), 3)
+    model.dropout = None
+    for t, dropped in enumerate(drawn):
+        frame = amps[:, t].copy()
+        frame[dropped] = 0
+        want = model.predict_percept(Stimulus(frame)).data[..., 0]
+        npt.assert_allclose(percept.data[..., t], want, rtol=1e-6)
+
+
+@pytest.mark.parametrize('dropout, tensor', [
+    (None, True), (0, True), (0.0, True), (2, False), (0.25, False),
+])
+def test_Thompson2003Spatial_tensor_core_requires_no_dropout(dropout, tensor):
+    import torch
+    model = Model(Thompson2003Spatial(ArgusI(), dropout=dropout, step=1),
+                  FadingTemporal()).build()
+    npt.assert_equal(model._has_tensor_core, tensor)
+    waveform = torch.zeros((16, 2))
+    if tensor:
+        model.spatial._predict_tensor(waveform, [0, 1])
+    else:
+        with pytest.raises(NotImplementedError, match='dropout'):
+            model.spatial._predict_tensor(waveform, [0, 1])
+
+
+def test_Thompson2003_composite_with_dropout_applies_it(monkeypatch):
+    # Drops every electrode, so the staged route must return zero:
+    monkeypatch.setattr(thompson2003, 'sample',
+                        lambda electrodes, k: electrodes)
+    model = Model(Thompson2003Spatial(ArgusI(), radius=400, step=1,
+                                      dropout=16),
+                  FadingTemporal()).build()
+    stim = {'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=50)}
+    npt.assert_equal(model.predict_percept(stim).data, 0)
+    model.spatial.dropout = None
+    npt.assert_equal(model.predict_percept(stim).data.max() > 0, True)
+
+
+def test_Thompson2003Spatial_tensor_matches_predict_percept():
+    import torch
+    model = Thompson2003Spatial(ArgusII(), radius=400, thresh_percept=0.5,
+                                xrange=(-12, 12), yrange=(-8, 8), step=0.5)
+    model.build()
+    wf = np.random.default_rng(42).normal(0, 3, (60, 5))
+    wf[::4] = 0
+    time = np.arange(5.0)
+    public = model.predict_percept(
+        Stimulus(wf, electrodes=model.implant.electrode_names, time=time))
+    resp = model._predict_tensor(torch.tensor(wf, dtype=torch.float32), time)
+    assert isinstance(resp.data, torch.Tensor)
+    want = public.data.reshape(resp.data.shape)
+    # The threshold must zero some, but not all, of the response:
+    assert 0 < np.mean(want == 0) < 1
+    npt.assert_allclose(resp.data.numpy(), want, rtol=1e-6, atol=1e-5)
+
+
+def test_Thompson2003Spatial_tensor_gradcheck():
+    import torch
+    # thresh_percept=0 keeps every response off the threshold boundary:
+    model = _row_spatial([140, 280], 200)
+    waveform = torch.tensor([[10.0, -3.0], [5.0, 2.0]], dtype=torch.float64,
+                            requires_grad=True)
+    torch.autograd.gradcheck(
+        lambda w: model._predict_tensor(w, [0, 1]).data, (waveform,))
+    # The Jacobian is the disk-incidence matrix:
+    resp = model._predict_tensor(waveform, [0, 1]).data
+    resp[:, 0].sum().backward()
+    npt.assert_equal(waveform.grad.numpy(), [[3, 0], [3, 0]])
+
+
+def test_Thompson2003Model_with_temporal_runs_on_torch():
+    model = Model(Thompson2003Spatial(ArgusI(), radius=400, step=0.5,
+                                      thresh_percept=0.5),
+                  FadingTemporal()).build()
+    stim = {'A1': BiphasicPulseTrain(20, 30, 0.45, stim_dur=50)}
+    npt.assert_equal(model._uses_tensor_core(model._prepared(stim)), True)
+    percept = model.predict_percept(stim)
+    npt.assert_equal(isinstance(percept.data, np.ndarray), True)
+    npt.assert_equal(percept.data.max() > 0, True)

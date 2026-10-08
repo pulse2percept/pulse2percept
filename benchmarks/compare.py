@@ -9,7 +9,7 @@ past its threshold.
 
 ``tracemalloc`` counts allocations instead of sampling the process, so repeated
 runs of unchanged code report the same peak to the byte. It does not see raw
-``malloc`` inside the Cython/OpenMP kernels, so the number is a floor on total
+``malloc`` inside the Cython kernels, so the number is a floor on total
 memory.
 
 Run time varies with runner load, so the time threshold is a generous 2x and

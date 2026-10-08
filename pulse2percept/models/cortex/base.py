@@ -133,8 +133,6 @@ class CortexSpatial(SpatialModel):
     def get_default_params(self):
         """Returns all settable parameters of the scoreboard model"""
         base_params = super(CortexSpatial, self).get_default_params()
-        # No cortical model uses OpenMP; Torch manages its own threads:
-        del base_params['n_threads'], base_params['n_jobs']
         params = {
                     'xrange' : (-5, 5),
                     'yrange' : (-5, 5),

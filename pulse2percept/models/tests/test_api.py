@@ -109,3 +109,9 @@ def test_granley_cython_extension_is_gone():
     """Granley runs on Torch; its Cython extension was removed in 0.12"""
     with pytest.raises(ImportError):
         importlib.import_module('pulse2percept.models.retina._granley2021')
+
+
+def test_thompson_cython_extension_is_gone():
+    """Thompson runs on Torch; its Cython extension was removed in 0.12"""
+    with pytest.raises(ImportError):
+        importlib.import_module('pulse2percept.models.retina._thompson2003')

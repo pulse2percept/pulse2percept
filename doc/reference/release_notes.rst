@@ -55,6 +55,15 @@ API changes and improvements
   everywhere, replacing their Cython extension, and no longer take
   ``n_threads``/``n_jobs`` (:pull:`954`).
 
+* The Thompson2003 models now run on Torch everywhere, replacing their Cython
+  extension, and no longer take ``n_threads``/``n_jobs``. Without
+  ``dropout``, a Thompson2003 composite runs on the Torch composite core.
+  pulse2percept no longer builds with OpenMP, and ``P2P_DISABLE_OPENMP`` was
+  removed (:pull:`955`).
+
+* ``SpatialModel`` and ``TemporalModel`` no longer take ``n_threads``/``n_jobs``;
+  every bundled model runs on Torch's own thread pool (:pull:`955`).
+
 Bug fixes
 ---------
 

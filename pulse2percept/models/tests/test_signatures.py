@@ -172,10 +172,9 @@ def test_defaults_match_declared_defaults(cls, _):
         if component is None:
             continue
         for name, default in component.get_default_params().items():
-            if name in ('visual_field_map', 'n_jobs', 'n_threads',
-                        'bright_model',
+            if name in ('visual_field_map', 'bright_model',
                         'size_model', 'streak_model'):
-                # Object defaults, and a machine-dependent thread count.
+                # Object defaults:
                 continue
             npt.assert_equal(getattr(component, name), default,
                              err_msg=f'{cls.__name__}.{name}')
@@ -187,7 +186,8 @@ def test_defaults_match_declared_defaults(cls, _):
                                  Nanduri2012Model, BiphasicAxonMapSpatial,
                                  BiphasicAxonMapModel,
                                  BiphasicScoreboardSpatial,
-                                 BiphasicScoreboardModel))
+                                 BiphasicScoreboardModel,
+                                 Thompson2003Spatial, Thompson2003Model))
 def test_torch_models_have_no_thread_params(cls):
     # Removed in 0.12: prediction runs on Torch:
     args = (ArgusII(),) if 'implant' in inspect.signature(cls).parameters \

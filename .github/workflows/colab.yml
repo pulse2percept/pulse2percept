@@ -165,13 +165,11 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libomp-dev zlib1g-dev libjpeg-turbo8-dev
+          sudo apt-get install -y zlib1g-dev libjpeg-turbo8-dev
 
       - name: Build a wheel
         # Build isolation on, so this uses the build requirements declared in
         # pyproject.toml -- the thing under test.
-        env:
-          CFLAGS: -fopenmp
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip build

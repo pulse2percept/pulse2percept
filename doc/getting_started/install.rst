@@ -130,21 +130,6 @@ required.
 On Windows, install `Build Tools for Visual Studio`_ and select
 ``Desktop development with C++``.
 
-On macOS, the Cython extensions use PyTorch's bundled OpenMP runtime, because
-a second OpenMP runtime in the same process aborts it. The build installs
-PyTorch automatically; with ``--no-build-isolation``, install PyTorch first.
-To build without OpenMP acceleration instead:
-
-.. code-block:: bash
-
-    P2P_DISABLE_OPENMP=1 pip install git+https://github.com/pulse2percept/pulse2percept
-
-or:
-
-.. code-block:: bash
-
-    P2P_DISABLE_OPENMP=1 uv pip install git+https://github.com/pulse2percept/pulse2percept
-
 .. _Build Tools for Visual Studio:
    https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
