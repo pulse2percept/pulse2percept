@@ -61,13 +61,14 @@ API changes and improvements
   pulse2percept no longer builds with OpenMP, and ``P2P_DISABLE_OPENMP`` was
   removed (:pull:`955`).
 
-* ``SpatialModel`` and ``TemporalModel`` no longer take ``n_threads``/``n_jobs``;
-  every bundled model runs on Torch's own thread pool (:pull:`955`).
+* ``SpatialModel`` and ``TemporalModel`` no longer take ``n_threads`` or
+  ``n_jobs``; every bundled model runs on Torch's own thread pool
+  (:pull:`955`).
 
-* ``ImageStimulus`` and ``VideoStimulus`` ``resize`` accepts a scale factor
+* ``ImageStimulus`` and ``VideoStimulus`` ``resize`` now accept a scale factor
   (e.g., ``resize=0.5``). ``threshold()`` defaults to Otsu's method
   (``'auto'``), and ``VideoStimulus.threshold`` thresholds each frame
-  (:pull:`N`).
+  (:pull:`956`).
 
 Bug fixes
 ---------
