@@ -1,4 +1,4 @@
-"""Torch execution of {Scoreboard,AxonMap,Nanduri2012}Spatial ->
+"""Torch execution of {Scoreboard,AxonMap,Nanduri2012,Thompson2003}Spatial ->
 {Fading,Alpha,Nanduri2012,Horsager2009}Temporal."""
 from dataclasses import replace
 
@@ -396,7 +396,7 @@ def test_Model_tensor_errors():
 
 
 @pytest.mark.parametrize('model', [
-    Model(Thompson2003Spatial(ArgusI()), FadingTemporal()),
+    Model(Thompson2003Spatial(ArgusI(), dropout=2), FadingTemporal()),
     Model(_spatial()),
     Model(temporal=FadingTemporal()),
 ])
@@ -789,7 +789,7 @@ def test_AxonMapModel_tensor_float64():
 # Public `Model.predict_percept` runs supported composites on the Torch core;
 # `_staged_percept` is the reference:
 
-COMPOSITES = ['retina', 'cortex', 'axonmap']
+COMPOSITES = ['retina', 'cortex', 'axonmap', 'thompson']
 
 
 def _composite(kind, reduce='peak', temporal=FadingTemporal):
@@ -803,6 +803,10 @@ def _composite(kind, reduce='peak', temporal=FadingTemporal):
             Orion(), implant_position=(10000, 10000), xrange=(-4.1, 3.9),
             yrange=(-3, 3), step=0.2, rho=1000, thresh_percept=0.5),
             temporal).build()
+    if kind == 'thompson':
+        return Model(Thompson2003Spatial(
+            ArgusI(), xrange=(-6, 6), yrange=(-5, 5), step=0.5,
+            thresh_percept=0.5), temporal).build()
     return Model(_axon_spatial(), temporal).build()
 
 

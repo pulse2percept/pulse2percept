@@ -97,7 +97,7 @@ It is strongly recommended to upload to TestPyPI first:
     twine upload --repository testpypi dist/*
 
 Install the package from TestPyPI and smoke-test it on at least one common
-platform. Pay particular attention to Cython/OpenMP behavior on Windows,
+platform. Pay particular attention to Cython behavior on Windows,
 Linux, and macOS.
 
 If the artifacts are good, upload the same files to PyPI:

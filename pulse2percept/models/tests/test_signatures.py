@@ -187,7 +187,8 @@ def test_defaults_match_declared_defaults(cls, _):
                                  Nanduri2012Model, BiphasicAxonMapSpatial,
                                  BiphasicAxonMapModel,
                                  BiphasicScoreboardSpatial,
-                                 BiphasicScoreboardModel))
+                                 BiphasicScoreboardModel,
+                                 Thompson2003Spatial, Thompson2003Model))
 def test_torch_models_have_no_thread_params(cls):
     # Removed in 0.12: prediction runs on Torch:
     args = (ArgusII(),) if 'implant' in inspect.signature(cls).parameters \

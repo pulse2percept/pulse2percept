@@ -19,9 +19,7 @@ The first two scenarios correspond to these one-liners::
 The PRIMA scenario runs its optical encoder directly. Electrical image
 scenarios use :func:`as_current` to keep their historical benchmark workload.
 
-Together the scenarios reach every compiled kernel used in percept prediction:
-``_thompson2003``. A new scenario should reach a kernel no existing scenario
-reaches.
+A new scenario should reach a model core no existing scenario reaches.
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -212,14 +210,14 @@ SCENARIOS = [
         binds_implant=False,
         plottable=False,
     ),
-    # Thompson 2003: spatial-only, image input. Only scenario that reaches
-    # _thompson2003:
+    # Thompson 2003: spatial-only, image input. Runs on Torch, so
+    # `n_threads` is unused:
     Scenario(
         id='argus2_thompson2003_logobvl',
         stimulus=lambda: p2p.stimuli.samples.logo_bvl(),
         implant=p2p.implants.retina.ArgusII,
         source=as_current,
-        model=lambda **kwargs: p2p.models.retina.Thompson2003Model(
+        model=lambda n_threads, **kwargs: p2p.models.retina.Thompson2003Model(
             xrange=(-12, 12), yrange=(-8, 8), **kwargs),
     ),
     # Composed Model (separate spatial + temporal) on the Torch core. Both

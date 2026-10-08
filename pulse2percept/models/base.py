@@ -2185,6 +2185,8 @@ class Model(Frozen, PrettyPrint):
         # change legacy semantics in ways an inherited one would ignore.
         return (not spatial._needs_structured_stim and
                 spatial.n_gray is None and
+                # Thompson samples dropout per prepared stimulus frame:
+                getattr(spatial, 'dropout', None) is None and
                 self.implant.stimulus_unit.dimension == uA.dimension and
                 '_predict_tensor' in vars(type(spatial)) and
                 '_predict_temporal_tensor' in vars(type(self.temporal)))

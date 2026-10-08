@@ -2,15 +2,11 @@
    :py:class:`~pulse2percept.models.retina.Thompson2003Spatial` [Thompson2003]_"""
 
 import numpy as np
-import copy
 from ...utils import sample
 from ...topography.retina import Curcio1990Map
 from ...units import um
-from ..base import Model, _thread_params
+from ..base import Model
 from .base import RetinalSpatial, _warn_ignores_z
-from ._thompson2003 import fast_thompson2003
-
-import warnings
 
 
 class Thompson2003Spatial(RetinalSpatial):
@@ -111,12 +107,10 @@ class Thompson2003Spatial(RetinalSpatial):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Inherited OpenMP thread count. The Thompson spatial kernel does not
-        currently use this parameter.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. The Thompson spatial kernel does not currently
-        use this parameter.
+
+    .. versionchanged:: 0.12.0
+
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
     """
 
     def __init__(self, implant, *, radius=None, dropout=None,
@@ -126,7 +120,7 @@ class Thompson2003Spatial(RetinalSpatial):
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
-                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+                 verbose=True, ndim=None):
         super().__init__(
             implant, radius=radius, dropout=dropout, xrange=xrange,
             yrange=yrange, step=step, grid_type=grid_type,
@@ -138,12 +132,13 @@ class Thompson2003Spatial(RetinalSpatial):
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose,
-            ndim=[2] if ndim is None else ndim,
-            **_thread_params(n_threads, n_jobs))
+            ndim=[2] if ndim is None else ndim)
 
     def get_default_params(self):
         """Return default model parameters."""
         base_params = super(Thompson2003Spatial, self).get_default_params()
+        # Prediction runs on Torch's own thread pool:
+        del base_params['n_threads'], base_params['n_jobs']
         params = {'radius': None, 'dropout': None,
                   'visual_field_map': Curcio1990Map()}
         return {**base_params, **params}
@@ -152,26 +147,82 @@ class Thompson2003Spatial(RetinalSpatial):
         """Return units used to store model parameters."""
         return {**super().get_param_units(), 'radius': um}
 
+    def _radius(self, electrode_array):
+        """Return the phosphene radius (microns)."""
+        if self.radius is not None:
+            return self.radius
+        if not hasattr(electrode_array, 'spacing'):
+            raise NotImplementedError
+        return 0.45 * electrode_array.spacing
+
     def _predict_spatial(self, electrode_array, stim):
-        """Predict the spatial response."""
+        """Predict float32 brightness over the spatial grid."""
+        import torch
         _warn_ignores_z(self, electrode_array)
-        radius = self.radius
-        if radius is None:
-            if not hasattr(electrode_array, 'spacing'):
-                raise NotImplementedError
-            radius = 0.45 * electrode_array.spacing
-        dropout = np.zeros(stim.shape, dtype=np.uint8)
+        radius = self._radius(electrode_array)
+        dropout = np.zeros(stim.shape, dtype=bool)
         if self.dropout is not None:
             for t in range(dropout.shape[1]):
                 dropout[sample(np.arange(stim.shape[0]), k=self.dropout),
-                        t] = 255
+                        t] = True
         x_el, y_el, _ = self._electrode_coords(electrode_array, stim)
-        return fast_thompson2003(self._stim_values(stim), x_el, y_el,
-                                 self.grid.ret.x.ravel(),
-                                 self.grid.ret.y.ravel(),
-                                 dropout.astype(np.uint8),
-                                 radius,
-                                 self.thresh_percept)
+        waveform = torch.tensor(self._stim_values(stim), dtype=torch.float32)
+        with torch.inference_mode():
+            return self._predict_thompson_tensor(
+                waveform, x_el, y_el, radius,
+                dropout=torch.from_numpy(dropout)).numpy()
+
+    def _predict_tensor(self, waveform, time):
+        """Return the flat Torch response to an ``(n_electrodes, T)`` waveform.
+
+        Runs the ``predict_percept`` kernel on every implant electrode.
+        Geometry is fixed.
+        """
+        if self.n_gray is not None:
+            # Quantization is discrete and has no exact gradient:
+            raise NotImplementedError("Tensor prediction does not support "
+                                      "n_gray; set n_gray=None.")
+        if self.dropout is not None:
+            # Sampled per prepared stimulus frame in `_predict_spatial`:
+            raise NotImplementedError("Tensor prediction does not support "
+                                      "dropout; set dropout=None.")
+        electrode_array = self.implant.electrode_array
+        _warn_ignores_z(self, electrode_array)
+        x_el, y_el, _ = self._electrode_coords(
+            electrode_array, None, electrodes=self.implant.electrode_names)
+        resp = self._predict_thompson_tensor(waveform, x_el, y_el,
+                                             self._radius(electrode_array))
+        return self._spatial_response(resp, time, None)
+
+    def _predict_thompson_tensor(self, waveform, x_el, y_el, radius,
+                                 dropout=None):
+        """Return the flat thresholded ``(P, T)`` response.
+
+        ``waveform`` rows follow the float32 electrode coordinates ``x_el``,
+        ``y_el`` (microns). ``dropout`` is an optional boolean
+        ``(n_electrodes, T)`` mask of dropped electrodes. Geometry is
+        float32; the response has the dtype and device of ``waveform``.
+        """
+        import torch
+        device = waveform.device
+        x, y = (torch.as_tensor(np.ravel(c), dtype=torch.float32,
+                                device=device)[:, None]
+                for c in (self.grid.ret.x, self.grid.ret.y))
+        x_el, y_el = (torch.as_tensor(c, dtype=torch.float32, device=device)
+                      for c in (x_el, y_el))
+        # Python floats holding float32 values keep Torch in float32. Strict
+        # `<`: a point exactly at `radius` is outside the disk:
+        radius = np.float32(radius)
+        inside = (x - x_el) ** 2 + (y - y_el) ** 2 < float(radius * radius)
+        # Unmapped grid points are zero:
+        inside &= ~(x.isnan() | y.isnan())
+        if dropout is not None:
+            waveform = torch.where(dropout.to(device), 0.0, waveform)
+        resp = inside.to(waveform.dtype) @ waveform
+        thresh = float(np.float32(self.thresh_percept))
+        # Zeroes only `|resp| < thresh`, so NaN propagates. `+ 0.0` turns -0.0
+        # into 0.0:
+        return torch.where(resp.abs() < thresh, 0.0, resp) + 0.0
 
 
 class Thompson2003Model(Model):
@@ -243,12 +294,10 @@ class Thompson2003Model(Model):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the spatial model.
-    n_threads : int, optional
-        Inherited OpenMP thread count. The Thompson spatial kernel does not
-        currently use this parameter.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. The Thompson spatial kernel does not currently
-        use this parameter.
+
+    .. versionchanged:: 0.12.0
+
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
     """
 
     def __init__(self, implant, *, radius=None, dropout=None,
@@ -258,7 +307,7 @@ class Thompson2003Model(Model):
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
                  location_noise=None,
-                 verbose=True, ndim=None, n_threads=None, n_jobs=None):
+                 verbose=True, ndim=None):
         super().__init__(
             spatial=Thompson2003Spatial(
                 implant, radius=radius, dropout=dropout, xrange=xrange,
@@ -269,6 +318,5 @@ class Thompson2003Model(Model):
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
-                location_noise=location_noise, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                location_noise=location_noise, verbose=verbose, ndim=ndim),
             temporal=None)
