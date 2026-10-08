@@ -4,6 +4,7 @@ from pulse2percept.stimuli.base import _frame_index
 from pulse2percept.units import (DimensionMismatchError, Hz, kHz, deg, dva,
                                  ms, rad, s, uA)
 from skimage.color import rgb2gray
+from skimage.filters import threshold_otsu
 from skimage.io import imsave
 from skimage.transform import resize as vid_resize
 from matplotlib.animation import FuncAnimation
@@ -100,6 +101,72 @@ def test_VideoStimulus_resize(tmp_path):
     npt.assert_equal(stim.resize((-1, 24)).vid_shape, (16, 24, 3, 10))
     with pytest.raises(ValueError):
         stim.resize((-1, -1))
+
+
+@pytest.mark.parametrize('factor,shape', [(0.5, (4, 6)), (2.0, (16, 24))])
+def test_VideoStimulus_resize_factor(factor, shape):
+    time = np.array([0, 10, 25, 60, 100], dtype=float)
+    meta = {'user': 'kept'}
+    gray = np.random.rand(8, 12, 5).astype(np.float32)
+    rgb = np.random.rand(8, 12, 3, 5).astype(np.float32)
+    for vid in (gray, rgb):
+        stim = VideoStimulus(vid, time=time, metadata=meta)
+        resized = stim.resize(factor)
+        # Every frame is resized; channels, frames, and times are not:
+        npt.assert_equal(resized.vid_shape, (*shape, *vid.shape[2:]))
+        npt.assert_almost_equal(resized.time, time)
+        npt.assert_equal(resized.metadata['user'], 'kept')
+        npt.assert_almost_equal(resized.data, stim.resize(shape).data)
+        npt.assert_almost_equal(
+            VideoStimulus(vid, time=time, resize=factor).data, resized.data)
+    for factor in (0, -1):
+        with pytest.raises(ValueError, match='positive'):
+            stim.resize(factor)
+
+
+def test_VideoStimulus_threshold():
+    time = np.array([0, 10, 25, 60], dtype=float)
+    rng = np.random.default_rng(0)
+    # Frames with deliberately different gray-level distributions:
+    vid = np.stack([0.2 * rng.random((6, 8)),
+                    0.5 + 0.5 * rng.random((6, 8)),
+                    rng.random((6, 8)) ** 3,
+                    np.full((6, 8), 0.7)], axis=-1).astype(np.float32)
+    stim = VideoStimulus(vid, time=time)
+    # Explicit gray level applies to every frame:
+    th = stim.threshold(0.6)
+    npt.assert_equal(th.vid_shape, vid.shape)
+    npt.assert_almost_equal(th.time, time)
+    npt.assert_equal(list(th.electrodes), list(stim.electrodes))
+    npt.assert_equal(th.data.reshape(vid.shape), vid > 0.6)
+    # Otsu is computed separately for each frame (a constant frame goes
+    # black):
+    frames = np.moveaxis(vid, -1, 0)
+    expected = np.stack([f > threshold_otsu(f) for f in frames], axis=-1)
+    npt.assert_equal(stim.threshold().data.reshape(vid.shape), expected)
+    npt.assert_equal(expected[..., 0].any() and expected[..., 1].any(), True)
+    npt.assert_equal(expected[..., 3].any(), False)
+    # One global threshold would differ:
+    global_th = vid > threshold_otsu(vid.ravel())
+    npt.assert_equal((global_th == expected).all(), False)
+    with pytest.raises(ValueError):
+        VideoStimulus(np.random.rand(6, 8, 3, 4)).threshold()
+
+
+def test_VideoStimulus_filter_resize_threshold():
+    square = np.zeros((32, 32), dtype=np.float32)
+    square[8:24, 8:24] = 1
+    vid = np.stack([square, np.roll(square, 4, axis=1)], axis=-1)
+    stim = VideoStimulus(vid, time=[0, 50])
+    out = stim.filter('sobel').resize(0.5).threshold()
+    npt.assert_equal(out.vid_shape, (16, 16, 2))
+    npt.assert_almost_equal(out.time, [0, 50])
+    npt.assert_equal(np.unique(out.data), [0, 1])
+    frames = out.data.reshape(out.vid_shape)
+    npt.assert_equal(frames[8, 8], 0)
+    npt.assert_equal(np.all(frames.mean(axis=(0, 1)) > 0), True)
+    # The second frame's edges moved with its square:
+    npt.assert_equal((frames[..., 0] == frames[..., 1]).all(), False)
 
 
 def test_VideoStimulus_resize_kwargs():

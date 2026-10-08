@@ -9,6 +9,7 @@ import os
 import warnings
 from copy import copy, deepcopy
 from math import isclose
+from numbers import Real
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -1479,6 +1480,49 @@ def _as_filename(source):
     return None
 
 
+def _resized_shape(shape, resize):
+    """Return the ``(rows, cols)`` that ``resize`` gives an image of ``shape``
+
+    ``resize`` is a scale factor or ``(rows, cols)``, where one entry may be
+    -1 to keep the aspect ratio.
+    """
+    if isinstance(resize, Real):
+        if not np.isfinite(resize) or resize <= 0:
+            raise ValueError(f'A "resize" factor must be a positive number, '
+                             f'not {resize}.')
+        # Same rounding as skimage.transform.rescale:
+        return tuple(max(int(round(resize * n)), 1) for n in shape[:2])
+    height, width = resize
+    if height < 0 and width < 0:
+        raise ValueError('"height" and "width" cannot both be -1.')
+    if height < 0:
+        height = int(shape[0] * width / shape[1])
+    if width < 0:
+        width = int(shape[1] * height / shape[0])
+    return height, width
+
+
+def _threshold_image(img, thresh, **kwargs):
+    """Return ``img > t`` for a gray level or a named method ``t``"""
+    if isinstance(thresh, str):
+        # 'mean' has always ignored kwargs:
+        methods = {'auto': threshold_otsu, 'otsu': threshold_otsu,
+                   'mean': lambda img, **_: threshold_mean(img),
+                   'minimum': threshold_minimum,
+                   'local': threshold_local, 'isodata': threshold_isodata}
+        try:
+            method = methods[thresh.lower()]
+        except KeyError:
+            raise ValueError(f"Unknown threshold method '{thresh}'.")
+        # A constant image has an Otsu threshold equal to its value, so it
+        # becomes all black:
+        return img > method(img, **kwargs)
+    if np.isscalar(thresh):
+        return img > thresh
+    raise TypeError(f"Threshold type must be str or float, not "
+                    f"{type(thresh)}.")
+
+
 class ImageStimulus(Stimulus):
     """ImageStimulus
 
@@ -1508,9 +1552,14 @@ class ImageStimulus(Stimulus):
             A :py:class:`pathlib.Path` is accepted wherever a filename is.
             ``metadata['source']`` is always a string.
 
-    resize : ``(height, width)`` or None, optional
-        Shape of the resized image. If one of the dimensions is set to -1,
-        its value will be inferred by keeping a constant aspect ratio.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales height and width by that factor (e.g., 0.5 halves
+        both). A tuple gives the shape of the resized image; if one of the
+        dimensions is set to -1, its value will be inferred by keeping a
+        constant aspect ratio. Applied after ``as_gray``.
+
+        .. versionchanged:: 0.12.0
+            Accepts a scale factor.
 
     as_gray : bool, optional
         Flag whether to convert the image to grayscale.
@@ -1576,14 +1625,7 @@ class ImageStimulus(Stimulus):
                 img = rgb2gray(img)
         # Resize if necessary:
         if resize is not None:
-            height, width = resize
-            if height < 0 and width < 0:
-                raise ValueError('"height" and "width" cannot both be -1.')
-            if height < 0:
-                height = int(img.shape[0] * width / img.shape[1])
-            if width < 0:
-                width = int(img.shape[1] * height / img.shape[0])
-            img = img_resize(img, (height, width))
+            img = img_resize(img, _resized_shape(img.shape, resize))
         # Store the original image shape for resizing and color conversion:
         self.img_shape = img.shape
         if electrodes is None:
@@ -1715,10 +1757,18 @@ class ImageStimulus(Stimulus):
 
         .. _skimage.transform.resize: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize
 
+        .. versionchanged:: 0.12.0
+
+            ``shape`` may be a scale factor.
+
         Parameters
         ----------
-        shape : (rows, cols)
-            Shape of the resized image
+        shape : float or (rows, cols)
+            A float scales rows and columns by that factor (e.g., 0.5 halves
+            both; sizes are rounded as in ``skimage.transform.rescale``).
+            A tuple gives the shape of the resized image; if one of the
+            dimensions is set to -1, its value will be inferred by keeping a
+            constant aspect ratio. Color channels are not resized.
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
@@ -1737,16 +1787,19 @@ class ImageStimulus(Stimulus):
         stim : `ImageStimulus`
             A copy of the stimulus object containing the resized image
 
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from pulse2percept.stimuli import ImageStimulus
+        >>> stim = ImageStimulus(np.zeros((10, 20)))
+        >>> stim.resize(0.5).img_shape
+        (5, 10)
+        >>> stim.resize((4, -1)).img_shape
+        (4, 8)
+
         """
-        height, width = shape
-        if height < 0 and width < 0:
-            raise ValueError('"height" and "width" cannot both be -1.')
-        if height < 0:
-            height = int(self.img_shape[0] * width / self.img_shape[1])
-        if width < 0:
-            width = int(self.img_shape[1] * height / self.img_shape[0])
-        img = img_resize(self.data.reshape(self.img_shape), (height, width),
-                         **kwargs)
+        img = img_resize(self.data.reshape(self.img_shape),
+                         _resized_shape(self.img_shape, shape), **kwargs)
 
         return ImageStimulus(img, electrodes=electrodes,
                              metadata=self.metadata)
@@ -1879,17 +1932,24 @@ class ImageStimulus(Stimulus):
         return ImageStimulus(trim_image(img, tol=tol), electrodes=electrodes,
                              metadata=self.metadata)
 
-    def threshold(self, thresh, **kwargs):
+    def threshold(self, thresh='auto', **kwargs):
         """Threshold the image
+
+        .. versionchanged:: 0.12.0
+
+            ``thresh`` defaults to 'auto' (Otsu's method).
 
         Parameters
         ----------
-        thresh : str or float
-            If a float in [0,1] is provided, pixels whose grayscale value is
-            above said threshold will be white, others black.
+        thresh : str or float, optional
+            If a float is provided, pixels whose gray level is above said
+            threshold will be white (1), others black (0). The threshold is in
+            the image's current gray levels; the image is not normalized
+            first.
 
             A number of additional methods are supported:
 
+            *  'auto' (default): Same as 'otsu'.
             *  'mean': Threshold image based on the mean of grayscale values.
             *  'minimum': Threshold image based on the minimum method, where
                           the histogram of the input image is computed and
@@ -1904,34 +1964,34 @@ class ImageStimulus(Stimulus):
                <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.threshold_isodata>`__,
                also known as the Ridler-Calvard method or intermeans.
 
+            A constant image becomes all black under 'auto'/'otsu'.
+        **kwargs :
+            Additional keyword arguments passed to the threshold method
+
         Returns
         -------
         stim : `ImageStimulus`
             A copy of the stimulus object with two gray levels 0.0 and 1.0
+
+        Examples
+        --------
+        Edge-filter an image, halve its size, then keep its strongest edges.
+        Thresholding last keeps the result binary:
+
+        >>> import numpy as np
+        >>> from pulse2percept.stimuli import samples
+        >>> stim = samples.logo_bvl(as_gray=True)
+        >>> edges = stim.filter('sobel').resize(0.5).threshold()
+        >>> np.unique(edges.data)
+        array([0., 1.], dtype=float32)
+
         """
         if len(self.img_shape) > 2:
             raise ValueError("Thresholding is only supported for grayscale "
                              "(i.e., single-channel) images. Use `rgb2gray` "
                              "first.")
-        img = self.data.reshape(self.img_shape)
-        if isinstance(thresh, str):
-            if thresh.lower() == 'mean':
-                img = img > threshold_mean(img)
-            elif thresh.lower() == 'minimum':
-                img = img > threshold_minimum(img, **kwargs)
-            elif thresh.lower() == 'local':
-                img = img > threshold_local(img, **kwargs)
-            elif thresh.lower() == 'otsu':
-                img = img > threshold_otsu(img, **kwargs)
-            elif thresh.lower() == 'isodata':
-                img = img > threshold_isodata(img, **kwargs)
-            else:
-                raise ValueError(f"Unknown threshold method '{thresh}'.")
-        elif np.isscalar(thresh):
-            img = self.data.reshape(self.img_shape) > thresh
-        else:
-            raise TypeError(f"Threshold type must be str or float, not "
-                            f"{type(thresh)}.")
+        img = _threshold_image(self.data.reshape(self.img_shape), thresh,
+                               **kwargs)
         return ImageStimulus(img, electrodes=self.electrodes,
                              metadata=self.metadata)
 
@@ -2274,8 +2334,14 @@ class VideoStimulus(Stimulus):
         For a full list of supported formats, see
         https://imageio.readthedocs.io/en/stable/formats.html.
 
-    resize : ``(height, width)`` or None, optional, default: None
-        A tuple specifying the desired height and the width of each video frame
+    resize : float, ``(height, width)``, or None, optional, default: None
+        A float scales the height and width of each frame by that factor
+        (e.g., 0.5 halves both). A tuple gives the desired height and width
+        of each frame; one of them may be -1 to keep the aspect ratio.
+        Frames and frame times are unchanged. Applied after ``as_gray``.
+
+        .. versionchanged:: 0.12.0
+            Accepts a scale factor.
 
     as_gray : bool, optional
         Flag whether to convert the image to grayscale.
@@ -2375,14 +2441,8 @@ class VideoStimulus(Stimulus):
                 vid = rgb2gray(vid.transpose((0, 1, 3, 2)))
         # Resize if necessary:
         if resize is not None:
-            height, width = resize
-            if height < 0 and width < 0:
-                raise ValueError('"height" and "width" cannot both be -1.')
-            if height < 0:
-                height = int(vid.shape[0] * width / vid.shape[1])
-            if width < 0:
-                width = int(vid.shape[1] * height / vid.shape[0])
-            vid = vid_resize(vid, (height, width, *vid.shape[2:]))
+            vid = vid_resize(vid, (*_resized_shape(vid.shape, resize),
+                                   *vid.shape[2:]))
         # Store the original image shape for resizing and color conversion:
         self.vid_shape = vid.shape
         if electrodes is None:
@@ -2538,12 +2598,19 @@ class VideoStimulus(Stimulus):
 
         .. _skimage.transform.resize: https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize
 
+        .. versionchanged:: 0.12.0
+
+            ``shape`` may be a scale factor.
+
         Parameters
         ----------
-        shape : (rows, cols)
-            Shape of each frame in the resized video. If one of the dimensions
-            is set to -1, its value will be inferred by keeping a constant
-            aspect ratio.
+        shape : float or (rows, cols)
+            A float scales the rows and columns of each frame by that factor
+            (e.g., 0.5 halves both; sizes are rounded as in
+            ``skimage.transform.rescale``). A tuple gives the shape of each
+            frame in the resized video; if one of the dimensions is set to -1,
+            its value will be inferred by keeping a constant aspect ratio.
+            Color channels, frames, and frame times are unchanged.
         electrodes : int, string or list thereof; optional
             Optionally, you can provide your own electrode names. If none are
             given, each pixel is named after its place in the image (e.g.
@@ -2563,15 +2630,9 @@ class VideoStimulus(Stimulus):
             A copy of the stimulus object containing the resized video
 
         """
-        height, width = shape
-        if height < 0 and width < 0:
-            raise ValueError('"height" and "width" cannot both be -1.')
-        if height < 0:
-            height = int(self.vid_shape[0] * width / self.vid_shape[1])
-        if width < 0:
-            width = int(self.vid_shape[1] * height / self.vid_shape[0])
         vid = vid_resize(self.data.reshape(self.vid_shape),
-                         (height, width, *self.vid_shape[2:]), **kwargs)
+                         (*_resized_shape(self.vid_shape, shape),
+                          *self.vid_shape[2:]), **kwargs)
         return VideoStimulus(vid, electrodes=electrodes, time=self.time,
                              metadata=self.metadata)
 
@@ -2737,6 +2798,36 @@ class VideoStimulus(Stimulus):
         vid = vid[row_start:row_end, col_start:col_end, ...]
         return VideoStimulus(vid, electrodes=electrodes, metadata=self.metadata,
                              time=self.time)
+
+    def threshold(self, thresh='auto', **kwargs):
+        """Threshold each frame of the video
+
+        .. versionadded:: 0.12.0
+
+        Parameters
+        ----------
+        thresh : str or float, optional
+            If a float is provided, pixels whose gray level is above said
+            threshold will be white (1), others black (0). The threshold is in
+            the video's current gray levels; the video is not normalized
+            first.
+
+            Methods ('auto' (default), 'otsu', 'mean', 'minimum', 'local',
+            'isodata') are those of
+            :py:meth:`~pulse2percept.stimuli.ImageStimulus.threshold`. They
+            compute a separate threshold for each frame.
+        **kwargs :
+            Additional keyword arguments passed to the threshold method
+
+        Returns
+        -------
+        stim : `VideoStimulus`
+            A copy of the stimulus object with two gray levels 0.0 and 1.0
+        """
+        if len(self.vid_shape) == 4:
+            raise ValueError("Thresholding is only supported for grayscale "
+                             "videos. Use `rgb2gray` first.")
+        return self.apply(_threshold_image, thresh, **kwargs)
 
     def rotate(self, angle, mode='constant', electrodes=None, **kwargs):
         """Rotate each frame of the video

@@ -1,9 +1,11 @@
 import os
+import warnings
 import numpy as np
 import numpy.testing as npt
 import pytest
 
 from skimage.color import rgb2gray
+from skimage.filters import threshold_otsu
 from skimage.io import imsave
 from skimage.transform import resize as img_resize
 
@@ -95,6 +97,36 @@ def test_ImageStimulus_resize():
     with pytest.raises(ValueError):
         stim.resize((-1, -1))
     os.remove(fname)
+
+
+@pytest.mark.parametrize('factor,shape', [(0.5, (4, 6)), (2.0, (16, 24)),
+                                          (0.3, (2, 4))])
+def test_ImageStimulus_resize_factor(factor, shape):
+    # Grayscale and RGB scale alike; color channels are not resized:
+    gray = np.random.rand(8, 12).astype(np.float32)
+    for img in (gray, np.dstack([gray] * 3)):
+        stim = ImageStimulus(img)
+        resized = stim.resize(factor)
+        npt.assert_equal(resized.img_shape, (*shape, *img.shape[2:]))
+        # Same as the explicit shape and the constructor argument:
+        npt.assert_almost_equal(resized.data, stim.resize(shape).data)
+        npt.assert_almost_equal(ImageStimulus(img, resize=factor).data,
+                                resized.data)
+    # Pixels are resampled, not reshaped: a horizontal ramp stays one
+    # (identical, increasing rows):
+    ramp = np.tile(np.linspace(0, 1, 8, dtype=np.float32), (8, 1))
+    halved = ImageStimulus(ramp).resize(0.5).data.reshape(4, 4)
+    npt.assert_almost_equal(halved, np.tile(halved[0], (4, 1)))
+    npt.assert_equal(np.all(np.diff(halved[0]) > 0), True)
+
+
+@pytest.mark.parametrize('factor', [0, -0.5, np.inf, np.nan])
+def test_ImageStimulus_resize_bad_factor(factor):
+    stim = ImageStimulus(np.zeros((8, 12)))
+    with pytest.raises(ValueError, match='positive'):
+        stim.resize(factor)
+    with pytest.raises(ValueError, match='positive'):
+        ImageStimulus(np.zeros((8, 12)), resize=factor)
 
 
 def test_ImageStimulus_resize_kwargs():
@@ -272,6 +304,67 @@ def test_ImageStimulus_threshold():
     npt.assert_almost_equal(stim.data, gray)
     npt.assert_equal(stim.img_shape, shape[:2])
     os.remove(fname)
+
+
+def test_ImageStimulus_threshold_explicit():
+    img = np.array([[0.1, 0.25], [0.3, 0.9]], dtype=np.float32)
+    stim = ImageStimulus(img)
+    th = stim.threshold(0.25)
+    # Strictly above the threshold is white, as in scikit-image:
+    npt.assert_equal(th.data.reshape(2, 2), [[0, 0], [1, 1]])
+    npt.assert_equal(th.data.dtype, np.float32)
+    npt.assert_equal(list(th.electrodes), list(stim.electrodes))
+    # The threshold is in the image's own units (no normalization first):
+    dim = ImageStimulus(img * 0.1)
+    npt.assert_equal(dim.threshold(0.25).data, 0)
+    npt.assert_equal(dim.threshold(0.025).data.reshape(2, 2),
+                     [[0, 0], [1, 1]])
+
+
+def test_ImageStimulus_threshold_auto():
+    img = np.random.default_rng(42).random((16, 20)).astype(np.float32) ** 2
+    stim = ImageStimulus(img)
+    expected = img > threshold_otsu(img)
+    for th in (stim.threshold(), stim.threshold('auto'),
+               stim.threshold('otsu')):
+        npt.assert_equal(th.data.reshape(img.shape), expected)
+    # A Sobel-filtered square has few edge pixels; Otsu keeps them sparse
+    # instead of splitting at the median:
+    square = np.zeros((32, 32), dtype=np.float32)
+    square[8:24, 8:24] = 1
+    edges = ImageStimulus(square).filter('sobel').threshold()
+    npt.assert_equal(np.isin(edges.data, [0, 1]).all(), True)
+    npt.assert_equal(0 < edges.data.mean() < 0.25, True)
+    npt.assert_equal(edges.data.reshape(32, 32)[16, 16], 0)
+    npt.assert_equal(edges.data.reshape(32, 32)[8, 16], 1)
+    with pytest.raises(ValueError):
+        stim.threshold('not-a-method')
+    # 'mean' still ignores kwargs:
+    npt.assert_equal(stim.threshold('mean', block_size=3).data,
+                     stim.threshold('mean').data)
+
+
+@pytest.mark.parametrize('value', [0.0, 0.4, 1.0])
+def test_ImageStimulus_threshold_constant(value):
+    stim = ImageStimulus(np.full((5, 7), value, dtype=np.float32))
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        th = stim.threshold()
+    npt.assert_equal(th.data, 0)
+
+
+def test_ImageStimulus_filter_resize_threshold():
+    square = np.zeros((64, 64), dtype=np.float32)
+    square[16:48, 16:48] = 1
+    stim = ImageStimulus(square)
+    resized = stim.filter('sobel').resize(0.5)
+    # Resizing blends gray levels; thresholding last makes them binary:
+    npt.assert_equal(np.isin(resized.data, [0, 1]).all(), False)
+    out = resized.threshold()
+    npt.assert_equal(out.img_shape, (32, 32))
+    npt.assert_equal(np.unique(out.data), [0, 1])
+    npt.assert_equal(out.data.reshape(32, 32)[16, 16], 0)
+    npt.assert_equal(0 < out.data.mean() < 0.25, True)
 
 
 def test_ImageStimulus_rotate():

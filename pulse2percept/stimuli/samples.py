@@ -85,9 +85,10 @@ def big_buck_bunny(resize=None, electrodes=None, metadata=None,
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of each video
-        frame.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of each video frame by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -152,9 +153,10 @@ def bvl_cake(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -220,9 +222,10 @@ def cajal_retina(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -275,9 +278,10 @@ def logo_bvl(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -320,9 +324,10 @@ def logo_ucsb(resize=None, electrodes=None, metadata=None):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -373,9 +378,10 @@ def ucsb_bike(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -452,9 +458,10 @@ def ucsb_flyover(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of each video
-        frame.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of each video frame by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -524,9 +531,10 @@ def ucsb_pedestrians(resize=None, electrodes=None, metadata=None,
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of each video
-        frame.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of each video frame by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -588,9 +596,10 @@ def ucsb_surf(resize=None, electrodes=None, metadata=None, as_gray=False):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -659,9 +668,10 @@ def zebrafish_retina(resize=None, electrodes=None, metadata=None,
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -711,9 +721,10 @@ class LogoBVL(ImageStimulus):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
@@ -749,9 +760,10 @@ class LogoUCSB(ImageStimulus):
 
     Parameters
     ----------
-    resize : ``(height, width)`` or None, optional
-        A tuple specifying the desired height and the width of the image
-        stimulus.
+    resize : float, ``(height, width)``, or None, optional
+        A float scales the height and width of the image stimulus by that
+        factor (e.g., 0.5 halves both). A tuple specifies the desired height
+        and width.
 
     electrodes : int, string or list thereof; optional
         Optionally, you can provide your own electrode names. By default,
