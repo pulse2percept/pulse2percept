@@ -514,6 +514,138 @@ def test_BiphasicAxonMapModel_reduces_to_AxonMapModel():
     npt.assert_allclose(got, want, rtol=1e-5, atol=1e-6 * np.abs(want).max())
 
 
+def _one_axon_model(source, bright=1.0, size=1.0, streak=1.0, rho=200):
+    """Return a built model and active-electrode ``(x, y)`` coordinates.
+
+    Effect models return the given factors (scalar or callable)."""
+    model = BiphasicAxonMapModel(ArgusII(), xrange=(-2, 2), yrange=(-2, 2),
+                                 step=1, rho=rho, meridian_blend=0,
+                                 n_axons=50, n_ax_segments=50,
+                                 ignore_pickle=True, verbose=False)
+    for attr, value in (('bright_model', bright), ('size_model', size),
+                        ('streak_model', streak)):
+        setattr(model.spatial, attr,
+                value if callable(value) else lambda f, a, p, v=value: v)
+    model.build()
+    stim = model.implant.prepare_stim(source)
+    x, y, _ = model.spatial._electrode_coords(model.implant.electrode_array,
+                                              stim, electrodes=list(source))
+    return model, np.c_[x, y]
+
+
+def _give_every_pixel(model, segments):
+    """Replace every pixel's axon with ``(x, y, sensitivity)`` rows"""
+    spatial = model.spatial
+    n_px, n_seg = spatial.grid.x.size, len(segments)
+    spatial.axon_contrib = np.tile(np.array(segments, dtype=np.float32),
+                                   (n_px, 1))
+    spatial.axon_idx_start = np.arange(n_px) * n_seg
+    spatial.axon_idx_end = spatial.axon_idx_start + n_seg
+
+
+def test_BiphasicAxonMap_is_the_analytical_segment_response():
+    # F_bright * exp(-r2 / (2 rho^2 F_size)) * sensitivity ** (1 / F_streak):
+    rho, f_bright, f_size, f_streak, sens = 200, 1.3, 2.5, 0.4, 0.6
+    source = {'C5': BiphasicPulseTrain(20, 2 * xTh, 0.45)}
+    model, el = _one_axon_model(source, f_bright, f_size, f_streak, rho)
+    dx, dy = 150, -80
+    # A segment without a location contributes nothing:
+    _give_every_pixel(model, [(np.nan, np.nan, 1),
+                              (el[0, 0] + dx, el[0, 1] + dy, sens)])
+    got = _frame(model.predict_percept(source))
+    want = f_bright * np.exp(-(dx ** 2 + dy ** 2) / (2 * rho ** 2 * f_size) +
+                             np.log(sens) / f_streak)
+    npt.assert_allclose(got, want, rtol=1e-5)
+
+
+def test_BiphasicAxonMap_sums_electrodes_before_picking_a_segment():
+    # Each segment sums both (signed) electrodes; the pixel then takes the
+    # segment with the largest |sum|, keeping its sign:
+    rho = 400
+    source = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
+              'A2': BiphasicPulseTrain(20, 3 * xTh, 0.45)}
+    model, el = _one_axon_model(
+        source, bright=lambda f, a, p: np.where(a > 2.5, -0.8, 1.0), rho=rho)
+    mid = el.mean(axis=0)
+    _give_every_pixel(model, [(*mid, 1), (*el[1], 1)])
+
+    def gauss(p, q):
+        return np.exp(-np.sum((p - q) ** 2) / (2 * rho ** 2))
+
+    at_mid = gauss(mid, el[0]) - 0.8 * gauss(mid, el[1])
+    at_a2 = gauss(el[1], el[0]) - 0.8
+    npt.assert_array_less(abs(at_mid), abs(at_a2))
+    npt.assert_allclose(_frame(model.predict_percept(source)), at_a2,
+                        rtol=1e-5)
+    # Picking each electrode's strongest segment first would differ:
+    npt.assert_array_less(0.1, abs(gauss(mid, el[0]) - 0.8 - at_a2))
+
+
+def test_BiphasicAxonMap_first_segment_wins_a_tie():
+    # Mirror-image segments give sums of equal |value| and opposite sign:
+    source = {'A1': BiphasicPulseTrain(20, 2 * xTh, 0.45),
+              'A2': BiphasicPulseTrain(20, 3 * xTh, 0.45)}
+    model, el = _one_axon_model(
+        source, bright=lambda f, a, p: np.where(a > 2.5, -1.0, 1.0), rho=400)
+    _give_every_pixel(model, [(*el[0], 1), (*el[1], 1)])
+    got = _frame(model.predict_percept(source))
+    npt.assert_array_less(0, got)
+    _give_every_pixel(model, [(*el[1], 1), (*el[0], 1)])
+    npt.assert_equal(_frame(model.predict_percept(source)), -got)
+
+
+def test_BiphasicAxonMap_effects_follow_their_electrode():
+    # The kernel sums electrodes in x order; here the active order is the
+    # reverse, and F_size/F_streak differ per electrode:
+    rho = 200
+    source = {'A10': BiphasicPulseTrain(20, 2 * xTh, 0.45),
+              'B1': BiphasicPulseTrain(20, 3 * xTh, 0.45)}
+    f_size, f_streak = np.array([0.5, 3.0]), np.array([2.0, 0.3])
+    model, el = _one_axon_model(
+        source, size=lambda f, a, p: np.where(a > 2.5, *f_size[::-1]),
+        streak=lambda f, a, p: np.where(a > 2.5, *f_streak[::-1]), rho=rho)
+    npt.assert_array_less(el[1, 0], el[0, 0])
+    segments = np.array([(*(el[0] + [150, 0]), 0.9),
+                         (*(el[1] + [50, 0]), 0.5)])
+    _give_every_pixel(model, segments)
+
+    def oracle(size, streak):
+        r2 = ((segments[:, None, :2] - el) ** 2).sum(axis=-1)
+        resp = np.exp(-r2 / (2 * rho ** 2 * size) +
+                      np.log(segments[:, 2:]) / streak).sum(axis=1)
+        return resp[np.argmax(np.abs(resp))]
+
+    want = oracle(f_size, f_streak)
+    npt.assert_allclose(_frame(model.predict_percept(source)), want,
+                        rtol=1e-5)
+    # Swapped factors give a different percept:
+    npt.assert_array_less(0.1, abs(oracle(f_size[::-1], f_streak[::-1]) -
+                                   want))
+
+
+@pytest.mark.parametrize('kernel', ('scoreboard', 'axon'))
+def test_Biphasic_cutoff_scales_with_F_size(kernel):
+    # Kept iff r2 <= cutoff_r2 * F_size, inclusive: 100 * 4 = 400 um^2.
+    import torch
+    from pulse2percept.models.base import _scoreboard_response
+    from pulse2percept.models.retina.beyeler2019 import _axon_gauss
+    x = np.array([19.99, 20, 20.01], dtype=np.float32)
+    rho, cutoff_r2, f_size = 10, 100, np.array([4], dtype=np.float32)
+    if kernel == 'scoreboard':
+        got = _scoreboard_response(torch.ones((1, 1)), (x, np.zeros(3)),
+                                   (np.zeros(1), np.zeros(1)), rho,
+                                   cutoff_r2, 0, spread_scale=f_size)[:, 0]
+    else:
+        seg = torch.tensor(np.c_[x, np.zeros(3), np.ones(3)],
+                           dtype=torch.float32)
+        got = _axon_gauss(seg, torch.zeros(1), torch.zeros(1),
+                          torch.tensor(2 * rho ** 2 * f_size),
+                          torch.tensor(cutoff_r2 * f_size))[:-1, 0]
+    npt.assert_equal(got.numpy() > 0, [True, True, False])
+    npt.assert_allclose(got[1], np.exp(-400 / (2 * rho ** 2 * 4)),
+                        rtol=1e-6)
+
+
 def test_BiphasicAxonMap_t_percept_units():
     # `t_percept` accepts time units (model overrides `predict_percept`):
     source = {'A1': BiphasicPulseTrain(20, 1 * xTh, 0.45,

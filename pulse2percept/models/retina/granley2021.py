@@ -3,7 +3,6 @@
    :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`,
    :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial`
    [Granley2021]_"""
-import multiprocessing
 import numpy as np
 from copy import deepcopy
 
@@ -11,12 +10,9 @@ from ...implants import ElectrodeArray
 from ...stimuli import BiphasicPulseTrain, Stimulus
 from ...units import as_value, um, xTh
 from ..base import (BaseModel, Model, _ModelResponse, _encoder_clock,
-                    _require_finite, _require_stim_dimension,
-                    _thread_params)
+                    _require_finite, _require_stim_dimension)
 from .base import _warn_ignores_z
 from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
-from ._granley2021 import (fast_biphasic_axon_map,
-                           fast_biphasic_scoreboard)
 
 #: Maximum horizon expansions when locating delayed temporal peaks.
 _PEAK_SEARCH_DOUBLINGS = 4
@@ -365,8 +361,7 @@ class _BiphasicSpatialMixin:
         """Return one factor per active electrode from effect model ``name``.
 
         A scalar return is broadcast to every active electrode. Any other
-        length raises ValueError, because the kernels index this array per
-        electrode without bounds checking.
+        length raises ValueError.
 
         ``positive`` also rejects factors <= 0 (used in an exponent
         denominator)."""
@@ -515,8 +510,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
 
     .. math::
 
-        I(r, \theta) =
-        \max_{p \in R(\theta)}
+        I_p =
         \sum_{e \in E}
         F_{\mathrm{bright}}
         \exp\left(
@@ -524,10 +518,17 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
             -\frac{d_{\mathrm{soma}}^2}
                 {2 \lambda^2 F_{\mathrm{streak}}}
         \right),
+        \qquad
+        I(r, \theta) = I_{p^*},
+        \quad
+        p^* = \arg\max_{p \in R(\theta)} |I_p|,
 
-    where :math:`d_e` is the distance from an axon segment to electrode
-    :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from that
-    segment to the ganglion cell body. Thus the effective spatial scales are
+    where :math:`d_e` is the distance from axon segment :math:`p` to
+    electrode :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from
+    that segment to the ganglion cell body. The pixel keeps the sign of
+    :math:`I_{p^*}`, which matters when ``bright_model`` returns negative
+    factors; the first segment wins a tie. Thus the effective spatial scales
+    are
 
     .. math::
 
@@ -634,10 +635,10 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+    .. versionchanged:: 0.12.0
+
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
 
     Notes
     -----
@@ -659,8 +660,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
                  meridian_blend=1, axon_pickle='axons.pickle',
-                 ignore_pickle=False, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 ignore_pickle=False, verbose=True, ndim=None):
         # Install default effect models after AxonMapSpatial initialization.
         super().__init__(
             implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange,
@@ -676,7 +676,6 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
             min_ax_sensitivity=min_ax_sensitivity,
             meridian_blend=meridian_blend, axon_pickle=axon_pickle,
             ignore_pickle=ignore_pickle, verbose=verbose, ndim=ndim)
-        self.set_params(**_thread_params(n_threads, n_jobs))
         self.bright_model = (DefaultBrightModel() if bright_model is None
                              else bright_model)
         self.size_model = (DefaultSizeModel(self.rho) if size_model is None
@@ -693,10 +692,6 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
             'bright_model': None,
             'size_model': None,
             'streak_model': None,
-            # Unlike AxonMapSpatial, the Cython kernel uses OpenMP threads.
-            # `n_jobs` writes through to `n_threads`, so it must come last:
-            'n_threads': multiprocessing.cpu_count(),
-            'n_jobs': None,
         }
         return {**base_params, **params}
 
@@ -712,6 +707,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
 
     def _predict_spatial(self, electrode_array, stim):
         """Predict the representative spatial percept."""
+        import torch
         if not isinstance(electrode_array, ElectrodeArray):
             raise TypeError("Implant must be of type ElectrodeArray but it is " +
                             str(type(electrode_array)))
@@ -722,19 +718,17 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
         # Match coordinates to the active-electrode order above.
         x, y, _ = self._electrode_coords(electrode_array, stim,
                                          electrodes=active)
-        return fast_biphasic_axon_map(
-            np.ascontiguousarray(elec_params[:, 1], dtype=np.float32),
-            self._effect_factors('bright_model', elec_params),
-            # `F_size` and `F_streak` appear in exponent denominators:
-            self._effect_factors('size_model', elec_params, positive=True),
-            self._effect_factors('streak_model', elec_params, positive=True),
-            x, y,
-            self.axon_contrib,
-            self.axon_idx_start.astype(np.uint32),
-            self.axon_idx_end.astype(np.uint32),
-            self.rho, self.thresh_percept,
-            self._cutoff_r2(self.rho),
-            self.n_threads)
+        # `F_bright` is the one-frame drive; it may be signed:
+        bright = torch.as_tensor(
+            self._effect_factors('bright_model', elec_params)[:, None])
+        # `F_size` and `F_streak` appear in exponent denominators:
+        size = self._effect_factors('size_model', elec_params, positive=True)
+        streak = self._effect_factors('streak_model', elec_params,
+                                      positive=True)
+        with torch.inference_mode():
+            return self._predict_axon_map_tensor(
+                bright, x, y, spread_scale=size,
+                sensitivity_power=1 / streak).numpy()
 
 
 class BiphasicAxonMapModel(Model):
@@ -769,8 +763,7 @@ class BiphasicAxonMapModel(Model):
 
     .. math::
 
-        I(r, \theta) =
-        \max_{p \in R(\theta)}
+        I_p =
         \sum_{e \in E}
         F_{\mathrm{bright}}
         \exp\left(
@@ -778,10 +771,17 @@ class BiphasicAxonMapModel(Model):
             -\frac{d_{\mathrm{soma}}^2}
                 {2 \lambda^2 F_{\mathrm{streak}}}
         \right),
+        \qquad
+        I(r, \theta) = I_{p^*},
+        \quad
+        p^* = \arg\max_{p \in R(\theta)} |I_p|,
 
-    where :math:`d_e` is the distance from an axon segment to electrode
-    :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from that
-    segment to the ganglion cell body. Thus the effective spatial scales are
+    where :math:`d_e` is the distance from axon segment :math:`p` to
+    electrode :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from
+    that segment to the ganglion cell body. The pixel keeps the sign of
+    :math:`I_{p^*}`, which matters when ``bright_model`` returns negative
+    factors; the first segment wins a tie. Thus the effective spatial scales
+    are
 
     .. math::
 
@@ -888,10 +888,10 @@ class BiphasicAxonMapModel(Model):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
+
+    .. versionchanged:: 0.12.0
+
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
 
     Notes
     -----
@@ -934,8 +934,7 @@ class BiphasicAxonMapModel(Model):
                  axons_range=(-180, 180), n_ax_segments=500,
                  ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
                  meridian_blend=1, axon_pickle='axons.pickle',
-                 ignore_pickle=False, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 ignore_pickle=False, verbose=True, ndim=None):
         super().__init__(
             spatial=BiphasicAxonMapSpatial(
                 implant, bright_model=bright_model, size_model=size_model,
@@ -952,8 +951,7 @@ class BiphasicAxonMapModel(Model):
                 ax_segments_range=ax_segments_range,
                 min_ax_sensitivity=min_ax_sensitivity,
                 meridian_blend=meridian_blend, axon_pickle=axon_pickle,
-                ignore_pickle=ignore_pickle, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                ignore_pickle=ignore_pickle, verbose=verbose, ndim=ndim),
             temporal=None)
 
 
@@ -1021,12 +1019,12 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
 
     .. versionadded:: 0.11.0
+
+    .. versionchanged:: 0.12.0
+
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
     """
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
@@ -1036,8 +1034,7 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
-                 location_noise=None, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 location_noise=None, verbose=True, ndim=None):
         # Install default effect models after ScoreboardSpatial initialization.
         super().__init__(
             implant, rho=rho, xrange=xrange, yrange=yrange, step=step,
@@ -1048,7 +1045,6 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
             implant_rotation=implant_rotation,
             implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose, ndim=ndim)
-        self.set_params(**_thread_params(n_threads, n_jobs))
         self.bright_model = (DefaultBrightModel() if bright_model is None
                              else bright_model)
         self.size_model = (DefaultSizeModel(self.rho) if size_model is None
@@ -1059,10 +1055,7 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
     def get_default_params(self):
         base_params = super(BiphasicScoreboardSpatial,
                             self).get_default_params()
-        # Unlike ScoreboardSpatial, the Cython kernel uses OpenMP threads.
-        # `n_jobs` writes through to `n_threads`, so it must come last:
-        return {**base_params, 'bright_model': None, 'size_model': None,
-                'n_threads': multiprocessing.cpu_count(), 'n_jobs': None}
+        return {**base_params, 'bright_model': None, 'size_model': None}
 
     def _build(self):
         if not callable(self.bright_model):
@@ -1073,21 +1066,20 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
 
     def _predict_spatial(self, electrode_array, stim):
         """Predict the representative spatial percept."""
+        import torch
         _warn_ignores_z(self, electrode_array)
         active, elec_params = self._elec_params(stim)
         # Match coordinates to the active-electrode order above.
         x, y, _ = self._electrode_coords(electrode_array, stim,
                                          electrodes=active)
-        return fast_biphasic_scoreboard(
-            np.ascontiguousarray(elec_params[:, 1], dtype=np.float32),
-            self._effect_factors('bright_model', elec_params),
-            # `F_size` appears in an exponent denominator:
-            self._effect_factors('size_model', elec_params, positive=True),
-            x, y,
-            self.grid.ret.x.ravel(), self.grid.ret.y.ravel(),
-            self.rho, self.thresh_percept,
-            self._cutoff_r2(self.rho),
-            self.n_threads)
+        # `F_bright` is the one-frame drive; it may be signed:
+        bright = torch.as_tensor(
+            self._effect_factors('bright_model', elec_params)[:, None])
+        # `F_size` appears in an exponent denominator:
+        size = self._effect_factors('size_model', elec_params, positive=True)
+        with torch.inference_mode():
+            return self._predict_scoreboard_tensor(
+                bright, x, y, spread_scale=size).numpy()
 
 
 class BiphasicScoreboardModel(Model):
@@ -1195,12 +1187,12 @@ class BiphasicScoreboardModel(Model):
         Whether to print status messages.
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model.
-    n_threads : int, optional
-        Number of OpenMP threads.
-    n_jobs : int or None, optional
-        Alias for ``n_threads``. ``None`` and -1 use all available CPU cores.
 
     .. versionadded:: 0.11.0
+
+    .. versionchanged:: 0.12.0
+
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
 
     Examples
     --------
@@ -1231,8 +1223,7 @@ class BiphasicScoreboardModel(Model):
                  n_gray=None,
                  implant_position=(0, 0), implant_rotation=0,
                  implant_depth=0,
-                 location_noise=None, verbose=True, ndim=None,
-                 n_threads=None, n_jobs=None):
+                 location_noise=None, verbose=True, ndim=None):
         super().__init__(
             spatial=BiphasicScoreboardSpatial(
                 implant, bright_model=bright_model, size_model=size_model,
@@ -1243,6 +1234,5 @@ class BiphasicScoreboardModel(Model):
                 implant_position=implant_position,
                 implant_rotation=implant_rotation,
                 implant_depth=implant_depth,
-                location_noise=location_noise, verbose=verbose, ndim=ndim,
-                n_threads=n_threads, n_jobs=n_jobs),
+                location_noise=location_noise, verbose=verbose, ndim=ndim),
             temporal=None)

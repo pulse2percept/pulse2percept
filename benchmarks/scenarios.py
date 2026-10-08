@@ -20,8 +20,8 @@ The PRIMA scenario runs its optical encoder directly. Electrical image
 scenarios use :func:`as_current` to keep their historical benchmark workload.
 
 Together the scenarios reach every compiled kernel used in percept prediction:
-``_granley2021`` and ``_thompson2003``. A new scenario should reach a kernel
-no existing scenario reaches.
+``_thompson2003``. A new scenario should reach a kernel no existing scenario
+reaches.
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -180,14 +180,16 @@ SCENARIOS = [
             xrange=(-4, 4), yrange=(-4, 4), rho=50, step=0.1, **kwargs),
     ),
     # Granley 2021 reads amplitude, frequency and pulse duration from each
-    # electrode's BiphasicPulseTrain and rejects images. Amplitude is in xTh:
+    # electrode's BiphasicPulseTrain and rejects images. Amplitude is in xTh.
+    # Runs on Torch, so `n_threads` is unused:
     Scenario(
         id='argus2_biphasic_ptrain',
         stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII,
                                       amp=20 * p2p.units.xTh),
         implant=p2p.implants.retina.ArgusII,
-        model=lambda **kwargs: p2p.models.retina.BiphasicAxonMapModel(
-            xrange=(-12, 12), yrange=(-8, 8), **kwargs),
+        model=lambda n_threads, **kwargs: (
+            p2p.models.retina.BiphasicAxonMapModel(
+                xrange=(-12, 12), yrange=(-8, 8), **kwargs)),
         caches_axons=True,
     ),
     # Nanduri 2012: multi-frame output through the Torch composite. Torch

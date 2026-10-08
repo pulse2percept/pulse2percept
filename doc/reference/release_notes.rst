@@ -51,6 +51,10 @@ API changes and improvements
   ``n_threads``/``n_jobs``. ``Nanduri2012Model`` runs on the Torch composite
   core (:pull:`953`).
 
+* The Granley2021 biphasic AxonMap and Scoreboard models now run on Torch
+  everywhere, replacing their Cython extension, and no longer take
+  ``n_threads``/``n_jobs`` (:pull:`954`).
+
 Bug fixes
 ---------
 
