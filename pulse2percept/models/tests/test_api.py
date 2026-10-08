@@ -18,11 +18,13 @@ GENERIC = ['AlphaTemporal', 'BaseModel', 'FadingTemporal', 'Model',
 
 #: Retinal names removed from the root namespace in v0.11.
 MOVED = ['AxonMapModel', 'AxonMapSpatial', 'BiphasicAxonMapModel',
-         'BiphasicAxonMapSpatial', 'BiphasicScoreboardModel',
-         'BiphasicScoreboardSpatial', 'Horsager2009Model',
+         'BiphasicScoreboardModel', 'Horsager2009Model',
          'Horsager2009Temporal', 'Nanduri2012Model', 'Nanduri2012Spatial',
          'Nanduri2012Temporal', 'ScoreboardModel', 'ScoreboardSpatial',
          'Thompson2003Model', 'Thompson2003Spatial']
+
+#: Retinal names removed in v0.12.
+REMOVED = ['BiphasicAxonMapSpatial', 'BiphasicScoreboardSpatial']
 
 #: Retinal names added since the reorganization.
 ADDED = ['Ho2018Model', 'Ho2018Spatial', 'Ho2018Temporal']
@@ -37,8 +39,10 @@ def test_root_namespace_is_anatomy_neutral():
     npt.assert_equal(sorted(models.__all__), GENERIC)
     for name in GENERIC:
         npt.assert_equal(hasattr(models, name), True, err_msg=name)
-    for name in MOVED:
+    for name in MOVED + REMOVED:
         npt.assert_equal(hasattr(models, name), False, err_msg=name)
+    for name in REMOVED:
+        npt.assert_equal(hasattr(models.retina, name), False, err_msg=name)
 
 
 @pytest.mark.parametrize('module', MOVED_MODULES)
@@ -67,9 +71,7 @@ def test_canonical_imports(module, names):
     ('pulse2percept.models.retina.beyeler2019', 'ScoreboardModel'),
     ('pulse2percept.models.retina.beyeler2019', 'AxonMapSpatial'),
     ('pulse2percept.models.retina.beyeler2019', 'AxonMapModel'),
-    ('pulse2percept.models.retina.granley2021', 'BiphasicAxonMapSpatial'),
     ('pulse2percept.models.retina.granley2021', 'BiphasicAxonMapModel'),
-    ('pulse2percept.models.retina.granley2021', 'BiphasicScoreboardSpatial'),
     ('pulse2percept.models.retina.granley2021', 'BiphasicScoreboardModel'),
     ('pulse2percept.models.retina.ho2018', 'Ho2018Spatial'),
     ('pulse2percept.models.retina.ho2018', 'Ho2018Temporal'),

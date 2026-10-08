@@ -1,21 +1,15 @@
 """:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`,
-   :py:class:`~pulse2percept.models.retina.BiphasicAxonMapSpatial`,
-   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`,
-   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial`
+   :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`
    [Granley2021]_"""
 import numpy as np
-from copy import deepcopy
 
 from ...implants import ElectrodeArray
 from ...stimuli import BiphasicPulseTrain, Stimulus
 from ...units import as_value, um, xTh
-from ..base import (BaseModel, Model, _ModelResponse, _encoder_clock,
-                    _require_finite, _require_stim_dimension)
+from ..base import (BaseModel, Model, _encoder_clock, _require_finite,
+                    _require_stim_dimension)
 from .base import _warn_ignores_z
 from .beyeler2019 import AxonMapSpatial, ScoreboardSpatial
-
-#: Maximum horizon expansions when locating delayed temporal peaks.
-_PEAK_SEARCH_DOUBLINGS = 4
 
 
 class DefaultBrightModel(BaseModel):
@@ -414,236 +408,21 @@ class _BiphasicSpatialMixin:
         return self._spatial_response(resp, t_percept, {'stim': stim},
                                       frame_clock=_encoder_clock(stim))
 
-    def _combine_temporal(self, resp, temporal, stim, t_percept):
-        """Apply a normalized temporal response to the spatial response."""
-        dur = self._envelope_dur(stim)
-        # Canonical unit drive, held for the stimulation duration.
-        envelope = Stimulus(np.array([[float(temporal._drive_sign), 0.0]]),
-                            electrodes=['envelope'], time=[0, dur])
-        # Do not modify the caller's temporal model.
-        probe = deepcopy(temporal)
-        probe.thresh_percept = 0
-        peak = self._envelope_peak(probe, envelope)
-        env = probe._predict_response(envelope, t_percept=t_percept)
-        fade = env.data.reshape(-1) / peak
-        return _ModelResponse(resp.data[:, :1] * fade, env.time,
-                              probe.time_unit, self.grid.x.shape,
-                              space=self.grid, frame_clock=resp.frame_clock,
-                              metadata={'stim': stim})
 
-    @staticmethod
-    def _envelope_peak(temporal, envelope):
-        """Return the peak response to the canonical temporal drive."""
-        dt = temporal.dt
-        episode = envelope.times(temporal.time_unit)[-1]
+class _BiphasicModel(Model):
+    """Spatial-only composite around a [Granley2021]_ spatial stage."""
 
-        for _ in range(_PEAK_SEARCH_DOUBLINGS):
-            t = np.arange(int(round(episode / dt)) + 1) * dt
-            resp = temporal._predict_response(envelope, t_percept=t).data
-            if np.argmax(resp) < resp.size - 1:
-                break
-            episode *= 2
-        else:
-            raise ValueError(
-                f"Could not locate the peak response of "
-                f"{type(temporal).__name__} within {t[-1]:g} "
-                f"{temporal.time_unit}."
-            )
-
-        peak = resp.max()
-        if not np.isfinite(peak) or peak <= 0:
-            raise ValueError(
-                f"{type(temporal).__name__} produced no finite positive "
-                f"response to the canonical drive."
-            )
-        return peak
-
-    def _envelope_dur(self, stim):
-        """Return the common duration of the active pulse trains."""
-        durs = {p[4] for p in _pulse_train_params(stim,
-                                                  self.implant.thresholds)}
-        if len(durs) > 1:
-            raise NotImplementedError(
-                f"{type(self).__name__} requires active electrodes to share "
-                f"one stim_dur, not {sorted(durs)}."
-            )
-        if durs:
-            return float(durs.pop())
-
-        # No active electrodes; duration only determines the output time axis.
-        if getattr(stim, '_biphasic_params', None) is not None:
-            return float(stim.duration)
-        sources = stim._structured_sources()
-        if sources:
-            return float(max(src.stim_dur for _, src in sources))
-        return float(stim.time[-1])
+    def __setattr__(self, name, value):
+        # The fit predicts one representative percept, not a time course:
+        if name == 'temporal' and value is not None:
+            raise TypeError(f"{type(self).__name__} does not take a temporal "
+                            f"model.")
+        super().__setattr__(name, value)
 
 
-class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
-    r"""Biphasic axon-map model of [Granley2021]_ (spatial module only).
+class _BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
+    """Spatial stage of :py:class:`BiphasicAxonMapModel`."""
 
-    Extends :py:class:`~pulse2percept.models.retina.AxonMapSpatial` with the
-    stimulus-dependent brightness, size, and streak-length scaling of
-    [Granley2021]_. The model returns one representative spatial percept for the
-    full biphasic pulse train.
-
-    Stimuli must retain their cathodic-first pulse-train description: either
-    :py:class:`~pulse2percept.stimuli.BiphasicPulseTrain` objects, or a still
-    image encoded with the standard biphasic encoder pulse (see
-    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). Amplitude may be
-    given in multiples of perceptual threshold
-    (:py:data:`~pulse2percept.units.xTh`) or as current when a threshold
-    calibration is available.
-
-    Encoded still images use the device-resolved amplitude, phase duration, and
-    frequency; exact pulse-onset timing and interphase duration are ignored. 
-    Videos are not supported.
-
-    Custom effect models must be callables with signature ``f(freq, amp, pdur)``.
-    Their arguments are frequency, amplitude in multiples of threshold, and phase
-    duration.
-
-    When paired with a temporal model, this spatial prediction is treated as the
-    peak percept and multiplied by a normalized temporal response.
-
-    The spatial response is
-
-    .. math::
-
-        I_p =
-        \sum_{e \in E}
-        F_{\mathrm{bright}}
-        \exp\left(
-            -\frac{d_e^2}{2 \rho^2 F_{\mathrm{size}}}
-            -\frac{d_{\mathrm{soma}}^2}
-                {2 \lambda^2 F_{\mathrm{streak}}}
-        \right),
-        \qquad
-        I(r, \theta) = I_{p^*},
-        \quad
-        p^* = \arg\max_{p \in R(\theta)} |I_p|,
-
-    where :math:`d_e` is the distance from axon segment :math:`p` to
-    electrode :math:`e`, and :math:`d_{\mathrm{soma}}` is the path length from
-    that segment to the ganglion cell body. The pixel keeps the sign of
-    :math:`I_{p^*}`, which matters when ``bright_model`` returns negative
-    factors; the first segment wins a tie. Thus the effective spatial scales
-    are
-
-    .. math::
-
-        \rho_{\mathrm{eff}} = \rho \sqrt{F_{\mathrm{size}}},
-        \qquad
-        \lambda_{\mathrm{eff}} = \lambda \sqrt{F_{\mathrm{streak}}}.
-
-    Parameters
-    ----------
-    implant : :py:class:`~pulse2percept.implants.Implant`
-        Implant whose electrode geometry and eye are modeled.
-
-        .. versionadded:: 0.11.0
-
-    bright_model : callable, optional
-        Maps ``(freq, amp, pdur)`` to a multiplicative brightness factor.
-        Defaults to :class:`DefaultBrightModel`.
-    size_model : callable, optional
-        Maps ``(freq, amp, pdur)`` to ``F_size``, which scales ``rho ** 2``.
-        Defaults to :class:`DefaultSizeModel`.
-    streak_model : callable, optional
-        Maps ``(freq, amp, pdur)`` to ``F_streak``, which scales
-        ``lam ** 2``. Defaults to :class:`DefaultStreakModel`.
-    rho : float or Quantity, optional
-        Gaussian decay constant for spread from an electrode to nearby axon
-        segments, in microns. Larger values broaden the percept.
-    lam : float or Quantity, optional
-        Gaussian decay constant along the axon between stimulation site and
-        soma, in microns. Larger values lengthen the percept.
-
-        .. versionchanged:: 0.10.0
-            Renamed from ``axlambda``; ``axlambda`` was removed in 0.11.0.
-
-    xrange : (float, float) or Quantity, optional
-        Horizontal visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``visual_field_map``.
-    yrange : (float, float) or Quantity, optional
-        Vertical visual-field extent in degrees of visual angle. A physical
-        retinal extent may instead be resolved through ``visual_field_map``.
-    step : float, (float, float), or Quantity, optional
-        Grid spacing in degrees of visual angle. A pair specifies separate x
-        and y spacing.
-
-        .. versionchanged:: 0.10.0
-            Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
-
-    grid_type : {'rect', 'hex'}, optional
-        Sampling lattice used for the visual-field grid.
-    thresh_percept : float, optional
-        Brightness values below this threshold are set to zero.
-    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
-        Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
-    n_gray : int or None, optional
-        Number of gray levels in the returned percept. ``None`` disables
-        gray-level quantization.
-    implant_position : (x, y) or Quantity, optional
-        Position of the device-local origin, in tissue coordinates or dva.
-
-        .. versionadded:: 0.11.0
-
-    implant_rotation : float or Quantity, optional
-        In-plane rotation (deg), positive counter-clockwise.
-
-        .. versionadded:: 0.11.0
-
-    implant_depth : float or Quantity, optional
-        Signed offset (um) along the normal of a 2D tissue map.
-
-        .. versionadded:: 0.11.0
-
-    location_noise : float or None, optional
-        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
-        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
-        Location-dependent models may also change phosphene shape or size.
-
-        .. versionadded:: 0.11.0
-
-    loc_od : (float, float) or Quantity, optional
-        Optic-disc location in degrees of visual angle. Its horizontal sign is
-        set from the bound implant's eye.
-    n_axons : int, optional
-        Number of nerve fiber bundles generated.
-    axons_range : (float, float) or Quantity, optional
-        Range of initial bundle angles ``phi0`` in the [Jansonius2009]_ model.
-    n_ax_segments : int, optional
-        Number of radial samples used to generate each bundle.
-    ax_segments_range : (float, float), optional
-        Radial-coordinate range used to generate each bundle in the
-        [Jansonius2009]_ model.
-    min_ax_sensitivity : float, optional
-        Minimum relative axon sensitivity retained during precomputation.
-    meridian_blend : float or Quantity, optional
-        Gaussian standard deviation for blending across the horizontal
-        meridian, in degrees of visual angle. Set to 0 to disable.
-
-        .. versionadded:: 0.10.0
-
-    axon_pickle : str, optional
-        File used to cache generated axon bundles.
-    ignore_pickle : bool, optional
-        If True, regenerate axon bundles instead of loading ``axon_pickle``.
-    verbose : bool, optional
-        Whether to print status messages.
-    ndim : list of int, optional
-        Dimensionalities of ``visual_field_map`` accepted by the model.
-
-    .. versionchanged:: 0.12.0
-
-        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
-
-    Notes
-    -----
-    ``ax_segments_range`` values above 90 are outside the range for which this
-    axon-map construction is considered reliable."""
     #: Mirror ``lam`` in addition to the mixin's ``rho``.
     _shared_with_effect = {**_BiphasicSpatialMixin._shared_with_effect,
                            'lam': 'streak_model'}
@@ -687,7 +466,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
         self.lam = lam
 
     def get_default_params(self):
-        base_params = super(BiphasicAxonMapSpatial, self).get_default_params()
+        base_params = super(_BiphasicAxonMapSpatial, self).get_default_params()
         params = {
             'bright_model': None,
             'size_model': None,
@@ -703,7 +482,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
         if not callable(self.streak_model):
             raise TypeError("streak_model needs to be callable")
 
-        super(BiphasicAxonMapSpatial, self)._build()
+        super(_BiphasicAxonMapSpatial, self)._build()
 
     def _predict_spatial(self, electrode_array, stim):
         """Predict the representative spatial percept."""
@@ -731,7 +510,7 @@ class BiphasicAxonMapSpatial(_BiphasicSpatialMixin, AxonMapSpatial):
                 sensitivity_power=1 / streak).numpy()
 
 
-class BiphasicAxonMapModel(Model):
+class BiphasicAxonMapModel(_BiphasicModel):
     r"""Biphasic axon-map model of [Granley2021]_.
 
     Extends :py:class:`~pulse2percept.models.retina.AxonMapModel` with the
@@ -891,7 +670,8 @@ class BiphasicAxonMapModel(Model):
 
     .. versionchanged:: 0.12.0
 
-        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed. The spatial
+        stage is no longer public and cannot be paired with a temporal model.
 
     Notes
     -----
@@ -936,7 +716,7 @@ class BiphasicAxonMapModel(Model):
                  meridian_blend=1, axon_pickle='axons.pickle',
                  ignore_pickle=False, verbose=True, ndim=None):
         super().__init__(
-            spatial=BiphasicAxonMapSpatial(
+            spatial=_BiphasicAxonMapSpatial(
                 implant, bright_model=bright_model, size_model=size_model,
                 streak_model=streak_model, rho=rho, lam=lam, xrange=xrange,
                 yrange=yrange, step=step, grid_type=grid_type,
@@ -955,77 +735,8 @@ class BiphasicAxonMapModel(Model):
             temporal=None)
 
 
-class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
-    r"""Biphasic scoreboard model (spatial module only).
-
-    Spatial component of
-    :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel`, for pairing
-    with a temporal model in a :py:class:`~pulse2percept.models.Model`. The
-    stimulus contract, effect models, spatial response, and validation caveat
-    are described there. In a composite model this spatial prediction is
-    treated as the peak percept and multiplied by a normalized temporal
-    response.
-
-    Parameters
-    ----------
-    implant : :py:class:`~pulse2percept.implants.Implant`
-        Implant whose electrode geometry is modeled.
-    bright_model : callable, optional
-        Maps ``(freq, amp, pdur)`` to a multiplicative brightness factor.
-        Defaults to :class:`DefaultBrightModel`.
-    size_model : callable, optional
-        Maps ``(freq, amp, pdur)`` to ``F_size``, which scales ``rho ** 2``.
-        Defaults to :class:`DefaultSizeModel`.
-    rho : float or Quantity, optional
-        Baseline Gaussian spatial decay constant in microns, before ``F_size``
-        scaling. Larger values produce broader phosphenes.
-
-        .. important::
-
-            Electrode-retina distance (``z``) does not directly affect ``rho``.
-
-    xrange : (float, float) or Quantity, optional
-        Horizontal visual-field extent in degrees of visual angle. May also be
-        passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``visual_field_map``.
-    yrange : (float, float) or Quantity, optional
-        Vertical visual-field extent in degrees of visual angle. May also be
-        passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``visual_field_map``.
-    step : float, (float, float), or Quantity, optional
-        Grid spacing in degrees of visual angle. A pair specifies separate x
-        and y spacing.
-    grid_type : {'rect', 'hex'}, optional
-        Sampling lattice used for the visual-field grid.
-    thresh_percept : float, optional
-        Brightness values below this threshold are set to zero.
-    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
-        Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
-    n_gray : int or None, optional
-        Number of gray levels in the returned percept. ``None`` disables
-        gray-level quantization.
-    implant_position : (x, y) or Quantity, optional
-        Position of the device-local origin, in tissue coordinates or dva.
-    implant_rotation : float or Quantity, optional
-        In-plane rotation (deg), positive counter-clockwise.
-    implant_depth : float or Quantity, optional
-        Signed offset (um) along the normal of a 2D tissue map.
-    location_noise : float or None, optional
-        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
-        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
-        Location-dependent models may also change phosphene shape or size.
-    verbose : bool, optional
-        Whether to print status messages.
-    ndim : list of int, optional
-        Dimensionalities of ``visual_field_map`` accepted by the model.
-
-    .. versionadded:: 0.11.0
-
-    .. versionchanged:: 0.12.0
-
-        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
-    """
+class _BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
+    """Spatial stage of :py:class:`BiphasicScoreboardModel`."""
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
                  rho=100, xrange=(-15, 15), yrange=(-15, 15), step=0.25,
@@ -1053,7 +764,7 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
         self.rho = rho
 
     def get_default_params(self):
-        base_params = super(BiphasicScoreboardSpatial,
+        base_params = super(_BiphasicScoreboardSpatial,
                             self).get_default_params()
         return {**base_params, 'bright_model': None, 'size_model': None}
 
@@ -1062,7 +773,7 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
             raise TypeError("bright_model needs to be callable")
         if not callable(self.size_model):
             raise TypeError("size_model needs to be callable")
-        super(BiphasicScoreboardSpatial, self)._build()
+        super(_BiphasicScoreboardSpatial, self)._build()
 
     def _predict_spatial(self, electrode_array, stim):
         """Predict the representative spatial percept."""
@@ -1082,7 +793,7 @@ class BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
                 bright, x, y, spread_scale=size).numpy()
 
 
-class BiphasicScoreboardModel(Model):
+class BiphasicScoreboardModel(_BiphasicModel):
     r"""Biphasic scoreboard model.
 
     Extends :py:class:`~pulse2percept.models.retina.ScoreboardModel` with the
@@ -1192,7 +903,8 @@ class BiphasicScoreboardModel(Model):
 
     .. versionchanged:: 0.12.0
 
-        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed.
+        Runs on Torch; ``n_threads`` and ``n_jobs`` were removed. The spatial
+        stage is no longer public and cannot be paired with a temporal model.
 
     Examples
     --------
@@ -1225,7 +937,7 @@ class BiphasicScoreboardModel(Model):
                  implant_depth=0,
                  location_noise=None, verbose=True, ndim=None):
         super().__init__(
-            spatial=BiphasicScoreboardSpatial(
+            spatial=_BiphasicScoreboardSpatial(
                 implant, bright_model=bright_model, size_model=size_model,
                 rho=rho, xrange=xrange, yrange=yrange, step=step,
                 grid_type=grid_type, thresh_percept=thresh_percept,

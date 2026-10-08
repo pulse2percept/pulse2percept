@@ -28,9 +28,7 @@ Pulse-Dependent Models
     :toctree:
 
     BiphasicScoreboardModel
-    BiphasicScoreboardSpatial
     BiphasicAxonMapModel
-    BiphasicAxonMapSpatial
     Nanduri2012Model
     Nanduri2012Spatial
     Nanduri2012Temporal
@@ -68,8 +66,7 @@ Photovoltaic Models
 from .base import RetinalSpatial
 from .beyeler2019 import (AxonMapModel, AxonMapSpatial, ScoreboardModel,
                           ScoreboardSpatial)
-from .granley2021 import (BiphasicAxonMapModel, BiphasicAxonMapSpatial,
-                          BiphasicScoreboardModel, BiphasicScoreboardSpatial)
+from .granley2021 import BiphasicAxonMapModel, BiphasicScoreboardModel
 from .ho2018 import Ho2018Model, Ho2018Spatial, Ho2018Temporal
 from .horsager2009 import Horsager2009Model, Horsager2009Temporal
 from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
@@ -80,9 +77,7 @@ __all__ = [
     'AxonMapModel',
     'AxonMapSpatial',
     'BiphasicAxonMapModel',
-    'BiphasicAxonMapSpatial',
     'BiphasicScoreboardModel',
-    'BiphasicScoreboardSpatial',
     'Ho2018Model',
     'Ho2018Spatial',
     'Ho2018Temporal',

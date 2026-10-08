@@ -34,19 +34,6 @@ Research array geometries
     Huang2021Array
     PhotovoltaicPixel
 
-Deprecated in v0.11
--------------------
-
-These compatibility classes will be removed in v0.12.
-
-.. autosummary::
-    :toctree:
-
-    PRIMA
-    PRIMA75
-    PRIMA55
-    PRIMA40
-
 .. seealso::
 
     *  :ref:`Core Concepts > Implants > Human Implant Systems
@@ -61,8 +48,7 @@ from .alpha import AlphaIMS, AlphaAMS
 from .suprachoroidal import Suprachoroidal24, Suprachoroidal44
 from .imie import IMIE
 from .prima import (PhotovoltaicPixel, PRIMAPivotal, Lorach2015Array,
-                    Ho2019FlatArray, Huang2021Array, PRIMA, PRIMA75,
-                    PRIMA55, PRIMA40)
+                    Ho2019FlatArray, Huang2021Array)
 
 __all__ = [
     'AlphaAMS',
@@ -78,9 +64,4 @@ __all__ = [
     'PhotovoltaicPixel',
     'PRIMAPivotal',
     'RetinalImplant',
-    # Deprecated in 0.11.0, removed in 0.12.0:
-    'PRIMA',
-    'PRIMA75',
-    'PRIMA55',
-    'PRIMA40',
 ]

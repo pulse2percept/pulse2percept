@@ -15,7 +15,6 @@ from ..stimuli.encoders import _EncodedStimulus
 from ..stimuli.pulse_trains import _as_threshold_amp
 from ..units import DimensionMismatchError, as_value, uA, um, xTh
 from ..utils import PrettyPrint
-from ..utils.deprecation import _deprecated_names
 
 
 def _implant_target(implant):
@@ -99,8 +98,8 @@ class Implant(PrettyPrint):
     .. versionadded:: 0.6
 
     .. versionchanged:: 0.11.0
-        Renamed from ``ProsthesisSystem``, which stays available as a
-        deprecated alias until 0.12.0.
+        Renamed from ``ProsthesisSystem``; ``ProsthesisSystem`` was removed in
+        0.12.0.
 
     .. versionchanged:: 0.11.0
         No longer takes ``eye``, which moved to
@@ -937,10 +936,3 @@ class GridImplant(Implant):
                          safe_mode=safe_mode, encoder=encoder, raster=raster,
                          max_current=max_current,
                          scene_input_frame=scene_input_frame)
-
-
-# ``ProsthesisSystem`` resolves to ``Implant`` itself so isinstance checks
-# against the old name still work:
-__getattr__ = _deprecated_names(__name__, {'ProsthesisSystem': Implant},
-                                deprecated_version='0.11.0',
-                                removed_version='0.12.0')

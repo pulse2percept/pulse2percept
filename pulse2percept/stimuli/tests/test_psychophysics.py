@@ -4,112 +4,11 @@ import pytest
 from scipy.ndimage import map_coordinates
 
 import pulse2percept as p2p
-from pulse2percept.stimuli import (BarStimulus, GratingStimulus,
-                                   ImageStimulus, VideoStimulus,
-                                   psychophysics)
+from pulse2percept.stimuli import ImageStimulus, VideoStimulus, psychophysics
 from pulse2percept.units import (DimensionMismatchError, deg, dimensionless,
                                  dva, Hz, ms, rad, uA)
 from pulse2percept.units import s as sec
 from pulse2percept.vision import Scene
-
-
-@pytest.mark.filterwarnings('ignore::DeprecationWarning')
-def test_GratingStimulus():
-    shape = (5, 5)
-    grating = GratingStimulus(shape, spatial_freq=0.25)
-    npt.assert_equal(grating.shape, (np.prod(shape), 51))
-    npt.assert_equal(grating.vid_shape, (shape[0], shape[1], 51))
-    npt.assert_almost_equal(grating.data.min(), 0)
-    npt.assert_almost_equal(grating.data.max(), 1)
-
-    # Drifting to the left/right:
-    nx = 3
-    for direction in [0, 180]:
-        # A grating with 1-px white bar, drifting 1 column per frame:
-        grating = GratingStimulus((nx, nx), direction=direction,
-                                  spatial_freq=1.0 / nx,
-                                  temporal_freq=1.0 / nx, time=np.arange(nx))
-        data = grating.data.reshape(grating.vid_shape)
-        for i in range(nx):
-            if direction == 0:
-                npt.assert_almost_equal(data[:, i, (i + 1) % nx], 1)
-            else:
-                npt.assert_almost_equal(data[:, nx - i - 1, i], 1)
-
-    # Contrast vs. mask:
-    for mask in ['circle', None]:
-        # Mask will have value 0.5, so contrast still defines the min/max:
-        grating = GratingStimulus(shape, spatial_freq=0.25, contrast=0.45,
-                                  mask=mask)
-        npt.assert_almost_equal(grating.data.max() - grating.data.min(), 0.45)
-        npt.assert_almost_equal(grating.data.min(), 0.275)
-        npt.assert_almost_equal(grating.data.max(), 0.725)
-
-    # Masks:
-    for mask in ['circle', 'gauss']:
-        grating = GratingStimulus(shape, mask=mask)
-        npt.assert_almost_equal(grating.data[:2, :].ravel(), 0.5, decimal=2)
-        npt.assert_almost_equal(grating.data[3:5, :].ravel(), 0.5, decimal=2)
-        npt.assert_almost_equal(grating.data[-2:, :].ravel(), 0.5, decimal=2)
-
-
-@pytest.mark.filterwarnings('ignore::DeprecationWarning')
-def test_BarStimulus():
-    shape = (15, 15)
-    bar = BarStimulus(shape)
-    npt.assert_equal(bar.shape, (np.prod(shape), 51))
-    npt.assert_equal(bar.vid_shape, (shape[0], shape[1], 51))
-    npt.assert_almost_equal(bar.data.max(), 1)
-
-    # Contrast vs. mask:
-    for mask in ['circle', 'gauss', None]:
-        # Mask will have value 0.5, so contrast still defines the min/max:
-        bar = BarStimulus(shape, contrast=0.45, mask=mask)
-        npt.assert_almost_equal(bar.data.max() - bar.data.min(), 0.45,
-                                decimal=2)
-        npt.assert_almost_equal(bar.data.min(), 0.275, decimal=2)
-        npt.assert_almost_equal(bar.data.max(), 0.725, decimal=2)
-
-    # Masks:
-    for mask in ['circle', 'gauss']:
-        bar = BarStimulus(shape, mask=mask)
-        npt.assert_almost_equal(bar.data[:2, :].ravel(), 0.5, decimal=2)
-        npt.assert_almost_equal(bar.data[3:5, :].ravel(), 0.5, decimal=2)
-        npt.assert_almost_equal(bar.data[-2:, :].ravel(), 0.5, decimal=2)
-
-
-@pytest.mark.filterwarnings('ignore::DeprecationWarning')
-def test_psychophysics_time_units():
-    # `time` may be given as a duration:
-    for cls, kwargs in [(GratingStimulus, {}), (BarStimulus, {})]:
-        bare = cls((4, 4), time=100, **kwargs)
-        unitful = cls((4, 4), time=0.1 * sec, **kwargs)
-        npt.assert_array_equal(bare.data, unitful.data)
-        npt.assert_array_equal(bare.time, unitful.time)
-        # An explicit list of time points works too:
-        listed = cls((4, 4), time=[0, 20, 40] * ms, **kwargs)
-        npt.assert_almost_equal(listed.time, [0, 20, 40])
-        # Pixels are gray levels; time has physical units.
-        npt.assert_equal(unitful.unit, dimensionless)
-        npt.assert_equal(unitful.time_unit, ms)
-        with pytest.raises(DimensionMismatchError):
-            cls((4, 4), time=5 * uA, **kwargs)
-
-
-@pytest.mark.filterwarnings('ignore::DeprecationWarning')
-def test_GratingStimulus_angle_units():
-    """`direction` and `phase` are plain angles, not visual angles"""
-    bare = GratingStimulus((4, 4), direction=45, phase=90, time=100)
-    unitful = GratingStimulus((4, 4), direction=45 * deg, phase=90 * deg,
-                              time=100)
-    in_rad = GratingStimulus((4, 4), direction=np.pi / 4 * rad,
-                             phase=np.pi / 2 * rad, time=100)
-    npt.assert_allclose(unitful.data, bare.data, rtol=1e-12)
-    npt.assert_allclose(in_rad.data, bare.data, rtol=1e-12)
-    for kwargs in ({'direction': 10 * dva}, {'phase': 10 * dva},
-                   {'phase': 10 * ms}):
-        with pytest.raises(DimensionMismatchError):
-            GratingStimulus((4, 4), time=100, **kwargs)
 
 
 def test_psychophysics_namespace():
@@ -119,6 +18,10 @@ def test_psychophysics_namespace():
     for name in ('bar', 'grating', 'landolt_c', 'tumbling_e'):
         npt.assert_equal(hasattr(psychophysics, name), True)
         npt.assert_equal(hasattr(p2p.stimuli, name), False)
+    # Removed in 0.12; `grating` and `bar` replace them:
+    for gone in ('GratingStimulus', 'BarStimulus'):
+        npt.assert_equal(hasattr(p2p.stimuli, gone), False)
+        npt.assert_equal(hasattr(psychophysics, gone), False)
 
 
 def _assert_area_averaged(scene):
@@ -962,41 +865,6 @@ def test_bar_invalid(kwargs, msg):
         psychophysics.bar(**{'shape': (16, 16), 'fov': 10, 'width': 2,
                              **kwargs})
     npt.assert_equal(msg in str(excinfo.value), True)
-
-
-@pytest.mark.parametrize('cls,alt', [
-    (GratingStimulus, 'psychophysics.grating'),
-    (BarStimulus, 'psychophysics.bar'),
-])
-def test_psychophysics_legacy_deprecated(cls, alt):
-    with pytest.warns(DeprecationWarning) as record:
-        cls((16, 16), time=[0, 20])
-    # `BarStimulus` builds a `GratingStimulus` internally, which must not warn
-    # again:
-    npt.assert_equal(len(record), 1)
-    msg = str(record[0].message)
-    for expected in (cls.__name__, alt, '0.11.0', '0.12.0'):
-        npt.assert_equal(expected in msg, True)
-
-
-@pytest.mark.filterwarnings('ignore::DeprecationWarning')
-def test_psychophysics_legacy_semantics():
-    """Deprecated classes keep their pixel/frame units until 0.11"""
-    grating = GratingStimulus((4, 4), spatial_freq=0.25, temporal_freq=0.1)
-    # `time=None` is still a 1-second video on an implicit 50 Hz grid:
-    npt.assert_almost_equal(grating.time, np.arange(0, 1001, 20))
-    npt.assert_equal(grating.vid_shape, (4, 4, 51))
-    # Temporal frequency is still cycles/frame, so 0.1 repeats every 10
-    # frames regardless of the time axis:
-    data = grating.data.reshape(grating.vid_shape)
-    npt.assert_allclose(data[..., 10], data[..., 0], atol=1e-6)
-    # Spatial frequency is still cycles/pixel, so 0.25 repeats every 4 pixels:
-    npt.assert_allclose(data[:, 0, 0], data[:, 0, 0][0], atol=1e-6)
-    bar = BarStimulus((16, 16), speed=1)
-    npt.assert_almost_equal(bar.time, np.arange(0, 1001, 20))
-    npt.assert_equal(bar.vid_shape, (16, 16, 51))
-    # ... and they are videos, not scenes:
-    npt.assert_equal(isinstance(bar, VideoStimulus), True)
 
 
 def test_grating_spatial_nyquist():

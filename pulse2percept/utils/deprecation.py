@@ -186,31 +186,6 @@ class deprecated:
         return wrapped
 
 
-def _deprecated_names(module, aliases, deprecated_version=None,
-                      removed_version=None):
-    """Return a module ``__getattr__`` (:pep:`562`) for renamed classes.
-
-    ``aliases`` maps each old name to its new class. ``module`` is the
-    module's ``__name__``, used in the ``AttributeError`` for unknown names.
-    The old name returns the new class itself (not a deprecated subclass), so
-    ``isinstance`` and ``issubclass`` checks still work; only the lookup
-    warns.
-    """
-    clause = _version_clause(deprecated_version, removed_version)
-
-    def __getattr__(name):
-        try:
-            obj = aliases[name]
-        except KeyError:
-            raise AttributeError(f"module {module!r} has no attribute "
-                                 f"{name!r}") from None
-        _warn_external(f"{name} is deprecated{clause}. Use "
-                       f"``{obj.__name__}`` instead.")
-        return obj
-
-    return __getattr__
-
-
 class deprecate_parameter:
     """Decorator for a deprecated function or method parameter.
 

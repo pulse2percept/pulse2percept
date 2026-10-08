@@ -250,11 +250,6 @@ least three output pixels.
 Spatial and temporal frequencies above the corresponding Nyquist limit are
 rejected rather than aliased.
 
-.. note::
-
-   ``GratingStimulus`` and ``BarStimulus`` use the legacy pixel/frame API and
-   are deprecated until v0.12.
-
 
 Loading and Processing Images
 -----------------------------

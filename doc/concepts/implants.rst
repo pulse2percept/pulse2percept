@@ -220,9 +220,6 @@ Hexagonal rows are separated by ``spacing * sqrt(3) / 2``.
 These arrays use pulsed near-infrared stimulation; their optical protocols are
 described in :ref:`topics-stimulation`.
 
-``PRIMA``, ``PRIMA75``, ``PRIMA55``, and ``PRIMA40`` are deprecated aliases;
-see the v0.11 release notes.
-
 
 .. _topics-implants-cortex:
 

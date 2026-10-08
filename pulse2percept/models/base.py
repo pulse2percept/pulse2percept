@@ -2101,7 +2101,6 @@ class Model(Frozen, PrettyPrint):
         if self._uses_tensor_core(stim):
             resp = self._predict_tensor_core(stim, t_percept)
         elif self.has_space and self.has_time:
-            combine = getattr(self.spatial, '_combine_temporal', None)
             # Schedule-reading spatial stages need the structured stimulus;
             # the rest integrate the delivered waveform downstream.
             resp = self.spatial._predict_response(
@@ -2112,15 +2111,10 @@ class Model(Frozen, PrettyPrint):
                 # `_delivered` drops encoder state; take the prepared clock:
                 resp = replace(resp, frame_clock=_encoder_clock(stim))
             if has_time_axis:
-                if resp.time is None and combine is not None:
-                    # Allow a spatial model to define custom temporal
-                    # combination for a timeless spatial response:
-                    resp = combine(resp, self.temporal, stim, t_percept)
-                else:
-                    # Then pass that to the temporal model, which will output
-                    # at all `t_percept` time steps:
-                    resp = self.temporal._predict_response(
-                        resp, t_percept=t_percept)
+                # Then pass that to the temporal model, which will output at
+                # all `t_percept` time steps:
+                resp = self.temporal._predict_response(
+                    resp, t_percept=t_percept)
         elif self.has_space:
             resp = self.spatial._predict_response(stim, t_percept=t_percept)
         else:

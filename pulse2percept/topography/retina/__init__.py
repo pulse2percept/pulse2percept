@@ -23,7 +23,6 @@ Maps with RGC Displacement
 .. autosummary::
     :toctree:
 
-    Watson2014DisplaceMap
     Montesano2020Map
 
 .. seealso::
@@ -34,12 +33,11 @@ Maps with RGC Displacement
 from .base import RetinalMap
 from .curcio1990 import Curcio1990Map
 from .montesano2020 import Montesano2020Map
-from .watson2014 import Watson2014Map, Watson2014DisplaceMap
+from .watson2014 import Watson2014Map
 
 __all__ = [
     'Curcio1990Map',
     'Montesano2020Map',
     'RetinalMap',
-    'Watson2014DisplaceMap',
     'Watson2014Map',
 ]
