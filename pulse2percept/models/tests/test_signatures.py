@@ -181,19 +181,13 @@ def test_defaults_match_declared_defaults(cls, _):
                              err_msg=f'{cls.__name__}.{name}')
 
 
-@pytest.mark.parametrize('kwargs', [{'n_threads': 2}, {'n_jobs': 2},
-                                    {'n_threads': 3, 'n_jobs': 2}])
-def test_n_jobs_is_an_alias_for_n_threads(kwargs):
-    # `n_jobs` writes through to `n_threads`, and wins when both are given.
-    # Granley's Cython kernels keep OpenMP threads:
-    for cls in (BiphasicAxonMapModel, BiphasicScoreboardModel):
-        npt.assert_equal(cls(ArgusII(), **kwargs).spatial.n_threads, 2)
-
-
 @pytest.mark.parametrize('cls', (FadingTemporal, AlphaTemporal,
                                  Horsager2009Temporal, Horsager2009Model,
                                  Nanduri2012Temporal, Nanduri2012Spatial,
-                                 Nanduri2012Model))
+                                 Nanduri2012Model, BiphasicAxonMapSpatial,
+                                 BiphasicAxonMapModel,
+                                 BiphasicScoreboardSpatial,
+                                 BiphasicScoreboardModel))
 def test_torch_models_have_no_thread_params(cls):
     # Removed in 0.12: prediction runs on Torch:
     args = (ArgusII(),) if 'implant' in inspect.signature(cls).parameters \

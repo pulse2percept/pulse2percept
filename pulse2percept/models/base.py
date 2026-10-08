@@ -130,7 +130,7 @@ _SCOREBOARD_BLOCK_BYTES = 16 * 2 ** 20
 
 
 def _scoreboard_response(waveform, grid, el, rho, cutoff_r2, thresh,
-                         boundary=None):
+                         boundary=None, spread_scale=None):
     """Return the thresholded Gaussian current-spread response, ``(P, T)``.
 
     ``grid`` and ``el`` hold matching x, y[, z] coordinates (microns) of the
@@ -138,8 +138,9 @@ def _scoreboard_response(waveform, grid, el, rho, cutoff_r2, thresh,
     Geometry and Gaussian weights are float32, cast to the dtype and device
     of ``waveform``. Pairs with ``r2 > cutoff_r2`` or a NaN coordinate
     contribute zero. If ``boundary`` is given, no current crosses
-    ``x = boundary``. Pixels are processed in blocks of about
-    ``_SCOREBOARD_BLOCK_BYTES``.
+    ``x = boundary``. ``spread_scale`` (``E``, positive) multiplies each
+    electrode's ``rho ** 2`` and ``cutoff_r2``. Pixels are processed in
+    blocks of about ``_SCOREBOARD_BLOCK_BYTES``.
     """
     import torch
     device = waveform.device
@@ -151,11 +152,17 @@ def _scoreboard_response(waveform, grid, el, rho, cutoff_r2, thresh,
     cutoff_r2 = np.float32(cutoff_r2)
     # Exponents below this only occur beyond the cutoff, so clamping them
     # changes no kept weight. Torch CPU `exp` is ~40x slower on large
-    # negative arguments:
+    # negative arguments. `spread_scale` cancels out of this ratio:
     min_arg = float(np.float32(2) * (-cutoff_r2 / two_rho2))
-    # Scalars are passed to Torch as Python floats holding float32 values, so
-    # Torch compares and divides in float32 without rounding them again:
-    two_rho2, cutoff_r2 = float(two_rho2), float(cutoff_r2)
+    if spread_scale is None:
+        # Scalars are passed to Torch as Python floats holding float32
+        # values, so Torch compares and divides in float32 without rounding
+        # them again:
+        two_rho2, cutoff_r2 = float(two_rho2), float(cutoff_r2)
+    else:
+        scale = np.asarray(spread_scale, dtype=np.float32)
+        two_rho2 = torch.as_tensor(two_rho2 * scale, device=device)
+        cutoff_r2 = torch.as_tensor(cutoff_r2 * scale, device=device)
     if boundary is not None:
         boundary = float(np.float32(boundary))
         el_left = el[0] < boundary

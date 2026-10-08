@@ -55,10 +55,13 @@ def _jansonius_tensor(rho, phi0, beta_sup, beta_inf):
     return (rho * torch.cos(phi)).numpy(), (rho * torch.sin(phi)).numpy()
 
 
-def _axon_gauss(seg, xs, ys, two_rho2, cutoff_r2):
+def _axon_gauss(seg, xs, ys, two_rho2, cutoff_r2, sensitivity_power=None):
     """Return the ``(n_seg + 1, n_el)`` float32 electrode weight per segment.
 
-    ``seg`` holds ``(x, y, sensitivity)`` rows. The trailing zero row is the
+    ``seg`` holds ``(x, y, sensitivity)`` rows. ``two_rho2`` and
+    ``cutoff_r2`` are floats or per-electrode tensors. With
+    ``sensitivity_power`` (per electrode), sensitivity enters as
+    ``sensitivity ** sensitivity_power``. The trailing zero row is the
     response of an axon without segments. Pairs with ``r2 > cutoff_r2`` and
     segments without a location (NaN) are 0.
     """
@@ -71,8 +74,14 @@ def _axon_gauss(seg, xs, ys, two_rho2, cutoff_r2):
     gauss[-1] = 0
     # Clamping pairs beyond the cutoff, zeroed below, keeps `exp` out of its
     # slow underflow path (~40x slower on CPU):
-    weight = torch.clamp(r2, max=float(cutoff_r2), out=gauss[:-1])
-    weight.div_(-two_rho2).exp_().mul_(seg[:, 2:]).masked_fill_(dropped, 0)
+    weight = torch.clamp(r2, max=cutoff_r2, out=gauss[:-1])
+    weight.div_(-two_rho2)
+    if sensitivity_power is None:
+        weight.exp_().mul_(seg[:, 2:])
+    else:
+        # One `exp` of summed exponents: log(s) * power, as an outer product:
+        weight.addr_(seg[:, 2].log(), sensitivity_power).exp_()
+    weight.masked_fill_(dropped, 0)
     return gauss
 
 
@@ -315,16 +324,19 @@ class ScoreboardSpatial(RetinalSpatial):
         resp = self._predict_scoreboard_tensor(waveform, x_el, y_el)
         return self._spatial_response(resp, time, None)
 
-    def _predict_scoreboard_tensor(self, waveform, x_el, y_el):
+    def _predict_scoreboard_tensor(self, waveform, x_el, y_el,
+                                   spread_scale=None):
         """Return the flat thresholded ``(P, T)`` response.
 
         ``waveform`` rows follow the float32 electrode coordinates ``x_el``,
         ``y_el`` (microns). Geometry and Gaussian weights are float32; the
-        response has the dtype and device of ``waveform``.
+        response has the dtype and device of ``waveform``. ``spread_scale``
+        optionally scales each electrode's ``rho ** 2``.
         """
         return _scoreboard_response(
             waveform, (self.grid.ret.x, self.grid.ret.y), (x_el, y_el),
-            self.rho, self._cutoff_r2(self.rho), self.thresh_percept)
+            self.rho, self._cutoff_r2(self.rho), self.thresh_percept,
+            spread_scale=spread_scale)
 
 
 class ScoreboardModel(Model):
@@ -1145,7 +1157,8 @@ class AxonMapSpatial(RetinalSpatial):
             self._predict_axon_map_tensor(waveform, x_el, y_el))
         return self._spatial_response(resp, time, None)
 
-    def _predict_axon_map_tensor(self, waveform, x_el, y_el):
+    def _predict_axon_map_tensor(self, waveform, x_el, y_el,
+                                 spread_scale=None, sensitivity_power=None):
         """Return the flat ``(P, T)`` response before meridian blending.
 
         ``waveform`` rows follow the float32 electrode coordinates ``x_el``,
@@ -1154,6 +1167,10 @@ class AxonMapSpatial(RetinalSpatial):
         its axon segment with the largest ``|response|`` (first on ties), then
         ``thresh_percept`` is applied. Whole axons are processed in blocks of
         about ``_AXON_BLOCK_BYTES``.
+
+        Optional per-electrode ``spread_scale`` multiplies ``rho ** 2`` and
+        the cutoff; ``sensitivity_power`` raises axon sensitivity to that
+        power (see ``_axon_gauss``).
 
         Until backward, autograd keeps each block's Gaussian (segments x
         electrodes x ``itemsize`` bytes in total) and one int64 index per
@@ -1168,7 +1185,16 @@ class AxonMapSpatial(RetinalSpatial):
         waveform = waveform[torch.as_tensor(order, device=device)]
         rho = np.float32(self.rho)
         two_rho2 = np.float32(2) * rho * rho
-        cutoff_r2 = self._cutoff_r2(self.rho)
+        cutoff_r2 = float(self._cutoff_r2(self.rho))
+        if spread_scale is not None:
+            scale = np.asarray(spread_scale, dtype=np.float32)[order]
+            two_rho2 = torch.as_tensor(two_rho2 * scale, device=device)
+            cutoff_r2 = torch.as_tensor(np.float32(cutoff_r2) * scale,
+                                        device=device)
+        if sensitivity_power is not None:
+            sensitivity_power = torch.as_tensor(
+                np.asarray(sensitivity_power, dtype=np.float32)[order],
+                device=device)
         contrib = torch.as_tensor(self.axon_contrib, device=device)
         start, end = self.axon_idx_start, self.axon_idx_end
         n_el, n_time = x_el.size, waveform.shape[1]
@@ -1178,7 +1204,8 @@ class AxonMapSpatial(RetinalSpatial):
                                    waveform.element_size(),
                                    _AXON_BLOCK_BYTES):
             lo, hi = start[p0], end[p1 - 1]
-            gauss = _axon_gauss(contrib[lo:hi], xs, ys, two_rho2, cutoff_r2)
+            gauss = _axon_gauss(contrib[lo:hi], xs, ys, two_rho2, cutoff_r2,
+                                sensitivity_power)
             seg_resp = gauss.to(waveform.dtype) @ waveform
             counts = end[p0:p1] - start[p0:p1]
             first = start[p0:p1] - lo

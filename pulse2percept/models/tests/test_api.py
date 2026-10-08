@@ -103,3 +103,9 @@ def test_axon_map_cython_extension_is_gone():
     """AxonMap runs on Torch; its Cython extension was removed in 0.12"""
     with pytest.raises(ImportError):
         importlib.import_module('pulse2percept.models.retina._beyeler2019')
+
+
+def test_granley_cython_extension_is_gone():
+    """Granley runs on Torch; its Cython extension was removed in 0.12"""
+    with pytest.raises(ImportError):
+        importlib.import_module('pulse2percept.models.retina._granley2021')
