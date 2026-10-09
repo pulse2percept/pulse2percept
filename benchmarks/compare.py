@@ -9,7 +9,7 @@ past its threshold.
 
 ``memory_metric`` says what ``peak_mem_mb`` measured: ``memray_heap_peak``,
 ``tracemalloc_peak`` (Windows) or ``cuda_allocated_delta``. All three count
-allocations, so repeated runs of unchanged code report nearly the same peak.
+allocations, so they are substantially more repeatable than process RSS.
 Memory is compared only when both runs report the same metric; untagged entries
 predate the tag and are compared on time only.
 
@@ -171,8 +171,9 @@ def render(rows, added, removed, failed, args):
         out += [
             ':warning: **A benchmark regressed past its threshold.**',
             '',
-            'Memory metrics count allocations and are highly repeatable, so a '
-            'memory regression is worth explaining rather than re-running. '
+            'Memory metrics are designed to be repeatable, so a memory '
+            'regression is worth explaining rather than dismissing as runner '
+            'noise. '
             'Time on a shared runner is not repeatable: confirm a time '
             'regression with `make bench` on a quiet machine before treating '
             'it as one.',

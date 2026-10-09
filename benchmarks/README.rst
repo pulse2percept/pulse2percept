@@ -70,8 +70,8 @@ the memory recorded in ``extra_info``. ``compare.py`` reads two
 It prints a Markdown table and exits non-zero if anything regressed. Time and
 memory use different thresholds:
 
-**Memory is highly repeatable.** Each memory metric counts allocations (see
-`Reading the numbers`_). Memory is compared only when both runs report the same
+**Memory is more repeatable than time.** Each memory metric counts
+allocations (see `Reading the numbers`_). Memory is compared only when both runs report the same
 ``memory_metric``; if the tags differ, or a run predates the tag, that
 benchmark is compared on time only.
 
@@ -161,8 +161,9 @@ benchmark first runs its payload once, untimed, and records ``peak_mem_mb`` and
 ``memory_metric`` in ``extra_info``.
 
 **Memory metrics.** ``memory_metric`` says what ``peak_mem_mb`` measured
-(MB = 1e6 bytes). All three count allocations made during the call, so
-allocator reuse and benchmark order do not change them:
+(MB = 1e6 bytes). All three count allocations made during the call. They are
+substantially more repeatable than process RSS and do not depend on whether an
+allocation needs additional resident pages:
 
 - ``memray_heap_peak`` (Linux, macOS): bytes live at the heap high-water mark,
   from `Memray <https://bloomberg.github.io/memray/>`_. Counts native

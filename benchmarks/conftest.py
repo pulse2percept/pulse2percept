@@ -158,8 +158,9 @@ def peak_memory():
     - ``tracemalloc_peak`` (Windows, which Memray does not support): counts
       Python and NumPy allocations only, not Torch tensors or raw ``malloc``.
 
-    Both count allocations made during the call, so allocator reuse does not
-    hide them. Call outside the timed section: tracking slows the call.
+    Both count allocator calls made during the call, so a block reused from
+    resident memory still counts. Call outside the timed section: tracking
+    slows the call.
     """
     if sys.platform == 'win32':
         backend, metric = _tracemalloc_peak, 'tracemalloc_peak'
