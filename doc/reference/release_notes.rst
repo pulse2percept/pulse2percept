@@ -83,7 +83,7 @@ API changes and improvements
 
 * New ``Granley2023Model``: the oriented-Gaussian phosphene model of
   [Granley2023]_, with nerve fiber bundles setting only phosphene orientation.
-  ``rho`` is an area in output pixels (:pull:`N`).
+  ``rho`` is an area in output pixels (:pull:`960`).
 
 Bug fixes
 ---------

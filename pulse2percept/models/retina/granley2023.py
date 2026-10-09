@@ -1,4 +1,6 @@
 """:py:class:`~pulse2percept.models.retina.Granley2023Model` [Granley2023]_"""
+import warnings
+
 import numpy as np
 
 from ...topography.retina import Watson2014Map
@@ -120,6 +122,18 @@ class _Granley2023Spatial(_BiphasicSpatialMixin, _AxonBundleMixin,
         return {**super().get_param_units(), 'loc_od': dva,
                 'axons_range': deg}
 
+    def _warn_placement(self):
+        """Warn when a known placement is not epiretinal."""
+        placement = self.implant.placement
+        if placement is None or placement == 'epiretinal':
+            return
+        warnings.warn(
+            f"{type(self).__name__} was developed for epiretinal stimulation "
+            f"and uses retinal nerve fiber orientation to set phosphene "
+            f"orientation. This implant is {placement}, so the phosphene "
+            f"orientation is a model assumption rather than a prediction "
+            f"about the device.")
+
     def _build(self):
         step = np.unique(np.ravel(self.step))
         if step.size != 1:
@@ -131,6 +145,7 @@ class _Granley2023Spatial(_BiphasicSpatialMixin, _AxonBundleMixin,
                              f"and 'lam' describe and must lie in (0, 1), not "
                              f"{self.thresh_percept}.")
         self._built_eye = self.eye
+        self._warn_placement()
         self._correct_loc_od()
         names = self.implant.electrode_names
         x_ret, y_ret, _ = self._electrode_coords(self.implant.electrode_array,

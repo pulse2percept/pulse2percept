@@ -1,10 +1,13 @@
+import warnings
+
 import numpy as np
 import numpy.testing as npt
 import pytest
 import torch
 
 from pulse2percept.implants import ElectrodeArray, GridImplant, PointSource
-from pulse2percept.implants.retina import ArgusII, RetinalImplant
+from pulse2percept.implants.retina import (AlphaIMS, ArgusII,
+                                           RetinalImplant)
 from pulse2percept.models import FadingTemporal
 from pulse2percept.models.retina import AxonMapModel, Granley2023Model
 from pulse2percept.models.retina.granley2023 import _mvg_response, _mvg_shape
@@ -334,6 +337,14 @@ def test_Granley2023_rejects_invalid_geometry(params, match):
     model.spatial.set_params(**params)
     with pytest.raises(ValueError, match=match):
         model.build()
+
+
+def test_Granley2023_warns_for_non_epiretinal_placement():
+    with pytest.warns(UserWarning, match='epiretinal'):
+        Granley2023Model(AlphaIMS(), **_GRID).build()
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        _argus().build()
 
 
 def test_Granley2023_needs_an_eye():
