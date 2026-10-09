@@ -27,7 +27,8 @@ MOVED = ['AxonMapModel', 'AxonMapSpatial', 'BiphasicAxonMapModel',
 REMOVED = ['BiphasicAxonMapSpatial', 'BiphasicScoreboardSpatial']
 
 #: Retinal names added since the reorganization.
-ADDED = ['Ho2018Model', 'Ho2018Spatial', 'Ho2018Temporal']
+ADDED = ['Granley2023Model', 'Ho2018Model', 'Ho2018Spatial',
+         'Ho2018Temporal']
 
 #: Implementation modules that moved out of the root.
 MOVED_MODULES = ['beyeler2019', '_beyeler2019', 'granley2021', '_granley2021',
@@ -73,6 +74,7 @@ def test_canonical_imports(module, names):
     ('pulse2percept.models.retina.beyeler2019', 'AxonMapModel'),
     ('pulse2percept.models.retina.granley2021', 'BiphasicAxonMapModel'),
     ('pulse2percept.models.retina.granley2021', 'BiphasicScoreboardModel'),
+    ('pulse2percept.models.retina.granley2023', 'Granley2023Model'),
     ('pulse2percept.models.retina.ho2018', 'Ho2018Spatial'),
     ('pulse2percept.models.retina.ho2018', 'Ho2018Temporal'),
     ('pulse2percept.models.retina.ho2018', 'Ho2018Model'),

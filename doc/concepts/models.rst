@@ -107,6 +107,11 @@ psychophysical or physiological datasets.
      - [Granley2021]_
      - spatiotemporal
      - Pulse-dependent phosphenes with axonal elongation
+   * - :py:class:`~pulse2percept.models.retina.Granley2023Model`
+     - [Granley2023]_
+     - spatial
+     - Pulse-dependent elliptical phosphenes oriented along nerve fiber
+       bundles
    * - :py:class:`~pulse2percept.models.retina.Nanduri2012Model`
      - [Nanduri2012]_
      - spatiotemporal
@@ -177,6 +182,33 @@ Within these models:
      - brightness
    * - phase duration
      - axonal streak length
+
+:py:class:`~pulse2percept.models.retina.Granley2023Model` [Granley2023]_
+uses the same pulse-train input but a different spatial model. Each electrode
+produces an elliptical Gaussian centered on the electrode; activation does not
+spread along the axon. Amplitude sets brightness and area, frequency sets
+brightness, and phase duration sets eccentricity. Nerve fiber bundles set only
+the ellipse's orientation.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 66
+
+   * - Model
+     - Role of nerve fiber bundles
+   * - :py:class:`~pulse2percept.models.retina.AxonMapModel`
+     - stimulation spreads along bundles
+   * - :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`
+     - AxonMap spread, with pulse-dependent brightness, size, and streak
+       length
+   * - :py:class:`~pulse2percept.models.retina.Granley2023Model`
+     - orientation of an electrode-centered ellipse
+
+.. important::
+
+   ``Granley2023Model.rho`` is an area in output pixels, as in
+   [Granley2023]_. Changing ``step`` therefore changes the phosphene's angular
+   size.
 
 See the :ref:`model reproductions <examples-models>` for examples based on the
 published experiments.

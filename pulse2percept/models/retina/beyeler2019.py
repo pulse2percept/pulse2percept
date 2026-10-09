@@ -469,174 +469,14 @@ class ScoreboardModel(Model):
             temporal=None)
 
 
-class AxonMapSpatial(RetinalSpatial):
-    r"""Axon map model of [Beyeler2019]_ (spatial module only).
+class _AxonBundleMixin:
+    """Nerve fiber bundle geometry from [Jansonius2009]_.
 
-    Models percepts as activation spread along retinal nerve fiber bundle
-    trajectories. Use :py:class:`~pulse2percept.models.retina.AxonMapModel` for a
-    standalone model.
-
-    The spatial response extends the scoreboard model by allowing activation
-    to spread along retinal nerve fiber bundles [Beyeler2019]_. For an axon
-    segment, the contribution of electrode :math:`e` is proportional to
-
-    .. math::
-
-        a_e
-        \exp\left(
-            -\frac{d_e^2}{2\rho^2}
-            -\frac{d_{\mathrm{soma}}^2}{2\lambda^2}
-        \right),
-
-    where :math:`d_e` is the distance from the segment to electrode :math:`e`,
-    and :math:`d_{\mathrm{soma}}` is the path length along the axon from that
-    segment to the ganglion cell body. Thus :math:`\rho` controls spread
-    away from the axon, whereas :math:`\lambda` controls spread along it.
-
-    .. important::
-    
-        ``rho`` and ``lam`` vary substantially across patients [Beyeler2019]_.
-        The defaults are representative values, not patient-specific estimates.
-
-    Parameters
-    ----------
-    implant : :py:class:`~pulse2percept.implants.Implant`
-        Implant whose electrode geometry and eye are modeled.
-
-        .. versionadded:: 0.11.0
-
-    rho : float or Quantity, optional
-        Gaussian spatial decay constant in microns. Larger values produce
-        broader phosphenes. The same ``rho`` value applies to all electrodes.
-
-        .. important::
-
-            Electrode-retina distance (``z``) does not directly affect ``rho``.
-
-    lam : float or Quantity, optional
-        Gaussian decay constant along the axon between stimulation site and
-        soma, in microns. Larger values lengthen the percept.
-
-        .. versionchanged:: 0.10.0
-            Renamed from ``axlambda``; ``axlambda`` was removed in 0.11.0.
-
-    xrange : (float, float) or Quantity, optional
-        Horizontal visual-field extent in degrees of visual angle. May also be
-        passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``visual_field_map``.
-    yrange : (float, float) or Quantity, optional
-        Vertical visual-field extent in degrees of visual angle. May also be
-        passed as retinal extent using physical units such as ``um``. The
-        correspondence is resolved through ``visual_field_map``.
-    step : float, (float, float), or Quantity, optional
-        Grid spacing in degrees of visual angle. A pair specifies separate x
-        and y spacing.
-
-        .. versionchanged:: 0.10.0
-            Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
-
-    grid_type : {'rect', 'hex'}, optional
-        Sampling lattice used for the visual-field grid.
-    thresh_percept : float, optional
-        Brightness values below this threshold are set to zero.
-    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
-        Retinotopic map between visual-field and retinal coordinates. Defaults
-        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
-    n_gray : int or None, optional
-        Number of gray levels in the returned percept. ``None`` disables
-        gray-level quantization.
-    implant_position : (x, y) or Quantity, optional
-        Position of the device-local origin, in tissue coordinates or dva.
-
-        .. versionadded:: 0.11.0
-
-    implant_rotation : float or Quantity, optional
-        In-plane rotation (deg), positive counter-clockwise.
-
-        .. versionadded:: 0.11.0
-
-    implant_depth : float or Quantity, optional
-        Signed offset (um) along the normal of a 2D tissue map.
-
-        .. versionadded:: 0.11.0
-
-    location_noise : float or None, optional
-        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
-        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
-        Location-dependent models may also change phosphene shape or size.
-
-        .. versionadded:: 0.11.0
-
-    loc_od : (float, float) or Quantity, optional
-        Optic-disc location in degrees of visual angle. Its horizontal sign is
-        set from the bound implant's eye.
-    n_axons : int, optional
-        Number of nerve fiber bundles generated.
-    axons_range : (float, float) or Quantity, optional
-        Range of initial bundle angles ``phi0`` in the [Jansonius2009]_ model.
-    n_ax_segments : int, optional
-        Number of radial samples used to generate each bundle.
-    ax_segments_range : (float, float), optional
-        Radial-coordinate range used to generate each bundle in the
-        [Jansonius2009]_ model.
-    min_ax_sensitivity : float, optional
-        Minimum relative axon sensitivity retained during precomputation.
-    meridian_blend : float or Quantity, optional
-        Gaussian standard deviation for blending across the horizontal
-        meridian, in degrees of visual angle. Set to 0 to disable.
-
-        .. versionadded:: 0.10.0
-
-    axon_pickle : str, optional
-        File used to cache generated axon bundles.
-    ignore_pickle : bool, optional
-        If True, regenerate axon bundles instead of loading ``axon_pickle``.
-    verbose : bool, optional
-        Whether to print status messages.
-    ndim : list of int, optional
-        Dimensionalities of ``visual_field_map`` accepted by the model.
-
-    Notes
-    -----
-    ``ax_segments_range`` values above 90 are outside the range for which this
-    axon-map construction is considered reliable."""
-
-    #: Spatial-only use may read dimensionless image or video values as
-    #: relative electrode drive, so an encoder is optional.
-    _accepts_dimensionless_drive = True
-
-    def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
-                 yrange=(-15, 15), step=0.25, grid_type='rect',
-                 thresh_percept=0,
-                 visual_field_map=None,
-                 n_gray=None,
-                 implant_position=(0, 0), implant_rotation=0,
-                 implant_depth=0,
-                 location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
-                 axons_range=(-180, 180), n_ax_segments=500,
-                 ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
-                 meridian_blend=1, axon_pickle='axons.pickle',
-                 ignore_pickle=False, verbose=True, ndim=None):
-        super().__init__(
-            implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange, step=step,
-            grid_type=grid_type, thresh_percept=thresh_percept,
-            visual_field_map=(Watson2014Map() if visual_field_map is None else
-                              visual_field_map),
-            n_gray=n_gray,
-            implant_position=implant_position,
-            implant_rotation=implant_rotation,
-            implant_depth=implant_depth,
-            location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
-            axons_range=axons_range, n_ax_segments=n_ax_segments,
-            ax_segments_range=ax_segments_range,
-            min_ax_sensitivity=min_ax_sensitivity,
-            meridian_blend=meridian_blend, axon_pickle=axon_pickle,
-            ignore_pickle=ignore_pickle, verbose=verbose,
-            ndim=[2] if ndim is None else ndim)
-        self.axon_contrib = None
-        self.axon_idx_start = None
-        self.axon_idx_end = None
-        self._built_eye = None
+    Shared by models that read bundle trajectories or local bundle
+    orientation. Requires ``loc_od``, ``n_axons``, ``axons_range``,
+    ``n_ax_segments``, ``ax_segments_range``, ``xrange``, ``yrange``,
+    ``visual_field_map``, ``implant``, and ``_built_eye`` set by
+    ``_build``."""
 
     @property
     def eye(self):
@@ -662,31 +502,6 @@ class AxonMapSpatial(RetinalSpatial):
     def is_built(self):
         """Return whether the axon map matches the implant's current eye."""
         return super().is_built and self._built_eye == self.eye
-
-    def get_default_params(self):
-        base_params = super(AxonMapSpatial, self).get_default_params()
-        params = {
-            'rho': 300,
-            'lam': 500,
-            'loc_od': (15.5, 1.5),
-            'n_axons': 1000,
-            'axons_range': (-180, 180),
-            'n_ax_segments': 500,
-            'ax_segments_range': (0, 50),
-            'min_ax_sensitivity': 1e-3,
-            'meridian_blend': 1,
-            'axon_pickle': 'axons.pickle',
-            'ignore_pickle': False,
-            'visual_field_map': Watson2014Map()
-        }
-        return {**base_params, **params}
-
-    def get_param_units(self):
-        """Return units used to store model parameters."""
-        # ``axons_range`` is an angle; ``ax_segments_range`` is the
-        # Jansonius radial coordinate and has no p2p unit declaration.
-        return {**super().get_param_units(), 'rho': um, 'lam': um,
-                'loc_od': dva, 'meridian_blend': dva, 'axons_range': deg}
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='right'):
         """Generate one nerve fiber bundle using [Jansonius2009]_.
@@ -857,6 +672,290 @@ class AxonMapSpatial(RetinalSpatial):
             return closest_axon, closest_idx
         return closest_axon
 
+    def calc_bundle_tangent(self, xc, yc):
+        """Calculate the local nerve fiber bundle orientation.
+
+        Parameters
+        ----------
+        xc, yc : float
+            Retinal coordinates in microns.
+
+        Returns
+        -------
+        tangent : float
+            Bundle orientation in radians, restricted to [-pi/2, pi/2]."""
+        if isinstance(xc, (list, np.ndarray)):
+            raise TypeError("xc must be a scalar")
+        if isinstance(yc, (list, np.ndarray)):
+            raise TypeError("yc must be a scalar")
+        bundles = self.grow_axon_bundles()
+        bundle = self.find_closest_axon(bundles, xret=xc, yret=yc)
+        idx = np.argmin((bundle[:, 0] - xc) ** 2 + (bundle[:, 1] - yc) ** 2)
+        # Use a one-sided difference at bundle endpoints:
+        if idx == 0:
+            dx = bundle[1, :] - bundle[0, :]
+        elif idx == bundle.shape[0] - 1:
+            dx = bundle[-1, :] - bundle[-2, :]
+        else:
+            dx = (bundle[idx + 1, :] - bundle[idx - 1, :]) / 2
+        dx[1] *= -1
+        tangent = np.arctan2(*dx[::-1])
+        # Orientation is axial; wrap to [-pi/2, pi/2]:
+        if tangent < np.deg2rad(-90):
+            tangent += np.deg2rad(180)
+        if tangent > np.deg2rad(90):
+            tangent -= np.deg2rad(180)
+        return tangent
+
+    def calc_bundle_tangent_fast(self, xc, yc, bundles=None):
+        """Calculate local bundle orientation for multiple retinal points.
+
+        Reuses a KD-tree search over ``bundles`` and is intended for vectorized
+        queries.
+
+        Parameters
+        ----------
+        xc, yc : array_like
+            Retinal coordinates in microns.
+        bundles : list of (N, 2) ndarrays, optional
+            Precomputed bundles. Generated if omitted.
+
+        Returns
+        -------
+        tangent : ndarray
+            Bundle orientations in radians, shaped like ``xc``."""
+
+        if bundles is None:
+            bundles = self.grow_axon_bundles()
+        xc = np.asarray(xc, dtype=np.float32)
+        yc = np.asarray(yc, dtype=np.float32)
+        # Map flattened segments to bundle IDs:
+        axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
+        axon_idx = [item for sublist in axon_idx for item in sublist]
+        axon_idx = np.array(axon_idx, dtype=np.uint32)
+        flat_bundles = np.concatenate(bundles)
+        kdtree = cKDTree(flat_bundles, leafsize=60)
+        query = np.stack((xc.ravel(), yc.ravel()), axis=1)
+        _, closest_seg = kdtree.query(query)
+        segs = axon_idx[closest_seg]
+        prev_segs = axon_idx[np.where(closest_seg > 0, closest_seg, 1) - 1]
+        next_segs = axon_idx[np.where(closest_seg < len(axon_idx)-2,
+                                      closest_seg, len(axon_idx)-2) + 1]
+
+        offset_l = np.where(prev_segs == segs, -1, 0)
+        offset_r = np.where(next_segs == segs, 1, 0)
+        dx = (flat_bundles[np.minimum(closest_seg + offset_r,
+                                      len(flat_bundles)-1)] -
+              flat_bundles[np.maximum(closest_seg + offset_l, 0)])
+
+        dx[:, 1] *= -1
+        tangent = np.arctan2(dx[:, 1], dx[:, 0])
+
+        # Orientation is axial; wrap to [-pi/2, pi/2]:
+        tangent = np.where(tangent < -np.pi/2, tangent+np.pi, tangent)
+        tangent = np.where(tangent > np.pi/2, tangent - np.pi, tangent)
+        return tangent.reshape(xc.shape)
+
+    def _correct_loc_od(self):
+        """Place the optic disc on the nasal side of the implanted eye."""
+        sign = -1 if self.eye == 'left' else 1
+        self.loc_od = (sign * np.abs(self.loc_od[0]), self.loc_od[1])
+
+
+class AxonMapSpatial(_AxonBundleMixin, RetinalSpatial):
+    r"""Axon map model of [Beyeler2019]_ (spatial module only).
+
+    Models percepts as activation spread along retinal nerve fiber bundle
+    trajectories. Use :py:class:`~pulse2percept.models.retina.AxonMapModel` for a
+    standalone model.
+
+    The spatial response extends the scoreboard model by allowing activation
+    to spread along retinal nerve fiber bundles [Beyeler2019]_. For an axon
+    segment, the contribution of electrode :math:`e` is proportional to
+
+    .. math::
+
+        a_e
+        \exp\left(
+            -\frac{d_e^2}{2\rho^2}
+            -\frac{d_{\mathrm{soma}}^2}{2\lambda^2}
+        \right),
+
+    where :math:`d_e` is the distance from the segment to electrode :math:`e`,
+    and :math:`d_{\mathrm{soma}}` is the path length along the axon from that
+    segment to the ganglion cell body. Thus :math:`\rho` controls spread
+    away from the axon, whereas :math:`\lambda` controls spread along it.
+
+    .. important::
+    
+        ``rho`` and ``lam`` vary substantially across patients [Beyeler2019]_.
+        The defaults are representative values, not patient-specific estimates.
+
+    Parameters
+    ----------
+    implant : :py:class:`~pulse2percept.implants.Implant`
+        Implant whose electrode geometry and eye are modeled.
+
+        .. versionadded:: 0.11.0
+
+    rho : float or Quantity, optional
+        Gaussian spatial decay constant in microns. Larger values produce
+        broader phosphenes. The same ``rho`` value applies to all electrodes.
+
+        .. important::
+
+            Electrode-retina distance (``z``) does not directly affect ``rho``.
+
+    lam : float or Quantity, optional
+        Gaussian decay constant along the axon between stimulation site and
+        soma, in microns. Larger values lengthen the percept.
+
+        .. versionchanged:: 0.10.0
+            Renamed from ``axlambda``; ``axlambda`` was removed in 0.11.0.
+
+    xrange : (float, float) or Quantity, optional
+        Horizontal visual-field extent in degrees of visual angle. May also be
+        passed as retinal extent using physical units such as ``um``. The
+        correspondence is resolved through ``visual_field_map``.
+    yrange : (float, float) or Quantity, optional
+        Vertical visual-field extent in degrees of visual angle. May also be
+        passed as retinal extent using physical units such as ``um``. The
+        correspondence is resolved through ``visual_field_map``.
+    step : float, (float, float), or Quantity, optional
+        Grid spacing in degrees of visual angle. A pair specifies separate x
+        and y spacing.
+
+        .. versionchanged:: 0.10.0
+            Renamed from ``xystep``; ``xystep`` was removed in 0.11.0.
+
+    grid_type : {'rect', 'hex'}, optional
+        Sampling lattice used for the visual-field grid.
+    thresh_percept : float, optional
+        Brightness values below this threshold are set to zero.
+    visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
+        Retinotopic map between visual-field and retinal coordinates. Defaults
+        to :py:class:`~pulse2percept.topography.retina.Watson2014Map`.
+    n_gray : int or None, optional
+        Number of gray levels in the returned percept. ``None`` disables
+        gray-level quantization.
+    implant_position : (x, y) or Quantity, optional
+        Position of the device-local origin, in tissue coordinates or dva.
+
+        .. versionadded:: 0.11.0
+
+    implant_rotation : float or Quantity, optional
+        In-plane rotation (deg), positive counter-clockwise.
+
+        .. versionadded:: 0.11.0
+
+    implant_depth : float or Quantity, optional
+        Signed offset (um) along the normal of a 2D tissue map.
+
+        .. versionadded:: 0.11.0
+
+    location_noise : float or None, optional
+        Standard deviation of fixed electrode-specific phosphene offsets, in dva.
+        Requires an invertible 2D ``visual_field_map``. ``None`` or 0 disables it.
+        Location-dependent models may also change phosphene shape or size.
+
+        .. versionadded:: 0.11.0
+
+    loc_od : (float, float) or Quantity, optional
+        Optic-disc location in degrees of visual angle. Its horizontal sign is
+        set from the bound implant's eye.
+    n_axons : int, optional
+        Number of nerve fiber bundles generated.
+    axons_range : (float, float) or Quantity, optional
+        Range of initial bundle angles ``phi0`` in the [Jansonius2009]_ model.
+    n_ax_segments : int, optional
+        Number of radial samples used to generate each bundle.
+    ax_segments_range : (float, float), optional
+        Radial-coordinate range used to generate each bundle in the
+        [Jansonius2009]_ model.
+    min_ax_sensitivity : float, optional
+        Minimum relative axon sensitivity retained during precomputation.
+    meridian_blend : float or Quantity, optional
+        Gaussian standard deviation for blending across the horizontal
+        meridian, in degrees of visual angle. Set to 0 to disable.
+
+        .. versionadded:: 0.10.0
+
+    axon_pickle : str, optional
+        File used to cache generated axon bundles.
+    ignore_pickle : bool, optional
+        If True, regenerate axon bundles instead of loading ``axon_pickle``.
+    verbose : bool, optional
+        Whether to print status messages.
+    ndim : list of int, optional
+        Dimensionalities of ``visual_field_map`` accepted by the model.
+
+    Notes
+    -----
+    ``ax_segments_range`` values above 90 are outside the range for which this
+    axon-map construction is considered reliable."""
+
+    #: Spatial-only use may read dimensionless image or video values as
+    #: relative electrode drive, so an encoder is optional.
+    _accepts_dimensionless_drive = True
+
+    def __init__(self, implant, *, rho=300, lam=500, xrange=(-15, 15),
+                 yrange=(-15, 15), step=0.25, grid_type='rect',
+                 thresh_percept=0,
+                 visual_field_map=None,
+                 n_gray=None,
+                 implant_position=(0, 0), implant_rotation=0,
+                 implant_depth=0,
+                 location_noise=None, loc_od=(15.5, 1.5), n_axons=1000,
+                 axons_range=(-180, 180), n_ax_segments=500,
+                 ax_segments_range=(0, 50), min_ax_sensitivity=1e-3,
+                 meridian_blend=1, axon_pickle='axons.pickle',
+                 ignore_pickle=False, verbose=True, ndim=None):
+        super().__init__(
+            implant, rho=rho, lam=lam, xrange=xrange, yrange=yrange, step=step,
+            grid_type=grid_type, thresh_percept=thresh_percept,
+            visual_field_map=(Watson2014Map() if visual_field_map is None else
+                              visual_field_map),
+            n_gray=n_gray,
+            implant_position=implant_position,
+            implant_rotation=implant_rotation,
+            implant_depth=implant_depth,
+            location_noise=location_noise, loc_od=loc_od, n_axons=n_axons,
+            axons_range=axons_range, n_ax_segments=n_ax_segments,
+            ax_segments_range=ax_segments_range,
+            min_ax_sensitivity=min_ax_sensitivity,
+            meridian_blend=meridian_blend, axon_pickle=axon_pickle,
+            ignore_pickle=ignore_pickle, verbose=verbose,
+            ndim=[2] if ndim is None else ndim)
+        self.axon_contrib = None
+        self.axon_idx_start = None
+        self.axon_idx_end = None
+        self._built_eye = None
+
+    def get_default_params(self):
+        base_params = super(AxonMapSpatial, self).get_default_params()
+        params = {
+            'rho': 300,
+            'lam': 500,
+            'loc_od': (15.5, 1.5),
+            'n_axons': 1000,
+            'axons_range': (-180, 180),
+            'n_ax_segments': 500,
+            'ax_segments_range': (0, 50),
+            'min_ax_sensitivity': 1e-3,
+            'meridian_blend': 1,
+            'axon_pickle': 'axons.pickle',
+            'ignore_pickle': False,
+            'visual_field_map': Watson2014Map()
+        }
+        return {**base_params, **params}
+
+    def get_param_units(self):
+        """Return units used to store model parameters."""
+        # ``axons_range`` is an angle; ``ax_segments_range`` is the
+        # Jansonius radial coordinate and has no p2p unit declaration.
+        return {**super().get_param_units(), 'rho': um, 'lam': um,
+                'loc_od': dva, 'meridian_blend': dva, 'axons_range': deg}
+
     def calc_axon_sensitivity(self, bundles):
         """Calculate sensitivity along the axon associated with each grid point.
 
@@ -962,89 +1061,6 @@ class AxonMapSpatial(RetinalSpatial):
         contrib[:, 2] = np.exp(-dist ** 2 / (2.0 * lam ** 2))
         return contrib, starts
 
-    def calc_bundle_tangent(self, xc, yc):
-        """Calculate the local nerve fiber bundle orientation.
-
-        Parameters
-        ----------
-        xc, yc : float
-            Retinal coordinates in microns.
-
-        Returns
-        -------
-        tangent : float
-            Bundle orientation in radians, restricted to [-pi/2, pi/2]."""
-        if isinstance(xc, (list, np.ndarray)):
-            raise TypeError("xc must be a scalar")
-        if isinstance(yc, (list, np.ndarray)):
-            raise TypeError("yc must be a scalar")
-        bundles = self.grow_axon_bundles()
-        bundle = self.find_closest_axon(bundles, xret=xc, yret=yc)
-        idx = np.argmin((bundle[:, 0] - xc) ** 2 + (bundle[:, 1] - yc) ** 2)
-        # Use a one-sided difference at bundle endpoints:
-        if idx == 0:
-            dx = bundle[1, :] - bundle[0, :]
-        elif idx == bundle.shape[0] - 1:
-            dx = bundle[-1, :] - bundle[-2, :]
-        else:
-            dx = (bundle[idx + 1, :] - bundle[idx - 1, :]) / 2
-        dx[1] *= -1
-        tangent = np.arctan2(*dx[::-1])
-        # Orientation is axial; wrap to [-pi/2, pi/2]:
-        if tangent < np.deg2rad(-90):
-            tangent += np.deg2rad(180)
-        if tangent > np.deg2rad(90):
-            tangent -= np.deg2rad(180)
-        return tangent
-    
-
-    def calc_bundle_tangent_fast(self, xc, yc, bundles=None):
-        """Calculate local bundle orientation for multiple retinal points.
-
-        Reuses a KD-tree search over ``bundles`` and is intended for vectorized
-        queries.
-
-        Parameters
-        ----------
-        xc, yc : array_like
-            Retinal coordinates in microns.
-        bundles : list of (N, 2) ndarrays, optional
-            Precomputed bundles. Generated if omitted.
-
-        Returns
-        -------
-        tangent : ndarray
-            Bundle orientations in radians, shaped like ``xc``."""
-
-        if bundles is None:
-            bundles = self.grow_axon_bundles()
-        xc = np.asarray(xc, dtype=np.float32)
-        yc = np.asarray(yc, dtype=np.float32)
-        # Map flattened segments to bundle IDs:
-        axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
-        axon_idx = [item for sublist in axon_idx for item in sublist]
-        axon_idx = np.array(axon_idx, dtype=np.uint32)
-        flat_bundles = np.concatenate(bundles)
-        kdtree = cKDTree(flat_bundles, leafsize=60)
-        query = np.stack((xc.ravel(), yc.ravel()), axis=1)
-        _, closest_seg = kdtree.query(query)
-        segs = axon_idx[closest_seg]
-        prev_segs = axon_idx[np.where(closest_seg > 0, closest_seg, 1) - 1]
-        next_segs = axon_idx[np.where(closest_seg < len(axon_idx)-2, closest_seg, len(axon_idx)-2) + 1]
-
-        offset_l = np.where(prev_segs == segs, -1, 0)
-        offset_r = np.where(next_segs == segs, 1, 0)
-        dx = flat_bundles[np.minimum(closest_seg + offset_r, len(flat_bundles)-1)] - flat_bundles[np.maximum(closest_seg + offset_l, 0)]
-
-        dx[:, 1] *= -1
-        tangent = np.arctan2(dx[:, 1], dx[:, 0])
-
-        # Orientation is axial; wrap to [-pi/2, pi/2]:
-        tangent = np.where(tangent < -np.pi/2, tangent+np.pi, tangent)
-        tangent = np.where(tangent > np.pi/2, tangent - np.pi, tangent)
-        return tangent.reshape(xc.shape)
-
-
     def _warn_placement(self):
         """Warn when the epiretinal axon-map mechanism does not match placement."""
         placement = self.implant.placement
@@ -1058,11 +1074,6 @@ class AxonMapSpatial(RetinalSpatial):
             f"prediction about the device. A placement-appropriate "
             f"local-response scoreboard model is a safer phenomenological "
             f"starting point.")
-
-    def _correct_loc_od(self):
-        """Place the optic disc on the nasal side of the implanted eye."""
-        sign = -1 if self.eye == 'left' else 1
-        self.loc_od = (sign * np.abs(self.loc_od[0]), self.loc_od[1])
 
     def _build(self):
         if self.lam < 10:
