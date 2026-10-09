@@ -1080,7 +1080,8 @@ class AxonMapSpatial(RetinalSpatial):
             need_axons = True
         else:
             if os.path.isfile(self.axon_pickle):
-                params, cached = pickle.load(open(self.axon_pickle, 'rb'))
+                with open(self.axon_pickle, 'rb') as f:
+                    params, cached = pickle.load(f)
                 # Cache layouts from older versions are regenerated rather than
                 # interpreted; pre-0.10 caches also store ``xystep`` metadata.
                 if not _is_axon_cache(cached):
@@ -1121,9 +1122,9 @@ class AxonMapSpatial(RetinalSpatial):
                       'xrange': self.xrange, 'yrange': self.yrange,
                       'step': self.step, 'n_ax_segments': self.n_ax_segments,
                       'ax_segments_range': self.ax_segments_range}
-            pickle.dump((params, (_AXON_CACHE_VERSION, bundles, bundle_id,
-                                  idx_segment)),
-                        open(self.axon_pickle, 'wb'))
+            with open(self.axon_pickle, 'wb') as f:
+                pickle.dump((params, (_AXON_CACHE_VERSION, bundles, bundle_id,
+                                      idx_segment)), f)
 
     def _predict_spatial(self, electrode_array, stim):
         """Predict float32 brightness over the spatial grid."""

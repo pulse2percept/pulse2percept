@@ -91,8 +91,9 @@ def test_predict_percept(benchmark, scenario, built_model, source,
                          peak_memory):
     """Predict the percept (headline number).
 
-    Includes encoding the stimulus, also timed separately in the ``implant``
-    group where the implant encodes on its own, so the groups overlap.
+    Includes encoding the stimulus. Where the implant can encode
+    independently, the corresponding ``implant.prepare_stim`` path is also
+    benchmarked in the ``implant`` group.
     """
     benchmark.extra_info.update(peak_memory(scenario.predict, built_model,
                                             source))

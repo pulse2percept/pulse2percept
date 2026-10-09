@@ -155,8 +155,10 @@ stimulus construction, encoding, the model build, or the percept computation.
        i.e. the actual computation). Both are in one group so they appear side
        by side in the report.
    * - ``predict_percept``
-     - The headline number: the scenario's ``predict``. Includes the encoding
-       also timed separately under ``implant``.
+     - The headline number: the scenario's ``predict``. Includes encoding the
+       stimulus. Where the implant can encode independently, the
+       corresponding ``implant.prepare_stim`` path is also benchmarked under
+       ``implant``.
    * - ``predict_tensor_cuda``
      - The Torch core (``_predict_tensor``) with the waveform on a CUDA
        device, for scenarios that run on it (the Argus II video). Excludes
