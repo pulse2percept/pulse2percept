@@ -17,7 +17,7 @@ from pulse2percept.models.retina import (RetinalSpatial, ScoreboardSpatial,
                                          Thompson2003Spatial)
 from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
                                              Watson2014Map)
-from pulse2percept.topography.cortex import Polimeni2006Map
+from pulse2percept.topography.cortex import Polimeni2006Map, Schira2010Map
 from pulse2percept.units import DimensionMismatchError, mm, um
 
 
@@ -97,7 +97,7 @@ def test_cortical_model_refuses_a_retinal_extent():
         CortexScoreboard(NeuroPortArray(), yrange=(-2 * mm, 2 * mm))
     # The cortical default map is unaffected:
     vfmap = CortexScoreboard(NeuroPortArray()).visual_field_map
-    npt.assert_equal(isinstance(vfmap, Polimeni2006Map), True)
+    npt.assert_equal(isinstance(vfmap, Schira2010Map), True)
 
 
 def test_retinal_shorthand_needs_a_retinal_map():

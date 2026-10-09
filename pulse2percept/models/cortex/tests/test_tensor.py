@@ -46,8 +46,10 @@ def test_ScoreboardSpatial_matches_reference(params):
 def test_ScoreboardSpatial_tensor_meridian_blend():
     # The default blend changes the response near the vertical meridian:
     wf = _waveform(Orion().n_electrodes)
-    plain = _scoreboard_reference(_spatial(meridian_blend=0).build(), wf)
-    spatial = _spatial().build()
+    # The placement assumes Polimeni geometry:
+    plain = _scoreboard_reference(_spatial(
+        meridian_blend=0, visual_field_map=Polimeni2006Map()).build(), wf)
+    spatial = _spatial(visual_field_map=Polimeni2006Map()).build()
     assert spatial.meridian_blend == 0.1
     expected = _scoreboard_reference(spatial, wf)
     assert np.abs(expected - plain).max() > 1
@@ -57,11 +59,14 @@ def test_ScoreboardSpatial_tensor_meridian_blend():
 
 def test_ScoreboardSpatial_tensor_regions():
     # Each region is thresholded before the regional sum:
-    spatial = _spatial(regions=['v1', 'v2', 'v3'], meridian_blend=0,
-                       thresh_percept=2).build()
+    # The placement assumes Polimeni geometry:
+    spatial = _spatial(
+        visual_field_map=Polimeni2006Map(regions=['v1', 'v2', 'v3']),
+        meridian_blend=0, thresh_percept=2).build()
     wf = _waveform(spatial.implant.n_electrodes)
     for region in spatial.regions:
-        alone = _spatial(regions=[region], meridian_blend=0).build()
+        alone = _spatial(visual_field_map=Polimeni2006Map(regions=[region]),
+                         meridian_blend=0).build()
         assert np.any(_scoreboard_reference(alone, wf) != 0)
     expected = _scoreboard_reference(spatial, wf)
     resp = _tensor(spatial, wf).data
@@ -74,7 +79,8 @@ def test_ScoreboardSpatial_tensor_regions():
 def test_ScoreboardSpatial_tensor_hemispheres():
     # Orion straddles the fissure; a wide spread would otherwise cross it:
     spatial = _spatial(implant_position=(-10, 0) * mm, rho=3000,
-                       meridian_blend=0, thresh_percept=0).build()
+                       meridian_blend=0, thresh_percept=0,
+                       visual_field_map=Polimeni2006Map()).build()
     x_el = spatial._electrode_coords(
         spatial.implant.electrode_array, None,
         electrodes=spatial.implant.electrode_names)[0]
@@ -100,8 +106,10 @@ def test_ScoreboardSpatial_tensor_ignores_z():
     wf = _waveform(implant.n_electrodes)
     resps = []
     for depth in (0, 2000):
+        # The placement assumes Polimeni geometry:
         spatial = _spatial(implant, implant_position=(0, 0), rho=800,
-                           step=0.5, implant_depth=depth).build()
+                           step=0.5, implant_depth=depth,
+                           visual_field_map=Polimeni2006Map()).build()
         z_el = spatial._electrode_coords(
             implant.electrode_array, None,
             electrodes=implant.electrode_names)[2]

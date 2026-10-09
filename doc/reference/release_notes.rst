@@ -77,8 +77,9 @@ API changes and improvements
   ``BiphasicScoreboardSpatial`` (:pull:`957`).
 
 * New ``Schira2010Map``: the Banded Double-Sech V1-V3 map, with numerical
-  cortical-to-visual-field inversion. ``Polimeni2006Map`` remains the default
-  (:pull:`959`).
+  cortical-to-visual-field inversion. It replaces ``Polimeni2006Map`` as the
+  default for cortical models except ``DynaphosModel``; pass
+  ``visual_field_map=Polimeni2006Map()`` for the old mapping (:pull:`959`).
 
 Bug fixes
 ---------

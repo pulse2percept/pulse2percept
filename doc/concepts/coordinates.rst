@@ -229,11 +229,11 @@ Cortical maps transform the visual field onto the surface of visual cortex.
      - Description
    * - :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`
      - [Polimeni2006]_
-     - Analytic wedge-dipole model of V1-V3; default for cortical models
+     - Analytic wedge-dipole model of V1-V3; default for ``DynaphosModel``
    * - :py:class:`~pulse2percept.topography.cortex.Schira2010Map`
      - [Schira2010]_
      - Analytic Banded Double-Sech population model of V1-V3, with V2/V3
-       bands around the V1 fovea
+       bands around the V1 fovea; default for other cortical models
    * - :py:class:`~pulse2percept.topography.cortex.NeuropythyMap`
      - [Benson2018]_
      - Subject-specific retinotopy estimated from cortical anatomy
