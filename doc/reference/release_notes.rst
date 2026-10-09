@@ -76,6 +76,10 @@ API changes and improvements
   ``Watson2014DisplaceMap``, ``BiphasicAxonMapSpatial``, and
   ``BiphasicScoreboardSpatial`` (:pull:`957`).
 
+* New ``Schira2010Map``: the Banded Double-Sech V1-V3 map, with an invertible
+  V2/V3 foveal confluence. ``Polimeni2006Map`` remains the default
+  (:pull:`959`).
+
 Bug fixes
 ---------
 

@@ -230,6 +230,10 @@ Cortical maps transform the visual field onto the surface of visual cortex.
    * - :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`
      - [Polimeni2006]_
      - Analytic wedge-dipole model of V1-V3; default for cortical models
+   * - :py:class:`~pulse2percept.topography.cortex.Schira2010Map`
+     - [Schira2010]_
+     - Analytic Banded Double-Sech population model of V1-V3, with V2/V3
+       bands around the V1 fovea
    * - :py:class:`~pulse2percept.topography.cortex.NeuropythyMap`
      - [Benson2018]_
      - Subject-specific retinotopy estimated from cortical anatomy
@@ -297,6 +301,30 @@ The map has six main parameters:
 
 Defaults follow [Polimeni2006]_. Individual human retinotopy can differ
 substantially from this population-level analytic map.
+
+
+Schira2010Map
+-------------
+
+:py:class:`~pulse2percept.topography.cortex.Schira2010Map` is a planar,
+population-average V1-V3 map. Unlike
+:py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, areal
+magnification is constant across polar angle, and V2/V3 form bands around the
+V1 foveal tip (the foveal confluence) instead of meeting at one point:
+
+.. plot::
+
+    import matplotlib.pyplot as plt
+    import pulse2percept as p2p
+
+    p2p.topography.cortex.Schira2010Map().plot()
+    plt.gcf().tight_layout()
+
+Parameters are ``k``, ``a``, ``b``, and ``alpha1``-``alpha3`` as above, plus
+the banding shift ``lambda_`` (dva). Defaults follow [Schira2010]_ and its
+reference MATLAB code. The inverse is numerical. Like
+:py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, it is a 2D
+model, not a cortical surface.
 
 
 NeuropythyMap

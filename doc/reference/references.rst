@@ -141,6 +141,11 @@ Studies referenced throughout the Documentation:
                   visuotopic map complexes in macaque striate and extra-striate cortex. 
                   Vision research, 46(20), 3336-3359. doi: `10.1016/j.visres.2006.03.006
                   <https://doi.org/10.1016/j.visres.2006.03.006>`_.
+.. [Schira2010] MM Schira, CW Tyler, B Spehar, M Breakspear (2010). Modeling
+                magnification and anisotropy in the primate foveal confluence.
+                *PLoS Computational Biology*, 6(1), e1000651. doi:
+                `10.1371/journal.pcbi.1000651
+                <https://doi.org/10.1371/journal.pcbi.1000651>`_.
 .. [Stingl2013] K Stingl, KU Bartz-Schmidt, D Besch, A Braun, A Bruckmann,
                 F Gekeler, U Greppmaier, S Hipp, G Hortdorfer, C Kernstock,
                 A Koitschev, A Kusnyerik, H Sachs, A Schatz, KT Stingl,
