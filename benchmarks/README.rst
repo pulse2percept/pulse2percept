@@ -5,9 +5,9 @@ Performance Benchmarks
 ======================
 
 A small suite that measures percept prediction from a stimulus, an implant and
-a phosphene model. It tracks **execution time** and **peak tracemalloc-tracked
-memory** for the reference pipelines in ``scenarios.py``, broken down by
-pipeline stage.
+a phosphene model. It tracks **execution time** and **peak memory** (resident
+CPU memory, or CUDA allocations on a GPU) for the reference pipelines in
+``scenarios.py``, broken down by pipeline stage.
 
 ``compare.py`` compares two runs. The ``Benchmarks`` workflow runs the base
 branch and the pull request on the same runner minutes apart, and fails the job
@@ -70,9 +70,10 @@ the memory recorded in ``extra_info``. ``compare.py`` reads two
 It prints a Markdown table and exits non-zero if anything regressed. Time and
 memory use different thresholds:
 
-**Memory is highly repeatable.** ``tracemalloc`` counts allocations instead of
-sampling the process, so repeated runs of unchanged code report the same peak
-to the byte.
+**Memory is compared only between like metrics.** Each benchmark tags
+``peak_mem_mb`` with ``memory_metric`` (see `Reading the numbers`_). If the two
+runs differ in tag, or a run predates the tag, that benchmark is compared on
+time only.
 
 **Time depends on runner load.** The minimum over many rounds may drift between
 runs of unchanged code, so the time threshold is a generous 2x and catches only
@@ -130,6 +131,11 @@ stimulus construction, the model build, or the percept computation.
    * - ``predict_percept``
      - The headline number. Includes the preparation also timed separately
        under ``implant``.
+   * - ``predict_tensor_cuda``
+     - The Torch core (``_predict_tensor``) with the waveform on a CUDA
+       device, for scenarios that run on it. Excludes stimulus preparation and
+       the copy to the device. Skipped without CUDA, including on the pull
+       request check.
    * - ``end_to_end``
      - The whole one-liner.
    * - ``plot``
@@ -149,16 +155,21 @@ core, which makes results incomparable between machines and between runs on a
 loaded machine. Set ``OMP_NUM_THREADS=1``, as the pull request check does, and
 never compare a run against a baseline taken at a different thread count.
 
-**Memory is measured separately from time.** ``tracemalloc`` inflates run time
-several-fold, so each benchmark runs its payload one extra time under
-``tracemalloc`` and records ``peak_mem_mb`` in ``extra_info``.
+**Memory is measured before time.** Each benchmark runs its payload once,
+untimed, and records ``peak_mem_mb`` and ``memory_metric`` in ``extra_info``.
+Timing runs afterwards, so memory the allocator retained from earlier calls
+does not hide the working set.
 
-**Memory numbers are a floor, not a total.** ``tracemalloc`` tracks Python and
-NumPy allocations, but not Torch tensors or raw ``malloc`` inside the
-Cython kernels. The Torch paths (AxonMap, Scoreboard, and Torch
-composites) therefore report much less than their actual peak. It was chosen
-over RSS sampling because it is deterministic, needs no extra dependency, and
-works on Windows (which rules out ``pytest-memray``).
+**Two memory metrics.** ``memory_metric`` says what ``peak_mem_mb`` measured
+(MB = 1e6 bytes):
+
+- ``rss_delta``: peak process RSS during the call minus RSS before it, sampled
+  about every 1 ms with ``psutil``. Covers NumPy, Torch, and Cython
+  allocations alike. Allocations shorter than a sampling interval can be
+  missed, and the number is noisier than an allocation count.
+- ``cuda_allocated_delta``: peak of Torch's CUDA allocator during the call
+  minus its live allocation before it. Counts tensors only, not the allocator
+  cache or the CUDA context, and is repeatable.
 
 **Run on a quiet machine.** Absolute timings from a shared CI runner are
 unreliable. The pull request check measures both sides on the same runner and

@@ -7,10 +7,10 @@ past its threshold.
 
     python benchmarks/compare.py baseline.json contender.json
 
-``tracemalloc`` counts allocations instead of sampling the process, so repeated
-runs of unchanged code report the same peak to the byte. It does not see raw
-``malloc`` inside the Cython kernels, so the number is a floor on total
-memory.
+``memory_metric`` says what ``peak_mem_mb`` measured: ``rss_delta`` (sampled
+process RSS) or ``cuda_allocated_delta`` (Torch's CUDA allocator). Memory is
+compared only when both runs report the same metric; untagged entries predate
+the tag and are compared on time only.
 
 Run time varies with runner load, so the time threshold is a generous 2x and
 catches only major regressions.
@@ -36,6 +36,12 @@ def load(path):
     """Return ``{fullname: benchmark}`` from a pytest-benchmark JSON file."""
     with open(path) as f:
         return {b['fullname']: b for b in json.load(f)['benchmarks']}
+
+
+def memory(bench):
+    """Return ``(peak_mem_mb, memory_metric)``; either may be None."""
+    info = bench.get('extra_info', {})
+    return info.get('peak_mem_mb'), info.get('memory_metric')
 
 
 def compare_one(base, head, threshold, floor):
@@ -75,15 +81,18 @@ def compare(baseline, contender, args):
     rows, failed = [], False
     for name in baseline.keys() & contender.keys():
         base, head = baseline[name], contender[name]
-        # An older baseline may have no memory entry; compare time only:
-        base_m = base.get('extra_info', {}).get('peak_mem_mb')
-        head_m = head.get('extra_info', {}).get('peak_mem_mb')
+        base_m, base_metric = memory(base)
+        head_m, head_metric = memory(head)
         t_ratio, t_status = compare_one(base['stats']['min'],
                                         head['stats']['min'],
                                         args.time_threshold,
                                         args.time_floor_ms / 1e3)
-        m_ratio, m_status = compare_one(base_m, head_m, args.mem_threshold,
-                                        args.mem_floor_mb)
+        if base_metric and base_metric == head_metric:
+            m_ratio, m_status = compare_one(base_m, head_m,
+                                            args.mem_threshold,
+                                            args.mem_floor_mb)
+        else:
+            m_ratio, m_status = None, 'ok'
         failed |= 'regressed' in (t_status, m_status)
         rows.append({
             'name': head['name'],
@@ -91,6 +100,7 @@ def compare(baseline, contender, args):
             'head_t': head['stats']['min'] * 1e3,
             't_ratio': t_ratio, 't_status': t_status,
             'base_m': base_m, 'head_m': head_m,
+            'base_metric': base_metric, 'head_metric': head_metric,
             'm_ratio': m_ratio, 'm_status': m_status,
         })
     # Regressions first, then by largest ratio:
@@ -107,6 +117,10 @@ def render(rows, added, removed, failed, args):
     def mb(value):
         return '--' if value is None else f'{value:.3f} MB'
 
+    def metric(r):
+        base, head = r['base_metric'] or '--', r['head_metric'] or '--'
+        return base if base == head else f'{base} &rarr; {head}'
+
     out = ['## Benchmark comparison', '']
     if not rows:
         out += [
@@ -122,18 +136,21 @@ def render(rows, added, removed, failed, args):
     else:
         out += [
             '| Benchmark | Time base | Time head | &Delta; time '
-            '| Mem base | Mem head | &Delta; mem |',
-            '|---|--:|--:|--:|--:|--:|--:|',
+            '| Mem metric | Mem base | Mem head | &Delta; mem |',
+            '|---|--:|--:|--:|---|--:|--:|--:|',
         ]
         for r in rows:
             out.append(
                 f"| `{r['name']}` "
                 f"| {r['base_t']:.3f} ms | {r['head_t']:.3f} ms "
                 f"| {fmt_delta(r['t_ratio'], r['t_status'])} "
+                f"| {metric(r)} "
                 f"| {mb(r['base_m'])} | {mb(r['head_m'])} "
                 f"| {fmt_delta(r['m_ratio'], r['m_status'])} |"
             )
         out.append('')
+        if any(r['base_metric'] != r['head_metric'] for r in rows):
+            out += ['Memory is not compared where the metrics differ.', '']
 
     for label, names in [('this branch', added), ('the base branch', removed)]:
         if names:
@@ -153,11 +170,9 @@ def render(rows, added, removed, failed, args):
         out += [
             ':warning: **A benchmark regressed past its threshold.**',
             '',
-            'The allocations tracemalloc sees are highly repeatable, so a '
-            'memory regression is worth explaining rather than re-running. '
-            'Time on a shared runner is not repeatable: confirm a time '
-            'regression with `make bench` on a quiet machine before treating '
-            'it as one.',
+            'Time and sampled RSS on a shared runner are not repeatable: '
+            'confirm a time or `rss_delta` regression with `make bench` on a '
+            'quiet machine before treating it as one.',
             '',
             'If the regression is real and you intend to accept it, say so in '
             'the pull request and merge over the failure. Do not raise the '

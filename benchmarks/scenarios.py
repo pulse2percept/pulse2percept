@@ -140,7 +140,7 @@ class Scenario:
     slow : bool
         Whether the scenario is excluded from the default run. Set when a
         single ``predict_percept`` takes more than a few seconds: timing calls
-        it several times and peak memory once more under ``tracemalloc``, so
+        it several times and peak memory once more, so
         the cost is roughly 10x. Slow scenarios run only with ``--runslow``.
     plottable : bool
         Whether the percept can be drawn. A temporal-only model has no spatial

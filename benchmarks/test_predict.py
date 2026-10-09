@@ -5,18 +5,23 @@ once end to end, so a regression can be located in stimulus construction, the
 model build, or the percept computation.
 
 Each benchmark reports wall-clock time through the ``benchmark`` fixture and
-peak memory through ``benchmark.extra_info``, both saved in the same JSON. Time
-and memory are measured in separate runs (see the ``peak_memory`` fixture).
+peak memory through ``benchmark.extra_info``, both saved in the same JSON.
+Memory is measured in a separate, untimed call before timing (see the
+``peak_memory`` fixture).
 """
 import matplotlib.pyplot as plt
 import pytest
+import torch
+
+from pulse2percept.models.base import (_delivered, _encoder_clock,
+                                       _tensor_waveform)
 
 
 @pytest.mark.benchmark(group='stimulus')
 def test_stimulus(benchmark, scenario, peak_memory):
     """Construct the stimulus, before any implant is involved."""
+    benchmark.extra_info.update(peak_memory(scenario.stimulus))
     stim = benchmark(scenario.stimulus)
-    benchmark.extra_info['peak_mem_mb'] = peak_memory(scenario.stimulus)
     benchmark.extra_info['stim_shape'] = str(stim.shape)
 
 
@@ -33,10 +38,9 @@ def test_implant(benchmark, scenario, implant, peak_memory):
     def setup():
         return (scenario.stimulus(),), {}
 
+    benchmark.extra_info.update(peak_memory(prepare, scenario.stimulus()))
     benchmark.pedantic(prepare, setup=setup, rounds=20, iterations=1,
                        warmup_rounds=1)
-    benchmark.extra_info['peak_mem_mb'] = peak_memory(prepare,
-                                                      scenario.stimulus())
     benchmark.extra_info['n_electrodes'] = implant.n_electrodes
 
 
@@ -55,10 +59,10 @@ def test_build(benchmark, scenario, implant, make_model, peak_memory):
     def setup():
         return (make_model(implant, ignore_pickle=False),), {}
 
+    benchmark.extra_info.update(peak_memory(
+        lambda: make_model(implant, ignore_pickle=False).build()))
     benchmark.pedantic(lambda model: model.build(), setup=setup, rounds=5,
                        iterations=1, warmup_rounds=1)
-    benchmark.extra_info['peak_mem_mb'] = peak_memory(
-        lambda: make_model(implant, ignore_pickle=False).build())
 
 
 @pytest.mark.benchmark(group='build')
@@ -74,10 +78,10 @@ def test_build_cold(benchmark, scenario, implant, make_model, peak_memory):
     def setup():
         return (make_model(implant, ignore_pickle=True),), {}
 
+    benchmark.extra_info.update(peak_memory(
+        lambda: make_model(implant, ignore_pickle=True).build()))
     benchmark.pedantic(lambda model: model.build(), setup=setup, rounds=5,
                        iterations=1, warmup_rounds=1)
-    benchmark.extra_info['peak_mem_mb'] = peak_memory(
-        lambda: make_model(implant, ignore_pickle=True).build())
 
 
 @pytest.mark.benchmark(group='predict_percept')
@@ -87,10 +91,39 @@ def test_predict_percept(benchmark, built_model, source, peak_memory):
     Includes the implant's preparation of the source, also timed separately in
     the ``implant`` group, so the two groups overlap.
     """
+    benchmark.extra_info.update(peak_memory(built_model.predict_percept,
+                                            source))
     percept = benchmark(built_model.predict_percept, source)
-    benchmark.extra_info['peak_mem_mb'] = peak_memory(
-        built_model.predict_percept, source)
     benchmark.extra_info['percept_shape'] = str(percept.shape)
+
+
+@pytest.mark.benchmark(group='predict_tensor_cuda')
+def test_predict_tensor_cuda(benchmark, scenario, built_model, source,
+                             cuda_device, synchronized, cuda_peak_memory):
+    """Predict on the Torch core with the waveform on a CUDA device.
+
+    Times ``_predict_tensor`` only: stimulus preparation and the copy to the
+    device happen beforehand.
+    """
+    stim = built_model._prepared(source)
+    if not built_model._uses_tensor_core(stim):
+        pytest.skip(f'{scenario.id} does not run on the Torch core')
+    # As in `Model._predict_tensor_core`:
+    delivered = _delivered(stim)
+    if not delivered.is_compressed:
+        delivered.compress()
+    waveform, time = _tensor_waveform(built_model.spatial, delivered)
+    waveform = waveform.to(cuda_device)
+    clock = _encoder_clock(stim)
+
+    def predict():
+        with torch.inference_mode():
+            return built_model._predict_tensor(waveform, time,
+                                               frame_clock=clock)
+
+    benchmark.extra_info.update(cuda_peak_memory(predict))
+    resp = benchmark(synchronized(predict))
+    benchmark.extra_info['resp_shape'] = str(tuple(resp.data.shape))
 
 
 @pytest.mark.benchmark(group='end_to_end')
@@ -105,8 +138,8 @@ def test_end_to_end(benchmark, scenario, make_model, peak_memory):
         source = scenario.source(implant, scenario.stimulus())
         return make_model(implant).predict_percept(source)
 
+    benchmark.extra_info.update(peak_memory(run))
     percept = benchmark(run)
-    benchmark.extra_info['peak_mem_mb'] = peak_memory(run)
     benchmark.extra_info['percept_shape'] = str(percept.shape)
 
 
@@ -128,9 +161,8 @@ def test_plot(benchmark, scenario, percept, peak_memory):
             ax.clear()
             return (), {'ax': ax}
 
+        benchmark.extra_info.update(peak_memory(percept.plot, ax=ax))
         benchmark.pedantic(percept.plot, setup=setup, rounds=20, iterations=1,
                            warmup_rounds=1)
-        ax.clear()
-        benchmark.extra_info['peak_mem_mb'] = peak_memory(percept.plot, ax=ax)
     finally:
         plt.close(fig)
