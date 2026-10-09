@@ -1,25 +1,11 @@
 """Pipelines exercised by the benchmark suite.
 
-A :class:`Scenario` is one end-to-end pipeline: build a stimulus, bind a model
-to an implant, predict a percept. The benchmarks in ``test_predict.py`` are
-parametrized over :data:`SCENARIOS`, so a new case needs only a new entry here.
+A :class:`Scenario` is one realistic pulse2percept workflow: build a stimulus,
+bind a model to an implant, predict a percept. The benchmarks in
+``test_predict.py`` are parametrized over :data:`SCENARIOS`.
 
-The first two scenarios correspond to these one-liners::
-
-    implant = p2p.implants.retina.ArgusII()
-    p2p.models.retina.AxonMapModel(implant=implant, yrange=(-8, 8),
-                                   xrange=(-12, 12)).predict_percept(
-        as_current(implant, p2p.stimuli.samples.logo_bvl()))
-
-    p2p.models.retina.ScoreboardModel(implant=p2p.implants.retina.PRIMAPivotal(),
-                                      yrange=(-4, 4), xrange=(-4, 4), rho=50,
-                                      step=0.1).predict_percept(
-        p2p.stimuli.samples.logo_bvl().invert())
-
-The PRIMA scenario runs its optical encoder directly. Electrical image
-scenarios use :func:`as_current` to keep their historical benchmark workload.
-
-A new scenario should reach a model core no existing scenario reaches.
+Inputs and grids are reduced from the quickstart versions so that the suite
+stays quick; the workflows are otherwise the same.
 """
 from dataclasses import dataclass
 from typing import Callable
@@ -27,38 +13,15 @@ from typing import Callable
 import numpy as np
 
 import pulse2percept as p2p
+from pulse2percept.units import Hz, dva, mm, ms, uA
 
 
-def array_ptrain(implant_cls, amp=20):
-    """Return a ``BiphasicPulseTrain`` on *every* electrode of ``implant_cls``.
+def drifting_grating(n_frames=12, fps=6, shape=(48, 80)):
+    """Return a drifting sinusoidal grating video (grayscale, 2 s).
 
-    A bare ``BiphasicPulseTrain`` drives a single electrode:
-    ``ArgusII().prepare_stim(BiphasicPulseTrain(...)).shape`` is ``(1, 29)``,
-    not ``(60, 29)``, i.e. one sixtieth of the per-electrode work.
-
-    A temporary implant supplies the electrode names, which adds about 2 ms to
-    the ~15 ms ``stimulus`` benchmark.
-
-    ``amp`` is in microamps for the current-based models. Granley uses
-    multiples of threshold, so its scenario passes ``20 * xTh``; the workload
-    is the same.
+    6 fps matches the Argus II encoder's 6 Hz pulse rate, so every frame is
+    sampled.
     """
-    names = implant_cls().electrode_names
-    return p2p.stimuli.Stimulus(
-        {e: p2p.stimuli.BiphasicPulseTrain(20, amp, 0.45, stim_dur=200)
-         for e in names})
-
-
-#: Microamps per gray level of 1.0 in :func:`as_current`.
-#:
-#: 1.0 keeps amplitudes numerically identical to older benchmark runs. The
-#: kernels do the same arithmetic on any amplitude, so the value can be
-#: increased if a scenario needs a clinically plausible one.
-GRAY_LEVEL_UA = 1.0
-
-
-def drifting_grating(n_frames=94, fps=29.97, shape=(240, 426)):
-    """Return a drifting sinusoidal grating video (grayscale, 94 frames)."""
     rows, cols = shape
     x = np.linspace(0, 4 * np.pi, cols)[np.newaxis, :, np.newaxis]
     phase = 2 * np.pi * np.arange(n_frames) / n_frames
@@ -67,70 +30,81 @@ def drifting_grating(n_frames=94, fps=29.97, shape=(240, 426)):
         metadata={'fps': fps})
 
 
-def as_current(implant, picture, amp_max=GRAY_LEVEL_UA):
-    """Sample an image onto an implant, treating gray levels as microamps.
+def imie():
+    """Return an IMIE that frequency-encodes images at 2x threshold.
 
-    Implants and ``predict_percept`` reject images, which are dimensionless.
-    User code converts an image to current with an encoder (see
-    :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`). An encoder produces a
-    pulse train per electrode, a much larger workload than the single static
-    frame these scenarios have always measured. This helper instead scales the
-    amplitudes that ``reshape_stim`` resampled onto the electrodes, so the
-    kernels receive the same electrodes and values as in older runs.
-
-    Returns the unprepared source passed to ``predict_percept``;
-    ``prepare_stim`` is measured separately by the ``implant`` benchmark.
+    The 80 uA threshold is uniform and illustrative, as in the
+    ``BiphasicAxonMapModel`` example; ``FrequencyEncoder`` takes current, and
+    the model converts it to threshold multiples.
     """
-    stim = implant.reshape_stim(picture)
-    data = stim.data * amp_max
-    if stim.time is None:
-        # Flat array = N electrodes with no time axis, as for an image. An
-        # (N, 1) array would get time [0] and a different `predict_percept`
-        # path:
-        return p2p.stimuli.Stimulus(data.ravel(), electrodes=stim.electrodes)
-    return p2p.stimuli.Stimulus(data, electrodes=stim.electrodes,
-                                time=stim.time)
-
-
-def axonmap(**kwargs):
-    """Return an AxonMap model."""
-    return p2p.models.retina.AxonMapModel(xrange=(-12, 12), yrange=(-8, 8),
-                                          **kwargs)
+    implant = p2p.implants.retina.IMIE()
+    implant.thresholds = 80 * uA
+    implant.encoder = p2p.stimuli.FrequencyEncoder(freq_range=(0, 60) * Hz,
+                                                   amp=160 * uA)
+    return implant
 
 
 def axonmap_fading(implant, verbose, **axon_cache):
     """Return an AxonMap + Fading composite; cache keywords go to AxonMap."""
     return p2p.models.Model(
         spatial=p2p.models.retina.AxonMapSpatial(
-            implant, xrange=(-12, 12), yrange=(-8, 8), verbose=verbose,
-            **axon_cache),
+            implant, xrange=(-12, 12), yrange=(-8, 8), step=0.5,
+            verbose=verbose, **axon_cache),
         temporal=p2p.models.FadingTemporal(verbose=verbose))
+
+
+def scotoma_scene():
+    """Return a 40 dva video scene with a central scotoma (quickstart)."""
+    return p2p.vision.Scene(drifting_grating(), fov=40 * dva,
+                            scotoma=p2p.vision.Scotoma.circle(5 * dva),
+                            scotoma_fill=0, aperture='round')
+
+
+#: Two saccades within the 2 s scene, as in the quickstart.
+GAZE = p2p.vision.Gaze([(0, 0, 0),
+                        (-8 * dva, -3 * dva, 600 * ms),
+                        (6 * dva, -4 * dva, 1300 * ms)])
+
+
+def letter_z():
+    """Return the quickstart letter Z as ``(N, 2)`` dva, 8 samples per
+    stroke."""
+    corners = [(-4.5, 3.4), (-1.3, 3.4), (-3.8, 0), (-1.2, 0)]
+    return np.vstack([np.linspace(start, end, 8)
+                      for start, end in zip(corners[:-1], corners[1:])])
+
+
+def trace(model, trajectory):
+    """Trace ``trajectory`` through the nearest electrodes, then predict."""
+    encoder = p2p.stimuli.TraceEncoder(
+        model, amp=1000 * uA, freq=model.freq, phase_dur=model.p_dur,
+        step_dur=100 * ms)
+    return model.predict_percept(encoder.encode(trajectory))
 
 
 @dataclass(frozen=True)
 class Scenario:
-    """One stimulus/implant/model pipeline.
+    """One stimulus/implant/model workflow.
 
     Attributes
     ----------
     id : str
         Short identifier. Appears in the benchmark report, so keep it terse.
     stimulus : callable
-        Takes no arguments, returns a stimulus.
+        Takes no arguments, returns the input passed to ``predict``.
     implant : callable
         Takes no arguments, returns an ``Implant``.
-    source : callable, optional
-        Takes the implant and the stimulus, returns what ``predict_percept``
-        is given. Defaults to the stimulus unchanged; the image scenarios use
-        :func:`as_current`.
     model : callable
-        Takes keyword arguments, returns an *unbuilt* model. Always receives
-        ``verbose``; also receives ``implant`` unless
-        ``binds_implant`` is False, and ``axon_pickle``/``ignore_pickle``
-        when ``caches_axons`` is True.
-    binds_implant : bool
-        Whether the model takes an ``implant``. False for a temporal-only
-        model, which receives the stimulus directly.
+        Takes ``implant`` and ``verbose`` (and ``axon_pickle``/
+        ``ignore_pickle`` when ``caches_axons`` is True), returns an
+        *unbuilt* model.
+    predict : callable, optional
+        Takes the model and the stimulus, returns a percept. Defaults to
+        ``model.predict_percept(stimulus)``.
+    implant_encodes : bool
+        Whether ``implant.prepare_stim`` alone turns the stimulus into
+        stimulation. False when that needs the model (``Scene`` registration,
+        ``TraceEncoder``); the ``implant`` benchmark is then skipped.
     caches_axons : bool
         Whether the model caches its axon map to disk. ``AxonMapSpatial``
         pickles the axon bundles to ``axons.pickle`` on first build, which
@@ -139,108 +113,60 @@ class Scenario:
         unknown keyword raises ``FreezeError``.
     slow : bool
         Whether the scenario is excluded from the default run. Set when a
-        single ``predict_percept`` takes more than a few seconds: timing calls
-        it several times and peak memory once more under ``tracemalloc``, so
-        the cost is roughly 10x. Slow scenarios run only with ``--runslow``.
-    plottable : bool
-        Whether the percept can be drawn. A temporal-only model has no spatial
-        grid (``xdva`` is None), and ``Percept.plot`` raises ``TypeError`` on
-        it, so the plot benchmark is skipped.
+        single prediction takes more than a few seconds: timing calls it
+        several times and peak memory once more, so the cost is roughly 10x.
+        Slow scenarios run only with ``--runslow``.
     """
 
     id: str
     stimulus: Callable
     implant: Callable
     model: Callable
-    source: Callable = lambda implant, stim: stim
-    binds_implant: bool = True
+    predict: Callable = lambda model, stim: model.predict_percept(stim)
+    implant_encodes: bool = True
     caches_axons: bool = False
     slow: bool = False
-    plottable: bool = True
 
 
 SCENARIOS = [
+    # Image, FrequencyEncoder, and Granley's pulse-dependent axon map:
     Scenario(
-        id='argus2_axonmap_logobvl',
-        stimulus=lambda: p2p.stimuli.samples.logo_bvl(),
-        implant=p2p.implants.retina.ArgusII,
-        source=as_current,
-        model=axonmap,
+        id='imie_biphasic_image',
+        stimulus=p2p.stimuli.samples.logo_bvl,
+        implant=imie,
+        model=lambda **kwargs: p2p.models.retina.BiphasicAxonMapModel(
+            xrange=(-14, 14), yrange=(-10, 10), step=0.5, **kwargs),
         caches_axons=True,
     ),
+    # Video, AmplitudeEncoder, raster, and the Torch spatiotemporal composite:
     Scenario(
-        # Benchmark the image-to-optical encoding path for PRIMA.
-        id='prima_scoreboard_logobvl',
-        stimulus=lambda: p2p.stimuli.samples.logo_bvl().invert(),
-        implant=p2p.implants.retina.PRIMAPivotal,
-        model=lambda **kwargs: p2p.models.retina.ScoreboardModel(
-            xrange=(-4, 4), yrange=(-4, 4), rho=50, step=0.1, **kwargs),
-    ),
-    # Granley 2021 reads amplitude, frequency and pulse duration from each
-    # electrode's BiphasicPulseTrain and rejects images. Amplitude is in xTh:
-    Scenario(
-        id='argus2_biphasic_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII,
-                                      amp=20 * p2p.units.xTh),
-        implant=p2p.implants.retina.ArgusII,
-        model=lambda **kwargs: (
-            p2p.models.retina.BiphasicAxonMapModel(
-                xrange=(-12, 12), yrange=(-8, 8), **kwargs)),
-        caches_axons=True,
-    ),
-    # Nanduri 2012: multi-frame output through the Torch composite:
-    Scenario(
-        id='argus2_nanduri2012_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
-        implant=p2p.implants.retina.ArgusII,
-        model=lambda **kwargs: p2p.models.retina.Nanduri2012Model(
-            xrange=(-4, 4), yrange=(-4, 4), step=0.5, **kwargs),
-    ),
-    # Horsager 2009: temporal-only, one trace per electrode, no spatial grid:
-    Scenario(
-        id='argus2_horsager2009_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
-        implant=p2p.implants.retina.ArgusII,
-        model=lambda **kwargs: p2p.models.retina.Horsager2009Model(
-            **kwargs),
-        binds_implant=False,
-        plottable=False,
-    ),
-    # Thompson 2003: spatial-only, image input:
-    Scenario(
-        id='argus2_thompson2003_logobvl',
-        stimulus=lambda: p2p.stimuli.samples.logo_bvl(),
-        implant=p2p.implants.retina.ArgusII,
-        source=as_current,
-        model=lambda **kwargs: p2p.models.retina.Thompson2003Model(
-            xrange=(-12, 12), yrange=(-8, 8), **kwargs),
-    ),
-    # Composed Model (separate spatial + temporal) on the Torch core:
-    Scenario(
-        id='argus2_scoreboard_fading_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
-        implant=p2p.implants.retina.ArgusII,
-        model=lambda implant, verbose: p2p.models.Model(
-            spatial=p2p.models.retina.ScoreboardSpatial(
-                implant, xrange=(-4, 4), yrange=(-4, 4), step=0.5,
-                verbose=verbose),
-            temporal=p2p.models.FadingTemporal(verbose=verbose)),
-    ),
-    # AxonMap + Fading: the composite runs the Torch AxonMap core on every
-    # electrode, the spatial-only scenarios on the compressed stimulus:
-    Scenario(
-        id='argus2_axonmap_fading_ptrain',
-        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
+        id='argus2_axonmap_fading_video',
+        stimulus=drifting_grating,
         implant=p2p.implants.retina.ArgusII,
         model=axonmap_fading,
         caches_axons=True,
     ),
+    # Scene coordinates, gaze, and PRIMA's optical encoder:
     Scenario(
-        id='argus2_axonmap_video',
-        stimulus=drifting_grating,
-        implant=p2p.implants.retina.ArgusII,
-        source=as_current,
-        model=axonmap,
-        caches_axons=True,
+        id='prima_ho2018_scene_gaze',
+        stimulus=scotoma_scene,
+        implant=p2p.implants.retina.PRIMAPivotal,
+        model=lambda **kwargs: p2p.models.retina.Ho2018Model(
+            xrange=(-6, 6), yrange=(-6, 6), step=0.1, **kwargs),
+        predict=lambda model, scene: model.predict_percept(scene, gaze=GAZE),
+        implant_encodes=False,
+    ),
+    # Cortex: retinotopic map, placement, and sequential TraceEncoder input:
+    Scenario(
+        id='orion_dynaphos_trace',
+        stimulus=letter_z,
+        implant=p2p.implants.cortex.Orion,
+        model=lambda **kwargs: p2p.models.cortex.DynaphosModel(
+            visual_field_map=p2p.topography.cortex.Polimeni2006Map(
+                regions=['v1']),
+            implant_position=(20, -5) * mm, xrange=(-6, 0), yrange=(-1, 4.5),
+            step=0.1, **kwargs),
+        predict=trace,
+        implant_encodes=False,
     ),
 ]

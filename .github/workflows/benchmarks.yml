@@ -116,10 +116,10 @@ jobs:
           pytest benchmarks/ --benchmark-only \
             --benchmark-json="$RESULTS/head.json"
 
-      # compare.py decides whether this job passes, so we first need to check
-      # its logic before we can trust it. Done here with synthetic data:
-      - name: Test the comparison logic
-        run: pytest benchmarks/test_compare.py -q
+      # compare.py and the memory helpers decide whether this job passes, so
+      # we first need to check them before we can trust them:
+      - name: Test the comparison logic and memory helpers
+        run: pytest benchmarks/test_compare.py benchmarks/test_memory.py -q
 
       # The report goes to the job summary rather than a pull request comment:
       - name: Compare

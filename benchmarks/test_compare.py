@@ -9,19 +9,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from compare import compare, compare_one, main
+from compare import compare, compare_one, main, render
 
 # Same as the defaults in compare.py:
 ARGS = SimpleNamespace(time_threshold=2.0, mem_threshold=1.15,
                        time_floor_ms=1.0, mem_floor_mb=1.0)
 
 
-def bench(name, time_ms, mem_mb=1000.0):
+def bench(name, time_ms, mem_mb=1000.0, metric='memray_heap_peak'):
     """Return one pytest-benchmark entry, keyed by full name."""
     entry = {'name': name, 'fullname': f'benchmarks/test_predict.py::{name}',
              'stats': {'min': time_ms / 1e3}, 'extra_info': {}}
     if mem_mb is not None:
         entry['extra_info']['peak_mem_mb'] = mem_mb
+    if metric is not None:
+        entry['extra_info']['memory_metric'] = metric
     return {entry['fullname']: entry}
 
 
@@ -84,6 +86,50 @@ def test_missing_memory_is_skipped_cleanly():
     assert not failed
     assert rows[0]['m_ratio'] is None
     assert rows[0]['base_m'] is None
+
+
+@pytest.mark.parametrize('metric', ['memray_heap_peak', 'tracemalloc_peak',
+                                    'cuda_allocated_delta'])
+def test_matching_metric_compares_memory(metric):
+    rows, _, _, failed = run(bench('a', 10.0, mem_mb=100.0, metric=metric),
+                             bench('a', 10.0, mem_mb=200.0, metric=metric))
+    assert failed
+    assert rows[0]['m_status'] == 'regressed'
+
+
+@pytest.mark.parametrize('base_metric, head_metric', [
+    (None, 'memray_heap_peak'),  # baseline predates memory_metric
+    (None, None),
+    ('memray_heap_peak', None),
+    ('tracemalloc_peak', 'memray_heap_peak'),  # Windows vs. Linux run
+    ('memray_heap_peak', 'cuda_allocated_delta'),
+    ('', ''),
+])
+def test_differing_or_missing_metric_skips_memory(base_metric, head_metric):
+    """A 10x memory jump is not compared across different metrics."""
+    rows, _, _, failed = run(
+        bench('a', 10.0, mem_mb=10.0, metric=base_metric),
+        bench('a', 10.0, mem_mb=100.0, metric=head_metric))
+    assert not failed
+    assert rows[0]['m_ratio'] is None
+    # Both values are still shown:
+    assert (rows[0]['base_m'], rows[0]['head_m']) == (10.0, 100.0)
+
+
+def test_differing_metric_still_compares_time():
+    _, _, _, failed = run(bench('a', 10.0, metric=None),
+                          bench('a', 30.0, metric='memray_heap_peak'))
+    assert failed
+
+
+def test_render_shows_metric_and_mismatch():
+    rows, added, removed, failed = run(
+        {**bench('same', 10.0), **bench('legacy', 10.0, metric=None)},
+        {**bench('same', 10.0), **bench('legacy', 10.0)})
+    out = render(rows, added, removed, failed, ARGS)
+    assert '| memray_heap_peak |' in out
+    assert '| -- &rarr; memray_heap_peak |' in out
+    assert 'not compared where the metrics differ' in out
 
 
 def test_benchmark_missing_extra_info_entirely():

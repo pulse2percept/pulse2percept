@@ -5,9 +5,9 @@ Performance Benchmarks
 ======================
 
 A small suite that measures percept prediction from a stimulus, an implant and
-a phosphene model. It tracks **execution time** and **peak tracemalloc-tracked
-memory** for the reference pipelines in ``scenarios.py``, broken down by
-pipeline stage.
+a phosphene model. It tracks **execution time** and **peak memory** (CPU heap
+allocations, or CUDA allocations on a GPU) for the reference pipelines in
+``scenarios.py``, broken down by pipeline stage.
 
 ``compare.py`` compares two runs. The ``Benchmarks`` workflow runs the base
 branch and the pull request on the same runner minutes apart, and fails the job
@@ -40,7 +40,7 @@ Useful invocations:
 
     # one stage, or one scenario
     pytest benchmarks/ --benchmark-only -k predict_percept
-    pytest benchmarks/ --benchmark-only -k argus2_axonmap_logobvl
+    pytest benchmarks/ --benchmark-only -k argus2_axonmap_fading_video
 
     # include the scenarios that are too slow for the default run
     pytest benchmarks/ --benchmark-only --runslow
@@ -70,9 +70,10 @@ the memory recorded in ``extra_info``. ``compare.py`` reads two
 It prints a Markdown table and exits non-zero if anything regressed. Time and
 memory use different thresholds:
 
-**Memory is highly repeatable.** ``tracemalloc`` counts allocations instead of
-sampling the process, so repeated runs of unchanged code report the same peak
-to the byte.
+**Memory is more repeatable than time.** Each memory metric counts
+allocations (see `Reading the numbers`_). Memory is compared only when both runs report the same
+``memory_metric``; if the tags differ, or a run predates the tag, that
+benchmark is compared on time only.
 
 **Time depends on runner load.** The minimum over many rounds may drift between
 runs of unchanged code, so the time threshold is a generous 2x and catches only
@@ -83,7 +84,8 @@ some benchmarks are tiny (a 0.2 ms build, a 0.08 MB prediction). Ratio-only
 breaches are shown as ``(under floor)`` and do not fail the run. All four limits
 are options; see ``python benchmarks/compare.py --help``.
 
-The pass/fail logic is tested on synthetic data in ``test_compare.py``.
+The pass/fail logic is tested on synthetic data in ``test_compare.py``, and
+the memory helpers in ``test_memory.py``.
 
 
 On a pull request
@@ -108,8 +110,32 @@ The job also fails if the two runs share **no** benchmarks.
 What is measured
 ================
 
+Four workflows, reduced from the quickstart to benchmark size:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Scenario
+     - Workflow
+   * - ``imie_biphasic_image``
+     - IMIE encodes an ``ImageStimulus`` with ``FrequencyEncoder`` (2x a
+       uniform 80 uA threshold, 0-60 Hz) for ``BiphasicAxonMapModel``.
+   * - ``argus2_axonmap_fading_video``
+     - Argus II's default ``AmplitudeEncoder`` (6 Hz) and sequential raster
+       encode a 2 s, 6 fps ``VideoStimulus`` for an ``AxonMapSpatial`` +
+       ``FadingTemporal`` composite on the Torch core.
+   * - ``prima_ho2018_scene_gaze``
+     - The same video in a 40 dva ``Scene`` with a scotoma, viewed through
+       PRIMA Pivotal's optical encoder by ``Ho2018Model``, with two saccades
+       in ``Gaze``.
+   * - ``orion_dynaphos_trace``
+     - ``TraceEncoder`` maps a letter Z in dva onto Orion electrodes on V1
+       (``Polimeni2006Map``) and stimulates them in sequence for
+       ``DynaphosModel``.
+
 Every scenario is measured at each stage, so a regression can be located in
-stimulus construction, the model build, or the percept computation.
+stimulus construction, encoding, the model build, or the percept computation.
 
 .. list-table::
    :header-rows: 1
@@ -120,18 +146,26 @@ stimulus construction, the model build, or the percept computation.
    * - ``stimulus``
      - Building the stimulus, before any implant exists.
    * - ``implant``
-     - Source to device-ready stimulation: the downsampling of an image or
-       video onto the electrode grid, then ``implant.prepare_stim``.
+     - ``implant.prepare_stim``: the implant's encoder turns an image or video
+       into stimulation. Skipped for scene and trace input, which need the
+       model.
    * - ``build``
      - ``model.build()``, both warm (``test_build``, every run after the
        first) and cold (``test_build_cold``, ignoring the on-disk axon cache,
        i.e. the actual computation). Both are in one group so they appear side
        by side in the report.
    * - ``predict_percept``
-     - The headline number. Includes the preparation also timed separately
-       under ``implant``.
+     - The headline number: the scenario's ``predict``. Includes encoding the
+       stimulus. Where the implant can encode independently, the
+       corresponding ``implant.prepare_stim`` path is also benchmarked under
+       ``implant``.
+   * - ``predict_tensor_cuda``
+     - The Torch core (``_predict_tensor``) with the waveform on a CUDA
+       device, for scenarios that run on it (the Argus II video). Excludes
+       stimulus preparation and the copy to the device. Skipped without CUDA,
+       including on the pull request check.
    * - ``end_to_end``
-     - The whole one-liner.
+     - The whole workflow, including implant and model construction.
    * - ``plot``
      - Drawing the percept. Mostly matplotlib time, kept in its own group so
        it is not read as model cost.
@@ -149,16 +183,27 @@ core, which makes results incomparable between machines and between runs on a
 loaded machine. Set ``OMP_NUM_THREADS=1``, as the pull request check does, and
 never compare a run against a baseline taken at a different thread count.
 
-**Memory is measured separately from time.** ``tracemalloc`` inflates run time
-several-fold, so each benchmark runs its payload one extra time under
-``tracemalloc`` and records ``peak_mem_mb`` in ``extra_info``.
+**Memory is measured separately from time.** Tracking slows the call, so each
+benchmark first runs its payload once, untimed, and records ``peak_mem_mb`` and
+``memory_metric`` in ``extra_info``.
 
-**Memory numbers are a floor, not a total.** ``tracemalloc`` tracks Python and
-NumPy allocations, but not Torch tensors or raw ``malloc`` inside the
-Cython kernels. The Torch paths (AxonMap, Scoreboard, and Torch
-composites) therefore report much less than their actual peak. It was chosen
-over RSS sampling because it is deterministic, needs no extra dependency, and
-works on Windows (which rules out ``pytest-memray``).
+**Memory metrics.** ``memory_metric`` says what ``peak_mem_mb`` measured
+(MB = 1e6 bytes). All three count allocations made during the call. They are
+substantially more repeatable than process RSS and do not depend on whether an
+allocation needs additional resident pages:
+
+- ``memray_heap_peak`` (Linux, macOS): bytes live at the heap high-water mark,
+  from `Memray <https://bloomberg.github.io/memray/>`_. Counts native
+  allocations, including NumPy, Torch and the Cython kernels.
+- ``tracemalloc_peak`` (Windows, which Memray does not support): Python and
+  NumPy allocations only. Torch tensors and raw ``malloc`` are invisible, so
+  Torch paths report far less than their actual peak.
+- ``cuda_allocated_delta``: peak of Torch's CUDA allocator during the call
+  minus its live allocation before it. Counts tensors only, not the allocator
+  cache or the CUDA context.
+
+Process RSS was not used: allocator reuse made later benchmarks report no
+growth, so the result depended on test order.
 
 **Run on a quiet machine.** Absolute timings from a shared CI runner are
 unreliable. The pull request check measures both sides on the same runner and
@@ -169,64 +214,32 @@ quiet machine.
 Adding a scenario
 =================
 
+Scenarios represent distinct, realistic pulse2percept workflows. Add one only
+when it exercises a materially different user-facing pipeline not already
+represented. Every scenario adds run time to every pull request.
+
 Add a ``Scenario`` to ``scenarios.py``. The benchmark functions are
 parametrized over that list, so every stage picks up the new entry with no
-other file changes. For example, a temporal model:
+other file changes.
 
-.. code-block:: python
+**Keep it benchmark-sized.** Shorten videos, coarsen model grids, and shorten
+trajectories until a prediction takes well under a second, while keeping the
+workflow the same. Set ``slow=True`` only if no such version exists; slow
+scenarios run only with ``--runslow``.
 
-    Scenario(
-        id='argus2_axonmap_fading',
-        stimulus=lambda: array_ptrain(p2p.implants.retina.ArgusII),
-        implant=p2p.implants.retina.ArgusII,
-        model=lambda implant, **kwargs: p2p.models.Model(
-            spatial=p2p.models.retina.AxonMapSpatial(implant, xrange=(-12, 12),
-                                              yrange=(-8, 8)),
-            temporal=p2p.models.FadingTemporal(), **kwargs),
-    )
+**Use the implant's encoder.** Image and video input goes through
+``implant.encoder``, as in user code. Match the video frame rate to the
+encoder's pulse rate, or frames go unsampled.
 
-Add a scenario only if it reaches a **compiled kernel no existing scenario
-reaches**. Every scenario adds run time to every pull request, and a model that
-shares its kernel with an existing scenario adds no regression coverage.
+**Override** ``predict`` when the workflow is not
+``model.predict_percept(stimulus)``, e.g. a ``Scene`` with ``gaze`` or a
+``TraceEncoder``. If ``implant.prepare_stim`` alone cannot turn the stimulus
+into stimulation, set ``implant_encodes=False`` to skip the ``implant`` stage.
 
-**Stimulate the whole array.** A bare ``BiphasicPulseTrain`` passed to an
-implant drives one electrode: ``ArgusII().prepare_stim(...)`` then has shape
-``(1, 29)`` instead of ``(60, 29)``, so the benchmark covers a sixtieth of the
-per-electrode work. Use the ``array_ptrain`` helper, as above.
-
-**Match the stimulus to the model.** ``BiphasicAxonMapModel`` reads pulse
-parameters from each electrode, rejects an image, and takes amplitude as a
-multiple of threshold (``array_ptrain(..., amp=20 * p2p.units.xTh)``), not a
-current. A temporal model given a single-frame stimulus measures nothing
-temporal.
-
-**An image is not a stimulus.** Gray levels are dimensionless, and both
-``prepare_stim`` and ``predict_percept`` reject them; user code converts an
-image to current with a ``PulseEncoder``. That would benchmark a pulse train
-per electrode instead of a single static frame, so the image scenarios use the
-``as_current`` helper, which samples the image onto the electrodes as current
-explicitly. See its docstring.
-
-**Sub-model parameters go on the sub-model instance**, as above. Keywords
-passed to ``Model(...)`` reach *both* sub-models, and ``Parametrized`` freezes
-attributes, so a keyword the temporal model does not recognize causes an error.
-
-**Set the capability flags.** A temporal-only model takes no ``implant``, so
-the scenario needs ``binds_implant=False``. Its percept has no spatial grid and
-``Percept.plot`` fails on it, so it also needs ``plottable=False``. If the
-scenario takes more than a few seconds per ``predict_percept`` call, set
-``slow=True`` to exclude it from the default run:
-
-.. code-block:: python
-
-    Scenario(
-        id='my_slow_scenario',
-        ...
-        slow=True,
-    )
-
-Slow scenarios run only with ``--runslow``, as in the test suite. The default
-run takes about a minute so that it is practical before opening a pull request.
+**Sub-model parameters go on the sub-model instance** (see ``axonmap_fading``).
+Keywords passed to ``Model(...)`` reach *both* sub-models, and
+``Parametrized`` freezes attributes, so a keyword the temporal model does not
+recognize causes an error.
 
 
 Scope
