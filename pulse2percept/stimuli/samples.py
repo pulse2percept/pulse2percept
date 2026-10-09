@@ -6,10 +6,6 @@ Loaders return ordinary :py:class:`~pulse2percept.stimuli.ImageStimulus` or
     from pulse2percept.stimuli import samples
     logo = samples.logo_bvl()
 
-:py:class:`~pulse2percept.stimuli.LogoBVL` and
-:py:class:`~pulse2percept.stimuli.LogoUCSB` are deprecated in favor of
-:py:func:`logo_bvl` and :py:func:`logo_ucsb` and will be removed in v0.12.
-
 .. versionadded:: 0.11.0
 """
 from os.path import dirname, join
@@ -18,7 +14,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .base import ImageStimulus, VideoStimulus
-from ..utils.deprecation import deprecated
 
 __all__ = [
     'big_buck_bunny',
@@ -708,79 +703,3 @@ def zebrafish_retina(resize=None, electrodes=None, metadata=None,
     return ImageStimulus(_sample_path('zebrafish-retina.jpg'), resize=resize,
                          as_gray=as_gray, electrodes=electrodes,
                          metadata=meta, compress=False)
-
-
-@deprecated(alt_func='pulse2percept.stimuli.samples.logo_bvl',
-            deprecated_version='0.11.0', removed_version='0.12.0')
-class LogoBVL(ImageStimulus):
-    """Bionic Vision Lab (BVL) logo
-
-    Load the 576x720x4 Bionic Vision Lab (BVL) logo.
-
-    .. versionadded:: 0.7
-
-    Parameters
-    ----------
-    resize : float, ``(height, width)``, or None, optional
-        A float scales the height and width of the image stimulus by that
-        factor (e.g., 0.5 halves both). A tuple specifies the desired height
-        and width.
-
-    electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. By default,
-        pixels are named by row letter, column number, and color-channel
-        suffix (e.g. 'A1', 'C12', 'A1_R').
-
-        .. note::
-           The number of electrode names provided must match the number of
-           pixels in the (resized) image.
-
-    metadata : dict, optional
-        Additional stimulus metadata can be stored in a dictionary.
-
-    """
-    __slots__ = ()
-
-    def __init__(self, resize=None, electrodes=None, metadata=None,
-                 as_gray=False):
-        super().__init__(_sample_path('bionic-vision-lab.png'), resize=resize,
-                         as_gray=as_gray, electrodes=electrodes,
-                         metadata=metadata, compress=False)
-
-
-@deprecated(alt_func='pulse2percept.stimuli.samples.logo_ucsb',
-            deprecated_version='0.11.0', removed_version='0.12.0')
-class LogoUCSB(ImageStimulus):
-    """UCSB logo
-
-    Load a 324x727 white-on-black logo of the University of California, Santa
-    Barbara.
-
-    .. versionadded:: 0.7
-
-    Parameters
-    ----------
-    resize : float, ``(height, width)``, or None, optional
-        A float scales the height and width of the image stimulus by that
-        factor (e.g., 0.5 halves both). A tuple specifies the desired height
-        and width.
-
-    electrodes : int, string or list thereof; optional
-        Optionally, you can provide your own electrode names. By default,
-        pixels are named by row letter, column number, and color-channel
-        suffix (e.g. 'A1', 'C12', 'A1_R').
-
-        .. note::
-           The number of electrode names provided must match the number of
-           pixels in the (resized) image.
-
-    metadata : dict, optional
-        Additional stimulus metadata can be stored in a dictionary.
-
-    """
-    __slots__ = ()
-
-    def __init__(self, resize=None, electrodes=None, metadata=None):
-        super().__init__(_sample_path('ucsb.png'), resize=resize,
-                         as_gray=True, electrodes=electrodes,
-                         metadata=metadata, compress=False)

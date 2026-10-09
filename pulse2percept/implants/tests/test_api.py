@@ -34,9 +34,8 @@ CORTICAL_DEVICES = [Orion, NeuroPortArray, ICVP]
 
 GENERIC = ['CheckerboardRaster', 'cortex', 'CustomRaster', 'DiskElectrode',
            'Electrode', 'ElectrodeArray', 'ElectrodeGrid', 'EnsembleImplant',
-           'GridImplant', 'HexElectrode', 'Implant', 'PointSource',
-           'ProsthesisSystem', 'Raster', 'retina', 'SequentialRaster',
-           'SquareElectrode']
+           'GridImplant', 'HexElectrode', 'Implant', 'PointSource', 'Raster',
+           'retina', 'SequentialRaster', 'SquareElectrode']
 
 
 def test_root_namespace_is_anatomy_neutral():
@@ -67,9 +66,8 @@ def test_flat_device_modules_are_gone(name):
     ('pulse2percept.implants.retina',
      ['AlphaAMS', 'AlphaIMS', 'ArgusI', 'ArgusII',
       'Ho2019FlatArray', 'Huang2021Array', 'IMIE', 'Lorach2015Array',
-      'PRIMA', 'PRIMA40', 'PRIMA55', 'PRIMA75', 'PRIMAPivotal',
-      'PhotovoltaicPixel', 'RetinalImplant', 'Suprachoroidal24',
-      'Suprachoroidal44']),
+      'PRIMAPivotal', 'PhotovoltaicPixel', 'RetinalImplant',
+      'Suprachoroidal24', 'Suprachoroidal44']),
     ('pulse2percept.implants.cortex',
      ['CorticalImplant', 'EllipsoidElectrode', 'ICVP', 'LinearEdgeThread',
       'Neuralink', 'NeuralinkThread', 'NeuroPortArray', 'Orion']),

@@ -17,7 +17,6 @@ from ...stimuli import PhotovoltaicEncoder, PRIMAEncoder
 from ...stimuli.base import _describe_unit
 from ...stimuli.encoders import _OpticalStimulus
 from ...units import DimensionMismatchError, as_value, mW, mm, um
-from ...utils import deprecated
 from ...utils.constants import MS_PER_S, ZORDER
 
 # Distinguish an implant's own default encoder from ``encoder=None``.
@@ -920,70 +919,3 @@ class Huang2021Array(_PhotovoltaicRetinalImplant):
     def row_spacing(self):
         """Distance (um) between adjacent pixel rows."""
         return self.spacing * np.sqrt(3) / 2
-
-
-@deprecated(alt_func='Ho2019FlatArray(55)', deprecated_version='0.11.0',
-            removed_version='0.12.0',
-            extra_msg='The name is ambiguous: 55 um arrays appear in two '
-                      'device families. This one is the flat F55 array of '
-                      'Ho et al. (2019); the 1.5 mm vertical-junction array '
-                      'of Huang et al. (2021) is ``Huang2021Array(55)``.')
-class PRIMA55(Ho2019FlatArray):
-    """Deprecated name for the F55 array of [Ho2019]_.
-    
-    .. deprecated:: 0.11.0
-        Use ``Ho2019FlatArray(55)`` instead.
-    """
-    __slots__ = ()
-
-    def __init__(self, z=0, eye='right', preprocess=False,
-                 safe_mode=False):
-        super().__init__(55, z=z, eye=eye,
-                         preprocess=preprocess, safe_mode=safe_mode)
-
-
-@deprecated(alt_func='Ho2019FlatArray(40)', deprecated_version='0.11.0',
-            removed_version='0.12.0',
-            extra_msg='The name is ambiguous: 40 um arrays appear in two '
-                      'device families. This one is the flat F40 array of '
-                      'Ho et al. (2019); the 1.5 mm vertical-junction array '
-                      'of Huang et al. (2021) is ``Huang2021Array(40)``.')
-class PRIMA40(Ho2019FlatArray):
-    """Deprecated name for the F40 array of [Ho2019]_.
-    
-    .. deprecated:: 0.11.0
-        Use ``Ho2019FlatArray(40)`` instead.
-    """
-    __slots__ = ()
-
-    def __init__(self, z=0, eye='right', preprocess=False,
-                 safe_mode=False):
-        super().__init__(40, z=z, eye=eye,
-                         preprocess=preprocess, safe_mode=safe_mode)
-
-
-@deprecated(alt_func='PRIMAPivotal', deprecated_version='0.11.0',
-            removed_version='0.12.0',
-            extra_msg='``PRIMA`` is reserved for the eventual commercial '
-                      'device, whose specifications may differ from the '
-                      'pivotal-trial configuration this class models.')
-class PRIMA(PRIMAPivotal):
-    """Deprecated name for the pivotal-trial PRIMA array.
-    
-    .. deprecated:: 0.11.0
-        Use :py:class:`~pulse2percept.implants.retina.PRIMAPivotal` instead.
-    """
-    __slots__ = ()
-
-
-@deprecated(alt_func='Lorach2015Array', deprecated_version='0.11.0',
-            removed_version='0.12.0',
-            extra_msg='``PRIMA75`` was pulse2percept shorthand, not an '
-                      'official device name.')
-class PRIMA75(Lorach2015Array):
-    """Deprecated name for the 70 um array of [Lorach2015]_.
-    
-    .. deprecated:: 0.11.0
-        Use :py:class:`~pulse2percept.implants.retina.Lorach2015Array` instead.
-    """
-    __slots__ = ()

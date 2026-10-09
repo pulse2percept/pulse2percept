@@ -180,7 +180,7 @@ class ScoreboardSpatial(RetinalSpatial):
         ``rho`` is fixed, so phosphene size does not depend on the pulse:
         doubling amplitude doubles brightness at constant width, unlike
         [Nanduri2012]_. Use
-        :py:class:`~pulse2percept.models.retina.BiphasicScoreboardSpatial` for
+        :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` for
         pulse-dependent brightness and size.
 
     Parameters

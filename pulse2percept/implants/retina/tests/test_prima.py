@@ -13,8 +13,7 @@ from scipy.spatial import cKDTree
 from pulse2percept.implants import PointSource, Implant
 from pulse2percept.implants.retina import (ArgusII, PhotovoltaicPixel,
                                            PRIMAPivotal, Lorach2015Array,
-                                           Ho2019FlatArray, Huang2021Array,
-                                           PRIMA, PRIMA75, PRIMA55, PRIMA40)
+                                           Ho2019FlatArray, Huang2021Array)
 from pulse2percept.stimuli import (BiphasicPulse, BiphasicPulseTrain,
                                    ImageStimulus, PhotovoltaicEncoder,
                                    PRIMAEncoder, samples, Stimulus)
@@ -255,41 +254,6 @@ def test_Ho2019FlatArray_F55_layout():
         npt.assert_equal((rows[0], rows[-1]), expected[col])
 
 
-@pytest.mark.parametrize('old_cls, pixel_size', [(PRIMA55, 55), (PRIMA40, 40)])
-def test_PRIMA55_PRIMA40_are_deprecated(old_cls, pixel_size):
-    """Deprecated names map to the Ho et al. arrays."""
-    with pytest.deprecated_call(match='Ho et al'):
-        old = old_cls()
-    new = Ho2019FlatArray(pixel_size)
-    npt.assert_equal(list(old.electrode_array.electrodes),
-                     list(new.electrode_array.electrodes))
-    npt.assert_allclose(old.electrode_array.coordinates(),
-                        new.electrode_array.coordinates())
-    npt.assert_equal(old.pixel_size, pixel_size)
-    # Still slotted, and accept the rest of the old signature:
-    npt.assert_equal(hasattr(old, '__dict__'), False)
-    with pytest.deprecated_call():
-        old_cls(-100, 'left', False, False)
-
-
-@pytest.mark.parametrize('old_cls, new_cls',
-                         [(PRIMA, PRIMAPivotal),
-                          (PRIMA75, Lorach2015Array)])
-def test_PRIMA_PRIMA75_are_deprecated(old_cls, new_cls):
-    """Deprecated names map to the canonical arrays."""
-    with pytest.deprecated_call():
-        old = old_cls()
-    new = new_cls()
-    npt.assert_equal(list(old.electrode_array.electrodes),
-                     list(new.electrode_array.electrodes))
-    npt.assert_allclose(old.electrode_array.coordinates(),
-                        new.electrode_array.coordinates())
-    # Still slotted, and accept the whole old signature:
-    npt.assert_equal(hasattr(old, '__dict__'), False)
-    with pytest.deprecated_call():
-        old_cls(-100, 'left', False, False)
-
-
 def test_implant_metadata():
     """Check photovoltaic implant metadata."""
     for cls in (PRIMAPivotal, Lorach2015Array, Ho2019FlatArray,
@@ -307,18 +271,14 @@ def test_implant_metadata():
 
 
 def test_prima_public_api():
-    """Check canonical and deprecated public names.
-
-    Deprecated PRIMA names are exported from the retina namespace only, not the
-    package root.
-    """
+    """Check canonical public names; the old aliases were removed in 0.12."""
     import pulse2percept.implants.retina as retina
-    canonical = ['PRIMAPivotal', 'Lorach2015Array', 'Ho2019FlatArray',
-                 'Huang2021Array']
-    deprecated = ['PRIMA', 'PRIMA75', 'PRIMA55', 'PRIMA40']
-    for name in canonical + deprecated:
+    for name in ['PRIMAPivotal', 'Lorach2015Array', 'Ho2019FlatArray',
+                 'Huang2021Array']:
         npt.assert_equal(name in retina.__all__, True)
         npt.assert_equal(getattr(retina, name).__name__, name)
+    for name in ['PRIMA', 'PRIMA75', 'PRIMA55', 'PRIMA40']:
+        npt.assert_equal(hasattr(retina, name), False)
 
 
 @pytest.mark.parametrize('pixel_size, n_elec, n_total, elec_diam',
@@ -779,14 +739,6 @@ def test_photovoltaic_arrays_have_no_borrowed_safe_mode(implant_type):
     npt.assert_equal('PRIMAPivotal' in str(excinfo.value), True)
     # The default protocol works without safe_mode:
     npt.assert_equal(implant_type().prepare_stim(samples.logo_bvl()).unit,
-                     mW / mm ** 2)
-
-
-def test_PRIMA_deprecated_alias_keeps_the_encoder():
-    with pytest.deprecated_call():
-        implant = PRIMA()
-    npt.assert_equal(isinstance(implant.encoder, PRIMAEncoder), True)
-    npt.assert_equal(implant.prepare_stim(samples.logo_bvl()).unit,
                      mW / mm ** 2)
 
 

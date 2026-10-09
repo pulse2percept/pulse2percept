@@ -70,6 +70,12 @@ API changes and improvements
   (``'auto'``), and ``VideoStimulus.threshold`` thresholds each frame
   (:pull:`956`).
 
+* Removed APIs deprecated in v0.11: ``pulse2percept.viz``,
+  ``ProsthesisSystem``, ``PRIMA``/``PRIMA75``/``PRIMA55``/``PRIMA40``,
+  ``GratingStimulus``, ``BarStimulus``, ``LogoBVL``, ``LogoUCSB``,
+  ``Watson2014DisplaceMap``, ``BiphasicAxonMapSpatial``, and
+  ``BiphasicScoreboardSpatial`` (:pull:`957`).
+
 Bug fixes
 ---------
 
@@ -237,7 +243,7 @@ Topography
   two-dimensional retinal ganglion-cell displacement model based on
   [Montesano2020]_, with eye-specific and inverse mappings (:pull:`897`).
 
-* :py:class:`~pulse2percept.topography.retina.Watson2014DisplaceMap` now
+* ``Watson2014DisplaceMap`` now
   supports both eyes and is deprecated in favor of ``Montesano2020Map``
   (:pull:`895`).
 
@@ -262,7 +268,7 @@ Scene and plotting
   stimulated electrodes at their model-side placement
   (:py:func:`~pulse2percept.plotting.plot_implant_percept`,
   :py:func:`~pulse2percept.plotting.play_implant_percept`).
-  :py:mod:`pulse2percept.viz` is deprecated until v0.12.0
+  ``pulse2percept.viz`` is deprecated until v0.12.0
   (:issue:`872`, :pull:`931`).
 
 
@@ -275,7 +281,7 @@ Bug fixes
 
 * Corrected PRIMA-family pixel dimensions and layouts (:pull:`865`).
 
-* :py:class:`~pulse2percept.models.retina.BiphasicAxonMapSpatial` now respects
+* ``BiphasicAxonMapSpatial`` now respects
   `n_gray` and preserves the full stimulus in percept metadata
   (:pull:`869`).
 
@@ -357,7 +363,7 @@ API changes:
   physical current from threshold-relative amplitude via the new ``xTh`` unit
   (:pull:`848`)
 
-* :py:class:`~pulse2percept.models.retina.BiphasicAxonMapSpatial` can now be composed
+* ``BiphasicAxonMapSpatial`` can now be composed
   with temporal models using a space-time-separable approximation (:pull:`847`)
 
 * Model parameter ``xystep`` was renamed to ``step`` and ``axlambda`` to
@@ -452,8 +458,8 @@ Highlights:
    [Greenwald2009]_ (:pull:`459`) and
    :py:func:`~pulse2percept.datasets.load_perezfornos2012`
    [PerezFornos2012]_ (:pull:`457`)
-*  New stimuli: :py:class:`~pulse2percept.stimuli.BarStimulus`,
-   :py:class:`~pulse2percept.stimuli.GratingStimulus` (:pull:`310`)
+*  New stimuli: ``BarStimulus``,
+   ``GratingStimulus`` (:pull:`310`)
 *  Python 3.10 support (:pull:`479`)
 *  Various bug fixes
 
@@ -472,18 +478,18 @@ v0.7.0 Implants (2021-04-04)
 
 Highlights:
 
-*  New implants: :py:class:`~pulse2percept.implants.retina.PRIMA`, 
-   :py:class:`~pulse2percept.implants.retina.PRIMA75`,
-   :py:class:`~pulse2percept.implants.retina.PRIMA55`, 
-   :py:class:`~pulse2percept.implants.retina.PRIMA40` (:pull:`188`)
+*  New implants: ``PRIMA``, 
+   ``PRIMA75``,
+   ``PRIMA55``, 
+   ``PRIMA40`` (:pull:`188`)
 *  New electrodes: :py:class:`~pulse2percept.implants.SquareElectrode`,
    :py:class:`~pulse2percept.implants.HexElectrode`,
    :py:class:`~pulse2percept.implants.retina.PhotovoltaicPixel` (:pull:`188`, 
    :pull:`193`)
 *  New stimuli: :py:class:`~pulse2percept.stimuli.ImageStimulus` and
    :py:class:`~pulse2percept.stimuli.VideoStimulus` (:pull:`196`, :pull:`220`,
-   :pull:`221`, :pull:`356`), :py:class:`~pulse2percept.stimuli.BarStimulus`
-   and :py:class:`~pulse2percept.stimuli.GratingStimulus` (:pull:`323`)
+   :pull:`221`, :pull:`356`), ``BarStimulus``
+   and ``GratingStimulus`` (:pull:`323`)
 *  New datasets: :py:class:`~pulse2percept.datasets.load_nanduri2012`
    (:pull:`250`)
 *  New model selection subpackage (:pull:`311`)
@@ -536,7 +542,7 @@ Bug fixes:
 v0.5.0 Community (2019-11-29)
 =============================
 
-*   New :py:mod:`pulse2percept.viz` module (:pull:`84`)
+*   New ``pulse2percept.viz`` module (:pull:`84`)
 *   Support for the :py:class:`~pulse2percept.implants.retina.AlphaIMS` implant
     (:pull:`87`)
 *   Automated wheelhouse build (:pull:`130`)

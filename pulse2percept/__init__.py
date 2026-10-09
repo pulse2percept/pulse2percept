@@ -89,8 +89,6 @@ from . import topography
 from . import units
 from . import utils
 from . import vision
-# Deprecated; re-exports from `plotting`:
-from . import viz
 
 __all__ = [
     "datasets",
@@ -104,5 +102,4 @@ __all__ = [
     "units",
     "utils",
     "vision",
-    "viz",
 ]

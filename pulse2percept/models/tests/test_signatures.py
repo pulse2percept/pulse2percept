@@ -13,9 +13,7 @@ from pulse2percept.implants.cortex import Orion
 from pulse2percept.models import AlphaTemporal, FadingTemporal
 from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
                                          BiphasicAxonMapModel,
-                                         BiphasicAxonMapSpatial,
                                          BiphasicScoreboardModel,
-                                         BiphasicScoreboardSpatial,
                                          Ho2018Model, Ho2018Spatial,
                                          Ho2018Temporal,
                                          Horsager2009Model,
@@ -36,9 +34,7 @@ IMPLANT_MODELS = [
     (ScoreboardModel, 'rho'),
     (AxonMapSpatial, 'lam'),
     (AxonMapModel, 'lam'),
-    (BiphasicAxonMapSpatial, 'bright_model'),
     (BiphasicAxonMapModel, 'bright_model'),
-    (BiphasicScoreboardSpatial, 'bright_model'),
     (BiphasicScoreboardModel, 'bright_model'),
     (Ho2018Spatial, 'rho'),
     (Ho2018Model, 'tau1'),
@@ -183,9 +179,7 @@ def test_defaults_match_declared_defaults(cls, _):
 @pytest.mark.parametrize('cls', (FadingTemporal, AlphaTemporal,
                                  Horsager2009Temporal, Horsager2009Model,
                                  Nanduri2012Temporal, Nanduri2012Spatial,
-                                 Nanduri2012Model, BiphasicAxonMapSpatial,
-                                 BiphasicAxonMapModel,
-                                 BiphasicScoreboardSpatial,
+                                 Nanduri2012Model, BiphasicAxonMapModel,
                                  BiphasicScoreboardModel,
                                  Thompson2003Spatial, Thompson2003Model))
 def test_torch_models_have_no_thread_params(cls):

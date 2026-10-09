@@ -196,9 +196,6 @@ The displacement depends on retinal meridian:
    These maps describe population-average anatomy, not subject-specific retinal
    geometry.
 
-   ``Watson2014DisplaceMap`` is deprecated. It uses horizontal-meridian fits
-   across entire hemifields and has no inverse mapping.
-
 
 Retinal Laterality
 ------------------

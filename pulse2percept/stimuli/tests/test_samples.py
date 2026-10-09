@@ -1,33 +1,21 @@
-import warnings
-
 import numpy as np
 import numpy.testing as npt
 import pytest
 
 import pulse2percept as p2p
-from pulse2percept.stimuli import (ImageStimulus, LogoBVL, LogoUCSB,
-                                   VideoStimulus, samples)
+from pulse2percept.stimuli import ImageStimulus, VideoStimulus, samples
 
 
-def _legacy(cls, **kwargs):
-    """Instantiate a legacy sample class without its deprecation warning"""
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', DeprecationWarning)
-        return cls(**kwargs)
-
-
-@pytest.mark.parametrize('loader,legacy', [
-    (samples.logo_bvl, LogoBVL),
-    (samples.logo_ucsb, LogoUCSB),
+@pytest.mark.parametrize('loader,img_shape', [
+    (samples.logo_bvl, (576, 720, 4)),
+    (samples.logo_ucsb, (324, 727)),
 ])
-def test_samples_match_legacy(loader, legacy):
+def test_samples_logos(loader, img_shape):
     new = loader()
-    old = _legacy(legacy)
     # Loaders return plain stimuli, not a sample type of their own:
     npt.assert_equal(type(new), ImageStimulus)
-    npt.assert_equal(new.img_shape, old.img_shape)
+    npt.assert_equal(new.img_shape, img_shape)
     npt.assert_equal(new.time, None)
-    npt.assert_almost_equal(new.data, old.data)
     npt.assert_almost_equal(new.data.min(), 0)
     npt.assert_almost_equal(new.data.max(), 1)
 
@@ -35,22 +23,8 @@ def test_samples_match_legacy(loader, legacy):
 def test_samples_image_options():
     logo = samples.logo_bvl(resize=(32, 32), as_gray=True)
     npt.assert_equal(logo.img_shape, (32, 32))
-    npt.assert_almost_equal(logo.data, _legacy(LogoBVL, resize=(32, 32),
-                                               as_gray=True).data)
     ucsb = samples.logo_ucsb(metadata={'foo': 'bar'})
     npt.assert_equal(ucsb.metadata['foo'], 'bar')
-
-
-@pytest.mark.parametrize('legacy,alt', [
-    (LogoBVL, 'samples.logo_bvl'),
-    (LogoUCSB, 'samples.logo_ucsb'),
-])
-def test_samples_legacy_classes_deprecated(legacy, alt):
-    with pytest.warns(DeprecationWarning) as record:
-        legacy()
-    msg = str(record[0].message)
-    npt.assert_equal(alt in msg, True)
-    npt.assert_equal('0.12.0' in msg, True)
 
 
 def test_samples_namespace():
@@ -59,13 +33,11 @@ def test_samples_namespace():
     npt.assert_equal(p2p.stimuli.samples is samples, True)
     for name in samples.__all__:
         npt.assert_equal(hasattr(p2p.stimuli, name), False)
-    # `samples.__all__` lists only the loaders; the deprecated classes stay
-    # importable from `pulse2percept.stimuli`:
-    for legacy in ('LogoBVL', 'LogoUCSB'):
-        npt.assert_equal(legacy in samples.__all__, False)
-        npt.assert_equal(hasattr(p2p.stimuli, legacy), True)
     # Removed, together with their assets:
     for gone in ('BostonTrain', 'GirlPool', 'SnellenChart'):
+        npt.assert_equal(hasattr(p2p.stimuli, gone), False)
+    # Removed in 0.12; the loaders replace them:
+    for gone in ('LogoBVL', 'LogoUCSB'):
         npt.assert_equal(hasattr(p2p.stimuli, gone), False)
     for gone in ('boston_train', 'girl_pool', 'snellen_chart'):
         npt.assert_equal(hasattr(samples, gone), False)

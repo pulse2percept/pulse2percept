@@ -298,19 +298,6 @@ def test_Implant_deactivate():
     npt.assert_equal(electrode in implant.prepare_stim(source).electrodes,
                      False)
 
-def test_ProsthesisSystem_is_a_deprecated_alias():
-    """ProsthesisSystem is a deprecated alias of Implant (renamed in 0.11.0)"""
-    for module in (implants, implants.base):
-        with pytest.deprecated_call(match='Use ``Implant``'):
-            alias = module.ProsthesisSystem
-        npt.assert_equal(alias is implants.Implant, True)
-    # Alias, not a subclass, so isinstance/issubclass still work:
-    npt.assert_equal(isinstance(ArgusII(), alias), True)
-    npt.assert_equal(issubclass(GridImplant, alias), True)
-    npt.assert_equal(alias(PointSource(0, 0, 0)).n_electrodes, 1)
-    with pytest.raises(AttributeError):
-        implants.NotAnImplant
-
 
 def test_GridImplant_is_a_grid_in_an_implant():
     implant = GridImplant((3, 4), 100)

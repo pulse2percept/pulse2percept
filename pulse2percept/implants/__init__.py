@@ -57,12 +57,6 @@ Devices
     retina
     cortex
 
-Deprecated in v0.11
--------------------
-
-``ProsthesisSystem`` is an alias of :py:class:`Implant` and will be
-removed in v0.12.
-
 .. seealso::
 
     *  :ref:`Core Concepts > Implants <topics-implants>`
@@ -78,7 +72,6 @@ from .rasters import (Raster, SequentialRaster, CheckerboardRaster,
 from .ensemble import EnsembleImplant
 from . import cortex
 from . import retina
-from ..utils.deprecation import _deprecated_names
 
 __all__ = [
     'CheckerboardRaster',
@@ -93,16 +86,8 @@ __all__ = [
     'HexElectrode',
     'Implant',
     'PointSource',
-    # Deprecated in 0.11.0, removed in 0.12.0:
-    'ProsthesisSystem',
     'Raster',
     'retina',
     'SequentialRaster',
     'SquareElectrode',
 ]
-
-# Deprecated in 0.11.0, removed in 0.12.0. Defined here as well as in
-# ``base`` so that both import paths warn.
-__getattr__ = _deprecated_names(__name__, {'ProsthesisSystem': Implant},
-                                deprecated_version='0.11.0',
-                                removed_version='0.12.0')

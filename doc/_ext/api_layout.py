@@ -60,8 +60,8 @@ def build_layout():
         src = getattr(obj, '__module__', '') or ''
 
         def rank(mod, alias):
-            # Shallower first, then the real name over a deprecated alias
-            # (``ProsthesisSystem`` is ``Implant``), then the source package
+            # Shallower first, then the real name over an alias, then the
+            # source package
             return (mod.count('.'), alias != getattr(obj, '__name__', alias),
                     not src.startswith(mod))
 

@@ -41,9 +41,7 @@ from pulse2percept.utils import FreezeError, frame_interval
 from pulse2percept.topography import Grid2D, VisualFieldMap
 from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.topography.retina import (Curcio1990Map, Montesano2020Map,
-                                             RetinalMap,
-                                             Watson2014DisplaceMap,
-                                             Watson2014Map)
+                                             RetinalMap, Watson2014Map)
 
 
 class ValidBaseModel(BaseModel):
@@ -2124,13 +2122,17 @@ def test_location_noise_resets_on_a_new_implant():
     npt.assert_equal(model._location_noise_z.shape, (2, 2))
 
 
-@pytest.mark.filterwarnings(
-    'ignore:Class Watson2014DisplaceMap is deprecated:DeprecationWarning')
+class _NoRetInverse(Watson2014Map):
+    """Maps dva to the retina only"""
+
+    def ret_to_dva(self, x_um, y_um, coords='cart'):
+        raise NotImplementedError
+
+
 def test_location_noise_needs_an_invertible_map():
     model = _one_electrode_model(location_noise=1.0, seed=7)
-    # Watson displacement depends on the eye, so use a RetinalImplant:
     model.implant = _implant_at([(560, 0)], cls=RetinalImplant)
-    model.visual_field_map = Watson2014DisplaceMap()
+    model.visual_field_map = _NoRetInverse()
     model.build()
     with pytest.raises(NotImplementedError):
         model.predict_percept({'A0': 1})
