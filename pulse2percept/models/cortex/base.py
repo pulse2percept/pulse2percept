@@ -2,7 +2,7 @@
 
 from ..base import SpatialModel, _check_implant, _draw_placed_implant
 from ...implants.base import _implant_target
-from ...topography.cortex import Polimeni2006Map
+from ...topography.cortex import Schira2010Map
 from ...utils._plotting import set_mm_ticks
 from ...utils.constants import ZORDER
 
@@ -58,8 +58,13 @@ class CortexSpatial(SpatialModel):
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
+        By default, :py:class:`~pulse2percept.topography.cortex.Schira2010Map` is
         used.
+
+        .. versionchanged:: 0.12.0
+
+            The default changed from
+            :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
@@ -117,9 +122,9 @@ class CortexSpatial(SpatialModel):
             params['visual_field_map'] = visual_field_map
         super(CortexSpatial, self).__init__(implant, **params)
 
-        # Use [Polemeni2006]_ visual field map by default
+        # Use [Schira2010]_ visual field map by default
         if visual_field_map is None:
-            self.visual_field_map = Polimeni2006Map(regions=self.regions)
+            self.visual_field_map = Schira2010Map(regions=self.regions)
         elif regions is not None and \
             set(self.regions) != set(self.visual_field_map.regions):
             raise ValueError("Conflicting regions in provided visual_field_map and user-supplied regions parameter")

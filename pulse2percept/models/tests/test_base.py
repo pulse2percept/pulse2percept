@@ -2261,8 +2261,10 @@ def test_cortical_location_noise_uses_home_region():
     coords = []
     for regions in (['v1', 'v2'], ['v2', 'v1']):
         np.random.seed(5)
-        model = CortexScoreboardSpatial(implant, regions=regions,
-                                        location_noise=1.0).build()
+        # With Polimeni, some electrodes lie outside V1 and V2:
+        model = CortexScoreboardSpatial(
+            implant, visual_field_map=Polimeni2006Map(regions=regions),
+            location_noise=1.0).build()
         names = [_electrode_in(model, 'v1'), _electrode_in(model, 'v2')]
         xyz = model._electrode_coords(implant.electrode_array, None,
                                       electrodes=names)

@@ -65,8 +65,13 @@ class ScoreboardSpatial(CortexSpatial):
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
+        By default, :py:class:`~pulse2percept.topography.cortex.Schira2010Map` is
         used.
+
+        .. versionchanged:: 0.12.0
+
+            The default changed from
+            :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into
@@ -285,8 +290,13 @@ class ScoreboardModel(Model):
     visual_field_map : :py:class:`~pulse2percept.topography.VisualFieldMap`, optional
         An instance of a :py:class:`~pulse2percept.topography.VisualFieldMap`
         object that provides retinotopic mappings.
-        By default, :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map` is
+        By default, :py:class:`~pulse2percept.topography.cortex.Schira2010Map` is
         used.
+
+        .. versionchanged:: 0.12.0
+
+            The default changed from
+            :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`.
     n_gray : int, optional
         The number of gray levels to use. If an integer is given, k-means
         clustering is used to compress the color space of the percept into

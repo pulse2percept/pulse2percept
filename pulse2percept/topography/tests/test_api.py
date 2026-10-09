@@ -19,7 +19,7 @@ def test_root_namespace_is_anatomy_neutral():
                      ['Grid2D', 'VisualFieldMap', 'cortex', 'retina'])
     for name in ('RetinalMap', 'Curcio1990Map', 'Watson2014Map',
                  'Watson2014DisplaceMap', 'Montesano2020Map', 'CorticalMap',
-                 'Polimeni2006Map', 'NeuropythyMap'):
+                 'Polimeni2006Map', 'Schira2010Map', 'NeuropythyMap'):
         npt.assert_equal(hasattr(topo, name), False, err_msg=name)
         with pytest.raises(ImportError):
             importlib.import_module(f'pulse2percept.topography.{name}')
@@ -29,7 +29,7 @@ def test_root_namespace_is_anatomy_neutral():
     ('pulse2percept.topography.retina',
      ['Curcio1990Map', 'Montesano2020Map', 'RetinalMap', 'Watson2014Map']),
     ('pulse2percept.topography.cortex',
-     ['CorticalMap', 'NeuropythyMap', 'Polimeni2006Map']),
+     ['CorticalMap', 'NeuropythyMap', 'Polimeni2006Map', 'Schira2010Map']),
 ])
 def test_canonical_imports(module, names):
     mod = importlib.import_module(module)
@@ -45,6 +45,7 @@ def test_canonical_imports(module, names):
     ('pulse2percept.topography.retina.watson2014', 'Watson2014Map'),
     ('pulse2percept.topography.cortex.base', 'CorticalMap'),
     ('pulse2percept.topography.cortex.polimeni2006', 'Polimeni2006Map'),
+    ('pulse2percept.topography.cortex.schira2010', 'Schira2010Map'),
     ('pulse2percept.topography.cortex.neuropythy', 'NeuropythyMap'),
 ])
 def test_defining_module(module, name):

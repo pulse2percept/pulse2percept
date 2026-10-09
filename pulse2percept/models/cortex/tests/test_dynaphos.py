@@ -25,6 +25,9 @@ def test_DynaphosModel():
 
     npt.assert_equal(model.regions, ['v1'])
     npt.assert_equal(model.visual_field_map.regions, ['v1'])
+    # Published Dynaphos map, not the generic cortical default:
+    npt.assert_equal(model.visual_field_map,
+                     Polimeni2006Map(a=0.75, k=17.3, b=120, alpha1=0.95))
     # V1 only; a rejected value leaves the regions unchanged:
     for regions in (['v1', 'v2'], ['v2'], 'v3'):
         with pytest.raises(ValueError, match='V1 only'):

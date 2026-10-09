@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from pulse2percept.models.cortex import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.implants.cortex import (NeuroPortArray, Orion,
                                            LinearEdgeThread)
-from pulse2percept.topography.cortex import Polimeni2006Map
+from pulse2percept.topography.cortex import Polimeni2006Map, Schira2010Map
 from pulse2percept.units import mm
 from pulse2percept.percepts import Percept
 
@@ -84,6 +84,21 @@ def test_ScoreboardSpatial(ModelClass, jitter_boundary, regions):
     npt.assert_equal(isinstance(percept, Percept), True)
     npt.assert_equal(percept.shape, list(spatial.grid.x.shape) + [1])
     npt.assert_almost_equal(percept.data, 0)
+
+
+@pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
+def test_ScoreboardSpatial_default_map(ModelClass):
+    vfmap = _spatial(ModelClass(Orion(), regions=['v1', 'v2'])
+                     ).visual_field_map
+    npt.assert_equal(type(vfmap), Schira2010Map)
+    npt.assert_equal(vfmap.regions, ['v1', 'v2'])
+    npt.assert_equal(vfmap, Schira2010Map(regions=['v1', 'v2']))
+    # An explicit map is kept:
+    polimeni = Polimeni2006Map(k=17.3, regions=['v2'])
+    vfmap = _spatial(ModelClass(Orion(), visual_field_map=polimeni)
+                     ).visual_field_map
+    npt.assert_equal(type(vfmap), Polimeni2006Map)
+    npt.assert_equal(vfmap, polimeni)
 
 
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
@@ -216,7 +231,8 @@ def test_plot_mm_ticks(monkeypatch):
 def test_poli_nlink():
     # Scoreboard with a 2D Polimeni map and a 3D Neuralink implant:
     implant = LinearEdgeThread(x=20000)
-    model = ScoreboardModel(implant=implant, rho=800, step=.5).build()
+    model = ScoreboardModel(implant=implant, rho=800, step=.5,
+                            visual_field_map=Polimeni2006Map()).build()
     npt.assert_equal(_spatial(model).grid.v1.z is None, True)
     npt.assert_equal(_spatial(model).grid.v1.x is None, False)
     percept = model.predict_percept({e: 1 for e in implant.electrode_names})
@@ -234,9 +250,11 @@ def _straddling_pair(coord):
 @pytest.mark.parametrize('ModelClass', [ScoreboardModel, ScoreboardSpatial])
 def test_CortexSpatial_meridian_blend(ModelClass):
     def make(**params):
-        # Half-step offset so no sample sits on the meridian:
+        # Half-step offset so no sample sits on the meridian. The implant
+        # placement below assumes Polimeni geometry:
         return ModelClass(xrange=(-5.1, 4.9), yrange=(-5, 5), step=0.2,
-                          rho=800, **params).build()
+                          rho=800, visual_field_map=Polimeni2006Map(),
+                          **params).build()
 
     # Implant near the midline, so phosphenes fall on the vertical meridian:
     implant = NeuroPortArray()
