@@ -307,10 +307,11 @@ Schira2010Map
 -------------
 
 :py:class:`~pulse2percept.topography.cortex.Schira2010Map` is a planar,
-population-average V1-V3 map. Unlike
-:py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, areal
-magnification is constant across polar angle, and V2/V3 form bands around the
-V1 foveal tip (the foveal confluence) instead of meeting at one point:
+population-average V1-V3 map. Compared with
+:py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, its Double-Sech
+transform greatly reduces meridional anisotropy, while the foveal banding
+intentionally increases central V2/V3 magnification: V2/V3 form bands around
+the V1 foveal tip (the foveal confluence) instead of meeting at one point:
 
 .. plot::
 

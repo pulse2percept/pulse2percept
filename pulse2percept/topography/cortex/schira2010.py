@@ -81,11 +81,12 @@ class Schira2010Map(CorticalMap):
 
     A planar, population-average analytic map of the V1/V2/V3 complex.
     Compared with the wedge-dipole
-    :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, it keeps
-    areal magnification constant across polar angle, and V2/V3 form bands
-    around the V1 foveal tip rather than converging on one point (the
-    foveal confluence). It remains a 2D model, not an anatomical cortical
-    surface; for subject-specific 3D surfaces, see
+    :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`, its
+    Double-Sech transform greatly reduces meridional anisotropy, while the
+    foveal banding intentionally increases central V2/V3 magnification:
+    V2/V3 form bands around the V1 foveal tip rather than converging on one
+    point (the foveal confluence). It remains a 2D model, not an anatomical
+    cortical surface; for subject-specific 3D surfaces, see
     :py:class:`~pulse2percept.topography.cortex.NeuropythyMap`.
 
     The forward map follows the authors' MATLAB code (Protocol S1 of
@@ -196,11 +197,9 @@ class Schira2010Map(CorticalMap):
         tree, ecc0, theta0, upper0 = _seed_tree(region, params)
         xdva = np.full(xc.shape, np.nan)
         ydva = np.full(xc.shape, np.nan)
-        for i in np.flatnonzero(np.isfinite(xc) & np.isfinite(yc)):
-            target = np.array([xc[i], yc[i]])
-            j = tree.query(target)[1]
-            upper = upper0[j]
 
+        def solve(target, ecc, theta, upper):
+            """Returns (residual in mm, ecc, theta) within one quadrant"""
             def residual(p):
                 return np.array(_canonical(p[0], p[1], upper, region,
                                            *params)) - target
@@ -208,13 +207,23 @@ class Schira2010Map(CorticalMap):
             # The V2/V3 quadrant is fixed by the seed; the solve stays in it:
             lo = 0 if upper and region != 'v1' else -np.pi / 2
             hi = 0 if not upper and region != 'v1' else np.pi / 2
-            fit = least_squares(residual, [ecc0[j], theta0[j]],
+            fit = least_squares(residual, [ecc, theta],
                                 bounds=([0, lo], [_MAX_ECC, hi]),
                                 x_scale='jac', xtol=1e-12, ftol=1e-12,
                                 gtol=1e-12)
-            if np.hypot(*residual(fit.x)) > _INVERSE_TOL_MM:
+            return np.hypot(*residual(fit.x)), *fit.x
+
+        for i in np.flatnonzero(np.isfinite(xc) & np.isfinite(yc)):
+            target = np.array([xc[i], yc[i]])
+            j = tree.query(target)[1]
+            seeds = [(ecc0[j], theta0[j], upper0[j])]
+            if region != 'v1' and ecc0[j] == 0:
+                # Both quadrants share the foveal band, so the seed's
+                # quadrant is arbitrary; its mirror is the same band point:
+                seeds.append((0.0, -theta0[j], not upper0[j]))
+            err, ecc, theta = min(solve(target, *s) for s in seeds)
+            if err > _INVERSE_TOL_MM:
                 continue
-            ecc, theta = fit.x
             if ecc < _FOVEA_ECC:
                 ecc = 0.0
             xdva[i] = ecc * np.cos(theta) * (-1 if left[i] else 1)

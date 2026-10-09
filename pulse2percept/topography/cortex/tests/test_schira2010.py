@@ -294,6 +294,19 @@ def test_schira2010_forward_inverse(region, lambda_):
                             0, atol=1e-6)
 
 
+@pytest.mark.parametrize('region', ['v2', 'v3'])
+def test_schira2010_inverse_near_band(region):
+    """Points next to the foveal band invert in the correct quadrant"""
+    vfmap = Schira2010Map(regions=[region])
+    ecc, theta = np.meshgrid([1e-4, 5e-4, 8e-4],
+                             np.deg2rad([-80, -10, -1, 1, 10, 80]))
+    for sign in (-1, 1):
+        x, y = sign * ecc * np.cos(theta), ecc * np.sin(theta)
+        xb, yb = vfmap.to_dva()[region](*vfmap.from_dva()[region](x, y))
+        npt.assert_allclose(xb, x, atol=1e-8)
+        npt.assert_allclose(yb, y, atol=1e-8)
+
+
 @pytest.mark.parametrize('region', ['v1', 'v2', 'v3'])
 def test_schira2010_inverse_forward(region):
     """Tissue the inverse accepts maps back to itself within 1 um"""
