@@ -217,6 +217,24 @@ def test_schira2010_hemispheres(region):
     npt.assert_allclose(to_tissue(-0.0, 5), to_tissue(0.0, 5))
 
 
+@pytest.mark.parametrize('params', [{'a': 0.75, 'k': 18},
+                                    {'a': 1.05, 'k': 26}])
+@pytest.mark.parametrize('region', ['v2', 'v3'])
+def test_schira2010_hemisphere_overlap(region, params):
+    """Foveal V2/V3 bands stay on their side of left_offset / 2"""
+    vfmap = Schira2010Map(regions=[region], **params)
+    ecc, theta = np.meshgrid([1e-6, 0.01, 0.1, 0.27, 1],
+                             np.deg2rad([-90, -60, -30, -1, 0, 30, 90]))
+    x = np.append(ecc * np.cos(theta), 1e-6)
+    y = np.append(ecc * np.sin(theta), -0.27)
+    for sign in (-1, 1):
+        xc, yc = vfmap.from_dva()[region](sign * x, y)
+        npt.assert_equal(xc > vfmap.left_offset / 2, sign < 0)
+        xb, yb = vfmap.to_dva()[region](xc, yc)
+        npt.assert_allclose(xb, sign * x, atol=1e-6)
+        npt.assert_allclose(yb, y, atol=1e-6)
+
+
 def test_schira2010_mirroring():
     """V2 is mirrored relative to V1 and V3"""
     vfmap = Schira2010Map(regions=['v1', 'v2', 'v3'])
@@ -305,7 +323,7 @@ def test_schira2010_inverse_outside():
                 npt.assert_equal(np.isnan(back), True,
                                  err_msg=f'{other} in {region}')
     # Beyond 90 dva, between hemispheres, and far off the map:
-    x = [vfmap.dva_to_v1(-89.9, 0)[0] + 2000, -9000, 30000]
+    x = [vfmap.dva_to_v1(-89.9, 0)[0] + 2000, -19000, 30000]
     y = [0, 0, 80000]
     for region in ('v1', 'v2', 'v3'):
         npt.assert_equal(np.isnan(vfmap.to_dva()[region](x, y)), True)

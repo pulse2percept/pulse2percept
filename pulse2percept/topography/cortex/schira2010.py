@@ -113,7 +113,11 @@ class Schira2010Map(CorticalMap):
     regions : list of str, optional
         Any of 'v1', 'v2', 'v3'.
     left_offset : float, optional
-        x offset (um) of the left hemisphere's V1 foveal tip.
+        x offset (um) of the left hemisphere's V1 foveal tip. Hemispheres
+        split at ``left_offset / 2``. The default is twice that of
+        :py:class:`~pulse2percept.topography.cortex.Polimeni2006Map`
+        because V2/V3 bands extend past the V1 foveal tip (up to ~15 mm for
+        k = 26, a = 0.75).
 
     Notes
     -----
@@ -140,6 +144,7 @@ class Schira2010Map(CorticalMap):
             'alpha1': 1,
             'alpha2': 0.5,
             'alpha3': 0.4,
+            'left_offset': -40000,
         }
         return {**super().get_default_params(), **params}
 
