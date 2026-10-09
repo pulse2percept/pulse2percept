@@ -64,7 +64,8 @@ dev = [
 # see benchmarks/README.md.
 benchmark = [
     "pytest-benchmark>=4",
-    "psutil",
+    # Windows falls back to tracemalloc:
+    "memray; sys_platform != 'win32'",
 ]
 [tool.coverage.run]
 # Measure coverage of the library, not of the test suite itself: test modules

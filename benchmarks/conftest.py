@@ -4,12 +4,14 @@ Benchmarks are skipped unless pytest is invoked with ``--benchmark-only``. If
 ``pytest-benchmark`` is not installed, the benchmark modules are not collected.
 """
 import gc
-import threading
+import sys
+import tempfile
+import tracemalloc
 from pathlib import Path
 
 import pytest
-# Loaded before any measurement, so its shared libraries do not count toward
-# the RSS of whichever benchmark first imports it:
+# Loaded before any measurement, so its import-time allocations do not count
+# toward whichever benchmark first imports it:
 import torch
 
 try:
@@ -120,49 +122,54 @@ def percept(built_model, source):
     return built_model.predict_percept(source)
 
 
+def _memray_peak(fn, *args, **kwargs):
+    """Return the bytes live at the heap high-water mark during one call."""
+    import memray
+    with tempfile.TemporaryDirectory() as tmp:
+        capture = Path(tmp) / 'capture.bin'
+        with memray.Tracker(
+                capture,
+                file_format=memray.FileFormat.AGGREGATED_ALLOCATIONS):
+            fn(*args, **kwargs)
+        records = memray.FileReader(
+            capture).get_high_watermark_allocation_records()
+        return sum(record.size for record in records)
+
+
+def _tracemalloc_peak(fn, *args, **kwargs):
+    """Return the peak bytes tracemalloc traced during one call."""
+    tracemalloc.start()
+    try:
+        fn(*args, **kwargs)
+        return tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
 @pytest.fixture
 def peak_memory():
-    """Return a helper that measures the resident memory one call adds.
+    """Return a helper that measures the peak heap allocation of one call.
 
-    The helper returns ``extra_info`` entries: ``peak_mem_mb``, the peak
-    process RSS during the call minus the RSS before it (MB = 1e6 bytes), and
-    ``memory_metric='rss_delta'``. RSS covers NumPy, Torch and Cython
-    allocations alike.
+    The helper returns ``extra_info`` entries: ``peak_mem_mb`` (MB = 1e6
+    bytes) and ``memory_metric``, which names the backend:
 
-    RSS is sampled about every 1 ms, so allocations shorter than that can be
-    missed. Memory the allocator retains from earlier calls is already
-    resident and does not count, so call it before timing the same code.
+    - ``memray_heap_peak`` (Linux, macOS): bytes live at Memray's heap
+      high-water mark. Counts native allocations (NumPy, Torch, Cython).
+    - ``tracemalloc_peak`` (Windows, which Memray does not support): counts
+      Python and NumPy allocations only, not Torch tensors or raw ``malloc``.
+
+    Both count allocations made during the call, so allocator reuse does not
+    hide them. Call outside the timed section: tracking slows the call.
     """
-    import psutil
-    proc = psutil.Process()
+    if sys.platform == 'win32':
+        backend, metric = _tracemalloc_peak, 'tracemalloc_peak'
+    else:
+        backend, metric = _memray_peak, 'memray_heap_peak'
 
     def _measure(fn, *args, **kwargs):
         gc.collect()
-        peak = [0]
-        alive, stop = threading.Event(), threading.Event()
-
-        def sample():
-            alive.set()
-            while not stop.is_set():
-                peak[0] = max(peak[0], proc.memory_info().rss)
-                stop.wait(1e-3)
-
-        thread = threading.Thread(target=sample, daemon=True)
-        thread.start()
-        alive.wait()
-        # After the thread exists, so its stack is not counted:
-        baseline = proc.memory_info().rss
-        try:
-            result = fn(*args, **kwargs)
-            # While `result` is alive, so memory it holds counts:
-            final = proc.memory_info().rss
-        finally:
-            stop.set()
-            thread.join()
-        del result
-        delta = max(peak[0], final) - baseline
-        return {'peak_mem_mb': round(max(delta, 0) / 1e6, 3),
-                'memory_metric': 'rss_delta'}
+        return {'peak_mem_mb': round(backend(fn, *args, **kwargs) / 1e6, 3),
+                'memory_metric': metric}
     return _measure
 
 

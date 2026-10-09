@@ -5,8 +5,8 @@ Performance Benchmarks
 ======================
 
 A small suite that measures percept prediction from a stimulus, an implant and
-a phosphene model. It tracks **execution time** and **peak memory** (resident
-CPU memory, or CUDA allocations on a GPU) for the reference pipelines in
+a phosphene model. It tracks **execution time** and **peak memory** (CPU heap
+allocations, or CUDA allocations on a GPU) for the reference pipelines in
 ``scenarios.py``, broken down by pipeline stage.
 
 ``compare.py`` compares two runs. The ``Benchmarks`` workflow runs the base
@@ -70,10 +70,10 @@ the memory recorded in ``extra_info``. ``compare.py`` reads two
 It prints a Markdown table and exits non-zero if anything regressed. Time and
 memory use different thresholds:
 
-**Memory is compared only between like metrics.** Each benchmark tags
-``peak_mem_mb`` with ``memory_metric`` (see `Reading the numbers`_). If the two
-runs differ in tag, or a run predates the tag, that benchmark is compared on
-time only.
+**Memory is highly repeatable.** Each memory metric counts allocations (see
+`Reading the numbers`_). Memory is compared only when both runs report the same
+``memory_metric``; if the tags differ, or a run predates the tag, that
+benchmark is compared on time only.
 
 **Time depends on runner load.** The minimum over many rounds may drift between
 runs of unchanged code, so the time threshold is a generous 2x and catches only
@@ -84,7 +84,8 @@ some benchmarks are tiny (a 0.2 ms build, a 0.08 MB prediction). Ratio-only
 breaches are shown as ``(under floor)`` and do not fail the run. All four limits
 are options; see ``python benchmarks/compare.py --help``.
 
-The pass/fail logic is tested on synthetic data in ``test_compare.py``.
+The pass/fail logic is tested on synthetic data in ``test_compare.py``, and
+the memory helpers in ``test_memory.py``.
 
 
 On a pull request
@@ -155,21 +156,26 @@ core, which makes results incomparable between machines and between runs on a
 loaded machine. Set ``OMP_NUM_THREADS=1``, as the pull request check does, and
 never compare a run against a baseline taken at a different thread count.
 
-**Memory is measured before time.** Each benchmark runs its payload once,
-untimed, and records ``peak_mem_mb`` and ``memory_metric`` in ``extra_info``.
-Timing runs afterwards, so memory the allocator retained from earlier calls
-does not hide the working set.
+**Memory is measured separately from time.** Tracking slows the call, so each
+benchmark first runs its payload once, untimed, and records ``peak_mem_mb`` and
+``memory_metric`` in ``extra_info``.
 
-**Two memory metrics.** ``memory_metric`` says what ``peak_mem_mb`` measured
-(MB = 1e6 bytes):
+**Memory metrics.** ``memory_metric`` says what ``peak_mem_mb`` measured
+(MB = 1e6 bytes). All three count allocations made during the call, so
+allocator reuse and benchmark order do not change them:
 
-- ``rss_delta``: peak process RSS during the call minus RSS before it, sampled
-  about every 1 ms with ``psutil``. Covers NumPy, Torch, and Cython
-  allocations alike. Allocations shorter than a sampling interval can be
-  missed, and the number is noisier than an allocation count.
+- ``memray_heap_peak`` (Linux, macOS): bytes live at the heap high-water mark,
+  from `Memray <https://bloomberg.github.io/memray/>`_. Counts native
+  allocations, including NumPy, Torch and the Cython kernels.
+- ``tracemalloc_peak`` (Windows, which Memray does not support): Python and
+  NumPy allocations only. Torch tensors and raw ``malloc`` are invisible, so
+  Torch paths report far less than their actual peak.
 - ``cuda_allocated_delta``: peak of Torch's CUDA allocator during the call
   minus its live allocation before it. Counts tensors only, not the allocator
-  cache or the CUDA context, and is repeatable.
+  cache or the CUDA context.
+
+Process RSS was not used: allocator reuse made later benchmarks report no
+growth, so the result depended on test order.
 
 **Run on a quiet machine.** Absolute timings from a shared CI runner are
 unreliable. The pull request check measures both sides on the same runner and

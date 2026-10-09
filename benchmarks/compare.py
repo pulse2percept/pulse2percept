@@ -7,10 +7,11 @@ past its threshold.
 
     python benchmarks/compare.py baseline.json contender.json
 
-``memory_metric`` says what ``peak_mem_mb`` measured: ``rss_delta`` (sampled
-process RSS) or ``cuda_allocated_delta`` (Torch's CUDA allocator). Memory is
-compared only when both runs report the same metric; untagged entries predate
-the tag and are compared on time only.
+``memory_metric`` says what ``peak_mem_mb`` measured: ``memray_heap_peak``,
+``tracemalloc_peak`` (Windows) or ``cuda_allocated_delta``. All three count
+allocations, so repeated runs of unchanged code report nearly the same peak.
+Memory is compared only when both runs report the same metric; untagged entries
+predate the tag and are compared on time only.
 
 Run time varies with runner load, so the time threshold is a generous 2x and
 catches only major regressions.
@@ -170,9 +171,11 @@ def render(rows, added, removed, failed, args):
         out += [
             ':warning: **A benchmark regressed past its threshold.**',
             '',
-            'Time and sampled RSS on a shared runner are not repeatable: '
-            'confirm a time or `rss_delta` regression with `make bench` on a '
-            'quiet machine before treating it as one.',
+            'Memory metrics count allocations and are highly repeatable, so a '
+            'memory regression is worth explaining rather than re-running. '
+            'Time on a shared runner is not repeatable: confirm a time '
+            'regression with `make bench` on a quiet machine before treating '
+            'it as one.',
             '',
             'If the regression is real and you intend to accept it, say so in '
             'the pull request and merge over the failure. Do not raise the '

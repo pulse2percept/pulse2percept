@@ -3,41 +3,46 @@
 No benchmark is run, so these are ordinary tests and run in a plain
 ``pytest benchmarks/``.
 """
-import time
+import sys
 
 import numpy as np
 import pytest
 import torch
 
-pytest.importorskip('psutil')
-
-# Large enough to stand out from allocator and interpreter noise:
+# Large enough to stand out from interpreter and allocator noise:
 NBYTES = 200_000_000
+MB = NBYTES / 1e6
 
 
-def test_rss_sampler_sees_freed_allocation(peak_memory):
-    """Memory freed before the call returns is seen only by the sampler."""
+def test_peak_sees_freed_numpy_allocation(peak_memory):
+    """Memory freed before the call returns still counts toward the peak."""
     def allocate_and_free():
         data = np.ones(NBYTES, dtype=np.uint8)
-        # Many 1 ms sampling intervals:
-        time.sleep(0.1)
         del data
 
-    result = peak_memory(allocate_and_free)
-    assert result['memory_metric'] == 'rss_delta'
-    assert result['peak_mem_mb'] > 0.9 * NBYTES / 1e6
+    assert peak_memory(allocate_and_free)['peak_mem_mb'] == pytest.approx(
+        MB, rel=0.05)
 
 
-def test_rss_excludes_memory_held_before_the_call(peak_memory):
+def test_peak_excludes_memory_held_before_the_call(peak_memory):
     held = np.ones(NBYTES, dtype=np.uint8)  # noqa: F841
-    assert peak_memory(lambda: None)['peak_mem_mb'] < 0.1 * NBYTES / 1e6
+    assert peak_memory(lambda: None)['peak_mem_mb'] < 0.01 * MB
 
 
-def test_cuda_allocator_sees_freed_tensor(cuda_device, cuda_peak_memory):
-    """A temporary tensor counts even though only a scalar is returned."""
-    def allocate_and_reduce():
-        return torch.ones(NBYTES // 4, device=cuda_device).sum()
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason='the Windows fallback, tracemalloc, does not see '
+                           'Torch allocations')
+def test_memray_sees_torch_cpu_allocation_every_time(peak_memory):
+    """Native Torch memory is counted (#949), also when the allocator could
+    reuse the block from the previous call."""
+    for _ in range(2):
+        result = peak_memory(torch.empty, NBYTES, dtype=torch.uint8)
+        assert result['memory_metric'] == 'memray_heap_peak'
+        assert result['peak_mem_mb'] == pytest.approx(MB, rel=0.05)
 
-    result = cuda_peak_memory(allocate_and_reduce)
+
+def test_cuda_allocator_sees_tensor(cuda_device, cuda_peak_memory):
+    result = cuda_peak_memory(torch.empty, NBYTES, dtype=torch.uint8,
+                              device=cuda_device)
     assert result['memory_metric'] == 'cuda_allocated_delta'
-    assert result['peak_mem_mb'] == pytest.approx(NBYTES / 1e6, rel=0.01)
+    assert result['peak_mem_mb'] == pytest.approx(MB, rel=0.01)
