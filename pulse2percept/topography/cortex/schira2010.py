@@ -43,12 +43,15 @@ def _canonical(ecc, theta, upper, region, k, a, b, lambda_, alphas):
         phi = -alpha2 * theta + side * np.pi / 2 * (alpha1 + alpha2)
     else:
         phi = alpha3 * theta + side * np.pi / 2 * (alpha1 + alpha2)
-    # Step 2: banding, a rightward shift (dva) that is full in V1 and tapers
-    # linearly to 0 at |phi| = pi (Eq. 8; bandedDoubleSech.m):
+    # Step 2: banding, a shift (dva) toward +x that is full in V1 and tapers
+    # linearly to 0 at |phi| = pi (bandedDoubleSech.m; Eqs. 8-10). The prose
+    # says V1 shifts "to the left"; Eqs. 9-10 and Protocol S1 add +shift:
     shift = lambda_ * np.minimum(2 * (1 - np.abs(phi) / np.pi), 1)
     z = ecc * np.exp(1j * phi) + shift
     E, P = np.abs(z), np.angle(z)
-    # Step 3: Double-Sech shear and dipole log (DoubleSech.m). At E = 0,
+    # Step 3: Double-Sech shear and dipole log (DoubleSech.m). Eq. 7 shears
+    # numerator and denominator separately; Protocol S1 applies one shear
+    # with the summed a- and b-exponents to both, as here. At E = 0,
     # log(E/a) = -inf and the shear exponent is 0:
     with np.errstate(divide='ignore'):
         exponent = _ISO_POLAR_GRAD * (1 / np.cosh(np.log(E / a) * _ECC_WIDTH) +
@@ -60,7 +63,7 @@ def _canonical(ecc, theta, upper, region, k, a, b, lambda_, alphas):
 
 @lru_cache(maxsize=16)
 def _seed_tree(region, params):
-    """Returns a KD-tree of canonical cortex (mm) and its (ecc, theta, upper)"""
+    """Returns a KD-tree of canonical cortex (mm), and its ecc/theta/upper"""
     ecc = np.concatenate(([0], np.geomspace(1e-3, _MAX_ECC, 240)))
     theta = np.linspace(-np.pi / 2, np.pi / 2, 181)
     ecc, theta = [g.ravel() for g in np.meshgrid(ecc, theta)]
@@ -97,12 +100,16 @@ class Schira2010Map(CorticalMap):
         Cortical scale (mm). [Schira2010]_ report 15-26 across subjects;
         the default follows Protocol S1.
     a, b : float, optional
-        Foveal and peripheral dipole eccentricities (dva).
+        Foveal and peripheral dipole eccentricities (dva). Defaults are the
+        values [Schira2010]_ recommend for most subjects; the Protocol S1
+        demo uses a = 0.75.
     lambda_ : float, optional
-        Banding shift (dva) applied before the log transform. 0 removes the
-        V2/V3 foveal bands but keeps the Double-Sech shear.
+        Banding shift (dva) applied before the log transform; the default
+        is the value fitted in [Schira2010]_. 0 removes the V2/V3 foveal
+        bands but keeps the Double-Sech shear.
     alpha1, alpha2, alpha3 : float, optional
         Angular compression of V1, V2, V3; also their relative areas.
+        Defaults follow Protocol S1.
     regions : list of str, optional
         Any of 'v1', 'v2', 'v3'.
     left_offset : float, optional
@@ -114,8 +121,9 @@ class Schira2010Map(CorticalMap):
        NaN. The model was fit to fMRI data within ~12 dva and is not
        validated across that whole range.
     *  For ``lambda_ > 0``, the V2/V3 fovea is a band (one point per polar
-       angle), so ``dva_to_v2(0, 0)`` and ``dva_to_v3(0, 0)`` are NaN. With
-       ``lambda_ = 0``, all three foveas map to the V1 foveal tip.
+       angle), so ``dva_to_v2(0, 0)`` and ``dva_to_v3(0, 0)`` are NaN, and
+       ``v2_to_dva``/``v3_to_dva`` map every point of the band to (0, 0).
+       With ``lambda_ = 0``, all three foveas map to the V1 foveal tip.
     *  On the horizontal meridian, V2/V3 use the upper-quadrant copy
        (Protocol S1 convention). The vertical meridian (x = 0) maps to the
        left hemisphere.
