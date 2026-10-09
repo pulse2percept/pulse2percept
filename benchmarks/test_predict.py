@@ -27,20 +27,22 @@ def test_stimulus(benchmark, scenario, peak_memory):
 
 @pytest.mark.benchmark(group='implant')
 def test_implant(benchmark, scenario, implant, peak_memory):
-    """Convert a source into the stimulation the device delivers.
+    """Encode the stimulus into the stimulation the device delivers.
 
-    Includes ``scenario.source``, which resamples an image onto the electrode
-    grid. Stimulus construction happens in ``setup`` and is not timed.
+    Uses the implant's own encoder. Stimulus construction happens in
+    ``setup`` and is not timed.
     """
-    def prepare(stim):
-        return implant.prepare_stim(scenario.source(implant, stim))
+    if not scenario.implant_encodes:
+        pytest.skip(f'{scenario.id} needs the model to turn its stimulus '
+                    f'into stimulation; see the predict_percept group')
 
     def setup():
         return (scenario.stimulus(),), {}
 
-    benchmark.extra_info.update(peak_memory(prepare, scenario.stimulus()))
-    benchmark.pedantic(prepare, setup=setup, rounds=20, iterations=1,
-                       warmup_rounds=1)
+    benchmark.extra_info.update(peak_memory(implant.prepare_stim,
+                                            scenario.stimulus()))
+    benchmark.pedantic(implant.prepare_stim, setup=setup, rounds=20,
+                       iterations=1, warmup_rounds=1)
     benchmark.extra_info['n_electrodes'] = implant.n_electrodes
 
 
@@ -85,15 +87,16 @@ def test_build_cold(benchmark, scenario, implant, make_model, peak_memory):
 
 
 @pytest.mark.benchmark(group='predict_percept')
-def test_predict_percept(benchmark, built_model, source, peak_memory):
+def test_predict_percept(benchmark, scenario, built_model, source,
+                         peak_memory):
     """Predict the percept (headline number).
 
-    Includes the implant's preparation of the source, also timed separately in
-    the ``implant`` group, so the two groups overlap.
+    Includes encoding the stimulus, also timed separately in the ``implant``
+    group where the implant encodes on its own, so the groups overlap.
     """
-    benchmark.extra_info.update(peak_memory(built_model.predict_percept,
+    benchmark.extra_info.update(peak_memory(scenario.predict, built_model,
                                             source))
-    percept = benchmark(built_model.predict_percept, source)
+    percept = benchmark(scenario.predict, built_model, source)
     benchmark.extra_info['percept_shape'] = str(percept.shape)
 
 
@@ -105,6 +108,10 @@ def test_predict_tensor_cuda(benchmark, scenario, built_model, source,
     Times ``_predict_tensor`` only: stimulus preparation and the copy to the
     device happen beforehand.
     """
+    # Scene and TraceEncoder input need the model, not just the implant:
+    if (not scenario.implant_encodes or
+            not getattr(built_model, '_has_tensor_core', False)):
+        pytest.skip(f'{scenario.id} does not run on the Torch core')
     stim = built_model._prepared(source)
     if not built_model._uses_tensor_core(stim):
         pytest.skip(f'{scenario.id} does not run on the Torch core')
@@ -128,15 +135,14 @@ def test_predict_tensor_cuda(benchmark, scenario, built_model, source,
 
 @pytest.mark.benchmark(group='end_to_end')
 def test_end_to_end(benchmark, scenario, make_model, peak_memory):
-    """Run the whole pipeline, as in the one-liners in :mod:`scenarios`.
+    """Run the whole workflow: implant, stimulus, model build, prediction.
 
     The model is built through ``make_model``, which writes the axon cache to
     a temporary directory.
     """
     def run():
         implant = scenario.implant()
-        source = scenario.source(implant, scenario.stimulus())
-        return make_model(implant).predict_percept(source)
+        return scenario.predict(make_model(implant), scenario.stimulus())
 
     benchmark.extra_info.update(peak_memory(run))
     percept = benchmark(run)
@@ -151,10 +157,6 @@ def test_plot(benchmark, scenario, percept, peak_memory):
     ``setup`` and reused, to avoid hundreds of figures and to keep teardown out
     of the timed section.
     """
-    if not scenario.plottable:
-        pytest.skip(f'{scenario.id} has a temporal-only model, whose percept '
-                    f'has no spatial grid for Percept.plot to draw')
-
     fig, ax = plt.subplots()
     try:
         def setup():

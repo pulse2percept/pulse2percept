@@ -86,9 +86,7 @@ def make_model(scenario, axon_pickle):
     section.
     """
     def _make(implant, ignore_pickle=False):
-        kwargs = {'verbose': False}
-        if scenario.binds_implant:
-            kwargs['implant'] = implant
+        kwargs = {'implant': implant, 'verbose': False}
         if scenario.caches_axons:
             kwargs['axon_pickle'] = axon_pickle
             kwargs['ignore_pickle'] = ignore_pickle
@@ -103,23 +101,23 @@ def implant(scenario):
 
 
 @pytest.fixture(scope='module')
-def source(scenario, implant):
-    """Return the input passed to ``predict_percept``."""
-    return scenario.source(implant, scenario.stimulus())
+def source(scenario):
+    """Return the input passed to ``scenario.predict``."""
+    return scenario.stimulus()
 
 
 @pytest.fixture(scope='module')
 def built_model(make_model, implant):
     """Return a built model, shared across benchmarks.
 
-    ``predict_percept`` does not mutate the model, so reuse is safe."""
+    Prediction does not mutate the model, so reuse is safe."""
     return make_model(implant).build()
 
 
 @pytest.fixture(scope='module')
-def percept(built_model, source):
+def percept(scenario, built_model, source):
     """Return a predicted percept."""
-    return built_model.predict_percept(source)
+    return scenario.predict(built_model, source)
 
 
 def _memray_peak(fn, *args, **kwargs):
