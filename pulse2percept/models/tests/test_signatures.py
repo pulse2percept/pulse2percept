@@ -14,7 +14,8 @@ from pulse2percept.models import AlphaTemporal, FadingTemporal
 from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
                                          BiphasicAxonMapModel,
                                          BiphasicScoreboardModel,
-                                         Ho2018Model, Ho2018Spatial,
+                                         Granley2023Model, Ho2018Model,
+                                         Ho2018Spatial,
                                          Ho2018Temporal,
                                          Horsager2009Model,
                                          Horsager2009Temporal,
@@ -36,6 +37,7 @@ IMPLANT_MODELS = [
     (AxonMapModel, 'lam'),
     (BiphasicAxonMapModel, 'bright_model'),
     (BiphasicScoreboardModel, 'bright_model'),
+    (Granley2023Model, 'orient_scale'),
     (Ho2018Spatial, 'rho'),
     (Ho2018Model, 'tau1'),
     (Thompson2003Spatial, 'radius'),
@@ -180,7 +182,7 @@ def test_defaults_match_declared_defaults(cls, _):
                                  Horsager2009Temporal, Horsager2009Model,
                                  Nanduri2012Temporal, Nanduri2012Spatial,
                                  Nanduri2012Model, BiphasicAxonMapModel,
-                                 BiphasicScoreboardModel,
+                                 BiphasicScoreboardModel, Granley2023Model,
                                  Thompson2003Spatial, Thompson2003Model))
 def test_torch_models_have_no_thread_params(cls):
     # Removed in 0.12: prediction runs on Torch:

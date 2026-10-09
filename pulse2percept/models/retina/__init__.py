@@ -34,6 +34,7 @@ Pulse-Dependent Models
     Nanduri2012Temporal
     Horsager2009Model
     Horsager2009Temporal
+    Granley2023Model
 
 Biphasic Effect Models
 ----------------------
@@ -67,6 +68,7 @@ from .base import RetinalSpatial
 from .beyeler2019 import (AxonMapModel, AxonMapSpatial, ScoreboardModel,
                           ScoreboardSpatial)
 from .granley2021 import BiphasicAxonMapModel, BiphasicScoreboardModel
+from .granley2023 import Granley2023Model
 from .ho2018 import Ho2018Model, Ho2018Spatial, Ho2018Temporal
 from .horsager2009 import Horsager2009Model, Horsager2009Temporal
 from .nanduri2012 import (Nanduri2012Model, Nanduri2012Spatial,
@@ -78,6 +80,7 @@ __all__ = [
     'AxonMapSpatial',
     'BiphasicAxonMapModel',
     'BiphasicScoreboardModel',
+    'Granley2023Model',
     'Ho2018Model',
     'Ho2018Spatial',
     'Ho2018Temporal',

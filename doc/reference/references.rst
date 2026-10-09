@@ -44,6 +44,11 @@ Studies referenced throughout the Documentation:
                  Phosphene Appearance for Epiretinal Prostheses. *International
                  Conference of the IEEE Engineering in Medicine and Biology
                  Society*, doi:`10.1109/EMBC46164.2021.9629663 <https://doi.org/10.1109/EMBC46164.2021.9629663>`_.
+.. [Granley2023] J Granley, T Fauvel, M Chalk, M Beyeler (2023).
+                 Human-in-the-Loop Optimization for Deep Stimulus Encoding in
+                 Visual Prostheses. *Advances in Neural Information Processing
+                 Systems (NeurIPS)* 36, doi:`10.48550/arXiv.2306.13104
+                 <https://doi.org/10.48550/arXiv.2306.13104>`_.
 .. [Greenwald2009] S Greenwald, A Horsager, M Humayun, R Greenberg,
                    M McMahon, I Fine (2009).
                    Brightness as a Function of Current Amplitude in Human

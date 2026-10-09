@@ -81,6 +81,10 @@ API changes and improvements
   default for cortical models except ``DynaphosModel``; pass
   ``visual_field_map=Polimeni2006Map()`` for the old mapping (:pull:`959`).
 
+* New ``Granley2023Model``: the oriented-Gaussian phosphene model of
+  [Granley2023]_, with nerve fiber bundles setting only phosphene orientation.
+  ``rho`` is an area in output pixels (:pull:`960`).
+
 Bug fixes
 ---------
 
