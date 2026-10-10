@@ -13,8 +13,8 @@ from ..stimuli import AmplitudeEncoder, ImageStimulus
 from ..units import um
 from ..units.base import has_units
 
-#: ONNX opset of exported graphs. Unity Inference Engine 2.x reads opsets
-#: 7-15.
+#: ONNX opset of exported graphs. Unity Inference Engine 2.6.1 reads opsets
+#: up to 25; 15 covers every operator these graphs use.
 _OPSET = 15
 
 #: Agreement required of every exported graph, relative to the peak |response|
