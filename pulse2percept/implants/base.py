@@ -46,6 +46,24 @@ def _grid_interval(grid, q):
     return i, (q - grid[i]) / (grid[i + 1] - grid[i]), inside
 
 
+def _bilinear_weights(img_y, img_x, y, x):
+    """Return ``(rows, cols, weights)``, each ``(n_points, 4)``: the pixels
+    around each point ``(y, x)`` and their bilinear weights.
+
+    Row ``r`` lies at ``img_y[r]`` and column ``c`` at ``img_x[c]``. Points
+    outside the grid get zero weights.
+    """
+    iy, wy, in_y = _grid_interval(img_y, y)
+    ix, wx, in_x = _grid_interval(img_x, x)
+    iy1 = np.minimum(iy + 1, img_y.size - 1)
+    ix1 = np.minimum(ix + 1, img_x.size - 1)
+    rows = np.stack([iy, iy, iy1, iy1], axis=1)
+    cols = np.stack([ix, ix1, ix, ix1], axis=1)
+    weights = np.stack([(1 - wy) * (1 - wx), (1 - wy) * wx, wy * (1 - wx),
+                        wy * wx], axis=1) * (in_y & in_x)[:, np.newaxis]
+    return rows, cols, weights
+
+
 def _bilinear_tensor(image, img_y, img_x, y, x):
     """Return a Torch ``image`` sampled bilinearly at points ``(y, x)``.
 
@@ -55,16 +73,8 @@ def _bilinear_tensor(image, img_y, img_x, y, x):
     pixels around each point.
     """
     import torch
-    iy, wy, in_y = _grid_interval(img_y, y)
-    ix, wx, in_x = _grid_interval(img_x, x)
-    iy1 = np.minimum(iy + 1, img_y.size - 1)
-    ix1 = np.minimum(ix + 1, img_x.size - 1)
-    rows = np.stack([iy, iy, iy1, iy1], axis=1)
-    cols = np.stack([ix, ix1, ix, ix1], axis=1)
-    weights = np.stack([(1 - wy) * (1 - wx), (1 - wy) * wx, wy * (1 - wx),
-                        wy * wx], axis=1) * (in_y & in_x)[:, np.newaxis]
     rows, cols, weights = (torch.as_tensor(a, device=image.device)
-                           for a in (rows, cols, weights))
+                           for a in _bilinear_weights(img_y, img_x, y, x))
     weights = weights.to(image.dtype).reshape(
         weights.shape + (1,) * (image.ndim - 2))
     return (image[rows, cols] * weights).sum(dim=1)
@@ -587,11 +597,19 @@ class Implant(PrettyPrint):
         if image.ndim not in (2, 3):
             raise ValueError(f"'image' must be a gray image (H, W) or video "
                              f"(H, W, n_frames), not {tuple(image.shape)}.")
+        return _bilinear_tensor(image, *self._image_grid(image.shape[:2]))
+
+    def _image_grid(self, shape):
+        """Return ``(img_y, img_x, y, x)`` for sampling an ``(H, W)`` image.
+
+        The image spans the electrode bounding box in device coordinates (um),
+        row 0 at the smallest y. ``y`` and ``x`` are the electrode positions in
+        ``electrode_names`` order.
+        """
         x, y = self.electrode_array.coordinates(um)[:, :2].T
-        img_h, img_w = image.shape[:2]
-        img_x = np.linspace(np.min(x), np.max(x), img_w)
-        img_y = np.linspace(np.min(y), np.max(y), img_h)
-        return _bilinear_tensor(image, img_y, img_x, y, x)
+        img_h, img_w = shape
+        return (np.linspace(np.min(y), np.max(y), img_h),
+                np.linspace(np.min(x), np.max(x), img_w), y, x)
 
     def plot(self, annotate=False, autoscale=True, ax=None, stim=None,
              stim_cmap=False):

@@ -60,6 +60,12 @@ dev = [
     "seaborn",
     "neuropythy"
 ]
+# Exact ONNX export (`export_onnx`); ONNX Runtime also checks the result:
+onnx = [
+    "onnx",
+    "onnxscript",
+    "onnxruntime",
+]
 # Kept out of `dev` so the test matrix does not install a runner it never uses;
 # see benchmarks/README.md.
 benchmark = [

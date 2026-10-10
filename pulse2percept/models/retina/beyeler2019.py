@@ -15,7 +15,8 @@ from ...topography.retina import Watson2014Map
 from ...implants import ElectrodeArray
 from ...stimuli import Stimulus
 from ..base import (Model, _blend_meridian, _draw_placed_implant,
-                    _is_tensor, _scoreboard_response, _warn_rho_vs_pitch)
+                    _is_tensor, _scoreboard_response, _scoreboard_weights,
+                    _warn_rho_vs_pitch)
 from .base import RetinalSpatial, _warn_ignores_z
 
 import warnings
@@ -321,6 +322,18 @@ class ScoreboardSpatial(RetinalSpatial):
             electrode_array, None, electrodes=self.implant.electrode_names)
         resp = self._predict_scoreboard_tensor(waveform, x_el, y_el)
         return self._spatial_response(resp, time, None)
+
+    def _onnx_adapter(self):
+        """Return the precomputed ``(P, E)`` Gaussian weights as a module."""
+        from .._deploy import _Scoreboard
+        electrode_array = self.implant.electrode_array
+        _warn_ignores_z(self, electrode_array)
+        x_el, y_el, _ = self._electrode_coords(
+            electrode_array, None, electrodes=self.implant.electrode_names)
+        weights = _scoreboard_weights((self.grid.ret.x, self.grid.ret.y),
+                                      (x_el, y_el), self.rho,
+                                      self._cutoff_r2(self.rho))
+        return _Scoreboard([weights], self.thresh_percept)
 
     def _predict_scoreboard_tensor(self, waveform, x_el, y_el,
                                    spread_scale=None):
@@ -1164,6 +1177,61 @@ class AxonMapSpatial(_AxonBundleMixin, RetinalSpatial):
         resp = self._postprocess_spatial(
             self._predict_axon_map_tensor(waveform, x_el, y_el))
         return self._spatial_response(resp, time, None)
+
+    def _onnx_adapter(self):
+        """Return the precomputed segment weights and axon layout as a module.
+
+        Segments with all-zero weights are dropped: they respond 0 to any
+        drive, so they only win where every segment responds 0, which gives
+        the same output. Pixels are bucketed by retained segment count; each
+        bucket pads its axons to its longest one with a zero-response slot.
+        """
+        import torch
+        from .._deploy import _AxonMap, _meridian_blend
+        electrode_array = self.implant.electrode_array
+        _warn_ignores_z(self, electrode_array)
+        x_el, y_el, _ = self._electrode_coords(
+            electrode_array, None, electrodes=self.implant.electrode_names)
+        xs, ys = torch.as_tensor(x_el), torch.as_tensor(y_el)
+        # As in `_predict_axon_map_tensor`:
+        rho = np.float32(self.rho)
+        two_rho2 = np.float32(2) * rho * rho
+        cutoff_r2 = float(self._cutoff_r2(self.rho))
+        contrib = torch.as_tensor(self.axon_contrib)
+        start, end = self.axon_idx_start, self.axon_idx_end
+        weights, kept = [], np.zeros(len(contrib), dtype=bool)
+        for p0, p1 in _axon_blocks(end - start, x_el.size, 1, 4,
+                                   _AXON_BLOCK_BYTES):
+            lo, hi = start[p0], end[p1 - 1]
+            gauss = _axon_gauss(contrib[lo:hi], xs, ys, two_rho2,
+                                cutoff_r2)[:-1]
+            nonzero = (gauss != 0).any(dim=1)
+            weights.append(gauss[nonzero])
+            kept[lo:hi] = nonzero.numpy()
+        n_kept = int(kept.sum())
+        weights.append(torch.zeros((1, x_el.size)))
+        # Row of each kept segment in `weights`; the zero row pads:
+        row = np.full(len(contrib) + 1, n_kept)
+        row[:-1][kept] = np.arange(n_kept)
+        segs = [row[a:b][kept[a:b]] for a, b in zip(start, end)]
+        counts = np.array([s.size for s in segs])
+        # Bucket lengths grow by 25%, which bounds padding at 25%:
+        ladder = [1]
+        while ladder[-1] < counts.max(initial=0):
+            ladder.append(max(ladder[-1] + 1, int(np.ceil(ladder[-1] * 1.25))))
+        length = np.asarray(ladder)[np.searchsorted(ladder, counts)]
+        buckets, pixels = [], []
+        for size in np.unique(length):
+            members = np.flatnonzero(length == size)
+            index = np.full((members.size, size), n_kept)
+            for i, p in enumerate(members):
+                index[i, :counts[p]] = segs[p]
+            buckets.append(torch.as_tensor(index))
+            pixels.append(members)
+        order = np.argsort(np.concatenate(pixels))
+        return _AxonMap(torch.cat(weights), buckets, torch.as_tensor(order),
+                        self.thresh_percept, blend=_meridian_blend(
+                            self, 'horizontal', self.meridian_blend))
 
     def _predict_axon_map_tensor(self, waveform, x_el, y_el,
                                  spread_scale=None, sensitivity_power=None):
