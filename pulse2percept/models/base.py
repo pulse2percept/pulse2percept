@@ -109,7 +109,40 @@ def _scoreboard_response(waveform, grid, el, rho, cutoff_r2, thresh,
     blocks of about ``_SCOREBOARD_BLOCK_BYTES``.
     """
     import torch
-    device = waveform.device
+    n_el, n_time = waveform.shape
+    itemsize = waveform.element_size()
+    # About four float32 (block, E) temporaries, the cast weights, and the
+    # response before and after thresholding:
+    per_pixel = n_el * (16 + itemsize) + 2 * n_time * itemsize
+    step = max(1, _SCOREBOARD_BLOCK_BYTES // per_pixel)
+    blocks = []
+    for weights in _scoreboard_weight_blocks(grid, el, rho, cutoff_r2, step,
+                                             boundary, spread_scale,
+                                             waveform.device):
+        resp = weights.to(waveform.dtype) @ waveform
+        # Zeroes only `|resp| < thresh`, so NaN propagates. `+ 0.0` turns -0.0
+        # into 0.0; whether a sum of zero terms is signed depends on the BLAS:
+        blocks.append(torch.where(resp.abs() < thresh, 0.0, resp) + 0.0)
+    return torch.cat(blocks)
+
+
+def _scoreboard_weights(grid, el, rho, cutoff_r2, boundary=None):
+    """Return the float32 ``(P, E)`` weights of ``_scoreboard_response``."""
+    import torch
+    # Four float32 (block, E) temporaries per pixel:
+    step = max(1, _SCOREBOARD_BLOCK_BYTES // (16 * len(el[0])))
+    return torch.cat(list(_scoreboard_weight_blocks(grid, el, rho, cutoff_r2,
+                                                    step, boundary)))
+
+
+def _scoreboard_weight_blocks(grid, el, rho, cutoff_r2, step, boundary=None,
+                              spread_scale=None, device=None):
+    """Yield the float32 Gaussian weights of ``_scoreboard_response``.
+
+    Each block holds ``(step, E)`` weights for consecutive grid points; the
+    last may be shorter. Arguments are those of ``_scoreboard_response``.
+    """
+    import torch
     grid = [torch.as_tensor(np.ravel(c), dtype=torch.float32, device=device)
             for c in grid]
     el = [torch.as_tensor(c, dtype=torch.float32, device=device) for c in el]
@@ -132,13 +165,6 @@ def _scoreboard_response(waveform, grid, el, rho, cutoff_r2, thresh,
     if boundary is not None:
         boundary = float(np.float32(boundary))
         el_left = el[0] < boundary
-    n_el, n_time = waveform.shape
-    itemsize = waveform.element_size()
-    # About four float32 (block, E) temporaries, the cast weights, and the
-    # response before and after thresholding:
-    per_pixel = n_el * (16 + itemsize) + 2 * n_time * itemsize
-    step = max(1, _SCOREBOARD_BLOCK_BYTES // per_pixel)
-    blocks = []
     for p0 in range(0, grid[0].numel(), step):
         r2 = None
         for g, e in zip(grid, el):
@@ -149,12 +175,7 @@ def _scoreboard_response(waveform, grid, el, rho, cutoff_r2, thresh,
         if boundary is not None:
             keep &= (grid[0][p0:p0 + step, None] < boundary) == el_left
         weights = r2.div_(-two_rho2).clamp_(min=min_arg).exp_()
-        weights.masked_fill_(~keep, 0.0)
-        resp = weights.to(waveform.dtype) @ waveform
-        # Zeroes only `|resp| < thresh`, so NaN propagates. `+ 0.0` turns -0.0
-        # into 0.0; whether a sum of zero terms is signed depends on the BLAS:
-        blocks.append(torch.where(resp.abs() < thresh, 0.0, resp) + 0.0)
-    return torch.cat(blocks)
+        yield weights.masked_fill_(~keep, 0.0)
 
 
 def _subsample(t_out, dt, n_sub, start=None):
@@ -440,24 +461,10 @@ def _blend_meridian(resp, grid, meridian, width):
     normal to the meridian, and tapered by distance from it. Time points are
     processed independently. A zero width or one-sided grid is a no-op.
     """
-    if width is None or width == 0:
+    geometry = _blend_geometry(grid, meridian, width)
+    if geometry is None:
         return resp
-    width = float(width)
-    if width < 0:
-        raise ValueError(f"Blend width must be non-negative, not {width}.")
-    if meridian == 'vertical':
-        dist, axis = grid.x, 1
-    elif meridian == 'horizontal':
-        dist, axis = grid.y, 0
-    else:
-        raise ValueError(f"Unknown meridian '{meridian}'; expected 'vertical' "
-                         f"or 'horizontal'.")
-    # Convert width from dva to samples:
-    along = dist[:, 0] if axis == 0 else dist[0, :]
-    if along.size < 2 or not (np.any(along < 0) and np.any(along > 0)):
-        # Nothing to blend unless the grid straddles the meridian:
-        return resp
-    spacing = float(np.abs(np.diff(along)).mean())
+    dist, axis, width, spacing = geometry
     if _is_tensor(resp):
         return _blend_meridian_tensor(resp, dist, axis, width, spacing)
     # Filter each time point independently:
@@ -474,24 +481,59 @@ def _blend_meridian(resp, grid, meridian, width):
     return blurred.reshape(resp.shape).astype(resp.dtype, copy=False)
 
 
+def _blend_geometry(grid, meridian, width):
+    """Return ``(dist, axis, width, spacing)`` for ``_blend_meridian``.
+
+    ``dist`` is the signed distance from the meridian (dva), ``axis`` the
+    grid axis normal to it, and ``spacing`` the mean sample spacing along
+    ``axis``. Returns None where blending is a no-op.
+    """
+    if width is None or width == 0:
+        return None
+    width = float(width)
+    if width < 0:
+        raise ValueError(f"Blend width must be non-negative, not {width}.")
+    if meridian == 'vertical':
+        dist, axis = grid.x, 1
+    elif meridian == 'horizontal':
+        dist, axis = grid.y, 0
+    else:
+        raise ValueError(f"Unknown meridian '{meridian}'; expected 'vertical' "
+                         f"or 'horizontal'.")
+    # Convert width from dva to samples:
+    along = dist[:, 0] if axis == 0 else dist[0, :]
+    if along.size < 2 or not (np.any(along < 0) and np.any(along > 0)):
+        # Nothing to blend unless the grid straddles the meridian:
+        return None
+    return dist, axis, width, float(np.abs(np.diff(along)).mean())
+
+
+def _blend_operator(dist, axis, width, spacing):
+    """Return the ``(n, n)`` blur and the taper weight of the Torch blend.
+
+    Column ``j`` of the blur is SciPy's filtered impulse at sample ``j``
+    along ``axis``. The weight has the shape of ``dist``. Arguments are those
+    returned by ``_blend_geometry``.
+    """
+    blur = gaussian_filter1d(np.eye(dist.shape[axis]), width / spacing,
+                             axis=0, mode='nearest')
+    return blur, np.exp(-dist ** 2 / (2.0 * width ** 2))
+
+
 def _blend_meridian_tensor(resp, dist, axis, width, spacing):
     """Torch counterpart of the ``_blend_meridian`` filter and taper."""
     import torch
     work = resp.reshape(dist.shape + (-1,))
-    # Dense (n, n) operator: column j is SciPy's filtered impulse at j, so
-    # truncation and 'nearest' edges match `gaussian_filter1d` exactly.
-    # Replaces #938's conv1d on purpose: O(n^2) per row, but at the axis
-    # lengths profiled (121-601 samples) it was faster and used less memory
-    # on CPU than conv1d's workspace or sliced accumulation's backward.
-    n = work.shape[axis]
-    blur = gaussian_filter1d(np.eye(n), width / spacing, axis=0,
-                             mode='nearest')
-    blur = torch.as_tensor(blur, dtype=resp.dtype, device=resp.device)
+    # Dense (n, n) operator, so truncation and 'nearest' edges match
+    # `gaussian_filter1d` exactly. Replaces #938's conv1d on purpose: O(n^2)
+    # per row, but at the axis lengths profiled (121-601 samples) it was
+    # faster and used less memory on CPU than conv1d's workspace or sliced
+    # accumulation's backward.
+    blur, weight = (torch.as_tensor(a, dtype=resp.dtype, device=resp.device)
+                    for a in _blend_operator(dist, axis, width, spacing))
     subscripts = 'ij,jxt->ixt' if axis == 0 else 'ij,yjt->yit'
     blurred = torch.einsum(subscripts, blur, work)
-    weight = torch.as_tensor(np.exp(-dist ** 2 / (2.0 * width ** 2)),
-                             dtype=resp.dtype, device=resp.device)[..., None]
-    return torch.lerp(work, blurred, weight).reshape(resp.shape)
+    return torch.lerp(work, blurred, weight[..., None]).reshape(resp.shape)
 
 
 def _tissue_map_ndim(model):
@@ -1483,6 +1525,18 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """
         raise NotImplementedError(
             f"{type(self).__name__} does not support Torch tensor input.")
+
+    def _onnx_adapter(self):
+        """Return a Torch module for ONNX export of the spatial response.
+
+        The module maps float32 drive ``(n_electrodes, 1)``, rows in
+        ``implant.electrode_names`` order, to the flat ``(n_grid_points, 1)``
+        response of ``predict_percept``, postprocessing included. Its
+        algorithm may differ from ``_predict_spatial``, but not its result
+        beyond float32 rounding. Requires a built model.
+        """
+        raise NotImplementedError(
+            f"ONNX export does not support {type(self).__name__}.")
 
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
              figsize=None, show_implant=False):

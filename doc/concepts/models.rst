@@ -618,6 +618,40 @@ Parameters with the same name in both components, such as
 ``thresh_percept``, remain independent.
 
 
+Exporting to ONNX
+=================
+
+:py:func:`~pulse2percept.export_onnx` exports the ordinary image-to-percept
+workflow of a spatial-only model as an ONNX graph, plus a JSON sidecar with
+the tensor layout, percept grid, electrode order, and encoder settings:
+
+.. code-block:: python
+
+    implant = p2p.implants.retina.ArgusII()
+    implant.encoder = p2p.stimuli.AmplitudeEncoder(amp_range=(0, 50))
+
+    model = p2p.models.retina.AxonMapModel(implant)
+
+    p2p.export_onnx(model, "model.onnx", input_shape=(76, 76))
+
+*  The graph reproduces ``model.predict_percept(image)`` for a gray image:
+   electrode sampling, frame-level encoder modulation, and the spatial model.
+   Weights are precomputed; nothing is approximated.
+*  Input is a fixed-size float32 gray image of shape ``(1, 1, H, W)``, with
+   values in [0, 1].
+*  Output is the raw model response on the percept grid, not normalized for
+   display.
+
+Only :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`,
+:py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, and
+:py:class:`~pulse2percept.models.retina.AxonMapSpatial` models with an
+:py:class:`~pulse2percept.stimuli.AmplitudeEncoder` export; other models and
+configurations raise an error. Temporal models are not yet supported, and
+:py:class:`~pulse2percept.vision.Scene` and gaze registration are not part of
+the export. Requires the ``onnx`` and ``onnxscript`` packages
+(``pip install pulse2percept[onnx]``).
+
+
 Model Limitations
 =================
 

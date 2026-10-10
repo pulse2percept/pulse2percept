@@ -2,7 +2,7 @@
    :py:class:`~pulse2percept.models.cortex.ScoreboardModel`"""
 
 from ..base import (Model, _blend_meridian, _is_tensor, _scoreboard_response,
-                    _warn_rho_vs_pitch)
+                    _scoreboard_weights, _warn_rho_vs_pitch)
 from .base import CortexSpatial
 from ...units import dva, um
 import numpy as np
@@ -209,23 +209,51 @@ class ScoreboardSpatial(CortexSpatial):
         device of ``waveform``.
         """
         cutoff_r2 = self._cutoff_r2(self.rho)
-        boundary = None
-        if self.visual_field_map.split_map:
-            # No current spreads between hemispheres:
-            boundary = self.visual_field_map.left_offset / 2
+        boundary, regions = self._scoreboard_regions(x_el, y_el, z_el)
         resp = 0
-        for region in self.regions:
-            grid = self.grid[region]
-            # A 2D map ignores electrode z; a 3D one adds depth:
-            if self.visual_field_map.ndim == 3:
-                coords = (grid.x, grid.y, grid.z), (x_el, y_el, z_el)
-            else:
-                coords = (grid.x, grid.y), (x_el, y_el)
+        for coords in regions:
             # Each region is thresholded before the sum:
             resp = resp + _scoreboard_response(
                 waveform, *coords, self.rho, cutoff_r2, self.thresh_percept,
                 boundary)
         return resp
+
+    def _scoreboard_regions(self, x_el, y_el, z_el):
+        """Return the hemisphere boundary and per-region ``(grid, el)``.
+
+        ``grid`` and ``el`` are the coordinate tuples ``_scoreboard_response``
+        takes for one region; ``boundary`` is None for a map without split
+        hemispheres.
+        """
+        boundary = None
+        if self.visual_field_map.split_map:
+            # No current spreads between hemispheres:
+            boundary = self.visual_field_map.left_offset / 2
+        regions = []
+        for region in self.regions:
+            grid = self.grid[region]
+            # A 2D map ignores electrode z; a 3D one adds depth:
+            if self.visual_field_map.ndim == 3:
+                regions.append(((grid.x, grid.y, grid.z), (x_el, y_el, z_el)))
+            else:
+                regions.append(((grid.x, grid.y), (x_el, y_el)))
+        return boundary, regions
+
+    def _onnx_adapter(self):
+        """Return the precomputed per-region Gaussian weights as a module.
+
+        Keeps one ``(P, E)`` matrix per region, because each region is
+        thresholded before the sum.
+        """
+        from .._deploy import _Scoreboard, _meridian_blend
+        xyz = self._electrode_coords(self.implant.electrode_array, None,
+                                     electrodes=self.implant.electrode_names)
+        boundary, regions = self._scoreboard_regions(*xyz)
+        cutoff_r2 = self._cutoff_r2(self.rho)
+        weights = [_scoreboard_weights(grid, el, self.rho, cutoff_r2,
+                                       boundary) for grid, el in regions]
+        return _Scoreboard(weights, self.thresh_percept, blend=_meridian_blend(
+            self, 'vertical', self.meridian_blend))
 
 
 class ScoreboardModel(Model):
