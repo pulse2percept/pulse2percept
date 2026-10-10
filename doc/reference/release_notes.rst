@@ -85,6 +85,10 @@ API changes and improvements
   [Granley2023]_, with nerve fiber bundles setting only phosphene orientation.
   ``rho`` is an area in output pixels (:pull:`960`).
 
+* New :py:func:`~pulse2percept.export_onnx` exports the gray-image workflow
+  of spatial-only Scoreboard and AxonMap models to ONNX without approximation
+  (:pull:`961`).
+
 Bug fixes
 ---------
 
