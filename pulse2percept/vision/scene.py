@@ -420,84 +420,104 @@ def _inpaint_biharmonic_rgb(image, mask):
     return np.clip(filled, 0, 1).astype(np.float32)
 
 
-def _laplace_system(mask):
+def _laplace_system(mask, step):
     """Returns ``(lu, lost, boundary)`` of the Laplace fill of ``mask``
 
     ``lu`` factorizes the 4-neighbor Laplacian on masked pixels, ``lost``
     holds their flat indices, and ``boundary`` maps flat known pixel values
-    to the right-hand side. Requires at least one unmasked pixel.
+    to the right-hand side. ``step`` is the raster pitch ``(dx, dy)`` in dva.
+    Requires at least one unmasked pixel.
     """
     n_rows, n_cols = mask.shape
     rows, cols = np.nonzero(mask)
     n = rows.size
     index = np.full(mask.shape, -1, dtype=np.int64)
     index[rows, cols] = np.arange(n)
-    # Only in-frame neighbors belong to the domain, so a border pixel has
-    # fewer than 4:
-    degree = np.zeros(n)
-    a_rows, a_cols, b_rows, b_cols = [], [], [], []
-    for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+    dx, dy = step
+    # Finite differences in dva, so the fill is harmonic in visual angle on
+    # anisotropic pixels. Only in-frame neighbors belong to the domain:
+    diagonal = np.zeros(n)
+    a_rows, a_cols, a_vals, b_rows, b_cols, b_vals = [], [], [], [], [], []
+    for dr, dc, w in ((-1, 0, dy ** -2), (1, 0, dy ** -2),
+                      (0, -1, dx ** -2), (0, 1, dx ** -2)):
         r, c = rows + dr, cols + dc
         inside = (r >= 0) & (r < n_rows) & (c >= 0) & (c < n_cols)
-        degree += inside
+        diagonal += w * inside
         i, r, c = np.flatnonzero(inside), r[inside], c[inside]
         lost = mask[r, c]
         a_rows.append(i[lost])
         a_cols.append(index[r[lost], c[lost]])
+        a_vals.append(np.full(lost.sum(), -w))
         b_rows.append(i[~lost])
         b_cols.append(r[~lost] * n_cols + c[~lost])
+        b_vals.append(np.full((~lost).sum(), w))
     a_rows, a_cols = np.concatenate(a_rows), np.concatenate(a_cols)
-    b_rows, b_cols = np.concatenate(b_rows), np.concatenate(b_cols)
-    # degree * u_i - (masked neighbors) = (known neighbors); nonsingular as
-    # long as one pixel is known:
+    # Positive weights keep each u_i a weighted mean of its neighbors
+    # (maximum principle); nonsingular as long as one pixel is known:
     laplacian = csc_matrix(
-        (np.concatenate((degree, -np.ones(a_rows.size))),
+        (np.concatenate([diagonal] + a_vals),
          (np.concatenate((np.arange(n), a_rows)),
           np.concatenate((np.arange(n), a_cols)))), shape=(n, n))
-    boundary = csr_matrix((np.ones(b_rows.size), (b_rows, b_cols)),
+    boundary = csr_matrix((np.concatenate(b_vals),
+                           (np.concatenate(b_rows), np.concatenate(b_cols))),
                           shape=(n, mask.size))
     return splu(laplacian), rows * n_cols + cols, boundary
 
 
-def _inpaint_laplace_rgb(image, mask, system=None):
+def _inpaint_laplace_rgb(image, mask, step, system=None):
     """Inpaints ``image`` where ``mask`` is True by harmonic extension of the
     unmasked pixels
 
-    ``system`` is `_laplace_system(mask)`, to reuse across frames.
+    ``step`` is the raster pitch ``(dx, dy)`` in dva. ``system`` is
+    `_laplace_system(mask, step)`, to reuse across frames.
     """
     if not mask.any():
         return np.asarray(image, dtype=np.float32)
-    lu, lost, boundary = _laplace_system(mask) if system is None else system
+    lu, lost, boundary = (_laplace_system(mask, step) if system is None
+                          else system)
     flat = np.array(image, dtype=float).reshape((-1, 3))
     flat[lost] = lu.solve(boundary @ flat)
     # Bounded by the known values (maximum principle); clip only rounding:
     return np.clip(flat.reshape(image.shape), 0, 1).astype(np.float32)
 
 
-def _gaussian_fill_rgb(image, mask, sigma, step):
-    """Replaces masked pixels of ``image`` by the Gaussian-weighted mean of
-    unmasked ones
-
-    ``sigma`` is in dva; ``step`` is the raster pitch ``(dx, dy)`` in dva.
-    Masked and off-frame pixels carry no weight.
-    """
-    image = np.asarray(image, dtype=np.float32)
-    if not mask.any():
-        return image
+def _blur_dva(values, sigma, step):
+    """Gaussian-blurs ``(rows, cols, channels)`` with ``sigma`` in dva"""
     dx, dy = step
     # Sigma 0 on the channel axis, so channels stay separate; zero padding,
     # so off-frame pixels add neither value nor weight:
-    sigmas = (sigma / dy, sigma / dx, 0)
+    return gaussian_filter(values, (sigma / dy, sigma / dx, 0),
+                           mode='constant', cval=0, truncate=_TRUNCATE)
+
+
+def _gaussian_weight(mask, sigma, step):
+    """Returns the Gaussian weight of unmasked pixels at each masked pixel,
+    ``(n_masked, 1)``"""
     valid = (~mask)[..., np.newaxis].astype(float)
-    weight = gaussian_filter(valid, sigmas, mode='constant', cval=0,
-                             truncate=_TRUNCATE)[mask]
+    weight = _blur_dva(valid, sigma, step)[mask]
     if not np.all(weight > 0):
         raise ValueError(f"scotoma_fill_sigma={sigma:g} dva is too small: the "
                          f"Gaussian (truncated at {_TRUNCATE:g} sigma) does "
                          f"not reach visible pixels from every point of the "
                          f"scotoma. Use a larger 'scotoma_fill_sigma'.")
-    total = gaussian_filter(image * valid, sigmas, mode='constant', cval=0,
-                            truncate=_TRUNCATE)[mask]
+    return weight
+
+
+def _gaussian_fill_rgb(image, mask, sigma, step, weight=None):
+    """Replaces masked pixels of ``image`` by the Gaussian-weighted mean of
+    unmasked ones
+
+    ``sigma`` is in dva; ``step`` is the raster pitch ``(dx, dy)`` in dva.
+    Masked and off-frame pixels carry no weight. ``weight`` is
+    `_gaussian_weight(mask, sigma, step)`, to reuse across frames.
+    """
+    image = np.asarray(image, dtype=np.float32)
+    if not mask.any():
+        return image
+    if weight is None:
+        weight = _gaussian_weight(mask, sigma, step)
+    visible = np.where(mask[..., np.newaxis], 0.0, image)
+    total = _blur_dva(visible, sigma, step)[mask]
     out = image.copy()
     out[mask] = np.clip(total / weight, 0, 1)
     return out
@@ -1067,21 +1087,22 @@ class Scene(PrettyPrint):
                                   truncate=_TRUNCATE)
         return np.clip(blurred[pads[0]:-pads[0], pads[1]:-pads[1]], 0, 1)
 
-    def _fill_rgb(self, frame_rgb, mask, step, laplace=None):
+    def _fill_rgb(self, frame_rgb, mask, step, laplace=None, weight=None):
         """Returns the scotoma fill for one ``(rows, cols, 3)`` frame
 
         ``mask`` marks lost pixels by the hard boundary, ``step`` is the
-        raster pitch ``(dx, dy)`` in dva, and ``laplace`` is
-        `_laplace_system(mask)`.
+        raster pitch ``(dx, dy)`` in dva, ``laplace`` is
+        `_laplace_system(mask, step)`, and ``weight`` is `_gaussian_weight`.
         """
         fill = self._scotoma_fill
         if fill in (_BIHARMONIC, _INPAINT):
             return _inpaint_biharmonic_rgb(frame_rgb, mask)
         if fill == _LAPLACE:
-            return _inpaint_laplace_rgb(frame_rgb, mask, system=laplace)
+            return _inpaint_laplace_rgb(frame_rgb, mask, step, system=laplace)
         if fill == _GAUSSIAN:
             return _gaussian_fill_rgb(frame_rgb, mask,
-                                      self._scotoma_fill_sigma, step)
+                                      self._scotoma_fill_sigma, step,
+                                      weight=weight)
         return fill
 
     def _aperture_mask(self, xs, ys):
@@ -1151,21 +1172,25 @@ class Scene(PrettyPrint):
             return (frames if frames.shape[2] == 3
                     else np.repeat(frames, 3, axis=2))
         alpha = self._rendered_loss_on(xs, ys)[..., np.newaxis]
-        mask = laplace = None
+        step = _raster_step(xs, ys)
+        mask = laplace = weight = None
         if self._scotoma_fill in _IMAGE_FILLS:
             # Fill support uses the hard boundary, even where a Gaussian
             # fill's `alpha` is blurred:
             mask = self._loss_on(xs, ys) > 0
             _check_surround(mask, self._scotoma_fill)
+            # Same mask for every frame, so set up once:
             if self._scotoma_fill == _LAPLACE and mask.any():
-                # Same mask for every frame, so factorize once:
-                laplace = _laplace_system(mask)
-        step = _raster_step(xs, ys)
+                laplace = _laplace_system(mask, step)
+            elif self._scotoma_fill == _GAUSSIAN and mask.any():
+                weight = _gaussian_weight(mask, self._scotoma_fill_sigma,
+                                          step)
         out = np.empty((ys.size, xs.size, 3, n_frames), dtype=np.float32)
         for f in range(n_frames):
             rgb = _as_rgb(frames[..., f])
             # Image fills depend on the frame content:
-            fill = self._fill_rgb(rgb, mask, step, laplace=laplace)
+            fill = self._fill_rgb(rgb, mask, step, laplace=laplace,
+                                  weight=weight)
             out[..., f] = (1 - alpha) * rgb + alpha * fill
         return out
 
@@ -1769,20 +1794,22 @@ class Scene(PrettyPrint):
         points = _gaze_points(gaze, n_out)
         data = np.empty((ys.size, xs.size, 3, n_out), dtype=np.float32)
         times, unit, overlays = [], None, {}
+        if self._fills_from_image():
+            # Compose on the eye-view raster for all frames at once, so the
+            # fill is set up once (a percept raises here):
+            view_xs, view_ys = self._view_axes()
+            native, native_time, unit = self._display_on(
+                view_xs, view_ys, percept=percept, vmax=vmax, vmin=vmin,
+                gaze=gaze)
         for f in range(n_out):
             gx, gy = points[0] if len(points) == 1 else points[f]
             # Eye coordinates of the source pixel centers:
             eye_xs, eye_ys = xs - gx, ys - gy
             if self._fills_from_image():
-                # Compose on the eye-view raster, then resample onto the
-                # source raster:
-                view_xs, view_ys = self._view_axes()
-                shown, time, unit = self._display_on(view_xs, view_ys,
-                                                     percept=percept,
-                                                     vmax=vmax, vmin=vmin,
-                                                     gaze=(gx, gy), frame=f)
-                shown = _regrid(view_xs, view_ys, shown[..., 0], eye_xs,
+                # Resample onto the source raster:
+                shown = _regrid(view_xs, view_ys, native[..., f], eye_xs,
                                 eye_ys)
+                time = _take_time(native_time, f)
             else:
                 shown, time, unit = self._display_on(eye_xs, eye_ys,
                                                      percept=percept,

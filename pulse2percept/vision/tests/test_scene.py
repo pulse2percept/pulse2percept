@@ -581,6 +581,45 @@ def test_laplace_stays_within_the_surrounding_values(center):
     npt.assert_equal(inside.max() <= image[ring].max() + 1e-6, True)
 
 
+def test_laplace_is_harmonic_in_dva_on_anisotropic_pixels():
+    """x**2 - y**2 is harmonic in dva but not in pixels when dx != dy
+
+    A linear ramp would not catch a pixel-space stencil.
+    """
+    # 2 x 1 dva pixels; render reuses the source raster, so no resampling:
+    n_rows, n_cols = SCENE_PX, HALF + 1
+    extent = (-n_cols, n_cols, -SCENE_PX / 2, SCENE_PX / 2)
+    xs, ys = _raster_axes(extent, (n_rows, n_cols))
+    xx, yy = np.meshgrid(xs, ys)
+    image = 0.5 + 1e-3 * (xx ** 2 - yy ** 2)
+    scene = Scene(ImageStimulus(image), fov=(2 * n_cols, SCENE_PX),
+                  extent=extent, scotoma=Scotoma.circle(8),
+                  scotoma_fill='laplace', scotoma_blend=0)
+    npt.assert_almost_equal(_raster_step(*scene._view_axes()), (2.0, 1.0))
+    mask = scene._loss_on(*scene._view_axes()) > 0
+    native = scene._native_rgb()[..., 0, 0]
+    npt.assert_equal(mask.sum() > 50, True)
+    npt.assert_allclose(native, image, atol=1e-6)
+
+
+def test_image_fill_setup_is_shared_by_all_played_frames(monkeypatch):
+    """Scene-view play factorizes the Laplace system once, not per frame"""
+    calls = []
+    original = scene_module._laplace_system
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(scene_module, '_laplace_system', counted)
+    frames = np.stack([random_rgb(seed) for seed in range(3)], axis=-1)
+    scene = Scene(VideoStimulus(frames, time=[0, 100, 200]),
+                  fov=(SCENE_PX, SCENE_PX), scotoma=Scotoma.circle(6),
+                  scotoma_fill='laplace')
+    scene.play(gaze=[(0, 0), (3, -2), (-4, 1)])
+    npt.assert_equal(len(calls), 1)
+    plt.close('all')
+
+
 def test_gaussian_keeps_color_channels_apart():
     """Each channel fills as if it were a grayscale scene of its own"""
     image = random_rgb()
