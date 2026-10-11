@@ -80,12 +80,12 @@ jobs:
 
       # ---- Install package (editable) with dev extras ----
       # Use --no-build-isolation so Cython uses the preinstalled NumPy headers.
-      # One job adds the `onnx` extra, so models/tests/test_export.py runs
-      # instead of skipping:
+      # Ubuntu Py 3.12 and minimum torch add the `onnx` extra, so
+      # models/tests/test_export.py runs instead of skipping:
       - name: Install package (editable + dev extras)
         run: |
           extras=dev
-          if [ "${{ matrix.os }}" = ubuntu-latest ] && [ "${{ matrix.python-version }}" = 3.12 ]; then
+          if [ "${{ matrix.os }}" = ubuntu-latest ] && { [ "${{ matrix.python-version }}" = 3.12 ] || [ -n "${{ matrix.torch }}" ]; }; then
             extras=dev,onnx
           fi
           python -m pip install -e ".[$extras]" --no-build-isolation

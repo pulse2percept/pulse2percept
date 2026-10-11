@@ -324,6 +324,27 @@ def test_axon_map_adapter_simultaneous(tmp_path):
     assert together > 0 and not np.isclose(together, sum(alone))
 
 
+def test_axon_map_adapter_electrode_order():
+    # C3 and C4 cancel, so the float32 sum depends on electrode order;
+    # stable x order (D3 shares C3's x) differs from `electrode_names`. No
+    # electrode is silent, so `predict_percept` uses the same matmul shape.
+    # ONNX Runtime has its own MatMul accumulation, so only Torch is exact.
+    spatial = _axon_spatial(meridian_blend=0, thresh_percept=0,
+                            rho=500).build()
+    (x3, y3), (x4, _) = _site(spatial, 'C3'), _site(spatial, 'C4')
+    _one_axon(spatial, [[(x3 + x4) / 2, y3, 1]])
+    drive = np.full(spatial.implant.n_electrodes, 1e-3)
+    for name, amp in (('C3', 1e7), ('C4', -1e7), ('D3', 1)):
+        drive += _single(spatial, name, amp - 1e-3)
+    expected = spatial.predict_percept(
+        Stimulus(drive, electrodes=spatial.implant.electrode_names)).data
+    with torch.inference_mode():
+        eager = spatial._onnx_adapter()(
+            torch.as_tensor(drive, dtype=torch.float32)[:, None])
+    npt.assert_array_equal(eager.numpy().ravel(), expected.ravel())
+    assert expected.ravel()[0] > 0
+
+
 @pytest.mark.parametrize('sign', [1, -1])
 def test_axon_map_adapter_first_tie(sign, tmp_path):
     # Opposite sensitivities tie |response| exactly; the first segment wins:
@@ -501,3 +522,18 @@ def test_export_onnx_rejects_mismatch(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match='predict_percept'):
         p2p.export_onnx(_retina(), path, (6, 10))
     assert not path.exists()
+
+
+def test_export_onnx_validation_error(tmp_path, monkeypatch):
+    # Any validation failure removes the ONNX file, not just a mismatch:
+    pytest.importorskip('onnxscript')
+    model = _retina()
+
+    def fail(stim):
+        raise ValueError('scheduling')
+
+    monkeypatch.setattr(model, 'predict_percept', fail)
+    path = tmp_path / 'model.onnx'
+    with pytest.raises(ValueError, match='scheduling'):
+        p2p.export_onnx(model, path, (6, 10))
+    assert not path.exists() and not (tmp_path / 'model.json').exists()

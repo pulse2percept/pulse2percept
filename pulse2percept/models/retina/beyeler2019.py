@@ -1192,8 +1192,11 @@ class AxonMapSpatial(_AxonBundleMixin, RetinalSpatial):
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(
             electrode_array, None, electrodes=self.implant.electrode_names)
-        xs, ys = torch.as_tensor(x_el), torch.as_tensor(y_el)
-        # As in `_predict_axon_map_tensor`:
+        # As in `_predict_axon_map_tensor`; float32 sums with cancellation
+        # depend on electrode order:
+        el_order = np.argsort(x_el, kind='stable')
+        xs = torch.as_tensor(x_el[el_order])
+        ys = torch.as_tensor(y_el[el_order])
         rho = np.float32(self.rho)
         two_rho2 = np.float32(2) * rho * rho
         cutoff_r2 = float(self._cutoff_r2(self.rho))
@@ -1229,9 +1232,10 @@ class AxonMapSpatial(_AxonBundleMixin, RetinalSpatial):
             buckets.append(torch.as_tensor(index))
             pixels.append(members)
         order = np.argsort(np.concatenate(pixels))
-        return _AxonMap(torch.cat(weights), buckets, torch.as_tensor(order),
-                        self.thresh_percept, blend=_meridian_blend(
-                            self, 'horizontal', self.meridian_blend))
+        return _AxonMap(torch.cat(weights), torch.as_tensor(el_order),
+                        buckets, torch.as_tensor(order), self.thresh_percept,
+                        blend=_meridian_blend(self, 'horizontal',
+                                              self.meridian_blend))
 
     def _predict_axon_map_tensor(self, waveform, x_el, y_el,
                                  spread_scale=None, sensitivity_power=None):

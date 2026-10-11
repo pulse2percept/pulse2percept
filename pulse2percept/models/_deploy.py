@@ -78,14 +78,18 @@ class _AxonMap(nn.Module):
     """AxonMap response ``(P, 1)`` to drive ``(E, 1)``.
 
     ``weights`` is the float32 ``(S + 1, E)`` electrode weight of each
-    retained segment, plus a zero last row. Each bucket ``(n_pixels, L)``
-    lists the segments of its pixels in axon order, padded with the zero
-    row. ``order`` maps concatenated bucket outputs to grid order.
+    retained segment, plus a zero last row. Its columns follow
+    ``electrodes``, the drive rows in summation order. Each bucket
+    ``(n_pixels, L)`` lists the segments of its pixels in axon order, padded
+    with the zero row. ``order`` maps concatenated bucket outputs to grid
+    order.
     """
 
-    def __init__(self, weights, buckets, order, thresh, blend=None):
+    def __init__(self, weights, electrodes, buckets, order, thresh,
+                 blend=None):
         super().__init__()
         self.register_buffer('weights', weights)
+        self.register_buffer('electrodes', electrodes)
         self.shapes = [tuple(b.shape) for b in buckets]
         _register_list(self, 'bucket', [b.reshape(-1) for b in buckets])
         self.register_buffer('order', order)
@@ -93,7 +97,8 @@ class _AxonMap(nn.Module):
         self.blend = blend
 
     def forward(self, drive):
-        seg = (self.weights @ drive).reshape(-1)
+        seg = self.weights @ drive.index_select(0, self.electrodes)
+        seg = seg.reshape(-1)
         out = []
         for i, shape in enumerate(self.shapes):
             packed = seg.index_select(0, getattr(self, f'bucket{i}'))

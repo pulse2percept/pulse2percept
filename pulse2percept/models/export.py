@@ -95,7 +95,7 @@ def export_onnx(model, path, input_shape):
     _save_onnx(module, torch.zeros((1, 1) + input_shape), path)
     try:
         _validate(model, module, path, input_shape)
-    except RuntimeError:
+    except BaseException:
         os.remove(path)
         raise
     with open(os.path.splitext(path)[0] + '.json', 'w') as f:
