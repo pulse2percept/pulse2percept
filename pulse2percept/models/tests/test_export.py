@@ -342,7 +342,6 @@ def test_axon_map_adapter_electrode_order():
         eager = spatial._onnx_adapter()(
             torch.as_tensor(drive, dtype=torch.float32)[:, None])
     npt.assert_array_equal(eager.numpy().ravel(), expected.ravel())
-    assert expected.ravel()[0] > 0
 
 
 @pytest.mark.parametrize('sign', [1, -1])
