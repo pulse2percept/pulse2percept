@@ -276,10 +276,9 @@ appearance. ``scotoma_fill`` controls how complete loss is displayed:
    * - ``'inpaint'``
      - Legacy alias for ``'biharmonic'``
 
-For numeric, color, and ``'gaussian'`` fills, ``scotoma_blend`` controls the
-softness of the boundary in degrees of visual angle. ``'biharmonic'`` and
-``'laplace'`` meet the surrounding image at the boundary and ignore
-``scotoma_blend``.
+For every fill, ``scotoma_blend`` controls the softness of the boundary in
+degrees of visual angle. Image-derived fills are still inferred from the
+scotoma's own (unblurred) boundary.
 
 Each image-derived fill makes a different assumption about what lies behind
 the scotoma:

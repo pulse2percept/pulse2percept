@@ -34,10 +34,7 @@ _BIHARMONIC = 'biharmonic'
 _LAPLACE = 'laplace'
 _GAUSSIAN = 'gaussian'
 _INPAINT = 'inpaint'
-# These meet the surrounding image at the boundary, so they ignore
-# `scotoma_blend`:
-_INTERPOLATING_FILLS = (_BIHARMONIC, _LAPLACE, _INPAINT)
-_IMAGE_FILLS = _INTERPOLATING_FILLS + (_GAUSSIAN,)
+_IMAGE_FILLS = (_BIHARMONIC, _LAPLACE, _GAUSSIAN, _INPAINT)
 
 # `aperture` shapes; size comes from `fov`. See `Scene._aperture_mask`:
 _RECTANGULAR = 'rectangular'
@@ -611,17 +608,16 @@ class Scene(PrettyPrint):
         Scotoma fill: a gray level in [0, 1] (default 0, black), an
         `(r, g, b)` triple in [0, 1], or any Matplotlib color string.
         A method name fills each frame from the surrounding image, using all
-        pixels where loss is nonzero as the hole:
+        pixels where loss is nonzero as the hole (``scotoma_blend`` does not
+        change the hole):
 
         *  `'biharmonic'`: smooth biharmonic interpolation
            (:py:func:`skimage.restoration.inpaint_biharmonic`); may overshoot
-           for large holes. Ignores `scotoma_blend`.
+           for large holes.
         *  `'laplace'`: harmonic interpolation (4-neighbor discrete Laplace
-           equation); bounded by the surrounding values. Ignores
-           `scotoma_blend`.
+           equation); bounded by the surrounding values.
         *  `'gaussian'`: Gaussian-weighted mean of visible pixels, with sigma
-           `scotoma_fill_sigma`; lost pixels carry no weight. Does not meet
-           the surround exactly, so `scotoma_blend` applies.
+           `scotoma_fill_sigma`; lost pixels carry no weight.
 
         `'inpaint'` is a legacy alias of `'biharmonic'`. Image-derived fills
         visualize missing vision, not perceptual filling-in, and cannot be
@@ -643,10 +639,13 @@ class Scene(PrettyPrint):
         loss map before drawing, softening the scotoma boundary. Defaults to
         0.5 dva; 0 keeps the scotoma's own edge. Converted to pixels per
         raster, so the softness in dva does not depend on resolution.
-        Rendering only: the scotoma's geometry is unchanged.
+        Rendering only: the scotoma's geometry is unchanged. Applies to every
+        ``scotoma_fill``.
 
         .. versionchanged:: 0.11.0
             Measured in degrees of visual angle rather than in scene pixels.
+        .. versionchanged:: 0.12.0
+            Also applies to ``scotoma_fill='inpaint'``.
     aperture : {'rectangular', 'round'}, optional
         Shape of the FOV (``fov`` sets its size). ``'rectangular'`` (default)
         shows the whole window; ``'round'`` inscribes an eye-centered ellipse
@@ -1073,9 +1072,7 @@ class Scene(PrettyPrint):
         separate row and column sigmas.
         """
         sigma = self._scotoma_blend
-        hard = (self.scotoma is None or
-                self._scotoma_fill in _INTERPOLATING_FILLS)
-        if hard or sigma == 0:
+        if self.scotoma is None or sigma == 0:
             return self._loss_on(xs, ys)
         dx, dy = _raster_step(xs, ys)
         sigmas = (sigma / dy, sigma / dx)
@@ -1175,8 +1172,8 @@ class Scene(PrettyPrint):
         step = _raster_step(xs, ys)
         mask = laplace = weight = None
         if self._scotoma_fill in _IMAGE_FILLS:
-            # Fill support uses the hard boundary, even where a Gaussian
-            # fill's `alpha` is blurred:
+            # The fill is inferred from the hard boundary; only `alpha` is
+            # blurred:
             mask = self._loss_on(xs, ys) > 0
             _check_surround(mask, self._scotoma_fill)
             # Same mask for every frame, so set up once:

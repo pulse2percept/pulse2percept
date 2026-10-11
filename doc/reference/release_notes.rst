@@ -87,8 +87,9 @@ API changes and improvements
 
 * ``Scene`` adds ``scotoma_fill='laplace'`` (harmonic) and ``'gaussian'``
   (normalized Gaussian average; requires ``scotoma_fill_sigma`` in dva).
-  ``'biharmonic'`` names the existing fill; ``'inpaint'`` stays as an alias
-  (:pull:`N`).
+  ``'biharmonic'`` names the existing fill; ``'inpaint'`` stays as an alias.
+  ``scotoma_blend`` now applies to every fill, including ``'inpaint'``
+  (:pull:`962`).
 
 Bug fixes
 ---------

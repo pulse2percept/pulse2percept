@@ -415,7 +415,8 @@ def test_the_inpainted_fill_knows_nothing_of_what_it_covers():
     sources = [np.where(lost, hidden, base)
                for hidden in (np.zeros_like(base), rng.random(base.shape))]
     views = [Scene(ImageStimulus(src), fov=(SCENE_PX, SCENE_PX),
-                   scotoma=scotoma, scotoma_fill='inpaint')._native_rgb()
+                   scotoma=scotoma, scotoma_fill='inpaint',
+                   scotoma_blend=0)._native_rgb()
              for src in sources]
     npt.assert_equal(np.allclose(*sources), False)
     npt.assert_array_equal(*views)
@@ -459,16 +460,31 @@ def test_an_image_filled_scene_refuses_to_compose_a_prosthetic_percept(
     npt.assert_equal(np.all(np.isfinite(scene._native_rgb())), True)
 
 
-def test_inpainting_ignores_the_blend():
-    """Inpainting ignores scotoma_blend, so covered pixels stay out"""
-    views = [ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill='inpaint',
-                        scotoma_blend=blend)._native_rgb()
-             for blend in (0, 5)]
-    npt.assert_array_equal(*views)
-    numeric = [ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0,
-                          scotoma_blend=blend)._native_rgb()
-               for blend in (0, 5)]
-    npt.assert_equal(np.allclose(*numeric), False)
+@pytest.mark.parametrize('fill, kwargs', [
+    (0.0, {}), ('red', {}), ('inpaint', {}), ('biharmonic', {}),
+    ('laplace', {}), ('gaussian', {'scotoma_fill_sigma': 4}),
+])
+def test_every_fill_blends_into_a_fill_from_the_hard_boundary(fill, kwargs):
+    """output = (1 - alpha) * native + alpha * fill, for every fill
+
+    ``alpha`` is the blurred loss; ``fill`` is the unblurred result.
+    """
+    image = np.random.default_rng(0).random((SCENE_PX, SCENE_PX, 3))
+    scenes = [Scene(ImageStimulus(image), fov=(SCENE_PX, SCENE_PX),
+                    scotoma=Scotoma.circle(6), scotoma_fill=fill,
+                    scotoma_blend=blend, **kwargs) for blend in (0, 3)]
+    hard, soft = (scene._native_rgb()[..., 0] for scene in scenes)
+    npt.assert_equal(np.allclose(hard, soft), False)
+    if fill in scene_module._IMAGE_FILLS:
+        # The hard render is the fill inside the scotoma and the image
+        # outside it:
+        lost = scenes[0]._loss_on(*scenes[0]._view_axes())[..., np.newaxis]
+        fill_rgb = np.where(lost == 1, hard, image)
+    else:
+        fill_rgb = scenes[0].scotoma_fill
+    alpha = rendered_loss(scenes[1])[..., np.newaxis]
+    npt.assert_allclose(soft, (1 - alpha) * image + alpha * fill_rgb,
+                        atol=1e-6)
 
 
 def test_inpainting_does_not_change_what_the_device_sees():
