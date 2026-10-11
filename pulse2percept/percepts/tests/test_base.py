@@ -388,8 +388,23 @@ def test_Percept_save(dtype, tmp_path):
         fname = percept.save(str(tmp_path / name), vmin=0, vmax=255)
         npt.assert_equal(os.path.isfile(fname), True)
         img = img_as_float(imread(fname))
-        npt.assert_almost_equal(np.min(img), 0, decimal=3)
-        npt.assert_almost_equal(np.max(img), 1.0, decimal=3)
+        # JPEG is lossy on this small native-size image:
+        decimal = 2 if name.endswith('.jpg') else 3
+        npt.assert_almost_equal(np.min(img), 0, decimal=decimal)
+        npt.assert_almost_equal(np.max(img), 1.0, decimal=decimal)
+
+
+def test_Percept_save_keeps_native_size_unless_shape_is_given(tmp_path):
+    percept = Percept(np.random.rand(17, 43, 1))
+    fname = str(tmp_path / 'p.png')
+    npt.assert_equal(imread(percept.save(fname, vmin=0, vmax=1)).shape,
+                     (17, 43))
+    for shape, expected in (((30, 50), (30, 50)), ((None, 86), (34, 86)),
+                            ((34, None), (34, 86))):
+        percept.save(fname, shape=shape, vmin=0, vmax=1)
+        npt.assert_equal(imread(fname).shape, expected)
+    with pytest.raises(ValueError):
+        percept.save(fname, shape=(None, None), vmin=0, vmax=1)
 
 
 def test_Percept_save_single_frame(tmp_path):

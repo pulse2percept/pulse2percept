@@ -91,6 +91,10 @@ API changes and improvements
   ``scotoma_blend`` now applies to every fill, including ``'inpaint'``
   (:pull:`962`).
 
+* New ``Scene.save()``, shorthand for ``scene.render(...).save(...)``.
+  ``Percept.save()`` now keeps the percept's native size when ``shape`` is
+  omitted, instead of resizing to 320 px wide (:pull:`963`).
+
 Bug fixes
 ---------
 
