@@ -264,19 +264,62 @@ appearance. ``scotoma_fill`` controls how complete loss is displayed:
      - Constant gray in ``[0, 1]``
    * - color
      - RGB value or Matplotlib color
+   * - ``'biharmonic'``
+     - Smooth biharmonic interpolation from the surrounding image; may
+       overshoot for large holes
+   * - ``'laplace'``
+     - Harmonic interpolation from the surrounding image; bounded by the
+       surrounding values
+   * - ``'gaussian'``
+     - Normalized Gaussian average of visible pixels; requires
+       ``scotoma_fill_sigma`` (dva)
    * - ``'inpaint'``
-     - Fill from the surrounding image using biharmonic inpainting
+     - Legacy alias for ``'biharmonic'``
 
-For numeric or color fills, ``scotoma_blend`` controls the softness of the
-boundary in degrees of visual angle.
+For numeric, color, and ``'gaussian'`` fills, ``scotoma_blend`` controls the
+softness of the boundary in degrees of visual angle. ``'biharmonic'`` and
+``'laplace'`` meet the surrounding image at the boundary and ignore
+``scotoma_blend``.
 
-``'inpaint'`` ignores ``scotoma_blend``.
+Each image-derived fill makes a different assumption about what lies behind
+the scotoma:
+
+.. plot::
+
+    import matplotlib.pyplot as plt
+    import pulse2percept as p2p
+
+    from pulse2percept.units import dva
+
+    image = p2p.stimuli.samples.ucsb_bike(resize=(240, 360))
+
+    fills = [
+        ('biharmonic', {}),
+        ('laplace', {}),
+        ('gaussian', {'scotoma_fill_sigma': 3 * dva}),
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+
+    for ax, (fill, kwargs) in zip(axes, fills):
+        scene = p2p.vision.Scene(
+            image,
+            extent=60 * dva,
+            fov=40 * dva,
+            scotoma=p2p.vision.Scotoma.circle(10 * dva),
+            scotoma_fill=fill,
+            **kwargs,
+        )
+        scene.plot(ax=ax, view='eye')
+        ax.set_title(repr(fill))
+
+    fig.tight_layout()
 
 .. note::
 
-   Inpainting is a visualization of missing native vision, not a model of
-   perceptual filling-in. It cannot be used when a prosthetic percept is
-   composited into the same scotoma.
+   Image-derived fills are visualizations of missing native vision, not
+   models of perceptual filling-in. They cannot be used when a prosthetic
+   percept is composited into the same scotoma.
 
 The scotoma does not affect what the implant receives. Prosthetic encoding
 samples the original scene, including regions where native vision is lost.

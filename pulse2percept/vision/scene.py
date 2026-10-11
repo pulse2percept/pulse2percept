@@ -4,6 +4,8 @@ from matplotlib.colors import to_rgb
 from matplotlib.patches import Ellipse, Rectangle
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import gaussian_filter
+from scipy.sparse import csc_matrix, csr_matrix
+from scipy.sparse.linalg import splu
 
 from skimage.color import rgb2gray
 from skimage.restoration import inpaint_biharmonic
@@ -26,8 +28,16 @@ _TRUNCATE = 4.0
 # float64 interpolator's memory use:
 _SAMPLE_BLOCK = 1 << 20
 
-# The only `scotoma_fill` string that is not a color; see `_inpaint_rgb`:
+# `scotoma_fill` strings that fill from the surrounding image rather than with
+# a color. 'inpaint' is a legacy alias of 'biharmonic':
+_BIHARMONIC = 'biharmonic'
+_LAPLACE = 'laplace'
+_GAUSSIAN = 'gaussian'
 _INPAINT = 'inpaint'
+# These meet the surrounding image at the boundary, so they ignore
+# `scotoma_blend`:
+_INTERPOLATING_FILLS = (_BIHARMONIC, _LAPLACE, _INPAINT)
+_IMAGE_FILLS = _INTERPOLATING_FILLS + (_GAUSSIAN,)
 
 # `aperture` shapes; size comes from `fov`. See `Scene._aperture_mask`:
 _RECTANGULAR = 'rectangular'
@@ -279,27 +289,51 @@ def _percept_on(prosthetic, frames, xs, ys):
 
 
 def _resolve_fill(scotoma_fill):
-    """Normalizes scotoma_fill to a gray level, RGB tuple, or _INPAINT"""
+    """Normalizes scotoma_fill to a gray level, RGB tuple, or one of
+    `_IMAGE_FILLS`"""
+    names = ', '.join(repr(name) for name in _IMAGE_FILLS)
     if isinstance(scotoma_fill, str):
-        if scotoma_fill == _INPAINT:
-            return _INPAINT
+        if scotoma_fill in _IMAGE_FILLS:
+            return scotoma_fill
         try:
             return tuple(float(c) for c in to_rgb(scotoma_fill))
         except ValueError:
             raise ValueError(f"'scotoma_fill' is a display intensity in "
-                             f"[0, 1], a Matplotlib color, or {_INPAINT!r}, "
-                             f"not {scotoma_fill!r}.") from None
+                             f"[0, 1], a Matplotlib color, or one of "
+                             f"{names}, not {scotoma_fill!r}.") from None
 
     fill = np.asarray(as_value(scotoma_fill, dimensionless, 'scotoma_fill'),
                       dtype=float)
     if fill.ndim != 0 and fill.shape != (3,):
         raise ValueError(f"'scotoma_fill' is a display intensity in [0, 1], "
-                         f"an (r, g, b) triple, a Matplotlib color, or "
-                         f"{_INPAINT!r}, not {scotoma_fill!r}.")
+                         f"an (r, g, b) triple, a Matplotlib color, or one "
+                         f"of {names}, not {scotoma_fill!r}.")
     if not np.all(np.isfinite(fill)) or fill.min() < 0 or fill.max() > 1:
         raise ValueError(f"'scotoma_fill' is a display intensity and must "
                          f"lie in [0, 1], not {scotoma_fill}.")
     return float(fill) if fill.ndim == 0 else tuple(fill.tolist())
+
+
+def _resolve_fill_sigma(scotoma_fill_sigma, fill):
+    """Normalizes `scotoma_fill_sigma` to dva; None unless `fill` is
+    `_GAUSSIAN`"""
+    if fill != _GAUSSIAN:
+        if scotoma_fill_sigma is not None:
+            raise ValueError(f"'scotoma_fill_sigma' sets the width of "
+                             f"scotoma_fill={_GAUSSIAN!r} and is not used by "
+                             f"scotoma_fill={fill!r}. Omit it.")
+        return None
+    if scotoma_fill_sigma is None:
+        raise ValueError(f"scotoma_fill={_GAUSSIAN!r} requires "
+                         f"'scotoma_fill_sigma', the Gaussian sigma in "
+                         f"degrees of visual angle.")
+    sigma = float(as_value(scotoma_fill_sigma, dva, 'scotoma_fill_sigma'))
+    if not np.isfinite(sigma) or sigma <= 0:
+        raise ValueError(f"'scotoma_fill_sigma' is a Gaussian sigma in "
+                         f"degrees of visual angle and must be finite and "
+                         f"positive, not {scotoma_fill_sigma}.")
+    return sigma
+
 
 def _resolve_background(background):
     """Normalizes ``background`` to an ``(r, g, b)`` triple in [0, 1]"""
@@ -368,18 +402,105 @@ def _over(frames, overlay):
     return np.clip(frames * (1 - alpha) + color * alpha, 0, 1)
 
 
-def _inpaint_rgb(image, mask):
-    """Inpaints ``image`` where ``mask`` is True from the unmasked pixels"""
+def _check_surround(mask, fill):
+    """Raises if ``mask`` leaves no visible pixel to fill from"""
     if mask.all():
-        raise ValueError("scotoma_fill='inpaint' fills a scotoma in from the "
-                         "vision around it, and here there is none: every "
-                         "pixel of the frame is lost. Use a numeric fill, or "
-                         "a smaller scotoma.")
+        raise ValueError(f"scotoma_fill={fill!r} fills a scotoma in from the "
+                         f"vision around it, and here there is none: every "
+                         f"pixel of the frame is lost. Use a numeric fill, "
+                         f"or a smaller scotoma.")
+
+
+def _inpaint_biharmonic_rgb(image, mask):
+    """Inpaints ``image`` where ``mask`` is True from the unmasked pixels"""
     if not mask.any():
         return np.asarray(image, dtype=np.float32)
     holed = np.where(mask[..., np.newaxis], 0.0, image)
     filled = inpaint_biharmonic(holed, mask, channel_axis=-1)
     return np.clip(filled, 0, 1).astype(np.float32)
+
+
+def _laplace_system(mask):
+    """Returns ``(lu, lost, boundary)`` of the Laplace fill of ``mask``
+
+    ``lu`` factorizes the 4-neighbor Laplacian on masked pixels, ``lost``
+    holds their flat indices, and ``boundary`` maps flat known pixel values
+    to the right-hand side. Requires at least one unmasked pixel.
+    """
+    n_rows, n_cols = mask.shape
+    rows, cols = np.nonzero(mask)
+    n = rows.size
+    index = np.full(mask.shape, -1, dtype=np.int64)
+    index[rows, cols] = np.arange(n)
+    # Only in-frame neighbors belong to the domain, so a border pixel has
+    # fewer than 4:
+    degree = np.zeros(n)
+    a_rows, a_cols, b_rows, b_cols = [], [], [], []
+    for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        r, c = rows + dr, cols + dc
+        inside = (r >= 0) & (r < n_rows) & (c >= 0) & (c < n_cols)
+        degree += inside
+        i, r, c = np.flatnonzero(inside), r[inside], c[inside]
+        lost = mask[r, c]
+        a_rows.append(i[lost])
+        a_cols.append(index[r[lost], c[lost]])
+        b_rows.append(i[~lost])
+        b_cols.append(r[~lost] * n_cols + c[~lost])
+    a_rows, a_cols = np.concatenate(a_rows), np.concatenate(a_cols)
+    b_rows, b_cols = np.concatenate(b_rows), np.concatenate(b_cols)
+    # degree * u_i - (masked neighbors) = (known neighbors); nonsingular as
+    # long as one pixel is known:
+    laplacian = csc_matrix(
+        (np.concatenate((degree, -np.ones(a_rows.size))),
+         (np.concatenate((np.arange(n), a_rows)),
+          np.concatenate((np.arange(n), a_cols)))), shape=(n, n))
+    boundary = csr_matrix((np.ones(b_rows.size), (b_rows, b_cols)),
+                          shape=(n, mask.size))
+    return splu(laplacian), rows * n_cols + cols, boundary
+
+
+def _inpaint_laplace_rgb(image, mask, system=None):
+    """Inpaints ``image`` where ``mask`` is True by harmonic extension of the
+    unmasked pixels
+
+    ``system`` is `_laplace_system(mask)`, to reuse across frames.
+    """
+    if not mask.any():
+        return np.asarray(image, dtype=np.float32)
+    lu, lost, boundary = _laplace_system(mask) if system is None else system
+    flat = np.array(image, dtype=float).reshape((-1, 3))
+    flat[lost] = lu.solve(boundary @ flat)
+    # Bounded by the known values (maximum principle); clip only rounding:
+    return np.clip(flat.reshape(image.shape), 0, 1).astype(np.float32)
+
+
+def _gaussian_fill_rgb(image, mask, sigma, step):
+    """Replaces masked pixels of ``image`` by the Gaussian-weighted mean of
+    unmasked ones
+
+    ``sigma`` is in dva; ``step`` is the raster pitch ``(dx, dy)`` in dva.
+    Masked and off-frame pixels carry no weight.
+    """
+    image = np.asarray(image, dtype=np.float32)
+    if not mask.any():
+        return image
+    dx, dy = step
+    # Sigma 0 on the channel axis, so channels stay separate; zero padding,
+    # so off-frame pixels add neither value nor weight:
+    sigmas = (sigma / dy, sigma / dx, 0)
+    valid = (~mask)[..., np.newaxis].astype(float)
+    weight = gaussian_filter(valid, sigmas, mode='constant', cval=0,
+                             truncate=_TRUNCATE)[mask]
+    if not np.all(weight > 0):
+        raise ValueError(f"scotoma_fill_sigma={sigma:g} dva is too small: the "
+                         f"Gaussian (truncated at {_TRUNCATE:g} sigma) does "
+                         f"not reach visible pixels from every point of the "
+                         f"scotoma. Use a larger 'scotoma_fill_sigma'.")
+    total = gaussian_filter(image * valid, sigmas, mode='constant', cval=0,
+                            truncate=_TRUNCATE)[mask]
+    out = image.copy()
+    out[mask] = np.clip(total / weight, 0, 1)
+    return out
 
 
 def _check_range(data, vmin, vmax):
@@ -466,12 +587,34 @@ class Scene(PrettyPrint):
     scotoma : :py:class:`~pulse2percept.vision.Scotoma`, optional
         Region where native vision is lost. If None, native vision is intact
         everywhere.
-    scotoma_fill : float, color, or 'inpaint', optional
+    scotoma_fill : float, color, or str, optional
         Scotoma fill: a gray level in [0, 1] (default 0, black), an
         `(r, g, b)` triple in [0, 1], or any Matplotlib color string.
-        `'inpaint'` fills from the surrounding image using
-        :py:func:`skimage.restoration.inpaint_biharmonic` and ignores
-        `scotoma_blend`. It cannot be used when composing a prosthetic percept.
+        A method name fills each frame from the surrounding image, using all
+        pixels where loss is nonzero as the hole:
+
+        *  `'biharmonic'`: smooth biharmonic interpolation
+           (:py:func:`skimage.restoration.inpaint_biharmonic`); may overshoot
+           for large holes. Ignores `scotoma_blend`.
+        *  `'laplace'`: harmonic interpolation (4-neighbor discrete Laplace
+           equation); bounded by the surrounding values. Ignores
+           `scotoma_blend`.
+        *  `'gaussian'`: Gaussian-weighted mean of visible pixels, with sigma
+           `scotoma_fill_sigma`; lost pixels carry no weight. Does not meet
+           the surround exactly, so `scotoma_blend` applies.
+
+        `'inpaint'` is a legacy alias of `'biharmonic'`. Image-derived fills
+        visualize missing vision, not perceptual filling-in, and cannot be
+        used when composing a prosthetic percept.
+
+        .. versionchanged:: 0.12.0
+            Added `'biharmonic'`, `'laplace'`, and `'gaussian'`.
+    scotoma_fill_sigma : float, optional
+        Gaussian sigma (dva) of ``scotoma_fill='gaussian'``, converted to
+        pixels per raster axis. Required for that fill and rejected for any
+        other.
+
+        .. versionadded:: 0.12.0
     background : float or (r, g, b), optional
         Gray level or RGB value to use for transparent pixels. Defaults to
         black.
@@ -524,13 +667,15 @@ class Scene(PrettyPrint):
     """
 
     def __init__(self, source, fov, extent=None, scotoma=None, scotoma_fill=0,
-                 scotoma_blend=0.5, background=0, aperture=_RECTANGULAR):
+                 scotoma_blend=0.5, background=0, aperture=_RECTANGULAR,
+                 scotoma_fill_sigma=None):
         if not isinstance(source, (ImageStimulus, VideoStimulus)):
             source = ImageStimulus(source)
         if scotoma is not None and not isinstance(scotoma, Scotoma):
             raise TypeError(f"'scotoma' must be a Scotoma object, not "
                             f"{type(scotoma)}.")
         fill = _resolve_fill(scotoma_fill)
+        fill_sigma = _resolve_fill_sigma(scotoma_fill_sigma, fill)
         blend = float(as_value(scotoma_blend, dva, 'scotoma_blend'))
         if not np.isfinite(blend) or blend < 0:
             raise ValueError(f"'scotoma_blend' is a Gaussian sigma in degrees "
@@ -540,6 +685,7 @@ class Scene(PrettyPrint):
         self._background = _resolve_background(background)
         self._scotoma = scotoma
         self._scotoma_fill = fill
+        self._scotoma_fill_sigma = fill_sigma
         self._scotoma_blend = blend
         self._aperture = _resolve_aperture(aperture)
         n_rows, n_cols = self._frame_shape
@@ -593,6 +739,8 @@ class Scene(PrettyPrint):
                   'background': self.background,
                   'scotoma_fill': self.scotoma_fill,
                   'scotoma_blend': self.scotoma_blend}
+        if self.scotoma_fill_sigma is not None:
+            params['scotoma_fill_sigma'] = self.scotoma_fill_sigma
         # Omit the default:
         if self.aperture != _RECTANGULAR:
             params['aperture'] = self.aperture
@@ -615,12 +763,18 @@ class Scene(PrettyPrint):
 
     @property
     def scotoma_fill(self):
-        """Scotoma fill as a gray level, `(r, g, b)` triple, or `'inpaint'`
+        """Scotoma fill as a gray level, `(r, g, b)` triple, or method name
 
-        Matplotlib color strings are stored as RGB triples.
+        Method names are `'biharmonic'`, `'laplace'`, `'gaussian'`, or the
+        legacy alias `'inpaint'`, stored as given. Matplotlib color strings
+        are stored as RGB triples.
         """
         return self._scotoma_fill
 
+    @property
+    def scotoma_fill_sigma(self):
+        """Gaussian sigma (dva) of ``scotoma_fill='gaussian'``, else None"""
+        return self._scotoma_fill_sigma
 
     @property
     def scotoma_blend(self):
@@ -759,6 +913,7 @@ class Scene(PrettyPrint):
         return Scene(self.source, self.fov, extent=self.extent,
                      scotoma=scotoma,
                      scotoma_fill=self.scotoma_fill,
+                     scotoma_fill_sigma=self.scotoma_fill_sigma,
                      scotoma_blend=self.scotoma_blend,
                      background=self.background,
                      aperture=self.aperture)
@@ -898,8 +1053,8 @@ class Scene(PrettyPrint):
         separate row and column sigmas.
         """
         sigma = self._scotoma_blend
-        # Inpainting uses the hard boundary:
-        hard = self.scotoma is None or self._scotoma_fill == _INPAINT
+        hard = (self.scotoma is None or
+                self._scotoma_fill in _INTERPOLATING_FILLS)
         if hard or sigma == 0:
             return self._loss_on(xs, ys)
         dx, dy = _raster_step(xs, ys)
@@ -912,11 +1067,22 @@ class Scene(PrettyPrint):
                                   truncate=_TRUNCATE)
         return np.clip(blurred[pads[0]:-pads[0], pads[1]:-pads[1]], 0, 1)
 
-    def _fill_rgb(self, frame_rgb, loss):
-        """Returns the scotoma fill for one ``(rows, cols, 3)`` frame"""
-        if self._scotoma_fill != _INPAINT:
-            return self._scotoma_fill
-        return _inpaint_rgb(frame_rgb, loss > 0)
+    def _fill_rgb(self, frame_rgb, mask, step, laplace=None):
+        """Returns the scotoma fill for one ``(rows, cols, 3)`` frame
+
+        ``mask`` marks lost pixels by the hard boundary, ``step`` is the
+        raster pitch ``(dx, dy)`` in dva, and ``laplace`` is
+        `_laplace_system(mask)`.
+        """
+        fill = self._scotoma_fill
+        if fill in (_BIHARMONIC, _INPAINT):
+            return _inpaint_biharmonic_rgb(frame_rgb, mask)
+        if fill == _LAPLACE:
+            return _inpaint_laplace_rgb(frame_rgb, mask, system=laplace)
+        if fill == _GAUSSIAN:
+            return _gaussian_fill_rgb(frame_rgb, mask,
+                                      self._scotoma_fill_sigma, step)
+        return fill
 
     def _aperture_mask(self, xs, ys):
         """Returns a mask of raster nodes outside the round aperture
@@ -984,13 +1150,22 @@ class Scene(PrettyPrint):
         if self.scotoma is None:
             return (frames if frames.shape[2] == 3
                     else np.repeat(frames, 3, axis=2))
-        loss = self._rendered_loss_on(xs, ys)
-        alpha = loss[..., np.newaxis]
+        alpha = self._rendered_loss_on(xs, ys)[..., np.newaxis]
+        mask = laplace = None
+        if self._scotoma_fill in _IMAGE_FILLS:
+            # Fill support uses the hard boundary, even where a Gaussian
+            # fill's `alpha` is blurred:
+            mask = self._loss_on(xs, ys) > 0
+            _check_surround(mask, self._scotoma_fill)
+            if self._scotoma_fill == _LAPLACE and mask.any():
+                # Same mask for every frame, so factorize once:
+                laplace = _laplace_system(mask)
+        step = _raster_step(xs, ys)
         out = np.empty((ys.size, xs.size, 3, n_frames), dtype=np.float32)
         for f in range(n_frames):
             rgb = _as_rgb(frames[..., f])
-            # Inpainting depends on the frame content:
-            fill = self._fill_rgb(rgb, loss)
+            # Image fills depend on the frame content:
+            fill = self._fill_rgb(rgb, mask, step, laplace=laplace)
             out[..., f] = (1 - alpha) * rgb + alpha * fill
         return out
 
@@ -1008,10 +1183,10 @@ class Scene(PrettyPrint):
         ``(frames, time, time_unit)``. With ``frame``, only that output frame
         is computed and ``gaze`` is a single (x, y).
         """
-        if self._scotoma_fill == _INPAINT:
+        if self._scotoma_fill in _IMAGE_FILLS:
             raise ValueError(
-                f"scotoma_fill={_INPAINT!r} cannot be combined with a "
-                f"prosthetic percept because their interaction is not "
+                f"scotoma_fill={self._scotoma_fill!r} cannot be combined with "
+                f"a prosthetic percept because their interaction is not "
                 f"modeled. Use a numeric 'scotoma_fill' to compose one.")
         _check_prosthetic(prosthetic)
         vmin, vmax = _check_range(prosthetic.data, vmin, vmax)
@@ -1042,8 +1217,8 @@ class Scene(PrettyPrint):
                 native = self._source_on(xs, ys, points[f],
                                          frame=self._source_frame(f))[..., 0]
             native = _as_rgb(native)
-            fill = self._fill_rgb(native, loss)
-            lost = np.maximum(fill, phosphene[..., np.newaxis])
+            # A color fill; image fills were rejected above:
+            lost = np.maximum(self._scotoma_fill, phosphene[..., np.newaxis])
             out[f] = (1 - alpha) * native + alpha * lost
         return (np.ascontiguousarray(np.moveaxis(out, 0, -1)), out_time,
                 out_unit)
@@ -1236,7 +1411,7 @@ class Scene(PrettyPrint):
             ``(1 - loss) * native + loss * max(scotoma_fill, phosphene)``;
             without one, it is rendered alone on black (overlaying it on
             intact native vision would imply an unmodeled interaction).
-            Not supported with ``scotoma_fill='inpaint'``.
+            Not supported with an image-derived ``scotoma_fill``.
         gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
             Scene location (dva) on the fovea. Defaults to the origin. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved at the output
@@ -1421,12 +1596,13 @@ class Scene(PrettyPrint):
         self._clip_to_support(artists, ax.transData)
         return ax
 
-    def _inpaints(self):
-        """Returns True if the scotoma is inpainted
+    def _fills_from_image(self):
+        """Returns True if the scotoma is filled from the surrounding image
 
-        Inpainting depends on the raster, so it must use the `render` raster.
+        Image fills depend on the raster, so they must use the `render`
+        raster.
         """
-        return self.scotoma is not None and self._scotoma_fill == _INPAINT
+        return self.scotoma is not None and self._scotoma_fill in _IMAGE_FILLS
 
     def _plot_scene(self, gaze_xy, frame, ax, rings, meridians, grid_color,
                     percept, vmax, vmin, context_alpha, **kwargs):
@@ -1439,7 +1615,7 @@ class Scene(PrettyPrint):
         if percept is not None:
             patch = self._percept_patch(percept, vmax, vmin, gaze_xy, frame,
                                         offset=gaze_xy)
-        if self._inpaints():
+        if self._fills_from_image():
             # Eye-view FOV raster, shifted by gaze:
             view_xs, view_ys = self._view_axes()
             wide = self._fov_layer(view_xs, view_ys, gaze_xy, frame, percept,
@@ -1597,7 +1773,7 @@ class Scene(PrettyPrint):
             gx, gy = points[0] if len(points) == 1 else points[f]
             # Eye coordinates of the source pixel centers:
             eye_xs, eye_ys = xs - gx, ys - gy
-            if self._inpaints():
+            if self._fills_from_image():
                 # Compose on the eye-view raster, then resample onto the
                 # source raster:
                 view_xs, view_ys = self._view_axes()

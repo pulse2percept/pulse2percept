@@ -7,7 +7,9 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 import matplotlib.pyplot as plt
+from scipy.ndimage import binary_dilation, gaussian_filter
 from skimage.color import rgb2gray
+from skimage.restoration import inpaint_biharmonic
 
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import ImageStimulus, VideoStimulus, samples
@@ -432,16 +434,21 @@ def test_inpainting_works_in_color_and_stays_a_display_intensity():
     npt.assert_almost_equal(native[..., 2, 0], 0.5, decimal=6)
 
 
-def test_an_inpainted_scene_refuses_to_compose_a_prosthetic_percept():
-    """Composing a percept onto an inpainted scene is a ValueError"""
+@pytest.mark.parametrize('fill, kwargs', [
+    ('inpaint', {}), ('biharmonic', {}), ('laplace', {}),
+    ('gaussian', {'scotoma_fill_sigma': 3}),
+])
+def test_an_image_filled_scene_refuses_to_compose_a_prosthetic_percept(
+        fill, kwargs):
+    """Composing a percept onto an image-filled scotoma is a ValueError"""
     rgb = np.stack([np.tile(np.linspace(0.1, 0.9, 31), (31, 1)),
                     np.tile(np.linspace(0.9, 0.2, 31), (31, 1)).T,
                     np.full((31, 31), 0.4)], axis=-1)
     scene = Scene(ImageStimulus(rgb), fov=(31, 31), scotoma=Scotoma.circle(4),
-                  scotoma_fill='inpaint')
+                  scotoma_fill=fill, **kwargs)
     dark = Percept(np.zeros((31, 31, 1)), space=scene._grid())
     for draw in (scene.render, lambda **kw: scene.plot(**kw)):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=fill):
             draw(percept=dark, vmax=1)
     plt.close('all')
     # A numeric fill composes; native vision is finite either way:
@@ -472,6 +479,204 @@ def test_inpainting_does_not_change_what_the_device_sees():
     npt.assert_array_equal(blind._sample_at(x, y), plain._sample_at(x, y))
     npt.assert_array_equal(blind._device_input(x, y),
                            plain._device_input(x, y))
+
+
+IMAGE_FILLS = [('inpaint', {}), ('biharmonic', {}), ('laplace', {}),
+               ('gaussian', {'scotoma_fill_sigma': 4})]
+
+
+def image_scene(image, fill, scotoma=None, **kwargs):
+    """Square scene of ``image`` at 1 dva per pixel with an image fill"""
+    n = image.shape[0]
+    scotoma = Scotoma.circle(6) if scotoma is None else scotoma
+    kwargs.setdefault('scotoma_blend', 0)
+    return Scene(ImageStimulus(image), fov=(n, n), scotoma=scotoma,
+                 scotoma_fill=fill, **kwargs)
+
+
+def filled(image, fill, **kwargs):
+    """Returns ``(native, mask)`` of `image_scene` for a still image"""
+    scene = image_scene(image, fill, **kwargs)
+    mask = scene._loss_on(*scene._view_axes()) > 0
+    return scene._native_rgb()[..., 0], mask
+
+
+def random_rgb(seed=0):
+    return np.random.default_rng(seed).random((SCENE_PX, SCENE_PX, 3))
+
+
+def test_inpaint_is_biharmonic_and_unchanged():
+    """'inpaint' and 'biharmonic' both run skimage's biharmonic inpainting"""
+    # Scenes store float32:
+    image = random_rgb().astype(np.float32)
+    native, mask = filled(image, 'inpaint')
+    npt.assert_array_equal(native, filled(image, 'biharmonic')[0])
+    holed = np.where(mask[..., np.newaxis], 0.0, image)
+    expected = np.clip(inpaint_biharmonic(holed, mask, channel_axis=-1), 0, 1)
+    npt.assert_allclose(native, expected, atol=1e-6)
+
+
+@pytest.mark.parametrize('fill, kwargs', IMAGE_FILLS)
+def test_image_fills_leave_visible_pixels_alone(fill, kwargs):
+    image = random_rgb()
+    native, mask = filled(image, fill, **kwargs)
+    npt.assert_array_equal(native[~mask], image[~mask].astype(np.float32))
+
+
+@pytest.mark.parametrize('fill, kwargs', IMAGE_FILLS)
+def test_image_fills_know_nothing_of_what_they_cover(fill, kwargs):
+    """Two images that differ only inside the scotoma fill identically"""
+    image = random_rgb(0)
+    _, mask = filled(image, fill, **kwargs)
+    hidden = np.where(mask[..., np.newaxis], random_rgb(1), image)
+    npt.assert_equal(np.allclose(image, hidden), False)
+    npt.assert_array_equal(filled(image, fill, **kwargs)[0],
+                           filled(hidden, fill, **kwargs)[0])
+
+
+@pytest.mark.parametrize('fill, kwargs', [('laplace', {}),
+                                          ('gaussian',
+                                           {'scotoma_fill_sigma': 4})])
+def test_a_constant_color_stays_constant(fill, kwargs):
+    color = (0.2, 0.5, 0.9)
+    image = np.broadcast_to(color, (SCENE_PX, SCENE_PX, 3))
+    native, _ = filled(image, fill, **kwargs)
+    npt.assert_allclose(native, image, atol=1e-6)
+
+
+@pytest.mark.parametrize('fill, kwargs', IMAGE_FILLS)
+def test_image_fills_need_some_vision_to_fill_from(fill, kwargs):
+    scene = image_scene(random_rgb(), fill, scotoma=Scotoma.circle(100),
+                        **kwargs)
+    with pytest.raises(ValueError, match='every pixel'):
+        scene._native_rgb()
+
+
+def test_laplace_reconstructs_a_linear_ramp_exactly():
+    """A linear function is harmonic, so Laplace fill recovers it"""
+    x = np.arange(SCENE_PX) - HALF
+    xx, yy = np.meshgrid(x, -x)
+    image = np.stack([0.5 + 0.02 * xx, 0.5 - 0.015 * yy,
+                      0.4 + 0.01 * xx + 0.01 * yy], axis=-1)
+    native, mask = filled(image, 'laplace', scotoma=Scotoma.circle(8))
+    npt.assert_equal(mask.sum() > 150, True)
+    npt.assert_allclose(native, image, atol=1e-6)
+
+
+@pytest.mark.parametrize('center', [(0, 0), (HALF, 0)])
+def test_laplace_stays_within_the_surrounding_values(center):
+    """No overshoot, and no black is invented past the frame edge
+
+    The surround rises away from the hole, so gradient-extrapolating fills
+    dip below it.
+    """
+    x = np.arange(SCENE_PX) - HALF
+    xx, yy = np.meshgrid(x, -x)
+    image = 0.2 + 0.015 * np.hypot(xx - center[0], yy - center[1])
+    native, mask = filled(image, 'laplace',
+                          scotoma=Scotoma.circle(10, center=center))
+    ring = binary_dilation(mask) & ~mask
+    inside = native[mask]
+    npt.assert_equal(inside.min() >= image[ring].min() - 1e-6, True)
+    npt.assert_equal(inside.max() <= image[ring].max() + 1e-6, True)
+
+
+def test_gaussian_keeps_color_channels_apart():
+    """Each channel fills as if it were a grayscale scene of its own"""
+    image = random_rgb()
+    native, _ = filled(image, 'gaussian', scotoma_fill_sigma=4)
+    for c in range(3):
+        gray, _ = filled(image[..., c], 'gaussian', scotoma_fill_sigma=4)
+        npt.assert_allclose(native[..., c], gray[..., 0], atol=1e-6)
+
+
+def test_gaussian_sigma_is_in_degrees_not_pixels():
+    """Same angular geometry at 1 and 3 pixels per degree fills alike"""
+    def smooth(n):
+        xs = (np.arange(n) + 0.5) * SCENE_PX / n - SCENE_PX / 2
+        xx, yy = np.meshgrid(xs, -xs)
+        return 0.5 + 0.3 * np.sin(xx / 3) * np.cos(yy / 4)
+
+    def fill(n, sigma):
+        scene = Scene(ImageStimulus(smooth(n)), fov=SCENE_PX,
+                      scotoma=Scotoma.circle(6), scotoma_fill='gaussian',
+                      scotoma_fill_sigma=sigma, scotoma_blend=0)
+        return scene._native_rgb()[..., 0, 0]
+
+    x = np.arange(SCENE_PX) - HALF
+    deep = np.hypot(*np.meshgrid(x, x)) <= 5
+    coarse = fill(SCENE_PX, 3)
+    # Every third fine pixel center is a coarse one:
+    fine = fill(3 * SCENE_PX, 3)[1::3, 1::3]
+    npt.assert_allclose(coarse[deep], fine[deep], atol=5e-3)
+    # The same sigma in fine pixels would be 9 dva, a different fill:
+    wide = fill(3 * SCENE_PX, 9)[1::3, 1::3]
+    npt.assert_equal(np.abs(coarse - wide)[deep].max() > 0.05, True)
+
+
+def test_gaussian_converts_sigma_per_axis():
+    """Anisotropic pixels get separate row and column sigmas"""
+    image = random_rgb()
+    mask = np.zeros(image.shape[:2], dtype=bool)
+    mask[15:26, 15:26] = True
+    got = scene_module._gaussian_fill_rgb(image, mask, 4.0, (2.0, 0.5))
+    valid = (~mask)[..., np.newaxis].astype(float)
+    blur = dict(sigma=(8.0, 2.0, 0), mode='constant', truncate=4.0)
+    expected = (gaussian_filter(image * valid, **blur) /
+                gaussian_filter(valid, **blur))
+    npt.assert_allclose(got[mask], expected[mask], atol=1e-6)
+
+
+def test_gaussian_blend_softens_the_boundary_inside_the_scotoma():
+    image = random_rgb()
+    hard, mask = filled(image, 'gaussian', scotoma_fill_sigma=4)
+    soft, _ = filled(image, 'gaussian', scotoma_fill_sigma=4,
+                     scotoma_blend=2)
+    npt.assert_equal(np.allclose(hard[mask], soft[mask]), False)
+    npt.assert_allclose(soft[~mask], hard[~mask], atol=1e-6)
+
+
+@pytest.mark.parametrize('sigma', [None, 0, -1, np.nan, np.inf])
+def test_gaussian_requires_a_real_sigma(sigma):
+    with pytest.raises(ValueError, match='scotoma_fill_sigma'):
+        image_scene(random_rgb(), 'gaussian', scotoma_fill_sigma=sigma)
+
+
+@pytest.mark.parametrize('fill', [0, 'red', 'inpaint', 'biharmonic',
+                                  'laplace'])
+def test_only_a_gaussian_fill_takes_a_sigma(fill):
+    with pytest.raises(ValueError, match='scotoma_fill_sigma'):
+        image_scene(random_rgb(), fill, scotoma_fill_sigma=2)
+
+
+def test_a_gaussian_too_narrow_to_reach_vision_is_an_error():
+    """A truncated kernel with no visible support raises, not NaN or black"""
+    scene = image_scene(random_rgb(), 'gaussian', scotoma_fill_sigma=1)
+    with pytest.raises(ValueError, match='too small'):
+        scene._native_rgb()
+
+
+@pytest.mark.parametrize('fill, kwargs', IMAGE_FILLS)
+def test_image_fills_follow_each_video_frame(fill, kwargs):
+    """Each frame fills like a still scene of that frame"""
+    frames = [random_rgb(0), random_rgb(1)]
+    video = Scene(VideoStimulus(np.stack(frames, axis=-1), time=[0, 1000]),
+                  fov=(SCENE_PX, SCENE_PX), scotoma=Scotoma.circle(6),
+                  scotoma_fill=fill, scotoma_blend=0, **kwargs)
+    native = video._native_rgb()
+    for f, frame in enumerate(frames):
+        npt.assert_allclose(native[..., f], filled(frame, fill, **kwargs)[0],
+                            atol=1e-6)
+    npt.assert_equal(np.allclose(native[..., 0], native[..., 1]), False)
+
+
+def test_the_fellow_eye_keeps_a_gaussian_fill():
+    scene = image_scene(random_rgb(), 'gaussian', scotoma_fill_sigma=2.5)
+    fellow = scene.fellow_eye()
+    npt.assert_equal(fellow.scotoma_fill, 'gaussian')
+    npt.assert_equal(fellow.scotoma_fill_sigma, 2.5)
+    npt.assert_equal('scotoma_fill_sigma=2.5' in repr(scene), True)
+    npt.assert_equal('scotoma_fill_sigma' in repr(ramp_scene()), False)
 
 
 @pytest.mark.parametrize('background, surround', [
@@ -842,7 +1047,8 @@ def test_scotoma_and_fill_are_validated():
     for blend in (-1, -0.1, np.nan, np.inf):
         with pytest.raises(ValueError):
             Scene(source, fov=8, scotoma_blend=blend)
-    for fill in ('blur', 'INPAINT', 'inpainting', 'definitely-not-a-color'):
+    for fill in ('blur', 'INPAINT', 'inpainting', 'Laplace', 'gauss',
+                 'definitely-not-a-color'):
         with pytest.raises(ValueError):
             Scene(source, fov=8, scotoma_fill=fill)
     for fill in ((0.1, 0.2), (0.1, 0.2, 0.3, 0.4), (0.5, 1.5, 0.5)):
