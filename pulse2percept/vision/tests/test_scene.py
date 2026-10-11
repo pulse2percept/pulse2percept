@@ -1287,7 +1287,7 @@ def test_save_matches_render_then_save(tmp_path):
     npt.assert_array_equal(iio.imread(a), iio.imread(b))
 
 
-def test_save_keeps_the_render_raster_unless_shape_is_given(tmp_path):
+def test_save_keeps_the_render_raster(tmp_path):
     """step=0.3 renders 137 x 137: neither the 41 px source nor 320 px"""
     scene = ramp_scene()
     rendered = scene.render(step=0.3)
@@ -1296,9 +1296,12 @@ def test_save_keeps_the_render_raster_unless_shape_is_given(tmp_path):
     npt.assert_equal(rendered.shape[:2], (137, 137))
 
 
-def test_save_shape_is_the_file_size_not_the_render_raster(tmp_path):
-    fname = ramp_scene().save(tmp_path / 'scene.png', shape=(30, 50))
-    npt.assert_equal(iio.imread(fname).shape, (30, 50, 3))
+def test_save_shape_is_the_render_raster_not_a_resize(tmp_path):
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.3)
+    a = scene.save(tmp_path / 'a.png', shape=(30, 50))
+    b = scene.render(shape=(30, 50)).save(tmp_path / 'b.png')
+    npt.assert_array_equal(iio.imread(a), iio.imread(b))
+    npt.assert_equal(iio.imread(a).shape, (30, 50, 3))
 
 
 def test_save_maps_percept_brightness_before_saving_rgb(tmp_path):
