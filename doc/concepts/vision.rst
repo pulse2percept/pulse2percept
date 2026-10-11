@@ -631,9 +631,20 @@ comparing rendered prosthetic percepts across conditions.
         vmax=50,
     )
 
-Its ``shape`` sets the saved file's ``(height, width)`` in pixels, as in
-:py:meth:`~pulse2percept.percepts.Percept.save`, not the render raster. Use
-``step``, or ``scene.render(shape=...).save(...)``, to choose the raster.
+``step`` sets the render raster, and the file keeps that raster's dimensions
+unless ``shape`` is given. ``shape`` resizes the saved file to
+``(height, width)`` pixels, as in
+:py:meth:`~pulse2percept.percepts.Percept.save`:
+
+.. code-block:: python
+
+    # Render at this angular resolution and save that raster:
+    scene.save('fine.png', step=0.02 * dva)
+
+    # Render normally, then resize the output file:
+    scene.save('small.png', shape=(None, 320))
+
+To render on an exact pixel grid, use ``scene.render(shape=...).save(...)``.
 
 There are three ways to save a scene:
 

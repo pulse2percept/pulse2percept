@@ -1287,6 +1287,15 @@ def test_save_matches_render_then_save(tmp_path):
     npt.assert_array_equal(iio.imread(a), iio.imread(b))
 
 
+def test_save_keeps_the_render_raster_unless_shape_is_given(tmp_path):
+    """step=0.3 renders 137 x 137: neither the 41 px source nor 320 px"""
+    scene = ramp_scene()
+    rendered = scene.render(step=0.3)
+    fname = scene.save(tmp_path / 'scene.png', step=0.3)
+    npt.assert_equal(iio.imread(fname).shape, (*rendered.shape[:2], 3))
+    npt.assert_equal(rendered.shape[:2], (137, 137))
+
+
 def test_save_shape_is_the_file_size_not_the_render_raster(tmp_path):
     fname = ramp_scene().save(tmp_path / 'scene.png', shape=(30, 50))
     npt.assert_equal(iio.imread(fname).shape, (30, 50, 3))

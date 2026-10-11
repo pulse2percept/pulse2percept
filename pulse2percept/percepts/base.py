@@ -890,8 +890,12 @@ class Percept(Data):
         fname : str
             Output filename. The extension determines the file format.
         shape : ``(height, width)``, optional
-            Output size in pixels. Either dimension may be ``None`` to preserve
-            the percept's aspect ratio.
+            Output size in pixels. If None, the percept's own spatial
+            dimensions are kept (no resampling). Either dimension may be
+            ``None`` to preserve the percept's aspect ratio.
+
+            .. versionchanged:: 0.12.0
+                Defaults to the native size instead of 320 pixels wide.
         fps : float, optional
             Movie frame rate in Hz. If None, use the percept's recorded timing.
         vmin, vmax : float, optional
@@ -953,22 +957,20 @@ class Percept(Data):
                 data = np.zeros(self.data.shape, dtype=np.float64)
         data = img_as_ubyte(data)
 
-        if shape is None:
-            # Use 320px width and infer height from aspect ratio:
-            shape = (None, 320)
-        height, width = shape
-        if height is None and width is None:
-            raise ValueError('If shape is a tuple, must specify either height '
-                             'or width or both.')
-        # Infer height or width if necessary:
-        if height is None and width is not None:
-            height = width / self.data.shape[1] * self.data.shape[0]
-        elif height is not None and width is None:
-            width = height / self.data.shape[0] * self.data.shape[1]
-        # Rescale percept to desired shape. `resize` requires the trailing
-        # (RGB, time) axes explicitly:
-        data = resize(data, (np.int32(height), np.int32(width),
-                             *data.shape[2:]))
+        if shape is not None:
+            height, width = shape
+            if height is None and width is None:
+                raise ValueError('If shape is a tuple, must specify either '
+                                 'height or width or both.')
+            # Infer height or width if necessary:
+            if height is None:
+                height = width / self.data.shape[1] * self.data.shape[0]
+            elif width is None:
+                width = height / self.data.shape[0] * self.data.shape[1]
+            # Rescale percept to desired shape. `resize` requires the trailing
+            # (RGB, time) axes explicitly:
+            data = resize(data, (np.int32(height), np.int32(width),
+                                 *data.shape[2:]))
 
         # Store the range for `load`: in metadata if the format supports it,
         # otherwise in the file name (only if vmin/vmax was given, or the name

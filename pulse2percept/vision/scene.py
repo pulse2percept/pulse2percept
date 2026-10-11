@@ -1496,8 +1496,10 @@ class Scene(PrettyPrint):
         percept : :py:class:`~pulse2percept.percepts.Percept`, optional
             Eye-centered brightness percept, composed as in
             :py:meth:`~pulse2percept.vision.Scene.render`.
-        gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
-            Scene location (dva) on the fovea. Defaults to the origin.
+        gaze : array_like or Gaze, optional
+            Scene location (dva) on the fovea, as ``(x, y)``,
+            ``(n_frames, 2)``, or a :py:class:`~pulse2percept.vision.Gaze`.
+            Defaults to the origin.
         vmax : float, optional
             Percept brightness shown as white. Defaults to the maximum over
             the whole ``percept``.
@@ -1508,8 +1510,9 @@ class Scene(PrettyPrint):
             pixel pitch.
         shape : ``(height, width)``, optional
             Size of the saved file in pixels, as in
-            :py:meth:`~pulse2percept.percepts.Percept.save`. Not the render
-            raster: for that, use ``scene.render(shape=...).save(...)``.
+            :py:meth:`~pulse2percept.percepts.Percept.save`. If None, the file
+            keeps the render raster set by ``step``. Not the render raster
+            itself: for that, use ``scene.render(shape=...).save(...)``.
         fps : float, optional
             Video frame rate in Hz. Defaults to the rendered percept's timing.
 
