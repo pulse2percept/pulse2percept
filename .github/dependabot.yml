@@ -1,4 +1,5 @@
 version: 2
+
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -18,6 +19,7 @@ updates:
       codeql-action:
         patterns:
           - "github/codeql-action*"
+
       # Everything else lands in a single PR per week
       actions:
         patterns:
@@ -30,6 +32,11 @@ updates:
       day: monday
     open-pull-requests-limit: 1
     ignore:
+      # torch>=2.7.0 is our supported-version floor, not a version to keep
+      # current. Newer Torch releases are already permitted by the requirement.
+      - dependency-name: "torch"
+
+      # Patch bumps are noise; minor/major still come through
       - dependency-name: "*"
         update-types:
           - version-update:semver-patch
