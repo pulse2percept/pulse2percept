@@ -3,6 +3,7 @@
 Test scenes use 1 dva per pixel and an odd pixel count, so pixel centers land
 on whole degrees and the center pixel sits on the origin.
 """
+import imageio.v3 as iio
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -1270,6 +1271,35 @@ def test_render_leaves_the_source_alone():
     scene.render(step=0.5)
     npt.assert_array_equal(scene.source.data, before)
     npt.assert_equal(np.any(before > 0), True)
+
+
+def test_save_writes_the_rendered_scene(tmp_path):
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill='laplace')
+    fname = scene.save(tmp_path / 'scene.png')
+    npt.assert_equal(fname, str(tmp_path / 'scene.png'))
+    npt.assert_equal(iio.imread(fname).ndim, 3)
+
+
+def test_save_matches_render_then_save(tmp_path):
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill='laplace')
+    a = scene.save(tmp_path / 'a.png', gaze=(5, 2), step=0.5)
+    b = scene.render(gaze=(5, 2), step=0.5).save(tmp_path / 'b.png')
+    npt.assert_array_equal(iio.imread(a), iio.imread(b))
+
+
+def test_save_shape_is_the_file_size_not_the_render_raster(tmp_path):
+    fname = ramp_scene().save(tmp_path / 'scene.png', shape=(30, 50))
+    npt.assert_equal(iio.imread(fname).shape, (30, 50, 3))
+
+
+def test_save_maps_percept_brightness_before_saving_rgb(tmp_path):
+    """vmin/vmax go to render; the RGB Percept.save rejects them"""
+    scene = ramp_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    percept = Percept(np.full((SCENE_PX, SCENE_PX, 1), 3.0),
+                      space=scene._grid())
+    a = scene.save(tmp_path / 'a.png', percept=percept, vmax=4, vmin=1)
+    b = scene.render(percept=percept, vmax=4, vmin=1).save(tmp_path / 'b.png')
+    npt.assert_array_equal(iio.imread(a), iio.imread(b))
 
 
 def test_render_composes_by_the_documented_equation():

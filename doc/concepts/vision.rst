@@ -572,10 +572,10 @@ Pixel values and channels may change. Geometry and timing may not, because
 ``extent`` and the scene clock still refer to the original source.
 
 
-Plotting, Playing, and Rendering
-================================
+Plotting, Playing, Rendering, and Saving
+========================================
 
-Scenes provide three complementary display methods:
+Scenes provide four complementary display methods:
 
 .. list-table::
    :header-rows: 1
@@ -591,6 +591,8 @@ Scenes provide three complementary display methods:
    * - ``scene.render()``
      - Resample all layers into one eye-centered RGB
        :py:class:`~pulse2percept.percepts.Percept`
+   * - ``scene.save()``
+     - Render the eye-centered FOV and write it to an image or video file
 
 For example:
 
@@ -613,10 +615,37 @@ For example:
 Model brightness is in arbitrary units, so use a fixed ``vmax`` when
 comparing rendered prosthetic percepts across conditions.
 
-``scene.play()`` returns a Matplotlib animation, which can be saved directly:
+``scene.save()`` is shorthand for ``scene.render(...).save(...)``:
 
 .. code-block:: python
 
+    scene.save(
+        'scene.png',
+        gaze=(0, 0) * dva,
+    )
+
+    scene.save(
+        'scene.png',
+        percept=percept,
+        gaze=(0, 0) * dva,
+        vmax=50,
+    )
+
+Its ``shape`` sets the saved file's ``(height, width)`` in pixels, as in
+:py:meth:`~pulse2percept.percepts.Percept.save`, not the render raster. Use
+``step``, or ``scene.render(shape=...).save(...)``, to choose the raster.
+
+There are three ways to save a scene:
+
+.. code-block:: python
+
+    # Rasterized FOV, no Matplotlib axes:
+    scene.save('scene.png')
+
+    # Matplotlib figure, including axes and annotations:
+    scene.plot().figure.savefig('scene.png')
+
+    # Matplotlib animation:
     scene.play(
         percept=percept,
         gaze=gaze,

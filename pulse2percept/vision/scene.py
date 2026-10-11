@@ -1476,6 +1476,53 @@ class Scene(PrettyPrint):
         return Percept(self._apply_aperture(frames, xs, ys),
                        space=_raster_grid(xs, ys), time=time, time_unit=unit)
 
+    def save(self, fname, percept=None, gaze=None, vmax=None, vmin=None,
+             step=None, shape=None, fps=None):
+        """Save the rasterized FOV to an image or video file
+
+        Equivalent to ``scene.render(percept=percept, gaze=gaze, vmax=vmax,
+        vmin=vmin, step=step).save(fname, shape=shape, fps=fps)``. The file
+        holds the eye-centered FOV only: no axes, labels, visual-field
+        annotations, or scene-view context. To save the plotted figure, use
+        ``scene.plot().figure.savefig(...)``; to save the plotted animation,
+        use ``scene.play(...).save(...)``.
+
+        .. versionadded:: 0.12.0
+
+        Parameters
+        ----------
+        fname : str or path-like
+            Output filename. The extension determines the file format.
+        percept : :py:class:`~pulse2percept.percepts.Percept`, optional
+            Eye-centered brightness percept, composed as in
+            :py:meth:`~pulse2percept.vision.Scene.render`.
+        gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
+            Scene location (dva) on the fovea. Defaults to the origin.
+        vmax : float, optional
+            Percept brightness shown as white. Defaults to the maximum over
+            the whole ``percept``.
+        vmin : float, optional
+            Percept brightness shown as black. Defaults to 0.
+        step : float or (dx, dy), optional
+            Pixel size of the render raster, in dva. Defaults to the source's
+            pixel pitch.
+        shape : ``(height, width)``, optional
+            Size of the saved file in pixels, as in
+            :py:meth:`~pulse2percept.percepts.Percept.save`. Not the render
+            raster: for that, use ``scene.render(shape=...).save(...)``.
+        fps : float, optional
+            Video frame rate in Hz. Defaults to the rendered percept's timing.
+
+        Returns
+        -------
+        str
+            Path of the file that was written.
+
+        """
+        rendered = self.render(percept=percept, gaze=gaze, vmax=vmax,
+                               vmin=vmin, step=step)
+        return rendered.save(fname, shape=shape, fps=fps)
+
     def plot(self, gaze=None, frame=0, ax=None, rings=False, meridians=False,
              grid_color=vf.GRID_COLOR, percept=None, vmax=None, vmin=None,
              view=_SCENE_VIEW, context_alpha=_CONTEXT_ALPHA, **kwargs):
