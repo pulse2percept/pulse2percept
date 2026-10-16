@@ -14,6 +14,11 @@ pulse2percept is organized into the following subpackages:
     topography
     units
     vision
+
+.. autosummary::
+    :toctree: _api
+
+    export_onnx
 """
 import matplotlib as mpl
 from os import environ
@@ -89,9 +94,11 @@ from . import topography
 from . import units
 from . import utils
 from . import vision
+from .models.export import export_onnx
 
 __all__ = [
     "datasets",
+    "export_onnx",
     "implants",
     "models",
     "percepts",

@@ -95,6 +95,10 @@ API changes and improvements
   ``Percept.save()`` now keeps the percept's native size when ``shape`` is
   omitted, instead of resizing to 320 px wide (:pull:`963`).
 
+* New :py:func:`~pulse2percept.export_onnx` exports the gray-image workflow
+  of spatial-only Scoreboard and AxonMap models to ONNX without approximation
+  (:pull:`961`).
+
 Bug fixes
 ---------
 
