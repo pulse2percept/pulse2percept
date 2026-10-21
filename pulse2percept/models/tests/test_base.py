@@ -2643,7 +2643,9 @@ def test_cortical_model_refuses_a_retinal_implant(model_cls):
 def test_anatomy_neutral_implants_stay_usable():
     # A bare Implant works with both retinal and cortical models:
     implant = _implant_at([(0, 0)])
-    ScoreboardSpatial(implant, visual_field_map=Curcio1990Map()).build()
+    # One electrode has no pitch to derive rho from:
+    ScoreboardSpatial(implant, rho=100,
+                      visual_field_map=Curcio1990Map()).build()
     CortexScoreboardSpatial(implant).build()
 
 

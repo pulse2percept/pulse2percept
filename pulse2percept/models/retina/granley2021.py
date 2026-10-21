@@ -766,7 +766,9 @@ class _BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
     def get_default_params(self):
         base_params = super(_BiphasicScoreboardSpatial,
                             self).get_default_params()
-        return {**base_params, 'bright_model': None, 'size_model': None}
+        # Fixed default; only ScoreboardSpatial derives rho from the pitch:
+        return {**base_params, 'rho': 100, 'bright_model': None,
+                'size_model': None}
 
     def _build(self):
         if not callable(self.bright_model):

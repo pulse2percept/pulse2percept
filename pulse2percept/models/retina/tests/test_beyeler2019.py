@@ -12,7 +12,9 @@ from matplotlib.axes import Subplot
 import matplotlib.pyplot as plt
 
 
-from pulse2percept.implants.retina import ArgusI, ArgusII, PRIMAPivotal
+from pulse2percept.implants import ElectrodeGrid
+from pulse2percept.implants.retina import (ArgusI, ArgusII, PRIMAPivotal,
+                                           RetinalImplant)
 from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import (ImageStimulus, Stimulus, samples,
                                    VideoStimulus)
@@ -159,6 +161,48 @@ def test_deepcopy_ScoreboardModel():
     # Assert destroying the original doesn't affect the copied
     original = None
     npt.assert_equal(copied is not None, True)
+
+
+SMALL_GRID = dict(xrange=(-1, 1), yrange=(-1, 1), step=0.5)
+
+
+@pytest.mark.parametrize('ModelClass', (ScoreboardSpatial, ScoreboardModel))
+def test_scoreboard_rho_defaults_to_half_the_pitch(ModelClass):
+    """PRIMA's 100 um pitch gives 50 um; rebinding re-resolves it"""
+    model = ModelClass(PRIMAPivotal(), **SMALL_GRID)
+    npt.assert_equal(_spatial(model).rho, None)
+    model.build()
+    npt.assert_almost_equal(_spatial(model).rho, 50)
+    # Argus II has a 575 um pitch:
+    model.implant = ArgusII()
+    model.build()
+    npt.assert_almost_equal(_spatial(model).rho, 287.5)
+
+
+def test_scoreboard_explicit_rho_overrides_the_default():
+    model = ScoreboardModel(PRIMAPivotal(), rho=0.09 * mm, **SMALL_GRID)
+    model.build()
+    npt.assert_almost_equal(model.spatial.rho, 90)
+    # Rebinding leaves an explicit rho alone:
+    model.implant = ArgusII()
+    model.build()
+    npt.assert_almost_equal(model.spatial.rho, 90)
+    # None re-enables the default; a value disables it again:
+    model.spatial.rho = None
+    model.build()
+    npt.assert_almost_equal(model.spatial.rho, 287.5)
+    model.spatial.rho = 90
+    model.implant = PRIMAPivotal()
+    model.build()
+    npt.assert_almost_equal(model.spatial.rho, 90)
+
+
+def test_scoreboard_rho_needs_a_pitch_or_a_value():
+    single = RetinalImplant(ElectrodeGrid((1, 1), 100))
+    with pytest.raises(ValueError, match='pitch'):
+        ScoreboardSpatial(single, **SMALL_GRID).build()
+    spatial = ScoreboardSpatial(single, rho=80, **SMALL_GRID).build()
+    npt.assert_almost_equal(spatial.rho, 80)
 
 
 def test_ScoreboardModel_predict_percept():

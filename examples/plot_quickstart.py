@@ -115,8 +115,9 @@ p2p.plotting.plot_implant_percept(
 # into the pulse durations delivered by the projector.
 #
 # :py:class:`~pulse2percept.models.retina.ScoreboardModel` (spatial only) gives
-# each pixel a Gaussian response. With an illustrative ``rho=50 um``, these
-# overlap into coherent forms rather than separate phosphenes.
+# each pixel a Gaussian response. Its default ``rho`` is half the 100 um pixel
+# pitch, an illustrative 50 um; the responses overlap into coherent forms
+# rather than separate phosphenes.
 
 video = p2p.stimuli.samples.ucsb_pedestrians(resize=(173, 320))
 scotoma = p2p.vision.Scotoma.circle(5 * dva)
@@ -132,7 +133,6 @@ scene = p2p.vision.Scene(
 prima = p2p.implants.retina.PRIMAPivotal()
 prima_model = p2p.models.retina.ScoreboardModel(
     prima,
-    rho=50 * um,                 # microns
     xrange=(-6 * dva, 6 * dva),  # degrees of visual angle
     yrange=(-6 * dva, 6 * dva),
     step=0.025 * dva,
@@ -153,8 +153,8 @@ scene.play(
 ###############################################################################
 # PRIMA patients generally report recognizable shapes, sometimes with
 # irregular contours, and without the fading seen with some other prostheses.
-# Drawing the percept over the fill is a visualization convention, not a model
-# of how prosthetic and natural vision combine.
+# The percept is screen-blended over the fill, a visualization convention
+# rather than a model of how prosthetic and natural vision combine.
 #
 #
 # A form traced through visual cortex

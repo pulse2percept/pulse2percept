@@ -143,7 +143,9 @@ The scoreboard and axon map models provide two common spatial starting points.
 
 :py:class:`~pulse2percept.models.retina.ScoreboardModel` represents each
 stimulated electrode as a circular Gaussian. ``rho`` controls the spatial
-spread of the predicted phosphene.
+spread of the predicted phosphene. It defaults to half the implant's median
+electrode pitch (50 um for PRIMA), a geometric convention rather than a fitted
+value; pass ``rho`` to set it explicitly.
 
 :py:class:`~pulse2percept.models.retina.AxonMapModel` additionally models
 activation along retinal nerve fiber bundles. ``rho`` controls spread away

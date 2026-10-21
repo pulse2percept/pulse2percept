@@ -15,8 +15,8 @@ from ...topography.retina import Watson2014Map
 from ...implants import ElectrodeArray
 from ...stimuli import Stimulus
 from ..base import (Model, _blend_meridian, _draw_placed_implant,
-                    _is_tensor, _scoreboard_response, _scoreboard_weights,
-                    _warn_rho_vs_pitch)
+                    _electrode_pitch, _is_tensor, _scoreboard_response,
+                    _scoreboard_weights, _warn_rho_vs_pitch)
 from .base import RetinalSpatial, _warn_ignores_z
 
 import warnings
@@ -194,10 +194,21 @@ class ScoreboardSpatial(RetinalSpatial):
     rho : float or Quantity, optional
         Gaussian spatial decay constant in microns. Larger values produce
         broader phosphenes. The same ``rho`` value applies to all electrodes.
+        ``None`` (default) uses half the implant's median nearest-neighbor
+        electrode pitch, resolved when the model is built (50 um for
+        :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`). Implants
+        with fewer than two electrodes at distinct positions require an
+        explicit ``rho``.
 
         .. important::
 
-            Electrode-retina distance (``z``) does not directly affect ``rho``.
+            ``rho = pitch / 2`` is a geometric convention that keeps
+            neighboring electrodes resolvable, not a measured spread of
+            neural activation. Electrode-retina distance (``z``) does not
+            directly affect ``rho``.
+
+        .. versionchanged:: 0.12.0
+            Defaults to half the electrode pitch instead of 100 um.
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. May also be
@@ -259,7 +270,7 @@ class ScoreboardSpatial(RetinalSpatial):
     #: relative electrode drive, so an encoder is optional.
     _accepts_dimensionless_drive = True
 
-    def __init__(self, implant, *, rho=100, xrange=(-15, 15),
+    def __init__(self, implant, *, rho=None, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0,
                  visual_field_map=None,
@@ -282,14 +293,31 @@ class ScoreboardSpatial(RetinalSpatial):
     def get_default_params(self):
         """Return all settable scoreboard parameters."""
         base_params = super(ScoreboardSpatial, self).get_default_params()
-        params = {'rho': 100, 'visual_field_map': Watson2014Map()}
+        params = {'rho': None, 'visual_field_map': Watson2014Map()}
         return {**base_params, **params}
 
     def get_param_units(self):
         """Return units used to store model parameters."""
         return {**super().get_param_units(), 'rho': um}
 
+    def __setattr__(self, name, value):
+        """Set a parameter, tracking whether ``rho`` is still deferred."""
+        super().__setattr__(name, value)
+        if name == 'rho':
+            object.__setattr__(self, '_rho_from_pitch', value is None)
+
     def _build(self):
+        if self._rho_from_pitch:
+            pitch = _electrode_pitch(self)
+            if pitch is None:
+                raise ValueError(
+                    f"rho=None uses half the implant's median electrode "
+                    f"pitch, and {type(self.implant).__name__} has none: that "
+                    f"needs at least two electrodes at distinct positions. "
+                    f"Pass 'rho' explicitly.")
+            # Bypass the parameter setter so this neither invalidates the
+            # build in progress nor clears the sentinel:
+            object.__setattr__(self, 'rho', pitch / 2)
         _warn_rho_vs_pitch(self)
 
     def _predict_spatial(self, electrode_array, stim):
@@ -404,10 +432,12 @@ class ScoreboardModel(Model):
     rho : float or Quantity, optional
         Gaussian spatial decay constant in microns. Larger values produce
         broader phosphenes. The same ``rho`` value applies to all electrodes.
+        ``None`` (default) uses half the implant's median nearest-neighbor
+        electrode pitch, a geometric convention rather than a measured
+        spread; see :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`.
 
-        .. important::
-
-            Electrode-retina distance (``z``) does not directly affect ``rho``.
+        .. versionchanged:: 0.12.0
+            Defaults to half the electrode pitch instead of 100 um.
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. May also be
@@ -461,7 +491,7 @@ class ScoreboardModel(Model):
     ndim : list of int, optional
         Dimensionalities of ``visual_field_map`` accepted by the model."""
 
-    def __init__(self, implant, *, rho=100, xrange=(-15, 15),
+    def __init__(self, implant, *, rho=None, xrange=(-15, 15),
                  yrange=(-15, 15), step=0.25, grid_type='rect',
                  thresh_percept=0,
                  visual_field_map=None,
