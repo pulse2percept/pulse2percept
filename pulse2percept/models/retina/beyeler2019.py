@@ -1527,11 +1527,6 @@ class AxonMapModel(Model):
         patterns. An encoder is required for physical amplitude, pulse timing,
         safety constraints, or temporal and pulse-dependent models.
 
-    .. important::
-
-        ``rho`` and ``lam`` vary substantially across patients [Beyeler2019]_.
-        The defaults are representative values, not patient-specific estimates.
-
     .. note::
 
         Model parameters such as ``rho`` and ``lam`` can vary substantially
