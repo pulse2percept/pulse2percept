@@ -184,6 +184,13 @@ class ScoreboardSpatial(RetinalSpatial):
         :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` for
         pulse-dependent brightness and size.
 
+    .. note::
+
+        Model parameters such as ``rho`` can vary substantially across patients
+        and electrodes. Default values are convenient starting points, not
+        universally valid estimates of phosphene appearance. Whenever possible,
+        fit these parameters to patient-specific psychophysical data.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -421,6 +428,13 @@ class ScoreboardModel(Model):
         [Nanduri2012]_. Use
         :py:class:`~pulse2percept.models.retina.BiphasicScoreboardModel` for
         pulse-dependent brightness and size.
+
+    .. note::
+
+        Model parameters such as ``rho`` can vary substantially across patients
+        and electrodes. Default values are convenient starting points, not
+        universally valid estimates of phosphene appearance. Whenever possible,
+        fit these parameters to patient-specific psychophysical data.
 
     Parameters
     ----------
@@ -829,10 +843,13 @@ class AxonMapSpatial(_AxonBundleMixin, RetinalSpatial):
     segment to the ganglion cell body. Thus :math:`\rho` controls spread
     away from the axon, whereas :math:`\lambda` controls spread along it.
 
-    .. important::
-    
-        ``rho`` and ``lam`` vary substantially across patients [Beyeler2019]_.
-        The defaults are representative values, not patient-specific estimates.
+    .. note::
+
+        Model parameters such as ``rho`` and ``lam`` can vary substantially
+        across patients and electrodes. Default values are convenient starting
+        points, not universally valid estimates of phosphene appearance.
+        Whenever possible, fit these parameters to patient-specific
+        psychophysical data.
 
     Parameters
     ----------
@@ -1514,6 +1531,14 @@ class AxonMapModel(Model):
 
         ``rho`` and ``lam`` vary substantially across patients [Beyeler2019]_.
         The defaults are representative values, not patient-specific estimates.
+
+    .. note::
+
+        Model parameters such as ``rho`` and ``lam`` can vary substantially
+        across patients and electrodes. Default values are convenient starting
+        points, not universally valid estimates of phosphene appearance.
+        Whenever possible, fit these parameters to patient-specific
+        psychophysical data.
 
     Parameters
     ----------

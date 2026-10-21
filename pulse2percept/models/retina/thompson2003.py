@@ -42,6 +42,13 @@ class Thompson2003Spatial(RetinalSpatial):
     :py:class:`~pulse2percept.models.retina.Thompson2003Model` for the standalone
     spatial model.
 
+    .. note::
+
+        Model parameters can vary substantially across patients and electrodes.
+        Default values are convenient starting points, not universally valid
+        estimates of phosphene appearance. Whenever possible, fit these
+        parameters to patient-specific psychophysical data.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -233,6 +240,13 @@ class Thompson2003Model(Model):
     Uses :py:class:`~pulse2percept.models.retina.Thompson2003Spatial` without a
     temporal component. See that class for the top-hat disk equation and
     dropout model.
+
+    .. note::
+
+        Model parameters can vary substantially across patients and electrodes.
+        Default values are convenient starting points, not universally valid
+        estimates of phosphene appearance. Whenever possible, fit these
+        parameters to patient-specific psychophysical data.
 
     Parameters
     ----------

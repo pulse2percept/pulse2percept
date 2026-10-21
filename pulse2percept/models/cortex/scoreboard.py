@@ -30,6 +30,13 @@ class ScoreboardSpatial(CortexSpatial):
         :py:class:`~pulse2percept.models.cortex.DynaphosModel` for a cortical
         model whose phosphene size follows the stimulus current.
 
+    .. note::
+
+        Model parameters such as ``rho`` can vary substantially across patients
+        and electrodes. Default values are convenient starting points, not
+        universally valid estimates of phosphene appearance. Whenever possible,
+        fit these parameters to patient-specific psychophysical data.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -282,6 +289,13 @@ class ScoreboardModel(Model):
         doubling amplitude doubles brightness at constant width. Use
         :py:class:`~pulse2percept.models.cortex.DynaphosModel` for a cortical
         model whose phosphene size follows the stimulus current.
+
+    .. note::
+
+        Model parameters such as ``rho`` can vary substantially across patients
+        and electrodes. Default values are convenient starting points, not
+        universally valid estimates of phosphene appearance. Whenever possible,
+        fit these parameters to patient-specific psychophysical data.
 
     Parameters
     ----------

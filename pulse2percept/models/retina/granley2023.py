@@ -233,6 +233,18 @@ class Granley2023Model(_BiphasicModel):
     phase-duration threshold correction is applied. Interphase duration and
     exact pulse timing are ignored. Videos are not supported.
 
+    .. note::
+
+        Model parameters such as ``rho`` and ``lam`` can vary substantially
+        across patients and electrodes. Default values are convenient starting
+        points, not universally valid estimates of phosphene appearance.
+        Whenever possible, fit these parameters to patient-specific
+        psychophysical data.
+
+        The relationships governing phosphene brightness, area, and
+        eccentricity (:math:`B`, :math:`A`, :math:`\epsilon`) are also based on
+        empirical fits and may not generalize to individual patients.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.retina.RetinalImplant`
