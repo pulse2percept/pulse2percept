@@ -317,8 +317,8 @@ the scotoma:
 .. note::
 
    Image-derived fills are visualizations of missing native vision, not
-   models of perceptual filling-in. They cannot be used when a prosthetic
-   percept is composited into the same scotoma.
+   models of perceptual filling-in. Only ``'laplace'`` can be combined with a
+   prosthetic percept.
 
 The scotoma does not affect what the implant receives. Prosthetic encoding
 samples the original scene, including regions where native vision is lost.
@@ -390,6 +390,12 @@ Within visual loss, native and prosthetic vision are composed as
 where :math:`L` is the fraction of native vision lost, :math:`N` is native
 vision, :math:`S` is ``scotoma_fill``, and :math:`P` is the displayed
 prosthetic percept.
+
+With ``scotoma_fill='laplace'``, :math:`S` is each frame's fill from the
+visible surround, so the percept is shown over filled-in vision instead of
+black. A dim percept may not visibly change a bright fill. The overlay is a
+visualization convention, not a validated model of how patients combine
+prosthetic and natural vision.
 
 Without a scotoma, a prosthetic percept is displayed on black rather than
 superimposed on intact native vision. The model does not specify how

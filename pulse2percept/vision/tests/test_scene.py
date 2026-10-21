@@ -437,7 +437,7 @@ def test_inpainting_works_in_color_and_stays_a_display_intensity():
 
 
 @pytest.mark.parametrize('fill, kwargs', [
-    ('inpaint', {}), ('biharmonic', {}), ('laplace', {}),
+    ('inpaint', {}), ('biharmonic', {}),
     ('gaussian', {'scotoma_fill_sigma': 3}),
 ])
 def test_an_image_filled_scene_refuses_to_compose_a_prosthetic_percept(
@@ -633,6 +633,166 @@ def test_image_fill_setup_is_shared_by_all_played_frames(monkeypatch):
                   fov=(SCENE_PX, SCENE_PX), scotoma=Scotoma.circle(6),
                   scotoma_fill='laplace')
     scene.play(gaze=[(0, 0), (3, -2), (-4, 1)])
+    npt.assert_equal(len(calls), 1)
+    plt.close('all')
+
+
+def blob(grid, peak, sigma=3.0):
+    """Returns a one-frame Gaussian brightness blob on ``grid``"""
+    return Percept((peak * np.exp(-(grid.x ** 2 + grid.y ** 2) /
+                                  (2 * sigma ** 2)))[..., np.newaxis],
+                   space=grid)
+
+
+def laplace_video(**kwargs):
+    """Three different random frames with a Laplace-filled scotoma"""
+    frames = np.stack([random_rgb(seed) for seed in range(3)], axis=-1)
+    kwargs.setdefault('scotoma', Scotoma.circle(6))
+    return Scene(VideoStimulus(frames, time=[0, 100, 200]),
+                 fov=(SCENE_PX, SCENE_PX), scotoma_fill='laplace', **kwargs)
+
+
+@pytest.mark.parametrize('vmax', [None, 1])
+def test_a_dark_percept_leaves_laplace_filled_vision_unchanged(vmax):
+    scene = image_scene(random_rgb(), 'laplace', scotoma_blend=2)
+    dark = Percept(np.zeros((SCENE_PX, SCENE_PX, 1)), space=scene._grid())
+    npt.assert_array_equal(scene.render(percept=dark, vmax=vmax).data,
+                           scene.render().data)
+    video = laplace_video()
+    gaze = [(0, 0), (3, -2), (-4, 1)]
+    npt.assert_array_equal(video.render(percept=dark, vmax=vmax,
+                                        gaze=gaze).data,
+                           video.render(gaze=gaze).data)
+
+
+def test_laplace_composes_by_the_documented_equation():
+    """(1 - loss) * native + loss * max(fill, phosphene), per channel
+
+    A linear ramp is harmonic, so its Laplace fill is the ramp itself.
+    """
+    x = np.arange(SCENE_PX) - HALF
+    xx, yy = np.meshgrid(x, -x)
+    image = np.stack([0.5 + 0.02 * xx, 0.5 - 0.015 * yy,
+                      0.4 + 0.01 * xx + 0.01 * yy], axis=-1)
+    scene = image_scene(image, 'laplace', scotoma=Scotoma.circle(8),
+                        scotoma_blend=1)
+    percept = blob(scene._grid(), 2.0, sigma=2.0)
+    phosphene = percept.data[..., 0] / 2.0
+    loss = rendered_loss(scene)[..., np.newaxis]
+    expected = ((1 - loss) * image +
+                loss * np.maximum(image, phosphene[..., np.newaxis]))
+    composed = scene.render(percept=percept).data[..., 0]
+    npt.assert_allclose(composed, expected, atol=1e-6)
+    # Covers inside, outside, the blended boundary, and a phosphene both
+    # above and below the fill:
+    inside = loss[..., 0] > 1 - 1e-6
+    npt.assert_equal([inside.any(), (loss == 0).any(),
+                      ((loss > 0.1) & (loss < 0.9)).any()], [True] * 3)
+    npt.assert_equal((phosphene[inside] > image[inside, 0]).any(), True)
+    npt.assert_equal((phosphene[inside] < image[inside, 0]).any(), True)
+
+
+@pytest.mark.parametrize('view', ['eye', 'scene'])
+def test_a_laplace_composite_knows_nothing_of_what_the_scotoma_hides(view):
+    """Pixels hidden by the scotoma change neither render nor plot"""
+    image = random_rgb(0)
+    x = np.arange(SCENE_PX) - HALF
+    hidden = np.hypot(*np.meshgrid(x, x)) <= 6
+    altered = np.where(hidden[..., np.newaxis], random_rgb(1), image)
+    scenes = [image_scene(src, 'laplace', scotoma=Scotoma.circle(8))
+              for src in (image, altered)]
+    percept = blob(Grid2D((-10, 10), (-10, 10), step=0.5), 1.0)
+    renders, patches = [], []
+    for scene in scenes:
+        renders.append(scene.render(percept=percept, vmax=2).data)
+        ax = drawn_on_fresh_axes(scene, percept=percept, vmax=2, view=view)
+        patches.append(ax.images[-1].get_array())
+    plt.close('all')
+    npt.assert_array_equal(*renders)
+    npt.assert_array_equal(*patches)
+
+
+def test_a_laplace_composite_follows_video_frames_and_gaze(played):
+    """Each frame composes its own fill at its own gaze; play shows render"""
+    scene = laplace_video(scotoma_blend=0)
+    gaze = [(0, 0), (3, -2), (-4, 1)]
+    grid = scene._grid()
+    peaks = np.array([0.5, 1.5, 3.0])
+    percept = Percept(np.concatenate([blob(grid, p).data for p in peaks],
+                                     axis=-1),
+                      space=grid, time=[0, 100, 200])
+    composed = scene.render(percept=percept, vmax=3, gaze=gaze)
+    native = scene.render(gaze=gaze).data
+    lost = rendered_loss(scene)[..., np.newaxis] > 0
+    for f in range(3):
+        phosphene = percept.data[..., f, np.newaxis] / 3
+        expected = np.where(lost, np.maximum(native[..., f], phosphene),
+                            native[..., f])
+        npt.assert_allclose(composed.data[..., f], expected, atol=1e-6)
+    npt.assert_almost_equal(composed.time, [0, 100, 200])
+    # Each frame has its own fill:
+    change = np.abs(native[..., 0] - native[..., 1])[lost[..., 0]]
+    npt.assert_equal(change.max() > 0.05, True)
+    # play(view='eye') shows the rendered frames on the rendered clock:
+    ani = scene.play(percept=percept, vmax=3, gaze=gaze, view='eye')
+    npt.assert_allclose(ani._frame_data, composed.data, atol=1e-6)
+    npt.assert_almost_equal(played['percept'].time, composed.time)
+    # The scene view shows the same eye raster where the FOV is; eye (row,
+    # col) is source (row - gy, col + gx):
+    frames = scene.play(percept=percept, vmax=3, gaze=gaze)._frame_data
+    for f, (gx, gy) in enumerate(gaze):
+        rows, cols = np.arange(SCENE_PX) - gy, np.arange(SCENE_PX) + gx
+        keep_r = (rows >= 0) & (rows < SCENE_PX)
+        keep_c = (cols >= 0) & (cols < SCENE_PX)
+        npt.assert_allclose(frames[np.ix_(rows[keep_r], cols[keep_c])][..., f],
+                            composed.data[np.ix_(keep_r, keep_c)][..., f],
+                            atol=1e-6)
+    plt.close('all')
+
+
+@pytest.mark.parametrize('view', ['eye', 'scene'])
+def test_a_laplace_patch_inside_the_scotoma_is_the_wide_fill(view):
+    """A patch with no surround of its own interpolates the wide fill"""
+    scene = image_scene(random_rgb(), 'laplace', scotoma=Scotoma.circle(8),
+                        scotoma_blend=0.5)
+    grid = Grid2D((-3, 3), (-3, 3), step=0.5)
+    dark = Percept(np.zeros(grid.x.shape + (1,)), space=grid)
+    ax = drawn_on_fresh_axes(scene, percept=dark, vmax=1, gaze=(2, -1),
+                             view=view)
+    wide, patch = (image.get_array() for image in ax.images[-2:])
+    # Patch row 0 is y = 3, wide row HALF - 3; columns likewise:
+    shared = wide[HALF - 3:HALF + 4, HALF - 3:HALF + 4]
+    npt.assert_almost_equal(patch[::2, ::2], shared, decimal=6)
+    npt.assert_almost_equal(patch[1::2, ::2],
+                            (shared[:-1] + shared[1:]) / 2, decimal=6)
+    # A bright percept shows only where it outshines the fill:
+    ax = drawn_on_fresh_axes(scene, percept=blob(grid, 1.0, sigma=1.0),
+                             vmax=1, gaze=(2, -1), view=view)
+    bright = ax.images[-1].get_array()
+    npt.assert_allclose(bright[::2, ::2],
+                        np.maximum(shared, blob(grid, 1.0, sigma=1.0).data[
+                            ::2, ::2]), atol=1e-6)
+    plt.close('all')
+
+
+@pytest.mark.parametrize('draw', [
+    lambda scene, **kw: scene.render(**kw),
+    lambda scene, **kw: scene.play(view='eye', **kw),
+    lambda scene, **kw: scene.play(**kw),
+])
+def test_laplace_setup_is_shared_by_all_composed_frames(monkeypatch, draw):
+    """Composing a percept factorizes the Laplace system once, not per
+    frame"""
+    calls = []
+    original = scene_module._laplace_system
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(scene_module, '_laplace_system', counted)
+    scene = laplace_video()
+    percept = blob(scene._grid(), 1.0)
+    draw(scene, percept=percept, gaze=[(0, 0), (3, -2), (-4, 1)])
     npt.assert_equal(len(calls), 1)
     plt.close('all')
 

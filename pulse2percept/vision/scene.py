@@ -620,8 +620,8 @@ class Scene(PrettyPrint):
            `scotoma_fill_sigma`; lost pixels carry no weight.
 
         `'inpaint'` is a legacy alias of `'biharmonic'`. Image-derived fills
-        visualize missing vision, not perceptual filling-in, and cannot be
-        used when composing a prosthetic percept.
+        visualize missing vision, not perceptual filling-in. Only `'laplace'`
+        can be composed with a prosthetic percept.
 
         .. versionchanged:: 0.12.0
             Added `'biharmonic'`, `'laplace'`, and `'gaussian'`.
@@ -1196,33 +1196,52 @@ class Scene(PrettyPrint):
         the aperture"""
         return self._native_on(*self._view_axes(), gaze=gaze)
 
+    def _source_rgb_on(self, xs, ys, points, frame=None):
+        """Returns ``f -> (rows, cols, 3)`` source RGB of output frame ``f`` on
+        an eye-centered raster"""
+        if len(points) > 1:
+            return lambda f: _as_rgb(self._source_on(
+                xs, ys, points[f], frame=self._source_frame(f))[..., 0])
+        # Not `_native_on`: gray is broadcast to RGB per frame instead of
+        # copied:
+        source = self._source_on(xs, ys, points[0],
+                                 frame=self._source_frame(frame))
+        return lambda f: _as_rgb(source[..., 0 if source.shape[-1] == 1
+                                        else f])
+
     def _composed_on(self, xs, ys, prosthetic, vmax, vmin=None, gaze=None,
-                     frame=None):
+                     frame=None, fill_axes=None):
         """Composes a prosthetic percept into the scotoma on an eye-centered
         raster
 
         ``out = (1 - loss) * native + loss * max(fill, phosphene)``. Returns
         ``(frames, time, time_unit)``. With ``frame``, only that output frame
-        is computed and ``gaze`` is a single (x, y).
+        is computed and ``gaze`` is a single (x, y). `'laplace'` is solved on
+        ``fill_axes`` (default ``(xs, ys)``) and resampled.
         """
-        if self._scotoma_fill in _IMAGE_FILLS:
+        fill = self._scotoma_fill
+        if fill in _IMAGE_FILLS and fill != _LAPLACE:
             raise ValueError(
-                f"scotoma_fill={self._scotoma_fill!r} cannot be combined with "
-                f"a prosthetic percept because their interaction is not "
-                f"modeled. Use a numeric 'scotoma_fill' to compose one.")
+                f"scotoma_fill={fill!r} cannot be combined with a prosthetic "
+                f"percept because their interaction is not modeled. Use a "
+                f"numeric 'scotoma_fill' or 'laplace' to compose one.")
         _check_prosthetic(prosthetic)
         vmin, vmax = _check_range(prosthetic.data, vmin, vmax)
         pframes, out_time, out_unit = self._prosthetic_frames(prosthetic,
                                                               frame=frame)
         n_out = pframes.shape[-1]
         points = _gaze_points(gaze, n_out)
-        static = len(points) == 1
-        if static:
-            # Not `_native_on`: gray is broadcast to RGB per frame below
-            # instead of copied:
-            source = self._source_on(xs, ys, points[0],
-                                     frame=self._source_frame(frame))
-            n_scene = source.shape[-1]
+        native_at = self._source_rgb_on(xs, ys, points, frame=frame)
+        if fill == _LAPLACE:
+            fill_xs, fill_ys = (xs, ys) if fill_axes is None else fill_axes
+            surround_at = (native_at if fill_axes is None else
+                           self._source_rgb_on(fill_xs, fill_ys, points,
+                                               frame=frame))
+            mask = self._loss_on(fill_xs, fill_ys) > 0
+            _check_surround(mask, fill)
+            fill_step = _raster_step(fill_xs, fill_ys)
+            # Same mask for every frame, so set up once:
+            laplace = _laplace_system(mask, fill_step) if mask.any() else None
         n_rows, n_cols = ys.size, xs.size
         # Both eye-centered, so independent of gaze:
         brightness = _percept_on(prosthetic, pframes, xs, ys)
@@ -1233,14 +1252,20 @@ class Scene(PrettyPrint):
         for f in range(n_out):
             phosphene = np.clip((brightness[..., f] - vmin) / (vmax - vmin),
                                 0, 1)
-            if static:
-                native = source[..., 0 if n_scene == 1 else f]
+            native = native_at(f)
+            if fill == _LAPLACE:
+                surround = native if fill_axes is None else surround_at(f)
+                lost_fill = self._fill_rgb(surround, mask, fill_step,
+                                           laplace=laplace)
+                if fill_axes is not None:
+                    lost_fill = _regrid(fill_xs, fill_ys, lost_fill, xs, ys)
+                # float32 as in `_native_on`, so a dark percept changes
+                # nothing:
+                phosphene = phosphene.astype(np.float32)
             else:
-                native = self._source_on(xs, ys, points[f],
-                                         frame=self._source_frame(f))[..., 0]
-            native = _as_rgb(native)
-            # A color fill; image fills were rejected above:
-            lost = np.maximum(self._scotoma_fill, phosphene[..., np.newaxis])
+                # A color fill; other image fills were rejected above:
+                lost_fill = fill
+            lost = np.maximum(lost_fill, phosphene[..., np.newaxis])
             out[f] = (1 - alpha) * native + alpha * lost
         return (np.ascontiguousarray(np.moveaxis(out, 0, -1)), out_time,
                 out_unit)
@@ -1265,13 +1290,13 @@ class Scene(PrettyPrint):
         return np.asarray(rgb, dtype=np.float32), out_time, out_unit
 
     def _display_on(self, xs, ys, percept=None, vmax=None, vmin=None, gaze=None,
-                    frame=None):
+                    frame=None, fill_axes=None):
         """Returns display RGB on an eye-centered raster
 
         Residual native vision, with the percept composed in if given.
         The aperture is not applied. Returns ``(frames, time, time_unit)``.
         With ``frame``, only that output frame is computed and ``gaze`` is a
-        single (x, y).
+        single (x, y). ``fill_axes`` is as in `_composed_on`.
         """
         if percept is None:
             if vmax is not None or vmin is not None:
@@ -1286,7 +1311,7 @@ class Scene(PrettyPrint):
             return self._prosthetic_on(xs, ys, percept, vmax, vmin=vmin,
                                        gaze=gaze, frame=frame)
         return self._composed_on(xs, ys, percept, vmax, vmin=vmin, gaze=gaze,
-                                 frame=frame)
+                                 frame=frame, fill_axes=fill_axes)
 
     def _output_clock(self, percept=None):
         """Returns ``(time, time_unit, n_frames)`` of the output frames
@@ -1433,7 +1458,8 @@ class Scene(PrettyPrint):
             ``(1 - loss) * native + loss * max(scotoma_fill, phosphene)``;
             without one, it is rendered alone on black (overlaying it on
             intact native vision would imply an unmodeled interaction).
-            Not supported with an image-derived ``scotoma_fill``.
+            ``'laplace'`` uses each frame's fill as ``scotoma_fill``; other
+            image-derived fills are not supported.
         gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
             Scene location (dva) on the fovea. Defaults to the origin. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved at the output
@@ -1641,9 +1667,11 @@ class Scene(PrettyPrint):
         pxs, pys = _percept_axes(percept)
         # Descending, so row 0 of the patch is the top:
         pys = pys[::-1]
+        # Solve image fills on the wide raster; the patch may lack a surround:
+        fill_axes = self._view_axes() if self._fills_from_image() else None
         patch = self._display_on(pxs, pys, percept=percept, vmax=vmax,
-                                 vmin=vmin, gaze=gaze_xy,
-                                 frame=frame)[0][..., 0]
+                                 vmin=vmin, gaze=gaze_xy, frame=frame,
+                                 fill_axes=fill_axes)[0][..., 0]
         left, right, bottom, top = _raster_extent(pxs, pys)
         dx, dy = offset
         return patch, (left + dx, right + dx, bottom + dy, top + dy)
@@ -1843,7 +1871,7 @@ class Scene(PrettyPrint):
         times, unit, overlays = [], None, {}
         if self._fills_from_image():
             # Compose on the eye-view raster for all frames at once, so the
-            # fill is set up once (a percept raises here):
+            # fill is set up once (a percept raises here unless 'laplace'):
             view_xs, view_ys = self._view_axes()
             native, native_time, unit = self._display_on(
                 view_xs, view_ys, percept=percept, vmax=vmax, vmin=vmin,

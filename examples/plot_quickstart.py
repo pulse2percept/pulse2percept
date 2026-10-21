@@ -108,10 +108,15 @@ p2p.plotting.plot_implant_percept(
 #
 # Here a video recorded on the UCSB campus spans 40 degrees of visual angle
 # (dva), with a central scotoma representing vision loss around the implanted
-# region. The video drives
+# region, filled in from the visible surround (``scotoma_fill='laplace'``).
+# The video drives
 # :py:class:`~pulse2percept.implants.retina.PRIMAPivotal`, whose
 # :py:class:`~pulse2percept.stimuli.PRIMAEncoder` converts image intensity
 # into the pulse durations delivered by the projector.
+#
+# :py:class:`~pulse2percept.models.retina.ScoreboardModel` (spatial only) gives
+# each pixel a Gaussian response. With an illustrative ``rho=50 um``, these
+# overlap into coherent forms rather than separate phosphenes.
 
 video = p2p.stimuli.samples.ucsb_pedestrians(resize=(173, 320))
 scotoma = p2p.vision.Scotoma.circle(5 * dva)
@@ -120,16 +125,17 @@ scene = p2p.vision.Scene(
     video,
     fov=40 * dva,
     scotoma=scotoma,
-    scotoma_fill=0,
+    scotoma_fill='laplace',
     aperture='round',
 )
 
 prima = p2p.implants.retina.PRIMAPivotal()
-prima_model = p2p.models.retina.Ho2018Model(
+prima_model = p2p.models.retina.ScoreboardModel(
     prima,
+    rho=50 * um,                 # microns
     xrange=(-6 * dva, 6 * dva),  # degrees of visual angle
     yrange=(-6 * dva, 6 * dva),
-    step=0.05 * dva,
+    step=0.025 * dva,
 )
 
 gaze = p2p.vision.Gaze([
@@ -145,8 +151,10 @@ scene.play(
 )
 
 ###############################################################################
-# The [Ho2018]_ model is based on degenerated rat retina and should not be
-# interpreted as a validated human model of PRIMA perception.
+# PRIMA patients generally report recognizable shapes, sometimes with
+# irregular contours, and without the fading seen with some other prostheses.
+# Drawing the percept over the fill is a visualization convention, not a model
+# of how prosthetic and natural vision combine.
 #
 #
 # A form traced through visual cortex
