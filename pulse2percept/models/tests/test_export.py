@@ -13,7 +13,8 @@ from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.models import cortex, export
 from pulse2percept.models.cortex.tests.test_tensor import _CurvedPolimeni
-from pulse2percept.models.export import _deploy_module, _save_onnx
+from pulse2percept.models.export import (_deploy_module, _require_close,
+                                         _save_onnx)
 from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
                                          Nanduri2012Spatial, ScoreboardModel,
                                          ScoreboardSpatial)
@@ -776,6 +777,37 @@ def test_export_onnx_rejects_mismatch(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match='predict_percept'):
         p2p.export_onnx(_retina(), path, (6, 10))
     assert not path.exists()
+
+
+@pytest.mark.parametrize('actual, desired, thresh', [
+    ([np.nan, 1], [0, 1], 0.5), ([0, 1], [np.nan, 1], 0.5),
+    ([np.inf, 1], [0, 1], 0.5), ([0, 1], [-np.inf, 1], 0.5),
+    # Matching non-finite values are not agreement:
+    ([np.nan, 1], [np.nan, 1], 0.5), ([np.inf, 1], [np.inf, 1], 0.5),
+    ([0, 1], [0, 1], np.nan),
+])
+def test_require_close_nonfinite(actual, desired, thresh):
+    with pytest.raises(RuntimeError, match='non-finite'):
+        _require_close(np.array(actual), np.array(desired), thresh,
+                       'predict_percept')
+
+
+def test_export_onnx_nonfinite_prediction(tmp_path, monkeypatch):
+    # An explicit white point skips the reference, not validation:
+    pytest.importorskip('onnxscript')
+    model = _retina()
+    predict = model.predict_percept
+
+    def corrupt(stim):
+        percept = predict(stim)
+        percept.data[0, 0] = np.nan
+        return percept
+
+    monkeypatch.setattr(model, 'predict_percept', corrupt)
+    path = tmp_path / 'model.onnx'
+    with pytest.raises(RuntimeError, match='non-finite'):
+        p2p.export_onnx(model, path, (6, 10), white_point=3.0)
+    assert not path.exists() and not (tmp_path / 'model.json').exists()
 
 
 def test_export_onnx_validation_error(tmp_path, monkeypatch):

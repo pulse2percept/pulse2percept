@@ -256,6 +256,12 @@ def _require_close(actual, desired, thresh, what):
     ``thresh`` within that tolerance.
     """
     actual, desired = np.ravel(actual), np.ravel(desired)
+    # NaN compares False against any tolerance, so it would pass below:
+    if not (np.all(np.isfinite(actual)) and np.all(np.isfinite(desired)) and
+            np.isfinite(thresh)):
+        raise RuntimeError(
+            f"The exported graph cannot be validated against {what}: "
+            f"non-finite response or threshold (NaN or Inf).")
     atol = _RTOL * max(np.abs(desired).max(initial=0), thresh)
     diff = np.abs(actual - desired)
     flip = (((actual == 0) | (desired == 0)) &
