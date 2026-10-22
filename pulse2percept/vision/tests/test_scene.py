@@ -437,31 +437,6 @@ def test_inpainting_works_in_color_and_stays_a_display_intensity():
 
 
 @pytest.mark.parametrize('fill, kwargs', [
-    ('inpaint', {}), ('biharmonic', {}), ('laplace', {}),
-    ('gaussian', {'scotoma_fill_sigma': 3}),
-])
-def test_an_image_filled_scene_refuses_to_compose_a_prosthetic_percept(
-        fill, kwargs):
-    """Composing a percept onto an image-filled scotoma is a ValueError"""
-    rgb = np.stack([np.tile(np.linspace(0.1, 0.9, 31), (31, 1)),
-                    np.tile(np.linspace(0.9, 0.2, 31), (31, 1)).T,
-                    np.full((31, 31), 0.4)], axis=-1)
-    scene = Scene(ImageStimulus(rgb), fov=(31, 31), scotoma=Scotoma.circle(4),
-                  scotoma_fill=fill, **kwargs)
-    dark = Percept(np.zeros((31, 31, 1)), space=scene._grid())
-    for draw in (scene.render, lambda **kw: scene.plot(**kw)):
-        with pytest.raises(ValueError, match=fill):
-            draw(percept=dark, vmax=1)
-    plt.close('all')
-    # A numeric fill composes; native vision is finite either way:
-    numeric = Scene(ImageStimulus(rgb), fov=(31, 31),
-                    scotoma=Scotoma.circle(4), scotoma_fill=0.0)
-    npt.assert_equal(rendered(numeric, percept=dark, vmax=1).shape,
-                     (31, 31, 3, 1))
-    npt.assert_equal(np.all(np.isfinite(scene._native_rgb())), True)
-
-
-@pytest.mark.parametrize('fill, kwargs', [
     (0.0, {}), ('red', {}), ('inpaint', {}), ('biharmonic', {}),
     ('laplace', {}), ('gaussian', {'scotoma_fill_sigma': 4}),
 ])
@@ -619,8 +594,24 @@ def test_laplace_is_harmonic_in_dva_on_anisotropic_pixels():
     npt.assert_allclose(native, image, atol=1e-6)
 
 
+def random_video(**kwargs):
+    """Three different random frames, 100 ms apart, with a Laplace fill"""
+    frames = np.stack([random_rgb(seed) for seed in range(3)], axis=-1)
+    kwargs.setdefault('scotoma', Scotoma.circle(6))
+    return Scene(VideoStimulus(frames, time=[0, 100, 200]),
+                 fov=(SCENE_PX, SCENE_PX), scotoma_fill='laplace', **kwargs)
+
+
+def blob(grid, peak, sigma=3.0):
+    """Returns a one-frame Gaussian brightness blob on ``grid``"""
+    return Percept((peak * np.exp(-(grid.x ** 2 + grid.y ** 2) /
+                                  (2 * sigma ** 2)))[..., np.newaxis],
+                   space=grid)
+
+
 def test_image_fill_setup_is_shared_by_all_played_frames(monkeypatch):
-    """Scene-view play factorizes the Laplace system once, not per frame"""
+    """Scene-view play factorizes the Laplace system once, not per frame,
+    with or without a percept"""
     calls = []
     original = scene_module._laplace_system
 
@@ -628,12 +619,109 @@ def test_image_fill_setup_is_shared_by_all_played_frames(monkeypatch):
         calls.append(1)
         return original(*args, **kwargs)
     monkeypatch.setattr(scene_module, '_laplace_system', counted)
-    frames = np.stack([random_rgb(seed) for seed in range(3)], axis=-1)
-    scene = Scene(VideoStimulus(frames, time=[0, 100, 200]),
-                  fov=(SCENE_PX, SCENE_PX), scotoma=Scotoma.circle(6),
-                  scotoma_fill='laplace')
-    scene.play(gaze=[(0, 0), (3, -2), (-4, 1)])
+    scene = random_video()
+    gaze = [(0, 0), (3, -2), (-4, 1)]
+    scene.play(gaze=gaze)
     npt.assert_equal(len(calls), 1)
+    scene.play(percept=blob(scene._grid(), 1.0), gaze=gaze)
+    npt.assert_equal(len(calls), 2)
+    plt.close('all')
+
+
+@pytest.mark.parametrize('fill, kwargs', IMAGE_FILLS)
+def test_a_dark_percept_leaves_filled_vision_unchanged(fill, kwargs):
+    scene = image_scene(random_rgb(), fill, scotoma_blend=2, **kwargs)
+    dark = Percept(np.zeros((SCENE_PX, SCENE_PX, 1)), space=scene._grid())
+    npt.assert_array_equal(scene.render(percept=dark).data,
+                           scene.render().data)
+
+
+@pytest.mark.parametrize('fill', ['laplace', 0.3, (1.0, 0.0, 0.0)])
+def test_a_percept_is_screen_blended_over_the_fill(fill):
+    """(1 - loss) * native + loss * (F + (1 - F) * P), per channel
+
+    A linear ramp is harmonic, so its Laplace fill is the ramp itself.
+    """
+    x = np.arange(SCENE_PX) - HALF
+    xx, yy = np.meshgrid(x, -x)
+    image = np.stack([0.5 + 0.02 * xx, 0.5 - 0.015 * yy,
+                      0.4 + 0.01 * xx + 0.01 * yy], axis=-1)
+    scene = image_scene(image, fill, scotoma=Scotoma.circle(8),
+                        scotoma_blend=0.5)
+    percept = blob(scene._grid(), 2.0, sigma=2.0)
+    phosphene = percept.data / 2.0
+    F = image if fill == 'laplace' else np.broadcast_to(fill, image.shape)
+    loss = rendered_loss(scene)[..., np.newaxis]
+    expected = (1 - loss) * image + loss * (F + (1 - F) * phosphene)
+    composed = scene.render(percept=percept).data[..., 0]
+    npt.assert_allclose(composed, expected, atol=1e-6)
+    npt.assert_equal(composed.min() >= 0 and composed.max() <= 1, True)
+    # Covers the blended boundary, and bright and dim phosphenes:
+    npt.assert_equal(((loss > 0.1) & (loss < 0.9)).any(), True)
+    inside = loss[..., 0] > 1 - 1e-6
+    npt.assert_equal([phosphene[inside].max() > 0.9,
+                      phosphene[inside].min() < 0.1], [True, True])
+
+
+@pytest.mark.parametrize('fill, kwargs', IMAGE_FILLS[1:])
+def test_a_patch_inside_the_scotoma_interpolates_the_wide_fill(fill, kwargs):
+    """A patch with no surround of its own is not inpainted on its own"""
+    scene = image_scene(random_rgb(), fill, scotoma=Scotoma.circle(8),
+                        scotoma_blend=0.5, **kwargs)
+    grid = Grid2D((-3, 3), (-3, 3), step=0.5)
+    dark = Percept(np.zeros(grid.x.shape + (1,)), space=grid)
+    bright = blob(grid, 1.0, sigma=1.0)
+    for view in ('eye', 'scene'):
+        ax = drawn_on_fresh_axes(scene, percept=dark, vmax=1, gaze=(2, -1),
+                                 view=view)
+        wide, patch = (image.get_array() for image in ax.images[-2:])
+        # Patch row 0 is y = 3, wide row HALF - 3; columns likewise:
+        shared = wide[HALF - 3:HALF + 4, HALF - 3:HALF + 4]
+        npt.assert_almost_equal(patch[::2, ::2], shared, decimal=6)
+        npt.assert_almost_equal(patch[1::2, ::2],
+                                (shared[:-1] + shared[1:]) / 2, decimal=6)
+        ax = drawn_on_fresh_axes(scene, percept=bright, vmax=1, gaze=(2, -1),
+                                 view=view)
+        P = bright.data[::2, ::2]
+        npt.assert_allclose(ax.images[-1].get_array()[::2, ::2],
+                            shared + (1 - shared) * P, atol=1e-6)
+    plt.close('all')
+
+
+def test_a_composite_follows_video_frames_and_gaze(played):
+    """Each frame blends over its own fill at its own gaze; play shows
+    render"""
+    scene = random_video(scotoma_blend=0)
+    gaze = [(0, 0), (3, -2), (-4, 1)]
+    grid = scene._grid()
+    percept = Percept(np.concatenate([blob(grid, p).data
+                                      for p in (0.5, 1.5, 3.0)], axis=-1),
+                      space=grid, time=[0, 100, 200])
+    composed = scene.render(percept=percept, vmax=3, gaze=gaze)
+    native = scene.render(gaze=gaze).data
+    lost = rendered_loss(scene)[..., np.newaxis] > 0
+    for f in range(3):
+        F, P = native[..., f], percept.data[..., f, np.newaxis] / 3
+        npt.assert_allclose(composed.data[..., f],
+                            np.where(lost, F + (1 - F) * P, F), atol=1e-6)
+    npt.assert_almost_equal(composed.time, [0, 100, 200])
+    # Each frame has its own fill:
+    change = np.abs(native[..., 0] - native[..., 1])[lost[..., 0]]
+    npt.assert_equal(change.max() > 0.05, True)
+    # play(view='eye') shows the rendered frames on the rendered clock:
+    ani = scene.play(percept=percept, vmax=3, gaze=gaze, view='eye')
+    npt.assert_allclose(ani._frame_data, composed.data, atol=1e-6)
+    npt.assert_almost_equal(played['percept'].time, composed.time)
+    # The scene view shows the same eye raster where the FOV is; eye (row,
+    # col) is source (row - gy, col + gx):
+    frames = scene.play(percept=percept, vmax=3, gaze=gaze)._frame_data
+    for f, (gx, gy) in enumerate(gaze):
+        rows, cols = np.arange(SCENE_PX) - gy, np.arange(SCENE_PX) + gx
+        keep_r = (rows >= 0) & (rows < SCENE_PX)
+        keep_c = (cols >= 0) & (cols < SCENE_PX)
+        npt.assert_allclose(frames[np.ix_(rows[keep_r], cols[keep_c])][..., f],
+                            composed.data[np.ix_(keep_r, keep_c)][..., f],
+                            atol=1e-6)
     plt.close('all')
 
 
@@ -1084,9 +1172,10 @@ def test_an_omitted_vmax_is_the_whole_percepts_maximum():
 
 def test_play_inherits_the_composition_rules_of_render():
     scene = video_scene(scotoma=Scotoma.circle(6), scotoma_fill='inpaint')
-    with pytest.raises(ValueError) as excinfo:
-        scene.play(percept=aligned_percept(), vmax=3)
-    npt.assert_equal('inpaint' in str(excinfo.value), True)
+    played = scene.play(percept=aligned_percept(), vmax=3, view='eye')
+    npt.assert_allclose(played._frame_data,
+                        scene.render(percept=aligned_percept(), vmax=3).data,
+                        atol=1e-6)
     with pytest.raises(ValueError):
         # vmax without a percept:
         video_scene().play(vmax=3)
@@ -1314,9 +1403,13 @@ def test_save_maps_percept_brightness_before_saving_rgb(tmp_path):
     npt.assert_array_equal(iio.imread(a), iio.imread(b))
 
 
-def test_render_composes_by_the_documented_equation():
-    """(1 - loss) * native + loss * max(fill, phosphene), analytically"""
-    native, fill, half = 0.8, 0.2, 0.5
+@pytest.mark.parametrize('fill', [0.0, 0.2])
+def test_render_composes_by_the_documented_equation(fill):
+    """(1 - loss) * native + loss * (fill + (1 - fill) * phosphene)
+
+    A black fill shows the phosphene itself.
+    """
+    native, half = 0.8, 0.5
     scene = Scene(ImageStimulus(np.full((9, 9), native)), fov=(9, 9),
                   scotoma=Scotoma(lambda x, y: np.full(np.shape(x), half)),
                   scotoma_fill=fill, scotoma_blend=0)
@@ -1326,27 +1419,14 @@ def test_render_composes_by_the_documented_equation():
         phosphene = brightness / vmax
         npt.assert_almost_equal(
             scene.render(percept=percept, vmax=vmax).data[4, 4, :, 0],
-            (1 - half) * native + half * max(fill, phosphene), decimal=6)
+            (1 - half) * native + half * (fill + (1 - fill) * phosphene),
+            decimal=6)
     # Composition is pointwise, so a finer render agrees:
     percept = Percept(np.full((9, 9, 1), 3.0), space=scene._grid())
     fine = scene.render(percept=percept, vmax=4, shape=(45, 45))
     npt.assert_almost_equal(fine.data[22, 22, 0, 0],
                             scene.render(percept=percept,
                                          vmax=4).data[4, 4, 0, 0], decimal=6)
-
-
-def test_a_color_fill_composes_a_percept_channel_by_channel():
-    """max(fill, phosphene) is applied per channel"""
-    native, fill, half = 0.8, (1.0, 0.0, 0.0), 0.5
-    scene = Scene(ImageStimulus(np.full((9, 9), native)), fov=(9, 9),
-                  scotoma=Scotoma(lambda x, y: np.full(np.shape(x), half)),
-                  scotoma_fill='red', scotoma_blend=0)
-    percept = Percept(np.full((9, 9, 1), 2.0), space=scene._grid())
-    phosphene = 2.0 / 4.0
-    lost = [max(c, phosphene) for c in fill]
-    npt.assert_almost_equal(
-        scene.render(percept=percept, vmax=4).data[4, 4, :, 0],
-        [(1 - half) * native + half * c for c in lost], decimal=6)
 
 
 def test_the_aperture_is_support_and_not_scene_data():
@@ -1781,12 +1861,12 @@ def test_composing_an_rgb_video_keeps_every_channel_where_it_was():
     x, y = scene._pixel_centers()
     intact = scene.scotoma(x, y) == 0
     npt.assert_array_equal(seen[intact], source[intact])
-    # Under complete loss, max(fill, phosphene); phosphene is dim in frame 0
-    # and bright in frame -1:
+    # Under complete loss, the screen blend; phosphene is dim in frame 0 and
+    # bright in frame -1:
     for f in (0, n - 1):
         phosphene = float(ramped_percept(scene, n).data[HALF, HALF, f])
         npt.assert_almost_equal(seen[HALF, HALF, :, f],
-                                [max(0.2, phosphene)] * 3, decimal=6)
+                                [0.2 + 0.8 * phosphene] * 3, decimal=6)
 
 
 @pytest.mark.parametrize('blend', [0, 2])

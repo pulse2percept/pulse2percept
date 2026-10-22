@@ -196,6 +196,13 @@ class Horsager2009Model(Model):
     ``Horsager2009Temporal`` instead when combining the temporal cascade with
     a spatial model.
 
+    .. note::
+
+        Model parameters can vary substantially across patients and electrodes.
+        Default values are convenient starting points, not universally valid
+        estimates of phosphene appearance. Whenever possible, fit these
+        parameters to patient-specific psychophysical data.
+
     Parameters
     ----------
     dt : float or Quantity, optional

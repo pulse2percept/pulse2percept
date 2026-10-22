@@ -86,7 +86,10 @@ def _encoded(implant, amp_range=(0, 50)):
 
 
 def _retina(**params):
-    params = {'xrange': (-8, 8), 'yrange': (-6, 6), 'step': 0.25, **params}
+    # rho=100 keeps a zero margin on this grid; the pitch default (287.5 um)
+    # covers it:
+    params = {'xrange': (-8, 8), 'yrange': (-6, 6), 'step': 0.25, 'rho': 100,
+              **params}
     return ScoreboardModel(ArgusII(), **params)
 
 

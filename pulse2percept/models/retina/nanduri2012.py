@@ -68,6 +68,14 @@ class Nanduri2012Spatial(RetinalSpatial):
         :py:class:`~pulse2percept.models.retina.Nanduri2012Model` for the combined
         spatial-temporal model.
 
+        .. note::
+
+            Model parameters can vary substantially across patients and
+            electrodes. Default values are convenient starting points, not
+            universally valid estimates of phosphene appearance. Whenever
+            possible, fit these parameters to patient-specific psychophysical
+            data.
+
         Parameters
         ----------
         implant : :py:class:`~pulse2percept.implants.Implant`
@@ -444,6 +452,14 @@ class Nanduri2012Model(Model):
         Combines :py:class:`~pulse2percept.models.retina.Nanduri2012Spatial` with
         :py:class:`~pulse2percept.models.retina.Nanduri2012Temporal`. See those classes
         for the spatial current-spread equation and temporal cascade.
+
+        .. note::
+
+            Model parameters can vary substantially across patients and
+            electrodes. Default values are convenient starting points, not
+            universally valid estimates of phosphene appearance. Whenever
+            possible, fit these parameters to patient-specific psychophysical
+            data.
 
         Parameters
         ----------

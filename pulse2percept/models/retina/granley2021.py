@@ -335,12 +335,15 @@ class _BiphasicSpatialMixin:
         not forwarded.
         """
         super().__setattr__(name, value)
-        target = self._shared_with_effect.get(name)
-        if target is None:
-            return
-        effect = getattr(self, target, None)
+        if name in self._shared_with_effect:
+            self._mirror_to_effect(name)
+
+    def _mirror_to_effect(self, name):
+        """Copy the stored value of ``name`` to the effect model that scales
+        it, if that model has the attribute"""
+        effect = getattr(self, self._shared_with_effect[name], None)
         if hasattr(effect, name):
-            # Mirror the stored value, which `super()` has already normalized:
+            # Mirror the stored value, which is already normalized:
             setattr(effect, name, getattr(self, name))
 
     def _elec_params(self, stim):
@@ -568,6 +571,18 @@ class BiphasicAxonMapModel(_BiphasicModel):
         \qquad
         \lambda_{\mathrm{eff}} = \lambda \sqrt{F_{\mathrm{streak}}}.
 
+    .. note::
+
+        Model parameters such as ``rho`` and ``lam`` can vary substantially
+        across patients and electrodes. Default values are convenient starting
+        points, not universally valid estimates of phosphene appearance.
+        Whenever possible, fit these parameters to patient-specific
+        psychophysical data.
+
+        The relationships governing phosphene brightness and size
+        (``F_bright``, ``F_size``, and ``F_streak``) are also based on
+        empirical fits and may not generalize to individual patients.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -739,7 +754,7 @@ class _BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
     """Spatial stage of :py:class:`BiphasicScoreboardModel`."""
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
-                 rho=100, xrange=(-15, 15), yrange=(-15, 15), step=0.25,
+                 rho=None, xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rect', thresh_percept=0,
                  visual_field_map=None,
                  n_gray=None,
@@ -774,6 +789,8 @@ class _BiphasicScoreboardSpatial(_BiphasicSpatialMixin, ScoreboardSpatial):
         if not callable(self.size_model):
             raise TypeError("size_model needs to be callable")
         super(_BiphasicScoreboardSpatial, self)._build()
+        # Resolving rho from the pitch bypasses the setter, so mirror it here:
+        self._mirror_to_effect('rho')
 
     def _predict_spatial(self, electrode_array, stim):
         """Predict the representative spatial percept."""
@@ -845,6 +862,17 @@ class BiphasicScoreboardModel(_BiphasicModel):
         ``rho`` alone sets apparent size. The underlying psychophysics
         ([Nanduri2012]_, [Weitz2015]_) is also epiretinal.
 
+    .. note::
+
+        Model parameters such as ``rho`` can vary substantially across patients
+        and electrodes. Default values are convenient starting points, not
+        universally valid estimates of phosphene appearance. Whenever possible,
+        fit these parameters to patient-specific psychophysical data.
+
+        The relationships governing phosphene brightness and size (``F_bright``
+        and ``F_size``) are also based on empirical fits and may not generalize
+        to individual patients.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -857,11 +885,17 @@ class BiphasicScoreboardModel(_BiphasicModel):
         Defaults to :class:`DefaultSizeModel`.
     rho : float or Quantity, optional
         Baseline Gaussian spatial decay constant in microns, before ``F_size``
-        scaling. Larger values produce broader phosphenes.
+        scaling. Larger values produce broader phosphenes. ``None`` (default)
+        uses half the implant's median electrode pitch, a geometric
+        convention; see
+        :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`.
 
         .. important::
 
             Electrode-retina distance (``z``) does not directly affect ``rho``.
+
+        .. versionchanged:: 0.12.0
+            Defaults to half the electrode pitch instead of 100 um.
 
     xrange : (float, float) or Quantity, optional
         Horizontal visual-field extent in degrees of visual angle. May also be
@@ -929,7 +963,7 @@ class BiphasicScoreboardModel(_BiphasicModel):
     """
 
     def __init__(self, implant, *, bright_model=None, size_model=None,
-                 rho=100, xrange=(-15, 15), yrange=(-15, 15), step=0.25,
+                 rho=None, xrange=(-15, 15), yrange=(-15, 15), step=0.25,
                  grid_type='rect', thresh_percept=0,
                  visual_field_map=None,
                  n_gray=None,

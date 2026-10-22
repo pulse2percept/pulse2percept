@@ -1131,6 +1131,32 @@ def test_BiphasicScoreboard_rho_reaches_the_size_model():
     npt.assert_almost_equal(spatial.size_model.rho, 300)
 
 
+def test_BiphasicScoreboard_default_rho_is_half_the_pitch():
+    """The resolved rho reaches the size model, and follows rebinding"""
+    from pulse2percept.implants.retina import PRIMAPivotal
+    grid = dict(xrange=(-1, 1), yrange=(-1, 1), step=0.5, verbose=False)
+    model = BiphasicScoreboardModel(implant=PRIMAPivotal(), **grid).build()
+    npt.assert_almost_equal(model.spatial.rho, 50)
+    npt.assert_almost_equal(model.spatial.size_model.rho, 50)
+    model.implant = ArgusII()
+    model.build()
+    npt.assert_almost_equal(model.spatial.rho, 287.5)
+    npt.assert_almost_equal(model.spatial.size_model.rho, 287.5)
+    # A fitted rho survives rebinding:
+    model.spatial.rho = 120
+    model.implant = PRIMAPivotal()
+    model.build()
+    npt.assert_almost_equal(model.spatial.size_model.rho, 120)
+
+    # A custom size model is kept:
+    def custom(freq, amp, pdur):
+        return np.ones_like(amp)
+    model = BiphasicScoreboardModel(implant=PRIMAPivotal(), size_model=custom,
+                                    **grid).build()
+    npt.assert_equal(model.spatial.size_model is custom, True)
+    npt.assert_almost_equal(model.spatial.rho, 50)
+
+
 def test_ScoreboardModel_is_unchanged():
     # Reference values from before BiphasicScoreboardModel was added:
     model = ScoreboardModel(implant=ArgusII(), xrange=(-8, 8), yrange=(-6, 6),

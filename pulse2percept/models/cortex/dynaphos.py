@@ -52,6 +52,13 @@ class DynaphosModel(BaseModel):
     diameter P (dva), following the reference implementation's
     ``radius_to_sigma = 0.5``.
 
+    .. note::
+
+        Model parameters can vary substantially across patients and electrodes.
+        Default values are convenient starting points, not universally valid
+        estimates of phosphene appearance. Whenever possible, fit these
+        parameters to patient-specific psychophysical data.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`

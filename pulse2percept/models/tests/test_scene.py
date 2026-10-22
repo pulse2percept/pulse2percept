@@ -607,16 +607,16 @@ def test_rendering_a_scene_with_a_scotoma_gives_a_composed_rgb_percept():
                             decimal=4)
 
 
-def test_an_inpainted_scotoma_cannot_hold_a_prosthetic_percept():
-    """Inpainting cannot hold a phosphene; a numeric fill works"""
+@pytest.mark.parametrize('fill', ['inpaint', 0.0])
+def test_a_filled_scotoma_holds_a_prosthetic_percept(fill):
+    """The phosphene brightens the fill, for image and numeric fills"""
     model = model_for(implant_at(0, 0))
-    filled = scene_of(scotoma=Scotoma.circle(6), scotoma_fill='inpaint')
-    with pytest.raises(ValueError):
-        filled.render(percept=model.predict_percept(filled), vmax=20)
-    numeric = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
-    npt.assert_equal(
-        numeric.render(percept=model.predict_percept(numeric),
-                       vmax=20).is_rgb, True)
+    scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=fill)
+    seen = scene.render(percept=model.predict_percept(scene), vmax=20)
+    npt.assert_equal(seen.is_rgb, True)
+    center = seen.data[HALF, HALF, :, 0]
+    npt.assert_equal(center.min() > scene.render().data[HALF, HALF].max(),
+                     True)
 
 
 def test_the_intact_periphery_is_the_scene_exactly():
@@ -775,8 +775,9 @@ def test_a_single_timed_percept_is_not_broadcast_over_a_video():
     """A single timed percept frame is not broadcast over a video"""
     source = VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20])
     scene = Scene(source, fov=(5, 5), scotoma=Scotoma.circle(3))
-    grid = ScoreboardModel(implant=implant_at(0, 0), xrange=(-2, 2),
-                           yrange=(-2, 2), step=1).build().spatial.grid
+    grid = ScoreboardModel(implant=implant_at(0, 0), rho=100,
+                           xrange=(-2, 2), yrange=(-2, 2),
+                           step=1).build().spatial.grid
     at_10 = Percept(np.full((5, 5, 1), 20.0), space=grid, time=[10])
     with pytest.raises(ValueError) as excinfo:
         scene.render(percept=at_10, vmax=20)
@@ -794,8 +795,9 @@ def test_a_temporal_percept_must_cover_the_video():
     source = VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20])
     scene = Scene(source, fov=(5, 5), scotoma=Scotoma.circle(3))
     values = np.stack([np.full((5, 5), b) for b in (0.0, 20.0)], axis=-1)
-    grid = ScoreboardModel(implant=implant_at(0, 0), xrange=(-2, 2),
-                           yrange=(-2, 2), step=1).build().spatial.grid
+    grid = ScoreboardModel(implant=implant_at(0, 0), rho=100,
+                           xrange=(-2, 2), yrange=(-2, 2),
+                           step=1).build().spatial.grid
     short = Percept(values, space=grid, time=[5, 15])
     with pytest.raises(ValueError) as excinfo:
         scene.render(percept=short, vmax=20)
@@ -812,8 +814,9 @@ def test_the_time_range_check_crosses_units():
     """The time range check converts a percept in s to a video in ms"""
     source = VideoStimulus(np.zeros((5, 5, 3)), time=[0, 10, 20])
     scene = Scene(source, fov=(5, 5), scotoma=Scotoma.circle(3))
-    grid = ScoreboardModel(implant=implant_at(0, 0), xrange=(-2, 2),
-                           yrange=(-2, 2), step=1).build().spatial.grid
+    grid = ScoreboardModel(implant=implant_at(0, 0), rho=100,
+                           xrange=(-2, 2), yrange=(-2, 2),
+                           step=1).build().spatial.grid
     values = np.stack([np.full((5, 5), b) for b in (0.0, 20.0)], axis=-1)
     # 0-20 ms is exactly 0-0.02 s:
     covering = Percept(values, space=grid, time=[0, 0.02], time_unit=s)
@@ -827,8 +830,9 @@ def test_the_time_range_check_crosses_units():
 
 def labeled_percept(time, source=None, time_unit=ms):
     """Return frames of brightness 1, 2, 3, optionally with source times"""
-    grid = ScoreboardModel(implant=implant_at(0, 0), xrange=(-2, 2),
-                           yrange=(-2, 2), step=1).build().spatial.grid
+    grid = ScoreboardModel(implant=implant_at(0, 0), rho=100,
+                           xrange=(-2, 2), yrange=(-2, 2),
+                           step=1).build().spatial.grid
     values = np.stack([np.full((5, 5), b) for b in (1.0, 2.0, 3.0)], axis=-1)
     meta = None if source is None else {'source_frame_time': source}
     return Percept(values, space=grid, time=time, time_unit=time_unit,

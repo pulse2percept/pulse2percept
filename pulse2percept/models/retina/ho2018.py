@@ -5,10 +5,9 @@
 import numpy as np
 
 from ...stimuli.encoders import _OpticalStimulus
-from ...topography.retina import Watson2014Map
 from ...units import as_value, dimensionless, mW, mm, ms
-from ..base import (Model, TemporalModel, _FrameClock, _electrode_pitch,
-                    _require_finite, _require_stim_dimension)
+from ..base import (Model, TemporalModel, _FrameClock, _require_finite,
+                    _require_stim_dimension)
 from .beyeler2019 import ScoreboardSpatial
 
 #: Peak irradiance (mW/mm^2) of the [Ho2018]_ white-noise condition, which the
@@ -231,6 +230,13 @@ class Ho2018Spatial(ScoreboardSpatial):
 
     .. versionadded:: 0.11.0
 
+    .. note::
+
+        Model parameters such as ``rho`` can vary substantially across patients
+        and electrodes. Default values are convenient starting points, not
+        universally valid estimates of phosphene appearance. Whenever possible,
+        fit these parameters to patient-specific psychophysical data.
+
     Parameters
     ----------
     implant : :py:class:`~pulse2percept.implants.Implant`
@@ -317,32 +323,6 @@ class Ho2018Spatial(ScoreboardSpatial):
             implant_rotation=implant_rotation, implant_depth=implant_depth,
             location_noise=location_noise, verbose=verbose, ndim=ndim)
 
-    def get_default_params(self):
-        """Return all settable parameters of the spatial response."""
-        return {**super().get_default_params(),
-                'rho': None, 'visual_field_map': Watson2014Map()}
-
-    def __setattr__(self, name, value):
-        """Set a parameter, tracking whether ``rho`` is still deferred."""
-        super().__setattr__(name, value)
-        if name == 'rho':
-            object.__setattr__(self, '_rho_from_pitch', value is None)
-
-    def _build(self):
-        if self._rho_from_pitch:
-            pitch = _electrode_pitch(self)
-            if pitch is None:
-                raise ValueError(
-                    f"rho=None spreads activation over half this implant's "
-                    f"median electrode pitch, and "
-                    f"{type(self.implant).__name__} has none: that needs at "
-                    f"least two electrodes at distinct positions. Pass 'rho' "
-                    f"explicitly.")
-            # Bypass the parameter setter so this neither invalidates the
-            # build in progress nor clears the sentinel:
-            object.__setattr__(self, 'rho', pitch / 2)
-        super()._build()
-
     def _stim_values(self, stim):
         """Return radiant-exposure drive for an optical schedule."""
         if isinstance(stim, _OpticalStimulus):
@@ -427,6 +407,13 @@ class Ho2018Model(Model):
         calibration to human brightness or contrast perception.
 
     .. versionadded:: 0.11.0
+
+    .. note::
+
+        Model parameters such as ``rho`` can vary substantially across patients
+        and electrodes. Default values are convenient starting points, not
+        universally valid estimates of phosphene appearance. Whenever possible,
+        fit these parameters to patient-specific psychophysical data.
 
     Parameters
     ----------

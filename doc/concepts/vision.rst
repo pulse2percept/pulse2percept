@@ -317,8 +317,7 @@ the scotoma:
 .. note::
 
    Image-derived fills are visualizations of missing native vision, not
-   models of perceptual filling-in. They cannot be used when a prosthetic
-   percept is composited into the same scotoma.
+   models of perceptual filling-in.
 
 The scotoma does not affect what the implant receives. Prosthetic encoding
 samples the original scene, including regions where native vision is lost.
@@ -381,15 +380,19 @@ A predicted percept can be placed back into its visual context:
 
     fig.tight_layout()
 
-Within visual loss, native and prosthetic vision are composed as
+Within visual loss, the percept is screen-blended over the fill:
 
 .. math::
 
-    (1 - L)N + L\max(S, P),
+    (1 - L)N + L\left[F + (1 - F)P\right],
 
 where :math:`L` is the fraction of native vision lost, :math:`N` is native
-vision, :math:`S` is ``scotoma_fill``, and :math:`P` is the displayed
-prosthetic percept.
+vision, :math:`F` is the fill (``scotoma_fill``, or each frame's image-derived
+fill), and :math:`P` is the displayed prosthetic brightness in
+:math:`[0, 1]`, applied to every RGB channel. Every ``scotoma_fill`` works.
+:math:`P = 0` means no prosthetic contribution, not perceived black; a black
+fill shows :math:`P` itself. Screen blending is a visualization convention,
+not a validated model of how patients combine prosthetic and natural vision.
 
 Without a scotoma, a prosthetic percept is displayed on black rather than
 superimposed on intact native vision. The model does not specify how

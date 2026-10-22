@@ -91,6 +91,16 @@ API changes and improvements
   ``scotoma_blend`` now applies to every fill, including ``'inpaint'``
   (:pull:`962`).
 
+* ``Scene`` composes a prosthetic percept over every ``scotoma_fill``,
+  including image-derived fills, by screen blending instead of
+  ``max(fill, phosphene)``; this changes composites with numeric fills
+  (:pull:`968`).
+
+* Retinal ``ScoreboardSpatial``, ``ScoreboardModel``, and
+  ``BiphasicScoreboardModel`` default to ``rho`` of half the implant's median
+  electrode pitch instead of 100 um (e.g., 50 um for PRIMA, 287.5 um for
+  Argus II). Pass ``rho`` to keep the old predictions (:pull:`968`).
+
 * New ``Scene.save()``, shorthand for ``scene.render(...).save(...)``.
   ``Percept.save()`` now keeps the percept's native size when ``shape`` is
   omitted, instead of resizing to 320 px wide (:pull:`963`).
