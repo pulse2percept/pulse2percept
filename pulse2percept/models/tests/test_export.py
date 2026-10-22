@@ -350,6 +350,19 @@ def test_export_onnx_ensemble(tmp_path):
     assert np.all(np.any(expected[:, ~upper] != 0, axis=1))
 
 
+def test_ensemble_composite_visual_path():
+    # The guard also opens the composite's Torch image route to ensembles:
+    ensemble = _ensemble()
+    model = Model(_ensemble_model(ensemble), FadingTemporal())
+    image = ImageStimulus(_images(ENSEMBLE_SHAPE)['hramp'])
+    assert model._visual_pixels(image) is not None
+    actual = model.predict_percept(image)
+    expected = model.predict_percept(ensemble.prepare_stim(image))
+    assert np.any(expected.data != 0)
+    _assert_close(actual.data, expected.data)
+    npt.assert_array_equal(actual.time, expected.time)
+
+
 def test_export_onnx_ensemble_sidecar(tmp_path):
     pytest.importorskip('onnxscript')
     model = _ensemble_model()
