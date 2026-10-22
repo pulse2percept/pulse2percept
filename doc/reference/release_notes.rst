@@ -109,6 +109,13 @@ API changes and improvements
   of spatial-only Scoreboard and AxonMap models to ONNX without approximation
   (:pull:`961`).
 
+* :py:func:`~pulse2percept.export_onnx` supports ``EnsembleImplant``, with one
+  image driving the whole ensemble (:pull:`969`).
+
+* :py:func:`~pulse2percept.export_onnx` sidecars (schema version 2) record a
+  recommended ``display.white_point``; pass ``white_point`` to override it
+  (:pull:`969`).
+
 Bug fixes
 ---------
 

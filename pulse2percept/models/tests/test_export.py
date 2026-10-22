@@ -7,12 +7,14 @@ import pytest
 import torch
 
 import pulse2percept as p2p
-from pulse2percept.implants.cortex import Orion
+from pulse2percept.implants import EnsembleImplant
+from pulse2percept.implants.cortex import NeuroPortArray, Orion
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models import FadingTemporal, Model
-from pulse2percept.models import cortex
+from pulse2percept.models import cortex, export
 from pulse2percept.models.cortex.tests.test_tensor import _CurvedPolimeni
-from pulse2percept.models.export import _deploy_module, _save_onnx
+from pulse2percept.models.export import (_deploy_module, _require_close,
+                                         _save_onnx)
 from pulse2percept.models.retina import (AxonMapModel, AxonMapSpatial,
                                          Nanduri2012Spatial, ScoreboardModel,
                                          ScoreboardSpatial)
@@ -21,7 +23,7 @@ from pulse2percept.models.tests.test_tensor import (_axon_spatial, _one_axon,
 from pulse2percept.stimuli import (AmplitudeEncoder, FrequencyEncoder,
                                    ImageStimulus, Stimulus)
 from pulse2percept.topography.cortex import Polimeni2006Map
-from pulse2percept.units import mm, xTh
+from pulse2percept.units import mm, um, xTh
 
 # float32 parity relative to the peak |response|: matrix products sum in a
 # runtime-dependent order (BLAS, ONNX Runtime).
@@ -38,6 +40,17 @@ def _run_onnx(path, data):
     session = ort.InferenceSession(str(path),
                                    providers=['CPUExecutionProvider'])
     return session.run(None, {'image': np.asarray(data, dtype=np.float32)})[0]
+
+
+def _read_sidecar(path):
+    """Return the sidecar of ONNX file ``path``, checking its display entry."""
+    with open(path.with_suffix('.json')) as f:
+        meta = json.load(f)
+    assert meta['schema_version'] == 2
+    white_point = meta['display']['white_point']
+    assert isinstance(white_point, float)
+    assert np.isfinite(white_point) and white_point > 0
+    return meta
 
 
 def _images(shape):
@@ -60,6 +73,7 @@ def _chain(model, images, tmp_path):
     path = tmp_path / 'model.onnx'
     shape = images[0].shape
     p2p.export_onnx(model, path, shape)
+    _read_sidecar(path)
     spatial = model.spatial if isinstance(model, Model) else model
     module = _deploy_module(spatial, shape)
     expected, eager, onnx = [], [], []
@@ -159,6 +173,9 @@ def test_export_onnx_frequency_zero(tmp_path):
     expected = _assert_chain(model, [np.ones((6, 10), dtype=np.float32)],
                              tmp_path)
     assert np.all(expected == 0)
+    # No positive reference response: the fallback white point.
+    meta = _read_sidecar(tmp_path / 'model.onnx')
+    assert meta['display']['white_point'] == 1.0
 
 
 # Scoreboard
@@ -248,6 +265,137 @@ def test_export_onnx_cortex_scoreboard_3d(tmp_path):
     assert np.ptp(model.spatial.build().grid.v1.z) > 0
     expected = _assert_chain(model, [_images((30, 30))['vramp']], tmp_path)
     assert 0 < np.mean(expected == 0) < 1
+
+
+# EnsembleImplant: one image across two NeuroPort arrays in V1
+
+
+ENSEMBLE_SHAPE = (48, 64)
+
+
+def _ensemble(cls=EnsembleImplant):
+    # Array 0 above and array 1 below the horizontal meridian, both in V1:
+    ensemble = cls.from_visual_field_map(
+        NeuroPortArray, Polimeni2006Map(regions=['v1']),
+        locs=np.array([[3.0, 1.5], [6.0, -1.5]]), region='v1')
+    return _encoded(ensemble)
+
+
+def _ensemble_model(ensemble=None, **params):
+    # rho is the NeuroPort pitch; the grid covers both arrays' phosphenes:
+    params = {'xrange': (0, 9), 'yrange': (-4, 4), 'step': 0.25, 'rho': 400,
+              **params}
+    return cortex.ScoreboardSpatial(
+        _ensemble() if ensemble is None else ensemble,
+        visual_field_map=Polimeni2006Map(regions=['v1']), **params)
+
+
+def _constituent_xy(ensemble):
+    """Return electrode (x, y) in um, constituent by constituent."""
+    return np.concatenate([implant.electrode_array.coordinates(um)[:, :2]
+                           for implant in ensemble.implants.values()])
+
+
+def _ensemble_marker(ensemble):
+    """Return an image lighting 2 x 2 pixels at the first electrode of array
+    0 (1.0) and the last electrode of array 1 (0.5)."""
+    image = np.zeros(ENSEMBLE_SHAPE, dtype=np.float32)
+    xy = _constituent_xy(ensemble)
+    lo, hi = xy.min(axis=0), xy.max(axis=0)
+    size = np.array(ENSEMBLE_SHAPE[::-1]) - 1
+    for point, value in ((xy[0], 1), (xy[-1], 0.5)):
+        col, row = ((point - lo) / (hi - lo) * size).astype(int)
+        image[row:row + 2, col:col + 2] = value
+    return image
+
+
+def _second_array_electrode(ensemble):
+    """Return an electrode of array 1 with later channels after it."""
+    return ensemble.electrode_names[ensemble.implants[0].n_electrodes + 10]
+
+
+def test_ensemble_electrode_order():
+    ensemble = _ensemble()
+    assert list(ensemble.implants) == [0, 1]
+    assert list(ensemble.electrode_names) == [
+        f'{key}-{name}' for key, implant in ensemble.implants.items()
+        for name in implant.electrode_names]
+
+
+def test_ensemble_registration():
+    # Bilinear sampling reproduces an affine image exactly, so each electrode
+    # reads the affine function of its position in the combined bounding box.
+    # Unequal x and y slopes expose swaps, flips, per-array extents, and
+    # reordered channels.
+    ensemble = _ensemble()
+    names = list(ensemble.electrode_names)
+    off = _second_array_electrode(ensemble)
+    ensemble.deactivate([off])
+    h, w = ENSEMBLE_SHAPE
+    rows, cols = np.mgrid[:h, :w]
+    image = (0.6 * rows / (h - 1) + 0.4 * cols / (w - 1)).astype(np.float32)
+    xy = _constituent_xy(ensemble)
+    x, y = ((xy - xy.min(axis=0)) / np.ptp(xy, axis=0)).T
+    expected = 50 * (0.6 * y + 0.4 * x)
+    expected[names.index(off)] = 0
+    module = _deploy_module(_ensemble_model(ensemble).build(), ENSEMBLE_SHAPE)
+    with torch.inference_mode():
+        drive = module.drive(torch.as_tensor(image)[None, None])
+    npt.assert_allclose(drive.numpy().ravel(), expected, rtol=0, atol=1e-5)
+    # `prepare_stim` drops the deactivated electrode:
+    view = ensemble.prepare_stim(ImageStimulus(image))._spatial_view()
+    prepared = dict(zip(view.electrodes, view.data.ravel()))
+    assert off not in prepared
+    npt.assert_allclose([prepared.get(e, 0) for e in names], expected,
+                        rtol=0, atol=1e-5)
+
+
+def test_export_onnx_ensemble(tmp_path):
+    model = _ensemble_model()
+    ensemble = model.implant
+    images = _images(ENSEMBLE_SHAPE)
+    images = [images['hramp'], images['vramp'], _ensemble_marker(ensemble)]
+    expected = _assert_chain(model, images, tmp_path)
+    for image, percept in zip(images, expected):
+        prepared = ensemble.prepare_stim(ImageStimulus(image))
+        _assert_close(model.predict_percept(prepared).data[..., 0], percept)
+    # Array 0's phosphenes lie at y >= 0.5 dva, array 1's at y <= 0.25; each
+    # image drives both:
+    upper = model.grid.y > 0.4
+    assert np.all(np.any(expected[:, upper] != 0, axis=1))
+    assert np.all(np.any(expected[:, ~upper] != 0, axis=1))
+
+
+def test_ensemble_composite_visual_path():
+    # The guard also opens the composite's Torch image route to ensembles:
+    ensemble = _ensemble()
+    model = Model(_ensemble_model(ensemble), FadingTemporal())
+    image = ImageStimulus(_images(ENSEMBLE_SHAPE)['hramp'])
+    assert model._visual_pixels(image) is not None
+    actual = model.predict_percept(image)
+    expected = model.predict_percept(ensemble.prepare_stim(image))
+    assert np.any(expected.data != 0)
+    _assert_close(actual.data, expected.data)
+    npt.assert_array_equal(actual.time, expected.time)
+
+
+def test_export_onnx_ensemble_sidecar(tmp_path):
+    pytest.importorskip('onnxscript')
+    model = _ensemble_model()
+    ensemble = model.implant
+    off = _second_array_electrode(ensemble)
+    ensemble.deactivate([off])
+    p2p.export_onnx(model, tmp_path / 'ensemble.onnx', ENSEMBLE_SHAPE)
+    meta = _read_sidecar(tmp_path / 'ensemble.onnx')
+    x, y = _constituent_xy(ensemble).T
+    assert meta['implant'] == 'EnsembleImplant'
+    extent = meta['input']['device_extent_um']
+    npt.assert_allclose([extent['x'], extent['y']],
+                        [[x.min(), x.max()], [y.min(), y.max()]])
+    assert meta['electrodes'] == [
+        f'{key}-{name}' for key, implant in ensemble.implants.items()
+        for name in implant.electrode_names]
+    assert meta['deactivated'] == [off]
 
 
 # AxonMap: the spatial module alone, with signed drive
@@ -436,10 +584,8 @@ def test_export_onnx_sidecar(tmp_path):
     p2p.export_onnx(model, tmp_path / 'cortex.onnx', [17, 23])
     # Builds as prediction does:
     assert model.is_built
-    with open(tmp_path / 'cortex.json') as f:
-        meta = json.load(f)
+    meta = _read_sidecar(tmp_path / 'cortex.onnx')
     grid = model.spatial.grid
-    assert meta['schema_version'] == 1
     assert meta['model'] == 'ScoreboardModel'
     assert meta['spatial_model'] == 'ScoreboardSpatial'
     assert meta['implant'] == 'Orion'
@@ -456,6 +602,92 @@ def test_export_onnx_sidecar(tmp_path):
     session_shape = _run_onnx(tmp_path / 'cortex.onnx',
                               np.zeros((1, 1, 17, 23))).shape
     assert list(session_shape) == meta['output']['shape']
+
+
+# Display white point
+
+
+WHITE_SHAPE = (12, 16)
+
+
+def _export_white_point(model, tmp_path, **kwargs):
+    pytest.importorskip('onnxscript')
+    p2p.export_onnx(model, tmp_path / 'model.onnx', WHITE_SHAPE, **kwargs)
+    return _read_sidecar(tmp_path / 'model.onnx')['display']['white_point']
+
+
+@pytest.mark.parametrize('make', [_retina, _cortex, _ensemble_model,
+                                  _axon_spatial],
+                         ids=['retina', 'cortex', 'ensemble', 'axon_map'])
+def test_export_onnx_white_point_default(make, tmp_path):
+    model = make()
+    white_point = _export_white_point(model, tmp_path)
+    gray = np.full(WHITE_SHAPE, 0.5, dtype=np.float32)
+    peak = model.predict_percept(ImageStimulus(gray)).data.max()
+    assert peak > 0 and white_point == 2 * float(peak)
+
+
+def test_export_onnx_white_point_rho(tmp_path):
+    # Wider overlapping fields sum to a brighter gray reference:
+    narrow = _export_white_point(_retina(rho=100), tmp_path)
+    wide = _export_white_point(_retina(rho=400), tmp_path)
+    assert wide > 1.5 * narrow
+
+
+@pytest.mark.parametrize('white_point', [3.0, 7, 0.1, np.float32(250)])
+def test_export_onnx_white_point_explicit(white_point, tmp_path,
+                                          monkeypatch):
+    def fail(model, input_shape):
+        raise AssertionError('reference prediction')
+
+    monkeypatch.setattr(export, '_reference_white_point', fail)
+    assert _export_white_point(_retina(), tmp_path,
+                               white_point=white_point) == white_point
+
+
+@pytest.mark.parametrize('white_point, error', [
+    (0, ValueError), (-3.0, ValueError), (np.nan, ValueError),
+    (np.inf, ValueError), ('3', TypeError), (True, TypeError),
+    ([3.0], TypeError),
+])
+def test_export_onnx_white_point_invalid(white_point, error, tmp_path):
+    path = tmp_path / 'model.onnx'
+    with pytest.raises(error, match='white_point'):
+        p2p.export_onnx(_retina(), path, WHITE_SHAPE, white_point=white_point)
+    assert not path.exists() and not (tmp_path / 'model.json').exists()
+
+
+@pytest.mark.parametrize('bad', [np.nan, np.inf])
+def test_export_onnx_white_point_nonfinite(bad, tmp_path, monkeypatch):
+    # Unlike a zero response, NaN or Inf gets no fallback:
+    pytest.importorskip('onnxscript')
+    model = _retina()
+    predict = model.predict_percept
+
+    def corrupt_gray(stim):
+        percept = predict(stim)
+        if np.all(stim.data == 0.5):
+            percept.data[0, 0] = bad
+        return percept
+
+    monkeypatch.setattr(model, 'predict_percept', corrupt_gray)
+    path = tmp_path / 'model.onnx'
+    with pytest.raises(ValueError, match='NaN or Inf'):
+        p2p.export_onnx(model, path, WHITE_SHAPE)
+    assert not path.exists() and not (tmp_path / 'model.json').exists()
+
+
+def test_export_onnx_white_point_graph(tmp_path):
+    # Only the sidecar changes:
+    pytest.importorskip('onnxscript')
+    image = _images(WHITE_SHAPE)['hramp'][None, None]
+    percepts = []
+    for white_point in (None, 3.0, 300.0):
+        path = tmp_path / f'{white_point}.onnx'
+        p2p.export_onnx(_retina(), path, WHITE_SHAPE, white_point=white_point)
+        percepts.append(_run_onnx(path, image))
+    npt.assert_array_equal(percepts[1], percepts[0])
+    npt.assert_array_equal(percepts[2], percepts[0])
 
 
 class _Subclassed(ScoreboardSpatial):
@@ -475,6 +707,19 @@ def _with_encoder(encoder):
 def _with_implant(**params):
     implant = ArgusII(**params)
     return ScoreboardModel(implant)
+
+
+class _SubEnsemble(EnsembleImplant):
+    pass
+
+
+def _with_ensemble(cls=EnsembleImplant, encoder=None, **attrs):
+    ensemble = _ensemble(cls)
+    if encoder is not None:
+        ensemble.encoder = encoder
+    for name, value in attrs.items():
+        setattr(ensemble, name, value)
+    return _ensemble_model(ensemble)
 
 
 @pytest.mark.parametrize('model, error, match', [
@@ -499,6 +744,14 @@ def _with_implant(**params):
     (_with_implant(safe_mode=True), NotImplementedError, 'safe_mode'),
     (_with_implant(preprocess=lambda stim: stim), NotImplementedError,
      'preprocess'),
+    # A subclass may change how stimuli are prepared:
+    (_with_ensemble(_SubEnsemble), NotImplementedError, '_prepare_stim'),
+    (_with_ensemble(preprocess=lambda stim: stim), NotImplementedError,
+     'preprocess'),
+    (_with_ensemble(safe_mode=True), NotImplementedError, 'safe_mode'),
+    (_with_ensemble(max_current=100), NotImplementedError, 'max_current'),
+    (_with_ensemble(encoder=AmplitudeEncoder(n_levels=8)),
+     NotImplementedError, 'n_levels'),
 ])
 def test_export_onnx_unsupported(model, error, match, tmp_path):
     path = tmp_path / 'model.onnx'
@@ -524,6 +777,37 @@ def test_export_onnx_rejects_mismatch(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match='predict_percept'):
         p2p.export_onnx(_retina(), path, (6, 10))
     assert not path.exists()
+
+
+@pytest.mark.parametrize('actual, desired, thresh', [
+    ([np.nan, 1], [0, 1], 0.5), ([0, 1], [np.nan, 1], 0.5),
+    ([np.inf, 1], [0, 1], 0.5), ([0, 1], [-np.inf, 1], 0.5),
+    # Matching non-finite values are not agreement:
+    ([np.nan, 1], [np.nan, 1], 0.5), ([np.inf, 1], [np.inf, 1], 0.5),
+    ([0, 1], [0, 1], np.nan),
+])
+def test_require_close_nonfinite(actual, desired, thresh):
+    with pytest.raises(RuntimeError, match='non-finite'):
+        _require_close(np.array(actual), np.array(desired), thresh,
+                       'predict_percept')
+
+
+def test_export_onnx_nonfinite_prediction(tmp_path, monkeypatch):
+    # An explicit white point skips the reference, not validation:
+    pytest.importorskip('onnxscript')
+    model = _retina()
+    predict = model.predict_percept
+
+    def corrupt(stim):
+        percept = predict(stim)
+        percept.data[0, 0] = np.nan
+        return percept
+
+    monkeypatch.setattr(model, 'predict_percept', corrupt)
+    path = tmp_path / 'model.onnx'
+    with pytest.raises(RuntimeError, match='non-finite'):
+        p2p.export_onnx(model, path, (6, 10), white_point=3.0)
+    assert not path.exists() and not (tmp_path / 'model.json').exists()
 
 
 def test_export_onnx_validation_error(tmp_path, monkeypatch):

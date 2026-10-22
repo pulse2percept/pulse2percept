@@ -349,14 +349,9 @@ The underlying ``data`` array has time on its final axis:
 
 Prosthesis models produce brightness percepts.
 
-:py:meth:`~pulse2percept.vision.Scene.render` instead returns an RGB percept;
-see :ref:`topics-vision`.
-
-RGB values must be finite and lie in ``[0, 1]``. Operations that require an
-ordering of brightness values are not defined for RGB percepts.
-``n_gray``, ``argmax``, ``max``, ``vmin``, ``vmax``, and ``plot()`` on a
-multi-frame RGB percept therefore raise ``ValueError``. Use ``play()`` or
-access ``percept.data`` directly instead.
+:py:meth:`~pulse2percept.vision.Scene.render` instead returns an RGB percept
+(see :ref:`topics-vision`), which is for display only: brightness operations
+and measurements do not apply to it.
 
 
 Measuring a Percept
@@ -375,21 +370,12 @@ geometric measurements from each predicted frame:
     metrics.peak.centroid               # (x, y) in dva
     metrics.peak.integrated_brightness  # brightness units x dva^2
 
-Geometry is measured from the percept's **support**: pixels at or above
-``threshold`` times that frame's maximum. The default is ``threshold=0.5``.
-
-For example:
-
-.. code-block:: python
-
-    metrics = percept.measure(threshold=0.25)
-
-Because the threshold is relative, multiplying an entire percept by a constant
-does not change its measured shape.
-
-
-Measurements
-------------
+Brightness measurements (``max_brightness``, ``integrated_brightness``) use
+every positive pixel. Geometry is measured from the percept's **support**:
+pixels at or above ``threshold`` times that frame's maximum (0.5 by default).
+Because the threshold is relative, multiplying a percept by a constant does
+not change its measured shape. At ``threshold=0.5``, ``diameter``
+approximates the FWHM of a well-sampled circular Gaussian.
 
 .. list-table::
    :header-rows: 1
@@ -430,43 +416,21 @@ Measurements
      - boolean
      - Whether the support reaches the simulated field boundary
 
-At ``threshold=0.5``, ``diameter`` approximates the FWHM of a well-sampled
-circular Gaussian.
+``elongation`` describes the union of all support pixels, so an elongation of
+4 could be one elongated phosphene or two separated round ones.
+``n_components`` distinguishes those cases.
 
-``major_axis``, ``minor_axis``, and ``elongation`` describe the union of all
-support pixels. An elongation of 4 could therefore describe one elongated
-phosphene or two separated round phosphenes. ``n_components`` distinguishes
-those cases.
-
-If ``touches_edge`` is true, the measurement covers only the part of the
+If ``touches_edge`` is true, the measurements cover only the part of the
 percept inside the simulated field. Increase ``xrange`` or ``yrange`` before
 interpreting its geometry.
 
-A frame with no positive brightness has zero brightness, area, and components,
-and ``NaN`` position and shape.
+For a temporal percept, each measurement is an array over frames, and
+``metrics.peak`` holds the frame with the largest integrated brightness.
 
-
-Temporal Percepts
------------------
-
-For a temporal percept, each measurement is an array over frames.
-
-``metrics.peak_frame`` identifies the frame with the largest integrated
-brightness, choosing the earliest frame in a tie. ``metrics.peak`` contains
-the measurements from that frame.
-
-``measure()`` does not compute time-integrated brightness or duration metrics.
-
-
-Measurement Scope
------------------
-
-``measure()`` requires a brightness percept defined on a
-:py:class:`~pulse2percept.topography.Grid2D`. RGB percepts and percepts without
-dva coordinates are rejected.
-
-The measurements describe the predicted percept image. They do not measure
-acuity, discriminability, recognition, or task performance.
+These are measurements of the predicted percept image. They do not predict
+acuity, discriminability, recognition, or task performance. See
+:py:class:`~pulse2percept.percepts.metrics.FrameMetrics` for exact
+definitions.
 
 
 Temporal Models
@@ -612,10 +576,6 @@ The components remain accessible independently:
 Either component may be ``None``. Components must be constructed before they
 are passed to ``Model``, and the implant belongs to the spatial component.
 
-Changing ``model.spatial.rho`` rebuilds the spatial component on the next
-prediction. Changing ``model.temporal.tau`` affects only the temporal
-component.
-
 Parameters with the same name in both components, such as
 ``thresh_percept``, remain independent.
 
@@ -623,9 +583,9 @@ Parameters with the same name in both components, such as
 Exporting to ONNX
 =================
 
-:py:func:`~pulse2percept.export_onnx` exports the ordinary image-to-percept
-workflow of a spatial-only model as an ONNX graph, plus a JSON sidecar with
-the tensor layout, percept grid, electrode order, and encoder settings:
+:py:func:`~pulse2percept.export_onnx` exports the image-to-percept workflow of
+a spatial-only model as an ONNX graph, plus a JSON sidecar describing its
+inputs and outputs:
 
 .. code-block:: python
 
@@ -636,22 +596,15 @@ the tensor layout, percept grid, electrode order, and encoder settings:
 
     p2p.export_onnx(model, "model.onnx", input_shape=(76, 76))
 
-*  The graph reproduces ``model.predict_percept(image)`` for a gray image:
-   electrode sampling, frame-level encoder modulation, and the spatial model.
-   Weights are precomputed; nothing is approximated.
-*  Input is a fixed-size float32 gray image of shape ``(1, 1, H, W)``, with
-   values in [0, 1].
-*  Output is the raw model response on the percept grid, not normalized for
-   display.
+The graph takes a gray image with values in [0, 1] and reproduces
+``model.predict_percept(image)`` to float32 precision. Its output is the raw,
+unnormalized percept; the sidecar includes a recommended display white point
+for visualization.
 
-Only :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`,
-:py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, and
-:py:class:`~pulse2percept.models.retina.AxonMapSpatial` models with an
-:py:class:`~pulse2percept.stimuli.AmplitudeEncoder` export; other models and
-configurations raise an error. Temporal models are not yet supported, and
-:py:class:`~pulse2percept.vision.Scene` and gaze registration are not part of
-the export. Requires the ``onnx`` and ``onnxscript`` packages
-(``pip install pulse2percept[onnx]``).
+Scoreboard and axon map models with an
+:py:class:`~pulse2percept.stimuli.AmplitudeEncoder` are supported; temporal
+models are not yet. See :py:func:`~pulse2percept.export_onnx` for the full
+requirements. Requires ``pip install pulse2percept[onnx]``.
 
 
 Model Limitations
