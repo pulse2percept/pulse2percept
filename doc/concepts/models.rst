@@ -648,9 +648,12 @@ Only :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`,
 :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, and
 :py:class:`~pulse2percept.models.retina.AxonMapSpatial` models with an
 :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` export; other models and
-configurations raise an error. Temporal models are not yet supported, and
-:py:class:`~pulse2percept.vision.Scene` and gaze registration are not part of
-the export. Requires the ``onnx`` and ``onnxscript`` packages
+configurations raise an error. An
+:py:class:`~pulse2percept.implants.EnsembleImplant` exports when one image
+drives the whole ensemble; per-implant inputs, custom preprocessing, safety
+checks, and ensemble subclasses do not. Temporal models are not yet
+supported, and :py:class:`~pulse2percept.vision.Scene` and gaze registration
+are not part of the export. Requires the ``onnx`` and ``onnxscript`` packages
 (``pip install pulse2percept[onnx]``).
 
 

@@ -7,7 +7,8 @@ import pytest
 import torch
 
 import pulse2percept as p2p
-from pulse2percept.implants.cortex import Orion
+from pulse2percept.implants import EnsembleImplant
+from pulse2percept.implants.cortex import NeuroPortArray, Orion
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models import FadingTemporal, Model
 from pulse2percept.models import cortex
@@ -21,7 +22,7 @@ from pulse2percept.models.tests.test_tensor import (_axon_spatial, _one_axon,
 from pulse2percept.stimuli import (AmplitudeEncoder, FrequencyEncoder,
                                    ImageStimulus, Stimulus)
 from pulse2percept.topography.cortex import Polimeni2006Map
-from pulse2percept.units import mm, xTh
+from pulse2percept.units import mm, um, xTh
 
 # float32 parity relative to the peak |response|: matrix products sum in a
 # runtime-dependent order (BLAS, ONNX Runtime).
@@ -248,6 +249,125 @@ def test_export_onnx_cortex_scoreboard_3d(tmp_path):
     assert np.ptp(model.spatial.build().grid.v1.z) > 0
     expected = _assert_chain(model, [_images((30, 30))['vramp']], tmp_path)
     assert 0 < np.mean(expected == 0) < 1
+
+
+# EnsembleImplant: one image across two NeuroPort arrays in V1
+
+
+ENSEMBLE_SHAPE = (48, 64)
+
+
+def _ensemble(cls=EnsembleImplant):
+    # Array 0 above and array 1 below the horizontal meridian, both in V1:
+    ensemble = cls.from_visual_field_map(
+        NeuroPortArray, Polimeni2006Map(regions=['v1']),
+        locs=np.array([[3.0, 1.5], [6.0, -1.5]]), region='v1')
+    return _encoded(ensemble)
+
+
+def _ensemble_model(ensemble=None, **params):
+    # rho is the NeuroPort pitch; the grid covers both arrays' phosphenes:
+    params = {'xrange': (0, 9), 'yrange': (-4, 4), 'step': 0.25, 'rho': 400,
+              **params}
+    return cortex.ScoreboardSpatial(
+        _ensemble() if ensemble is None else ensemble,
+        visual_field_map=Polimeni2006Map(regions=['v1']), **params)
+
+
+def _constituent_xy(ensemble):
+    """Return electrode (x, y) in um, constituent by constituent."""
+    return np.concatenate([implant.electrode_array.coordinates(um)[:, :2]
+                           for implant in ensemble.implants.values()])
+
+
+def _ensemble_marker(ensemble):
+    """Return an image lighting 2 x 2 pixels at the first electrode of array
+    0 (1.0) and the last electrode of array 1 (0.5)."""
+    image = np.zeros(ENSEMBLE_SHAPE, dtype=np.float32)
+    xy = _constituent_xy(ensemble)
+    lo, hi = xy.min(axis=0), xy.max(axis=0)
+    size = np.array(ENSEMBLE_SHAPE[::-1]) - 1
+    for point, value in ((xy[0], 1), (xy[-1], 0.5)):
+        col, row = ((point - lo) / (hi - lo) * size).astype(int)
+        image[row:row + 2, col:col + 2] = value
+    return image
+
+
+def _second_array_electrode(ensemble):
+    """Return an electrode of array 1 with later channels after it."""
+    return ensemble.electrode_names[ensemble.implants[0].n_electrodes + 10]
+
+
+def test_ensemble_electrode_order():
+    ensemble = _ensemble()
+    assert list(ensemble.implants) == [0, 1]
+    assert list(ensemble.electrode_names) == [
+        f'{key}-{name}' for key, implant in ensemble.implants.items()
+        for name in implant.electrode_names]
+
+
+def test_ensemble_registration():
+    # Bilinear sampling reproduces an affine image exactly, so each electrode
+    # reads the affine function of its position in the combined bounding box.
+    # Unequal x and y slopes expose swaps, flips, per-array extents, and
+    # reordered channels.
+    ensemble = _ensemble()
+    names = list(ensemble.electrode_names)
+    off = _second_array_electrode(ensemble)
+    ensemble.deactivate([off])
+    h, w = ENSEMBLE_SHAPE
+    rows, cols = np.mgrid[:h, :w]
+    image = (0.6 * rows / (h - 1) + 0.4 * cols / (w - 1)).astype(np.float32)
+    xy = _constituent_xy(ensemble)
+    x, y = ((xy - xy.min(axis=0)) / np.ptp(xy, axis=0)).T
+    expected = 50 * (0.6 * y + 0.4 * x)
+    expected[names.index(off)] = 0
+    module = _deploy_module(_ensemble_model(ensemble).build(), ENSEMBLE_SHAPE)
+    with torch.inference_mode():
+        drive = module.drive(torch.as_tensor(image)[None, None])
+    npt.assert_allclose(drive.numpy().ravel(), expected, rtol=0, atol=1e-5)
+    # `prepare_stim` drops the deactivated electrode:
+    view = ensemble.prepare_stim(ImageStimulus(image))._spatial_view()
+    prepared = dict(zip(view.electrodes, view.data.ravel()))
+    assert off not in prepared
+    npt.assert_allclose([prepared.get(e, 0) for e in names], expected,
+                        rtol=0, atol=1e-5)
+
+
+def test_export_onnx_ensemble(tmp_path):
+    model = _ensemble_model()
+    ensemble = model.implant
+    images = _images(ENSEMBLE_SHAPE)
+    images = [images['hramp'], images['vramp'], _ensemble_marker(ensemble)]
+    expected = _assert_chain(model, images, tmp_path)
+    for image, percept in zip(images, expected):
+        prepared = ensemble.prepare_stim(ImageStimulus(image))
+        _assert_close(model.predict_percept(prepared).data[..., 0], percept)
+    # Array 0's phosphenes lie at y >= 0.5 dva, array 1's at y <= 0.25; each
+    # image drives both:
+    upper = model.grid.y > 0.4
+    assert np.all(np.any(expected[:, upper] != 0, axis=1))
+    assert np.all(np.any(expected[:, ~upper] != 0, axis=1))
+
+
+def test_export_onnx_ensemble_sidecar(tmp_path):
+    pytest.importorskip('onnxscript')
+    model = _ensemble_model()
+    ensemble = model.implant
+    off = _second_array_electrode(ensemble)
+    ensemble.deactivate([off])
+    p2p.export_onnx(model, tmp_path / 'ensemble.onnx', ENSEMBLE_SHAPE)
+    with open(tmp_path / 'ensemble.json') as f:
+        meta = json.load(f)
+    x, y = _constituent_xy(ensemble).T
+    assert meta['implant'] == 'EnsembleImplant'
+    extent = meta['input']['device_extent_um']
+    npt.assert_allclose([extent['x'], extent['y']],
+                        [[x.min(), x.max()], [y.min(), y.max()]])
+    assert meta['electrodes'] == [
+        f'{key}-{name}' for key, implant in ensemble.implants.items()
+        for name in implant.electrode_names]
+    assert meta['deactivated'] == [off]
 
 
 # AxonMap: the spatial module alone, with signed drive
@@ -477,6 +597,19 @@ def _with_implant(**params):
     return ScoreboardModel(implant)
 
 
+class _SubEnsemble(EnsembleImplant):
+    pass
+
+
+def _with_ensemble(cls=EnsembleImplant, encoder=None, **attrs):
+    ensemble = _ensemble(cls)
+    if encoder is not None:
+        ensemble.encoder = encoder
+    for name, value in attrs.items():
+        setattr(ensemble, name, value)
+    return _ensemble_model(ensemble)
+
+
 @pytest.mark.parametrize('model, error, match', [
     (Model(ScoreboardSpatial(ArgusII()), FadingTemporal()),
      NotImplementedError, 'spatial-only'),
@@ -499,6 +632,14 @@ def _with_implant(**params):
     (_with_implant(safe_mode=True), NotImplementedError, 'safe_mode'),
     (_with_implant(preprocess=lambda stim: stim), NotImplementedError,
      'preprocess'),
+    # A subclass may change how stimuli are prepared:
+    (_with_ensemble(_SubEnsemble), NotImplementedError, '_prepare_stim'),
+    (_with_ensemble(preprocess=lambda stim: stim), NotImplementedError,
+     'preprocess'),
+    (_with_ensemble(safe_mode=True), NotImplementedError, 'safe_mode'),
+    (_with_ensemble(max_current=100), NotImplementedError, 'max_current'),
+    (_with_ensemble(encoder=AmplitudeEncoder(n_levels=8)),
+     NotImplementedError, 'n_levels'),
 ])
 def test_export_onnx_unsupported(model, error, match, tmp_path):
     path = tmp_path / 'model.onnx'

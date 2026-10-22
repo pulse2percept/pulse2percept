@@ -49,7 +49,10 @@ def export_onnx(model, path, input_shape):
         be an :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` with
         ``amp_range`` in uA, without ``n_levels`` or ``stretch``, on an
         implant without custom preprocessing or sampling, ``safe_mode``, or
-        ``max_current``.
+        ``max_current``. An :py:class:`~pulse2percept.implants.EnsembleImplant`
+        (not a subclass) is supported under the same conditions, with one
+        image driving the whole ensemble; per-implant inputs are not
+        exported.
     path : str or path-like
         Output ``.onnx`` file.
     input_shape : (int, int)
@@ -60,7 +63,8 @@ def export_onnx(model, path, input_shape):
     *  Input ``image`` is float32 ``(1, 1, H, W)``, gray levels in [0, 1].
        The image spans the electrode bounding box in device coordinates,
        row 0 at the smallest device y, as for an
-       :py:class:`~pulse2percept.stimuli.ImageStimulus`.
+       :py:class:`~pulse2percept.stimuli.ImageStimulus`. For an ensemble,
+       the box spans the electrodes of all its implants.
     *  Output ``percept`` is float32 ``(1, 1, Hp, Wp)`` on the model's grid,
        row 0 at the largest y (dva). Values are the raw spatial response,
        not normalized for display.

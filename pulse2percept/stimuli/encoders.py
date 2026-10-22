@@ -1178,6 +1178,7 @@ class AmplitudeEncoder(PulseEncoder):
             return "Tensor encoding requires an encoder bound to an implant."
         # Imported here because `implants` imports this module:
         from ..implants.base import Implant
+        from ..implants.ensemble import EnsembleImplant
         if prepared:
             if implant.stimulus_unit.dimension != uA.dimension:
                 return (f"Tensor encoding requires an implant driven by "
@@ -1190,8 +1191,11 @@ class AmplitudeEncoder(PulseEncoder):
             # `prepare_stim` steps without a tensor implementation:
             unsupported = [name for name, on in (
                 ('preprocess', preprocesses),
+                # An exact ensemble prepares a whole-ensemble image as
+                # `Implant` does; only per-implant dicts differ:
                 ('_prepare_stim',
-                 type(implant)._prepare_stim is not Implant._prepare_stim),
+                 type(implant)._prepare_stim is not Implant._prepare_stim and
+                 type(implant) is not EnsembleImplant),
                 ('check_stim',
                  type(implant).check_stim is not Implant.check_stim),
                 ('safe_mode', implant.safe_mode),
