@@ -644,6 +644,35 @@ the tensor layout, percept grid, electrode order, and encoder settings:
 *  Output is the raw model response on the percept grid, not normalized for
    display.
 
+Raw responses scale with current and add up where electrode fields overlap,
+so they often exceed 1 (e.g., at a larger ``rho``). A viewer that clips at 1
+would lose that brightness range, so the sidecar also records a
+``display.white_point``, the raw response to show as white:
+
+.. math::
+
+    B_\mathrm{display} = \mathrm{clip}\left(
+    \frac{\max(0, B_\mathrm{raw})}{\mathrm{white\_point}}, 0, 1\right)
+
+By default, the white point is twice the peak of
+``model.predict_percept`` for a uniform 50% gray image of ``input_shape``, so
+that image peaks at half brightness. It thus reflects the configured implant,
+encoder, electrode geometry, ``rho``, and thresholds. If that response is
+nowhere positive (e.g., ``freq=0``), the white point is 1.0. Pass
+``white_point`` to choose it instead:
+
+.. code-block:: python
+
+    p2p.export_onnx(model, "model.onnx", input_shape=(76, 76),
+                    white_point=3.0)
+
+The white point is a visualization convention, not a psychophysical
+brightness calibration, and it changes neither the ONNX graph nor
+``predict_percept``. Each default is fitted to its own model, which suits
+demonstrations; to compare absolute predicted brightness across models,
+export them with a common ``white_point``. Heavily thresholded or signed
+configurations may need an explicit value.
+
 Only :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`,
 :py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, and
 :py:class:`~pulse2percept.models.retina.AxonMapSpatial` models with an

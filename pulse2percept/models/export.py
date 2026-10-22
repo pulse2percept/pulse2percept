@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import logging
+import numbers
 import os
 import warnings
 
@@ -27,7 +28,7 @@ _RTOL = 1e-5
 _MAX_BYTES = 2 ** 31
 
 
-def export_onnx(model, path, input_shape):
+def export_onnx(model, path, input_shape, *, white_point=None):
     """Export the image-to-percept workflow of a spatial model to ONNX
 
     Writes ``path`` and a JSON sidecar next to it (``model.onnx`` and
@@ -57,6 +58,12 @@ def export_onnx(model, path, input_shape):
         Output ``.onnx`` file.
     input_shape : (int, int)
         Image height and width in pixels.
+    white_point : float, optional
+        Raw ``percept`` value to display as white, stored in the sidecar as
+        ``display.white_point``. Must be finite and positive. By default,
+        twice the peak response of ``model.predict_percept`` to a uniform
+        gray image (0.5) of ``input_shape``, or 1.0 if that response is
+        nowhere positive (e.g., ``freq=0``). Does not change the graph.
 
     Notes
     -----
@@ -67,7 +74,13 @@ def export_onnx(model, path, input_shape):
        the box spans the electrodes of all its implants.
     *  Output ``percept`` is float32 ``(1, 1, Hp, Wp)`` on the model's grid,
        row 0 at the largest y (dva). Values are the raw spatial response,
-       not normalized for display.
+       not normalized for display, and may exceed 1.
+    *  A viewer shows ``clip(max(0, percept) / white_point, 0, 1)``. The
+       default white point is a visualization convention, not a
+       psychophysical brightness calibration: the gray reference peaks at
+       half brightness. Defaults differ between models, so displayed
+       brightness is comparable across models only at a shared explicit
+       ``white_point``.
     *  Weights are precomputed from the model's fixed geometry. No
        approximation is made: the graph agrees with ``predict_percept`` to
        float32 rounding, checked on a test image after export (with ONNX
@@ -87,6 +100,8 @@ def export_onnx(model, path, input_shape):
     import torch
     spatial = _spatial_model(model)
     input_shape = _input_shape(input_shape)
+    if white_point is not None:
+        white_point = _white_point(white_point)
     if not spatial.is_built:
         spatial.build()
     module = _deploy_module(spatial, input_shape)
@@ -99,11 +114,14 @@ def export_onnx(model, path, input_shape):
     _save_onnx(module, torch.zeros((1, 1) + input_shape), path)
     try:
         _validate(model, module, path, input_shape)
+        if white_point is None:
+            white_point = _reference_white_point(model, input_shape)
     except BaseException:
         os.remove(path)
         raise
     with open(os.path.splitext(path)[0] + '.json', 'w') as f:
-        json.dump(_sidecar(model, spatial, input_shape), f, indent=1)
+        json.dump(_sidecar(model, spatial, input_shape, white_point), f,
+                  indent=1)
 
 
 def _save_onnx(module, example, path):
@@ -150,6 +168,28 @@ def _input_shape(input_shape):
         raise ValueError(f"'input_shape' must be a (height, width) pair of "
                          f"positive integers, not {input_shape}.")
     return tuple(int(s) for s in shape)
+
+
+def _white_point(white_point):
+    """Return an explicit ``white_point`` as a finite positive float."""
+    # bool is an int, but True is not a deliberate white point:
+    if (isinstance(white_point, bool) or
+            not isinstance(white_point, numbers.Real)):
+        raise TypeError(f"'white_point' must be a number or None, not "
+                        f"{type(white_point).__name__}.")
+    if not (np.isfinite(white_point) and white_point > 0):
+        raise ValueError(f"'white_point' must be finite and positive, not "
+                         f"{white_point}.")
+    return float(white_point)
+
+
+def _reference_white_point(model, input_shape):
+    """Return twice the peak response to uniform 50% gray, or 1.0 if it is
+    nowhere positive."""
+    gray = np.full(input_shape, 0.5, dtype=np.float32)
+    data = model.predict_percept(ImageStimulus(gray)).data
+    peak = float(np.max(data, where=np.isfinite(data), initial=0))
+    return 2 * peak if peak > 0 else 1.0
 
 
 def _deploy_module(spatial, input_shape):
@@ -257,8 +297,8 @@ def _json_value(value):
     return array.tolist() if array.ndim else type(value).__name__
 
 
-def _sidecar(model, spatial, input_shape):
-    """Return the JSON sidecar (schema version 1) of an exported model."""
+def _sidecar(model, spatial, input_shape, white_point):
+    """Return the JSON sidecar (schema version 2) of an exported model."""
     from .. import __version__
     implant = spatial.implant
     encoder = implant.encoder
@@ -270,7 +310,7 @@ def _sidecar(model, spatial, input_shape):
     units = {name: str(unit) for name, unit in
              spatial.get_param_units().items() if name in params}
     return {
-        'schema_version': 1,
+        'schema_version': 2,
         'pulse2percept_version': __version__,
         'model': type(model).__name__,
         'spatial_model': type(spatial).__name__,
@@ -293,6 +333,9 @@ def _sidecar(model, spatial, input_shape):
             'shape': [1, 1, *grid.x.shape],
             'dtype': 'float32',
             'values': 'raw spatial response, not normalized',
+        },
+        'display': {
+            'white_point': white_point,
         },
         'percept_grid': {
             'units': 'dva',

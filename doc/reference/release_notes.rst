@@ -112,6 +112,10 @@ API changes and improvements
 * :py:func:`~pulse2percept.export_onnx` supports ``EnsembleImplant``, with one
   image driving the whole ensemble (:pull:`N`).
 
+* :py:func:`~pulse2percept.export_onnx` sidecars (schema version 2) record a
+  recommended ``display.white_point``; pass ``white_point`` to override it
+  (:pull:`N`).
+
 Bug fixes
 ---------
 
