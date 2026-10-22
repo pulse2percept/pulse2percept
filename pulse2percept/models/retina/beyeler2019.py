@@ -209,10 +209,10 @@ class ScoreboardSpatial(RetinalSpatial):
 
         .. important::
 
-            ``rho = pitch / 2`` is a geometric convention that keeps
-            neighboring electrodes resolvable, not a measured spread of
-            neural activation. Electrode-retina distance (``z``) does not
-            directly affect ``rho``.
+            ``rho = pitch / 2`` is an illustrative geometric convention that
+            produces overlapping responses from neighboring electrodes, not
+            a measured spread of neural activation. Electrode-retina
+            distance (``z``) does not directly affect ``rho``.
 
         .. versionchanged:: 0.12.0
             Defaults to half the electrode pitch instead of 100 um.
