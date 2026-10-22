@@ -177,10 +177,12 @@ def _white_point(white_point):
             not isinstance(white_point, numbers.Real)):
         raise TypeError(f"'white_point' must be a number or None, not "
                         f"{type(white_point).__name__}.")
-    if not (np.isfinite(white_point) and white_point > 0):
+    # Checked after conversion: a long double can overflow to inf.
+    value = float(white_point)
+    if not (np.isfinite(value) and value > 0):
         raise ValueError(f"'white_point' must be finite and positive, not "
                          f"{white_point}.")
-    return float(white_point)
+    return value
 
 
 def _reference_white_point(model, input_shape):
@@ -188,7 +190,11 @@ def _reference_white_point(model, input_shape):
     nowhere positive."""
     gray = np.full(input_shape, 0.5, dtype=np.float32)
     data = model.predict_percept(ImageStimulus(gray)).data
-    peak = float(np.max(data, where=np.isfinite(data), initial=0))
+    # A zero response is legitimate; NaN or Inf is a numerical failure:
+    if not np.all(np.isfinite(data)):
+        raise ValueError("Cannot compute the default 'white_point': the 50% "
+                         "gray reference percept contains NaN or Inf.")
+    peak = float(np.max(data, initial=0))
     return 2 * peak if peak > 0 else 1.0
 
 

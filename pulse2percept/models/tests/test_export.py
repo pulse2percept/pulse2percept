@@ -656,6 +656,26 @@ def test_export_onnx_white_point_invalid(white_point, error, tmp_path):
     assert not path.exists() and not (tmp_path / 'model.json').exists()
 
 
+@pytest.mark.parametrize('bad', [np.nan, np.inf])
+def test_export_onnx_white_point_nonfinite(bad, tmp_path, monkeypatch):
+    # Unlike a zero response, NaN or Inf gets no fallback:
+    pytest.importorskip('onnxscript')
+    model = _retina()
+    predict = model.predict_percept
+
+    def corrupt_gray(stim):
+        percept = predict(stim)
+        if np.all(stim.data == 0.5):
+            percept.data[0, 0] = bad
+        return percept
+
+    monkeypatch.setattr(model, 'predict_percept', corrupt_gray)
+    path = tmp_path / 'model.onnx'
+    with pytest.raises(ValueError, match='NaN or Inf'):
+        p2p.export_onnx(model, path, WHITE_SHAPE)
+    assert not path.exists() and not (tmp_path / 'model.json').exists()
+
+
 def test_export_onnx_white_point_graph(tmp_path):
     # Only the sidecar changes:
     pytest.importorskip('onnxscript')
