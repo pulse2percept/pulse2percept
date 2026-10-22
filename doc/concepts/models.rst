@@ -377,6 +377,45 @@ Because the threshold is relative, multiplying a percept by a constant does
 not change its measured shape. At ``threshold=0.5``, ``diameter``
 approximates the FWHM of a well-sampled circular Gaussian.
 
+.. list-table::
+   :header-rows: 1
+   :widths: 27 18 55
+
+   * - Measurement
+     - Units
+     - Meaning
+   * - ``max_brightness``
+     - model units
+     - Largest pixel value in the frame
+   * - ``integrated_brightness``
+     - brightness x dva^2
+     - Pixel sum multiplied by pixel area; approximately independent of grid
+       resolution
+   * - ``area``
+     - dva^2
+     - Area of the suprathreshold support
+   * - ``diameter``
+     - dva
+     - Diameter of a circle with the same area as the support
+   * - ``centroid``
+     - dva
+     - Mean ``(x, y)`` position of the support pixels
+   * - ``major_axis``
+     - dva
+     - Major axis of the ellipse defined by the support's second moments
+   * - ``minor_axis``
+     - dva
+     - Minor axis of the same ellipse
+   * - ``elongation``
+     - ratio
+     - ``major_axis / minor_axis``; 1 for a circle
+   * - ``n_components``
+     - count
+     - Number of disconnected suprathreshold regions
+   * - ``touches_edge``
+     - boolean
+     - Whether the support reaches the simulated field boundary
+
 ``elongation`` describes the union of all support pixels, so an elongation of
 4 could be one elongated phosphene or two separated round ones.
 ``n_components`` distinguishes those cases.
@@ -390,8 +429,8 @@ For a temporal percept, each measurement is an array over frames, and
 
 These are measurements of the predicted percept image. They do not predict
 acuity, discriminability, recognition, or task performance. See
-:py:class:`~pulse2percept.percepts.metrics.FrameMetrics` for all
-measurements, their definitions, and units.
+:py:class:`~pulse2percept.percepts.metrics.FrameMetrics` for exact
+definitions.
 
 
 Temporal Models
