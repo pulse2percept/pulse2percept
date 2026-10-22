@@ -623,9 +623,9 @@ Parameters with the same name in both components, such as
 Exporting to ONNX
 =================
 
-:py:func:`~pulse2percept.export_onnx` exports the ordinary image-to-percept
-workflow of a spatial-only model as an ONNX graph, plus a JSON sidecar with
-the tensor layout, percept grid, electrode order, and encoder settings:
+:py:func:`~pulse2percept.export_onnx` exports the image-to-percept workflow of
+a spatial-only model as an ONNX graph, plus a JSON sidecar describing its
+inputs and outputs:
 
 .. code-block:: python
 
@@ -636,54 +636,15 @@ the tensor layout, percept grid, electrode order, and encoder settings:
 
     p2p.export_onnx(model, "model.onnx", input_shape=(76, 76))
 
-*  The graph reproduces ``model.predict_percept(image)`` for a gray image:
-   electrode sampling, frame-level encoder modulation, and the spatial model.
-   Weights are precomputed; nothing is approximated.
-*  Input is a fixed-size float32 gray image of shape ``(1, 1, H, W)``, with
-   values in [0, 1].
-*  Output is the raw model response on the percept grid, not normalized for
-   display.
+The graph takes a gray image with values in [0, 1] and reproduces
+``model.predict_percept(image)`` to float32 precision. Its output is the raw,
+unnormalized percept; the sidecar includes a recommended display white point
+for visualization.
 
-Raw responses scale with current and add up where electrode fields overlap,
-so they often exceed 1 (e.g., at a larger ``rho``). A viewer that clips at 1
-would lose that brightness range, so the sidecar also records a
-``display.white_point``, the raw response to show as white:
-
-.. math::
-
-    B_\mathrm{display} = \mathrm{clip}\left(
-    \frac{\max(0, B_\mathrm{raw})}{\mathrm{white\_point}}, 0, 1\right)
-
-By default, the white point is twice the peak of
-``model.predict_percept`` for a uniform 50% gray image of ``input_shape``, so
-that image peaks at half brightness. It thus reflects the configured implant,
-encoder, electrode geometry, ``rho``, and thresholds. If that response is
-nowhere positive (e.g., ``freq=0``), the white point is 1.0. Pass
-``white_point`` to choose it instead:
-
-.. code-block:: python
-
-    p2p.export_onnx(model, "model.onnx", input_shape=(76, 76),
-                    white_point=3.0)
-
-The white point is a visualization convention, not a psychophysical
-brightness calibration, and it changes neither the ONNX graph nor
-``predict_percept``. Each default is fitted to its own model, which suits
-demonstrations; to compare absolute predicted brightness across models,
-export them with a common ``white_point``. Heavily thresholded or signed
-configurations may need an explicit value.
-
-Only :py:class:`~pulse2percept.models.retina.ScoreboardSpatial`,
-:py:class:`~pulse2percept.models.cortex.ScoreboardSpatial`, and
-:py:class:`~pulse2percept.models.retina.AxonMapSpatial` models with an
-:py:class:`~pulse2percept.stimuli.AmplitudeEncoder` export; other models and
-configurations raise an error. An
-:py:class:`~pulse2percept.implants.EnsembleImplant` exports when one image
-drives the whole ensemble; per-implant inputs, custom preprocessing, safety
-checks, and ensemble subclasses do not. Temporal models are not yet
-supported, and :py:class:`~pulse2percept.vision.Scene` and gaze registration
-are not part of the export. Requires the ``onnx`` and ``onnxscript`` packages
-(``pip install pulse2percept[onnx]``).
+Scoreboard and axon map models with an
+:py:class:`~pulse2percept.stimuli.AmplitudeEncoder` are supported; temporal
+models are not yet. See :py:func:`~pulse2percept.export_onnx` for the full
+requirements. Requires ``pip install pulse2percept[onnx]``.
 
 
 Model Limitations
