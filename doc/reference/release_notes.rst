@@ -130,8 +130,10 @@ Bug fixes
 * Temporal models applied directly to a ``Stimulus`` no longer fail when an
   electrode is silent; its row is kept and stays zero (:pull:`937`).
 
-* ``Stimulus.compress`` no longer drops Inf samples or electrodes driven only
-  at Inf (:pull:`950`).
+* ``Stimulus.compress`` no longer drops Inf samples, electrodes driven only
+  at Inf, or the sample before a change at the last time point. The latter
+  made interpolation ramp across the final constant stretch, e.g. in
+  spatial-only predictions of timed input (:pull:`950`, :pull:`972`).
 
 * ``Nanduri2012Spatial`` no longer returns NaN beneath an electrode with
   negative ``z``; current spread now depends on ``|z|`` as documented
