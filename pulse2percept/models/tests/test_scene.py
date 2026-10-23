@@ -13,6 +13,7 @@ import pytest
 
 from pulse2percept.implants import (ElectrodeArray, ElectrodeGrid,
                                     Implant, PointSource)
+from pulse2percept.implants.retina import PRIMAPivotal
 from pulse2percept.models import FadingTemporal, Model, SpatialModel
 from pulse2percept.models.retina import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.models.base import _placement_shift, _scene_stim
@@ -212,12 +213,97 @@ def test_fixational_motion_does_not_move_a_head_mounted_camera():
                            seen_by(model, scene))
 
 
-def test_a_gaze_trajectory_needs_a_scene_with_frame_times():
-    """A gaze trajectory with a still scene raises ValueError"""
+#: A gaze trajectory on a still scene, with irregular event times:
+EVENT_TIMES = [0, 605, 1270]
+FIXATIONS = np.array([(0, 0), (-12, -4), (10, 3)], dtype=float)
+
+
+def wander(time=EVENT_TIMES):
+    return Gaze(FIXATIONS * dva, time=time * ms)
+
+
+def copies_of_ramp(time):
+    """`scene_of` as a video of copies of the ramp, one per frame time"""
+    frames = np.repeat(ramp_source().data.reshape((SCENE_PX, SCENE_PX, 1)),
+                       len(time), axis=-1)
+    return scene_of(VideoStimulus(frames, time=time))
+
+
+def test_a_still_scene_is_sampled_at_each_gaze_event():
+    """One frame per fixation, each the still prediction at that gaze"""
     model = model_for(implant_at(0, 0))
-    gaze = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
-    with pytest.raises(ValueError):
-        model.predict_percept(scene_of(), gaze=gaze)
+    scene = scene_of()
+    npt.assert_almost_equal(seen_by(model, scene, gaze=wander()).ravel(),
+                            ramp_at(FIXATIONS[:, 0]), decimal=4)
+    percept = model.predict_percept(scene, gaze=wander())
+    npt.assert_almost_equal(percept.time, EVENT_TIMES)
+    npt.assert_equal(np.all(np.diff(percept.data[3, 3]) != 0), True)
+    for f, xy in enumerate(FIXATIONS):
+        fixed = model.predict_percept(scene, gaze=xy * dva)
+        # A single fixation stays untimed:
+        npt.assert_equal(fixed.time, None)
+        npt.assert_allclose(percept.data[..., f], fixed.data[..., 0],
+                            rtol=1e-6)
+
+
+def test_a_still_trajectory_predicts_like_a_video_of_copies():
+    """Regular events, so the video's frame interval is defined"""
+    time = [0, 100, 200]
+    model = model_for(implant_at(0, 0))
+    still = model.predict_percept(scene_of(), gaze=wander(time))
+    video = model.predict_percept(copies_of_ramp(time), gaze=wander(time))
+    npt.assert_almost_equal(still.time, video.time)
+    npt.assert_allclose(still.data, video.data, rtol=1e-6)
+    npt.assert_array_equal(still._scene_gaze[0], video._scene_gaze[0])
+
+
+def spatiotemporal(implant):
+    return Model(spatial=ScoreboardSpatial(implant, rho=200, xrange=(-4, 4),
+                                           yrange=(-4, 4), step=0.5,
+                                           visual_field_map=Curcio1990Map()),
+                 temporal=FadingTemporal()).build()
+
+
+def test_a_temporal_model_needs_t_percept_to_end_a_still_trajectory():
+    """The last fixation has no end of its own"""
+    time = [0, 100, 200]
+    model = spatiotemporal(implant_at(0, 0))
+    with pytest.raises(ValueError, match="t_percept"):
+        model.predict_percept(scene_of(), gaze=wander(time))
+    t_percept = [50, 150, 250, 300] * ms
+    percept = model.predict_percept(scene_of(), gaze=wander(time),
+                                    t_percept=t_percept)
+    # Output times are t_percept, not gaze events:
+    npt.assert_almost_equal(percept.time, [50, 150, 250, 300])
+    # Registered at the fixation held at each output time:
+    npt.assert_array_equal(percept._scene_gaze[0], FIXATIONS[[0, 1, 2, 2]])
+    # One input schedule, the same as a video of copies ending at 300 ms:
+    stim = _scene_stim(model, scene_of(), wander(time), end=300)
+    npt.assert_almost_equal(stim.time[-1], 300)
+    npt.assert_almost_equal(stim.metadata['encoder']['source_frame_time'],
+                            time)
+    video = model.predict_percept(copies_of_ramp(time), gaze=wander(time),
+                                  t_percept=t_percept)
+    npt.assert_allclose(percept.data, video.data, rtol=1e-5)
+    # Gaze is undefined before the first event; nothing is simulated then:
+    late = wander([100, 200, 300])
+    for t in ([50, 150] * ms, 100 * ms):
+        with pytest.raises(ValueError):
+            model.predict_percept(scene_of(), gaze=late, t_percept=t)
+
+
+def test_a_still_trajectory_display_uses_the_percept_clock():
+    """A temporal percept is drawn at its output times, not at gaze events"""
+    still = scene_of(scotoma=Scotoma.circle(6), scotoma_fill='laplace')
+    model = spatiotemporal(implant_at(0, 0))
+    percept = model.predict_percept(still, gaze=wander([0, 100, 200]),
+                                    t_percept=[50, 150, 250, 300] * ms)
+    rendered = still.render(percept=percept, vmax=5)
+    npt.assert_almost_equal(rendered.time, [50, 150, 250, 300])
+    held = FIXATIONS[[0, 1, 2, 2]] * dva
+    npt.assert_array_equal(rendered.data, still.render(percept=percept,
+                                                       gaze=held,
+                                                       vmax=5).data)
 
 
 def test_an_unknown_scene_input_frame_is_refused():
@@ -1080,6 +1166,67 @@ def test_play_reuses_the_prediction_gaze(view):
         video.play(percept=percept, gaze=SACCADE_FRAMES * dva, vmax=20,
                    view=view)._frame_data)
     plt.close('all')
+
+
+@pytest.mark.parametrize('view', ['scene', 'eye'])
+def test_play_reuses_the_prediction_gaze_of_a_still_trajectory(view):
+    still = scene_of(scotoma=Scotoma.circle(6), scotoma_fill='laplace')
+    percept = model_for(implant_at(0, 0)).predict_percept(still,
+                                                          gaze=wander())
+    reused = still.play(percept=percept, vmax=20, view=view)._frame_data
+    npt.assert_equal(reused.shape[-1], len(EVENT_TIMES))
+    npt.assert_array_equal(reused, still.play(percept=percept, gaze=wander(),
+                                              vmax=20, view=view)._frame_data)
+    plt.close('all')
+
+
+def test_an_eye_registered_still_trajectory_requires_its_prediction_gaze():
+    still = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    percept = model_for(implant_at(0, 0)).predict_percept(still,
+                                                          gaze=wander())
+    # Resolved at 605 ms, the second fixation would still be the first:
+    late = wander([0, 700, 1270])
+    for gaze in (late, (0, 0) * dva, FIXATIONS[::-1] * dva):
+        for display in (still.render, still.play):
+            with pytest.raises(ValueError):
+                display(percept=percept, gaze=gaze, vmax=20)
+    with pytest.raises(ValueError):
+        still.plot(percept=percept, gaze=late, frame=1)
+    plt.close('all')
+
+
+def test_a_head_registered_still_trajectory_leaves_the_input_alone():
+    still = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    model = model_for(implant_at(0, 0, input_frame='head'))
+    npt.assert_almost_equal(seen_by(model, still, gaze=wander()).ravel(),
+                            [ramp_at(0)] * 3, decimal=4)
+    # Same brightness, but one frame per fixation, so the eye can move:
+    percept = model.predict_percept(still, gaze=wander())
+    npt.assert_almost_equal(percept.time, EVENT_TIMES)
+    npt.assert_array_equal(percept.data, percept.data[..., :1].repeat(3, -1))
+    reused = still.render(percept=percept, vmax=20).data
+    other = Gaze(FIXATIONS[::-1] * dva, time=EVENT_TIMES * ms)
+    moved = still.render(percept=percept, gaze=other, vmax=20).data
+    npt.assert_equal(np.allclose(moved, reused), False)
+    # A percept predicted without gaze plays along any trajectory:
+    fixed = model.predict_percept(still)
+    npt.assert_allclose(still.render(percept=fixed, gaze=wander(),
+                                     vmax=20).data, reused, atol=1e-6)
+
+
+def test_a_projector_delivers_each_fixation_at_its_next_pulse():
+    """PRIMA's 30 Hz projector frames need not align with saccades"""
+    model = ScoreboardModel(implant=PRIMAPivotal(), xrange=(-2, 2),
+                            yrange=(-2, 2), step=1).build()
+    scene = scene_of()
+    percept = model.predict_percept(scene, gaze=wander())
+    # First pulse period at or after 0, 605, and 1270 ms:
+    npt.assert_almost_equal(percept.time, np.array([0, 19, 39]) * 1000 / 30)
+    npt.assert_array_equal(percept._scene_gaze[0], FIXATIONS)
+    for f, xy in enumerate(FIXATIONS):
+        npt.assert_allclose(percept.data[..., f],
+                            model.predict_percept(scene, gaze=xy * dva).data[
+                                ..., 0], rtol=1e-6)
 
 
 def test_only_scene_prediction_stores_gaze():

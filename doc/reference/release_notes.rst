@@ -96,6 +96,11 @@ API changes and improvements
   ``max(fill, phosphene)``; this changes composites with numeric fills
   (:pull:`968`).
 
+* A ``Gaze`` now animates a still-image ``Scene``: ``predict_percept``,
+  ``render``, ``plot``, and ``play`` sample the image at each gaze event. A
+  temporal model requires ``t_percept``, which ends the last fixation
+  (:pull:`972`).
+
 * New ``FixationalMotion`` adds reproducible drift and microsaccades to each
   fixation of a ``Gaze`` (:pull:`971`).
 

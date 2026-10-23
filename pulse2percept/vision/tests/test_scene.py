@@ -16,7 +16,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import ImageStimulus, VideoStimulus, samples
 from pulse2percept.topography import Grid2D
 from pulse2percept.units import dva, ms, s
-from pulse2percept.vision import Scene, Scotoma
+from pulse2percept.vision import Gaze, Scene, Scotoma
 from pulse2percept.vision import scene as scene_module
 from pulse2percept.vision.scene import (_raster_axes, _raster_extent,
                                         _raster_step)
@@ -2694,3 +2694,96 @@ def test_inpainting_uses_the_eye_raster_when_the_lattices_differ():
     bottom = (1 - fc) * seen[r1, c0] + fc * seen[r1, c1]
     expected = (1 - fr) * top + fr * bottom
     npt.assert_allclose(frames[inside], expected, atol=1e-5)
+
+
+# A gaze trajectory on a still scene
+#
+# Irregular event times, so no single frame interval fits them:
+EVENT_TIMES = [0, 605, 1270]
+FIXATIONS = np.array([(0, 0), (-12, -4), (10, 3)], dtype=float)
+
+
+def wander():
+    return Gaze(FIXATIONS * dva, time=EVENT_TIMES * ms)
+
+
+def copies_scene(**kwargs):
+    """`world_scene` as a video of copies, one per gaze event"""
+    frames = np.stack([coordinate_image()] * len(EVENT_TIMES), axis=-1)
+    return world_scene(VideoStimulus(frames, time=EVENT_TIMES), **kwargs)
+
+
+def test_render_samples_a_still_scene_at_each_gaze_event():
+    scene = world_scene()
+    rendered = scene.render(gaze=wander())
+    npt.assert_almost_equal(rendered.time, EVENT_TIMES)
+    npt.assert_equal(rendered.time_unit, ms)
+    for f, xy in enumerate(FIXATIONS):
+        npt.assert_array_equal(rendered.data[..., f],
+                               scene.render(gaze=xy * dva).data[..., 0])
+    # The source is not turned into a video:
+    npt.assert_equal((scene.time, scene.n_frames), (None, 1))
+
+
+@pytest.mark.parametrize('view', ['scene', 'eye'])
+@pytest.mark.parametrize('fill', ['laplace', 0.2])
+def test_a_still_scene_plays_a_trajectory_like_a_video_of_copies(view, fill):
+    """One played frame per gaze event, not per source frame"""
+    kwargs = dict(scotoma=Scotoma.circle(4), scotoma_fill=fill,
+                  aperture='round')
+    still, copies = world_scene(**kwargs), copies_scene(**kwargs)
+    played = still.play(gaze=wander(), view=view, rings=[5])._frame_data
+    npt.assert_equal(played.shape[-1], len(EVENT_TIMES))
+    npt.assert_array_equal(played, copies.play(gaze=wander(), view=view,
+                                               rings=[5])._frame_data)
+    plt.close('all')
+
+
+@pytest.mark.parametrize('view', ['scene', 'eye'])
+def test_plot_draws_the_requested_fixation_of_a_still_scene(view):
+    scene = world_scene(scotoma=Scotoma.circle(4), scotoma_fill='laplace')
+    for f, xy in enumerate(FIXATIONS):
+        drawn = drawn_on_fresh_axes(scene, gaze=wander(), frame=f, view=view)
+        fixed = drawn_on_fresh_axes(scene, gaze=xy * dva, view=view)
+        npt.assert_array_equal(drawn.images[-1].get_array(),
+                               fixed.images[-1].get_array())
+        npt.assert_almost_equal(drawn.images[-1].get_extent(),
+                                fixed.images[-1].get_extent())
+        plt.close('all')
+    with pytest.raises(ValueError):
+        scene.plot(gaze=wander(), frame=len(EVENT_TIMES))
+
+
+def test_gaze_event_times_keep_their_unit():
+    scene = world_scene()
+    in_s = Gaze(FIXATIONS * dva, time=[0, 0.605, 1.27] * s)
+    rendered = scene.render(gaze=in_s)
+    npt.assert_equal(rendered.time_unit, s)
+    npt.assert_almost_equal(rendered.time, [0, 0.605, 1.27])
+    npt.assert_array_equal(rendered.data, scene.render(gaze=wander()).data)
+
+
+def test_a_still_scene_without_a_clock_has_nothing_to_play():
+    scene = ramp_scene()
+    untimed = Percept(np.zeros((SCENE_PX, SCENE_PX, 1)), space=scene._grid())
+    for kwargs in ({}, {'gaze': (3, 0) * dva}, {'percept': untimed,
+                                                'vmax': 1}):
+        with pytest.raises(ValueError, match='nothing to play'):
+            scene.play(**kwargs)
+    # A Gaze or a timed percept is a clock:
+    npt.assert_equal(scene.play(gaze=wander())._frame_data.shape[-1], 3)
+    timed = Percept(np.zeros((SCENE_PX, SCENE_PX, 2)), space=scene._grid(),
+                    time=[0, 50])
+    npt.assert_equal(scene.play(percept=timed, vmax=1)._frame_data.shape[-1],
+                     2)
+    plt.close('all')
+
+
+def test_a_video_scene_keeps_its_frame_clock_for_a_trajectory():
+    video = video_scene()
+    gaze = Gaze([(0, 0), (4, 1)] * dva, time=[0, 605] * ms)
+    npt.assert_almost_equal(video._sampling_clock(gaze)[0], [0, 1000])
+    rendered = video.render(gaze=gaze)
+    npt.assert_almost_equal(rendered.time, [0, 1000])
+    npt.assert_array_equal(rendered.data,
+                           video.render(gaze=[(0, 0), (4, 1)] * dva).data)

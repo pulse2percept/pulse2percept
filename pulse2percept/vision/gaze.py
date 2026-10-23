@@ -177,9 +177,9 @@ class Gaze(PrettyPrint):
     ``fixational_motion`` adds involuntary motion around each fixation.
 
     Accepted wherever :py:class:`~pulse2percept.vision.Scene` and
-    :py:meth:`~pulse2percept.models.Model.predict_percept` take a ``gaze``,
-    if there are frame times to resolve against: a video scene's, or a timed
-    percept's for a still scene.
+    :py:meth:`~pulse2percept.models.Model.predict_percept` take a ``gaze``.
+    Resolved at a video scene's frame times, else at a timed percept's; a
+    still scene is otherwise sampled at each event.
 
     .. versionadded:: 0.11.0
 
