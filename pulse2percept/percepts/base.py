@@ -276,6 +276,10 @@ class Percept(Data):
     #: models instead of metadata. None for other percepts.
     _frame_clock = None
 
+    #: ``(gaze, scene_input_frame)`` of a scene-predicted percept, read by
+    #: `Scene` display. None for other percepts.
+    _scene_gaze = None
+
     def __init__(self, data, space=None, time=None, metadata=None, n_gray=None,
                  time_unit=ms):
         # import at runtime to avoid circular import

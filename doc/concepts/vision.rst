@@ -542,6 +542,8 @@ Whether gaze also changes the image reaching the electrodes depends on
        percept in the scene but do not change electrode input
 
 The implant and scotoma remain fixed in eye coordinates as gaze changes.
+Display methods reuse the prediction gaze by default. With ``'head'`` input,
+playback may use another gaze.
 
 For head-centered systems, each electrode samples its own registered
 visual-field position. Patient-specific camera-to-electrode registration is

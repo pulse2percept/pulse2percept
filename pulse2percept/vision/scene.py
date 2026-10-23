@@ -1328,11 +1328,25 @@ class Scene(PrettyPrint):
 
     def _resolve_gaze(self, gaze, percept=None):
         """Converts a `Gaze` to one (x, y) per output frame; returns other
-        inputs unchanged"""
-        if not isinstance(gaze, Gaze):
-            return gaze
-        time, unit, n_out = self._output_clock(percept)
-        return _gaze_points(gaze, n_out, time=time, time_unit=unit)
+        inputs unchanged, or the prediction gaze of ``percept`` if None"""
+        stored = getattr(percept, '_scene_gaze', None)
+        predicted, frame = (None, None) if stored is None else stored
+        if gaze is None:
+            return predicted
+        if isinstance(gaze, Gaze):
+            time, unit, n_out = self._output_clock(percept)
+            gaze = _gaze_points(gaze, n_out, time=time, time_unit=unit)
+        if frame == 'eye':
+            n_out = self._n_display_frames(percept)
+            given = _gaze_points(gaze, n_out)
+            # 1e-6 dva: rounding only
+            if (len(predicted) not in (1, n_out) or
+                    not np.allclose(given, predicted, rtol=0, atol=1e-6)):
+                raise ValueError(
+                    "Playback gaze differs from the gaze used for "
+                    "eye-registered scene prediction. Use the original gaze "
+                    "or recompute the percept with the desired gaze.")
+        return gaze
 
     def _source_aligned(self, prosthetic):
         """Returns True if percept frame k was predicted from scene frame k
@@ -1457,7 +1471,8 @@ class Scene(PrettyPrint):
             Screen blending is a display convention, not a validated model of
             how prosthetic and native vision combine.
         gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
-            Scene location (dva) on the fovea. Defaults to the origin. A
+            Scene location (dva) on the fovea. Defaults to the percept's
+            prediction gaze, else the origin. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved at the output
             frame times: a video scene's, or a timed percept's for a still
             scene.
@@ -1521,7 +1536,7 @@ class Scene(PrettyPrint):
         gaze : array_like or Gaze, optional
             Scene location (dva) on the fovea, as ``(x, y)``,
             ``(n_frames, 2)``, or a :py:class:`~pulse2percept.vision.Gaze`.
-            Defaults to the origin.
+            Defaults to the percept's prediction gaze, else the origin.
         vmax : float, optional
             Percept brightness shown as white. Defaults to the maximum over
             the whole ``percept``.
@@ -1584,7 +1599,8 @@ class Scene(PrettyPrint):
         Parameters
         ----------
         gaze : (x, y) or :py:class:`~pulse2percept.vision.Gaze`, optional
-            Scene location (dva) on the fovea. Defaults to the origin. A
+            Scene location (dva) on the fovea. Defaults to the percept's
+            prediction gaze, else the origin. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved at the output
             frame times, and the position at ``frame`` is drawn.
         frame : int, optional
