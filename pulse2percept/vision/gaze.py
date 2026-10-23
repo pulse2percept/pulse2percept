@@ -1,8 +1,170 @@
-""":py:class:`~pulse2percept.vision.Gaze`"""
+""":py:class:`~pulse2percept.vision.Gaze`,
+:py:class:`~pulse2percept.vision.FixationalMotion`"""
 import numpy as np
+from scipy.signal import lfilter
 
 from ..units import DimensionMismatchError, Quantity, as_value, dva, ms
 from ..utils import PrettyPrint
+
+
+class FixationalMotion(PrettyPrint):
+    """Involuntary drift and microsaccades around each fixation of a Gaze
+
+    The offset from the intended fixation is zero at fixation onset,
+    generated on an internal 10 ms grid, and linearly interpolated at the
+    requested times. It depends only on ``seed``, the fixation index, and the
+    time since onset, not on frame rate or evaluation order. Tremor is not
+    modeled.
+
+    Drift is an Ornstein-Uhlenbeck process on each axis (correlation time
+    500 ms, stationary SD 0.02 dva). Microsaccades occur at a mean rate of
+    1/s, at least 150 ms apart and 150 ms after onset. Each is a 0.1-0.3 dva
+    jump within one 10 ms step, landing within 0.3 dva of the target if
+    possible, otherwise toward it.
+
+    These provisional defaults approximate published human ranges
+    [OteroMillan2014]_, [Rucci2015]_. They are not fitted to data and do not
+    reproduce the full statistics of measured eye movements.
+
+    .. versionadded:: 0.12.0
+
+    Parameters
+    ----------
+    drift : bool, optional
+        Whether to generate drift.
+    microsaccades : bool, optional
+        Whether to generate microsaccades.
+    seed : int, optional
+        Non-negative random seed. None draws one at construction and stores
+        it in ``seed``.
+
+    Examples
+    --------
+    >>> from pulse2percept.units import dva, ms
+    >>> from pulse2percept.vision import FixationalMotion, Gaze
+    >>> gaze = Gaze([(0, 0), (6, 2)] * dva, time=[0, 400] * ms,
+    ...             fixational_motion=FixationalMotion(seed=42))
+    >>> gaze.positions  # the intended fixations
+    array([[0., 0.],
+           [6., 2.]])
+
+    """
+    __slots__ = ('_drift', '_microsaccades', '_seed')
+
+    # Times in ms, distances in dva:
+    _step = 10.0
+    _drift_tau = 500.0
+    _drift_sd = 0.02
+    _msacc_interval = 1000.0  # mean onset-to-onset interval
+    _msacc_refractory = 150.0
+    _msacc_amplitude = (0.1, 0.3)
+    _msacc_reach = 0.3
+
+    def __init__(self, drift=True, microsaccades=True, seed=None):
+        for name, value in (('drift', drift),
+                            ('microsaccades', microsaccades)):
+            if not isinstance(value, (bool, np.bool_)):
+                raise TypeError(f"'{name}' must be True or False, not "
+                                f"{value!r}.")
+        if seed is None:
+            seed = np.random.SeedSequence().entropy
+        elif (isinstance(seed, (bool, np.bool_)) or
+              not isinstance(seed, (int, np.integer)) or seed < 0):
+            raise ValueError(f"'seed' must be a non-negative integer or None, "
+                             f"not {seed!r}.")
+        self._drift = bool(drift)
+        self._microsaccades = bool(microsaccades)
+        self._seed = int(seed)
+
+    def _pprint_params(self):
+        """Return a dict of class attributes to pretty-print"""
+        return {'drift': self.drift, 'microsaccades': self.microsaccades,
+                'seed': self.seed}
+
+    @property
+    def drift(self):
+        """Whether drift is generated"""
+        return self._drift
+
+    @property
+    def microsaccades(self):
+        """Whether microsaccades are generated"""
+        return self._microsaccades
+
+    @property
+    def seed(self):
+        """Random seed; fixed at construction"""
+        return self._seed
+
+    def _offsets(self, fixation, elapsed):
+        """Returns ``(n, 2)`` offsets in dva, ``elapsed`` ms after the onset
+        of each ``fixation`` (an index into the Gaze events)"""
+        offsets = np.zeros((elapsed.size, 2))
+        if not (self.drift or self.microsaccades):
+            return offsets
+        for index in np.unique(fixation):
+            here = fixation == index
+            segment = self._segment(int(index), elapsed[here].max())
+            steps = elapsed[here] / self._step
+            grid = np.arange(len(segment))
+            for axis in range(2):
+                offsets[here, axis] = np.interp(steps, grid, segment[:, axis])
+        return offsets
+
+    def _segment(self, fixation, duration):
+        """Returns ``(n, 2)`` offsets in dva on the internal grid, from onset
+        of ``fixation`` through ``duration`` ms"""
+        n = int(np.ceil(duration / self._step)) + 1
+        offsets = np.zeros((n, 2))
+        # One stream per component, so toggling one leaves the other as is:
+        if self.drift:
+            rng = np.random.default_rng(
+                np.random.SeedSequence(self.seed, spawn_key=(fixation, 0)))
+            # Values are drawn in order, so a longer segment extends a
+            # shorter one:
+            noise = rng.standard_normal((n, 2))
+            noise[0] = 0  # zero offset at onset
+            decay = np.exp(-self._step / self._drift_tau)
+            gain = self._drift_sd * np.sqrt(1 - decay ** 2)
+            offsets += lfilter([gain], [1, -decay], noise, axis=0)
+        if self.microsaccades:
+            rng = np.random.default_rng(
+                np.random.SeedSequence(self.seed, spawn_key=(fixation, 1)))
+            low, high = self._msacc_amplitude
+            onset = 0.0
+            while True:
+                # Three draws per event, so events do not depend on
+                # `duration`:
+                gap, amplitude, direction = rng.random(3)
+                # Refractory period plus an exponential wait:
+                onset += (self._msacc_refractory -
+                          (self._msacc_interval - self._msacc_refractory) *
+                          np.log1p(-gap))
+                k = int(onset // self._step) + 1
+                if k >= n:
+                    break
+                offsets[k:] += _microsaccade(offsets[k - 1],
+                                             low + (high - low) * amplitude,
+                                             direction, self._msacc_reach)
+        return offsets
+
+
+def _microsaccade(start, amplitude, u, reach):
+    """Returns the ``(dx, dy)`` jump of a microsaccade from ``start``
+
+    The direction is uniform (``u`` in [0, 1)) over those landing within
+    ``reach`` of the target; if none does, the jump aims at the target.
+    """
+    r = np.hypot(*start)
+    if r == 0:
+        theta = 2 * np.pi * u
+    else:
+        # Law of cosines: the landing is within reach iff the angle from
+        # `start`'s direction is at least arccos(c):
+        c = (reach ** 2 - r ** 2 - amplitude ** 2) / (2 * amplitude * r)
+        lo = np.arccos(np.clip(c, -1, 1))
+        theta = np.arctan2(start[1], start[0]) + lo + u * 2 * (np.pi - lo)
+    return amplitude * np.array([np.cos(theta), np.sin(theta)])
 
 
 class Gaze(PrettyPrint):
@@ -12,6 +174,7 @@ class Gaze(PrettyPrint):
     until ``time[i + 1]``; the last fixation is held indefinitely. Saccades
     are instantaneous (no interpolation). An event exactly on a frame time
     applies to that frame; times before the first event are a ValueError.
+    ``fixational_motion`` adds involuntary motion around each fixation.
 
     Accepted wherever :py:class:`~pulse2percept.vision.Scene` and
     :py:meth:`~pulse2percept.models.Model.predict_percept` take a ``gaze``,
@@ -31,6 +194,11 @@ class Gaze(PrettyPrint):
         Start time of each fixation, in ms unless unitful. Must be finite and
         strictly increasing. Required for ``(n, 2)`` positions; not allowed
         for ``(x, y, time)`` rows.
+    fixational_motion : :py:class:`~pulse2percept.vision.FixationalMotion`, optional
+        Drift and microsaccades added to each fixation at the times gaze is
+        resolved. ``positions`` and ``time`` keep the intended fixations.
+
+        .. versionadded:: 0.12.0
 
     Examples
     --------
@@ -45,9 +213,12 @@ class Gaze(PrettyPrint):
     array([  0., 400.])
 
     """
-    __slots__ = ('_positions', '_time', '_time_unit')
+    __slots__ = ('_positions', '_time', '_time_unit', '_fixational_motion')
 
-    def __init__(self, positions, time=None):
+    def __init__(self, positions, time=None, fixational_motion=None):
+        if not isinstance(fixational_motion, (FixationalMotion, type(None))):
+            raise TypeError(f"'fixational_motion' must be a FixationalMotion "
+                            f"or None, not {type(fixational_motion)}.")
         if time is None:
             positions, time = _split_rows(positions)
         elif _row_width(positions) == 3:
@@ -88,11 +259,13 @@ class Gaze(PrettyPrint):
         self._positions = positions
         self._time = time
         self._time_unit = unit
+        self._fixational_motion = fixational_motion
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
         return {'positions': self.positions, 'time': self.time,
-                'time_unit': self.time_unit}
+                'time_unit': self.time_unit,
+                'fixational_motion': self.fixational_motion}
 
     @property
     def positions(self):
@@ -109,9 +282,15 @@ class Gaze(PrettyPrint):
         """Unit of ``time``"""
         return self._time_unit
 
-    def _at(self, time, time_unit=None):
-        """Returns the fixation active at each ``time``, as ``(n, 2)``
+    @property
+    def fixational_motion(self):
+        """:py:class:`~pulse2percept.vision.FixationalMotion`, or None"""
+        return self._fixational_motion
 
+    def _at(self, time, time_unit=None):
+        """Returns the gaze position at each ``time``, as ``(n, 2)`` in dva
+
+        This is the active fixation plus any fixational motion.
         ``time_unit`` is the unit of ``time``; None uses ``self.time_unit``.
         """
         unit = self.time_unit if time_unit is None else time_unit
@@ -126,7 +305,12 @@ class Gaze(PrettyPrint):
                 f"Gaze is undefined before its first event at "
                 f"{events[0]:g} {unit}, and this asks for {first:g} {unit}. "
                 f"Start the trajectory at or before the first frame.")
-        return self.positions[idx]
+        if self.fixational_motion is None:
+            return self.positions[idx]
+        elapsed = np.asarray(as_value(Quantity(time - events[idx], unit), ms,
+                                      'time'), dtype=float)
+        return (self.positions[idx] +
+                self.fixational_motion._offsets(idx, elapsed))
 
 
 def _row_width(rows):

@@ -25,7 +25,7 @@ from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
                                              Watson2014Map)
 from pulse2percept.units import deg, dva, ms, s, um
-from pulse2percept.vision import Gaze, Scene, Scotoma
+from pulse2percept.vision import FixationalMotion, Gaze, Scene, Scotoma
 
 #: Square scene: one pixel per degree, center pixel at the origin.
 SCENE_PX = 41
@@ -187,6 +187,29 @@ def test_a_gaze_trajectory_does_not_move_a_head_mounted_camera():
     sparse = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
     npt.assert_almost_equal(seen_by(model, scene, gaze=sparse),
                             seen_by(model, scene), decimal=6)
+
+
+def test_fixational_motion_moves_an_eye_coupled_implants_input():
+    scene = ramp_video_scene()
+    model = model_for(implant_at(0, 0))
+    gaze = Gaze([(0, 0)] * dva, time=[0] * ms,
+                fixational_motion=FixationalMotion(seed=2))
+    moved = gaze._at(scene.time, scene.time_unit)
+    npt.assert_equal(np.all(moved[1:, 0] != 0), True)
+    npt.assert_almost_equal(seen_by(model, scene, gaze=gaze).ravel(),
+                            ramp_at(moved[:, 0]), decimal=6)
+    npt.assert_array_equal(model.predict_percept(scene, gaze=gaze).data,
+                           model.predict_percept(scene,
+                                                 gaze=moved * dva).data)
+
+
+def test_fixational_motion_does_not_move_a_head_mounted_camera():
+    scene = ramp_video_scene()
+    model = model_for(implant_at(0, 0, input_frame='head'))
+    gaze = Gaze([(0, 0)] * dva, time=[0] * ms,
+                fixational_motion=FixationalMotion(seed=2))
+    npt.assert_array_equal(seen_by(model, scene, gaze=gaze),
+                           seen_by(model, scene))
 
 
 def test_a_gaze_trajectory_needs_a_scene_with_frame_times():
