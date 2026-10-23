@@ -17,15 +17,17 @@ from scipy.spatial import cKDTree
 from ..implants import Implant
 from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
-from ..stimuli.encoders import (AmplitudeEncoder, _EncodedStimulus,
-                                _FrameClock, _OpticalStimulus, _gray_pixels)
+from ..stimuli.encoders import (AmplitudeEncoder, _DEFAULT_FRAME_DUR,
+                                _EncodedStimulus, _FrameClock,
+                                _FrameSchedule, _OpticalStimulus,
+                                _gray_pixels)
 from ..percepts import Percept
 from ..percepts.base import _quantize_gray
 from ..topography import Grid2D
 from ..units import (DimensionMismatchError, Quantity, Unit, as_value, deg,
                      dva, ms, um, uA)
 from ..units.base import has_units
-from ..vision import Scene
+from ..vision import Gaze, Scene
 from ..vision.gaze import _gaze_points
 from ..utils import PrettyPrint, Frozen, Parametrized
 from ..utils.base import _is_constructing
@@ -413,8 +415,13 @@ def _device_scene(scene, implant):
     return device
 
 
-def _scene_stim(model, scene, gaze):
-    """Prepare electrode stimulation sampled from a scene."""
+def _scene_stim(model, scene, gaze, end=None):
+    """Prepare electrode stimulation sampled from a scene.
+
+    A still scene with a `Gaze` is sampled at its event times. The last
+    fixation lasts until ``end`` (ms), which must follow it. A spatial-only
+    model, or no ``end``, adds ``_DEFAULT_FRAME_DUR``, as for a still image.
+    """
     if not model.has_space:
         raise ValueError("Scene registration requires a spatial model.")
 
@@ -432,22 +439,45 @@ def _scene_stim(model, scene, gaze):
         raise ValueError(
             f"'scene_input_frame' must be 'eye' or 'head', not {frame!r}.")
 
-    # Gaze is sampled on the source frame clock, independent of `t_percept`:
-    points = _gaze_points(gaze, device_scene.n_frames,
-                          time=device_scene.time,
-                          time_unit=device_scene.time_unit)
+    # Source frame clock (gaze events on a still scene), not `t_percept`:
+    time, time_unit = device_scene._sampling_clock(gaze)
+    last_frame_dur = None
+    if device_scene.time is None and time is not None:
+        time = Quantity(time, time_unit).to_value(ms)
+        if end is None:
+            end = time[-1] + _DEFAULT_FRAME_DUR
+        elif not model.has_time and end - time[-1] > 1e-6:
+            # Spatial responses depend only on the frame in effect; keep the
+            # last frame's pulses whole:
+            end += _DEFAULT_FRAME_DUR
+        # 1e-6 ms: rounding only
+        if end - time[-1] <= 1e-6:
+            raise ValueError(
+                f"'t_percept' ends at "
+                f"{Quantity(end, ms).to_value(gaze.time_unit):g} "
+                f"{gaze.time_unit}, so the last gaze event at "
+                f"{gaze.time[-1]:g} {gaze.time_unit} is never delivered. "
+                f"Extend 't_percept' past it.")
+        time_unit, last_frame_dur = ms, end - time[-1]
+    n_frames = device_scene.n_frames if time is None else time.size
+    points = _gaze_points(gaze, n_frames, time=time, time_unit=time_unit)
     input_gaze = points if frame == 'eye' else None
-    gray = device_scene._device_input(x_vf, y_vf, gaze=input_gaze)
+    gray = device_scene._device_input(x_vf, y_vf, gaze=input_gaze,
+                                      n_frames=n_frames)
 
-    if device_scene.time is None:
+    if time is None:
         gray = gray[:, 0]
+    elif gray.shape[1] < n_frames:
+        # A head-fixed camera samples a still scene once:
+        gray = np.repeat(gray, n_frames, axis=1)
 
-    seen = Stimulus(
-        gray,
-        electrodes=implant.electrode_names,
-        time=device_scene.time,
-        metadata=device_scene.source.metadata,
-    )
+    if last_frame_dur is None:
+        seen = Stimulus(gray, electrodes=implant.electrode_names, time=time,
+                        metadata=device_scene.source.metadata)
+    else:
+        seen = _FrameSchedule(gray, implant.electrode_names, time,
+                              last_frame_dur,
+                              metadata=device_scene.source.metadata)
 
     # `_device_scene` already applied the implant's preprocessing:
     return implant._prepare_stim(seen._inherit_units(device_scene.source),
@@ -1423,22 +1453,24 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 allow_dimensionless=self._accepts_dimensionless_drive),
             t_percept=t_percept))
 
-    def _spatial_response(self, resp, time, metadata, frame_clock=None):
-        """Return a flat grid response, quantized to ``n_gray`` levels if set.
+    def _spatial_response(self, resp, time, metadata, frame_clock=None,
+                          quantize=True):
+        """Return a flat grid response, quantized to ``n_gray`` levels if set
+        and ``quantize``.
 
         Quantization precedes any temporal stage.
         """
-        if self.n_gray is not None:
+        if quantize and self.n_gray is not None:
             resp = _quantize_gray(resp, self.n_gray)
         return _ModelResponse(resp, time, self.time_unit, self.grid.x.shape,
                               space=self.grid, frame_clock=frame_clock,
                               metadata=metadata)
 
-    def _predict_response(self, stim, t_percept=None):
+    def _predict_response(self, stim, t_percept=None, *, quantize=True):
         """Return the flat spatial response to a prepared stimulus, or None.
 
         Composite models use this path to prepare stimulation once before running
-        spatial and temporal stages.
+        spatial and temporal stages. ``quantize=False`` skips ``n_gray``.
         """
         if not self.is_built:
             self.build()
@@ -1513,7 +1545,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                                              stim)
         resp = self._postprocess_spatial(resp)
         return self._spatial_response(resp, t_percept, {'stim': stim},
-                                      frame_clock=clock)
+                                      frame_clock=clock, quantize=quantize)
 
     def _predict_tensor(self, waveform, time):
         """Return the flat spatial response to a Torch waveform.
@@ -2069,14 +2101,28 @@ class Model(Frozen, PrettyPrint):
             :py:meth:`~pulse2percept.implants.Implant.prepare_stim`, or a
             visual scene.
         t_percept : float or array-like, optional
-            Output times in ``time_unit``. Unitful times are accepted.
+            Output times in ``time_unit``. Unitful times are accepted. For a
+            :py:class:`~pulse2percept.vision.Gaze` on a still scene, the
+            latest time must follow the last gaze event. Models with a
+            temporal stage require it; stimulation stops then, dropping
+            pulses that cannot finish (e.g., 9.8 ms PRIMA pulses). Output
+            frames are registered at the eye position at their time; at a
+            saccade, a temporal response still reflects the previous
+            fixation.
         gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
             Scene location falling on the fovea, in degrees of visual angle,
             so that ``scene = eye-centered visual field + gaze``. Requires
             ``source`` to be a scene. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved against the
-            scene's frame times, not against ``t_percept``. Gaze selects the
-            scene region sampled by the electrodes unless the implant's
+            scene's frame times, not against ``t_percept``; a still scene is
+            sampled at each gaze event. A spatial-only model then responds to
+            the encoder frame in effect at each time (e.g., a projector pulse
+            period), without interpolating between frames. Without
+            ``t_percept``, it returns one frame per fixation, at its first
+            encoder frame. A pulse encoder's frame is a modulation change,
+            not a delivered pulse: a fixation shorter than the pulse period
+            still gets a response. Gaze selects the scene region sampled by
+            the electrodes unless the implant's
             :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is
             ``'head'``; the percept stays on the model's eye-centered grid
             either way.
@@ -2108,20 +2154,101 @@ class Model(Frozen, PrettyPrint):
             if pixels is not None:
                 return self._predict_visual_percept(source, pixels, t_percept)
             return self._predict_percept(self._prepared(source), t_percept)
-        percept = self._predict_percept(_scene_stim(self, source, gaze),
-                                        t_percept)
+        # A Gaze on a still scene is a timed input schedule:
+        trajectory = source.time is None and isinstance(gaze, Gaze)
+        end = None
+        if trajectory and t_percept is not None:
+            t_out = np.ravel(as_value(t_percept, self.time_unit, 't_percept'))
+            if t_out.size == 0:
+                raise ValueError("'t_percept' is empty; pass at least one "
+                                 "output time.")
+            # Gaze is undefined before its first event:
+            gaze._at(t_out, self.time_unit)
+            end = Quantity(t_out.max(), self.time_unit).to_value(ms)
+        elif trajectory and self.has_time:
+            raise ValueError(
+                "A Gaze holds its last fixation indefinitely, so on a still "
+                "scene a temporal model requires 't_percept'; its latest time "
+                "ends the simulation.")
+        stim = _scene_stim(self, source, gaze, end=end)
+        if trajectory and not self.has_time:
+            percept = self._predict_fixations(stim, t_percept)
+        else:
+            percept = self._predict_percept(stim, t_percept)
         if percept is not None:
             frame = self.implant.scene_input_frame
             if gaze is None and frame == 'head':
                 # Unknown, not fixation:
                 points = None
+            elif trajectory:
+                # One per output frame, not per gaze event:
+                timed = percept.time is not None
+                points = gaze._at(percept.time if timed else gaze.time[:1],
+                                  percept.time_unit if timed else None)
             else:
                 # Source frame clock, as in `_scene_stim`:
                 points = _gaze_points(gaze, source.n_frames, time=source.time,
                                       time_unit=source.time_unit).copy()
+            if points is not None:
                 points.flags.writeable = False
             percept._scene_gaze = (points, frame)
         return percept
+
+    def _predict_fixations(self, stim, t_percept=None):
+        """Spatial-only percept of a gaze trajectory on a still scene
+
+        Returns the response to the encoder frame (e.g., projector pulse
+        period) in effect at each output time. Without ``t_percept``: one
+        frame per fixation, at its first encoder frame; a fixation without one
+        has no frame.
+        """
+        clock = _encoder_clock(stim)
+        if clock is None or clock.source_time is None:
+            return self._predict_percept(stim, t_percept)
+        device = np.asarray(clock.time, dtype=float)
+        # 1e-6 ms: rounding only
+        if t_percept is None:
+            onsets = np.asarray(clock.source_time, dtype=float)
+            ends = np.append(onsets[1:], np.inf)
+            first = np.searchsorted(device, onsets - 1e-6)
+            hit = first < device.size
+            hit[hit] = device[first[hit]] < ends[hit]
+            if not hit.any():
+                raise ValueError("No encoder frame falls within any "
+                                 "fixation, so nothing is delivered.")
+            frames = first[hit]
+            times = device[frames]
+        else:
+            times = Quantity(np.ravel(as_value(t_percept, self.time_unit,
+                                               't_percept')),
+                             self.time_unit).to_value(ms)
+            # Frame in effect (zero-order hold):
+            frames = np.maximum(
+                np.searchsorted(device, times + 1e-6, side='right') - 1, 0)
+        time = Quantity(times, ms).to_value(self.spatial.time_unit)
+        if self.spatial._needs_structured_stim:
+            # Schedule-reading models serve each frame time themselves:
+            resp = self.spatial._predict_response(
+                stim, t_percept=Quantity(device[frames], ms))
+            return _to_percept(replace(resp, time=time, frame_clock=clock))
+        # Select frames by index, not by interpolating the view in time;
+        # predict each distinct frame once:
+        view = _spatial_input(stim)
+        drive = np.reshape(view.data, (len(view.electrodes), -1))
+        if view.time is None:
+            frames = np.zeros_like(frames)
+        columns, inverse = np.unique(drive[:, frames], axis=1,
+                                     return_inverse=True)
+        label = np.arange(columns.shape[1], dtype=float)
+        rebuild = type(view) if view._is_normalized_drive else Stimulus
+        unique = rebuild(columns, electrodes=view.electrodes, time=label)
+        unique._inherit_units(view)._inherit_metadata(view)
+        resp = self.spatial._predict_response(
+            unique, t_percept=Quantity(label, view.time_unit), quantize=False)
+        # k-means for `n_gray` weighs every output frame:
+        return _to_percept(self.spatial._spatial_response(
+            resp.data[:, np.ravel(inverse)], time, {'stim': view},
+            frame_clock=clock))
 
     @property
     def _accepts_dimensionless_drive(self):

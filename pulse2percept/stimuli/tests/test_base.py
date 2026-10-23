@@ -18,6 +18,7 @@ from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, MonophasicPulse)
 from pulse2percept.stimuli import ImageStimulus
 from pulse2percept.stimuli import VideoStimulus
+from pulse2percept.stimuli._base import fast_compress_time
 from pulse2percept.stimuli._merge import merge_time_axes
 from pulse2percept.stimuli.base import _interp_rows
 from pulse2percept.units import (DimensionMismatchError, Quantity,
@@ -264,6 +265,30 @@ def test_Stimulus_compress_nonfinite(row, data, time):
     stim.compress()
     npt.assert_equal(stim.data, [data])
     npt.assert_equal(stim.time, time)
+
+
+@pytest.mark.parametrize('rows, kept', [
+    # Final rising and falling edges keep both sides:
+    ([[0, 0, 0, 1]], [0, 2, 3]),
+    ([[1, 1, 1, 0]], [0, 2, 3]),
+    # No edge, no intermediate samples:
+    ([[0, 0, 0, 0]], [0, 3]),
+    ([[0, 1]], [0, 1]),
+    # Only one electrode changes, at the final sample:
+    ([[1, 1, 1, 1], [0, 0, 0, 3]], [0, 2, 3]),
+])
+def test_compress_keeps_both_sides_of_a_final_edge(rows, kept):
+    """Interpolating the compressed samples reproduces every original one"""
+    data = np.asarray(rows, dtype=np.float32)
+    time = np.arange(data.shape[1], dtype=float)
+    mask = np.asarray(fast_compress_time(data))
+    npt.assert_equal(np.flatnonzero(mask), kept)
+    npt.assert_equal(_interp_rows(time, time[mask], data[:, mask]), data)
+    # Through `Stimulus`, which also drops silent electrodes:
+    stim = Stimulus(data, time=time)
+    stim.compress()
+    npt.assert_equal(_interp_rows(time, stim.time, stim.data),
+                     data[np.any(data != 0, axis=1)])
 
 
 def test_Stimulus_append():
@@ -1639,7 +1664,7 @@ def test_Stimulus_immutable_operations():
         npt.assert_equal(out.time.flags.writeable, False)
         npt.assert_equal(out.data.flags['C_CONTIGUOUS'], True)
     # The operations still give the right result:
-    npt.assert_equal(compressed.shape, (1, 3))
+    npt.assert_equal(compressed.shape, (1, 4))
     npt.assert_equal(list(removed.electrodes), ['B2'])
 
 

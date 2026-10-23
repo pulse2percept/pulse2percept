@@ -10,42 +10,43 @@ A :py:class:`~pulse2percept.vision.Scene` places images and videos in the
 visual field. It provides a common space for gaze, residual vision, and
 prosthetic percepts.
 
-For example, start with a natural scene, add a central scotoma, and move gaze
-across the image:
+For example, place a photo in the visual field, add a central scotoma, and
+move gaze across it:
 
 .. code-block:: python
 
-    import numpy as np
     import pulse2percept as p2p
 
     from pulse2percept.units import dva, ms
 
-    image = p2p.stimuli.samples.ucsb_bike(resize=(240, 360))
-
-    # Give the still image a short time axis so gaze can be animated:
-    frame = image.data.reshape(image.img_shape)
-    time = np.arange(0, 2400, 40)
-    video = p2p.stimuli.VideoStimulus(
-        np.repeat(frame[..., np.newaxis], len(time), axis=-1),
-        time=time * ms,
-    )
-
     scene = p2p.vision.Scene(
-        video,
-        extent=60 * dva,
+        'photo.jpg',
         fov=40 * dva,
         scotoma=p2p.vision.Scotoma.circle(5 * dva),
-        scotoma_fill='inpaint',
+        scotoma_fill='laplace',
+        aperture='round',
     )
 
     gaze = p2p.vision.Gaze(
-        [(0, 0), (-12, 0), (12, 0), (-8, 2)] * dva,
-        time=[0, 600, 1200, 1800] * ms,
+        [(0, 0), (-12, 0), (12, 0)] * dva,
+        time=[0, 600, 1200] * ms,
     )
 
+    # Native vision alone, one frame per fixation:
     scene.play(gaze=gaze)
 
-The source remains fixed in the world while the eye-centered field of view and
+    # With a prosthetic percept:
+    model = p2p.models.retina.ScoreboardModel(
+        p2p.implants.retina.PRIMAPivotal())
+    percept = model.predict_percept(scene, gaze=gaze)
+    scene.play(percept=percept)
+
+A file name or array becomes an
+:py:class:`~pulse2percept.stimuli.ImageStimulus`; videos work the same way.
+``play`` holds each frame until the next.
+
+``extent`` sets the source's angular size, and ``plot`` draws one fixation.
+The source stays fixed in the world; the eye-centered field of view and
 scotoma move with gaze:
 
 .. plot::
@@ -222,11 +223,43 @@ view.
 Gaze Timing
 -----------
 
-Gaze times are interpreted as ms unless units are supplied.
+Gaze times are in ms unless units are supplied, and keep their unit.
 
-A fixation beginning exactly on a frame time applies to that frame. For video
-scenes, gaze is resolved against the video's frame times. For a still scene
-shown together with a timed percept, the percept provides the clock.
+A fixation beginning exactly on a frame time applies to that frame. Gaze is
+resolved against:
+
+* a video scene's frame times;
+* on a still scene, a timed percept's frame times, else the gaze event times.
+  The image stays fixed in the world; each fixation samples it anew.
+
+``predict_percept`` also samples a still scene at each gaze event. A
+spatial-only model responds to the encoder frame in effect at each output
+time, without interpolating between fixations. By default, it returns one
+frame per fixation, at its first encoder frame (for PRIMA, the next 30 Hz
+projector pulse after the saccade; a shorter fixation gets no frame). With
+pulse encoders such as :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, a
+frame is a modulation change, not a delivered pulse: a fixation shorter than
+the pulse period still gets a response.
+
+A model with a temporal stage simulates all fixations as one input schedule.
+The last fixation has no end of its own, so ``t_percept`` is required; its
+latest time ends the simulation and must follow the last gaze event:
+
+.. code-block:: python
+
+    import numpy as np
+
+    percept = model.predict_percept(
+        scene,
+        gaze=gaze,
+        t_percept=np.arange(0, 1801, 20) * ms,
+    )
+
+Each output frame is drawn at the eye position at its time and reflects the
+stimulation delivered up to then: at a saccade, the previous fixation's
+response appears at the new eye position. Stimulation stops at the latest
+``t_percept``; a pulse that cannot finish by then (e.g., a 9.8 ms PRIMA pulse)
+is dropped.
 
 
 Fixational Eye Movements
@@ -238,6 +271,9 @@ Fixational Eye Movements
 microsaccades around each fixation of a ``Gaze``:
 
 .. code-block:: python
+
+    video = p2p.stimuli.samples.ucsb_pedestrians(resize=(173, 320))
+    scene = p2p.vision.Scene(video, fov=40 * dva)
 
     gaze = p2p.vision.Gaze(
         [
@@ -259,6 +295,8 @@ microsaccades around each fixation of a ``Gaze``:
   frame times. Low frame rates may miss or temporally distort microsaccades,
   particularly when modeling fast retinal responses. A ``seed`` gives the
   same motion at any frame rate.
+* A still scene samples gaze only at fixation onsets, where the offset is
+  zero, and rejects fixational motion. Use a video scene.
 * It moves the input of eye-coupled implants (``scene_input_frame='eye'``),
   not of head-mounted cameras.
 
@@ -637,7 +675,8 @@ Scenes provide four complementary display methods:
      - Draw one frame, preserving the source and percept at their own spatial
        resolutions
    * - ``scene.play()``
-     - Animate a video scene, gaze, and optionally a prosthetic percept
+     - Animate a video scene or a gaze trajectory, optionally with a
+       prosthetic percept
    * - ``scene.render()``
      - Resample all layers into one eye-centered RGB
        :py:class:`~pulse2percept.percepts.Percept`
@@ -713,7 +752,7 @@ There are three ways to save a scene:
     ).save('scene.gif', writer='pillow')
 
 Saved files use a single frame interval (the mean), so pass ``fps`` to
-``play()`` if the scene has irregular frame times.
+``play()`` if the frame times are irregular (e.g., gaze events).
 
 ``render`` uses the source's angular pixel pitch by default. Set ``step`` or
 ``shape`` to choose another output raster:

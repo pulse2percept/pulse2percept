@@ -144,10 +144,7 @@ gaze = p2p.vision.Gaze([
     (22 * dva, -10 * dva, 1270 * ms)
 ])
 percept = prima_model.predict_percept(scene, gaze=gaze)
-scene.play(
-    percept=percept,
-    vmax=percept.data.max(),
-)
+scene.play(percept=percept)
 
 ###############################################################################
 # PRIMA patients generally report recognizable shapes, sometimes with
@@ -155,7 +152,24 @@ scene.play(
 # The percept is screen-blended over the fill, a visualization convention
 # rather than a model of how prosthetic and natural vision combine.
 #
-#
+# The same gaze trajectory also animates a still image (or a file name). Each
+# fixation samples the fixed image anew; its frame starts at the projector's
+# first pulse after the saccade and is held until the next.
+# ``still.play(gaze=gaze)`` shows native vision alone. Models with a temporal
+# stage also need ``t_percept``, whose latest time ends the last fixation.
+
+still = p2p.vision.Scene(
+    p2p.stimuli.samples.ucsb_bike(resize=(240, 360)),
+    fov=40 * dva,
+    extent=60 * dva,
+    scotoma=scotoma,
+    scotoma_fill='laplace',
+    aperture='round',
+)
+percept = prima_model.predict_percept(still, gaze=gaze)
+still.play(percept=percept)
+
+###############################################################################
 # A form traced through visual cortex
 # -----------------------------------
 #

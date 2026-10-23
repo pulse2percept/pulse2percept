@@ -188,11 +188,15 @@ def test_play_accepts_a_trajectory_with_or_without_rings():
     plt.close('all')
 
 
-def test_a_still_scene_has_no_clock_to_resolve_against():
+def test_a_still_scene_samples_a_trajectory_at_its_events():
     scene = Scene(ImageStimulus(np.zeros((8, 8))), fov=(8, 8))
-    for call in (scene.render, scene.plot):
+    npt.assert_almost_equal(scene.render(gaze=trajectory()).time, EVENT_TIMES)
+    # Fixational motion is zero at every event, so it is refused:
+    gaze = Gaze(EVENTS * dva, time=EVENT_TIMES * ms,
+                fixational_motion=FixationalMotion(seed=3))
+    for call in (scene.render, scene.plot, scene.play):
         with pytest.raises(ValueError):
-            call(gaze=trajectory())
+            call(gaze=gaze)
     plt.close('all')
 
 
@@ -205,14 +209,14 @@ def test_the_output_clock_and_the_rendered_frames_never_disagree():
     still = Scene(ImageStimulus(np.zeros((8, 8))), fov=(8, 8))
     for scene in (video_scene(), still):
         for percept in (None, untimed, timed):
-            kwargs = {} if percept is None else {'percept': percept,
-                                                 'vmax': 1}
-            n_drawn = scene.render(**kwargs).data.shape[-1]
-            time, _, n_clock = scene._output_clock(percept)
-            npt.assert_equal(n_clock, n_drawn)
-            npt.assert_equal(scene._n_display_frames(percept), n_drawn)
-            if time is not None:
-                npt.assert_equal(np.size(time), n_drawn)
+            for gaze in (None, trajectory()):
+                kwargs = {} if percept is None else {'percept': percept,
+                                                     'vmax': 1}
+                n_drawn = scene.render(gaze=gaze, **kwargs).data.shape[-1]
+                time, _, n_clock = scene._output_clock(percept, gaze)
+                npt.assert_equal(n_clock, n_drawn)
+                if time is not None:
+                    npt.assert_equal(np.size(time), n_drawn)
 
 
 def test_gaze_resolves_on_scene_frames_not_on_percept_response_times():
