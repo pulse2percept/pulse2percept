@@ -26,6 +26,7 @@ Eye Movements
     :toctree:
 
     Gaze
+    FixationalMotion
 
 .. seealso::
 
@@ -33,12 +34,13 @@ Eye Movements
 
 """
 from .binocular import BinocularScene
-from .gaze import Gaze
+from .gaze import FixationalMotion, Gaze
 from .scene import Scene
 from .scotoma import Scotoma
 
 __all__ = [
     'BinocularScene',
+    'FixationalMotion',
     'Gaze',
     'Scene',
     'Scotoma'

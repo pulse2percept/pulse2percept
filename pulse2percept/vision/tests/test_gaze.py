@@ -8,7 +8,7 @@ from pulse2percept.percepts import Percept
 from pulse2percept.stimuli import ImageStimulus, VideoStimulus
 from pulse2percept.topography import Grid2D
 from pulse2percept.units import DimensionMismatchError, dva, ms, s, um
-from pulse2percept.vision import Gaze, Scene, Scotoma
+from pulse2percept.vision import FixationalMotion, Gaze, Scene, Scotoma
 
 SCENE_PX = 41
 # One frame every 100 ms, so events at 0/200/300 ms land on frames 0, 2, 3:
@@ -257,3 +257,181 @@ def test_a_still_scene_resolves_against_a_timed_percept():
     npt.assert_array_equal(
         scene.render(percept=percept, gaze=trajectory(), vmax=1).data,
         scene.render(percept=percept, gaze=EXPANDED * dva, vmax=1).data)
+
+
+# Fixational motion; onsets off the 10 ms grid:
+ROWS = [(0, 0, 0), (-29 * dva, -7 * dva, 605 * ms),
+        (22 * dva, -10 * dva, 1270 * ms)]
+# The internal grid, so each microsaccade is one step:
+GRID = np.arange(0, 20001, 10.0)
+
+
+def wandering(seed=42, **kwargs):
+    return Gaze(ROWS, fixational_motion=FixationalMotion(seed=seed, **kwargs))
+
+
+def offsets(seed, **kwargs):
+    """Returns 20 s of offsets from one fixation at the origin, in dva"""
+    gaze = Gaze([(0, 0)] * dva, time=[0] * ms,
+                fixational_motion=FixationalMotion(seed=seed, **kwargs))
+    return gaze._at(GRID, ms)
+
+
+def test_fixational_motion_validates_its_arguments():
+    for motion in ('drift', FixationalMotion, 42):
+        with pytest.raises(TypeError):
+            Gaze(ROWS, fixational_motion=motion)
+    with pytest.raises(TypeError):
+        FixationalMotion(drift=1)
+    with pytest.raises(TypeError):
+        FixationalMotion(microsaccades=None)
+    for seed in (-1, 1.5, True, '42'):
+        with pytest.raises(ValueError):
+            FixationalMotion(seed=seed)
+
+
+def test_without_fixational_motion_gaze_is_unchanged():
+    """No motion, or motion with both components off, holds each fixation"""
+    npt.assert_equal(trajectory().fixational_motion, None)
+    still = FixationalMotion(drift=False, microsaccades=False, seed=1)
+    gaze = Gaze(EVENTS * dva, time=EVENT_TIMES * ms, fixational_motion=still)
+    npt.assert_array_equal(gaze._at(FRAME_TIMES, ms), EXPANDED)
+
+
+def test_fixational_motion_keeps_the_intended_fixations():
+    gaze = wandering()
+    positions, time = gaze.positions.copy(), gaze.time.copy()
+    moved = gaze._at(np.arange(0, 2000, 40.0), ms)
+    npt.assert_array_equal(gaze.positions, positions)
+    npt.assert_array_equal(gaze.time, time)
+    with pytest.raises(ValueError):
+        gaze.positions[0, 0] = 99
+    with pytest.raises(ValueError):
+        gaze.time[0] = 99
+    # Rows and positions + time give the same motion:
+    split = Gaze(positions * dva, time=time * ms,
+                 fixational_motion=gaze.fixational_motion)
+    npt.assert_array_equal(split._at(np.arange(0, 2000, 40.0), ms), moved)
+
+
+def test_fixational_motion_is_reproducible():
+    times = np.arange(0, 2000, 40.0)
+    npt.assert_array_equal(wandering(7)._at(times, ms),
+                           wandering(7)._at(times, ms))
+    npt.assert_equal(np.array_equal(wandering(7)._at(times, ms),
+                                    wandering(8)._at(times, ms)), False)
+    # Without a seed, one is drawn once and reused:
+    unseeded = Gaze(ROWS, fixational_motion=FixationalMotion())
+    first = unseeded._at(times, ms)
+    npt.assert_array_equal(unseeded._at(times, ms), first)
+    npt.assert_array_equal(
+        wandering(unseeded.fixational_motion.seed)._at(times, ms), first)
+
+
+def test_fixational_motion_does_not_depend_on_how_it_is_sampled():
+    """Sampling order, subsets, and frame rate leave the trajectory as is"""
+    gaze = wandering()
+    npt.assert_array_equal(gaze._at([100, 200], ms)[1],
+                           gaze._at([200], ms)[0])
+    at_25hz = np.arange(0, 3000, 40.0)
+    expected = gaze._at(at_25hz, ms)
+    one_by_one = [gaze._at([t], ms)[0] for t in at_25hz[::-1]][::-1]
+    npt.assert_array_equal(one_by_one, expected)
+    shuffled = np.random.default_rng(0).permutation(at_25hz.size)
+    npt.assert_array_equal(gaze._at(at_25hz[shuffled], ms),
+                           expected[shuffled])
+    # 1 kHz output, compared at the 25 Hz frame times:
+    npt.assert_array_equal(gaze._at(np.arange(0, 3000, 1.0), ms)[::40],
+                           expected)
+
+
+def test_the_offset_resets_at_each_fixation_onset():
+    gaze = wandering()
+    npt.assert_array_equal(gaze._at([0, 605, 1270], ms), gaze.positions)
+    # The motion follows time since onset, not the absolute clock:
+    later = Gaze(gaze.positions * dva, time=(gaze.time + 3) * ms,
+                 fixational_motion=gaze.fixational_motion)
+    times = np.arange(0, 2000, 7.0)
+    npt.assert_allclose(later._at(times + 3, ms), gaze._at(times, ms),
+                        rtol=0, atol=1e-12)
+
+
+def test_seconds_and_milliseconds_give_the_same_motion():
+    gaze = wandering()
+    in_seconds = Gaze([(0, 0, 0), (-29 * dva, -7 * dva, 0.605 * s),
+                       (22 * dva, -10 * dva, 1.27 * s)],
+                      fixational_motion=gaze.fixational_motion)
+    times = np.arange(0, 3000, 40.0)
+    expected = gaze._at(times, ms)
+    for query, unit in ((times, ms), (times / 1000, s)):
+        npt.assert_allclose(in_seconds._at(query, unit), expected, rtol=0,
+                            atol=1e-12)
+
+
+def test_the_last_fixation_keeps_moving_after_its_onset():
+    gaze = wandering()
+    late = gaze._at([5000, 60000], ms) - gaze.positions[-1]
+    npt.assert_equal(np.all(np.isfinite(late)), True)
+    npt.assert_equal(np.all(np.hypot(*late.T) > 0), True)
+    npt.assert_equal(np.all(np.hypot(*late.T) < 0.5), True)
+
+
+def test_drift_is_temporally_correlated():
+    """Correlated over 10 ms, unlike white noise; decorrelated over 2 s"""
+    for seed in range(5):
+        x = offsets(seed, microsaccades=False)[50:, 0]
+        npt.assert_equal(np.corrcoef(x[:-1], x[1:])[0, 1] > 0.9, True)
+        npt.assert_equal(np.corrcoef(x[:-200], x[200:])[0, 1] < 0.5, True)
+
+
+def test_fixational_motion_stays_near_the_target():
+    moved = np.array([offsets(seed) for seed in range(20)])
+    npt.assert_equal(np.hypot(*moved.T).max() < 0.5, True)
+    # No systematic drift away from fixation:
+    npt.assert_equal(np.all(np.abs(moved.reshape(-1, 2).mean(0)) < 0.05),
+                     True)
+
+
+def test_microsaccades_are_rare_jumps_larger_than_drift():
+    jumps = np.array([np.hypot(*np.diff(offsets(seed, drift=False), axis=0).T)
+                      for seed in range(20)])
+    sizes = jumps[jumps > 0]
+    npt.assert_equal(np.all((sizes >= 0.1) & (sizes <= 0.3)), True)
+    rate = sizes.size / (20 * GRID[-1] / 1000)  # per s
+    npt.assert_equal(0.7 < rate < 1.3, True)
+    for row in jumps:
+        onsets = np.flatnonzero(row) * 10.0  # ms
+        npt.assert_equal(onsets.min() >= 150 - 10, True)
+        npt.assert_equal(np.diff(onsets).min() >= 150 - 10, True)
+    drift_steps = np.hypot(*np.diff(offsets(0, microsaccades=False),
+                                    axis=0).T)
+    npt.assert_equal(drift_steps.max() < 0.05, True)
+
+
+def test_a_fixed_seed_alternates_drift_and_microsaccades():
+    """Small drift steps, with a few large microsaccades"""
+    steps = np.hypot(*np.diff(offsets(42)[:300], axis=0).T)  # 3 s
+    large = np.flatnonzero(steps > 0.05)
+    npt.assert_equal(1 <= large.size <= 8, True)
+    npt.assert_equal(np.all(np.diff(large) >= 14), True)
+    small = np.delete(steps, large)
+    npt.assert_equal(np.all((small > 0) & (small < 0.05)), True)
+
+
+def test_render_and_play_resolve_the_same_fixational_motion():
+    scene = video_scene()
+    gaze = Gaze(EVENTS * dva, time=EVENT_TIMES * ms,
+                fixational_motion=FixationalMotion(seed=3))
+    moved = gaze._at(FRAME_TIMES, ms)
+    npt.assert_equal(np.array_equal(moved, EXPANDED), False)
+    npt.assert_array_equal(scene.render(gaze=gaze).data,
+                           scene.render(gaze=moved * dva).data)
+    percept = Percept(np.random.rand(9, 9, FRAME_TIMES.size),
+                      space=Grid2D((-4, 4), (-4, 4), step=1),
+                      time=FRAME_TIMES)
+    npt.assert_allclose(
+        scene.play(percept=percept, gaze=gaze, vmax=1,
+                   view='eye')._frame_data,
+        scene.render(percept=percept, gaze=moved * dva, vmax=1).data,
+        atol=1e-6)
+    plt.close('all')

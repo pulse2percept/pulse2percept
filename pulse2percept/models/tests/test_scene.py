@@ -25,7 +25,7 @@ from pulse2percept.topography.cortex import Polimeni2006Map
 from pulse2percept.topography.retina import (Curcio1990Map, RetinalMap,
                                              Watson2014Map)
 from pulse2percept.units import deg, dva, ms, s, um
-from pulse2percept.vision import Gaze, Scene, Scotoma
+from pulse2percept.vision import FixationalMotion, Gaze, Scene, Scotoma
 
 #: Square scene: one pixel per degree, center pixel at the origin.
 SCENE_PX = 41
@@ -187,6 +187,29 @@ def test_a_gaze_trajectory_does_not_move_a_head_mounted_camera():
     sparse = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
     npt.assert_almost_equal(seen_by(model, scene, gaze=sparse),
                             seen_by(model, scene), decimal=6)
+
+
+def test_fixational_motion_moves_an_eye_coupled_implants_input():
+    scene = ramp_video_scene()
+    model = model_for(implant_at(0, 0))
+    gaze = Gaze([(0, 0)] * dva, time=[0] * ms,
+                fixational_motion=FixationalMotion(seed=2))
+    moved = gaze._at(scene.time, scene.time_unit)
+    npt.assert_equal(np.all(moved[1:, 0] != 0), True)
+    npt.assert_almost_equal(seen_by(model, scene, gaze=gaze).ravel(),
+                            ramp_at(moved[:, 0]), decimal=6)
+    npt.assert_array_equal(model.predict_percept(scene, gaze=gaze).data,
+                           model.predict_percept(scene,
+                                                 gaze=moved * dva).data)
+
+
+def test_fixational_motion_does_not_move_a_head_mounted_camera():
+    scene = ramp_video_scene()
+    model = model_for(implant_at(0, 0, input_frame='head'))
+    gaze = Gaze([(0, 0)] * dva, time=[0] * ms,
+                fixational_motion=FixationalMotion(seed=2))
+    npt.assert_array_equal(seen_by(model, scene, gaze=gaze),
+                           seen_by(model, scene))
 
 
 def test_a_gaze_trajectory_needs_a_scene_with_frame_times():
@@ -944,6 +967,25 @@ def test_display_reuses_the_prediction_gaze():
     npt.assert_array_equal(
         reused, video.render(percept=percept, gaze=SACCADE_FRAMES * dva,
                              vmax=20).data)
+
+
+def test_display_reuses_the_prediction_gaze_with_fixational_motion():
+    video = blind_video()
+    gaze = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms,
+                fixational_motion=FixationalMotion(seed=2))
+    percept = model_for(implant_at(0, 0)).predict_percept(video, gaze=gaze)
+    reused = video.render(percept=percept, vmax=20).data
+    npt.assert_array_equal(
+        reused, video.render(percept=percept, gaze=gaze, vmax=20).data)
+    for view in ('scene', 'eye'):
+        npt.assert_array_equal(
+            video.play(percept=percept, vmax=20, view=view)._frame_data,
+            video.play(percept=percept, gaze=gaze, vmax=20,
+                       view=view)._frame_data)
+    plt.close('all')
+    # The stored gaze includes the motion, so the bare fixations differ:
+    with pytest.raises(ValueError):
+        video.render(percept=percept, gaze=saccade(), vmax=20)
 
 
 def test_an_eye_registered_percept_requires_its_prediction_gaze(tmp_path):

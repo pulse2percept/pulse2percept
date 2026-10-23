@@ -128,6 +128,11 @@ Studies referenced throughout the Documentation:
                  by retinal stimulation. Investigative Ophthalmology & Visual
                  Science 53:205-214, doi:`10.1167/iovs.11-8401
                  <https://doi.org/10.1167/iovs.11-8401>`_.
+.. [OteroMillan2014] J Otero-Millan, SL Macknik, S Martinez-Conde (2014).
+                     Fixational eye movements and binocular vision.
+                     *Frontiers in Integrative Neuroscience* 8:52,
+                     doi:`10.3389/fnint.2014.00052
+                     <https://doi.org/10.3389/fnint.2014.00052>`_.
 .. [Palanker2020] D Palanker, Y LeMer, S Mohand-Said, M Muqit, JA Sahel (2020).
                   Photovoltaic restoration of central vision in atrophic
                   age-related macular degeneration. *Ophthalmology* 1-8
@@ -146,6 +151,10 @@ Studies referenced throughout the Documentation:
                   visuotopic map complexes in macaque striate and extra-striate cortex. 
                   Vision research, 46(20), 3336-3359. doi: `10.1016/j.visres.2006.03.006
                   <https://doi.org/10.1016/j.visres.2006.03.006>`_.
+.. [Rucci2015] M Rucci, M Poletti (2015). Control and functions of fixational
+               eye movements. *Annual Review of Vision Science* 1:499-518,
+               doi:`10.1146/annurev-vision-082114-035742
+               <https://doi.org/10.1146/annurev-vision-082114-035742>`_.
 .. [Schira2010] MM Schira, CW Tyler, B Spehar, M Breakspear (2010). Modeling
                 magnification and anisotropy in the primate foveal confluence.
                 *PLoS Computational Biology*, 6(1), e1000651. doi:

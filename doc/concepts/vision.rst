@@ -229,6 +229,51 @@ scenes, gaze is resolved against the video's frame times. For a still scene
 shown together with a timed percept, the percept provides the clock.
 
 
+Fixational Eye Movements
+------------------------
+
+.. versionadded:: 0.12.0
+
+:py:class:`~pulse2percept.vision.FixationalMotion` adds involuntary drift and
+microsaccades around each fixation of a ``Gaze``:
+
+.. code-block:: python
+
+    gaze = p2p.vision.Gaze(
+        [
+            (0, 0, 0),
+            (-29 * dva, -7 * dva, 605 * ms),
+            (22 * dva, -10 * dva, 1270 * ms),
+        ],
+        fixational_motion=p2p.vision.FixationalMotion(seed=42),
+    )
+
+    scene.play(gaze=gaze)
+    percept = model.predict_percept(scene, gaze=gaze)
+
+* Drift: slow, correlated motion (SD about 0.02 dva per axis).
+  Microsaccades: 0.1-0.3 dva jumps, about one per second. No tremor.
+* The offset is zero at each fixation onset. ``gaze.positions`` and
+  ``gaze.time`` keep the intended fixations.
+* Motion is generated on an internal 10 ms grid but sampled at the scene's
+  frame times. Low frame rates may miss or temporally distort microsaccades,
+  particularly when modeling fast retinal responses. A ``seed`` gives the
+  same motion at any frame rate.
+* It moves the input of eye-coupled implants (``scene_input_frame='eye'``),
+  not of head-mounted cameras.
+
+The defaults are illustrative, informed by published ranges of human
+fixational eye movements [OteroMillan2014]_, [Rucci2015]_. They are not fitted
+to measured trajectories and should not be treated as a validated
+physiological model.
+
+Retinal image motion does not imply perceived jitter. Natural vision largely
+stabilizes it; whether prosthetic vision does is unknown, and no
+stabilization is modeled. ``scene.play`` shows the geometry;
+``predict_percept`` predicts the model response. Neither reconstructs
+conscious visual experience.
+
+
 Residual Vision
 ===============
 

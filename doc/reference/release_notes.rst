@@ -96,6 +96,9 @@ API changes and improvements
   ``max(fill, phosphene)``; this changes composites with numeric fills
   (:pull:`968`).
 
+* New ``FixationalMotion`` adds reproducible drift and microsaccades to each
+  fixation of a ``Gaze`` (:pull:`971`).
+
 * Retinal ``ScoreboardSpatial``, ``ScoreboardModel``, and
   ``BiphasicScoreboardModel`` default to ``rho`` of half the implant's median
   electrode pitch instead of 100 um (e.g., 50 um for PRIMA, 287.5 um for
