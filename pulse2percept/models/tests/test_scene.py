@@ -379,6 +379,61 @@ def test_a_projector_skips_a_fixation_shorter_than_its_pulse_period():
     npt.assert_array_equal(percept._scene_gaze[0], positions[[0, 2, 3]])
 
 
+def test_a_spatial_model_holds_the_fixation_in_effect_between_events():
+    """Gray 0, then gray 1 from 100 ms: nothing of the second at 50 ms"""
+    model = model_for(implant_at(0, 0))
+    edges = np.array([(-HALF, 0), (HALF, 0)], dtype=float)
+    gaze = Gaze(edges * dva, time=[0, 100] * ms)
+    percept = model.predict_percept(scene_of(), gaze=gaze,
+                                    t_percept=[50, 99, 100, 150] * ms)
+    npt.assert_almost_equal(percept.time, [50, 99, 100, 150])
+    dark, bright = (model.predict_percept(scene_of(), gaze=xy * dva).data[
+        ..., 0] for xy in edges)
+    npt.assert_equal((dark.max(), bright.max() > 0), (0, True))
+    for f, expected in enumerate((dark, dark, bright, bright)):
+        npt.assert_allclose(percept.data[..., f], expected, rtol=1e-6)
+    npt.assert_array_equal(percept._scene_gaze[0], edges[[0, 0, 1, 1]])
+
+
+def test_a_projector_frame_holds_until_the_next_pulse_period():
+    """At 610 ms the eye has moved, but the 600 ms frame shows fixation 0"""
+    model = ScoreboardModel(implant=PRIMAPivotal(), xrange=(-2, 2),
+                            yrange=(-2, 2), step=1).build()
+    percept = model.predict_percept(scene_of(), gaze=wander(),
+                                    t_percept=[610, 640, 1275] * ms)
+    fixed = [model.predict_percept(scene_of(), gaze=xy * dva).data[..., 0]
+             for xy in FIXATIONS]
+    for f, k in enumerate((0, 1, 1)):
+        npt.assert_allclose(percept.data[..., f], fixed[k], rtol=1e-6)
+    npt.assert_array_equal(percept._scene_gaze[0], FIXATIONS[[1, 1, 2]])
+    # The 1266.7 ms frame keeps its full 9.8 ms pulses past the last time:
+    white = scene_of(ImageStimulus(np.ones((SCENE_PX, SCENE_PX))))
+    percept = model.predict_percept(white, gaze=wander(),
+                                    t_percept=[1275] * ms)
+    npt.assert_allclose(percept.data[..., 0],
+                        model.predict_percept(white).data[..., 0], rtol=1e-6)
+
+
+def test_constant_projector_drive_is_not_blended_with_its_last_frame():
+    """A head-fixed camera sees the same drive at every fixation, until a
+    final frame whose pulses do not fit"""
+    implant = PRIMAPivotal()
+    implant.scene_input_frame = 'head'
+    model = ScoreboardModel(implant=implant, xrange=(-2, 2), yrange=(-2, 2),
+                            step=1).build()
+    percept = model.predict_percept(scene_of(), gaze=wander())
+    npt.assert_allclose(percept.data, model.predict_percept(scene_of()).data[
+        ..., [0, 0, 0]], rtol=1e-6)
+
+
+def test_a_spatial_model_responds_to_modulation_not_to_pulses():
+    """The 10 ms fixation falls between 20 Hz pulses, yet gets a frame"""
+    with pytest.warns(UserWarning, match='deliver no pulse'):
+        percept = model_for(implant_at(0, 0)).predict_percept(
+            scene_of(), gaze=wander([0, 10, 20]))
+    npt.assert_almost_equal(percept.time, [0, 10, 20])
+
+
 def test_an_encoder_that_retimes_frames_cannot_take_a_gaze_trajectory():
     implant = Implant(PointSource(0, 0, 0), encoder=AmplitudeEncoder(
         amp_range=(0, AMP_MAX), frame_dur=50))

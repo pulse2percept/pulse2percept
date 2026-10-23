@@ -235,9 +235,16 @@ resolved against:
   image stays fixed in the world, and each fixation samples it anew.
 
 ``predict_percept`` also samples a still scene at each gaze event. A
-spatial-only model returns one frame per fixation, at the first device frame
-within it (e.g., the next 30 Hz PRIMA projector pulse after a saccade). A
-model with a temporal stage simulates all fixations as one input schedule.
+spatial-only model responds to the encoder frame in effect at each output
+time, never an interpolation between fixations. By default, it returns one
+frame per fixation, at the first encoder frame within it (e.g., the next
+30 Hz PRIMA projector pulse after a saccade; a fixation that ends before it
+gets no frame). For pulse encoders such as
+:py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, a frame is a change in
+modulation, not a delivered pulse: a fixation shorter than the pulse period
+still gets a spatial-only response, even if no pulse falls within it.
+
+A model with a temporal stage simulates all fixations as one input schedule.
 The last fixation has no end of its own, so ``t_percept`` is required; its
 latest time ends the simulation and must follow the last gaze event:
 
