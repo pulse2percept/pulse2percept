@@ -336,10 +336,10 @@ def _sampled_frames(source, implant=None, frame_dur=None):
 
 
 class _FrameSchedule(Stimulus):
-    """Gray levels per electrode at frame onsets (ms) that may be irregular,
-    e.g. gaze events on a still scene
+    """Gray levels per electrode at possibly irregular frame onsets (ms),
+    e.g. gaze events
 
-    Each frame ends at the next onset; the last lasts ``last_frame_dur`` ms.
+    Each frame lasts until the next; the last lasts ``last_frame_dur`` ms.
     """
     __slots__ = ('_last_frame_dur',)
 
@@ -365,9 +365,9 @@ def _frame_timing(time, n_frames, fps=None, frame_dur=None,
     if last_frame_dur is not None:
         if frame_dur is not None:
             raise ValueError(
-                f"This encoder retimes every frame to frame_dur={frame_dur:g} "
-                f"ms, which would discard these frame onsets (e.g., gaze "
-                f"events). Use an encoder without 'frame_dur'.")
+                f"frame_dur={frame_dur:g} ms retimes every frame, which "
+                f"would discard these frame onsets (e.g., gaze events). Use "
+                f"an encoder without 'frame_dur'.")
         return np.asarray(time, dtype=np.float64), float(last_frame_dur)
     if frame_dur is None:
         # Preserve the source frame interval.

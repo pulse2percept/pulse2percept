@@ -418,10 +418,9 @@ def _device_scene(scene, implant):
 def _scene_stim(model, scene, gaze, end=None):
     """Prepare electrode stimulation sampled from a scene.
 
-    A still scene with a `Gaze` is sampled at the gaze event times. ``end``
-    (ms) must follow the last event; the last fixation lasts until ``end``
-    for a temporal model, else ``_DEFAULT_FRAME_DUR`` past it (default: past
-    its onset), as for a still image.
+    A still scene with a `Gaze` is sampled at its event times. The last
+    fixation lasts until ``end`` (ms), which must follow it. A spatial-only
+    model, or no ``end``, adds ``_DEFAULT_FRAME_DUR``, as for a still image.
     """
     if not model.has_space:
         raise ValueError("Scene registration requires a spatial model.")
@@ -440,8 +439,7 @@ def _scene_stim(model, scene, gaze, end=None):
         raise ValueError(
             f"'scene_input_frame' must be 'eye' or 'head', not {frame!r}.")
 
-    # Gaze is sampled on the source frame clock (the gaze event times of a
-    # still scene), independent of `t_percept`:
+    # Source frame clock (gaze events on a still scene), not `t_percept`:
     time, time_unit = device_scene._sampling_clock(gaze)
     last_frame_dur = None
     if device_scene.time is None and time is not None:
@@ -449,18 +447,17 @@ def _scene_stim(model, scene, gaze, end=None):
         if end is None:
             end = time[-1] + _DEFAULT_FRAME_DUR
         elif not model.has_time and end - time[-1] > 1e-6:
-            # A spatial response depends only on the frame in effect, so do
-            # not cut the last frame (and its pulses) short at `end`:
+            # Spatial responses depend only on the frame in effect; keep the
+            # last frame's pulses whole:
             end += _DEFAULT_FRAME_DUR
         # 1e-6 ms: rounding only
         if end - time[-1] <= 1e-6:
             raise ValueError(
                 f"'t_percept' ends at "
                 f"{Quantity(end, ms).to_value(gaze.time_unit):g} "
-                f"{gaze.time_unit}, but the last gaze event starts at "
-                f"{gaze.time[-1]:g} {gaze.time_unit}, so that fixation would "
-                f"never be delivered. Extend 't_percept' past the last gaze "
-                f"event, or remove the later events from the Gaze.")
+                f"{gaze.time_unit}, so the last gaze event at "
+                f"{gaze.time[-1]:g} {gaze.time_unit} is never delivered. "
+                f"Extend 't_percept' past it.")
         time_unit, last_frame_dur = ms, end - time[-1]
     n_frames = device_scene.n_frames if time is None else time.size
     points = _gaze_points(gaze, n_frames, time=time, time_unit=time_unit)
@@ -1473,8 +1470,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         """Return the flat spatial response to a prepared stimulus, or None.
 
         Composite models use this path to prepare stimulation once before running
-        spatial and temporal stages. ``quantize=False`` skips ``n_gray``, for
-        callers that assemble the output frames first.
+        spatial and temporal stages. ``quantize=False`` skips ``n_gray``.
         """
         if not self.is_built:
             self.build()
@@ -2107,28 +2103,26 @@ class Model(Frozen, PrettyPrint):
         t_percept : float or array-like, optional
             Output times in ``time_unit``. Unitful times are accepted. For a
             :py:class:`~pulse2percept.vision.Gaze` on a still scene, the
-            latest time must follow the last gaze event. A model with a
-            temporal stage requires it there, and stimulation stops then: a
-            pulse that cannot finish by that time (e.g., a 9.8 ms PRIMA
-            pulse) is not delivered.
-            Each output frame is registered at the eye position at its time,
-            while a temporal response reflects the stimulation delivered up
-            to then: at a saccade, still the previous fixation's.
+            latest time must follow the last gaze event. Models with a
+            temporal stage require it; stimulation stops then, dropping
+            pulses that cannot finish (e.g., 9.8 ms PRIMA pulses). Output
+            frames are registered at the eye position at their time; at a
+            saccade, a temporal response still reflects the previous
+            fixation.
         gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
             Scene location falling on the fovea, in degrees of visual angle,
             so that ``scene = eye-centered visual field + gaze``. Requires
             ``source`` to be a scene. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved against the
             scene's frame times, not against ``t_percept``; a still scene is
-            sampled at each gaze event instead. A spatial-only model then
-            responds at each time to the encoder frame in effect (e.g., a
-            projector pulse period), not an interpolation between frames;
-            without ``t_percept``, it returns one frame per fixation, at the
-            first encoder frame within it. It responds to frame-level
-            modulation: a pulse encoder's frame (e.g., a fixation shorter
-            than the pulse period) may deliver no pulse yet still get a
-            response. Gaze selects the scene region sampled by the
-            electrodes unless the implant's
+            sampled at each gaze event. A spatial-only model then responds to
+            the encoder frame in effect at each time (e.g., a projector pulse
+            period), without interpolating between frames. Without
+            ``t_percept``, it returns one frame per fixation, at its first
+            encoder frame. A pulse encoder's frame is a modulation change,
+            not a delivered pulse: a fixation shorter than the pulse period
+            still gets a response. Gaze selects the scene region sampled by
+            the electrodes unless the implant's
             :py:attr:`~pulse2percept.implants.Implant.scene_input_frame` is
             ``'head'``; the percept stays on the model's eye-centered grid
             either way.
@@ -2166,17 +2160,16 @@ class Model(Frozen, PrettyPrint):
         if trajectory and t_percept is not None:
             t_out = np.ravel(as_value(t_percept, self.time_unit, 't_percept'))
             if t_out.size == 0:
-                raise ValueError("'t_percept' is empty, so there is no time "
-                                 "to end the last fixation at. Pass at least "
-                                 "one output time.")
+                raise ValueError("'t_percept' is empty; pass at least one "
+                                 "output time.")
             # Gaze is undefined before its first event:
             gaze._at(t_out, self.time_unit)
             end = Quantity(t_out.max(), self.time_unit).to_value(ms)
         elif trajectory and self.has_time:
             raise ValueError(
                 "A Gaze holds its last fixation indefinitely, so on a still "
-                "scene a temporal model has no end time to simulate to. Pass "
-                "'t_percept'; the last fixation lasts until its latest time.")
+                "scene a temporal model requires 't_percept'; its latest time "
+                "ends the simulation.")
         stim = _scene_stim(self, source, gaze, end=end)
         if trajectory and not self.has_time:
             percept = self._predict_fixations(stim, t_percept)
@@ -2188,7 +2181,7 @@ class Model(Frozen, PrettyPrint):
                 # Unknown, not fixation:
                 points = None
             elif trajectory:
-                # One per output frame; these need not be gaze event times:
+                # One per output frame, not per gaze event:
                 timed = percept.time is not None
                 points = gaze._at(percept.time if timed else gaze.time[:1],
                                   percept.time_unit if timed else None)
@@ -2204,10 +2197,10 @@ class Model(Frozen, PrettyPrint):
     def _predict_fixations(self, stim, t_percept=None):
         """Spatial-only percept of a gaze trajectory on a still scene
 
-        Each output time gets the response to the device frame (e.g.,
-        projector pulse period) in effect then, never an interpolation between
-        frames. Without ``t_percept``: one frame per fixation, at the first
-        device frame within it; a fixation without one has no frame.
+        Returns the response to the encoder frame (e.g., projector pulse
+        period) in effect at each output time. Without ``t_percept``: one
+        frame per fixation, at its first encoder frame; a fixation without one
+        has no frame.
         """
         clock = _encoder_clock(stim)
         if clock is None or clock.source_time is None:
@@ -2221,16 +2214,15 @@ class Model(Frozen, PrettyPrint):
             hit = first < device.size
             hit[hit] = device[first[hit]] < ends[hit]
             if not hit.any():
-                raise ValueError("No device frame falls within any fixation "
-                                 "of this gaze trajectory, so nothing is "
-                                 "delivered.")
+                raise ValueError("No encoder frame falls within any "
+                                 "fixation, so nothing is delivered.")
             frames = first[hit]
             times = device[frames]
         else:
             times = Quantity(np.ravel(as_value(t_percept, self.time_unit,
                                                't_percept')),
                              self.time_unit).to_value(ms)
-            # Latest frame at or before each time; gaze starts with the first:
+            # Frame in effect (zero-order hold):
             frames = np.maximum(
                 np.searchsorted(device, times + 1e-6, side='right') - 1, 0)
         time = Quantity(times, ms).to_value(self.spatial.time_unit)
@@ -2239,8 +2231,8 @@ class Model(Frozen, PrettyPrint):
             resp = self.spatial._predict_response(
                 stim, t_percept=Quantity(device[frames], ms))
             return _to_percept(replace(resp, time=time, frame_clock=clock))
-        # Select frames by index: time interpolation of the compressed view
-        # can blend frames. Distinct columns all survive compression:
+        # Select frames by index, not by interpolating the view in time;
+        # predict each distinct frame once:
         view = _spatial_input(stim)
         drive = np.reshape(view.data, (len(view.electrodes), -1))
         if view.time is None:
@@ -2253,7 +2245,7 @@ class Model(Frozen, PrettyPrint):
         unique._inherit_units(view)._inherit_metadata(view)
         resp = self.spatial._predict_response(
             unique, t_percept=Quantity(label, view.time_unit), quantize=False)
-        # `n_gray` weights each output frame, so quantize all of them:
+        # k-means for `n_gray` weighs every output frame:
         return _to_percept(self.spatial._spatial_response(
             resp.data[:, np.ravel(inverse)], time, {'stim': view},
             frame_clock=clock))

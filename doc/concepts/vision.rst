@@ -42,12 +42,12 @@ move gaze across it:
     scene.play(percept=percept)
 
 A file name or array becomes an
-:py:class:`~pulse2percept.stimuli.ImageStimulus`; a video works the same way.
+:py:class:`~pulse2percept.stimuli.ImageStimulus`; videos work the same way.
 ``play`` holds each frame until the next.
 
-In more detail, ``extent`` sets the source's angular size, and ``plot`` draws
-one fixation. The source remains fixed in the world while the eye-centered
-field of view and scotoma move with gaze:
+``extent`` sets the source's angular size, and ``plot`` draws one fixation.
+The source stays fixed in the world; the eye-centered field of view and
+scotoma move with gaze:
 
 .. plot::
 
@@ -223,26 +223,23 @@ view.
 Gaze Timing
 -----------
 
-Gaze times are interpreted as ms unless units are supplied, and keep their
-unit.
+Gaze times are in ms unless units are supplied, and keep their unit.
 
 A fixation beginning exactly on a frame time applies to that frame. Gaze is
 resolved against:
 
 * a video scene's frame times;
-* for a still scene, a timed percept's frame times, else the gaze event
-  times. Timed gaze can thus animate a still image as well as a video: the
-  image stays fixed in the world, and each fixation samples it anew.
+* on a still scene, a timed percept's frame times, else the gaze event times.
+  The image stays fixed in the world; each fixation samples it anew.
 
 ``predict_percept`` also samples a still scene at each gaze event. A
 spatial-only model responds to the encoder frame in effect at each output
-time, never an interpolation between fixations. By default, it returns one
-frame per fixation, at the first encoder frame within it (e.g., the next
-30 Hz PRIMA projector pulse after a saccade; a fixation that ends before it
-gets no frame). For pulse encoders such as
-:py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, a frame is a change in
-modulation, not a delivered pulse: a fixation shorter than the pulse period
-still gets a spatial-only response, even if no pulse falls within it.
+time, without interpolating between fixations. By default, it returns one
+frame per fixation, at its first encoder frame (for PRIMA, the next 30 Hz
+projector pulse after the saccade; a shorter fixation gets no frame). With
+pulse encoders such as :py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, a
+frame is a modulation change, not a delivered pulse: a fixation shorter than
+the pulse period still gets a response.
 
 A model with a temporal stage simulates all fixations as one input schedule.
 The last fixation has no end of its own, so ``t_percept`` is required; its
@@ -258,12 +255,11 @@ latest time ends the simulation and must follow the last gaze event:
         t_percept=np.arange(0, 1801, 20) * ms,
     )
 
-Each output frame is drawn at the eye position at its time. A temporal
-response reflects the stimulation delivered up to then: at the instant of a
-saccade, it is still the previous fixation's, now at the new eye position.
-Stimulation stops at the latest ``t_percept``: a pulse that cannot finish by
-then (e.g., a 9.8 ms PRIMA pulse) is not delivered, so the last frames do not
-model ongoing stimulation.
+Each output frame is drawn at the eye position at its time and reflects the
+stimulation delivered up to then: at a saccade, the previous fixation's
+response appears at the new eye position. Stimulation stops at the latest
+``t_percept``; a pulse that cannot finish by then (e.g., a 9.8 ms PRIMA pulse)
+is dropped.
 
 
 Fixational Eye Movements
@@ -300,7 +296,7 @@ microsaccades around each fixation of a ``Gaze``:
   particularly when modeling fast retinal responses. A ``seed`` gives the
   same motion at any frame rate.
 * A still scene samples gaze only at fixation onsets, where the offset is
-  zero, so it refuses fixational motion. Use a video scene.
+  zero, and rejects fixational motion. Use a video scene.
 * It moves the input of eye-coupled implants (``scene_input_frame='eye'``),
   not of head-mounted cameras.
 

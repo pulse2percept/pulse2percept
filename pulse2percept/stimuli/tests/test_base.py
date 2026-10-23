@@ -1663,7 +1663,7 @@ def test_Stimulus_immutable_operations():
         npt.assert_equal(out.data.flags.writeable, False)
         npt.assert_equal(out.time.flags.writeable, False)
         npt.assert_equal(out.data.flags['C_CONTIGUOUS'], True)
-    # The operations still give the right result (both sides of each edge):
+    # The operations still give the right result:
     npt.assert_equal(compressed.shape, (1, 4))
     npt.assert_equal(list(removed.electrodes), ['B2'])
 

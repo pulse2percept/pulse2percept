@@ -1325,30 +1325,28 @@ class Scene(PrettyPrint):
                                  clock=clock)
 
     def _sampling_clock(self, gaze=None):
-        """Returns ``(time, time_unit)`` at which the source is sampled
-
-        The frame times of a video. On a still scene, the event times of a
-        `Gaze`; None for any other gaze.
-        """
+        """Returns ``(time, time_unit)`` at which the source is sampled: a
+        video's frame times, a `Gaze`'s event times on a still scene, else
+        None"""
         if self.time is not None:
             return self.time, self.time_unit
         if not isinstance(gaze, Gaze):
             return None, self.time_unit
         if gaze.fixational_motion is not None:
             raise ValueError(
-                "Fixational motion is continuous, and a still scene samples a "
-                "Gaze only at its event times, where the motion is zero. Use "
-                "a video scene, whose frame times sample the motion.")
+                "A still scene samples a Gaze only at its event times, where "
+                "fixational motion is zero. Use a video scene to sample the "
+                "motion.")
         return gaze.time, gaze.time_unit
 
     def _output_clock(self, percept=None, gaze=None):
         """Returns ``(time, time_unit, n_frames)`` of the output frames
 
         A video scene uses its own frame times (the percept is resampled at
-        them). A still scene uses a timed percept's, else the event times of
-        a `Gaze` (an untimed percept is repeated), else none. Gaze is
-        resolved at these times. Time stamps of a returned Percept can differ;
-        see `_prosthetic_frames`.
+        them). A still scene uses a timed percept's, else a `Gaze`'s event
+        times (repeating an untimed percept), else none. Gaze is resolved at
+        these times. Time stamps of a returned Percept can differ; see
+        `_prosthetic_frames`.
         """
         if self.time is None and getattr(percept, 'time', None) is not None:
             return percept.time, percept.time_unit, percept.data.shape[-1]

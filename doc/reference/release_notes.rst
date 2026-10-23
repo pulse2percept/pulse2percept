@@ -97,8 +97,8 @@ API changes and improvements
   (:pull:`968`).
 
 * A ``Gaze`` now animates a still-image ``Scene``: ``predict_percept``,
-  ``render``, ``plot``, and ``play`` sample the image at each gaze event. A
-  temporal model requires ``t_percept``, which ends the last fixation
+  ``render``, ``plot``, and ``play`` sample the image at each gaze event.
+  Temporal models require ``t_percept``, which ends the last fixation
   (:pull:`972`).
 
 * New ``FixationalMotion`` adds reproducible drift and microsaccades to each
@@ -131,9 +131,9 @@ Bug fixes
   electrode is silent; its row is kept and stays zero (:pull:`937`).
 
 * ``Stimulus.compress`` no longer drops Inf samples, electrodes driven only
-  at Inf, or the sample before a change at the last time point. The latter
-  made interpolation ramp across the final constant stretch, e.g. in
-  spatial-only predictions of timed input (:pull:`950`, :pull:`972`).
+  at Inf, or the sample before a change at the last time point, which skewed
+  interpolation (e.g., spatial-only predictions of timed input)
+  (:pull:`950`, :pull:`972`).
 
 * ``Nanduri2012Spatial`` no longer returns NaN beneath an electrode with
   negative ``z``; current spread now depends on ``|z|`` as documented

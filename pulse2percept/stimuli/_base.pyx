@@ -61,7 +61,7 @@ cpdef bool[::1] fast_compress_time(const float32[:, ::1] data):
         if t == 0:
             continue
         # Determine if there is a signal edge (at least one element in `t`
-        # must be different from `t-1`), including into the last element:
+        # must be different from `t-1`):
         for e in range(n_elec):
             if not c_isclose(data[e, t], data[e, t - 1]):
                 idx_time[t - 1] = True

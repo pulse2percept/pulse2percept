@@ -152,12 +152,11 @@ scene.play(percept=percept)
 # The percept is screen-blended over the fill, a visualization convention
 # rather than a model of how prosthetic and natural vision combine.
 #
-# The same gaze trajectory also animates a still image (or a file name). The
-# image stays fixed in the world, and each fixation samples it anew. Each
-# frame is shown from the projector's first pulse after the saccade and held
-# until the next. ``still.play(gaze=gaze)`` shows native vision alone. A model
-# with a temporal stage also needs ``t_percept``, whose latest time ends the
-# last fixation.
+# The same gaze trajectory also animates a still image (or a file name). Each
+# fixation samples the fixed image anew; its frame starts at the projector's
+# first pulse after the saccade and is held until the next.
+# ``still.play(gaze=gaze)`` shows native vision alone. Models with a temporal
+# stage also need ``t_percept``, whose latest time ends the last fixation.
 
 still = p2p.vision.Scene(
     p2p.stimuli.samples.ucsb_bike(resize=(240, 360)),
