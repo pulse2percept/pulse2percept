@@ -129,6 +129,8 @@ class FixationalMotion(PrettyPrint):
                 np.random.SeedSequence(self.seed, spawn_key=(fixation, 1)))
             low, high = self._msacc_amplitude
             onset = 0.0
+            jumps = np.zeros((n, 2))
+            shift = np.zeros(2)  # sum of jumps so far
             while True:
                 # Fixed draws per event, so events ignore `duration`:
                 gap, amplitude, direction = rng.random(3)
@@ -139,9 +141,11 @@ class FixationalMotion(PrettyPrint):
                 k = int(onset // self._step) + 1
                 if k >= n:
                     break
-                offsets[k:] += _microsaccade(offsets[k - 1],
-                                             low + (high - low) * amplitude,
-                                             direction, self._msacc_reach)
+                jumps[k] = _microsaccade(offsets[k - 1] + shift,
+                                         low + (high - low) * amplitude,
+                                         direction, self._msacc_reach)
+                shift += jumps[k]
+            offsets += np.cumsum(jumps, axis=0)
         return offsets
 
 

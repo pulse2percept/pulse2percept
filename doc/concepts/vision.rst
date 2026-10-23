@@ -255,9 +255,10 @@ microsaccades around each fixation of a ``Gaze``:
   Microsaccades: 0.1-0.3 dva jumps, about one per second. No tremor.
 * The offset is zero at each fixation onset. ``gaze.positions`` and
   ``gaze.time`` keep the intended fixations.
-* Motion is generated on an internal 10 ms grid and enters predictions only
-  at the scene's frame times. A ``seed`` gives the same motion at any frame
-  rate.
+* Motion is generated on an internal 10 ms grid but sampled at the scene's
+  frame times. Low frame rates may miss or temporally distort microsaccades,
+  particularly when modeling fast retinal responses. A ``seed`` gives the
+  same motion at any frame rate.
 * It moves the input of eye-coupled implants (``scene_input_frame='eye'``),
   not of head-mounted cameras.
 

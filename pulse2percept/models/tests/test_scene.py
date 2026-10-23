@@ -969,6 +969,25 @@ def test_display_reuses_the_prediction_gaze():
                              vmax=20).data)
 
 
+def test_display_reuses_the_prediction_gaze_with_fixational_motion():
+    video = blind_video()
+    gaze = Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms,
+                fixational_motion=FixationalMotion(seed=2))
+    percept = model_for(implant_at(0, 0)).predict_percept(video, gaze=gaze)
+    reused = video.render(percept=percept, vmax=20).data
+    npt.assert_array_equal(
+        reused, video.render(percept=percept, gaze=gaze, vmax=20).data)
+    for view in ('scene', 'eye'):
+        npt.assert_array_equal(
+            video.play(percept=percept, vmax=20, view=view)._frame_data,
+            video.play(percept=percept, gaze=gaze, vmax=20,
+                       view=view)._frame_data)
+    plt.close('all')
+    # The stored gaze includes the motion, so the bare fixations differ:
+    with pytest.raises(ValueError):
+        video.render(percept=percept, gaze=saccade(), vmax=20)
+
+
 def test_an_eye_registered_percept_requires_its_prediction_gaze(tmp_path):
     """Another gaze would show the percept of one eye position at another"""
     model = model_for(implant_at(0, 0))
