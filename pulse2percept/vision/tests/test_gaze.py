@@ -259,10 +259,10 @@ def test_a_still_scene_resolves_against_a_timed_percept():
         scene.render(percept=percept, gaze=EXPANDED * dva, vmax=1).data)
 
 
-# Fixational motion. Non-grid-aligned onsets, as in the docs:
+# Fixational motion; onsets off the 10 ms grid:
 ROWS = [(0, 0, 0), (-29 * dva, -7 * dva, 605 * ms),
         (22 * dva, -10 * dva, 1270 * ms)]
-# 10 ms: the internal grid, so each microsaccade is one sample-to-sample step
+# The internal grid, so each microsaccade is one step:
 GRID = np.arange(0, 20001, 10.0)
 
 
@@ -377,8 +377,7 @@ def test_the_last_fixation_keeps_moving_after_its_onset():
 
 
 def test_drift_is_temporally_correlated():
-    """Drift positions 10 ms apart are correlated, unlike white noise, and
-    decorrelate over seconds"""
+    """Correlated over 10 ms, unlike white noise; decorrelated over 2 s"""
     for seed in range(5):
         x = offsets(seed, microsaccades=False)[50:, 0]
         npt.assert_equal(np.corrcoef(x[:-1], x[1:])[0, 1] > 0.9, True)
@@ -410,7 +409,7 @@ def test_microsaccades_are_rare_jumps_larger_than_drift():
 
 
 def test_a_fixed_seed_alternates_drift_and_microsaccades():
-    """Steps are small drift, with a few large microsaccades between"""
+    """Small drift steps, with a few large microsaccades"""
     steps = np.hypot(*np.diff(offsets(42)[:300], axis=0).T)  # 3 s
     large = np.flatnonzero(steps > 0.05)
     npt.assert_equal(1 <= large.size <= 8, True)

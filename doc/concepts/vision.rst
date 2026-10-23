@@ -251,24 +251,26 @@ microsaccades around each fixation of a ``Gaze``:
     scene.play(gaze=gaze)
     percept = model.predict_percept(scene, gaze=gaze)
 
-* Drift is slow, temporally correlated motion (SD about 0.02 dva per axis).
-  Microsaccades are 0.1-0.3 dva jumps, about one per second.
+* Drift: slow, correlated motion (SD about 0.02 dva per axis).
+  Microsaccades: 0.1-0.3 dva jumps, about one per second. No tremor.
 * The offset is zero at each fixation onset. ``gaze.positions`` and
   ``gaze.time`` keep the intended fixations.
-* Motion is generated on an internal 10 ms grid, independent of the frame
-  rate, and enters predictions only at the frame times the scene samples.
-  The same ``seed`` gives the same motion at any frame rate.
-* Like any gaze change, it moves the input of eye-coupled implants
-  (``scene_input_frame='eye'``) but not of head-mounted cameras.
-* The defaults approximate published human statistics [OteroMillan2014]_,
-  [Rucci2015]_. They are not a subject-specific prediction. Tremor is not
-  modeled.
+* Motion is generated on an internal 10 ms grid and enters predictions only
+  at the scene's frame times. A ``seed`` gives the same motion at any frame
+  rate.
+* It moves the input of eye-coupled implants (``scene_input_frame='eye'``),
+  not of head-mounted cameras.
 
-Retinal image motion does not imply perceived jitter. In natural vision,
-perception largely compensates for fixational eye movements; whether this
-holds for prosthetic vision is unknown, so none is modeled. ``scene.play``
-shows the geometry of the eye movement, and ``predict_percept`` predicts the
-model's response to it; neither reconstructs conscious visual experience.
+The defaults are illustrative, informed by published ranges of human
+fixational eye movements [OteroMillan2014]_, [Rucci2015]_. They are not fitted
+to measured trajectories and should not be treated as a validated
+physiological model.
+
+Retinal image motion does not imply perceived jitter. Natural vision largely
+stabilizes it; whether prosthetic vision does is unknown, and no
+stabilization is modeled. ``scene.play`` shows the geometry;
+``predict_percept`` predicts the model response. Neither reconstructs
+conscious visual experience.
 
 
 Residual Vision

@@ -10,21 +10,19 @@ from ..utils import PrettyPrint
 class FixationalMotion(PrettyPrint):
     """Involuntary drift and microsaccades around each fixation of a Gaze
 
-    The offset from the intended fixation is zero at fixation onset,
-    generated on an internal 10 ms grid, and linearly interpolated at the
-    requested times. It depends only on ``seed``, the fixation index, and the
-    time since onset, not on frame rate or evaluation order. Tremor is not
-    modeled.
+    The offset is zero at fixation onset, generated on a 10 ms grid, and
+    linearly interpolated. It depends only on ``seed``, fixation index, and
+    time since onset, not on frame rate or evaluation order.
 
-    Drift is an Ornstein-Uhlenbeck process on each axis (correlation time
-    500 ms, stationary SD 0.02 dva). Microsaccades occur at a mean rate of
-    1/s, at least 150 ms apart and 150 ms after onset. Each is a 0.1-0.3 dva
-    jump within one 10 ms step, landing within 0.3 dva of the target if
-    possible, otherwise toward it.
+    Drift: Ornstein-Uhlenbeck process per axis (correlation time 500 ms,
+    stationary SD 0.02 dva). Microsaccades: mean rate 1/s, at least 150 ms
+    apart and after onset; each a 0.1-0.3 dva jump within one 10 ms step,
+    landing within 0.3 dva of the target if possible. Tremor is not modeled.
 
-    These provisional defaults approximate published human ranges
-    [OteroMillan2014]_, [Rucci2015]_. They are not fitted to data and do not
-    reproduce the full statistics of measured eye movements.
+    The defaults are illustrative, informed by published ranges of human
+    fixational eye movements [OteroMillan2014]_, [Rucci2015]_. They are not
+    fitted to measured trajectories and should not be treated as a validated
+    physiological model.
 
     .. versionadded:: 0.12.0
 
@@ -44,7 +42,7 @@ class FixationalMotion(PrettyPrint):
     >>> from pulse2percept.vision import FixationalMotion, Gaze
     >>> gaze = Gaze([(0, 0), (6, 2)] * dva, time=[0, 400] * ms,
     ...             fixational_motion=FixationalMotion(seed=42))
-    >>> gaze.positions  # the intended fixations
+    >>> gaze.positions  # unchanged
     array([[0., 0.],
            [6., 2.]])
 
@@ -116,12 +114,11 @@ class FixationalMotion(PrettyPrint):
         of ``fixation`` through ``duration`` ms"""
         n = int(np.ceil(duration / self._step)) + 1
         offsets = np.zeros((n, 2))
-        # One stream per component, so toggling one leaves the other as is:
+        # One stream per component, so toggling one keeps the other:
         if self.drift:
             rng = np.random.default_rng(
                 np.random.SeedSequence(self.seed, spawn_key=(fixation, 0)))
-            # Values are drawn in order, so a longer segment extends a
-            # shorter one:
+            # Drawn in order, so a longer segment extends a shorter one:
             noise = rng.standard_normal((n, 2))
             noise[0] = 0  # zero offset at onset
             decay = np.exp(-self._step / self._drift_tau)
@@ -133,8 +130,7 @@ class FixationalMotion(PrettyPrint):
             low, high = self._msacc_amplitude
             onset = 0.0
             while True:
-                # Three draws per event, so events do not depend on
-                # `duration`:
+                # Fixed draws per event, so events ignore `duration`:
                 gap, amplitude, direction = rng.random(3)
                 # Refractory period plus an exponential wait:
                 onset += (self._msacc_refractory -
@@ -152,8 +148,8 @@ class FixationalMotion(PrettyPrint):
 def _microsaccade(start, amplitude, u, reach):
     """Returns the ``(dx, dy)`` jump of a microsaccade from ``start``
 
-    The direction is uniform (``u`` in [0, 1)) over those landing within
-    ``reach`` of the target; if none does, the jump aims at the target.
+    Direction is uniform (``u`` in [0, 1)) over landings within ``reach`` of
+    the target; if there are none, the jump aims at the target.
     """
     r = np.hypot(*start)
     if r == 0:
@@ -195,8 +191,8 @@ class Gaze(PrettyPrint):
         strictly increasing. Required for ``(n, 2)`` positions; not allowed
         for ``(x, y, time)`` rows.
     fixational_motion : :py:class:`~pulse2percept.vision.FixationalMotion`, optional
-        Drift and microsaccades added to each fixation at the times gaze is
-        resolved. ``positions`` and ``time`` keep the intended fixations.
+        Drift and microsaccades around each fixation. ``positions`` and
+        ``time`` keep the intended fixations.
 
         .. versionadded:: 0.12.0
 
@@ -288,9 +284,9 @@ class Gaze(PrettyPrint):
         return self._fixational_motion
 
     def _at(self, time, time_unit=None):
-        """Returns the gaze position at each ``time``, as ``(n, 2)`` in dva
+        """Returns the active fixation plus any fixational motion at each
+        ``time``, as ``(n, 2)`` in dva
 
-        This is the active fixation plus any fixational motion.
         ``time_unit`` is the unit of ``time``; None uses ``self.time_unit``.
         """
         unit = self.time_unit if time_unit is None else time_unit

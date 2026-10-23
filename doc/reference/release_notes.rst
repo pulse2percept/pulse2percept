@@ -96,9 +96,8 @@ API changes and improvements
   ``max(fill, phosphene)``; this changes composites with numeric fills
   (:pull:`968`).
 
-* New ``FixationalMotion`` adds seeded drift and microsaccades around each
-  fixation of a ``Gaze`` (``fixational_motion=FixationalMotion(seed=42)``);
-  ``positions`` and ``time`` keep the intended fixations (:pull:`971`).
+* New ``FixationalMotion`` adds reproducible drift and microsaccades to each
+  fixation of a ``Gaze`` (:pull:`971`).
 
 * Retinal ``ScoreboardSpatial``, ``ScoreboardModel``, and
   ``BiphasicScoreboardModel`` default to ``rho`` of half the implant's median
