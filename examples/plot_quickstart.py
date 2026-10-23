@@ -146,7 +146,6 @@ gaze = p2p.vision.Gaze([
 percept = prima_model.predict_percept(scene, gaze=gaze)
 scene.play(
     percept=percept,
-    gaze=gaze,
     vmax=percept.data.max(),
 )
 

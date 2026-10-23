@@ -2108,8 +2108,20 @@ class Model(Frozen, PrettyPrint):
             if pixels is not None:
                 return self._predict_visual_percept(source, pixels, t_percept)
             return self._predict_percept(self._prepared(source), t_percept)
-        return self._predict_percept(_scene_stim(self, source, gaze),
-                                     t_percept)
+        percept = self._predict_percept(_scene_stim(self, source, gaze),
+                                        t_percept)
+        if percept is not None:
+            frame = self.implant.scene_input_frame
+            if gaze is None and frame == 'head':
+                # Unknown, not fixation:
+                points = None
+            else:
+                # Source frame clock, as in `_scene_stim`:
+                points = _gaze_points(gaze, source.n_frames, time=source.time,
+                                      time_unit=source.time_unit).copy()
+                points.flags.writeable = False
+            percept._scene_gaze = (points, frame)
+        return percept
 
     @property
     def _accepts_dimensionless_drive(self):

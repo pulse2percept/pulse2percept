@@ -6,6 +6,7 @@ implant.
 Scenes use one degree per pixel with an odd pixel count, so pixel centers are
 on whole degrees and the center pixel is at the origin.
 """
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -159,12 +160,12 @@ def test_gaze_leaves_a_head_mounted_camera_looking_where_it_was():
                             seen_by(on_grid, scene, gaze=(0, 0)), decimal=6)
 
 
-def ramp_video_scene(n_frames=4):
+def ramp_video_scene(n_frames=4, **kwargs):
     """Return a static ramp video with 100 ms frames"""
     frames = np.repeat(ramp_source().data.reshape(
         (SCENE_PX, SCENE_PX, 1)), n_frames, axis=-1)
     return scene_of(VideoStimulus(frames,
-                                  time=np.arange(n_frames) * 100.0))
+                                  time=np.arange(n_frames) * 100.0), **kwargs)
 
 
 def test_a_gaze_trajectory_is_resolved_on_the_scenes_own_frames():
@@ -907,6 +908,150 @@ def test_per_frame_gaze_moves_the_eye_between_video_frames():
     for model in (eye, camera):
         with pytest.raises(ValueError):
             seen_by(model, scene_of(), gaze=gaze)
+
+
+def saccade():
+    """Fixate the origin, then (6, 0) dva from 200 ms on"""
+    return Gaze([(0, 0), (6, 0)] * dva, time=[0, 200] * ms)
+
+
+#: `saccade` on the 100 ms frames of `ramp_video_scene`:
+SACCADE_FRAMES = np.array([(0, 0), (0, 0), (6, 0), (6, 0)], dtype=float)
+
+
+def blind_video():
+    """`ramp_video_scene` with a central scotoma, so display depends on gaze"""
+    return ramp_video_scene(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+
+
+def test_display_reuses_the_prediction_gaze():
+    """Without gaze, display uses the gaze the percept was predicted with"""
+    model = model_for(implant_at(0, 0))
+    still = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    fixation = np.array([3.0, -1.0])
+    percept = model.predict_percept(still, gaze=fixation)
+    # The percept keeps its own copy:
+    fixation[:] = 0
+    npt.assert_array_equal(
+        still.render(percept=percept, vmax=20).data,
+        still.render(percept=percept, gaze=(3, -1) * dva, vmax=20).data)
+    video = blind_video()
+    percept = model.predict_percept(video, gaze=saccade())
+    reused = video.render(percept=percept, vmax=20).data
+    npt.assert_array_equal(
+        reused, video.render(percept=percept, gaze=saccade(), vmax=20).data)
+    # One gaze per frame is the same trajectory:
+    npt.assert_array_equal(
+        reused, video.render(percept=percept, gaze=SACCADE_FRAMES * dva,
+                             vmax=20).data)
+
+
+def test_an_eye_registered_percept_requires_its_prediction_gaze(tmp_path):
+    """Another gaze would show the percept of one eye position at another"""
+    model = model_for(implant_at(0, 0))
+    video = blind_video()
+    percept = model.predict_percept(video, gaze=saccade())
+    early = Gaze([(0, 0), (6, 0)] * dva, time=[0, 100] * ms)
+    for gaze in ((6, 0) * dva, SACCADE_FRAMES[::-1] * dva, early):
+        for display in (video.render, video.play):
+            with pytest.raises(ValueError):
+                display(percept=percept, gaze=gaze, vmax=20)
+        with pytest.raises(ValueError):
+            video.save(tmp_path / 'percept.gif', percept=percept, gaze=gaze)
+    plt.close('all')
+    # Omitted prediction gaze is fixation at the origin:
+    still = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    percept = model.predict_percept(still)
+    with pytest.raises(ValueError):
+        still.render(percept=percept, gaze=(2, 0) * dva, vmax=20)
+    npt.assert_array_equal(still.render(percept=percept, vmax=20).data,
+                           still.render(percept=percept, gaze=(0, 0),
+                                        vmax=20).data)
+
+
+def test_plot_checks_the_prediction_gaze_of_the_drawn_frame_only():
+    model = model_for(implant_at(0, 0))
+    video = blind_video()
+    percept = model.predict_percept(video, gaze=saccade())
+    for f, xy in enumerate(SACCADE_FRAMES):
+        given = video.plot(percept=percept, frame=f, gaze=xy * dva)
+        reused = video.plot(percept=percept, frame=f)
+        npt.assert_array_equal(np.asarray(given.images[-1].get_array()),
+                               np.asarray(reused.images[-1].get_array()))
+        plt.close('all')
+    for gaze in ((6, 0) * dva, SACCADE_FRAMES[::-1] * dva):
+        with pytest.raises(ValueError):
+            video.plot(percept=percept, frame=0, gaze=gaze)
+    plt.close('all')
+
+
+def test_a_head_registered_percept_accepts_another_playback_gaze():
+    """Head-mounted camera and eye move independently"""
+    model = model_for(implant_at(0, 0, input_frame='head'))
+    scene = scene_of(scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    percept = model.predict_percept(scene, gaze=(5, 0) * dva)
+    reused = scene.render(percept=percept, vmax=20).data
+    npt.assert_array_equal(
+        reused, scene.render(percept=percept, gaze=(5, 0) * dva,
+                             vmax=20).data)
+    # Same brightness, drawn where the eye points during playback:
+    moved = scene.render(percept=percept, gaze=(-3, 0) * dva, vmax=20).data
+    npt.assert_array_equal(moved, composed(model, scene, vmax=20,
+                                           gaze=(-3, 0) * dva))
+    npt.assert_equal(np.allclose(moved, reused), False)
+    # Without prediction gaze, any playback trajectory is allowed:
+    video = blind_video()
+    percept = model.predict_percept(video)
+    npt.assert_array_equal(
+        video.render(percept=percept, gaze=saccade(), vmax=20).data,
+        video.render(percept=percept, gaze=SACCADE_FRAMES * dva,
+                     vmax=20).data)
+
+
+def test_reused_gaze_follows_source_frames_not_percept_time_stamps():
+    """A temporal percept is stamped at frame ends; gaze is not shifted"""
+    video = ramp_video_scene(3, scotoma=Scotoma.circle(6), scotoma_fill=0.0)
+    model = Model(spatial=ScoreboardSpatial(implant_at(0, 0), rho=200,
+                                            xrange=(-4, 4), yrange=(-4, 4),
+                                            step=0.5,
+                                            visual_field_map=Curcio1990Map()),
+                  temporal=FadingTemporal()).build()
+    gaze = Gaze([(0, 0), (6, 0)] * dva, time=[0, 100] * ms)
+    percept = model.predict_percept(video, gaze=gaze)
+    npt.assert_almost_equal(percept.time, [100, 200, 300])
+    on_source = np.array([(0, 0), (6, 0), (6, 0)], dtype=float)
+    npt.assert_array_equal(
+        video.render(percept=percept, vmax=5).data,
+        video.render(percept=percept, gaze=on_source * dva, vmax=5).data)
+    # Resolved at percept time stamps, frame 0 would already be at (6, 0):
+    with pytest.raises(ValueError):
+        video.render(percept=percept, gaze=(6, 0) * dva, vmax=5)
+
+
+@pytest.mark.parametrize('view', ['scene', 'eye'])
+def test_play_reuses_the_prediction_gaze(view):
+    video = blind_video()
+    percept = model_for(implant_at(0, 0)).predict_percept(video,
+                                                          gaze=saccade())
+    npt.assert_array_equal(
+        video.play(percept=percept, vmax=20, view=view)._frame_data,
+        video.play(percept=percept, gaze=SACCADE_FRAMES * dva, vmax=20,
+                   view=view)._frame_data)
+    plt.close('all')
+
+
+def test_only_scene_prediction_stores_gaze():
+    """Stored gaze changes neither the prediction nor other percepts"""
+    model = model_for(implant_at(0, 0))
+    scene = scene_of()
+    percept = model.predict_percept(scene, gaze=(3, -1) * dva)
+    direct = model._predict_percept(_scene_stim(model, scene, (3, -1) * dva))
+    npt.assert_array_equal(percept.data, direct.data)
+    npt.assert_equal(percept.metadata, direct.metadata)
+    npt.assert_equal(percept._scene_gaze[0].flags.writeable, False)
+    npt.assert_equal(
+        model.predict_percept(BiphasicPulse(20, 0.45))._scene_gaze, None)
+    npt.assert_equal(Percept(np.zeros((5, 5, 1)))._scene_gaze, None)
 
 
 def test_a_bound_implant_survives_a_deepcopy():

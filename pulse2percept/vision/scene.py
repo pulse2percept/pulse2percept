@@ -1326,13 +1326,35 @@ class Scene(PrettyPrint):
         """Returns the number of output frames"""
         return self._output_clock(percept)[2]
 
-    def _resolve_gaze(self, gaze, percept=None):
+    def _resolve_gaze(self, gaze, percept=None, frame=None):
         """Converts a `Gaze` to one (x, y) per output frame; returns other
-        inputs unchanged"""
-        if not isinstance(gaze, Gaze):
-            return gaze
-        time, unit, n_out = self._output_clock(percept)
-        return _gaze_points(gaze, n_out, time=time, time_unit=unit)
+        inputs unchanged, or the prediction gaze of ``percept`` if None
+
+        With ``frame``, only that output frame is checked against the
+        prediction gaze.
+        """
+        stored = getattr(percept, '_scene_gaze', None)
+        predicted, input_frame = (None, None) if stored is None else stored
+        if gaze is None:
+            return predicted
+        if isinstance(gaze, Gaze):
+            time, unit, n_out = self._output_clock(percept)
+            gaze = _gaze_points(gaze, n_out, time=time, time_unit=unit)
+        if input_frame == 'eye':
+            n_out = self._n_display_frames(percept)
+            given = _gaze_points(gaze, n_out)
+            aligned = len(predicted) in (1, n_out)
+            if aligned and frame is not None:
+                given = given[0 if len(given) == 1 else frame]
+                predicted = predicted[0 if len(predicted) == 1 else frame]
+            # 1e-6 dva: rounding only
+            if (not aligned or
+                    not np.allclose(given, predicted, rtol=0, atol=1e-6)):
+                raise ValueError(
+                    "Playback gaze differs from the gaze used for "
+                    "eye-registered scene prediction. Use the original gaze "
+                    "or recompute the percept with the desired gaze.")
+        return gaze
 
     def _source_aligned(self, prosthetic):
         """Returns True if percept frame k was predicted from scene frame k
@@ -1457,7 +1479,8 @@ class Scene(PrettyPrint):
             Screen blending is a display convention, not a validated model of
             how prosthetic and native vision combine.
         gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
-            Scene location (dva) on the fovea. Defaults to the origin. A
+            Scene location (dva) on the fovea. Defaults to the percept's
+            prediction gaze, else the origin. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved at the output
             frame times: a video scene's, or a timed percept's for a still
             scene.
@@ -1521,7 +1544,7 @@ class Scene(PrettyPrint):
         gaze : array_like or Gaze, optional
             Scene location (dva) on the fovea, as ``(x, y)``,
             ``(n_frames, 2)``, or a :py:class:`~pulse2percept.vision.Gaze`.
-            Defaults to the origin.
+            Defaults to the percept's prediction gaze, else the origin.
         vmax : float, optional
             Percept brightness shown as white. Defaults to the maximum over
             the whole ``percept``.
@@ -1584,7 +1607,8 @@ class Scene(PrettyPrint):
         Parameters
         ----------
         gaze : (x, y) or :py:class:`~pulse2percept.vision.Gaze`, optional
-            Scene location (dva) on the fovea. Defaults to the origin. A
+            Scene location (dva) on the fovea. Defaults to the percept's
+            prediction gaze, else the origin. A
             :py:class:`~pulse2percept.vision.Gaze` is resolved at the output
             frame times, and the position at ``frame`` is drawn.
         frame : int, optional
@@ -1633,7 +1657,8 @@ class Scene(PrettyPrint):
         if not 0 <= frame < n_out:
             raise ValueError(f"'frame' must be in 0..{n_out - 1}, not "
                              f"{frame}.")
-        points = _gaze_points(self._resolve_gaze(gaze, percept), n_out)
+        points = _gaze_points(self._resolve_gaze(gaze, percept, frame=frame),
+                              n_out)
         # Only the drawn frame is evaluated:
         gaze_xy = points[0] if len(points) == 1 else points[frame]
         if view == _EYE_VIEW:
