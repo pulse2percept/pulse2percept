@@ -2763,6 +2763,19 @@ def test_gaze_event_times_keep_their_unit():
     npt.assert_array_equal(rendered.data, scene.render(gaze=wander()).data)
 
 
+def test_one_or_late_gaze_events_keep_their_onsets():
+    scene = world_scene()
+    one = Gaze(FIXATIONS[:1] * dva, time=[30] * ms)
+    rendered = scene.render(gaze=one)
+    npt.assert_almost_equal(rendered.time, [30])
+    npt.assert_array_equal(rendered.data,
+                           scene.render(gaze=FIXATIONS[0] * dva).data)
+    npt.assert_equal(scene.play(gaze=one)._frame_data.shape[-1], 1)
+    late = Gaze(FIXATIONS * dva, time=[100, 160, 450] * ms)
+    npt.assert_almost_equal(scene.render(gaze=late).time, [100, 160, 450])
+    plt.close('all')
+
+
 def test_a_still_scene_without_a_clock_has_nothing_to_play():
     scene = ramp_scene()
     untimed = Percept(np.zeros((SCENE_PX, SCENE_PX, 1)), space=scene._grid())

@@ -10,36 +10,44 @@ A :py:class:`~pulse2percept.vision.Scene` places images and videos in the
 visual field. It provides a common space for gaze, residual vision, and
 prosthetic percepts.
 
-For example, start with a natural scene, add a central scotoma, and move gaze
-across the image:
+For example, place a photo in the visual field, add a central scotoma, and
+move gaze across it:
 
 .. code-block:: python
 
-    import numpy as np
     import pulse2percept as p2p
 
     from pulse2percept.units import dva, ms
 
-    image = p2p.stimuli.samples.ucsb_bike(resize=(240, 360))
-
     scene = p2p.vision.Scene(
-        image,
-        extent=60 * dva,
+        'photo.jpg',
         fov=40 * dva,
         scotoma=p2p.vision.Scotoma.circle(5 * dva),
-        scotoma_fill='inpaint',
+        scotoma_fill='laplace',
+        aperture='round',
     )
 
     gaze = p2p.vision.Gaze(
-        [(0, 0), (-12, 0), (12, 0), (-8, 2)] * dva,
-        time=[0, 600, 1200, 1800] * ms,
+        [(0, 0), (-12, 0), (12, 0)] * dva,
+        time=[0, 600, 1200] * ms,
     )
 
-    # One frame per fixation, held until the next:
+    # Native vision alone, one frame per fixation:
     scene.play(gaze=gaze)
 
-The source remains fixed in the world while the eye-centered field of view and
-scotoma move with gaze:
+    # With a prosthetic percept:
+    model = p2p.models.retina.ScoreboardModel(
+        p2p.implants.retina.PRIMAPivotal())
+    percept = model.predict_percept(scene, gaze=gaze)
+    scene.play(percept=percept)
+
+A file name or array becomes an
+:py:class:`~pulse2percept.stimuli.ImageStimulus`; a video works the same way.
+``play`` holds each frame until the next.
+
+In more detail, ``extent`` sets the source's angular size, and ``plot`` draws
+one fixation. The source remains fixed in the world while the eye-centered
+field of view and scotoma move with gaze:
 
 .. plot::
 
@@ -231,15 +239,21 @@ spatial-only model returns one frame per fixation, at the first device frame
 within it (e.g., the next 30 Hz PRIMA projector pulse after a saccade). A
 model with a temporal stage simulates all fixations as one input schedule.
 The last fixation has no end of its own, so ``t_percept`` is required; its
-latest time ends the simulation:
+latest time ends the simulation and must follow the last gaze event:
 
 .. code-block:: python
+
+    import numpy as np
 
     percept = model.predict_percept(
         scene,
         gaze=gaze,
-        t_percept=np.arange(0, 2401, 20) * ms,
+        t_percept=np.arange(0, 1801, 20) * ms,
     )
+
+Each output frame is drawn at the eye position at its time. A temporal
+response reflects the stimulation delivered up to then: at the instant of a
+saccade, it is still the previous fixation's, now at the new eye position.
 
 
 Fixational Eye Movements

@@ -2339,3 +2339,28 @@ def test_AmplitudeEncoder_xTh_fails_the_electrical_safety_checks():
             implant.prepare_stim(img)
     implant = ArgusII(encoder=encoder(), thresholds=80, safe_mode=True)
     npt.assert_equal(implant.prepare_stim(img).unit, uA)
+
+
+def test_a_frame_schedule_keeps_irregular_onsets_and_its_last_duration():
+    """E.g., gaze events on a still scene: no frame rate, no retiming"""
+    def schedule(onsets):
+        frames = encoders._FrameSchedule(np.array([[0.2, 0.5, 0.8]]), ['A'],
+                                         onsets, 400)
+        # Gray levels, as for a scene:
+        return frames._inherit_units(ImageStimulus(np.zeros((2, 2))))
+
+    onsets = [0, 605, 1270]
+    for encoder in (AmplitudeEncoder(amp_range=(0, 50), freq=20),
+                    PRIMAEncoder()):
+        stim = encoder.encode(schedule(onsets))
+        npt.assert_almost_equal(stim.metadata['encoder']['source_frame_time'],
+                                onsets)
+        npt.assert_almost_equal(stim.time[-1], 1670)
+    # Retiming every frame would discard the onsets:
+    with pytest.raises(ValueError, match='frame_dur'):
+        AmplitudeEncoder(amp_range=(0, 50), frame_dur=100).encode(
+            schedule(onsets))
+    # Irregular frames have no frame rate to quote:
+    with pytest.warns(UserWarning, match='shorter than the pulse period'):
+        AmplitudeEncoder(amp_range=(0, 50), freq=20).encode(
+            schedule([0, 10, 20]))

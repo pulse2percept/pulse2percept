@@ -19,7 +19,8 @@ from ..stimuli import ImageStimulus, Stimulus, VideoStimulus
 from ..stimuli.base import _describe_unit, _has_time_axis
 from ..stimuli.encoders import (AmplitudeEncoder, _DEFAULT_FRAME_DUR,
                                 _EncodedStimulus, _FrameClock,
-                                _OpticalStimulus, _gray_pixels)
+                                _FrameSchedule, _OpticalStimulus,
+                                _gray_pixels)
 from ..percepts import Percept
 from ..percepts.base import _quantize_gray
 from ..topography import Grid2D
@@ -30,7 +31,7 @@ from ..vision import Gaze, Scene
 from ..vision.gaze import _gaze_points
 from ..utils import PrettyPrint, Frozen, Parametrized
 from ..utils.base import _is_constructing
-from ..utils.constants import MS_PER_S, ZORDER
+from ..utils.constants import ZORDER
 
 
 def _encoder_clock(stim):
@@ -417,8 +418,8 @@ def _device_scene(scene, implant):
 def _scene_stim(model, scene, gaze, end=None):
     """Prepare electrode stimulation sampled from a scene.
 
-    A still scene with a `Gaze` is sampled at the gaze event times before
-    ``end`` (ms). The last fixation lasts until ``end``; by default,
+    A still scene with a `Gaze` is sampled at the gaze event times. The last
+    fixation lasts until ``end`` (ms), which must follow it; by default,
     ``_DEFAULT_FRAME_DUR`` after its onset, as for a still image.
     """
     if not model.has_space:
@@ -441,19 +442,21 @@ def _scene_stim(model, scene, gaze, end=None):
     # Gaze is sampled on the source frame clock (the gaze event times of a
     # still scene), independent of `t_percept`:
     time, time_unit = device_scene._sampling_clock(gaze)
-    metadata = device_scene.source.metadata
+    last_frame_dur = None
     if device_scene.time is None and time is not None:
         time = Quantity(time, time_unit).to_value(ms)
         if end is None:
             end = time[-1] + _DEFAULT_FRAME_DUR
-        if end <= time[0]:
+        # 1e-6 ms: rounding only
+        if end - time[-1] <= 1e-6:
             raise ValueError(
-                f"The gaze trajectory starts at {gaze.time[0]:g} "
-                f"{gaze.time_unit}, and 't_percept' ends no later. Nothing "
-                f"is simulated before the first fixation.")
-        time, time_unit = time[time < end], ms
-        # Onsets are irregular; `fps` sets the last fixation's duration:
-        metadata = dict(metadata or {}, fps=MS_PER_S / (end - time[-1]))
+                f"'t_percept' ends at "
+                f"{Quantity(end, ms).to_value(gaze.time_unit):g} "
+                f"{gaze.time_unit}, but the last gaze event starts at "
+                f"{gaze.time[-1]:g} {gaze.time_unit}, so that fixation would "
+                f"never be delivered. Extend 't_percept' past the last gaze "
+                f"event, or remove the later events from the Gaze.")
+        time_unit, last_frame_dur = ms, end - time[-1]
     n_frames = device_scene.n_frames if time is None else time.size
     points = _gaze_points(gaze, n_frames, time=time, time_unit=time_unit)
     input_gaze = points if frame == 'eye' else None
@@ -466,12 +469,13 @@ def _scene_stim(model, scene, gaze, end=None):
         # A head-fixed camera samples a still scene once:
         gray = np.repeat(gray, n_frames, axis=1)
 
-    seen = Stimulus(
-        gray,
-        electrodes=implant.electrode_names,
-        time=time,
-        metadata=metadata,
-    )
+    if last_frame_dur is None:
+        seen = Stimulus(gray, electrodes=implant.electrode_names, time=time,
+                        metadata=device_scene.source.metadata)
+    else:
+        seen = _FrameSchedule(gray, implant.electrode_names, time,
+                              last_frame_dur,
+                              metadata=device_scene.source.metadata)
 
     # `_device_scene` already applied the implant's preprocessing:
     return implant._prepare_stim(seen._inherit_units(device_scene.source),
@@ -2095,8 +2099,11 @@ class Model(Frozen, PrettyPrint):
         t_percept : float or array-like, optional
             Output times in ``time_unit``. Unitful times are accepted. For a
             :py:class:`~pulse2percept.vision.Gaze` on a still scene, the
-            latest time also ends the last fixation; a model with a temporal
-            stage requires it there.
+            latest time also ends the last fixation and must follow the last
+            gaze event; a model with a temporal stage requires it there.
+            Each output frame is registered at the eye position at its time,
+            while a temporal response reflects the stimulation delivered up
+            to then: at a saccade, still the previous fixation's.
         gaze : (x, y), (n_frames, 2), or :py:class:`~pulse2percept.vision.Gaze`, optional
             Scene location falling on the fovea, in degrees of visual angle,
             so that ``scene = eye-centered visual field + gaze``. Requires
@@ -2144,6 +2151,10 @@ class Model(Frozen, PrettyPrint):
         end = None
         if trajectory and t_percept is not None:
             t_out = np.ravel(as_value(t_percept, self.time_unit, 't_percept'))
+            if t_out.size == 0:
+                raise ValueError("'t_percept' is empty, so there is no time "
+                                 "to end the last fixation at. Pass at least "
+                                 "one output time.")
             # Gaze is undefined before its first event:
             gaze._at(t_out, self.time_unit)
             end = Quantity(t_out.max(), self.time_unit).to_value(ms)
@@ -2184,8 +2195,7 @@ class Model(Frozen, PrettyPrint):
         and has no frame.
         """
         clock = _encoder_clock(stim)
-        if (clock is None or clock.source_time is None or
-                _spatial_input(stim).time is None):
+        if clock is None or clock.source_time is None:
             return self._predict_percept(stim)
         onsets = np.asarray(clock.source_time, dtype=float)
         device = np.asarray(clock.time, dtype=float)
@@ -2194,7 +2204,15 @@ class Model(Frozen, PrettyPrint):
         first = np.searchsorted(device, onsets - 1e-6)
         hit = first < device.size
         hit[hit] = device[first[hit]] < ends[hit]
-        return self._predict_percept(stim, Quantity(device[first[hit]], ms))
+        if not hit.any():
+            raise ValueError("No device frame falls within any fixation of "
+                             "this gaze trajectory, so nothing is delivered.")
+        at = Quantity(device[first[hit]], ms)
+        if _spatial_input(stim).time is not None:
+            return self._predict_percept(stim, at)
+        # A single device frame has no time axis; its response holds:
+        resp = self.spatial._predict_response(stim)
+        return _to_percept(replace(resp, time=at.to_value(resp.time_unit)))
 
     @property
     def _accepts_dimensionless_drive(self):

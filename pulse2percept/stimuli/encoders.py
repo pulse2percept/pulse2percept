@@ -328,21 +328,47 @@ def _sampled_frames(source, implant=None, frame_dur=None):
                               dtype=np.float32), 0, 1)
     if stim.time is None:
         gray = gray.reshape((-1, 1))
+    last_frame_dur = (source._last_frame_dur
+                      if isinstance(source, _FrameSchedule) else None)
     frame_time, frame_dur = _frame_timing(stim.time, gray.shape[1], fps,
-                                          frame_dur)
+                                          frame_dur, last_frame_dur)
     return gray, stim.electrodes, frame_time, frame_dur
 
 
-def _frame_timing(time, n_frames, fps=None, frame_dur=None):
+class _FrameSchedule(Stimulus):
+    """Gray levels per electrode at frame onsets (ms) that may be irregular,
+    e.g. gaze events on a still scene
+
+    Each frame ends at the next onset; the last lasts ``last_frame_dur`` ms.
+    """
+    __slots__ = ('_last_frame_dur',)
+
+    def __init__(self, source, electrodes, time, last_frame_dur,
+                 metadata=None):
+        super().__init__(source, electrodes=electrodes, time=time,
+                         metadata=metadata)
+        self._last_frame_dur = float(last_frame_dur)
+
+
+def _frame_timing(time, n_frames, fps=None, frame_dur=None,
+                  last_frame_dur=None):
     """Return frame onsets and duration (ms) of a source.
 
     ``time=None`` is a still image. An explicit ``frame_dur`` replaces the
-    source frame timing.
+    source frame timing. With ``last_frame_dur``, onsets are kept as given and
+    the returned duration is that of the last frame.
     """
     if time is None:
         # Static images use the default presentation duration.
         return (np.zeros(1, dtype=np.float64),
                 _DEFAULT_FRAME_DUR if frame_dur is None else frame_dur)
+    if last_frame_dur is not None:
+        if frame_dur is not None:
+            raise ValueError(
+                f"This encoder retimes every frame to frame_dur={frame_dur:g} "
+                f"ms, which would discard these frame onsets (e.g., gaze "
+                f"events). Use an encoder without 'frame_dur'.")
+        return np.asarray(time, dtype=np.float64), float(last_frame_dur)
     if frame_dur is None:
         # Preserve the source frame interval.
         return (np.asarray(time, dtype=np.float64),
@@ -935,11 +961,15 @@ class PulseEncoder(ImplantEncoder):
             hit[f] = True
         missed = np.count_nonzero(~hit & active.any(axis=0))
         if missed:
-            fps = MS_PER_S / frame_dur
+            if np.allclose(np.diff(frame_time), frame_dur, rtol=0, atol=1e-2):
+                why = (f"the pulse period is longer than a frame "
+                       f"({MS_PER_S / frame_dur:.2f} fps)")
+            else:
+                # Irregular frames (e.g., gaze events) have no frame rate:
+                why = "they are shorter than the pulse period"
             _warn_external(
                 f"{missed} of {n_frames} frames deliver no pulse at all, "
-                f"because the pulse period is longer than a frame "
-                f"({fps:.2f} fps). Their gray levels are never sampled; "
+                f"because {why}. Their gray levels are never sampled; "
                 f"raise the frequency to see them.", category=UserWarning)
 
         ticks = np.unique(np.concatenate(
