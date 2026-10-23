@@ -1326,21 +1326,29 @@ class Scene(PrettyPrint):
         """Returns the number of output frames"""
         return self._output_clock(percept)[2]
 
-    def _resolve_gaze(self, gaze, percept=None):
+    def _resolve_gaze(self, gaze, percept=None, frame=None):
         """Converts a `Gaze` to one (x, y) per output frame; returns other
-        inputs unchanged, or the prediction gaze of ``percept`` if None"""
+        inputs unchanged, or the prediction gaze of ``percept`` if None
+
+        With ``frame``, only that output frame is checked against the
+        prediction gaze.
+        """
         stored = getattr(percept, '_scene_gaze', None)
-        predicted, frame = (None, None) if stored is None else stored
+        predicted, input_frame = (None, None) if stored is None else stored
         if gaze is None:
             return predicted
         if isinstance(gaze, Gaze):
             time, unit, n_out = self._output_clock(percept)
             gaze = _gaze_points(gaze, n_out, time=time, time_unit=unit)
-        if frame == 'eye':
+        if input_frame == 'eye':
             n_out = self._n_display_frames(percept)
             given = _gaze_points(gaze, n_out)
+            aligned = len(predicted) in (1, n_out)
+            if aligned and frame is not None:
+                given = given[0 if len(given) == 1 else frame]
+                predicted = predicted[0 if len(predicted) == 1 else frame]
             # 1e-6 dva: rounding only
-            if (len(predicted) not in (1, n_out) or
+            if (not aligned or
                     not np.allclose(given, predicted, rtol=0, atol=1e-6)):
                 raise ValueError(
                     "Playback gaze differs from the gaze used for "
@@ -1649,7 +1657,8 @@ class Scene(PrettyPrint):
         if not 0 <= frame < n_out:
             raise ValueError(f"'frame' must be in 0..{n_out - 1}, not "
                              f"{frame}.")
-        points = _gaze_points(self._resolve_gaze(gaze, percept), n_out)
+        points = _gaze_points(self._resolve_gaze(gaze, percept, frame=frame),
+                              n_out)
         # Only the drawn frame is evaluated:
         gaze_xy = points[0] if len(points) == 1 else points[frame]
         if view == _EYE_VIEW:

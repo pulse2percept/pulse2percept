@@ -953,7 +953,7 @@ def test_an_eye_registered_percept_requires_its_prediction_gaze(tmp_path):
     percept = model.predict_percept(video, gaze=saccade())
     early = Gaze([(0, 0), (6, 0)] * dva, time=[0, 100] * ms)
     for gaze in ((6, 0) * dva, SACCADE_FRAMES[::-1] * dva, early):
-        for display in (video.render, video.plot, video.play):
+        for display in (video.render, video.play):
             with pytest.raises(ValueError):
                 display(percept=percept, gaze=gaze, vmax=20)
         with pytest.raises(ValueError):
@@ -967,6 +967,22 @@ def test_an_eye_registered_percept_requires_its_prediction_gaze(tmp_path):
     npt.assert_array_equal(still.render(percept=percept, vmax=20).data,
                            still.render(percept=percept, gaze=(0, 0),
                                         vmax=20).data)
+
+
+def test_plot_checks_the_prediction_gaze_of_the_drawn_frame_only():
+    model = model_for(implant_at(0, 0))
+    video = blind_video()
+    percept = model.predict_percept(video, gaze=saccade())
+    for f, xy in enumerate(SACCADE_FRAMES):
+        given = video.plot(percept=percept, frame=f, gaze=xy * dva)
+        reused = video.plot(percept=percept, frame=f)
+        npt.assert_array_equal(np.asarray(given.images[-1].get_array()),
+                               np.asarray(reused.images[-1].get_array()))
+        plt.close('all')
+    for gaze in ((6, 0) * dva, SACCADE_FRAMES[::-1] * dva):
+        with pytest.raises(ValueError):
+            video.plot(percept=percept, frame=0, gaze=gaze)
+    plt.close('all')
 
 
 def test_a_head_registered_percept_accepts_another_playback_gaze():
