@@ -261,6 +261,9 @@ latest time ends the simulation and must follow the last gaze event:
 Each output frame is drawn at the eye position at its time. A temporal
 response reflects the stimulation delivered up to then: at the instant of a
 saccade, it is still the previous fixation's, now at the new eye position.
+Stimulation stops at the latest ``t_percept``: a pulse that cannot finish by
+then (e.g., a 9.8 ms PRIMA pulse) is not delivered, so the last frames do not
+model ongoing stimulation.
 
 
 Fixational Eye Movements

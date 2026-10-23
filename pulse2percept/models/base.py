@@ -1456,22 +1456,25 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                 allow_dimensionless=self._accepts_dimensionless_drive),
             t_percept=t_percept))
 
-    def _spatial_response(self, resp, time, metadata, frame_clock=None):
-        """Return a flat grid response, quantized to ``n_gray`` levels if set.
+    def _spatial_response(self, resp, time, metadata, frame_clock=None,
+                          quantize=True):
+        """Return a flat grid response, quantized to ``n_gray`` levels if set
+        and ``quantize``.
 
         Quantization precedes any temporal stage.
         """
-        if self.n_gray is not None:
+        if quantize and self.n_gray is not None:
             resp = _quantize_gray(resp, self.n_gray)
         return _ModelResponse(resp, time, self.time_unit, self.grid.x.shape,
                               space=self.grid, frame_clock=frame_clock,
                               metadata=metadata)
 
-    def _predict_response(self, stim, t_percept=None):
+    def _predict_response(self, stim, t_percept=None, *, quantize=True):
         """Return the flat spatial response to a prepared stimulus, or None.
 
         Composite models use this path to prepare stimulation once before running
-        spatial and temporal stages.
+        spatial and temporal stages. ``quantize=False`` skips ``n_gray``, for
+        callers that assemble the output frames first.
         """
         if not self.is_built:
             self.build()
@@ -1546,7 +1549,7 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
                                              stim)
         resp = self._postprocess_spatial(resp)
         return self._spatial_response(resp, t_percept, {'stim': stim},
-                                      frame_clock=clock)
+                                      frame_clock=clock, quantize=quantize)
 
     def _predict_tensor(self, waveform, time):
         """Return the flat spatial response to a Torch waveform.
@@ -2105,7 +2108,9 @@ class Model(Frozen, PrettyPrint):
             Output times in ``time_unit``. Unitful times are accepted. For a
             :py:class:`~pulse2percept.vision.Gaze` on a still scene, the
             latest time must follow the last gaze event. A model with a
-            temporal stage requires it there, and it ends the last fixation.
+            temporal stage requires it there, and stimulation stops then: a
+            pulse that cannot finish by that time (e.g., a 9.8 ms PRIMA
+            pulse) is not delivered.
             Each output frame is registered at the eye position at its time,
             while a temporal response reflects the stimulation delivered up
             to then: at a saccade, still the previous fixation's.
@@ -2228,29 +2233,29 @@ class Model(Frozen, PrettyPrint):
             # Latest frame at or before each time; gaze starts with the first:
             frames = np.maximum(
                 np.searchsorted(device, times + 1e-6, side='right') - 1, 0)
+        time = Quantity(times, ms).to_value(self.spatial.time_unit)
         if self.spatial._needs_structured_stim:
             # Schedule-reading models serve each frame time themselves:
             resp = self.spatial._predict_response(
                 stim, t_percept=Quantity(device[frames], ms))
-        else:
-            # Select frames by index: time interpolation of the compressed
-            # view can blend frames. Distinct columns all survive compression:
-            view = _spatial_input(stim)
-            drive = np.reshape(view.data, (len(view.electrodes), -1))
-            if view.time is None:
-                frames = np.zeros_like(frames)
-            columns, inverse = np.unique(drive[:, frames], axis=1,
-                                         return_inverse=True)
-            label = np.arange(columns.shape[1], dtype=float)
-            rebuild = type(view) if view._is_normalized_drive else Stimulus
-            unique = rebuild(columns, electrodes=view.electrodes, time=label)
-            unique._inherit_units(view)._inherit_metadata(view)
-            resp = self.spatial._predict_response(
-                unique, t_percept=Quantity(label, view.time_unit))
-            resp = replace(resp, data=resp.data[:, np.ravel(inverse)],
-                           metadata={'stim': view})
-        return _to_percept(replace(
-            resp, time=Quantity(times, ms).to_value(resp.time_unit),
+            return _to_percept(replace(resp, time=time, frame_clock=clock))
+        # Select frames by index: time interpolation of the compressed view
+        # can blend frames. Distinct columns all survive compression:
+        view = _spatial_input(stim)
+        drive = np.reshape(view.data, (len(view.electrodes), -1))
+        if view.time is None:
+            frames = np.zeros_like(frames)
+        columns, inverse = np.unique(drive[:, frames], axis=1,
+                                     return_inverse=True)
+        label = np.arange(columns.shape[1], dtype=float)
+        rebuild = type(view) if view._is_normalized_drive else Stimulus
+        unique = rebuild(columns, electrodes=view.electrodes, time=label)
+        unique._inherit_units(view)._inherit_metadata(view)
+        resp = self.spatial._predict_response(
+            unique, t_percept=Quantity(label, view.time_unit), quantize=False)
+        # `n_gray` weights each output frame, so quantize all of them:
+        return _to_percept(self.spatial._spatial_response(
+            resp.data[:, np.ravel(inverse)], time, {'stim': view},
             frame_clock=clock))
 
     @property

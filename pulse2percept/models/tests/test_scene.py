@@ -19,6 +19,7 @@ from pulse2percept.models.retina import ScoreboardModel, ScoreboardSpatial
 from pulse2percept.models.base import _placement_shift, _scene_stim
 from pulse2percept.models.cortex import ScoreboardModel as CortexScoreboard
 from pulse2percept.percepts import Percept
+from pulse2percept.percepts.base import _quantize_gray
 from pulse2percept.stimuli import (AmplitudeEncoder, BiphasicPulse,
                                    BiphasicPulseTrain, ImageStimulus,
                                    VideoStimulus)
@@ -424,6 +425,22 @@ def test_constant_projector_drive_is_not_blended_with_its_last_frame():
     percept = model.predict_percept(scene_of(), gaze=wander())
     npt.assert_allclose(percept.data, model.predict_percept(scene_of()).data[
         ..., [0, 0, 0]], rtol=1e-6)
+
+
+@pytest.mark.parametrize('t_percept', [None, [0, 50, 150, 250, 350] * ms])
+def test_n_gray_weighs_every_output_frame_of_a_still_trajectory(t_percept):
+    """The eye returns to fixation 0, so it fills most output frames"""
+    gaze = Gaze(FIXATIONS[[0, 1, 0, 0]] * dva, time=[0, 100, 200, 300] * ms)
+    raw = model_for(implant_at(0, 0)).predict_percept(scene_of(), gaze=gaze,
+                                                      t_percept=t_percept)
+    model = model_for(implant_at(0, 0), n_gray=3)
+    # k-means is initialized from NumPy's global RNG:
+    np.random.seed(7)
+    expected = _quantize_gray(raw.data, 3)
+    np.random.seed(7)
+    npt.assert_array_equal(model.predict_percept(scene_of(), gaze=gaze,
+                                                 t_percept=t_percept).data,
+                           expected)
 
 
 def test_a_spatial_model_responds_to_modulation_not_to_pulses():
