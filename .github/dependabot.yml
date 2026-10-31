@@ -29,18 +29,6 @@ updates:
     directory: /doc
     schedule:
       interval: weekly
-      day: monday
-    open-pull-requests-limit: 1
-    ignore:
-      # torch>=2.7.0 is our supported-version floor, not a version to keep
-      # current. Newer Torch releases are already permitted by the requirement.
-      - dependency-name: "torch"
-
-      # Patch bumps are noise; minor/major still come through
-      - dependency-name: "*"
-        update-types:
-          - version-update:semver-patch
-    groups:
-      doc-requirements:
+    open-pull-requests-limit: 0
         patterns:
           - "*"
