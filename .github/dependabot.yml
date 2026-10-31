@@ -1,3 +1,4 @@
+
 version: 2
 
 updates:
@@ -25,10 +26,11 @@ updates:
         patterns:
           - "*"
 
+  # Docs are maintained as a stable, tested build environment.
+  # Update dependencies deliberately rather than chasing new releases.
+  # Security updates remain available when enabled in repository settings.
   - package-ecosystem: pip
     directory: /doc
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
-        patterns:
-          - "*"
