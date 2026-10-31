@@ -371,3 +371,22 @@ def test_Granley2023_kernel_is_differentiable():
     for param in (freq, amp, pdur):
         npt.assert_equal(bool(torch.isfinite(param.grad).all()), True)
         npt.assert_equal(bool((param.grad != 0).all()), True)
+
+
+def test_Granley2023_kernel_is_batched():
+    # Leading batch axes of the pulse parameters; `active` drops electrodes:
+    rng = np.random.default_rng(0)
+    freq, amp, pdur = (torch.tensor(rng.uniform(lo, hi, (3, 4)))
+                       for lo, hi in ((5, 50), (0, 3), (0.2, 1)))
+    active = torch.tensor(rng.random((3, 4)) < 0.7)
+    x, y = (torch.tensor(rng.uniform(-5, 5, 20)) for _ in range(2))
+    geometry = [torch.tensor(rng.uniform(-3, 3, 4)) for _ in range(3)]
+    params = dict(thresh_percept=np.exp(-2), **_SHAPE)
+    batched = _mvg_response(freq, amp, pdur, x, y, *geometry, active=active,
+                            **params)
+    assert batched.shape == (3, 20)
+    for b in range(3):
+        on = active[b]
+        single = _mvg_response(freq[b, on], amp[b, on], pdur[b, on], x, y,
+                               *(g[on] for g in geometry), **params)
+        npt.assert_allclose(batched[b], single, rtol=1e-12)

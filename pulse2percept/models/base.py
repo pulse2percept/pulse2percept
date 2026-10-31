@@ -1558,17 +1558,18 @@ class SpatialModel(BaseModel, metaclass=ABCMeta):
         raise NotImplementedError(
             f"{type(self).__name__} does not support Torch tensor input.")
 
-    def _onnx_adapter(self):
-        """Return a Torch module for ONNX export of the spatial response.
+    def _torch_adapter(self):
+        """Return a fixed-geometry Torch module of the spatial response.
 
-        The module maps float32 drive ``(n_electrodes, 1)``, rows in
-        ``implant.electrode_names`` order, to the flat ``(n_grid_points, 1)``
-        response of ``predict_percept``, postprocessing included. Its
-        algorithm may differ from ``_predict_spatial``, but not its result
-        beyond float32 rounding. Requires a built model.
+        Used by ``to_torch`` and ``export_onnx``. The module maps float32
+        drive ``(n_electrodes, N)``, rows in ``implant.electrode_names``
+        order, to the flat ``(n_grid_points, N)`` response of
+        ``predict_percept``, postprocessing included; columns are
+        independent. Its algorithm may differ from ``_predict_spatial``, but
+        not its result beyond float32 rounding. Requires a built model.
         """
         raise NotImplementedError(
-            f"ONNX export does not support {type(self).__name__}.")
+            f"{type(self).__name__} has no fixed-geometry Torch module.")
 
     def plot(self, use_dva=False, style='hull', autoscale=True, ax=None,
              figsize=None, show_implant=False):

@@ -580,8 +580,100 @@ Parameters with the same name in both components, such as
 ``thresh_percept``, remain independent.
 
 
+Torch Modules and ONNX Export
+=============================
+
+A configured model can be used in three ways. All three run the same
+equations; they differ in what goes in and comes out.
+
+.. code-block:: python
+
+    # Simulation: NumPy in, Percept out
+    percept = model.predict_percept(image)
+
+    # Differentiable ML: batched tensors in and out, with gradients
+    module = p2p.to_torch(model, input_shape=(28, 28))
+    percepts = module(images)
+
+    # Deployment: frozen ONNX graph plus JSON sidecar
+    p2p.export_onnx(model, "model.onnx", input_shape=(28, 28))
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 27 27 28
+
+   * -
+     - ``predict_percept``
+     - ``to_torch``
+     - ``export_onnx``
+   * - Input
+     - Any stimulus source, one at a time
+     - Images ``(B, C, H, W)``, videos ``(B, C, T, H, W)``, or electrode
+       values
+     - Gray image ``(1, 1, H, W)``
+   * - Output
+     - :py:class:`~pulse2percept.percepts.Percept`, time last
+     - Tensor ``(B, 1, Hp, Wp)`` or ``(B, 1, T, Hp, Wp)``
+     - ``(1, 1, Hp, Wp)``
+   * - Gradients
+     - No
+     - Yes, where the model is continuous
+     - No
+   * - Models
+     - All
+     - Scoreboard, AxonMap, Nanduri2012, Thompson2003, Granley2023, with
+       their supported temporal models
+     - Spatial-only Scoreboard and AxonMap
+
+Units, image registration, grid orientation, electrode order, and timing are
+those of ``predict_percept``. Percepts are raw model output, not normalized
+for display.
+
+Differentiable Torch modules
+----------------------------
+
+:py:func:`~pulse2percept.to_torch` returns a :py:class:`torch.nn.Module` that
+runs the implant's image sampling and
+:py:class:`~pulse2percept.stimuli.AmplitudeEncoder`, deactivated electrodes,
+threshold calibration, safety checks, and the spatial and temporal models on
+a batch. A one-element batch reproduces ``predict_percept`` to float32
+precision. The module is a snapshot of the model: rebuild it after changing
+parameters. Move it with ``.to(device)``.
+
+Images hold finite float gray levels in [0, 1]. Three-channel (RGB) input is
+converted to gray, as in ``predict_percept``; no supported model uses color.
+
+``input_kind='electrodes'`` skips image sampling and encoding, for networks
+that output stimulation directly: current (uA) per electrode, or a waveform
+sampled at ``time`` (ms) for a temporal model. For
+:py:class:`~pulse2percept.models.retina.Granley2023Model`, it takes amplitude
+in threshold multiples (xTh) plus frequency (Hz) and phase duration (ms),
+which can also receive gradients.
+
+Gradients are exact where the model is smooth. Where it is not, autograd
+returns the gradient on one side:
+
+*  Gray levels clipped at 0 and 1, ``thresh_percept``, and AxonMap's choice
+   of axon segment at ties.
+*  Half-wave rectification in temporal models: at exactly 0 uA, such as a
+   black image, the gradient is 0.
+*  The Granley2023 amplitude cutoff: an electrode at or below ``amp_cutoff``
+   produces no phosphene and receives no gradient.
+
+Pulse timing is fixed and has no gradient. Discrete operations are not
+supported: :py:class:`~pulse2percept.stimuli.FrequencyEncoder`, encoder
+``n_levels`` and ``stretch``, and percept ``n_gray``. Optical implants,
+:py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`, and scenes are
+not supported yet. See :ref:`sphx_glr_examples_plot_to_torch.py`.
+
+Cost is dominated by the temporal model. Spatial-only AxonMap and
+Granley2023 train at thousands of images per second on a GPU.
+:py:class:`~pulse2percept.models.retina.Nanduri2012Temporal` integrates in
+5 us steps and needs about 10 GB of GPU memory for a batch of 16 still images
+(500 ms each), which makes it impractical for routine training.
+
 Exporting to ONNX
-=================
+-----------------
 
 :py:func:`~pulse2percept.export_onnx` exports the image-to-percept workflow of
 a spatial-only model as an ONNX graph, plus a JSON sidecar describing its
@@ -596,10 +688,10 @@ inputs and outputs:
 
     p2p.export_onnx(model, "model.onnx", input_shape=(76, 76))
 
-The graph takes a gray image with values in [0, 1] and reproduces
-``model.predict_percept(image)`` to float32 precision. Its output is the raw,
-unnormalized percept; the sidecar includes a recommended display white point
-for visualization.
+The graph is that of ``to_torch`` with fixed weights. It takes a gray image
+with values in [0, 1] and reproduces ``model.predict_percept(image)`` to
+float32 precision. Its output is the raw, unnormalized percept; the sidecar
+includes a recommended display white point for visualization.
 
 Scoreboard and axon map models with an
 :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` are supported; temporal

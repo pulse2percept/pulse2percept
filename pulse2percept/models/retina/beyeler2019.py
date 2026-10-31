@@ -358,7 +358,7 @@ class ScoreboardSpatial(RetinalSpatial):
         resp = self._predict_scoreboard_tensor(waveform, x_el, y_el)
         return self._spatial_response(resp, time, None)
 
-    def _onnx_adapter(self):
+    def _torch_adapter(self):
         """Return the precomputed ``(P, E)`` Gaussian weights as a module."""
         from .._deploy import _Scoreboard
         electrode_array = self.implant.electrode_array
@@ -1225,7 +1225,7 @@ class AxonMapSpatial(_AxonBundleMixin, RetinalSpatial):
             self._predict_axon_map_tensor(waveform, x_el, y_el))
         return self._spatial_response(resp, time, None)
 
-    def _onnx_adapter(self):
+    def _torch_adapter(self):
         """Return the precomputed segment weights and axon layout as a module.
 
         Segments with all-zero weights are dropped: they respond 0 to any
@@ -1234,7 +1234,7 @@ class AxonMapSpatial(_AxonBundleMixin, RetinalSpatial):
         bucket pads its axons to its longest one with a zero-response slot.
         """
         import torch
-        from .._deploy import _AxonMap, _meridian_blend
+        from .._deploy import _AxonMap, _bucket_axons, _meridian_blend
         electrode_array = self.implant.electrode_array
         _warn_ignores_z(self, electrode_array)
         x_el, y_el, _ = self._electrode_coords(
@@ -1260,27 +1260,15 @@ class AxonMapSpatial(_AxonBundleMixin, RetinalSpatial):
             kept[lo:hi] = nonzero.numpy()
         n_kept = int(kept.sum())
         weights.append(torch.zeros((1, x_el.size)))
+        weights = torch.cat(weights)
         # Row of each kept segment in `weights`; the zero row pads:
         row = np.full(len(contrib) + 1, n_kept)
         row[:-1][kept] = np.arange(n_kept)
-        segs = [row[a:b][kept[a:b]] for a, b in zip(start, end)]
-        counts = np.array([s.size for s in segs])
-        # Bucket lengths grow by 25%, which bounds padding at 25%:
-        ladder = [1]
-        while ladder[-1] < counts.max(initial=0):
-            ladder.append(max(ladder[-1] + 1, int(np.ceil(ladder[-1] * 1.25))))
-        length = np.asarray(ladder)[np.searchsorted(ladder, counts)]
-        buckets, pixels = [], []
-        for size in np.unique(length):
-            members = np.flatnonzero(length == size)
-            index = np.full((members.size, size), n_kept)
-            for i, p in enumerate(members):
-                index[i, :counts[p]] = segs[p]
-            buckets.append(torch.as_tensor(index))
-            pixels.append(members)
-        order = np.argsort(np.concatenate(pixels))
-        return _AxonMap(torch.cat(weights), torch.as_tensor(el_order),
-                        buckets, torch.as_tensor(order), self.thresh_percept,
+        index, order = _bucket_axons(
+            [row[a:b][kept[a:b]] for a, b in zip(start, end)], n_kept)
+        return _AxonMap([weights[torch.as_tensor(i.ravel())] for i in index],
+                        [i.shape[1] for i in index], torch.as_tensor(el_order),
+                        torch.as_tensor(order), self.thresh_percept,
                         blend=_meridian_blend(self, 'horizontal',
                                               self.meridian_blend))
 

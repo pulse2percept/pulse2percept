@@ -69,7 +69,9 @@ onnx = [
 # Kept out of `dev` so the test matrix does not install a runner it never uses;
 # see benchmarks/README.md.
 benchmark = [
-    "pytest-benchmark>=4",
+    # pytest-benchmark 5.3.0 reads `node._nodeid`, which pytest 9.2 removed:
+    "pytest>=8.1,<9.2",
+    "pytest-benchmark>=5.3.0",
     # Windows falls back to tracemalloc:
     "memray; sys_platform != 'win32'",
 ]

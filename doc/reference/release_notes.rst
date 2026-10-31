@@ -10,13 +10,14 @@ v0.12.0 Torch (unreleased)
 Highlights
 ----------
 
-* A ``Model`` combining retinal or cortical ``ScoreboardSpatial``, or
-  ``AxonMapSpatial``, with ``FadingTemporal`` or ``AlphaTemporal`` supports
-  differentiable Torch execution from electrode waveforms, or from grayscale
-  image or video pixels through ``AmplitudeEncoder``. ``predict_percept`` runs
-  these composites on Torch internally. PyTorch (>= 2.7.0) is now a required
-  dependency; Intel Macs are no longer supported (:pull:`937`, :pull:`938`,
-  :pull:`939`, :pull:`941`, :pull:`942`, :pull:`943`).
+* New :py:func:`~pulse2percept.to_torch` turns a configured model into a
+  batched, differentiable ``torch.nn.Module`` for ML training: image, video,
+  or electrode input, through ``AmplitudeEncoder``, implant constraints, and
+  spatial and temporal models, including AxonMap and Granley2023.
+  ``predict_percept`` runs on the same Torch kernels. PyTorch (>= 2.7.0) is
+  now a required dependency; Intel Macs are no longer supported
+  (:pull:`937`, :pull:`938`, :pull:`939`, :pull:`941`, :pull:`942`,
+  :pull:`943`, :pull:`975`).
 
 API changes and improvements
 ----------------------------

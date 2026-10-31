@@ -11,7 +11,7 @@ from pulse2percept.implants import EnsembleImplant
 from pulse2percept.implants.cortex import NeuroPortArray, Orion
 from pulse2percept.implants.retina import ArgusII
 from pulse2percept.models import FadingTemporal, Model
-from pulse2percept.models import cortex, export
+from pulse2percept.models import _deploy, cortex, export
 from pulse2percept.models.cortex.tests.test_tensor import _CurvedPolimeni
 from pulse2percept.models.export import (_deploy_module, _require_close,
                                          _save_onnx)
@@ -119,6 +119,14 @@ def _cortex(implant=None, **params):
 # Image sampling
 
 
+def _drive(module, image):
+    """Return the frame-level drive (uA) of a gray image, ``(E,)``."""
+    with torch.inference_mode():
+        pulses = module.pulses
+        return pulses.drive(pulses(module.sampler(
+            torch.as_tensor(image)[None, None])))[0, :, 0]
+
+
 @pytest.mark.parametrize('shape', [(6, 10), (13, 7), (40, 63)])
 def test_drive_matches_prepare_stim(shape):
     implant = ArgusII()
@@ -126,8 +134,7 @@ def test_drive_matches_prepare_stim(shape):
     for image in _images(shape).values():
         view = implant.prepare_stim(ImageStimulus(image))._spatial_view()
         expected = dict(zip(view.electrodes, view.data.ravel()))
-        with torch.inference_mode():
-            drive = module.drive(torch.as_tensor(image)[None, None])
+        drive = _drive(module, image)
         npt.assert_allclose(drive.numpy().ravel(),
                             [expected[e] for e in implant.electrode_names],
                             rtol=1e-6, atol=1e-5)
@@ -139,8 +146,7 @@ def test_drive_orientation():
     image = np.zeros((6, 10), dtype=np.float32)
     image[0, 0], image[1, 3] = 1, 0.5
     module = _deploy_module(_retina().spatial.build(), image.shape)
-    with torch.inference_mode():
-        drive = module.drive(torch.as_tensor(image)[None, None]).numpy()
+    drive = _drive(module, image).numpy()
     drive = dict(zip(ArgusII().electrode_names, drive.ravel()))
     assert drive.pop('A1') == 50 and drive.pop('B4') == 25
     assert all(v == 0 for v in drive.values())
@@ -339,8 +345,7 @@ def test_ensemble_registration():
     expected = 50 * (0.6 * y + 0.4 * x)
     expected[names.index(off)] = 0
     module = _deploy_module(_ensemble_model(ensemble).build(), ENSEMBLE_SHAPE)
-    with torch.inference_mode():
-        drive = module.drive(torch.as_tensor(image)[None, None])
+    drive = _drive(module, image)
     npt.assert_allclose(drive.numpy().ravel(), expected, rtol=0, atol=1e-5)
     # `prepare_stim` drops the deactivated electrode:
     view = ensemble.prepare_stim(ImageStimulus(image))._spatial_view()
@@ -407,7 +412,7 @@ def _adapter_chain(spatial, drive, tmp_path):
     names = spatial.implant.electrode_names
     expected = spatial.predict_percept(Stimulus(drive, electrodes=names))
     drive = torch.as_tensor(drive, dtype=torch.float32)[:, None]
-    adapter = spatial._onnx_adapter()
+    adapter = spatial._torch_adapter()
     with torch.inference_mode():
         eager = adapter(drive).numpy().ravel()
     pytest.importorskip('onnxscript')
@@ -490,7 +495,7 @@ def test_axon_map_adapter_electrode_order():
     expected = spatial.predict_percept(
         Stimulus(drive, electrodes=spatial.implant.electrode_names)).data
     with torch.inference_mode():
-        eager = spatial._onnx_adapter()(
+        eager = spatial._torch_adapter()(
             torch.as_tensor(drive, dtype=torch.float32)[:, None])
     npt.assert_array_equal(eager.numpy().ravel(), expected.ravel())
 
@@ -561,6 +566,21 @@ def test_axon_map_adapter_short_and_empty_axons(tmp_path):
     expected = _assert_adapter_chain(spatial, _single(spatial, 'D2', 40),
                                      tmp_path)
     assert expected[0] > 0 and np.all(expected[1:] == 0)
+
+
+@pytest.mark.parametrize('chunk', [16 * 2 ** 20, 1])
+def test_axon_map_adapter_columns(chunk, monkeypatch):
+    # Columns are independent; tiny chunks (one pixel each) change nothing:
+    monkeypatch.setattr(_deploy, '_AXON_CHUNK_BYTES', chunk)
+    spatial = _axon_spatial(meridian_blend=1).build()
+    wf = torch.as_tensor(_waveform(spatial.implant.n_electrodes),
+                         dtype=torch.float32)
+    expected = spatial._predict_tensor(wf, None).data
+    with torch.inference_mode():
+        actual = spatial._torch_adapter()(wf)
+    npt.assert_allclose(actual, expected, rtol=0,
+                        atol=1e-6 * expected.abs().max())
+    assert expected.min() < 0 < expected.max()
 
 
 @pytest.mark.parametrize('params', [{}, {'thresh_percept': 5}])

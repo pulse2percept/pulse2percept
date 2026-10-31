@@ -18,6 +18,7 @@ pulse2percept is organized into the following subpackages:
 .. autosummary::
     :toctree: _api
 
+    to_torch
     export_onnx
 """
 import matplotlib as mpl
@@ -94,7 +95,7 @@ from . import topography
 from . import units
 from . import utils
 from . import vision
-from .models.export import export_onnx
+from .models.export import export_onnx, to_torch
 
 __all__ = [
     "datasets",
@@ -105,6 +106,7 @@ __all__ = [
     "plotting",
     "set_debug_logging",
     "stimuli",
+    "to_torch",
     "topography",
     "units",
     "utils",
