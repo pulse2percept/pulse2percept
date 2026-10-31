@@ -78,6 +78,9 @@ jobs:
           python -m pip install "setuptools>=64" wheel "Cython>=3.0.8" "numpy>=2,<3"
           # CPU-only wheels; PyPI's Linux torch pulls in CUDA:
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          # pytest-benchmark breaks on pytest 9.2. Pinned here because the base
+          # branch installs its own, unpinned requirements:
+          python -m pip install "pytest>=8.1,<9.2"
 
       # actions/checkout leaves a detached HEAD at the merge commit, so record
       # it now: it is what we return to after measuring the base.
