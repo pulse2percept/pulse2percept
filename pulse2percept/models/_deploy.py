@@ -52,6 +52,13 @@ class _ImageSampler(nn.Module):
             raise ValueError(f"Input must have shape {layout} with C=1 (gray) "
                              f"or C=3 (RGB) and (H, W)={self.shape}, not "
                              f"{tuple(x.shape)}.")
+        if not x.is_floating_point():
+            raise TypeError(f"Input must hold float gray levels in [0, 1], "
+                            f"not {x.dtype}; divide 8-bit images by 255.")
+        # Eager only: export cannot trace a data-dependent check.
+        if not torch.compiler.is_compiling() and not bool(
+                torch.isfinite(x).all()):
+            raise ValueError("Input must be finite, but contains NaN or Inf.")
         pixels = x.flatten(-2).index_select(-1, self.pixel_index)
         gray = (pixels * self.pixel_weight).unflatten(-1, (-1, 4)).sum(-1)
         if x.shape[1] == 3:

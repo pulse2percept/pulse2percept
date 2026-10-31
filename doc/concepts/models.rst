@@ -640,6 +640,9 @@ a batch. A one-element batch reproduces ``predict_percept`` to float32
 precision. The module is a snapshot of the model: rebuild it after changing
 parameters. Move it with ``.to(device)``.
 
+Images hold finite float gray levels in [0, 1]. Three-channel (RGB) input is
+converted to gray, as in ``predict_percept``; no supported model uses color.
+
 ``input_kind='electrodes'`` skips image sampling and encoding, for networks
 that output stimulation directly: current (uA) per electrode, or a waveform
 sampled at ``time`` (ms) for a temporal model. For
@@ -662,6 +665,12 @@ supported: :py:class:`~pulse2percept.stimuli.FrequencyEncoder`, encoder
 ``n_levels`` and ``stretch``, and percept ``n_gray``. Optical implants,
 :py:class:`~pulse2percept.models.retina.BiphasicAxonMapModel`, and scenes are
 not supported yet. See :ref:`sphx_glr_examples_plot_to_torch.py`.
+
+Cost is dominated by the temporal model. Spatial-only AxonMap and
+Granley2023 train at thousands of images per second on a GPU.
+:py:class:`~pulse2percept.models.retina.Nanduri2012Temporal` integrates in
+5 us steps and needs about 10 GB of GPU memory for a batch of 16 still images
+(500 ms each), which makes it impractical for routine training.
 
 Exporting to ONNX
 -----------------

@@ -17,7 +17,7 @@ Highlights
   ``predict_percept`` runs on the same Torch kernels. PyTorch (>= 2.7.0) is
   now a required dependency; Intel Macs are no longer supported
   (:pull:`937`, :pull:`938`, :pull:`939`, :pull:`941`, :pull:`942`,
-  :pull:`943`, :pull:`XXX`).
+  :pull:`943`, :pull:`975`).
 
 API changes and improvements
 ----------------------------

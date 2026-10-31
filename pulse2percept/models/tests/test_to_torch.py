@@ -147,6 +147,19 @@ def test_video_parity_spatial(model):
     _assert_close(actual[0, 0], np.moveaxis(expected.data, -1, 0))
 
 
+@pytest.mark.parametrize('model', ['scoreboard', 'unencoded'])
+def test_video_one_frame(model):
+    # A one-frame video keeps its time axis; values are those of the frame:
+    model = SPATIAL[model]()
+    image = _images(2)[1]
+    module = p2p.to_torch(model, (1,) + SHAPE, fps=10)
+    npt.assert_allclose(module.t_percept, [0])
+    actual = _run(module, image[None, None, None])
+    assert actual.shape == (1, 1, 1) + model.spatial.grid.x.shape
+    expected = model.predict_percept(ImageStimulus(image)).data[..., 0]
+    _assert_close(actual[0, 0, 0], expected)
+
+
 def test_video_parity_temporal():
     model = TEMPORAL['scoreboard-fading']()
     video = np.random.default_rng(2).random(SHAPE + (3,)).astype(np.float32)
@@ -567,6 +580,13 @@ def test_input_validation():
     for bad in ((1,) + SHAPE, (1, 1, 5, 5), (1, 2) + SHAPE):
         with pytest.raises(ValueError, match=r'\(B, C, H, W\)'):
             module(torch.zeros(bad))
+    with pytest.raises(TypeError, match='uint8'):
+        module(torch.zeros((1, 1) + SHAPE, dtype=torch.uint8))
+    for bad in (np.nan, np.inf):
+        image = torch.zeros((2, 1) + SHAPE)
+        image[1, 0, 3, 4] = bad
+        with pytest.raises(ValueError, match='finite'):
+            module(image)
     direct = p2p.to_torch(SPATIAL['scoreboard'](), input_kind='electrodes')
     with pytest.raises(ValueError, match='finite'):
         direct(torch.full((1, 60), np.nan))

@@ -87,7 +87,8 @@ def to_torch(model, input_shape=None, *, input_kind=None, fps=None,
     -------
     module : :py:class:`torch.nn.Module`
         Maps an input batch to raw percepts, not normalized for display:
-        ``(B, 1, Hp, Wp)``, or ``(B, 1, T, Hp, Wp)`` with a time axis.
+        ``(B, 1, Hp, Wp)``, or ``(B, 1, T, Hp, Wp)`` for videos and temporal
+        models (a one-frame video has ``T=1``).
         Attributes: ``electrode_names`` (order of electrode input),
         ``grid`` (percept grid, dva; row 0 at the largest y),
         ``t_percept`` (output times, ms, or None), and ``time`` (sample
@@ -95,12 +96,13 @@ def to_torch(model, input_shape=None, *, input_kind=None, fps=None,
 
     Notes
     -----
-    *  Image input is float ``(B, C, H, W)`` and video input
-       ``(B, C, n_frames, H, W)``, gray levels in [0, 1], ``C=1`` (gray) or
-       ``C=3`` (RGB, converted to gray as in
-       :py:meth:`~pulse2percept.implants.Implant.reshape_stim`). The image
-       spans the electrode bounding box, row 0 at the smallest device y, as
-       for an :py:class:`~pulse2percept.stimuli.ImageStimulus`.
+    *  Image input is ``(B, C, H, W)`` and video input
+       ``(B, C, n_frames, H, W)``: finite float gray levels in [0, 1].
+       ``C=3`` (RGB) is converted to gray as in
+       :py:meth:`~pulse2percept.implants.Implant.reshape_stim`; no supported
+       model uses color. The image spans the electrode bounding box, row 0 at
+       the smallest device y, as for an
+       :py:class:`~pulse2percept.stimuli.ImageStimulus`.
     *  Images require the implant's encoder to be an
        :py:class:`~pulse2percept.stimuli.AmplitudeEncoder` without
        ``n_levels`` or ``stretch``. A spatial-only Scoreboard or AxonMap
@@ -217,7 +219,8 @@ def to_torch(model, input_shape=None, *, input_kind=None, fps=None,
             pulses, sched, unit = _pulse_stage(implant, encoder, input_kind,
                                                n_frames, fps)
             args['pulses'] = pulses
-            times = sched._frame_time if n_frames > 1 else None
+            # Videos keep their time axis, even with one frame:
+            times = sched._frame_time if input_kind == 'video' else None
             if granley:
                 # Realized pulse parameters, as `_biphasic_params` reads them:
                 args['freq'] = torch.as_tensor(sched._freq[:, 0],
