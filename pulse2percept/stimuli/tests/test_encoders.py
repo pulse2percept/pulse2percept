@@ -444,6 +444,23 @@ def test_AmplitudeEncoder__encode_tensor_zero_amplitude_jacobian():
     assert image.grad.abs().sum() > 0
 
 
+def test_EncodedStimulus__render_tensor_batched():
+    # Each batch element renders as the NumPy schedule with its amplitudes:
+    implant = ArgusII()
+    encoder = AmplitudeEncoder(implant, amp_range=(0, 50), freq=20)
+    video = np.random.default_rng(0).random((6, 10, 3)).astype(np.float32)
+    stims = [encoder.encode(VideoStimulus(v, metadata={'fps': 10}))
+             for v in (video, 1 - video)]
+    sched = stims[0]
+    amp = torch.as_tensor(np.stack([s._amp for s in stims]))
+    rendered = sched._render_tensor(amp).numpy()
+    npt.assert_equal(rendered[0], stims[0].data)
+    # Same pulse schedule, other amplitudes:
+    other = sched._rebuilt(sched.electrodes, stims[1]._amp, sched._sched,
+                           sched._freq)
+    npt.assert_equal(rendered[1], other.data)
+
+
 @pytest.mark.parametrize('make_implant,params,off', [
     # Sequential raster on a 0.1 ms clock, anodic first, interphase gap:
     (ArgusII, {'amp_range': (10, 50), 'freq': 60, 'phase_dur': 0.3,

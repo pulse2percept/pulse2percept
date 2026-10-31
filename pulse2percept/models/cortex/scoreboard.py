@@ -246,7 +246,7 @@ class ScoreboardSpatial(CortexSpatial):
                 regions.append(((grid.x, grid.y), (x_el, y_el)))
         return boundary, regions
 
-    def _onnx_adapter(self):
+    def _torch_adapter(self):
         """Return the precomputed per-region Gaussian weights as a module.
 
         Keeps one ``(P, E)`` matrix per region, because each region is

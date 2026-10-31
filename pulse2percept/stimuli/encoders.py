@@ -254,22 +254,32 @@ class _EncodedStimulus(Stimulus):
         return {'data': _adoptable(data), 'electrodes': self.electrodes,
                 'time': self.time}
 
+    def _pulse_index(self):
+        """Return the frame and unit pulse value of every sample.
+
+        Both are ``(n_electrodes, n_time)``; electrodes without pulses have
+        value 0. ``_render`` is ``amp[e, frame[e, t]] * wave[e, t]``.
+        """
+        frame = np.zeros((len(self.electrodes), self._ticks.size),
+                         dtype=np.int64)
+        wave = np.zeros(frame.shape, dtype=np.float64)
+        for rows, f, w in self._waves():
+            frame[rows] = f
+            wave[rows] = w
+        return frame, wave
+
     def _render_tensor(self, amp):
         """Return the ``_render`` waveform with Torch amplitudes ``amp``.
 
-        ``amp`` has the shape of ``self._amp`` and is used only for pulse
-        heights; onsets and time points stay those of this schedule.
+        ``amp`` has the shape of ``self._amp``, optionally with leading batch
+        axes, and is used only for pulse heights; onsets and time points stay
+        those of this schedule.
         """
         import torch
-        # The zero-valued term keeps a waveform without pulses in the graph:
-        data = torch.zeros((len(self.electrodes), self._ticks.size),
-                           dtype=amp.dtype, device=amp.device) + 0 * amp.sum()
-        for rows, frame, wave in self._waves():
-            rows = torch.as_tensor(rows, device=amp.device)
-            frame = torch.as_tensor(frame, device=amp.device)
-            data[rows] = amp[rows][:, frame] * torch.as_tensor(
-                wave, dtype=amp.dtype, device=amp.device)
-        return data
+        frame, wave = (torch.as_tensor(a, device=amp.device)
+                       for a in self._pulse_index())
+        frame = frame.expand(amp.shape[:-1] + frame.shape[-1:])
+        return amp.gather(-1, frame) * wave.to(amp.dtype)
 
     def _pprint_params(self):
         """Return a dict of class attributes to pretty-print"""
@@ -419,6 +429,43 @@ def _video_frames(n_frames, time=None, fps=None, frame_dur=None):
     if not np.all(np.isfinite(time)) or np.any(np.diff(time) <= 0):
         raise ValueError("'time' must be finite and strictly increasing.")
     return _frame_timing(time, n_frames, fps, frame_dur)
+
+
+def _implant_tensor_gap(implant, checked=False):
+    """Return why Torch execution of ``implant.prepare_stim`` would differ
+    from NumPy, or None.
+
+    ``checked`` accepts ``safe_mode`` and ``max_current``, for callers that
+    check the stimulus themselves.
+    """
+    # Imported here because `implants` imports this module:
+    from ..implants.base import Implant
+    from ..implants.ensemble import EnsembleImplant
+    if implant.stimulus_unit.dimension != uA.dimension:
+        return (f"Tensor encoding requires an implant driven by electrical "
+                f"current, not {implant.stimulus_unit}.")
+    # `preprocess=True` with the inherited `preprocess_stim` is a no-op:
+    preprocesses = callable(implant.preprocess) or bool(
+        implant.preprocess and
+        type(implant).preprocess_stim is not Implant.preprocess_stim)
+    # `prepare_stim` steps without a tensor implementation:
+    unsupported = [name for name, on in (
+        ('preprocess', preprocesses),
+        # An exact ensemble prepares a whole-ensemble image as `Implant`
+        # does; only per-implant dicts differ:
+        ('_prepare_stim',
+         type(implant)._prepare_stim is not Implant._prepare_stim and
+         type(implant) is not EnsembleImplant),
+        ('check_stim', type(implant).check_stim is not Implant.check_stim),
+        ('safe_mode', implant.safe_mode and not checked),
+        ('max_current', implant.max_current is not None and not checked))
+        if on]
+    if unsupported:
+        return (f"Tensor encoding does not support an implant with "
+                f"{', '.join(unsupported)}. Use an implant without custom "
+                f"preprocessing or safety checks, with safe_mode=False and "
+                f"max_current=None.")
+    return None
 
 
 class Encoder(PrettyPrint, metaclass=ABCMeta):
@@ -1197,47 +1244,26 @@ class AmplitudeEncoder(PulseEncoder):
             return super().encode(source)
         return self._encode_pixels(source, pixels)[1]
 
-    def _tensor_gap(self, prepared=True):
+    def _tensor_gap(self, prepared=True, checked=False):
         """Return why Torch encoding would differ from NumPy, or None.
 
         ``prepared`` also requires the ``implant.prepare_stim`` steps to be
-        reproducible.
+        reproducible. ``checked`` accepts ``safe_mode``, ``max_current`` and
+        an ``xTh`` ``amp_range``, for callers that calibrate and check the
+        stimulus themselves.
         """
         implant = self.implant
         if implant is None:
             return "Tensor encoding requires an encoder bound to an implant."
-        # Imported here because `implants` imports this module:
-        from ..implants.base import Implant
-        from ..implants.ensemble import EnsembleImplant
         if prepared:
-            if implant.stimulus_unit.dimension != uA.dimension:
-                return (f"Tensor encoding requires an implant driven by "
-                        f"electrical current, not {implant.stimulus_unit}.")
-            # `preprocess=True` with the inherited `preprocess_stim` is a
-            # no-op:
-            preprocesses = callable(implant.preprocess) or bool(
-                implant.preprocess and
-                type(implant).preprocess_stim is not Implant.preprocess_stim)
-            # `prepare_stim` steps without a tensor implementation:
-            unsupported = [name for name, on in (
-                ('preprocess', preprocesses),
-                # An exact ensemble prepares a whole-ensemble image as
-                # `Implant` does; only per-implant dicts differ:
-                ('_prepare_stim',
-                 type(implant)._prepare_stim is not Implant._prepare_stim and
-                 type(implant) is not EnsembleImplant),
-                ('check_stim',
-                 type(implant).check_stim is not Implant.check_stim),
-                ('safe_mode', implant.safe_mode),
-                ('max_current', implant.max_current is not None)) if on]
-            if unsupported:
-                return (f"Tensor encoding does not support an implant with "
-                        f"{', '.join(unsupported)}. Use an implant without "
-                        f"custom preprocessing or safety checks, with "
-                        f"safe_mode=False and max_current=None.")
-            if self.amp_unit != uA:
+            gap = _implant_tensor_gap(implant, checked)
+            if gap is not None:
+                return gap
+            if self.amp_unit != uA and not checked:
                 return (f"Tensor encoding requires 'amp_range' in uA, not "
                         f"{self.amp_unit}.")
+        # Imported here because `implants` imports this module:
+        from ..implants.base import Implant
         if type(implant).reshape_stim is not Implant.reshape_stim:
             return "Tensor encoding does not support a custom 'reshape_stim'."
         if self.n_levels is not None or self.stretch:

@@ -24,28 +24,34 @@ def _mvg_shape(freq, amp, pdur, *, rho, lam, a0, a1, a2, a3, a4, amp_cutoff):
 
 
 def _mvg_response(freq, amp, pdur, x, y, x_el, y_el, theta, *,
-                  thresh_percept, **params):
+                  thresh_percept, active=None, **params):
     """Return the summed oriented-Gaussian response at each pixel.
 
-    ``freq``, ``amp``, ``pdur``, ``x_el``, ``y_el`` and ``theta`` are Torch
-    tensors with one entry per active electrode; ``x``, ``y`` hold the pixel
-    coordinates. Coordinates are in pixels with ``y`` pointing down the image
-    rows. ``params`` go to ``_mvg_shape``. Differentiable away from the
-    amplitude cutoff, area floor and eccentricity clip."""
+    ``x_el``, ``y_el`` and ``theta`` are Torch tensors with one entry per
+    electrode; ``x``, ``y`` hold the pixel coordinates. Coordinates are in
+    pixels with ``y`` pointing down the image rows. ``freq``, ``amp`` and
+    ``pdur`` are ``(..., n_electrodes)``, with optional leading batch axes;
+    the response is ``(..., n_pixels)``. ``active`` (bool, broadcastable to
+    ``amp``) excludes electrodes. ``params`` go to ``_mvg_shape``.
+    Differentiable away from the amplitude cutoff, area floor and
+    eccentricity clip."""
     import torch
     bright, area, ecc = _mvg_shape(freq, amp, pdur, **params)
+    if active is not None:
+        bright = torch.where(active, bright, 0.0)
     # Variances whose `thresh_percept` contour has this area and eccentricity:
     contour = -2 * np.pi * np.log(thresh_percept)
     minor = torch.sqrt(1 - ecc ** 2)
-    var_x = area * minor / contour
-    var_y = area / (contour * minor)
+    # Electrodes on the last axis, pixels before it:
+    var_x = (area * minor / contour)[..., None, :]
+    var_y = (area / (contour * minor))[..., None, :]
     dx = x[:, None] - x_el
     dy = y[:, None] - y_el
     cos, sin = torch.cos(theta), torch.sin(theta)
     # Quadratic form d.T @ inv(R @ diag(var_x, var_y) @ R.T) @ d:
     quad = ((dx * cos + dy * sin) ** 2 / var_x +
             (dy * cos - dx * sin) ** 2 / var_y)
-    return (bright * torch.exp(-0.5 * quad)).sum(dim=1)
+    return (bright[..., None, :] * torch.exp(-0.5 * quad)).sum(dim=-1)
 
 
 def _mirrors(visual_field_map, x, y, eps=1.0):
